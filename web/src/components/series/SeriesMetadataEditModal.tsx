@@ -24,6 +24,8 @@ import {
   IconEdit,
   IconLink,
   IconList,
+  IconLock,
+  IconLockOpen,
   IconPhoto,
   IconRefresh,
   IconShare,
@@ -97,6 +99,7 @@ interface LocksState {
   genres: boolean;
   tags: boolean;
   customMetadata: boolean;
+  cover: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -176,6 +179,7 @@ function initializeLocksState(locks: MetadataLocks | undefined): LocksState {
     genres: locks?.genres || false,
     tags: locks?.tags || false,
     customMetadata: locks?.customMetadata || false,
+    cover: (locks as LocksState | undefined)?.cover || false,
   };
 }
 
@@ -823,6 +827,36 @@ export function SeriesMetadataEditModal({
       <Text size="sm" c="dimmed">
         Upload custom poster images or select from existing covers.
       </Text>
+
+      {/* Cover lock toggle */}
+      <Group gap="xs">
+        <Tooltip
+          label={
+            locksState.cover
+              ? "Locked: Cover selection protected from automatic updates"
+              : "Unlocked: Cover can be changed by plugins"
+          }
+          position="right"
+        >
+          <ActionIcon
+            variant="subtle"
+            color={locksState.cover ? "orange" : "gray"}
+            onClick={() => updateLock("cover", !locksState.cover)}
+            aria-label={locksState.cover ? "Unlock cover" : "Lock cover"}
+          >
+            {locksState.cover ? (
+              <IconLock size={18} />
+            ) : (
+              <IconLockOpen size={18} />
+            )}
+          </ActionIcon>
+        </Tooltip>
+        <Text size="sm" c={locksState.cover ? "orange" : "dimmed"}>
+          {locksState.cover
+            ? "Cover selection locked"
+            : "Cover selection unlocked"}
+        </Text>
+      </Group>
 
       {/* Upload dropzone */}
       <Dropzone

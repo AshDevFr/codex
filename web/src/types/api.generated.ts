@@ -8334,6 +8334,12 @@ export interface components {
              */
             ageRating: boolean;
             /**
+             * @description Whether the cover selection is locked
+             *     When locked, plugins can still download covers but won't auto-select them
+             * @example false
+             */
+            cover: boolean;
+            /**
              * @description Whether the custom_metadata field is locked
              * @example false
              */
@@ -12688,6 +12694,12 @@ export interface components {
              * @example false
              */
             ageRating?: boolean | null;
+            /**
+             * @description Whether to lock the cover selection
+             *     When locked, plugins can still download covers but won't auto-select them
+             * @example false
+             */
+            cover?: boolean | null;
             /**
              * @description Whether to lock the custom_metadata field
              * @example false

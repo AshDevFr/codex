@@ -112,6 +112,7 @@ pub struct Model {
     pub genres_lock: bool,
     pub tags_lock: bool,
     pub custom_metadata_lock: bool,
+    pub cover_lock: bool,
     // Timestamps
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

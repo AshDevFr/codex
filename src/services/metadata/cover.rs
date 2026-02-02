@@ -22,6 +22,11 @@ impl CoverService {
     ///
     /// If a cover from this plugin already exists, it will be replaced with the new one.
     /// This ensures the cover is always up-to-date with what the plugin provides.
+    ///
+    /// If `cover_locked` is true, the cover will be downloaded and saved, but it will NOT
+    /// be automatically selected as the primary cover. This preserves the user's manual
+    /// cover selection while still keeping the plugin cover available for future use.
+    #[allow(clippy::too_many_arguments)]
     pub async fn download_and_apply(
         db: &DatabaseConnection,
         thumbnail_service: &ThumbnailService,
@@ -29,6 +34,7 @@ impl CoverService {
         library_id: Uuid,
         cover_url: &str,
         plugin_name: &str,
+        cover_locked: bool,
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<()> {
         use tokio::fs;
@@ -90,13 +96,15 @@ impl CoverService {
             .context("Failed to write cover file")?;
 
         // Create a new cover with source = "plugin:{plugin_name}"
-        // This automatically deselects any previously selected cover
+        // If cover is locked, don't auto-select - preserve user's existing cover selection.
+        // If cover is not locked, this automatically deselects any previously selected cover.
+        let should_select = !cover_locked;
         SeriesCoversRepository::create(
             db,
             series_id,
             &source,
             &filepath.to_string_lossy(),
-            true, // is_selected
+            should_select,
             None,
             None,
         )
@@ -106,11 +114,15 @@ impl CoverService {
         // Touch series to update updated_at (for cache busting)
         SeriesRepository::touch(db, series_id).await?;
 
-        // Queue thumbnail regeneration task
-        Self::queue_thumbnail_regeneration(db, thumbnail_service, series_id).await;
+        // Only regenerate thumbnail and emit event if the cover was actually selected
+        // (i.e., not locked). If locked, the displayed thumbnail remains unchanged.
+        if should_select {
+            // Queue thumbnail regeneration task
+            Self::queue_thumbnail_regeneration(db, thumbnail_service, series_id).await;
 
-        // Emit CoverUpdated event for real-time UI updates
-        Self::emit_cover_updated_event(event_broadcaster, series_id, library_id);
+            // Emit CoverUpdated event for real-time UI updates
+            Self::emit_cover_updated_event(event_broadcaster, series_id, library_id);
+        }
 
         Ok(())
     }

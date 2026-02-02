@@ -1017,7 +1017,10 @@ pub async fn preview_series_metadata(
             .cover_url
             .as_ref()
             .map(|v| serde_json::json!(v)),
-        false, // Covers don't have a lock field
+        current_metadata
+            .as_ref()
+            .map(|m| m.cover_lock)
+            .unwrap_or(false),
         has_permission(PluginPermission::MetadataWriteCovers),
         &mut will_apply,
         &mut locked,

@@ -500,6 +500,7 @@ impl MetadataApplier {
         // Cover URL - download and apply cover from plugin
         if should_apply_field("coverUrl") {
             if let Some(cover_url) = &metadata.cover_url {
+                let cover_locked = current_metadata.map(|m| m.cover_lock).unwrap_or(false);
                 if !plugin.has_permission(&PluginPermission::MetadataWriteCovers) {
                     skipped_fields.push(SkippedField {
                         field: "coverUrl".to_string(),
@@ -513,6 +514,7 @@ impl MetadataApplier {
                         library_id,
                         cover_url,
                         &plugin.name,
+                        cover_locked,
                         options.event_broadcaster.as_ref(),
                     )
                     .await

@@ -939,6 +939,11 @@ pub struct MetadataLocks {
     /// Whether the custom_metadata field is locked
     #[schema(example = false)]
     pub custom_metadata: bool,
+
+    /// Whether the cover selection is locked
+    /// When locked, plugins can still download covers but won't auto-select them
+    #[schema(example = false)]
+    pub cover: bool,
 }
 
 /// Full series metadata response including all related data
@@ -1244,6 +1249,12 @@ pub struct UpdateMetadataLocksRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = false)]
     pub custom_metadata: Option<bool>,
+
+    /// Whether to lock the cover selection
+    /// When locked, plugins can still download covers but won't auto-select them
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub cover: Option<bool>,
 }
 
 // ============================================================================

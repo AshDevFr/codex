@@ -425,6 +425,7 @@ async fn series_to_full_dtos_batched(
                     genres: metadata.genres_lock,
                     tags: metadata.tags_lock,
                     custom_metadata: metadata.custom_metadata_lock,
+                    cover: metadata.cover_lock,
                 },
                 created_at: metadata.created_at,
                 updated_at: metadata.updated_at,
@@ -770,6 +771,7 @@ pub async fn patch_series(
                 genres_lock: Set(false),
                 tags_lock: Set(false),
                 custom_metadata_lock: Set(false),
+                cover_lock: Set(false),
                 created_at: Set(now),
                 updated_at: Set(now),
             };
@@ -1338,6 +1340,11 @@ pub async fn upload_series_cover(
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create cover: {}", e)))?;
+
+    // Auto-lock cover to prevent plugins from overwriting user's custom upload
+    SeriesMetadataRepository::update_cover_lock(&state.db, series_id, true)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to lock cover: {}", e)))?;
 
     // Touch series to update updated_at (for cache busting)
     SeriesRepository::touch(&state.db, series_id)
@@ -2826,6 +2833,7 @@ pub async fn get_series_metadata(
             genres: metadata.genres_lock,
             tags: metadata.tags_lock,
             custom_metadata: metadata.custom_metadata_lock,
+            cover: metadata.cover_lock,
         },
         genres: genre_dtos,
         tags: tag_dtos,
@@ -2940,6 +2948,10 @@ pub async fn update_metadata_locks(
         active.custom_metadata_lock = Set(v);
         has_changes = true;
     }
+    if let Some(v) = request.cover {
+        active.cover_lock = Set(v);
+        has_changes = true;
+    }
 
     let updated = if has_changes {
         active.updated_at = Set(Utc::now());
@@ -2970,6 +2982,7 @@ pub async fn update_metadata_locks(
         genres: updated.genres_lock,
         tags: updated.tags_lock,
         custom_metadata: updated.custom_metadata_lock,
+        cover: updated.cover_lock,
     }))
 }
 
@@ -3025,6 +3038,7 @@ pub async fn get_metadata_locks(
         genres: metadata.genres_lock,
         tags: metadata.tags_lock,
         custom_metadata: metadata.custom_metadata_lock,
+        cover: metadata.cover_lock,
     }))
 }
 
@@ -4766,6 +4780,11 @@ pub async fn select_series_cover(
                 ApiError::Internal(format!("Failed to select cover: {}", e))
             }
         })?;
+
+    // Auto-lock cover to prevent plugins from overwriting user's manual selection
+    SeriesMetadataRepository::update_cover_lock(&state.db, series_id, true)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to lock cover: {}", e)))?;
 
     // Touch series to update updated_at (for cache busting)
     SeriesRepository::touch(&state.db, series_id)

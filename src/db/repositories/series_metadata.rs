@@ -82,6 +82,7 @@ impl SeriesMetadataRepository {
             genres_lock: Set(false),
             tags_lock: Set(false),
             custom_metadata_lock: Set(false),
+            cover_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -342,6 +343,7 @@ impl SeriesMetadataRepository {
             "total_book_count" => active_model.total_book_count_lock = Set(locked),
             "genres" => active_model.genres_lock = Set(locked),
             "tags" => active_model.tags_lock = Set(locked),
+            "cover" => active_model.cover_lock = Set(locked),
             _ => return Err(anyhow::anyhow!("Unknown field: {}", field)),
         }
 
@@ -366,8 +368,29 @@ impl SeriesMetadataRepository {
             "total_book_count" => metadata.total_book_count_lock,
             "genres" => metadata.genres_lock,
             "tags" => metadata.tags_lock,
+            "cover" => metadata.cover_lock,
             _ => false,
         }
+    }
+
+    /// Update cover lock state
+    pub async fn update_cover_lock(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        locked: bool,
+    ) -> Result<series_metadata::Model> {
+        let existing = Self::get_by_series_id(db, series_id)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Series metadata not found for series: {}", series_id)
+            })?;
+
+        let mut active_model: series_metadata::ActiveModel = existing.into();
+        active_model.cover_lock = Set(locked);
+        active_model.updated_at = Set(Utc::now());
+
+        let model = active_model.update(db).await?;
+        Ok(model)
     }
 
     /// Delete metadata for a series (cascaded automatically when series is deleted)

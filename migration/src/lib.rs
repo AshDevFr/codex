@@ -73,6 +73,9 @@ mod m20260131_000039_create_series_external_ids;
 mod m20260131_000040_add_library_preprocessing;
 mod m20260131_000041_add_plugin_search_config;
 
+// Cover lock feature
+mod m20260201_000042_add_cover_lock;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -135,6 +138,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260131_000039_create_series_external_ids::Migration),
             Box::new(m20260131_000040_add_library_preprocessing::Migration),
             Box::new(m20260131_000041_add_plugin_search_config::Migration),
+            // Cover lock feature
+            Box::new(m20260201_000042_add_cover_lock::Migration),
         ]
     }
 }

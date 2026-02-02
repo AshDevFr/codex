@@ -20323,12 +20323,18 @@
           "totalBookCount",
           "genres",
           "tags",
-          "customMetadata"
+          "customMetadata",
+          "cover"
         ],
         "properties": {
           "ageRating": {
             "type": "boolean",
             "description": "Whether the age_rating field is locked",
+            "example": false
+          },
+          "cover": {
+            "type": "boolean",
+            "description": "Whether the cover selection is locked\nWhen locked, plugins can still download covers but won't auto-select them",
             "example": false
           },
           "customMetadata": {
@@ -27873,6 +27879,14 @@
               "null"
             ],
             "description": "Whether to lock the age_rating field",
+            "example": false
+          },
+          "cover": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the cover selection\nWhen locked, plugins can still download covers but won't auto-select them",
             "example": false
           },
           "customMetadata": {
