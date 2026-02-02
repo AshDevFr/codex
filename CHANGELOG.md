@@ -2,6 +2,13 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.6.2] - 2026-02-02
+
+### 🐛 Bug Fixes
+
+- *(komga)* Add missing series read-progress endpoints
+- *(web)* Prevent navigation when triggering library menu actions
+
 ## [1.6.1] - 2026-02-02
 
 ### 🐛 Bug Fixes
