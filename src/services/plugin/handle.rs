@@ -53,6 +53,25 @@ pub enum PluginError {
     InvalidManifest(String),
 }
 
+/// Configuration for retry behavior on rate-limited requests
+#[derive(Debug, Clone)]
+pub struct RetryConfig {
+    /// Maximum number of retries before giving up
+    pub max_retries: u32,
+    /// Additional delay increment per retry (added to retry_after from API)
+    /// Total delay = retry_after + (attempt - 1) * delay_increment
+    pub delay_increment: Duration,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: 5,
+            delay_increment: Duration::from_secs(10),
+        }
+    }
+}
+
 /// Configuration for a plugin handle
 ///
 /// Note: The `credentials` field uses `SecretValue` which implements `Debug`
@@ -73,6 +92,8 @@ pub struct PluginConfig {
     /// Credentials to pass to plugin (via init message)
     /// Uses SecretValue to prevent logging of sensitive data
     pub credentials: Option<SecretValue>,
+    /// Retry configuration for rate-limited requests
+    pub retry_config: RetryConfig,
 }
 
 impl std::fmt::Debug for PluginConfig {
@@ -84,6 +105,7 @@ impl std::fmt::Debug for PluginConfig {
             .field("max_failures", &self.max_failures)
             .field("config", &self.config)
             .field("credentials", &self.credentials) // SecretValue shows [REDACTED]
+            .field("retry_config", &self.retry_config)
             .finish()
     }
 }
@@ -97,6 +119,7 @@ impl Default for PluginConfig {
             max_failures: 3,
             config: None,
             credentials: None,
+            retry_config: RetryConfig::default(),
         }
     }
 }
@@ -342,8 +365,6 @@ impl PluginHandle {
         params: MetadataSearchParams,
     ) -> Result<MetadataSearchResponse, PluginError> {
         self.ensure_running().await?;
-        let client_guard = self.client.read().await;
-        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
 
         let timeout_ms = self.config.request_timeout.as_millis();
         debug!(
@@ -352,36 +373,16 @@ impl PluginHandle {
             "Plugin handle: sending search request"
         );
 
-        match client
-            .call::<_, MetadataSearchResponse>(methods::METADATA_SERIES_SEARCH, params.clone())
-            .await
-        {
-            Ok(response) => {
-                self.health.record_success().await;
-                debug!(
-                    query = %params.query,
-                    result_count = response.results.len(),
-                    "Plugin handle: search succeeded"
-                );
-                Ok(response)
-            }
-            Err(e) => {
-                let health_state = self.health.state().await;
-                error!(
-                    query = %params.query,
-                    timeout_ms = timeout_ms,
-                    error = %e,
-                    error_debug = ?e,
-                    health_status = %health_state.status,
-                    consecutive_failures = health_state.consecutive_failures,
-                    max_failures = self.config.max_failures,
-                    "Plugin handle: search failed"
-                );
-                self.health.record_failure().await;
-                self.check_and_disable().await;
-                Err(PluginError::Rpc(e))
-            }
-        }
+        self.call_with_retry("search_series", params, |p| async move {
+            let client_guard = self.client.read().await;
+            let client = client_guard
+                .as_ref()
+                .ok_or_else(|| RpcError::InvalidResponse("Client not initialized".to_string()))?;
+            client
+                .call::<_, MetadataSearchResponse>(methods::METADATA_SERIES_SEARCH, p)
+                .await
+        })
+        .await
     }
 
     /// Get series metadata by external ID
@@ -390,19 +391,15 @@ impl PluginHandle {
         params: MetadataGetParams,
     ) -> Result<PluginSeriesMetadata, PluginError> {
         self.ensure_running().await?;
-        let client_guard = self.client.read().await;
-        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
-        match client.call(methods::METADATA_SERIES_GET, params).await {
-            Ok(response) => {
-                self.health.record_success().await;
-                Ok(response)
-            }
-            Err(e) => {
-                self.health.record_failure().await;
-                self.check_and_disable().await;
-                Err(PluginError::Rpc(e))
-            }
-        }
+
+        self.call_with_retry("get_series_metadata", params, |p| async move {
+            let client_guard = self.client.read().await;
+            let client = client_guard
+                .as_ref()
+                .ok_or_else(|| RpcError::InvalidResponse("Client not initialized".to_string()))?;
+            client.call(methods::METADATA_SERIES_GET, p).await
+        })
+        .await
     }
 
     /// Get book metadata by external ID (future use)
@@ -412,20 +409,16 @@ impl PluginHandle {
         params: MetadataGetParams,
     ) -> Result<PluginBookMetadata, PluginError> {
         self.ensure_running().await?;
-        let client_guard = self.client.read().await;
-        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+
         // TODO: Change to METADATA_BOOK_GET when book metadata is implemented
-        match client.call(methods::METADATA_SERIES_GET, params).await {
-            Ok(response) => {
-                self.health.record_success().await;
-                Ok(response)
-            }
-            Err(e) => {
-                self.health.record_failure().await;
-                self.check_and_disable().await;
-                Err(PluginError::Rpc(e))
-            }
-        }
+        self.call_with_retry("get_book_metadata", params, |p| async move {
+            let client_guard = self.client.read().await;
+            let client = client_guard
+                .as_ref()
+                .ok_or_else(|| RpcError::InvalidResponse("Client not initialized".to_string()))?;
+            client.call(methods::METADATA_SERIES_GET, p).await
+        })
+        .await
     }
 
     /// Find best match for a series title
@@ -434,19 +427,15 @@ impl PluginHandle {
         params: MetadataMatchParams,
     ) -> Result<Option<SearchResult>, PluginError> {
         self.ensure_running().await?;
-        let client_guard = self.client.read().await;
-        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
-        match client.call(methods::METADATA_SERIES_MATCH, params).await {
-            Ok(response) => {
-                self.health.record_success().await;
-                Ok(response)
-            }
-            Err(e) => {
-                self.health.record_failure().await;
-                self.check_and_disable().await;
-                Err(PluginError::Rpc(e))
-            }
-        }
+
+        self.call_with_retry("match_series", params, |p| async move {
+            let client_guard = self.client.read().await;
+            let client = client_guard
+                .as_ref()
+                .ok_or_else(|| RpcError::InvalidResponse("Client not initialized".to_string()))?;
+            client.call(methods::METADATA_SERIES_MATCH, p).await
+        })
+        .await
     }
 
     /// Call an arbitrary method on the plugin
@@ -495,6 +484,99 @@ impl PluginHandle {
             PluginState::Running => Ok(()),
             PluginState::Disabled { reason } => Err(PluginError::Disabled { reason }),
             _ => Err(PluginError::NotInitialized),
+        }
+    }
+
+    /// Check if an RPC error is retryable (rate limited)
+    fn is_retryable_error(err: &RpcError) -> Option<u64> {
+        match err {
+            RpcError::RateLimited {
+                retry_after_seconds,
+            } => Some(*retry_after_seconds),
+            _ => None,
+        }
+    }
+
+    /// Calculate retry delay: retry_after + (attempt - 1) * delay_increment
+    fn calculate_retry_delay(&self, retry_after_seconds: u64, attempt: u32) -> Duration {
+        let base = Duration::from_secs(retry_after_seconds);
+        let increment = self.config.retry_config.delay_increment * (attempt - 1);
+        base + increment
+    }
+
+    /// Execute an RPC call with retry logic for rate-limited errors
+    async fn call_with_retry<P, R, F, Fut>(
+        &self,
+        operation_name: &str,
+        params: P,
+        make_call: F,
+    ) -> Result<R, PluginError>
+    where
+        P: Clone + std::fmt::Debug,
+        F: Fn(P) -> Fut,
+        Fut: std::future::Future<Output = Result<R, RpcError>>,
+    {
+        let max_retries = self.config.retry_config.max_retries;
+        let mut attempt = 0u32;
+
+        loop {
+            attempt += 1;
+            let result = make_call(params.clone()).await;
+
+            match result {
+                Ok(response) => {
+                    self.health.record_success().await;
+                    if attempt > 1 {
+                        info!(
+                            operation = operation_name,
+                            attempt = attempt,
+                            "Plugin operation succeeded after retry"
+                        );
+                    }
+                    return Ok(response);
+                }
+                Err(e) => {
+                    // Check if this is a retryable error
+                    if let Some(retry_after) = Self::is_retryable_error(&e) {
+                        if attempt < max_retries {
+                            let delay = self.calculate_retry_delay(retry_after, attempt);
+                            warn!(
+                                operation = operation_name,
+                                attempt = attempt,
+                                max_retries = max_retries,
+                                retry_after_seconds = retry_after,
+                                delay_seconds = delay.as_secs(),
+                                "Rate limited, will retry after delay"
+                            );
+                            tokio::time::sleep(delay).await;
+                            continue;
+                        }
+                        // Max retries exhausted
+                        error!(
+                            operation = operation_name,
+                            attempt = attempt,
+                            max_retries = max_retries,
+                            "Rate limited, max retries exhausted"
+                        );
+                    }
+
+                    // Non-retryable error or max retries exhausted
+                    let health_state = self.health.state().await;
+                    error!(
+                        operation = operation_name,
+                        attempt = attempt,
+                        error = %e,
+                        error_debug = ?e,
+                        health_status = %health_state.status,
+                        consecutive_failures = health_state.consecutive_failures,
+                        max_failures = self.config.max_failures,
+                        "Plugin operation failed"
+                    );
+                    self.health.record_failure().await;
+                    self.check_and_disable().await;
+                    return Err(PluginError::Rpc(e));
+                }
+            }
         }
     }
 
@@ -568,6 +650,61 @@ mod tests {
         // Should be a no-op when not disabled
         handle.enable().await.unwrap();
         assert_eq!(handle.state().await, PluginState::Idle);
+    }
+
+    #[test]
+    fn test_retry_config_default() {
+        let config = RetryConfig::default();
+        assert_eq!(config.max_retries, 5);
+        assert_eq!(config.delay_increment, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_calculate_retry_delay() {
+        let config = PluginConfig::default();
+        let handle = PluginHandle::new(config);
+
+        // Test delay calculation: retry_after + (attempt - 1) * delay_increment
+        // With default delay_increment of 10s and retry_after of 10s:
+        // Attempt 1: 10 + 0*10 = 10s
+        // Attempt 2: 10 + 1*10 = 20s
+        // Attempt 3: 10 + 2*10 = 30s
+        // Attempt 4: 10 + 3*10 = 40s
+        // Attempt 5: 10 + 4*10 = 50s
+
+        assert_eq!(handle.calculate_retry_delay(10, 1), Duration::from_secs(10));
+        assert_eq!(handle.calculate_retry_delay(10, 2), Duration::from_secs(20));
+        assert_eq!(handle.calculate_retry_delay(10, 3), Duration::from_secs(30));
+        assert_eq!(handle.calculate_retry_delay(10, 4), Duration::from_secs(40));
+        assert_eq!(handle.calculate_retry_delay(10, 5), Duration::from_secs(50));
+
+        // Test with different retry_after values
+        assert_eq!(handle.calculate_retry_delay(5, 1), Duration::from_secs(5));
+        assert_eq!(handle.calculate_retry_delay(5, 3), Duration::from_secs(25));
+    }
+
+    #[test]
+    fn test_is_retryable_error() {
+        use super::super::rpc::RpcError;
+
+        // Rate limited is retryable
+        let rate_limited = RpcError::RateLimited {
+            retry_after_seconds: 10,
+        };
+        assert_eq!(PluginHandle::is_retryable_error(&rate_limited), Some(10));
+
+        // Other errors are not retryable
+        let not_found = RpcError::NotFound("test".to_string());
+        assert_eq!(PluginHandle::is_retryable_error(&not_found), None);
+
+        let auth_failed = RpcError::AuthFailed("test".to_string());
+        assert_eq!(PluginHandle::is_retryable_error(&auth_failed), None);
+
+        let timeout = RpcError::Timeout(Duration::from_secs(30));
+        assert_eq!(PluginHandle::is_retryable_error(&timeout), None);
+
+        let api_error = RpcError::ApiError("test".to_string());
+        assert_eq!(PluginHandle::is_retryable_error(&api_error), None);
     }
 
     // Integration tests would require a mock plugin process

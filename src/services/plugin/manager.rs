@@ -55,7 +55,7 @@ use crate::db::entities::plugins;
 use crate::db::repositories::{FailureContext, PluginFailuresRepository, PluginsRepository};
 use crate::services::PluginMetricsService;
 
-use super::handle::{PluginConfig, PluginError, PluginHandle};
+use super::handle::{PluginConfig, PluginError, PluginHandle, RetryConfig};
 use super::process::PluginProcessConfig;
 use super::protocol::{
     MetadataGetParams, MetadataMatchParams, MetadataSearchParams, MetadataSearchResponse,
@@ -1107,6 +1107,7 @@ impl PluginManager {
             max_failures: self.config.failure_threshold,
             config: Some(plugin.config.clone()),
             credentials,
+            retry_config: RetryConfig::default(),
         })
     }
 
