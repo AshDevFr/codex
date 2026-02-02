@@ -19,7 +19,7 @@ import {
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 /**
  * A preprocessing rule that transforms text using regex patterns.
@@ -136,6 +136,20 @@ export function PreprocessingRulesEditor({
 }: PreprocessingRulesEditorProps) {
   const [localTestInput, setLocalTestInput] = useState(testInput);
 
+  // Generate stable keys for rules to avoid focus loss when editing
+  const nextKeyRef = useRef(0);
+  const ruleKeysRef = useRef<number[]>([]);
+
+  // Sync keys with value array length
+  if (ruleKeysRef.current.length < value.length) {
+    // Add new keys for new rules
+    while (ruleKeysRef.current.length < value.length) {
+      ruleKeysRef.current.push(nextKeyRef.current++);
+    }
+  } else if (ruleKeysRef.current.length > value.length) {
+    // Trim keys when rules are removed (keys are removed via removeRule/moveRule)
+  }
+
   // Use local state if no external control
   const effectiveTestInput = onTestInputChange ? testInput : localTestInput;
   const setTestInput = onTestInputChange ?? setLocalTestInput;
@@ -186,6 +200,7 @@ export function PreprocessingRulesEditor({
 
   const removeRule = useCallback(
     (index: number) => {
+      ruleKeysRef.current.splice(index, 1);
       onChange(value.filter((_, i) => i !== index));
     },
     [value, onChange],
@@ -200,6 +215,11 @@ export function PreprocessingRulesEditor({
       [newRules[index], newRules[newIndex]] = [
         newRules[newIndex],
         newRules[index],
+      ];
+      // Swap keys to maintain stable identity
+      [ruleKeysRef.current[index], ruleKeysRef.current[newIndex]] = [
+        ruleKeysRef.current[newIndex],
+        ruleKeysRef.current[index],
       ];
       onChange(newRules);
     },
@@ -256,7 +276,7 @@ export function PreprocessingRulesEditor({
       ) : (
         <Stack gap="sm">
           {value.map((rule, index) => (
-            <Card key={`${rule.pattern}-${index}`} padding="sm" withBorder>
+            <Card key={ruleKeysRef.current[index]} padding="sm" withBorder>
               <Stack gap="xs">
                 {/* Rule header with controls */}
                 <Group justify="space-between">
