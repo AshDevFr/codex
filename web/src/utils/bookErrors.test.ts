@@ -129,19 +129,19 @@ describe("bookErrors utility functions", () => {
 
   describe("ERROR_TYPE_LABELS constant", () => {
     it("should have labels for all error types", () => {
-      expect(Object.keys(ERROR_TYPE_LABELS)).toHaveLength(7);
+      expect(Object.keys(ERROR_TYPE_LABELS)).toHaveLength(8);
     });
   });
 
   describe("ERROR_TYPE_COLORS constant", () => {
     it("should have colors for all error types", () => {
-      expect(Object.keys(ERROR_TYPE_COLORS)).toHaveLength(7);
+      expect(Object.keys(ERROR_TYPE_COLORS)).toHaveLength(8);
     });
   });
 
   describe("ERROR_TYPE_DESCRIPTIONS constant", () => {
     it("should have descriptions for all error types", () => {
-      expect(Object.keys(ERROR_TYPE_DESCRIPTIONS)).toHaveLength(7);
+      expect(Object.keys(ERROR_TYPE_DESCRIPTIONS)).toHaveLength(8);
     });
   });
 });
