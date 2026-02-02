@@ -72,6 +72,32 @@ pub async fn analyze_book(
                     );
                 }
             }
+
+            // Check if book has zero pages after successful analysis
+            // This is not a failure - analysis completed, but the book has no content
+            if let Ok(Some(updated_book)) = BookRepository::get_by_id(db, book_id).await {
+                if updated_book.page_count == 0 {
+                    let book_error =
+                        BookError::new("Book was analyzed successfully but contains zero pages");
+                    if let Err(e) =
+                        BookRepository::set_error(db, book_id, BookErrorType::ZeroPages, book_error)
+                            .await
+                    {
+                        warn!("Failed to set ZeroPages error for book {}: {}", book_id, e);
+                    }
+                } else {
+                    // Clear ZeroPages error if book now has pages
+                    if let Err(e) =
+                        BookRepository::clear_error(db, book_id, BookErrorType::ZeroPages).await
+                    {
+                        warn!(
+                            "Failed to clear ZeroPages error for book {}: {}",
+                            book_id, e
+                        );
+                    }
+                }
+            }
+
             info!(
                 "Analysis completed for book {} in {:?}",
                 book_id,

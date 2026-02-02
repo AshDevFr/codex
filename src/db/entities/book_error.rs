@@ -25,6 +25,8 @@ pub enum BookErrorType {
     PageExtraction,
     /// Error rendering PDF pages (e.g., PDFium not available)
     PdfRendering,
+    /// Book was analyzed successfully but contains zero pages
+    ZeroPages,
     /// Other uncategorized errors
     Other,
 }
@@ -39,6 +41,7 @@ impl BookErrorType {
             BookErrorType::Thumbnail => "Thumbnail Generation",
             BookErrorType::PageExtraction => "Page Extraction",
             BookErrorType::PdfRendering => "PDF Rendering",
+            BookErrorType::ZeroPages => "Zero Pages",
             BookErrorType::Other => "Other Error",
         }
     }
@@ -53,6 +56,7 @@ impl BookErrorType {
             BookErrorType::Thumbnail,
             BookErrorType::PageExtraction,
             BookErrorType::PdfRendering,
+            BookErrorType::ZeroPages,
             BookErrorType::Other,
         ]
     }
@@ -149,6 +153,14 @@ mod tests {
 
         let parsed: BookErrorType = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, BookErrorType::Parser);
+
+        // Test ZeroPages serializes to snake_case
+        let zero_pages = BookErrorType::ZeroPages;
+        let json = serde_json::to_string(&zero_pages).unwrap();
+        assert_eq!(json, "\"zero_pages\"");
+
+        let parsed: BookErrorType = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, BookErrorType::ZeroPages);
     }
 
     #[test]
@@ -240,6 +252,7 @@ mod tests {
         assert_eq!(BookErrorType::Thumbnail.label(), "Thumbnail Generation");
         assert_eq!(BookErrorType::PageExtraction.label(), "Page Extraction");
         assert_eq!(BookErrorType::PdfRendering.label(), "PDF Rendering");
+        assert_eq!(BookErrorType::ZeroPages.label(), "Zero Pages");
         assert_eq!(BookErrorType::Other.label(), "Other Error");
     }
 }

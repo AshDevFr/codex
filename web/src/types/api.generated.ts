@@ -5026,7 +5026,7 @@ export interface components {
          * @description Book error type
          * @enum {string}
          */
-        BookErrorTypeDto: "format_detection" | "parser" | "metadata" | "thumbnail" | "page_extraction" | "pdf_rendering" | "other";
+        BookErrorTypeDto: "format_detection" | "parser" | "metadata" | "thumbnail" | "page_extraction" | "pdf_rendering" | "zero_pages" | "other";
         /** @description Full book metadata including all fields and their lock states */
         BookFullMetadata: {
             /**

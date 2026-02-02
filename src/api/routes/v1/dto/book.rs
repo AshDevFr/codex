@@ -844,6 +844,8 @@ pub enum BookErrorTypeDto {
     PageExtraction,
     /// Error rendering PDF pages (e.g., PDFium not available)
     PdfRendering,
+    /// Book was analyzed successfully but contains zero pages
+    ZeroPages,
     /// Other uncategorized errors
     Other,
 }
@@ -858,6 +860,7 @@ impl From<crate::db::entities::book_error::BookErrorType> for BookErrorTypeDto {
             BookErrorType::Thumbnail => BookErrorTypeDto::Thumbnail,
             BookErrorType::PageExtraction => BookErrorTypeDto::PageExtraction,
             BookErrorType::PdfRendering => BookErrorTypeDto::PdfRendering,
+            BookErrorType::ZeroPages => BookErrorTypeDto::ZeroPages,
             BookErrorType::Other => BookErrorTypeDto::Other,
         }
     }
@@ -873,6 +876,7 @@ impl From<BookErrorTypeDto> for crate::db::entities::book_error::BookErrorType {
             BookErrorTypeDto::Thumbnail => BookErrorType::Thumbnail,
             BookErrorTypeDto::PageExtraction => BookErrorType::PageExtraction,
             BookErrorTypeDto::PdfRendering => BookErrorType::PdfRendering,
+            BookErrorTypeDto::ZeroPages => BookErrorType::ZeroPages,
             BookErrorTypeDto::Other => BookErrorType::Other,
         }
     }

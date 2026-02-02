@@ -14046,6 +14046,7 @@
           "thumbnail",
           "page_extraction",
           "pdf_rendering",
+          "zero_pages",
           "other"
         ]
       },
