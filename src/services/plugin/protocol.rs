@@ -414,6 +414,9 @@ pub struct SearchResultPreview {
     pub rating: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Number of books in the series (if known by the provider)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub book_count: Option<i32>,
 }
 
 /// Parameters for metadata/get

@@ -24720,6 +24720,14 @@
         "type": "object",
         "description": "Preview data for search results",
         "properties": {
+          "bookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of books in the series (if known by the provider)"
+          },
           "description": {
             "type": [
               "string",

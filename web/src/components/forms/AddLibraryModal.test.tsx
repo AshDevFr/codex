@@ -648,10 +648,11 @@ describe("LibraryModal (Add Mode)", () => {
 
     // The form validation happens in handleSubmit and shows a notification
     // The library should not be created because cron schedule is required
-    await waitFor(() => {
-      // Verify that the API was not called (validation prevented submission)
-      expect(librariesApi.create).not.toHaveBeenCalled();
-    });
+    // Short wait to give time for any async calls to happen
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify that the API was not called (validation prevented submission)
+    expect(librariesApi.create).not.toHaveBeenCalled();
   });
 
   it("should have all formats selected by default", async () => {
@@ -767,61 +768,38 @@ describe("LibraryModal (Add Mode)", () => {
     const selectButton = await screen.findByText("Select This Folder");
     await user.click(selectButton);
 
-    // Open formats dropdown and deselect some formats
+    // Open formats dropdown
     const formatsInput = modalContent.getByLabelText("Allowed Formats");
     await user.click(formatsInput);
 
-    // Wait for options to appear (may appear multiple times in MultiSelect)
+    // Wait for dropdown to be visible
     await waitFor(() => {
-      const cbzElements = screen.getAllByText("CBZ (Comic Book ZIP)");
-      expect(cbzElements.length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText("CBR (Comic Book RAR)").length,
+      ).toBeGreaterThan(0);
     });
 
-    // Deselect CBR and PDF by clicking them (they're selected by default)
-    // In Mantine MultiSelect, clicking a selected item in the dropdown toggles it off
-    // Wait for dropdown to be fully open
-    await waitFor(() => {
-      const options = screen.getAllByText("CBR (Comic Book RAR)");
-      expect(options.length).toBeGreaterThan(0);
-    });
+    // Find close buttons within pills (Mantine uses CloseButton component)
+    // Use document.body to query since Mantine renders in portals
+    // Pills are ordered: CBZ (0), CBR (1), EPUB (2), PDF (3)
+    let closeButtons = document.querySelectorAll(".mantine-Pill-remove");
 
-    // Find the option in the dropdown (not the selected item in the input)
-    // The dropdown options are typically in a portal
-    const cbrOptions = screen.getAllByText("CBR (Comic Book RAR)");
-    // Click the last one (usually the option in dropdown, not the selected tag)
-    const cbrOption = cbrOptions[cbrOptions.length - 1];
-    await user.click(cbrOption);
+    // Remove CBR first (index 1)
+    if (closeButtons.length >= 2) {
+      await user.click(closeButtons[1]);
+    }
 
-    // Wait for the state to update after clicking
-    await waitFor(() => {
-      // Verify CBR was deselected by checking the dropdown is still open
-      const pdfOptions = screen.getAllByText("PDF (Portable Document Format)");
-      expect(pdfOptions.length).toBeGreaterThan(0);
-    });
+    // After removing CBR, re-query for buttons since DOM has changed
+    // Now pills are: CBZ (0), EPUB (1), PDF (2)
+    closeButtons = document.querySelectorAll(".mantine-Pill-remove");
 
-    // Deselect PDF
-    const pdfOptions = screen.getAllByText("PDF (Portable Document Format)");
-    const pdfOption = pdfOptions[pdfOptions.length - 1];
-    await user.click(pdfOption);
-
-    // Wait for state to update
-    await waitFor(
-      () => {
-        // Give time for the click to process
-      },
-      { timeout: 500 },
-    );
+    // Remove PDF (now at index 2)
+    if (closeButtons.length >= 3) {
+      await user.click(closeButtons[2]);
+    }
 
     // Close dropdown
     await user.keyboard("{Escape}");
-
-    // Wait for state to update after deselecting formats
-    await waitFor(
-      () => {
-        // Give time for the MultiSelect state to update
-      },
-      { timeout: 500 },
-    );
 
     // Submit form
     await waitFor(() => {
@@ -837,16 +815,10 @@ describe("LibraryModal (Add Mode)", () => {
         expect.objectContaining({
           name: "Test Library",
           path: "/home/user",
-          allowedFormats: expect.arrayContaining(["CBZ", "EPUB"]),
+          allowedFormats: ["CBZ", "EPUB"],
         }),
       );
     });
-
-    // Verify CBR and PDF are not in the submitted formats
-    const createCall = vi.mocked(librariesApi.create).mock.calls[0];
-    const submittedFormats = createCall[0].allowedFormats;
-    expect(submittedFormats).not.toContain("CBR");
-    expect(submittedFormats).not.toContain("PDF");
   });
 
   it("should reset to all formats when modal closes", async () => {

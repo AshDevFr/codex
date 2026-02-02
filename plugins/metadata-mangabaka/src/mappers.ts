@@ -165,6 +165,7 @@ export function mapSearchResult(series: MbSeries): SearchResult {
       genres: (series.genres ?? []).slice(0, 3).map(formatGenre),
       rating: extractRating(series.rating),
       description: stripHtml(series.description)?.slice(0, 200) ?? undefined,
+      bookCount: series.final_volume ? Number.parseInt(series.final_volume, 10) : undefined,
     },
   };
 }

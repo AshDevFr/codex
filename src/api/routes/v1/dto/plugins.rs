@@ -1017,6 +1017,10 @@ pub struct SearchResultPreviewDto {
     /// Short description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// Number of books in the series (if known by the provider)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book_count: Option<i32>,
 }
 
 /// Response containing search results from a plugin
@@ -1298,6 +1302,7 @@ impl From<crate::services::plugin::protocol::SearchResultPreview> for SearchResu
             genres: p.genres,
             rating: p.rating,
             description: p.description,
+            book_count: p.book_count,
         }
     }
 }

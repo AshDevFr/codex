@@ -64,7 +64,29 @@ describe("mappers", () => {
       expect(result.year).toBeUndefined();
       expect(result.coverUrl).toBeUndefined();
       expect(result.preview?.rating).toBeUndefined();
+      expect(result.preview?.bookCount).toBeUndefined();
       expect(result.relevanceScore).toBeUndefined();
+    });
+
+    it("should include book count from final_volume", () => {
+      const series: MbSeries = {
+        id: 12345,
+        state: "active",
+        title: "Completed Series",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "completed",
+        final_volume: "13",
+      };
+
+      const result = mapSearchResult(series);
+
+      expect(result.preview?.bookCount).toBe(13);
     });
   });
 

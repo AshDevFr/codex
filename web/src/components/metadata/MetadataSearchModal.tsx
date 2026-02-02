@@ -301,6 +301,12 @@ function SearchResultCard({ result, onSelect }: SearchResultCardProps) {
                   {result.preview.status}
                 </Badge>
               )}
+              {result.preview.bookCount != null && (
+                <Badge size="xs" variant="filled" color="blue">
+                  {result.preview.bookCount}{" "}
+                  {result.preview.bookCount === 1 ? "book" : "books"}
+                </Badge>
+              )}
               {result.preview.genres?.slice(0, 3).map((genre) => (
                 <Badge key={genre} size="xs" variant="light">
                   {genre}

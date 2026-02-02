@@ -65,6 +65,8 @@ export interface SearchResultPreview {
   rating?: number;
   /** Short description */
   description?: string;
+  /** Number of books in the series (if known by the provider) */
+  bookCount?: number;
 }
 
 // =============================================================================

@@ -213,4 +213,58 @@ describe("MetadataSearchModal", () => {
 
     expect(screen.queryByText("Search Test Plugin")).not.toBeInTheDocument();
   });
+
+  it("displays book count when provided in preview", async () => {
+    (pluginsApi.searchMetadata as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      result: {
+        results: [
+          {
+            externalId: "ext-1",
+            title: "Series With Books",
+            alternateTitles: [],
+            year: 2024,
+            coverUrl: null,
+            preview: {
+              status: "Completed",
+              bookCount: 10,
+              genres: ["Fantasy"],
+            },
+          },
+          {
+            externalId: "ext-2",
+            title: "Single Book Series",
+            alternateTitles: [],
+            year: 2023,
+            coverUrl: null,
+            preview: {
+              bookCount: 1,
+              genres: [],
+            },
+          },
+        ],
+      },
+      latencyMs: 100,
+    });
+
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={mockPlugin}
+        initialQuery="Series"
+        onSelect={onSelect}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("10 books")).toBeInTheDocument();
+      },
+      { timeout: 1000 },
+    );
+
+    // Singular form for 1 book
+    expect(screen.getByText("1 book")).toBeInTheDocument();
+  });
 });

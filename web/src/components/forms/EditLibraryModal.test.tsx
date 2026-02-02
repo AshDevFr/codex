@@ -282,65 +282,34 @@ describe("LibraryModal (Edit Mode)", () => {
       expect(screen.getByText("Edit Library")).toBeInTheDocument();
     });
 
-    const modal = await screen.findByRole("dialog");
-    const modalContent = within(modal);
+    // Navigate to the Scanning tab
+    const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+    await user.click(scanningTab);
+
+    // Wait for the Scanning tab content to load
+    await waitFor(() => {
+      expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+    });
 
     // Switch to auto scan
-    // Mantine Select renders as a button/combobox - find by displayed text first
-    // biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
-    let selectInput;
-    try {
-      // Mantine Select shows the selected value as text
-      selectInput = screen.getByText("Manual - Trigger scans on demand");
-    } catch {
-      try {
-        selectInput = screen.getByLabelText("Scan Strategy");
-      } catch {
-        // Fallback: find combobox or button near the label
-        const label = modalContent.getByText("Scan Strategy");
-        const allInteractive = modalContent.getAllByRole("combobox");
-        if (allInteractive.length > 0) {
-          selectInput = allInteractive[0];
-        } else {
-          const buttons = modalContent.getAllByRole("button");
-          selectInput =
-            buttons.find(
-              (btn) =>
-                btn.textContent?.includes("Manual") ||
-                btn.closest("form")?.contains(label),
-            ) || buttons[0];
-        }
-      }
-    }
+    const selectInput = screen.getByText("Manual - Trigger scans on demand");
     await user.click(selectInput);
 
     await waitFor(() => {
-      const autoOption = screen.getByText("Automatic - Scheduled scanning");
-      expect(autoOption).toBeInTheDocument();
+      expect(
+        screen.getByText("Automatic - Scheduled scanning"),
+      ).toBeInTheDocument();
     });
 
     const autoOption = screen.getByText("Automatic - Scheduled scanning");
     await user.click(autoOption);
 
     // Wait for cron input and change it
-    let cronInput: HTMLElement | null = null;
-    await waitFor(() => {
-      // Try multiple ways to find the CronInput
-      try {
-        cronInput = modalContent.getByLabelText("Cron Schedule");
-      } catch {
-        try {
-          cronInput = screen.getByLabelText("Cron Schedule");
-        } catch {
-          // Fallback: find by placeholder
-          cronInput = modalContent.getByPlaceholderText("0 0 * * *");
-        }
-      }
-      expect(cronInput).toBeInTheDocument();
-    });
+    const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+    expect(cronInput).toBeInTheDocument();
 
-    await user.clear(cronInput!);
-    await user.type(cronInput!, "0 2 * * *");
+    await user.clear(cronInput);
+    await user.type(cronInput, "0 2 * * *");
 
     // Submit form
     const saveButton = screen.getByText("Save Changes");
@@ -465,69 +434,38 @@ describe("LibraryModal (Edit Mode)", () => {
       expect(screen.getByText("Edit Library")).toBeInTheDocument();
     });
 
-    const modal = await screen.findByRole("dialog");
-    const modalContent = within(modal);
+    // Navigate to the Scanning tab
+    const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+    await user.click(scanningTab);
+
+    // Wait for the Scanning tab content to load
+    await waitFor(() => {
+      expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+    });
 
     // Switch to auto scan
-    // Mantine Select renders as a button/combobox - find by displayed text first
-    // biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
-    let selectInput;
-    try {
-      // Mantine Select shows the selected value as text
-      selectInput = screen.getByText("Manual - Trigger scans on demand");
-    } catch {
-      try {
-        selectInput = screen.getByLabelText("Scan Strategy");
-      } catch {
-        // Fallback: find combobox or button near the label
-        const label = modalContent.getByText("Scan Strategy");
-        const allInteractive = modalContent.getAllByRole("combobox");
-        if (allInteractive.length > 0) {
-          selectInput = allInteractive[0];
-        } else {
-          const buttons = modalContent.getAllByRole("button");
-          selectInput =
-            buttons.find(
-              (btn) =>
-                btn.textContent?.includes("Manual") ||
-                btn.closest("form")?.contains(label),
-            ) || buttons[0];
-        }
-      }
-    }
+    const selectInput = screen.getByText("Manual - Trigger scans on demand");
     await user.click(selectInput);
 
     await waitFor(() => {
-      const autoOption = screen.getByText("Automatic - Scheduled scanning");
-      expect(autoOption).toBeInTheDocument();
+      expect(
+        screen.getByText("Automatic - Scheduled scanning"),
+      ).toBeInTheDocument();
     });
 
     const autoOption = screen.getByText("Automatic - Scheduled scanning");
     await user.click(autoOption);
 
     // Wait for cron input and enter invalid value
-    let cronInput: HTMLElement | null = null;
-    await waitFor(() => {
-      // Try multiple ways to find the CronInput
-      try {
-        cronInput = modalContent.getByLabelText("Cron Schedule");
-      } catch {
-        try {
-          cronInput = screen.getByLabelText("Cron Schedule");
-        } catch {
-          // Fallback: find by placeholder
-          cronInput = modalContent.getByPlaceholderText("0 0 * * *");
-        }
-      }
-      expect(cronInput).toBeInTheDocument();
-    });
+    const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+    expect(cronInput).toBeInTheDocument();
 
-    await user.clear(cronInput!);
-    await user.type(cronInput!, "invalid cron");
+    await user.clear(cronInput);
+    await user.type(cronInput, "invalid cron");
 
     // Input should show validation error
     await waitFor(() => {
-      expect(cronInput!).toHaveAttribute("aria-invalid", "true");
+      expect(cronInput).toHaveAttribute("aria-invalid", "true");
     });
   });
 

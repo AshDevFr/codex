@@ -10986,6 +10986,11 @@ export interface components {
         };
         /** @description Preview data for search results */
         SearchResultPreviewDto: {
+            /**
+             * Format: int32
+             * @description Number of books in the series (if known by the provider)
+             */
+            bookCount?: number | null;
             /** @description Short description */
             description?: string | null;
             /** @description Genres */
