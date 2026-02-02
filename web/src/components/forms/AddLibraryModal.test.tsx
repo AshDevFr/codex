@@ -467,88 +467,50 @@ describe("LibraryModal (Add Mode)", () => {
 		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal
-		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-		const modalContent = within(modal);
+		await screen.findByRole("dialog", {}, { timeout: 3000 });
 
-		// Find the select by looking for the label, then find the input
+		// Navigate to the Scanning tab
+		const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+		await user.click(scanningTab);
+
+		// Wait for the Scanning tab content to load
 		await waitFor(() => {
-			expect(modalContent.getByText("Scan Strategy")).toBeInTheDocument();
+			expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
 		});
 
-		// Find the select input - Mantine Select renders as a button/combobox
-		// Try to find by the displayed text first (most reliable)
-		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
-		let selectInput;
-		try {
-			// Mantine Select shows the selected value as text
-			selectInput = screen.getByText("Manual - Trigger scans on demand");
-		} catch {
-			try {
-				selectInput = screen.getByLabelText("Scan Strategy");
-			} catch {
-				// Fallback: find combobox or button near the label
-				const label = modalContent.getByText("Scan Strategy");
-				// Find the next interactive element after the label
-				const allInteractive = modalContent.getAllByRole("combobox");
-				if (allInteractive.length > 0) {
-					selectInput = allInteractive[0];
-				} else {
-					// Try buttons
-					const buttons = modalContent.getAllByRole("button");
-					selectInput =
-						buttons.find(
-							(btn) =>
-								btn.textContent?.includes("Manual") ||
-								btn.closest("form")?.contains(label),
-						) || buttons[0];
-				}
-			}
-		}
-
-		// Click to open dropdown (this will make it a combobox)
+		// Find and click on the Select to open the dropdown
+		const selectInput = screen.getByText("Manual - Trigger scans on demand");
 		await user.click(selectInput);
 
 		// Wait for and click the auto option
-		await waitFor(() => {
-			const autoOption = screen.getByText("Automatic - Scheduled scanning");
-			expect(autoOption).toBeInTheDocument();
-		});
-
-		const autoOption = screen.getByText("Automatic - Scheduled scanning");
+		const autoOption = await screen.findByText(
+			"Automatic - Scheduled scanning",
+		);
 		await user.click(autoOption);
 
 		// Cron input should appear
-		await waitFor(() => {
-			// Try multiple ways to find the CronInput
-			// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
-			let cronInput;
-			try {
-				cronInput = modalContent.getByLabelText("Cron Schedule");
-			} catch {
-				try {
-					cronInput = screen.getByLabelText("Cron Schedule");
-				} catch {
-					// Fallback: find by placeholder
-					cronInput = modalContent.getByPlaceholderText("0 0 * * *");
-				}
-			}
-			expect(cronInput).toBeInTheDocument();
-		});
+		const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+		expect(cronInput).toBeInTheDocument();
 	});
 
 	it("should not show cron input when manual scan strategy is selected", async () => {
+		const user = userEvent.setup();
 		renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
 		// Wait for modal
-		const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-		const modalContent = within(modal);
+		await screen.findByRole("dialog", {}, { timeout: 3000 });
+
+		// Navigate to the Scanning tab
+		const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+		await user.click(scanningTab);
+
+		// Wait for the Scanning tab content to load
+		await waitFor(() => {
+			expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+		});
 
 		// Cron input should not be visible by default (manual is default)
-		await waitFor(() => {
-			expect(
-				modalContent.queryByLabelText("Cron Schedule"),
-			).not.toBeInTheDocument();
-		});
+		expect(screen.queryByPlaceholderText("0 0 * * *")).not.toBeInTheDocument();
 	});
 
 	it("should create library with cron schedule when auto scan is enabled", async () => {
@@ -582,61 +544,29 @@ describe("LibraryModal (Add Mode)", () => {
 		const selectButton = await screen.findByText("Select This Folder");
 		await user.click(selectButton);
 
-		// Select auto scan strategy
-		// Mantine Select renders as a button/combobox - find by displayed text first
-		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
-		let selectInput;
-		try {
-			// Mantine Select shows the selected value as text
-			selectInput = screen.getByText("Manual - Trigger scans on demand");
-		} catch {
-			try {
-				selectInput = screen.getByLabelText("Scan Strategy");
-			} catch {
-				// Fallback: find combobox or button near the label
-				const label = modalContent.getByText("Scan Strategy");
-				const allInteractive = modalContent.getAllByRole("combobox");
-				if (allInteractive.length > 0) {
-					selectInput = allInteractive[0];
-				} else {
-					const buttons = modalContent.getAllByRole("button");
-					selectInput =
-						buttons.find(
-							(btn) =>
-								btn.textContent?.includes("Manual") ||
-								btn.closest("form")?.contains(label),
-						) || buttons[0];
-				}
-			}
-		}
-		await user.click(selectInput);
+		// Navigate to the Scanning tab
+		const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+		await user.click(scanningTab);
 
+		// Wait for the Scanning tab content to load
 		await waitFor(() => {
-			const autoOption = screen.getByText("Automatic - Scheduled scanning");
-			expect(autoOption).toBeInTheDocument();
+			expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
 		});
 
-		const autoOption = screen.getByText("Automatic - Scheduled scanning");
+		// Find and click on the Select to open the dropdown
+		const selectInput = screen.getByText("Manual - Trigger scans on demand");
+		await user.click(selectInput);
+
+		// Wait for and click the auto option
+		const autoOption = await screen.findByText(
+			"Automatic - Scheduled scanning",
+		);
 		await user.click(autoOption);
 
 		// Wait for cron input and verify it has default value
-		await waitFor(() => {
-			// Try multiple ways to find the CronInput
-			// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
-			let cronInput;
-			try {
-				cronInput = modalContent.getByLabelText("Cron Schedule");
-			} catch {
-				try {
-					cronInput = screen.getByLabelText("Cron Schedule");
-				} catch {
-					// Fallback: find by placeholder
-					cronInput = modalContent.getByPlaceholderText("0 0 * * *");
-				}
-			}
-			expect(cronInput).toBeInTheDocument();
-			expect(cronInput).toHaveValue("0 0 * * *");
-		});
+		const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+		expect(cronInput).toBeInTheDocument();
+		expect(cronInput).toHaveValue("0 0 * * *");
 
 		// Submit form
 		await waitFor(() => {
@@ -688,66 +618,29 @@ describe("LibraryModal (Add Mode)", () => {
 		const selectButton = await screen.findByText("Select This Folder");
 		await user.click(selectButton);
 
-		// Select auto scan strategy
-		// Mantine Select renders as a button/combobox - find by displayed text first
-		// biome-ignore lint/suspicious/noImplicitAnyLet: Test variable with dynamic assignment
-		let selectInput;
-		try {
-			// Mantine Select shows the selected value as text
-			selectInput = screen.getByText("Manual - Trigger scans on demand");
-		} catch {
-			try {
-				selectInput = screen.getByLabelText("Scan Strategy");
-			} catch {
-				// Fallback: find combobox or button near the label
-				const label = modalContent.getByText("Scan Strategy");
-				const allInteractive = modalContent.getAllByRole("combobox");
-				if (allInteractive.length > 0) {
-					selectInput = allInteractive[0];
-				} else {
-					const buttons = modalContent.getAllByRole("button");
-					selectInput =
-						buttons.find(
-							(btn) =>
-								btn.textContent?.includes("Manual") ||
-								btn.closest("form")?.contains(label),
-						) || buttons[0];
-				}
-			}
-		}
-		await user.click(selectInput);
+		// Navigate to the Scanning tab
+		const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+		await user.click(scanningTab);
 
+		// Wait for the Scanning tab content to load and find the select
 		await waitFor(() => {
-			const autoOption = screen.getByText("Automatic - Scheduled scanning");
-			expect(autoOption).toBeInTheDocument();
+			expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
 		});
 
-		const autoOption = screen.getByText("Automatic - Scheduled scanning");
+		// Find and click on the Select to open the dropdown
+		const selectInput = screen.getByText("Manual - Trigger scans on demand");
+		await user.click(selectInput);
+
+		// Wait for and click the auto option
+		const autoOption = await screen.findByText(
+			"Automatic - Scheduled scanning",
+		);
 		await user.click(autoOption);
 
-		// Wait for cron input and clear it
-		// The CronInput appears after selecting auto scan
-		// Wait a bit for the state to update and component to re-render
-		await waitFor(
-			() => {
-				// Try multiple ways to find the CronInput
-				// Check in entire document since Mantine may render in portals
-				const cronInputByLabel = screen.queryByLabelText("Cron Schedule");
-				const cronInputByPlaceholder =
-					screen.queryByPlaceholderText("0 0 * * *");
-
-				expect(cronInputByLabel || cronInputByPlaceholder).toBeInTheDocument();
-			},
-			{ timeout: 3000 },
-		);
-
-		// Now get the input - search in entire document
-		const cronInput =
-			screen.queryByLabelText("Cron Schedule") ||
-			screen.queryByPlaceholderText("0 0 * * *");
-
+		// Wait for cron input to appear and clear it
+		const cronInput = await screen.findByPlaceholderText("0 0 * * *");
 		expect(cronInput).toBeInTheDocument();
-		await user.clear(cronInput!);
+		await user.clear(cronInput);
 
 		// Try to submit - should show validation error
 		const createButton = screen.getByText("Create Library");
@@ -755,13 +648,10 @@ describe("LibraryModal (Add Mode)", () => {
 
 		// The form validation happens in handleSubmit and shows a notification
 		// The library should not be created because cron schedule is required
-		await waitFor(
-			() => {
-				// Verify that the API was not called (validation prevented submission)
-				expect(librariesApi.create).not.toHaveBeenCalled();
-			},
-			{ timeout: 1000 },
-		);
+		await waitFor(() => {
+			// Verify that the API was not called (validation prevented submission)
+			expect(librariesApi.create).not.toHaveBeenCalled();
+		});
 	});
 
 	it("should have all formats selected by default", async () => {

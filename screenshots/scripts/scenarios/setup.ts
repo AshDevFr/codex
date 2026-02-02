@@ -48,50 +48,12 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   // Step 2: Configure Settings
   console.log("  📝 Setup Step 2: Configure Settings");
 
-  // The switch starts unchecked (skipSettings = false), so settings are visible by default
-  // First, check the "Skip" switch to hide settings, then capture that view
-  const skipLabel = await page.$('label:has-text("Skip configuration")');
-  if (skipLabel) {
-    // Click to check the skip switch (hide settings)
-    await skipLabel.click();
-    await page.waitForTimeout(500);
-  }
+  // Capture settings step
+  await captureScreenshot(page, "setup/wizard-step2-settings");
 
-  // Capture with skip checked (settings hidden)
-  await captureScreenshot(page, "setup/wizard-step2-skip");
-
-  // Now uncheck the skip switch to show settings
-  if (skipLabel) {
-    await skipLabel.click();
-    await page.waitForTimeout(500);
-  }
-
-  // Capture with basic settings visible
-  await captureScreenshot(page, "setup/wizard-step2-basic-settings");
-
-  // Click "Show Advanced Settings" to expand
-  const advancedButton = await page.$('button:has-text("Show Advanced Settings")');
-  if (advancedButton) {
-    await advancedButton.click();
-    await page.waitForTimeout(500); // Wait for collapse animation
-    await captureScreenshot(page, "setup/wizard-step2-advanced-settings", { fullPage: true });
-  }
-
-  // Check the skip option and complete setup
-  console.log("  📝 Completing setup with defaults...");
-
-  // Re-check skip to use defaults
-  const skipSwitchAgain = await page.$('label:has-text("Skip configuration") input[type="checkbox"]');
-  if (skipSwitchAgain) {
-    const isChecked = await skipSwitchAgain.isChecked();
-    if (!isChecked) {
-      await page.click('label:has-text("Skip configuration")');
-      await page.waitForTimeout(300);
-    }
-  }
-
-  // Submit to complete setup
-  await page.click('button[type="submit"]:has-text("Skip and Finish"), button[type="submit"]:has-text("Save Settings and Finish")');
+  // Complete setup with defaults
+  console.log("  📝 Completing setup...");
+  await page.click('button[type="submit"]:has-text("Finish Setup")');
 
   // Wait for redirect to home
   await page.waitForURL((url) => !url.pathname.includes("/setup"), { timeout: 15000 });

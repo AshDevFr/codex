@@ -268,11 +268,7 @@ First-time setup for creating your admin account.
 
 ![Setup Wizard - Step 1 Filled](../screenshots/setup/wizard-step1-filled.png)
 
-![Setup Wizard - Step 2 Skip](../screenshots/setup/wizard-step2-skip.png)
-
-![Setup Wizard - Step 2 Basic Settings](../screenshots/setup/wizard-step2-basic-settings.png)
-
-![Setup Wizard - Step 2 Advanced Settings](../screenshots/setup/wizard-step2-advanced-settings.png)
+![Setup Wizard - Step 2 Settings](../screenshots/setup/wizard-step2-settings.png)
 
 ![Setup Complete - Dashboard](../screenshots/setup/complete-dashboard.png)
 
