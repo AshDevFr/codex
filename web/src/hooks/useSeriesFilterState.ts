@@ -48,6 +48,9 @@ interface UseSeriesFilterStateReturn {
   // Actions for completion filter
   setCompletionState: (state: TriState) => void;
 
+  // Actions for hasExternalSourceId filter
+  setHasExternalSourceIdState: (state: TriState) => void;
+
   // Bulk actions
   clearAll: () => void;
   clearGroup: (group: keyof SeriesFilterState) => void;
@@ -99,6 +102,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       newParams.delete("lf");
       newParams.delete("stf");
       newParams.delete("cf");
+      newParams.delete("esf");
 
       // Add new filter params
       for (const [key, value] of filterParams) {
@@ -299,6 +303,15 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     [filters, updateFilters],
   );
 
+  // HasExternalSourceId actions
+  const setHasExternalSourceIdState = useCallback(
+    (state: TriState) => {
+      const newFilters = { ...filters, hasExternalSourceId: state };
+      updateFilters(newFilters);
+    },
+    [filters, updateFilters],
+  );
+
   // Clear all filters
   const clearAll = useCallback(() => {
     updateFilters(createEmptySeriesFilterState());
@@ -370,6 +383,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     setSharingTagState,
     setSharingTagMode,
     setCompletionState,
+    setHasExternalSourceIdState,
     clearAll,
     clearGroup,
     hasActiveFilters,

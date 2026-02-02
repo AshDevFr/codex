@@ -22,6 +22,8 @@ export function ActiveFilters() {
     setPublisherState,
     setLanguageState,
     setSharingTagState,
+    setCompletionState,
+    setHasExternalSourceIdState,
     clearAll,
   } = useSeriesFilterState();
 
@@ -99,6 +101,60 @@ export function ActiveFilters() {
       setSharingTagState,
     ),
   ];
+
+  // Add completion chip if active
+  if (filters.completion !== "neutral") {
+    const isExclude = filters.completion === "exclude";
+    allChips.push(
+      <Badge
+        key="completion"
+        variant="filled"
+        color={isExclude ? "red" : "blue"}
+        size="md"
+        className={styles.chip}
+        rightSection={
+          <ActionIcon
+            size="xs"
+            variant="transparent"
+            color="white"
+            onClick={() => setCompletionState("neutral")}
+            aria-label="Remove complete filter"
+          >
+            <IconX size={12} />
+          </ActionIcon>
+        }
+      >
+        {isExclude ? "NOT " : ""}Complete
+      </Badge>,
+    );
+  }
+
+  // Add hasExternalSourceId chip if active
+  if (filters.hasExternalSourceId !== "neutral") {
+    const isExclude = filters.hasExternalSourceId === "exclude";
+    allChips.push(
+      <Badge
+        key="hasExternalSourceId"
+        variant="filled"
+        color={isExclude ? "red" : "blue"}
+        size="md"
+        className={styles.chip}
+        rightSection={
+          <ActionIcon
+            size="xs"
+            variant="transparent"
+            color="white"
+            onClick={() => setHasExternalSourceIdState("neutral")}
+            aria-label="Remove external ID filter"
+          >
+            <IconX size={12} />
+          </ActionIcon>
+        }
+      >
+        {isExclude ? "NOT " : ""}Has External ID
+      </Badge>,
+    );
+  }
 
   return (
     <Group gap="xs" className={styles.container}>

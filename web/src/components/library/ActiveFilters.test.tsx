@@ -158,4 +158,72 @@ describe("ActiveFilters", () => {
     expect(screen.getByText(/Genre: Action/)).toBeInTheDocument();
     expect(screen.getByText(/NOT Genre: Horror/)).toBeInTheDocument();
   });
+
+  it("should render completion include filter chip", () => {
+    render(
+      <TestWrapper initialRoute="/?cf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText("Filters:")).toBeInTheDocument();
+    expect(screen.getByText("Complete")).toBeInTheDocument();
+  });
+
+  it("should render completion exclude filter chip with NOT prefix", () => {
+    render(
+      <TestWrapper initialRoute="/?cf=exclude">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/NOT Complete/)).toBeInTheDocument();
+  });
+
+  it("should render hasExternalSourceId include filter chip", () => {
+    render(
+      <TestWrapper initialRoute="/?esf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText("Filters:")).toBeInTheDocument();
+    expect(screen.getByText("Has External ID")).toBeInTheDocument();
+  });
+
+  it("should render hasExternalSourceId exclude filter chip with NOT prefix", () => {
+    render(
+      <TestWrapper initialRoute="/?esf=exclude">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/NOT Has External ID/)).toBeInTheDocument();
+  });
+
+  it("should have remove button on completion chip", () => {
+    render(
+      <TestWrapper initialRoute="/?cf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    const removeButton = screen.getByRole("button", {
+      name: /Remove complete filter/i,
+    });
+    expect(removeButton).toBeInTheDocument();
+  });
+
+  it("should have remove button on hasExternalSourceId chip", () => {
+    render(
+      <TestWrapper initialRoute="/?esf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    const removeButton = screen.getByRole("button", {
+      name: /Remove external ID filter/i,
+    });
+    expect(removeButton).toBeInTheDocument();
+  });
 });
