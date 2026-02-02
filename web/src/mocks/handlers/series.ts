@@ -677,6 +677,7 @@ export const seriesHandlers = [
         genres: false,
         tags: false,
         customMetadata: false,
+        cover: false,
       },
     });
   }),
@@ -770,6 +771,7 @@ export const seriesHandlers = [
       genres: false,
       tags: false,
       customMetadata: false,
+      cover: false,
     });
   }),
 
@@ -801,6 +803,7 @@ export const seriesHandlers = [
       genres: body.genres ?? false,
       tags: body.tags ?? false,
       customMetadata: body.customMetadata ?? false,
+      cover: body.cover ?? false,
     });
   }),
 
@@ -837,6 +840,7 @@ export const seriesHandlers = [
         genres: body.genres ?? false,
         tags: body.tags ?? false,
         customMetadata: body.customMetadata ?? false,
+        cover: body.cover ?? false,
       });
     },
   ),
@@ -1579,6 +1583,7 @@ function toFullSeriesResponse(seriesItem: (typeof mockSeries)[number]) {
         genresLock: false,
         tagsLock: false,
         customMetadataLock: false,
+        coverLock: false,
       },
     },
     genres,
