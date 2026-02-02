@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 /// Request to update reading progress for a book
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProgressRequest {
     /// Current page number (1-indexed)
     #[schema(example = 42)]
@@ -23,6 +24,7 @@ pub struct UpdateProgressRequest {
 
 /// Response containing reading progress for a book
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ReadProgressResponse {
     /// Progress record ID
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -83,6 +85,7 @@ impl From<crate::db::entities::read_progress::Model> for ReadProgressResponse {
 
 /// Response containing a list of reading progress records
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ReadProgressListResponse {
     /// List of progress records
     pub progress: Vec<ReadProgressResponse>,
@@ -94,6 +97,7 @@ pub struct ReadProgressListResponse {
 
 /// Response for bulk mark as read/unread operations
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct MarkReadResponse {
     /// Number of books affected
     #[schema(example = 5)]

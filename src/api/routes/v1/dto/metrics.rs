@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 /// Application metrics response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct MetricsDto {
     /// Total number of libraries in the system
     #[schema(example = 5)]
@@ -41,6 +42,7 @@ pub struct MetricsDto {
 
 /// Metrics for a single library
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct LibraryMetricsDto {
     /// Library ID
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -69,6 +71,7 @@ pub struct LibraryMetricsDto {
 
 /// Plugin metrics response - current performance statistics for all plugins
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginMetricsResponse {
     /// When the metrics were last updated
     #[schema(example = "2026-01-30T12:00:00Z")]
@@ -83,6 +86,7 @@ pub struct PluginMetricsResponse {
 
 /// Summary metrics across all plugins
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginMetricsSummaryDto {
     /// Total number of registered plugins
     #[schema(example = 3)]
@@ -119,6 +123,7 @@ pub struct PluginMetricsSummaryDto {
 
 /// Metrics for a single plugin
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginMetricsDto {
     /// Plugin ID
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -175,6 +180,7 @@ pub struct PluginMetricsDto {
 
 /// Metrics breakdown by method for a plugin
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PluginMethodMetricsDto {
     /// Method name
     #[schema(example = "search")]

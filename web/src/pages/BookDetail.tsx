@@ -251,7 +251,7 @@ export function BookDetail() {
   ];
 
   // Calculate reading progress (current_page is 1-indexed)
-  const currentPage = book.readProgress ? book.readProgress.current_page : 0;
+  const currentPage = book.readProgress ? book.readProgress.currentPage : 0;
   const percentage =
     book.pageCount > 0 ? (currentPage / book.pageCount) * 100 : 0;
 
@@ -471,7 +471,7 @@ export function BookDetail() {
                   variant="filled"
                   leftSection={<IconBook size={14} />}
                   onClick={() => {
-                    const page = book.readProgress?.current_page ?? 1;
+                    const page = book.readProgress?.currentPage ?? 1;
                     navigate(`/reader/${book.id}?page=${page}`);
                   }}
                 >

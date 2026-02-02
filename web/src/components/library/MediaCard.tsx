@@ -149,7 +149,7 @@ export const MediaCard = memo(function MediaCard({
     e.stopPropagation();
     if (type === "book" && book) {
       // Start from current page if there's progress, otherwise page 1
-      const page = book.readProgress?.current_page || 1;
+      const page = book.readProgress?.currentPage || 1;
       navigate(`/reader/${book.id}?page=${page}`);
     }
   };
@@ -157,7 +157,7 @@ export const MediaCard = memo(function MediaCard({
   // Calculate progress percentage for books
   const progressPercentage =
     book?.readProgress && book.pageCount
-      ? (book.readProgress.current_page / book.pageCount) * 100
+      ? (book.readProgress.currentPage / book.pageCount) * 100
       : 0;
 
   // Book analysis mutation

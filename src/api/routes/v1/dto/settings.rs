@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 /// Setting response DTO
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct SettingDto {
     /// Setting unique identifier
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -61,6 +62,7 @@ pub struct SettingDto {
 
 /// Update setting request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateSettingRequest {
     /// New value for the setting
     #[schema(example = "8")]
@@ -74,6 +76,7 @@ pub struct UpdateSettingRequest {
 
 /// Bulk update settings request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct BulkUpdateSettingsRequest {
     /// List of settings to update
     pub updates: Vec<BulkSettingUpdate>,
@@ -86,6 +89,7 @@ pub struct BulkUpdateSettingsRequest {
 
 /// Single setting update in a bulk operation
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct BulkSettingUpdate {
     /// Setting key to update
     #[schema(example = "scan.concurrent_jobs")]
@@ -98,6 +102,7 @@ pub struct BulkSettingUpdate {
 
 /// Setting history entry DTO
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct SettingHistoryDto {
     /// History entry ID
     #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
@@ -140,6 +145,7 @@ pub struct SettingHistoryDto {
 
 /// Query parameters for listing settings
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ListSettingsQuery {
     /// Filter settings by category
     #[schema(example = "scanning")]
@@ -149,6 +155,7 @@ pub struct ListSettingsQuery {
 
 /// Query parameters for setting history
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct HistoryQuery {
     /// Maximum number of history entries to return
     #[schema(example = 50)]
@@ -161,6 +168,7 @@ pub struct HistoryQuery {
 /// A simplified setting DTO that only includes the key and value,
 /// used for public display settings accessible to all authenticated users.
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PublicSettingDto {
     /// Setting key name
     #[schema(example = "display.custom_metadata_template")]
@@ -178,6 +186,7 @@ pub struct PublicSettingDto {
 /// Contains branding-related settings that can be accessed without authentication.
 /// Used on the login page and other unauthenticated UI surfaces.
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct BrandingSettingsDto {
     /// The application name to display
     #[schema(example = "Codex")]

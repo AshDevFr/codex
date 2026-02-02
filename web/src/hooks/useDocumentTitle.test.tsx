@@ -18,7 +18,7 @@ import { useDocumentTitle, useDynamicDocumentTitle } from "./useDocumentTitle";
 const server = setupServer(
   // Default handler that returns "Codex" as app name
   http.get("/api/v1/settings/branding", () => {
-    return HttpResponse.json({ application_name: "Codex" });
+    return HttpResponse.json({ applicationName: "Codex" });
   }),
 );
 
@@ -97,7 +97,7 @@ describe("useDocumentTitle", () => {
   it("should use custom app name from branding settings", async () => {
     server.use(
       http.get("/api/v1/settings/branding", () => {
-        return HttpResponse.json({ application_name: "My Comics" });
+        return HttpResponse.json({ applicationName: "My Comics" });
       }),
     );
 

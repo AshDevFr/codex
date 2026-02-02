@@ -97,15 +97,15 @@ export function PdfCacheSettings() {
   useEffect(() => {
     const completedCleanupTasks = activeTasks.filter(
       (task) =>
-        PDF_CACHE_TASK_TYPES.includes(task.task_type) &&
+        PDF_CACHE_TASK_TYPES.includes(task.taskType) &&
         task.status === "completed" &&
-        !processedTaskIds.current.has(task.task_id),
+        !processedTaskIds.current.has(task.taskId),
     );
 
     if (completedCleanupTasks.length > 0) {
       // Mark these tasks as processed
       for (const task of completedCleanupTasks) {
-        processedTaskIds.current.add(task.task_id);
+        processedTaskIds.current.add(task.taskId);
       }
 
       // Throttle refresh to avoid hammering the API
@@ -124,7 +124,7 @@ export function PdfCacheSettings() {
       setCleanupModalOpened(false);
       notifications.show({
         title: "Cleanup Task Queued",
-        message: `Task ${data.task_id.slice(0, 8)}... has been queued. Cleaning pages older than ${data.max_age_days} days.`,
+        message: `Task ${data.taskId.slice(0, 8)}... has been queued. Cleaning pages older than ${data.maxAgeDays} days.`,
         color: "blue",
       });
       // Invalidate task queries so the new task shows up
@@ -147,10 +147,10 @@ export function PdfCacheSettings() {
       setClearModalOpened(false);
       queryClient.invalidateQueries({ queryKey: ["pdf-cache-stats"] });
 
-      if (data.files_deleted > 0) {
+      if (data.filesDeleted > 0) {
         notifications.show({
           title: "Cache Cleared",
-          message: `Deleted ${data.files_deleted.toLocaleString()} cached pages, freed ${data.bytes_reclaimed_human}`,
+          message: `Deleted ${data.filesDeleted.toLocaleString()} cached pages, freed ${data.bytesReclaimedHuman}`,
           color: "green",
         });
       } else {
@@ -170,8 +170,8 @@ export function PdfCacheSettings() {
     },
   });
 
-  const hasCachedFiles = (stats?.total_files || 0) > 0;
-  const cacheEnabled = stats?.cache_enabled ?? false;
+  const hasCachedFiles = (stats?.totalFiles || 0) > 0;
+  const cacheEnabled = stats?.cacheEnabled ?? false;
 
   if (statsLoading) {
     return (
@@ -250,21 +250,21 @@ export function PdfCacheSettings() {
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
           <StatCard
             title="Cached Pages"
-            value={stats?.total_files || 0}
+            value={stats?.totalFiles || 0}
             subtitle="Total rendered page images"
             color={hasCachedFiles ? "blue" : "gray"}
             icon={<IconFile size={32} />}
           />
           <StatCard
             title="Cache Size"
-            value={stats?.total_size_human || "0 B"}
-            subtitle={`${(stats?.total_size_bytes || 0).toLocaleString()} bytes`}
+            value={stats?.totalSizeHuman || "0 B"}
+            subtitle={`${(stats?.totalSizeBytes || 0).toLocaleString()} bytes`}
             color={hasCachedFiles ? "blue" : "gray"}
             icon={<IconFolder size={32} />}
           />
           <StatCard
             title="Books Cached"
-            value={stats?.book_count || 0}
+            value={stats?.bookCount || 0}
             subtitle="Unique books with cached pages"
             color={hasCachedFiles ? "blue" : "gray"}
             icon={<IconBook size={32} />}
@@ -272,13 +272,13 @@ export function PdfCacheSettings() {
           <StatCard
             title="Oldest Page"
             value={
-              stats?.oldest_file_age_days !== undefined
-                ? `${stats.oldest_file_age_days} days`
+              stats?.oldestFileAgeDays !== undefined
+                ? `${stats.oldestFileAgeDays} days`
                 : "N/A"
             }
             subtitle="Age of oldest cached page"
             color={
-              stats?.oldest_file_age_days && stats.oldest_file_age_days > 30
+              stats?.oldestFileAgeDays && stats.oldestFileAgeDays > 30
                 ? "orange"
                 : "gray"
             }
@@ -294,7 +294,7 @@ export function PdfCacheSettings() {
               {cacheEnabled ? (
                 hasCachedFiles ? (
                   <Badge color="blue" size="lg">
-                    {stats?.total_files.toLocaleString()} pages cached
+                    {stats?.totalFiles.toLocaleString()} pages cached
                   </Badge>
                 ) : (
                   <Badge color="gray" size="lg">
@@ -312,18 +312,18 @@ export function PdfCacheSettings() {
                 Cache directory:
               </Text>
               <Text size="sm" ff="monospace">
-                {stats?.cache_dir || "N/A"}
+                {stats?.cacheDir || "N/A"}
               </Text>
             </Group>
             {hasCachedFiles ? (
               <Text c="dimmed">
-                The cache contains {stats?.total_files.toLocaleString()}{" "}
-                rendered pages from {stats?.book_count.toLocaleString()} books,
-                using {stats?.total_size_human} of disk space.
-                {stats?.oldest_file_age_days !== undefined && (
+                The cache contains {stats?.totalFiles.toLocaleString()} rendered
+                pages from {stats?.bookCount.toLocaleString()} books, using{" "}
+                {stats?.totalSizeHuman} of disk space.
+                {stats?.oldestFileAgeDays !== undefined && (
                   <>
                     {" "}
-                    The oldest cached page is {stats.oldest_file_age_days} days
+                    The oldest cached page is {stats.oldestFileAgeDays} days
                     old.
                   </>
                 )}
@@ -351,8 +351,8 @@ export function PdfCacheSettings() {
               pages will be preserved.
             </Text>
             <Text size="sm" c="dimmed">
-              Current cache: {stats?.total_files.toLocaleString() || 0} pages (
-              {stats?.total_size_human || "0 B"})
+              Current cache: {stats?.totalFiles.toLocaleString() || 0} pages (
+              {stats?.totalSizeHuman || "0 B"})
             </Text>
             <Group justify="flex-end">
               <Button
@@ -388,8 +388,8 @@ export function PdfCacheSettings() {
               Are you sure you want to clear the entire PDF page cache?
             </Text>
             <Text size="sm" c="dimmed">
-              This will delete {stats?.total_files.toLocaleString() || 0} cached
-              pages and free {stats?.total_size_human || "0 B"} of disk space.
+              This will delete {stats?.totalFiles.toLocaleString() || 0} cached
+              pages and free {stats?.totalSizeHuman || "0 B"} of disk space.
             </Text>
             <Group justify="flex-end">
               <Button

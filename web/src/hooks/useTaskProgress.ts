@@ -54,28 +54,28 @@ export function useTaskProgress() {
     // Convert API task response to TaskProgressEvent format
     const convertTaskToEvent = (task: {
       id: string;
-      task_type: string;
+      taskType: string;
       status: string;
-      library_id?: string | null;
-      series_id?: string | null;
-      book_id?: string | null;
-      started_at?: string | null;
+      libraryId?: string | null;
+      seriesId?: string | null;
+      bookId?: string | null;
+      startedAt?: string | null;
     }): TaskProgressEvent => {
       // Map "processing" status to "running" for UI consistency
       const status: TaskStatus =
         task.status === "processing" ? "running" : (task.status as TaskStatus);
 
       return {
-        task_id: task.id,
-        task_type: task.task_type,
+        taskId: task.id,
+        taskType: task.taskType,
         status,
         progress: undefined,
         error: undefined,
-        started_at: task.started_at ?? new Date().toISOString(),
-        completed_at: undefined,
-        library_id: task.library_id ?? undefined,
-        series_id: task.series_id ?? undefined,
-        book_id: task.book_id ?? undefined,
+        startedAt: task.startedAt ?? new Date().toISOString(),
+        completedAt: undefined,
+        libraryId: task.libraryId ?? undefined,
+        seriesId: task.seriesId ?? undefined,
+        bookId: task.bookId ?? undefined,
       };
     };
 
@@ -116,7 +116,7 @@ export function useTaskProgress() {
           // Add or update tasks that are currently processing
           for (const task of tasks) {
             const event = convertTaskToEvent(task);
-            next.set(event.task_id, event);
+            next.set(event.taskId, event);
           }
           return next;
         });
@@ -171,14 +171,14 @@ export function useTaskProgress() {
             // Don't overwrite if SSE has updated it (has progress or different status)
             for (const task of tasks) {
               const event = convertTaskToEvent(task);
-              const existing = next.get(event.task_id);
+              const existing = next.get(event.taskId);
               if (
                 !existing ||
                 (existing.status === "running" &&
                   !existing.progress &&
-                  !existing.completed_at)
+                  !existing.completedAt)
               ) {
-                next.set(event.task_id, event);
+                next.set(event.taskId, event);
               }
             }
             return next;
@@ -204,13 +204,13 @@ export function useTaskProgress() {
           setTimeout(() => {
             setActiveTasks((current) => {
               const updated = new Map(current);
-              updated.delete(event.task_id);
+              updated.delete(event.taskId);
               return updated;
             });
           }, 5000);
         }
 
-        next.set(event.task_id, event);
+        next.set(event.taskId, event);
         return next;
       });
     };
@@ -241,7 +241,7 @@ export function useTaskProgress() {
 
   // Sort helper for consistent ordering (by task_type alphabetically)
   const sortTasks = (tasks: TaskProgressEvent[]): TaskProgressEvent[] =>
-    tasks.sort((a, b) => a.task_type.localeCompare(b.task_type));
+    tasks.sort((a, b) => a.taskType.localeCompare(b.taskType));
 
   return {
     /**
@@ -272,7 +272,7 @@ export function useTaskProgress() {
     getTasksByLibrary: (libraryId: string): TaskProgressEvent[] => {
       return sortTasks(
         Array.from(activeTasks.values()).filter(
-          (task) => task.library_id === libraryId,
+          (task) => task.libraryId === libraryId,
         ),
       );
     },

@@ -24,7 +24,7 @@ export const tasksHandlers = [
       filteredTasks = filteredTasks.filter((t) => t.status === status);
     }
     if (taskType) {
-      filteredTasks = filteredTasks.filter((t) => t.task_type === taskType);
+      filteredTasks = filteredTasks.filter((t) => t.taskType === taskType);
     }
 
     // 1-indexed pagination
@@ -58,20 +58,20 @@ export const tasksHandlers = [
   http.post("/api/v1/tasks", async ({ request }) => {
     await delay(100);
     const body = (await request.json()) as {
-      task_type: string;
-      library_id?: string;
-      book_id?: string;
+      taskType: string;
+      libraryId?: string;
+      bookId?: string;
     };
 
     const newTask = createTask({
-      task_type: body.task_type,
-      library_id: body.library_id,
-      book_id: body.book_id,
+      taskType: body.taskType,
+      libraryId: body.libraryId,
+      bookId: body.bookId,
       status: "pending",
     });
 
     mockTasks.unshift(newTask);
-    return HttpResponse.json({ task_id: newTask.id }, { status: 201 });
+    return HttpResponse.json({ taskId: newTask.id }, { status: 201 });
   }),
 
   // Cancel task
@@ -87,8 +87,8 @@ export const tasksHandlers = [
     mockTasks[taskIndex] = {
       ...mockTasks[taskIndex],
       status: "failed",
-      last_error: "Cancelled by user",
-      completed_at: new Date().toISOString(),
+      lastError: "Cancelled by user",
+      completedAt: new Date().toISOString(),
     };
 
     return HttpResponse.json(mockTasks[taskIndex]);
@@ -105,14 +105,14 @@ export const tasksHandlers = [
     }
 
     const newTask = createTask({
-      task_type: task.task_type,
-      library_id: task.library_id,
-      book_id: task.book_id,
+      taskType: task.taskType,
+      libraryId: task.libraryId,
+      bookId: task.bookId,
       status: "pending",
     });
 
     mockTasks.unshift(newTask);
-    return HttpResponse.json({ task_id: newTask.id });
+    return HttpResponse.json({ taskId: newTask.id });
   }),
 
   // Purge completed tasks

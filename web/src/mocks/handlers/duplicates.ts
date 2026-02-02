@@ -21,15 +21,11 @@ const createMockDuplicates = (): DuplicateGroup[] => {
       }
       groups.push({
         id: `dup-group-${i + 1}`,
-        file_hash: `hash-${i + 1}-${"a".repeat(60)}`.slice(0, 64),
-        duplicate_count: bookIds.length,
-        book_ids: bookIds,
-        created_at: new Date(
-          Date.now() - i * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-        updated_at: new Date(
-          Date.now() - i * 12 * 60 * 60 * 1000,
-        ).toISOString(),
+        fileHash: `hash-${i + 1}-${"a".repeat(60)}`.slice(0, 64),
+        duplicateCount: bookIds.length,
+        bookIds: bookIds,
+        createdAt: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date(Date.now() - i * 12 * 60 * 60 * 1000).toISOString(),
       });
     }
   }
@@ -51,14 +47,14 @@ export const duplicatesHandlers = [
     const filteredDuplicates = mockDuplicates;
 
     const totalDuplicateBooks = filteredDuplicates.reduce(
-      (sum, group) => sum + group.duplicate_count,
+      (sum, group) => sum + group.duplicateCount,
       0,
     );
 
     return HttpResponse.json({
       duplicates: filteredDuplicates,
-      total_groups: filteredDuplicates.length,
-      total_duplicate_books: totalDuplicateBooks,
+      totalGroups: filteredDuplicates.length,
+      totalDuplicateBooks: totalDuplicateBooks,
     });
   }),
 
@@ -88,12 +84,12 @@ export const duplicatesHandlers = [
       return new HttpResponse(null, { status: 404 });
     }
 
-    const deletedCount = mockDuplicates[groupIndex].duplicate_count - 1;
+    const deletedCount = mockDuplicates[groupIndex].duplicateCount - 1;
     mockDuplicates.splice(groupIndex, 1);
 
     return HttpResponse.json({
-      deleted_count: deletedCount,
-      kept_book_id: keepBookId,
+      deletedCount: deletedCount,
+      keptBookId: keepBookId,
     });
   }),
 
@@ -101,7 +97,7 @@ export const duplicatesHandlers = [
   http.post("/api/v1/duplicates/scan", async () => {
     await delay(500);
     return HttpResponse.json({
-      task_id: crypto.randomUUID(),
+      taskId: crypto.randomUUID(),
       message: "Duplicate scan task queued",
     });
   }),

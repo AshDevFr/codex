@@ -935,7 +935,7 @@ export const bookHandlers = [
       return HttpResponse.json({ error: "No progress found" }, { status: 404 });
     }
 
-    const currentPage = book.readProgress.current_page;
+    const currentPage = book.readProgress.currentPage;
     return HttpResponse.json({
       id: `progress-${params.id}`,
       bookId: params.id,

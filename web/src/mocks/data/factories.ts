@@ -670,13 +670,13 @@ export const createReadProgress = (
   overrides: Partial<ReadProgressResponse> = {},
 ): ReadProgressResponse => ({
   id: faker.string.uuid(),
-  user_id: faker.string.uuid(),
-  book_id: faker.string.uuid(),
-  current_page: faker.number.int({ min: 1, max: 30 }),
+  userId: faker.string.uuid(),
+  bookId: faker.string.uuid(),
+  currentPage: faker.number.int({ min: 1, max: 30 }),
   completed: false,
-  completed_at: null,
-  started_at: faker.date.past().toISOString(),
-  updated_at: faker.date.recent().toISOString(),
+  completedAt: null,
+  startedAt: faker.date.past().toISOString(),
+  updatedAt: faker.date.recent().toISOString(),
   ...overrides,
 });
 
@@ -696,7 +696,7 @@ export const createSetting = (
       "task.poll_interval_seconds",
     ]),
   value: overrides.value || faker.word.sample(),
-  default_value: overrides.default_value || faker.word.sample(),
+  defaultValue: overrides.defaultValue || faker.word.sample(),
   description: faker.lorem.sentence(),
   category:
     overrides.category ||
@@ -706,10 +706,10 @@ export const createSetting = (
       "Authentication",
       "Task",
     ]),
-  value_type: "string",
-  is_sensitive: false,
-  updated_at: faker.date.recent().toISOString(),
-  updated_by: faker.string.uuid(),
+  valueType: "string",
+  isSensitive: false,
+  updatedAt: faker.date.recent().toISOString(),
+  updatedBy: faker.string.uuid(),
   version: faker.number.int({ min: 1, max: 10 }),
   ...overrides,
 });
@@ -721,14 +721,14 @@ export const createSettingHistory = (
   overrides: Partial<SettingHistoryDto> = {},
 ): SettingHistoryDto => ({
   id: faker.string.uuid(),
-  setting_id: faker.string.uuid(),
+  settingId: faker.string.uuid(),
   key: overrides.key || "server.name",
-  old_value: "Old Value",
-  new_value: "New Value",
-  changed_at: faker.date.recent().toISOString(),
-  changed_by: faker.string.uuid(),
-  change_reason: faker.lorem.sentence(),
-  ip_address: faker.internet.ip(),
+  oldValue: "Old Value",
+  newValue: "New Value",
+  changedAt: faker.date.recent().toISOString(),
+  changedBy: faker.string.uuid(),
+  changeReason: faker.lorem.sentence(),
+  ipAddress: faker.internet.ip(),
   ...overrides,
 });
 
@@ -746,8 +746,8 @@ export const createTask = (
   ];
   return {
     id: faker.string.uuid(),
-    task_type:
-      overrides.task_type ||
+    taskType:
+      overrides.taskType ||
       faker.helpers.arrayElement([
         "scan_library",
         "generate_thumbnails",
@@ -756,17 +756,17 @@ export const createTask = (
     status: overrides.status || faker.helpers.arrayElement(statuses),
     priority: faker.number.int({ min: 0, max: 10 }),
     attempts: faker.number.int({ min: 0, max: 3 }),
-    max_attempts: 3,
-    created_at: faker.date.past().toISOString(),
-    scheduled_for: faker.date.recent().toISOString(),
-    started_at: faker.date.recent().toISOString(),
-    completed_at: null,
-    last_error: null,
-    library_id: faker.string.uuid(),
-    book_id: null,
-    series_id: null,
-    locked_by: null,
-    locked_until: null,
+    maxAttempts: 3,
+    createdAt: faker.date.past().toISOString(),
+    scheduledFor: faker.date.recent().toISOString(),
+    startedAt: faker.date.recent().toISOString(),
+    completedAt: null,
+    lastError: null,
+    libraryId: faker.string.uuid(),
+    bookId: null,
+    seriesId: null,
+    lockedBy: null,
+    lockedUntil: null,
     params: null,
     result: null,
     ...overrides,
@@ -785,7 +785,7 @@ export const createTaskStats = (
   failed: faker.number.int({ min: 0, max: 20 }),
   stale: faker.number.int({ min: 0, max: 5 }),
   total: faker.number.int({ min: 100, max: 5100 }),
-  by_type: {},
+  byType: {},
   ...overrides,
 });
 
@@ -795,16 +795,16 @@ export const createTaskStats = (
 export const createInventoryMetrics = (
   overrides: Partial<MetricsDto> = {},
 ): MetricsDto => ({
-  library_count: faker.number.int({ min: 1, max: 10 }),
-  series_count: faker.number.int({ min: 10, max: 500 }),
-  book_count: faker.number.int({ min: 100, max: 10000 }),
-  total_book_size: faker.number.int({
+  libraryCount: faker.number.int({ min: 1, max: 10 }),
+  seriesCount: faker.number.int({ min: 10, max: 500 }),
+  bookCount: faker.number.int({ min: 100, max: 10000 }),
+  totalBookSize: faker.number.int({
     min: 1_000_000_000,
     max: 100_000_000_000,
   }),
-  user_count: faker.number.int({ min: 1, max: 50 }),
-  database_size: faker.number.int({ min: 10_000_000, max: 500_000_000 }),
-  page_count: faker.number.int({ min: 10000, max: 500000 }),
+  userCount: faker.number.int({ min: 1, max: 50 }),
+  databaseSize: faker.number.int({ min: 10_000_000, max: 500_000_000 }),
+  pageCount: faker.number.int({ min: 10000, max: 500000 }),
   libraries: [],
   ...overrides,
 });
@@ -817,9 +817,9 @@ export const createLibraryMetrics = (
 ): LibraryMetricsDto => ({
   id: faker.string.uuid(),
   name: faker.helpers.arrayElement(["Comics", "Manga", "Ebooks"]),
-  series_count: faker.number.int({ min: 5, max: 100 }),
-  book_count: faker.number.int({ min: 50, max: 2000 }),
-  total_size: faker.number.int({ min: 500_000_000, max: 50_000_000_000 }),
+  seriesCount: faker.number.int({ min: 5, max: 100 }),
+  bookCount: faker.number.int({ min: 50, max: 2000 }),
+  totalSize: faker.number.int({ min: 500_000_000, max: 50_000_000_000 }),
   ...overrides,
 });
 
@@ -829,22 +829,22 @@ export const createLibraryMetrics = (
 export const createTaskMetrics = (
   overrides: Partial<TaskMetricsResponse> = {},
 ): TaskMetricsResponse => ({
-  updated_at: faker.date.recent().toISOString(),
+  updatedAt: faker.date.recent().toISOString(),
   retention: "30",
   summary: {
-    total_executed: faker.number.int({ min: 100, max: 10000 }),
-    total_succeeded: faker.number.int({ min: 90, max: 9000 }),
-    total_failed: faker.number.int({ min: 0, max: 100 }),
-    avg_duration_ms: faker.number.float({ min: 100, max: 5000 }),
-    avg_queue_wait_ms: faker.number.float({ min: 10, max: 500 }),
-    tasks_per_minute: faker.number.float({ min: 0.5, max: 20 }),
+    totalExecuted: faker.number.int({ min: 100, max: 10000 }),
+    totalSucceeded: faker.number.int({ min: 90, max: 9000 }),
+    totalFailed: faker.number.int({ min: 0, max: 100 }),
+    avgDurationMs: faker.number.float({ min: 100, max: 5000 }),
+    avgQueueWaitMs: faker.number.float({ min: 10, max: 500 }),
+    tasksPerMinute: faker.number.float({ min: 0.5, max: 20 }),
   },
-  by_type: [],
+  byType: [],
   queue: {
-    pending_count: faker.number.int({ min: 0, max: 50 }),
-    processing_count: faker.number.int({ min: 0, max: 5 }),
-    stale_count: 0,
-    oldest_pending_age_ms: null,
+    pendingCount: faker.number.int({ min: 0, max: 50 }),
+    processingCount: faker.number.int({ min: 0, max: 5 }),
+    staleCount: 0,
+    oldestPendingAgeMs: null,
   },
   ...overrides,
 });
@@ -855,23 +855,23 @@ export const createTaskMetrics = (
 export const createTaskTypeMetrics = (
   overrides: Partial<TaskTypeMetricsDto> = {},
 ): TaskTypeMetricsDto => ({
-  task_type: overrides.task_type || "scan_library",
+  taskType: overrides.taskType || "scan_library",
   executed: faker.number.int({ min: 10, max: 1000 }),
   succeeded: faker.number.int({ min: 9, max: 950 }),
   failed: faker.number.int({ min: 0, max: 50 }),
   retried: faker.number.int({ min: 0, max: 20 }),
-  avg_duration_ms: faker.number.float({ min: 500, max: 10000 }),
-  min_duration_ms: faker.number.int({ min: 100, max: 500 }),
-  max_duration_ms: faker.number.int({ min: 10000, max: 60000 }),
-  p50_duration_ms: faker.number.int({ min: 1000, max: 3000 }),
-  p95_duration_ms: faker.number.int({ min: 5000, max: 15000 }),
-  avg_queue_wait_ms: faker.number.float({ min: 10, max: 200 }),
-  items_processed: faker.number.int({ min: 100, max: 50000 }),
-  bytes_processed: faker.number.int({ min: 100_000_000, max: 10_000_000_000 }),
-  throughput_per_sec: faker.number.float({ min: 1, max: 100 }),
-  error_rate_pct: faker.number.float({ min: 0, max: 10 }),
-  last_error: null,
-  last_error_at: null,
+  avgDurationMs: faker.number.float({ min: 500, max: 10000 }),
+  minDurationMs: faker.number.int({ min: 100, max: 500 }),
+  maxDurationMs: faker.number.int({ min: 10000, max: 60000 }),
+  p50DurationMs: faker.number.int({ min: 1000, max: 3000 }),
+  p95DurationMs: faker.number.int({ min: 5000, max: 15000 }),
+  avgQueueWaitMs: faker.number.float({ min: 10, max: 200 }),
+  itemsProcessed: faker.number.int({ min: 100, max: 50000 }),
+  bytesProcessed: faker.number.int({ min: 100_000_000, max: 10_000_000_000 }),
+  throughputPerSec: faker.number.float({ min: 1, max: 100 }),
+  errorRatePct: faker.number.float({ min: 0, max: 10 }),
+  lastError: null,
+  lastErrorAt: null,
   ...overrides,
 });
 
@@ -882,11 +882,11 @@ export const createDuplicateGroup = (
   overrides: Partial<DuplicateGroup> = {},
 ): DuplicateGroup => ({
   id: faker.string.uuid(),
-  file_hash: faker.string.alphanumeric(64),
-  duplicate_count: faker.number.int({ min: 2, max: 5 }),
-  book_ids: [faker.string.uuid(), faker.string.uuid()],
-  created_at: faker.date.past().toISOString(),
-  updated_at: faker.date.recent().toISOString(),
+  fileHash: faker.string.alphanumeric(64),
+  duplicateCount: faker.number.int({ min: 2, max: 5 }),
+  bookIds: [faker.string.uuid(), faker.string.uuid()],
+  createdAt: faker.date.past().toISOString(),
+  updatedAt: faker.date.recent().toISOString(),
   ...overrides,
 });
 
@@ -947,10 +947,10 @@ export const createPluginMethodMetrics = (
 ): PluginMethodMetricsDto => ({
   method:
     overrides.method || faker.helpers.arrayElement(["search", "get", "match"]),
-  requests_total: faker.number.int({ min: 50, max: 500 }),
-  requests_success: faker.number.int({ min: 45, max: 480 }),
-  requests_failed: faker.number.int({ min: 0, max: 20 }),
-  avg_duration_ms: faker.number.float({ min: 100, max: 500 }),
+  requestsTotal: faker.number.int({ min: 50, max: 500 }),
+  requestsSuccess: faker.number.int({ min: 45, max: 480 }),
+  requestsFailed: faker.number.int({ min: 0, max: 20 }),
+  avgDurationMs: faker.number.float({ min: 100, max: 500 }),
   ...overrides,
 });
 
@@ -960,41 +960,41 @@ export const createPluginMethodMetrics = (
 export const createPluginMetrics = (
   overrides: Partial<PluginMetricsDto> = {},
 ): PluginMetricsDto => {
-  const requests_total =
-    overrides.requests_total ?? faker.number.int({ min: 100, max: 1000 });
-  const requests_failed =
-    overrides.requests_failed ??
-    faker.number.int({ min: 0, max: Math.floor(requests_total * 0.1) });
-  const requests_success =
-    overrides.requests_success ?? requests_total - requests_failed;
-  const error_rate_pct =
-    requests_total > 0 ? (requests_failed / requests_total) * 100 : 0;
+  const requestsTotal =
+    overrides.requestsTotal ?? faker.number.int({ min: 100, max: 1000 });
+  const requestsFailed =
+    overrides.requestsFailed ??
+    faker.number.int({ min: 0, max: Math.floor(requestsTotal * 0.1) });
+  const requestsSuccess =
+    overrides.requestsSuccess ?? requestsTotal - requestsFailed;
+  const errorRatePct =
+    requestsTotal > 0 ? (requestsFailed / requestsTotal) * 100 : 0;
 
   return {
-    plugin_id: faker.string.uuid(),
-    plugin_name: faker.helpers.arrayElement([
+    pluginId: faker.string.uuid(),
+    pluginName: faker.helpers.arrayElement([
       "MangaBaka",
       "ComicVine",
       "AniList",
       "MyAnimeList",
     ]),
-    requests_total,
-    requests_success,
-    requests_failed,
-    avg_duration_ms: faker.number.float({ min: 150, max: 500 }),
-    rate_limit_rejections: faker.number.int({ min: 0, max: 10 }),
-    error_rate_pct: Number(error_rate_pct.toFixed(2)),
-    last_success: faker.date.recent().toISOString(),
-    last_failure: faker.datatype.boolean()
+    requestsTotal,
+    requestsSuccess,
+    requestsFailed,
+    avgDurationMs: faker.number.float({ min: 150, max: 500 }),
+    rateLimitRejections: faker.number.int({ min: 0, max: 10 }),
+    errorRatePct: Number(errorRatePct.toFixed(2)),
+    lastSuccess: faker.date.recent().toISOString(),
+    lastFailure: faker.datatype.boolean()
       ? faker.date.recent().toISOString()
       : null,
-    health_status: faker.helpers.arrayElement([
+    healthStatus: faker.helpers.arrayElement([
       "healthy",
       "degraded",
       "unhealthy",
     ]),
-    by_method: null,
-    failure_counts: null,
+    byMethod: null,
+    failureCounts: null,
     ...overrides,
   };
 };
@@ -1005,14 +1005,14 @@ export const createPluginMetrics = (
 export const createPluginMetricsSummary = (
   overrides: Partial<PluginMetricsSummaryDto> = {},
 ): PluginMetricsSummaryDto => ({
-  total_plugins: faker.number.int({ min: 1, max: 5 }),
-  healthy_plugins: faker.number.int({ min: 0, max: 4 }),
-  degraded_plugins: faker.number.int({ min: 0, max: 2 }),
-  unhealthy_plugins: faker.number.int({ min: 0, max: 1 }),
-  total_requests: faker.number.int({ min: 500, max: 5000 }),
-  total_success: faker.number.int({ min: 450, max: 4800 }),
-  total_failed: faker.number.int({ min: 0, max: 200 }),
-  total_rate_limit_rejections: faker.number.int({ min: 0, max: 50 }),
+  totalPlugins: faker.number.int({ min: 1, max: 5 }),
+  healthyPlugins: faker.number.int({ min: 0, max: 4 }),
+  degradedPlugins: faker.number.int({ min: 0, max: 2 }),
+  unhealthyPlugins: faker.number.int({ min: 0, max: 1 }),
+  totalRequests: faker.number.int({ min: 500, max: 5000 }),
+  totalSuccess: faker.number.int({ min: 450, max: 4800 }),
+  totalFailed: faker.number.int({ min: 0, max: 200 }),
+  totalRateLimitRejections: faker.number.int({ min: 0, max: 50 }),
   ...overrides,
 });
 
@@ -1022,7 +1022,7 @@ export const createPluginMetricsSummary = (
 export const createPluginMetricsResponse = (
   overrides: Partial<PluginMetricsResponse> = {},
 ): PluginMetricsResponse => ({
-  updated_at: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
   summary: createPluginMetricsSummary(),
   plugins: [],
   ...overrides,

@@ -116,10 +116,10 @@ describe("useEntityEvents", () => {
     // Simulate receiving a CoverUpdated event
     const event: EntityChangeEvent = {
       type: "cover_updated",
-      entity_type: "series",
-      entity_id: "series-123",
+      entityType: "series",
+      entityId: "series-123",
       timestamp: "2026-01-07T12:00:00Z",
-      user_id: undefined,
+      userId: undefined,
     };
 
     if (capturedCallback) {
@@ -171,11 +171,11 @@ describe("useEntityEvents", () => {
     // Simulate receiving a SeriesBulkPurged event
     const event: EntityChangeEvent = {
       type: "series_bulk_purged",
-      series_id: "series-456",
-      library_id: "lib-2",
+      seriesId: "series-456",
+      libraryId: "lib-2",
       count: 5,
       timestamp: "2026-01-07T12:00:00Z",
-      user_id: "user-1",
+      userId: "user-1",
     };
 
     if (capturedCallback) {
@@ -253,9 +253,9 @@ describe("useEntityEvents", () => {
     // Simulate receiving a library_deleted event
     const event: EntityChangeEvent = {
       type: "library_deleted",
-      library_id: "lib-123",
+      libraryId: "lib-123",
       timestamp: "2026-01-12T12:00:00Z",
-      user_id: "user-1",
+      userId: "user-1",
     };
 
     if (capturedCallback) {
@@ -309,10 +309,10 @@ describe("useEntityEvents", () => {
     // Simulate receiving a cover_updated event for a series
     const seriesEvent: EntityChangeEvent = {
       type: "cover_updated",
-      entity_type: "series",
-      entity_id: "series-123",
+      entityType: "series",
+      entityId: "series-123",
       timestamp: "2026-01-12T12:00:00Z",
-      user_id: undefined,
+      userId: undefined,
     };
 
     if (capturedCallback) {
@@ -347,10 +347,10 @@ describe("useEntityEvents", () => {
     // Simulate receiving a cover_updated event for a book
     const bookEvent: EntityChangeEvent = {
       type: "cover_updated",
-      entity_type: "book",
-      entity_id: "book-456",
+      entityType: "book",
+      entityId: "book-456",
       timestamp: "2026-01-12T12:00:00Z",
-      user_id: undefined,
+      userId: undefined,
     };
 
     if (capturedCallback) {
@@ -397,9 +397,9 @@ describe("useEntityEvents", () => {
     // Test plugin_created event
     const createdEvent: EntityChangeEvent = {
       type: "plugin_created",
-      plugin_id: "plugin-123",
+      pluginId: "plugin-123",
       timestamp: "2026-01-31T12:00:00Z",
-      user_id: "user-1",
+      userId: "user-1",
     };
 
     if (capturedCallback) {
@@ -425,9 +425,9 @@ describe("useEntityEvents", () => {
     // Test plugin_enabled event
     const enabledEvent: EntityChangeEvent = {
       type: "plugin_enabled",
-      plugin_id: "plugin-456",
+      pluginId: "plugin-456",
       timestamp: "2026-01-31T12:00:00Z",
-      user_id: "user-1",
+      userId: "user-1",
     };
 
     if (capturedCallback) {
@@ -451,9 +451,9 @@ describe("useEntityEvents", () => {
     // Test plugin_disabled event
     const disabledEvent: EntityChangeEvent = {
       type: "plugin_disabled",
-      plugin_id: "plugin-789",
+      pluginId: "plugin-789",
       timestamp: "2026-01-31T12:00:00Z",
-      user_id: "user-1",
+      userId: "user-1",
     };
 
     if (capturedCallback) {

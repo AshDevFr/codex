@@ -83,14 +83,14 @@ function handleEntityEvent(
       // Invalidate specific book if it's an update
       if (event.type === "book_updated") {
         queryClient.invalidateQueries({
-          queryKey: ["books", event.book_id],
+          queryKey: ["books", event.bookId],
         });
       }
 
       // Invalidate library queries
-      if (event.library_id) {
+      if (event.libraryId) {
         queryClient.invalidateQueries({
-          queryKey: ["libraries", event.library_id],
+          queryKey: ["libraries", event.libraryId],
         });
 
         // Invalidate series in this library
@@ -117,21 +117,21 @@ function handleEntityEvent(
         event.type === "series_metadata_updated"
       ) {
         queryClient.invalidateQueries({
-          queryKey: ["series", event.series_id],
+          queryKey: ["series", event.seriesId],
         });
         // For metadata updates, also refetch active queries to immediately update the UI
         if (event.type === "series_metadata_updated") {
           queryClient.refetchQueries({
-            queryKey: ["series", event.series_id],
+            queryKey: ["series", event.seriesId],
             type: "active",
           });
         }
       }
 
       // Invalidate library queries
-      if (event.library_id) {
+      if (event.libraryId) {
         queryClient.invalidateQueries({
-          queryKey: ["libraries", event.library_id],
+          queryKey: ["libraries", event.libraryId],
         });
       }
       break;
@@ -141,19 +141,19 @@ function handleEntityEvent(
       // Record the cover update for cache-busting image URLs
       // This is needed because query invalidation only refetches JSON data,
       // not images. The timestamp is used as a query param to force image reload.
-      useCoverUpdatesStore.getState().recordCoverUpdate(event.entity_id);
+      useCoverUpdatesStore.getState().recordCoverUpdate(event.entityId);
 
       const timestamp = useCoverUpdatesStore
         .getState()
-        .getCoverTimestamp(event.entity_id);
+        .getCoverTimestamp(event.entityId);
       log(
-        `Cover updated for ${event.entity_type} ${event.entity_id}, cache-bust timestamp: ${timestamp}`,
+        `Cover updated for ${event.entityType} ${event.entityId}, cache-bust timestamp: ${timestamp}`,
       );
 
-      if (event.entity_type === "book") {
+      if (event.entityType === "book") {
         // Invalidate the specific book query
         queryClient.invalidateQueries({
-          queryKey: ["books", event.entity_id],
+          queryKey: ["books", event.entityId],
         });
         // Invalidate all book list queries (marks them as stale)
         queryClient.invalidateQueries({
@@ -165,10 +165,10 @@ function handleEntityEvent(
           queryKey: ["books"],
           type: "active",
         });
-      } else if (event.entity_type === "series") {
+      } else if (event.entityType === "series") {
         // Invalidate the specific series query
         queryClient.invalidateQueries({
-          queryKey: ["series", event.entity_id],
+          queryKey: ["series", event.entityId],
         });
         // Invalidate all series list queries (marks them as stale)
         queryClient.invalidateQueries({
@@ -192,10 +192,10 @@ function handleEntityEvent(
       });
       // Invalidate both query key patterns used in the codebase
       queryClient.invalidateQueries({
-        queryKey: ["libraries", event.library_id],
+        queryKey: ["libraries", event.libraryId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["library", event.library_id],
+        queryKey: ["library", event.libraryId],
       });
       // When a library is deleted, also invalidate all books and series queries
       // since they may contain data from the deleted library

@@ -35,7 +35,7 @@ export function useAppName(): string {
     refetchOnWindowFocus: false, // Don't refetch on window focus
   });
 
-  return data?.application_name ?? DEFAULT_APP_NAME;
+  return data?.applicationName ?? DEFAULT_APP_NAME;
 }
 
 /**
@@ -66,7 +66,7 @@ export function useBranding() {
   });
 
   return {
-    appName: data?.application_name ?? DEFAULT_APP_NAME,
+    appName: data?.applicationName ?? DEFAULT_APP_NAME,
     isLoading,
     error: error as Error | null,
     isError,

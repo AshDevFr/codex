@@ -31,13 +31,13 @@ use crate::tasks::types::TaskType;
     responses(
         (status = 200, description = "Cache statistics retrieved successfully", body = PdfCacheStatsDto,
          example = json!({
-             "total_files": 1500,
-             "total_size_bytes": 157286400,
-             "total_size_human": "150.0 MB",
-             "book_count": 45,
-             "oldest_file_age_days": 15,
-             "cache_dir": "/data/cache",
-             "cache_enabled": true
+             "totalFiles": 1500,
+             "totalSizeBytes": 157286400,
+             "totalSizeHuman": "150.0 MB",
+             "bookCount": 45,
+             "oldestFileAgeDays": 15,
+             "cacheDir": "/data/cache",
+             "cacheEnabled": true
          })
         ),
         (status = 403, description = "Admin access required"),
@@ -98,9 +98,9 @@ pub async fn get_pdf_cache_stats(
     responses(
         (status = 200, description = "Cleanup task queued successfully", body = TriggerPdfCacheCleanupResponse,
          example = json!({
-             "task_id": "550e8400-e29b-41d4-a716-446655440000",
+             "taskId": "550e8400-e29b-41d4-a716-446655440000",
              "message": "PDF cache cleanup task queued successfully",
-             "max_age_days": 30
+             "maxAgeDays": 30
          })
         ),
         (status = 403, description = "Admin access required"),
@@ -151,9 +151,9 @@ pub async fn trigger_pdf_cache_cleanup(
     responses(
         (status = 200, description = "Cache cleared successfully", body = PdfCacheCleanupResultDto,
          example = json!({
-             "files_deleted": 1500,
-             "bytes_reclaimed": 157286400,
-             "bytes_reclaimed_human": "150.0 MB"
+             "filesDeleted": 1500,
+             "bytesReclaimed": 157286400,
+             "bytesReclaimedHuman": "150.0 MB"
          })
         ),
         (status = 403, description = "Admin access required"),

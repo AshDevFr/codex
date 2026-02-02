@@ -53,71 +53,121 @@ pub struct TaskProgress {
 pub enum EntityEvent {
     /// A book was created
     BookCreated {
+        #[serde(rename = "bookId")]
         book_id: Uuid,
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
+        #[serde(rename = "libraryId")]
         library_id: Uuid,
     },
     /// A book was updated
     BookUpdated {
+        #[serde(rename = "bookId")]
         book_id: Uuid,
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
+        #[serde(rename = "libraryId")]
         library_id: Uuid,
         #[serde(skip_serializing_if = "Option::is_none")]
         fields: Option<Vec<String>>,
     },
     /// A book was deleted
     BookDeleted {
+        #[serde(rename = "bookId")]
         book_id: Uuid,
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
+        #[serde(rename = "libraryId")]
         library_id: Uuid,
     },
     /// A series was created
-    SeriesCreated { series_id: Uuid, library_id: Uuid },
+    SeriesCreated {
+        #[serde(rename = "seriesId")]
+        series_id: Uuid,
+        #[serde(rename = "libraryId")]
+        library_id: Uuid,
+    },
     /// A series was updated
     SeriesUpdated {
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
+        #[serde(rename = "libraryId")]
         library_id: Uuid,
         #[serde(skip_serializing_if = "Option::is_none")]
         fields: Option<Vec<String>>,
     },
     /// A series was deleted
-    SeriesDeleted { series_id: Uuid, library_id: Uuid },
+    SeriesDeleted {
+        #[serde(rename = "seriesId")]
+        series_id: Uuid,
+        #[serde(rename = "libraryId")]
+        library_id: Uuid,
+    },
     /// Series metadata was updated by a plugin
     SeriesMetadataUpdated {
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
+        #[serde(rename = "libraryId")]
         library_id: Uuid,
         /// Plugin that updated the metadata
+        #[serde(rename = "pluginId")]
         plugin_id: Uuid,
         /// Fields that were updated
+        #[serde(rename = "fieldsUpdated")]
         fields_updated: Vec<String>,
     },
     /// Deleted books were purged from a series
     SeriesBulkPurged {
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
+        #[serde(rename = "libraryId")]
         library_id: Uuid,
         count: u64,
     },
     /// A cover image was updated
     CoverUpdated {
+        #[serde(rename = "entityType")]
         entity_type: EntityType,
+        #[serde(rename = "entityId")]
         entity_id: Uuid,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "libraryId", skip_serializing_if = "Option::is_none")]
         library_id: Option<Uuid>,
     },
     /// A library was updated
-    LibraryUpdated { library_id: Uuid },
+    LibraryUpdated {
+        #[serde(rename = "libraryId")]
+        library_id: Uuid,
+    },
     /// A library was deleted
-    LibraryDeleted { library_id: Uuid },
+    LibraryDeleted {
+        #[serde(rename = "libraryId")]
+        library_id: Uuid,
+    },
     /// A plugin was created
-    PluginCreated { plugin_id: Uuid },
+    PluginCreated {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+    },
     /// A plugin was updated (configuration changed)
-    PluginUpdated { plugin_id: Uuid },
+    PluginUpdated {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+    },
     /// A plugin was enabled
-    PluginEnabled { plugin_id: Uuid },
+    PluginEnabled {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+    },
     /// A plugin was disabled
-    PluginDisabled { plugin_id: Uuid },
+    PluginDisabled {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+    },
     /// A plugin was deleted
-    PluginDeleted { plugin_id: Uuid },
+    PluginDeleted {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+    },
     /// Internal signal to indicate shutdown (not sent to clients)
     #[serde(skip)]
     Shutdown,
@@ -125,6 +175,7 @@ pub enum EntityEvent {
 
 /// Complete entity change event with metadata
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct EntityChangeEvent {
     /// The specific event that occurred
     #[serde(flatten)]
@@ -186,6 +237,7 @@ impl EntityChangeEvent {
 
 /// Task progress event for background operations
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskProgressEvent {
     /// Unique identifier for this task instance
     pub task_id: Uuid,

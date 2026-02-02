@@ -15,13 +15,13 @@ vi.mock("@/api/pdfCache", () => ({
 
 // Default mock stats
 const defaultStats: pdfCacheApi.PdfCacheStatsDto = {
-  total_files: 1500,
-  total_size_bytes: 157_286_400,
-  total_size_human: "150.0 MB",
-  book_count: 45,
-  oldest_file_age_days: 15,
-  cache_dir: "/data/cache",
-  cache_enabled: true,
+  totalFiles: 1500,
+  totalSizeBytes: 157_286_400,
+  totalSizeHuman: "150.0 MB",
+  bookCount: 45,
+  oldestFileAgeDays: 15,
+  cacheDir: "/data/cache",
+  cacheEnabled: true,
 };
 
 describe("PdfCacheSettings", () => {
@@ -108,10 +108,10 @@ describe("PdfCacheSettings", () => {
   it("should not show cleanup buttons when cache is empty", async () => {
     vi.mocked(pdfCacheApi.pdfCacheApi.getStats).mockResolvedValue({
       ...defaultStats,
-      total_files: 0,
-      total_size_bytes: 0,
-      total_size_human: "0 B",
-      book_count: 0,
+      totalFiles: 0,
+      totalSizeBytes: 0,
+      totalSizeHuman: "0 B",
+      bookCount: 0,
     });
 
     renderWithProviders(<PdfCacheSettings />);
@@ -131,7 +131,7 @@ describe("PdfCacheSettings", () => {
   it("should show warning when cache is disabled", async () => {
     vi.mocked(pdfCacheApi.pdfCacheApi.getStats).mockResolvedValue({
       ...defaultStats,
-      cache_enabled: false,
+      cacheEnabled: false,
     });
 
     renderWithProviders(<PdfCacheSettings />);

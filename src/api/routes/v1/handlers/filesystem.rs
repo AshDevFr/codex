@@ -12,11 +12,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 #[schema(example = json!({
     "name": "Documents",
     "path": "/home/user/Documents",
-    "is_directory": true,
-    "is_readable": true
+    "isDirectory": true,
+    "isReadable": true
 }))]
 pub struct FileSystemEntry {
     /// Name of the file or directory
@@ -30,12 +31,13 @@ pub struct FileSystemEntry {
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 #[schema(example = json!({
-    "current_path": "/home/user/Documents",
-    "parent_path": "/home/user",
+    "currentPath": "/home/user/Documents",
+    "parentPath": "/home/user",
     "entries": [
-        {"name": "Comics", "path": "/home/user/Documents/Comics", "is_directory": true, "is_readable": true},
-        {"name": "Manga", "path": "/home/user/Documents/Manga", "is_directory": true, "is_readable": true}
+        {"name": "Comics", "path": "/home/user/Documents/Comics", "isDirectory": true, "isReadable": true},
+        {"name": "Manga", "path": "/home/user/Documents/Manga", "isDirectory": true, "isReadable": true}
     ]
 }))]
 pub struct BrowseResponse {
@@ -48,6 +50,7 @@ pub struct BrowseResponse {
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
 pub struct BrowseQuery {
     /// Path to browse (defaults to user's home directory)
     path: Option<String>,

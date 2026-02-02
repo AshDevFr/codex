@@ -37,7 +37,7 @@ describe("useAppName", () => {
       http.get("/api/v1/settings/branding", async () => {
         // Delay response to ensure we test the loading state
         await new Promise((resolve) => setTimeout(resolve, 100));
-        return HttpResponse.json({ application_name: "Custom App" });
+        return HttpResponse.json({ applicationName: "Custom App" });
       }),
     );
 
@@ -52,7 +52,7 @@ describe("useAppName", () => {
   it("should return custom app name after loading", async () => {
     server.use(
       http.get("/api/v1/settings/branding", () => {
-        return HttpResponse.json({ application_name: "My Library" });
+        return HttpResponse.json({ applicationName: "My Library" });
       }),
     );
 
@@ -104,7 +104,7 @@ describe("useBranding", () => {
     server.use(
       http.get("/api/v1/settings/branding", async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
-        return HttpResponse.json({ application_name: "Custom App" });
+        return HttpResponse.json({ applicationName: "Custom App" });
       }),
     );
 
@@ -121,7 +121,7 @@ describe("useBranding", () => {
   it("should return app name and success state after loading", async () => {
     server.use(
       http.get("/api/v1/settings/branding", () => {
-        return HttpResponse.json({ application_name: "My Comics" });
+        return HttpResponse.json({ applicationName: "My Comics" });
       }),
     );
 

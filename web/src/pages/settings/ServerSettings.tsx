@@ -91,7 +91,7 @@ function SettingRow({
   };
 
   const renderInput = () => {
-    switch (setting.value_type) {
+    switch (setting.valueType) {
       case "boolean":
         return (
           <Switch
@@ -108,8 +108,8 @@ function SettingRow({
           <NumberInput
             value={Number.parseInt(localValue, 10) || 0}
             onChange={(value) => setLocalValue(String(value))}
-            min={setting.min_value ?? undefined}
-            max={setting.max_value ?? undefined}
+            min={setting.minValue ?? undefined}
+            max={setting.maxValue ?? undefined}
             onBlur={handleSave}
             w={120}
           />
@@ -140,7 +140,7 @@ function SettingRow({
               style={{ cursor: "pointer" }}
               onClick={() => setIsEditing(true)}
             >
-              {setting.is_sensitive ? "••••••••" : localValue || "(empty)"}
+              {setting.isSensitive ? "••••••••" : localValue || "(empty)"}
             </Text>
             <Button
               size="xs"
@@ -167,7 +167,7 @@ function SettingRow({
       <Table.Td>{renderInput()}</Table.Td>
       <Table.Td>
         <Badge variant="light" size="sm">
-          {setting.value_type}
+          {setting.valueType}
         </Badge>
       </Table.Td>
       <Table.Td>
@@ -185,7 +185,7 @@ function SettingRow({
               variant="subtle"
               color="orange"
               onClick={() => onReset(setting.key)}
-              disabled={setting.value === setting.default_value}
+              disabled={setting.value === setting.defaultValue}
             >
               <IconRefresh size={16} />
             </ActionIcon>
@@ -544,7 +544,7 @@ export function ServerSettings() {
                   (s) => s.key === historyKey,
                 )?.value;
                 const canRestore =
-                  entry.old_value !== null && entry.old_value !== currentValue;
+                  entry.oldValue !== null && entry.oldValue !== currentValue;
 
                 return (
                   // biome-ignore lint/suspicious/noArrayIndexKey: History entries have no unique ID
@@ -560,7 +560,7 @@ export function ServerSettings() {
                         }}
                         lineClamp={3}
                       >
-                        {entry.old_value ?? "(empty)"}
+                        {entry.oldValue ?? "(empty)"}
                       </Text>
                     </Table.Td>
                     <Table.Td>
@@ -574,13 +574,13 @@ export function ServerSettings() {
                         }}
                         lineClamp={3}
                       >
-                        {entry.new_value}
+                        {entry.newValue}
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      {new Date(entry.changed_at).toLocaleString()}
+                      {new Date(entry.changedAt).toLocaleString()}
                     </Table.Td>
-                    <Table.Td>{entry.change_reason || "-"}</Table.Td>
+                    <Table.Td>{entry.changeReason || "-"}</Table.Td>
                     <Table.Td>
                       {canRestore ? (
                         <Tooltip label="Restore to this value">
@@ -591,7 +591,7 @@ export function ServerSettings() {
                               if (historyKey) {
                                 updateSettingMutation.mutate({
                                   key: historyKey,
-                                  value: entry.old_value as string,
+                                  value: entry.oldValue as string,
                                 });
                               }
                             }}

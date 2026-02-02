@@ -452,7 +452,7 @@ const DEFAULT_APP_NAME: &str = "Codex";
     responses(
         (status = 200, description = "Branding settings", body = BrandingSettingsDto,
          example = json!({
-             "application_name": "Codex"
+             "applicationName": "Codex"
          })
         ),
     ),

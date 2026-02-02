@@ -95,8 +95,7 @@ export function LibraryPage() {
   // Get active scan tasks for this library
   const activeScanTasks = libraryId
     ? getTasksByLibrary(libraryId).filter(
-        (task) =>
-          task.task_type === "scan_library" && task.status === "running",
+        (task) => task.taskType === "scan_library" && task.status === "running",
       )
     : [];
 

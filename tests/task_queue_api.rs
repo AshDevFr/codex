@@ -149,9 +149,9 @@ async fn test_api_create_task() {
         .to_string();
 
     let create_request = json!({
-        "task_type": {
+        "taskType": {
             "type": "generate_thumbnails",
-            "library_id": null
+            "libraryId": null
         },
         "priority": 5
     });
@@ -162,7 +162,7 @@ async fn test_api_create_task() {
 
     assert_eq!(status, StatusCode::OK);
     assert!(response.is_some());
-    assert!(response.unwrap()["task_id"].is_string());
+    assert!(response.unwrap()["taskId"].is_string());
 }
 
 /// Test getting task stats via API
@@ -206,7 +206,7 @@ async fn test_api_task_stats() {
     assert!(stats["failed"].is_number());
     assert!(stats["stale"].is_number());
     assert!(stats["total"].is_number());
-    assert!(stats["by_type"].is_object());
+    assert!(stats["byType"].is_object());
 }
 
 /// Test cancelling task via API

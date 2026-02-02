@@ -38,6 +38,7 @@ fn default_limit() -> u64 {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateTaskRequest {
     /// Type of task to create
     pub task_type: TaskType,
@@ -52,6 +53,7 @@ pub struct CreateTaskRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateTaskResponse {
     /// ID of the created task
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -59,6 +61,7 @@ pub struct CreateTaskResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskResponse {
     /// Unique task identifier
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -151,6 +154,7 @@ impl From<crate::db::entities::tasks::Model> for TaskResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PurgeTasksParams {
     #[serde(default = "default_purge_days")]
     pub days: i64,
@@ -161,6 +165,7 @@ fn default_purge_days() -> i64 {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PurgeTasksResponse {
     /// Number of tasks deleted
     #[schema(example = 42)]
@@ -168,6 +173,7 @@ pub struct PurgeTasksResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageResponse {
     /// Response message
     #[schema(example = "Task 550e8400-e29b-41d4-a716-446655440000 cancelled")]
@@ -533,6 +539,7 @@ pub async fn nuke_all_tasks(
 
 /// Request body for batch book thumbnail generation
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct GenerateBookThumbnailsRequest {
     /// If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
     #[serde(default)]
@@ -558,6 +565,7 @@ pub struct GenerateBookThumbnailsRequest {
 
 /// Request body for batch series thumbnail generation
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct GenerateSeriesThumbnailsRequest {
     /// If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
     #[serde(default)]

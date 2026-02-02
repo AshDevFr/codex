@@ -36,13 +36,13 @@ describe("TaskProgressIndicator", () => {
   it("should render when tasks are active", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: { current: 5, total: 10, message: "Processing..." },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -64,13 +64,13 @@ describe("TaskProgressIndicator", () => {
   it("should format task names correctly", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "generate_thumbnails",
+        taskId: "task-1",
+        taskType: "generate_thumbnails",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -92,13 +92,13 @@ describe("TaskProgressIndicator", () => {
   it("should display progress percentage when available", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: { current: 7, total: 10, message: "Processing..." },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -120,13 +120,13 @@ describe("TaskProgressIndicator", () => {
   it("should show completed status with green color", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "completed",
         progress: { current: 10, total: 10, message: "Done" },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -148,13 +148,13 @@ describe("TaskProgressIndicator", () => {
   it("should show failed status with red color", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "failed",
         progress: undefined,
         error: "Database error",
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -176,22 +176,22 @@ describe("TaskProgressIndicator", () => {
   it("should display multiple tasks", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
       {
-        task_id: "task-2",
-        task_type: "generate_thumbnails",
+        taskId: "task-2",
+        taskType: "generate_thumbnails",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-2",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-2",
       },
     ];
 
@@ -201,7 +201,7 @@ describe("TaskProgressIndicator", () => {
       pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
-      getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+      getTask: vi.fn((id) => mockTasks.find((t) => t.taskId === id)),
     });
 
     renderWithMantine(<TaskProgressIndicator />);
@@ -245,8 +245,8 @@ describe("TaskProgressIndicator", () => {
   it("should display progress message when available", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: {
           current: 3,
@@ -254,8 +254,8 @@ describe("TaskProgressIndicator", () => {
           message: "Analyzing metadata...",
         },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -276,13 +276,13 @@ describe("TaskProgressIndicator", () => {
   it("should display error message for failed tasks", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "scan_library",
+        taskId: "task-1",
+        taskType: "scan_library",
         status: "failed",
         progress: undefined,
         error: "Connection timeout",
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -304,22 +304,22 @@ describe("TaskProgressIndicator", () => {
   it("should not show pending tasks in the indicator", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
       {
-        task_id: "task-2",
-        task_type: "analyze_book",
+        taskId: "task-2",
+        taskType: "analyze_book",
         status: "pending",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:01:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:01:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -329,7 +329,7 @@ describe("TaskProgressIndicator", () => {
       pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
-      getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+      getTask: vi.fn((id) => mockTasks.find((t) => t.taskId === id)),
     });
 
     renderWithMantine(<TaskProgressIndicator />);

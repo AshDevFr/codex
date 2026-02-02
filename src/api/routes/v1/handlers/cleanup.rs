@@ -39,9 +39,9 @@ use crate::tasks::types::TaskType;
     responses(
         (status = 200, description = "Orphan statistics retrieved successfully", body = OrphanStatsDto,
          example = json!({
-             "orphaned_thumbnails": 42,
-             "orphaned_covers": 5,
-             "total_size_bytes": 1073741824
+             "orphanedThumbnails": 42,
+             "orphanedCovers": 5,
+             "totalSizeBytes": 1073741824
          })
         ),
         (status = 403, description = "Admin access required"),
@@ -153,7 +153,7 @@ pub async fn get_orphan_stats(
     responses(
         (status = 200, description = "Cleanup task queued successfully", body = TriggerCleanupResponse,
          example = json!({
-             "task_id": "550e8400-e29b-41d4-a716-446655440000",
+             "taskId": "550e8400-e29b-41d4-a716-446655440000",
              "message": "Cleanup task queued successfully"
          })
         ),
@@ -196,9 +196,9 @@ pub async fn trigger_cleanup(
     responses(
         (status = 200, description = "Cleanup completed successfully", body = CleanupResultDto,
          example = json!({
-             "thumbnails_deleted": 42,
-             "covers_deleted": 5,
-             "bytes_freed": 1073741824,
+             "thumbnailsDeleted": 42,
+             "coversDeleted": 5,
+             "bytesFreed": 1073741824,
              "failures": 0
          })
         ),

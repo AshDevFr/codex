@@ -28,7 +28,7 @@
                 },
                 "example": {
                   "message": "Cleanup task queued successfully",
-                  "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                  "taskId": "550e8400-e29b-41d4-a716-446655440000"
                 }
               }
             }
@@ -62,10 +62,10 @@
                   "$ref": "#/components/schemas/CleanupResultDto"
                 },
                 "example": {
-                  "bytes_freed": 1073741824,
-                  "covers_deleted": 5,
+                  "bytesFreed": 1073741824,
+                  "coversDeleted": 5,
                   "failures": 0,
-                  "thumbnails_deleted": 42
+                  "thumbnailsDeleted": 42
                 }
               }
             }
@@ -112,9 +112,9 @@
                   "$ref": "#/components/schemas/OrphanStatsDto"
                 },
                 "example": {
-                  "orphaned_covers": 5,
-                  "orphaned_thumbnails": 42,
-                  "total_size_bytes": 1073741824
+                  "orphanedCovers": 5,
+                  "orphanedThumbnails": 42,
+                  "totalSizeBytes": 1073741824
                 }
               }
             }
@@ -150,9 +150,9 @@
                   "$ref": "#/components/schemas/PdfCacheCleanupResultDto"
                 },
                 "example": {
-                  "bytes_reclaimed": 157286400,
-                  "bytes_reclaimed_human": "150.0 MB",
-                  "files_deleted": 1500
+                  "bytesReclaimed": 157286400,
+                  "bytesReclaimedHuman": "150.0 MB",
+                  "filesDeleted": 1500
                 }
               }
             }
@@ -188,9 +188,9 @@
                   "$ref": "#/components/schemas/TriggerPdfCacheCleanupResponse"
                 },
                 "example": {
-                  "max_age_days": 30,
+                  "maxAgeDays": 30,
                   "message": "PDF cache cleanup task queued successfully",
-                  "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                  "taskId": "550e8400-e29b-41d4-a716-446655440000"
                 }
               }
             }
@@ -226,13 +226,13 @@
                   "$ref": "#/components/schemas/PdfCacheStatsDto"
                 },
                 "example": {
-                  "book_count": 45,
-                  "cache_dir": "/data/cache",
-                  "cache_enabled": true,
-                  "oldest_file_age_days": 15,
-                  "total_files": 1500,
-                  "total_size_bytes": 157286400,
-                  "total_size_human": "150.0 MB"
+                  "bookCount": 45,
+                  "cacheDir": "/data/cache",
+                  "cacheEnabled": true,
+                  "oldestFileAgeDays": 15,
+                  "totalFiles": 1500,
+                  "totalSizeBytes": 157286400,
+                  "totalSizeHuman": "150.0 MB"
                 }
               }
             }
@@ -9921,7 +9921,7 @@
                   "$ref": "#/components/schemas/BrandingSettingsDto"
                 },
                 "example": {
-                  "application_name": "Codex"
+                  "applicationName": "Codex"
                 }
               }
             }
@@ -15025,10 +15025,10 @@
         "type": "object",
         "description": "Branding settings DTO (unauthenticated access)\n\nContains branding-related settings that can be accessed without authentication.\nUsed on the login page and other unauthenticated UI surfaces.",
         "required": [
-          "application_name"
+          "applicationName"
         ],
         "properties": {
-          "application_name": {
+          "applicationName": {
             "type": "string",
             "description": "The application name to display",
             "example": "Codex"
@@ -15038,11 +15038,11 @@
       "BrowseResponse": {
         "type": "object",
         "required": [
-          "current_path",
+          "currentPath",
           "entries"
         ],
         "properties": {
-          "current_path": {
+          "currentPath": {
             "type": "string",
             "description": "Current directory path"
           },
@@ -15053,7 +15053,7 @@
             },
             "description": "List of entries in the current directory"
           },
-          "parent_path": {
+          "parentPath": {
             "type": [
               "string",
               "null"
@@ -15062,22 +15062,22 @@
           }
         },
         "example": {
-          "current_path": "/home/user/Documents",
+          "currentPath": "/home/user/Documents",
           "entries": [
             {
-              "is_directory": true,
-              "is_readable": true,
+              "isDirectory": true,
+              "isReadable": true,
               "name": "Comics",
               "path": "/home/user/Documents/Comics"
             },
             {
-              "is_directory": true,
-              "is_readable": true,
+              "isDirectory": true,
+              "isReadable": true,
               "name": "Manga",
               "path": "/home/user/Documents/Manga"
             }
           ],
-          "parent_path": "/home/user"
+          "parentPath": "/home/user"
         }
       },
       "BulkAnalyzeBooksRequest": {
@@ -15363,7 +15363,7 @@
           "updates"
         ],
         "properties": {
-          "change_reason": {
+          "changeReason": {
             "type": [
               "string",
               "null"
@@ -15415,20 +15415,20 @@
         "type": "object",
         "description": "Result of a cleanup operation",
         "required": [
-          "thumbnails_deleted",
-          "covers_deleted",
-          "bytes_freed",
+          "thumbnailsDeleted",
+          "coversDeleted",
+          "bytesFreed",
           "failures"
         ],
         "properties": {
-          "bytes_freed": {
+          "bytesFreed": {
             "type": "integer",
             "format": "int64",
             "description": "Total bytes freed by deletion",
             "example": 1073741824,
             "minimum": 0
           },
-          "covers_deleted": {
+          "coversDeleted": {
             "type": "integer",
             "format": "int32",
             "description": "Number of cover files deleted",
@@ -15449,7 +15449,7 @@
             "example": 0,
             "minimum": 0
           },
-          "thumbnails_deleted": {
+          "thumbnailsDeleted": {
             "type": "integer",
             "format": "int32",
             "description": "Number of thumbnail files deleted",
@@ -16004,7 +16004,7 @@
       "CreateTaskRequest": {
         "type": "object",
         "required": [
-          "task_type"
+          "taskType"
         ],
         "properties": {
           "priority": {
@@ -16016,7 +16016,7 @@
             "description": "Priority level (higher = more urgent)",
             "example": 0
           },
-          "scheduled_for": {
+          "scheduledFor": {
             "type": [
               "string",
               "null"
@@ -16025,7 +16025,7 @@
             "description": "When to run the task (defaults to now)",
             "example": "2024-01-15T12:00:00Z"
           },
-          "task_type": {
+          "taskType": {
             "$ref": "#/components/schemas/TaskType",
             "description": "Type of task to create"
           }
@@ -16034,10 +16034,10 @@
       "CreateTaskResponse": {
         "type": "object",
         "required": [
-          "task_id"
+          "taskId"
         ],
         "properties": {
-          "task_id": {
+          "taskId": {
             "type": "string",
             "format": "uuid",
             "description": "ID of the created task",
@@ -16227,14 +16227,14 @@
         "description": "A group of duplicate books",
         "required": [
           "id",
-          "file_hash",
-          "book_ids",
-          "duplicate_count",
-          "created_at",
-          "updated_at"
+          "fileHash",
+          "bookIds",
+          "duplicateCount",
+          "createdAt",
+          "updatedAt"
         ],
         "properties": {
-          "book_ids": {
+          "bookIds": {
             "type": "array",
             "items": {
               "type": "string",
@@ -16242,18 +16242,18 @@
             },
             "description": "List of book IDs that share this hash"
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "description": "When the duplicate was first detected",
             "example": "2024-01-15T10:30:00Z"
           },
-          "duplicate_count": {
+          "duplicateCount": {
             "type": "integer",
             "format": "int32",
             "description": "Number of duplicate copies found",
             "example": 3
           },
-          "file_hash": {
+          "fileHash": {
             "type": "string",
             "description": "SHA-256 hash of the file content",
             "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -16264,7 +16264,7 @@
             "description": "Unique identifier for the duplicate group",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "description": "When the group was last updated",
             "example": "2024-01-15T10:30:00Z"
@@ -16419,7 +16419,7 @@
                 "format": "date-time",
                 "description": "When the event occurred"
               },
-              "user_id": {
+              "userId": {
                 "type": [
                   "string",
                   "null"
@@ -16438,21 +16438,21 @@
             "type": "object",
             "description": "A book was created",
             "required": [
-              "book_id",
-              "series_id",
-              "library_id",
+              "bookId",
+              "seriesId",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "book_id": {
+              "bookId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16468,13 +16468,13 @@
             "type": "object",
             "description": "A book was updated",
             "required": [
-              "book_id",
-              "series_id",
-              "library_id",
+              "bookId",
+              "seriesId",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "book_id": {
+              "bookId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16487,11 +16487,11 @@
                   "type": "string"
                 }
               },
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16507,21 +16507,21 @@
             "type": "object",
             "description": "A book was deleted",
             "required": [
-              "book_id",
-              "series_id",
-              "library_id",
+              "bookId",
+              "seriesId",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "book_id": {
+              "bookId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16537,16 +16537,16 @@
             "type": "object",
             "description": "A series was created",
             "required": [
-              "series_id",
-              "library_id",
+              "seriesId",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16562,8 +16562,8 @@
             "type": "object",
             "description": "A series was updated",
             "required": [
-              "series_id",
-              "library_id",
+              "seriesId",
+              "libraryId",
               "type"
             ],
             "properties": {
@@ -16576,11 +16576,11 @@
                   "type": "string"
                 }
               },
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16596,16 +16596,16 @@
             "type": "object",
             "description": "A series was deleted",
             "required": [
-              "series_id",
-              "library_id",
+              "seriesId",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16621,30 +16621,30 @@
             "type": "object",
             "description": "Series metadata was updated by a plugin",
             "required": [
-              "series_id",
-              "library_id",
-              "plugin_id",
-              "fields_updated",
+              "seriesId",
+              "libraryId",
+              "pluginId",
+              "fieldsUpdated",
               "type"
             ],
             "properties": {
-              "fields_updated": {
+              "fieldsUpdated": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 },
                 "description": "Fields that were updated"
               },
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "plugin_id": {
+              "pluginId": {
                 "type": "string",
                 "format": "uuid",
                 "description": "Plugin that updated the metadata"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16660,8 +16660,8 @@
             "type": "object",
             "description": "Deleted books were purged from a series",
             "required": [
-              "series_id",
-              "library_id",
+              "seriesId",
+              "libraryId",
               "count",
               "type"
             ],
@@ -16671,11 +16671,11 @@
                 "format": "int64",
                 "minimum": 0
               },
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16691,19 +16691,19 @@
             "type": "object",
             "description": "A cover image was updated",
             "required": [
-              "entity_type",
-              "entity_id",
+              "entityType",
+              "entityId",
               "type"
             ],
             "properties": {
-              "entity_id": {
+              "entityId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "entity_type": {
+              "entityType": {
                 "$ref": "#/components/schemas/EntityType"
               },
-              "library_id": {
+              "libraryId": {
                 "type": [
                   "string",
                   "null"
@@ -16722,11 +16722,11 @@
             "type": "object",
             "description": "A library was updated",
             "required": [
-              "library_id",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16742,11 +16742,11 @@
             "type": "object",
             "description": "A library was deleted",
             "required": [
-              "library_id",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16762,11 +16762,11 @@
             "type": "object",
             "description": "A plugin was created",
             "required": [
-              "plugin_id",
+              "pluginId",
               "type"
             ],
             "properties": {
-              "plugin_id": {
+              "pluginId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16782,11 +16782,11 @@
             "type": "object",
             "description": "A plugin was updated (configuration changed)",
             "required": [
-              "plugin_id",
+              "pluginId",
               "type"
             ],
             "properties": {
-              "plugin_id": {
+              "pluginId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16802,11 +16802,11 @@
             "type": "object",
             "description": "A plugin was enabled",
             "required": [
-              "plugin_id",
+              "pluginId",
               "type"
             ],
             "properties": {
-              "plugin_id": {
+              "pluginId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16822,11 +16822,11 @@
             "type": "object",
             "description": "A plugin was disabled",
             "required": [
-              "plugin_id",
+              "pluginId",
               "type"
             ],
             "properties": {
-              "plugin_id": {
+              "pluginId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -16842,11 +16842,11 @@
             "type": "object",
             "description": "A plugin was deleted",
             "required": [
-              "plugin_id",
+              "pluginId",
               "type"
             ],
             "properties": {
-              "plugin_id": {
+              "pluginId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -17379,15 +17379,15 @@
         "required": [
           "name",
           "path",
-          "is_directory",
-          "is_readable"
+          "isDirectory",
+          "isReadable"
         ],
         "properties": {
-          "is_directory": {
+          "isDirectory": {
             "type": "boolean",
             "description": "Whether this is a directory"
           },
-          "is_readable": {
+          "isReadable": {
             "type": "boolean",
             "description": "Whether the entry is readable"
           },
@@ -17401,8 +17401,8 @@
           }
         },
         "example": {
-          "is_directory": true,
-          "is_readable": true,
+          "isDirectory": true,
+          "isReadable": true,
           "name": "Documents",
           "path": "/home/user/Documents"
         }
@@ -17890,7 +17890,7 @@
         "type": "object",
         "description": "Request body for batch book thumbnail generation",
         "properties": {
-          "book_ids": {
+          "bookIds": {
             "type": [
               "array",
               "null"
@@ -17906,7 +17906,7 @@
             "description": "If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.",
             "example": false
           },
-          "library_id": {
+          "libraryId": {
             "type": [
               "string",
               "null"
@@ -17915,7 +17915,7 @@
             "description": "Optional: scope to a specific library",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "series_id": {
+          "seriesId": {
             "type": [
               "string",
               "null"
@@ -17924,7 +17924,7 @@
             "description": "Optional: scope to a specific series (within library if both provided)",
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
-          "series_ids": {
+          "seriesIds": {
             "type": [
               "array",
               "null"
@@ -17946,7 +17946,7 @@
             "description": "If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.",
             "example": false
           },
-          "library_id": {
+          "libraryId": {
             "type": [
               "string",
               "null"
@@ -17955,7 +17955,7 @@
             "description": "Optional: scope to a specific library",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "series_ids": {
+          "seriesIds": {
             "type": [
               "array",
               "null"
@@ -19764,12 +19764,12 @@
         "required": [
           "id",
           "name",
-          "series_count",
-          "book_count",
-          "total_size"
+          "seriesCount",
+          "bookCount",
+          "totalSize"
         ],
         "properties": {
-          "book_count": {
+          "bookCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of books in this library",
@@ -19786,13 +19786,13 @@
             "description": "Library name",
             "example": "Comics"
           },
-          "series_count": {
+          "seriesCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of series in this library",
             "example": 45
           },
-          "total_size": {
+          "totalSize": {
             "type": "integer",
             "format": "int64",
             "description": "Total size of books in bytes (approx. 15GB)",
@@ -19819,8 +19819,8 @@
         "description": "Response for listing duplicates",
         "required": [
           "duplicates",
-          "total_groups",
-          "total_duplicate_books"
+          "totalGroups",
+          "totalDuplicateBooks"
         ],
         "properties": {
           "duplicates": {
@@ -19830,13 +19830,13 @@
             },
             "description": "List of duplicate groups"
           },
-          "total_duplicate_books": {
+          "totalDuplicateBooks": {
             "type": "integer",
             "description": "Total number of books that are duplicates",
             "example": 15,
             "minimum": 0
           },
-          "total_groups": {
+          "totalGroups": {
             "type": "integer",
             "description": "Total number of duplicate groups",
             "example": 5,
@@ -20464,18 +20464,18 @@
         "type": "object",
         "description": "Response for cleanup operation",
         "required": [
-          "deleted_count",
-          "retention_days"
+          "deletedCount",
+          "retentionDays"
         ],
         "properties": {
-          "deleted_count": {
+          "deletedCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of metric records deleted",
             "example": 500,
             "minimum": 0
           },
-          "oldest_remaining": {
+          "oldestRemaining": {
             "type": [
               "string",
               "null"
@@ -20483,7 +20483,7 @@
             "format": "date-time",
             "description": "Timestamp of oldest remaining record"
           },
-          "retention_days": {
+          "retentionDays": {
             "type": "string",
             "description": "Current retention setting",
             "example": "30"
@@ -20494,23 +20494,23 @@
         "type": "object",
         "description": "Application metrics response",
         "required": [
-          "library_count",
-          "series_count",
-          "book_count",
-          "total_book_size",
-          "user_count",
-          "database_size",
-          "page_count",
+          "libraryCount",
+          "seriesCount",
+          "bookCount",
+          "totalBookSize",
+          "userCount",
+          "databaseSize",
+          "pageCount",
           "libraries"
         ],
         "properties": {
-          "book_count": {
+          "bookCount": {
             "type": "integer",
             "format": "int64",
             "description": "Total number of books across all libraries",
             "example": 3500
           },
-          "database_size": {
+          "databaseSize": {
             "type": "integer",
             "format": "int64",
             "description": "Database size in bytes (approximate)",
@@ -20523,31 +20523,31 @@
             },
             "description": "Breakdown by library"
           },
-          "library_count": {
+          "libraryCount": {
             "type": "integer",
             "format": "int64",
             "description": "Total number of libraries in the system",
             "example": 5
           },
-          "page_count": {
+          "pageCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of pages across all books",
             "example": 175000
           },
-          "series_count": {
+          "seriesCount": {
             "type": "integer",
             "format": "int64",
             "description": "Total number of series across all libraries",
             "example": 150
           },
-          "total_book_size": {
+          "totalBookSize": {
             "type": "integer",
             "format": "int64",
             "description": "Total size of all books in bytes (approx. 50GB)",
             "example": "52428800000"
           },
-          "user_count": {
+          "userCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of registered users",
@@ -20559,10 +20559,10 @@
         "type": "object",
         "description": "Response for nuke (delete all) operation",
         "required": [
-          "deleted_count"
+          "deletedCount"
         ],
         "properties": {
-          "deleted_count": {
+          "deletedCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of metric records deleted",
@@ -20703,9 +20703,9 @@
         "type": "object",
         "description": "Statistics about orphaned files in the system",
         "required": [
-          "orphaned_thumbnails",
-          "orphaned_covers",
-          "total_size_bytes"
+          "orphanedThumbnails",
+          "orphanedCovers",
+          "totalSizeBytes"
         ],
         "properties": {
           "files": {
@@ -20718,21 +20718,21 @@
             },
             "description": "List of orphaned files with details"
           },
-          "orphaned_covers": {
+          "orphanedCovers": {
             "type": "integer",
             "format": "int32",
             "description": "Number of orphaned cover files (no matching series in database)",
             "example": 5,
             "minimum": 0
           },
-          "orphaned_thumbnails": {
+          "orphanedThumbnails": {
             "type": "integer",
             "format": "int32",
             "description": "Number of orphaned thumbnail files (no matching book in database)",
             "example": 42,
             "minimum": 0
           },
-          "total_size_bytes": {
+          "totalSizeBytes": {
             "type": "integer",
             "format": "int64",
             "description": "Total size of all orphaned files in bytes",
@@ -20756,11 +20756,11 @@
         "description": "Information about a single orphaned file",
         "required": [
           "path",
-          "size_bytes",
-          "file_type"
+          "sizeBytes",
+          "fileType"
         ],
         "properties": {
-          "entity_id": {
+          "entityId": {
             "type": [
               "string",
               "null"
@@ -20769,7 +20769,7 @@
             "description": "The entity UUID extracted from the filename",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "file_type": {
+          "fileType": {
             "type": "string",
             "description": "Type of file: \"thumbnail\" or \"cover\"",
             "example": "thumbnail"
@@ -20779,7 +20779,7 @@
             "description": "Path to the orphaned file (relative to data directory)",
             "example": "thumbnails/books/55/550e8400-e29b-41d4-a716-446655440000.jpg"
           },
-          "size_bytes": {
+          "sizeBytes": {
             "type": "integer",
             "format": "int64",
             "description": "Size of the file in bytes",
@@ -22372,24 +22372,24 @@
         "type": "object",
         "description": "Result of a PDF cache cleanup operation",
         "required": [
-          "files_deleted",
-          "bytes_reclaimed",
-          "bytes_reclaimed_human"
+          "filesDeleted",
+          "bytesReclaimed",
+          "bytesReclaimedHuman"
         ],
         "properties": {
-          "bytes_reclaimed": {
+          "bytesReclaimed": {
             "type": "integer",
             "format": "int64",
             "description": "Bytes freed by the cleanup",
             "example": 26214400,
             "minimum": 0
           },
-          "bytes_reclaimed_human": {
+          "bytesReclaimedHuman": {
             "type": "string",
             "description": "Human-readable size reclaimed (e.g., \"25.0 MB\")",
             "example": "25.0 MB"
           },
-          "files_deleted": {
+          "filesDeleted": {
             "type": "integer",
             "format": "int64",
             "description": "Number of cached page files deleted",
@@ -22402,32 +22402,32 @@
         "type": "object",
         "description": "Statistics about the PDF page cache",
         "required": [
-          "total_files",
-          "total_size_bytes",
-          "total_size_human",
-          "book_count",
-          "cache_dir",
-          "cache_enabled"
+          "totalFiles",
+          "totalSizeBytes",
+          "totalSizeHuman",
+          "bookCount",
+          "cacheDir",
+          "cacheEnabled"
         ],
         "properties": {
-          "book_count": {
+          "bookCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of unique books with cached pages",
             "example": 45,
             "minimum": 0
           },
-          "cache_dir": {
+          "cacheDir": {
             "type": "string",
             "description": "Path to the cache directory",
             "example": "/data/cache"
           },
-          "cache_enabled": {
+          "cacheEnabled": {
             "type": "boolean",
             "description": "Whether the PDF page cache is enabled",
             "example": true
           },
-          "oldest_file_age_days": {
+          "oldestFileAgeDays": {
             "type": [
               "integer",
               "null"
@@ -22437,21 +22437,21 @@
             "example": 15,
             "minimum": 0
           },
-          "total_files": {
+          "totalFiles": {
             "type": "integer",
             "format": "int64",
             "description": "Total number of cached page files",
             "example": 1500,
             "minimum": 0
           },
-          "total_size_bytes": {
+          "totalSizeBytes": {
             "type": "integer",
             "format": "int64",
             "description": "Total size of cache in bytes",
             "example": 157286400,
             "minimum": 0
           },
-          "total_size_human": {
+          "totalSizeHuman": {
             "type": "string",
             "description": "Human-readable total size (e.g., \"150.0 MB\")",
             "example": "150.0 MB"
@@ -22528,14 +22528,14 @@
                 "description": "Metadata plugin actions (search, get, match)",
                 "required": [
                   "action",
-                  "content_type"
+                  "contentType"
                 ],
                 "properties": {
                   "action": {
                     "$ref": "#/components/schemas/MetadataAction",
                     "description": "The metadata action to perform"
                   },
-                  "content_type": {
+                  "contentType": {
                     "$ref": "#/components/schemas/MetadataContentType",
                     "description": "Content type (series or book)"
                   },
@@ -23067,13 +23067,13 @@
         "description": "Metrics breakdown by method for a plugin",
         "required": [
           "method",
-          "requests_total",
-          "requests_success",
-          "requests_failed",
-          "avg_duration_ms"
+          "requestsTotal",
+          "requestsSuccess",
+          "requestsFailed",
+          "avgDurationMs"
         ],
         "properties": {
-          "avg_duration_ms": {
+          "avgDurationMs": {
             "type": "number",
             "format": "double",
             "description": "Average duration in milliseconds",
@@ -23084,21 +23084,21 @@
             "description": "Method name",
             "example": "search"
           },
-          "requests_failed": {
+          "requestsFailed": {
             "type": "integer",
             "format": "int64",
             "description": "Failed requests",
             "example": 5,
             "minimum": 0
           },
-          "requests_success": {
+          "requestsSuccess": {
             "type": "integer",
             "format": "int64",
             "description": "Successful requests",
             "example": 195,
             "minimum": 0
           },
-          "requests_total": {
+          "requestsTotal": {
             "type": "integer",
             "format": "int64",
             "description": "Total requests for this method",
@@ -23111,24 +23111,24 @@
         "type": "object",
         "description": "Metrics for a single plugin",
         "required": [
-          "plugin_id",
-          "plugin_name",
-          "requests_total",
-          "requests_success",
-          "requests_failed",
-          "avg_duration_ms",
-          "rate_limit_rejections",
-          "error_rate_pct",
-          "health_status"
+          "pluginId",
+          "pluginName",
+          "requestsTotal",
+          "requestsSuccess",
+          "requestsFailed",
+          "avgDurationMs",
+          "rateLimitRejections",
+          "errorRatePct",
+          "healthStatus"
         ],
         "properties": {
-          "avg_duration_ms": {
+          "avgDurationMs": {
             "type": "number",
             "format": "double",
             "description": "Average request duration in milliseconds",
             "example": 250.5
           },
-          "by_method": {
+          "byMethod": {
             "type": [
               "object",
               "null"
@@ -23141,13 +23141,13 @@
               "type": "string"
             }
           },
-          "error_rate_pct": {
+          "errorRatePct": {
             "type": "number",
             "format": "double",
             "description": "Error rate as percentage",
             "example": 4.0
           },
-          "failure_counts": {
+          "failureCounts": {
             "type": [
               "object",
               "null"
@@ -23162,12 +23162,12 @@
               "type": "string"
             }
           },
-          "health_status": {
+          "healthStatus": {
             "type": "string",
             "description": "Current health status",
             "example": "healthy"
           },
-          "last_failure": {
+          "lastFailure": {
             "type": [
               "string",
               "null"
@@ -23175,7 +23175,7 @@
             "format": "date-time",
             "description": "Last failure timestamp"
           },
-          "last_success": {
+          "lastSuccess": {
             "type": [
               "string",
               "null"
@@ -23183,39 +23183,39 @@
             "format": "date-time",
             "description": "Last successful request timestamp"
           },
-          "plugin_id": {
+          "pluginId": {
             "type": "string",
             "format": "uuid",
             "description": "Plugin ID",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "plugin_name": {
+          "pluginName": {
             "type": "string",
             "description": "Plugin name",
             "example": "AniList Provider"
           },
-          "rate_limit_rejections": {
+          "rateLimitRejections": {
             "type": "integer",
             "format": "int64",
             "description": "Number of rate limit rejections",
             "example": 2,
             "minimum": 0
           },
-          "requests_failed": {
+          "requestsFailed": {
             "type": "integer",
             "format": "int64",
             "description": "Failed requests",
             "example": 20,
             "minimum": 0
           },
-          "requests_success": {
+          "requestsSuccess": {
             "type": "integer",
             "format": "int64",
             "description": "Successful requests",
             "example": 480,
             "minimum": 0
           },
-          "requests_total": {
+          "requestsTotal": {
             "type": "integer",
             "format": "int64",
             "description": "Total requests made",
@@ -23228,7 +23228,7 @@
         "type": "object",
         "description": "Plugin metrics response - current performance statistics for all plugins",
         "required": [
-          "updated_at",
+          "updatedAt",
           "summary",
           "plugins"
         ],
@@ -23244,7 +23244,7 @@
             "$ref": "#/components/schemas/PluginMetricsSummaryDto",
             "description": "Overall summary statistics"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the metrics were last updated",
@@ -23256,66 +23256,66 @@
         "type": "object",
         "description": "Summary metrics across all plugins",
         "required": [
-          "total_plugins",
-          "healthy_plugins",
-          "degraded_plugins",
-          "unhealthy_plugins",
-          "total_requests",
-          "total_success",
-          "total_failed",
-          "total_rate_limit_rejections"
+          "totalPlugins",
+          "healthyPlugins",
+          "degradedPlugins",
+          "unhealthyPlugins",
+          "totalRequests",
+          "totalSuccess",
+          "totalFailed",
+          "totalRateLimitRejections"
         ],
         "properties": {
-          "degraded_plugins": {
+          "degradedPlugins": {
             "type": "integer",
             "format": "int64",
             "description": "Number of degraded plugins",
             "example": 1,
             "minimum": 0
           },
-          "healthy_plugins": {
+          "healthyPlugins": {
             "type": "integer",
             "format": "int64",
             "description": "Number of healthy plugins",
             "example": 2,
             "minimum": 0
           },
-          "total_failed": {
+          "totalFailed": {
             "type": "integer",
             "format": "int64",
             "description": "Total failed requests",
             "example": 100,
             "minimum": 0
           },
-          "total_plugins": {
+          "totalPlugins": {
             "type": "integer",
             "format": "int64",
             "description": "Total number of registered plugins",
             "example": 3,
             "minimum": 0
           },
-          "total_rate_limit_rejections": {
+          "totalRateLimitRejections": {
             "type": "integer",
             "format": "int64",
             "description": "Total rate limit rejections",
             "example": 5,
             "minimum": 0
           },
-          "total_requests": {
+          "totalRequests": {
             "type": "integer",
             "format": "int64",
             "description": "Total requests made across all plugins",
             "example": 1500,
             "minimum": 0
           },
-          "total_success": {
+          "totalSuccess": {
             "type": "integer",
             "format": "int64",
             "description": "Total successful requests",
             "example": 1400,
             "minimum": 0
           },
-          "unhealthy_plugins": {
+          "unhealthyPlugins": {
             "type": "integer",
             "format": "int64",
             "description": "Number of unhealthy plugins",
@@ -23824,12 +23824,12 @@
         "type": "object",
         "description": "Queue health metrics",
         "required": [
-          "pending_count",
-          "processing_count",
-          "stale_count"
+          "pendingCount",
+          "processingCount",
+          "staleCount"
         ],
         "properties": {
-          "oldest_pending_age_ms": {
+          "oldestPendingAgeMs": {
             "type": [
               "integer",
               "null"
@@ -23838,21 +23838,21 @@
             "description": "Age of oldest pending task in milliseconds",
             "minimum": 0
           },
-          "pending_count": {
+          "pendingCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of tasks waiting to run",
             "example": 25,
             "minimum": 0
           },
-          "processing_count": {
+          "processingCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of tasks currently executing",
             "example": 4,
             "minimum": 0
           },
-          "stale_count": {
+          "staleCount": {
             "type": "integer",
             "format": "int64",
             "description": "Number of stale/stuck tasks",
@@ -23889,15 +23889,15 @@
         "description": "Response containing reading progress for a book",
         "required": [
           "id",
-          "user_id",
-          "book_id",
-          "current_page",
+          "userId",
+          "bookId",
+          "currentPage",
           "completed",
-          "started_at",
-          "updated_at"
+          "startedAt",
+          "updatedAt"
         ],
         "properties": {
-          "book_id": {
+          "bookId": {
             "type": "string",
             "format": "uuid",
             "description": "Book ID",
@@ -23908,7 +23908,7 @@
             "description": "Whether the book is completed",
             "example": false
           },
-          "completed_at": {
+          "completedAt": {
             "type": [
               "string",
               "null"
@@ -23917,7 +23917,7 @@
             "description": "When the book was completed (if completed)",
             "example": "2024-01-20T20:00:00Z"
           },
-          "current_page": {
+          "currentPage": {
             "type": "integer",
             "format": "int32",
             "description": "Current page (1-indexed)",
@@ -23929,7 +23929,7 @@
             "description": "Progress record ID",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "progress_percentage": {
+          "progressPercentage": {
             "type": [
               "number",
               "null"
@@ -23938,19 +23938,19 @@
             "description": "Progress as a percentage (0.0-1.0)\nFor EPUBs, this is the stored percentage from reflowable content\nFor other formats, this is calculated from current_page / total_pages",
             "example": 0.45
           },
-          "started_at": {
+          "startedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When reading started",
             "example": "2024-01-10T14:30:00Z"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When progress was last updated",
             "example": "2024-01-15T18:45:00Z"
           },
-          "user_id": {
+          "userId": {
             "type": "string",
             "format": "uuid",
             "description": "User ID",
@@ -25859,12 +25859,12 @@
           "id",
           "key",
           "value",
-          "value_type",
+          "valueType",
           "category",
           "description",
-          "is_sensitive",
-          "default_value",
-          "updated_at",
+          "isSensitive",
+          "defaultValue",
+          "updatedAt",
           "version"
         ],
         "properties": {
@@ -25873,7 +25873,7 @@
             "description": "Category for grouping settings",
             "example": "scanning"
           },
-          "default_value": {
+          "defaultValue": {
             "type": "string",
             "description": "Default value for this setting",
             "example": "2"
@@ -25889,7 +25889,7 @@
             "description": "Setting unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "is_sensitive": {
+          "isSensitive": {
             "type": "boolean",
             "description": "Whether value should be masked in responses",
             "example": false
@@ -25899,7 +25899,7 @@
             "description": "Setting key name",
             "example": "scan.concurrent_jobs"
           },
-          "max_value": {
+          "maxValue": {
             "type": [
               "integer",
               "null"
@@ -25908,7 +25908,7 @@
             "description": "Maximum allowed value (for numeric settings)",
             "example": 16
           },
-          "min_value": {
+          "minValue": {
             "type": [
               "integer",
               "null"
@@ -25917,13 +25917,13 @@
             "description": "Minimum allowed value (for numeric settings)",
             "example": 1
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the setting was last updated",
             "example": "2024-01-15T10:30:00Z"
           },
-          "updated_by": {
+          "updatedBy": {
             "type": [
               "string",
               "null"
@@ -25936,7 +25936,7 @@
             "description": "Current setting value",
             "example": "4"
           },
-          "value_type": {
+          "valueType": {
             "type": "string",
             "description": "Data type of the value (string, integer, boolean, etc.)",
             "example": "integer"
@@ -25954,15 +25954,15 @@
         "description": "Setting history entry DTO",
         "required": [
           "id",
-          "setting_id",
+          "settingId",
           "key",
-          "old_value",
-          "new_value",
-          "changed_by",
-          "changed_at"
+          "oldValue",
+          "newValue",
+          "changedBy",
+          "changedAt"
         ],
         "properties": {
-          "change_reason": {
+          "changeReason": {
             "type": [
               "string",
               "null"
@@ -25970,13 +25970,13 @@
             "description": "Reason provided for the change",
             "example": "Performance optimization"
           },
-          "changed_at": {
+          "changedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the change was made",
             "example": "2024-01-15T10:30:00Z"
           },
-          "changed_by": {
+          "changedBy": {
             "type": "string",
             "format": "uuid",
             "description": "User who made the change",
@@ -25988,7 +25988,7 @@
             "description": "History entry ID",
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
-          "ip_address": {
+          "ipAddress": {
             "type": [
               "string",
               "null"
@@ -26001,17 +26001,17 @@
             "description": "Setting key that was changed",
             "example": "scan.concurrent_jobs"
           },
-          "new_value": {
+          "newValue": {
             "type": "string",
             "description": "New value after the change",
             "example": "4"
           },
-          "old_value": {
+          "oldValue": {
             "type": "string",
             "description": "Previous value before the change",
             "example": "2"
           },
-          "setting_id": {
+          "settingId": {
             "type": "string",
             "format": "uuid",
             "description": "ID of the setting that was changed",
@@ -26242,24 +26242,24 @@
         "type": "object",
         "description": "A single historical data point",
         "required": [
-          "period_start",
+          "periodStart",
           "count",
           "succeeded",
           "failed",
-          "avg_duration_ms",
-          "min_duration_ms",
-          "max_duration_ms",
-          "items_processed",
-          "bytes_processed"
+          "avgDurationMs",
+          "minDurationMs",
+          "maxDurationMs",
+          "itemsProcessed",
+          "bytesProcessed"
         ],
         "properties": {
-          "avg_duration_ms": {
+          "avgDurationMs": {
             "type": "number",
             "format": "double",
             "description": "Average duration in milliseconds",
             "example": 1200.0
           },
-          "bytes_processed": {
+          "bytesProcessed": {
             "type": "integer",
             "format": "int64",
             "description": "Bytes processed in this period",
@@ -26280,28 +26280,28 @@
             "example": 2,
             "minimum": 0
           },
-          "items_processed": {
+          "itemsProcessed": {
             "type": "integer",
             "format": "int64",
             "description": "Items processed in this period",
             "example": 500,
             "minimum": 0
           },
-          "max_duration_ms": {
+          "maxDurationMs": {
             "type": "integer",
             "format": "int64",
             "description": "Maximum duration",
             "example": 5000,
             "minimum": 0
           },
-          "min_duration_ms": {
+          "minDurationMs": {
             "type": "integer",
             "format": "int64",
             "description": "Minimum duration",
             "example": 200,
             "minimum": 0
           },
-          "period_start": {
+          "periodStart": {
             "type": "string",
             "format": "date-time",
             "description": "Start of this period",
@@ -26314,7 +26314,7 @@
             "example": 48,
             "minimum": 0
           },
-          "task_type": {
+          "taskType": {
             "type": [
               "string",
               "null"
@@ -26363,14 +26363,14 @@
         "type": "object",
         "description": "Task metrics response - current performance statistics",
         "required": [
-          "updated_at",
+          "updatedAt",
           "retention",
           "summary",
-          "by_type",
+          "byType",
           "queue"
         ],
         "properties": {
-          "by_type": {
+          "byType": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TaskTypeMetricsDto"
@@ -26390,7 +26390,7 @@
             "$ref": "#/components/schemas/TaskMetricsSummaryDto",
             "description": "Overall summary statistics"
           },
-          "updated_at": {
+          "updatedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the metrics were last updated",
@@ -26402,47 +26402,47 @@
         "type": "object",
         "description": "Summary metrics across all task types",
         "required": [
-          "total_executed",
-          "total_succeeded",
-          "total_failed",
-          "avg_duration_ms",
-          "avg_queue_wait_ms",
-          "tasks_per_minute"
+          "totalExecuted",
+          "totalSucceeded",
+          "totalFailed",
+          "avgDurationMs",
+          "avgQueueWaitMs",
+          "tasksPerMinute"
         ],
         "properties": {
-          "avg_duration_ms": {
+          "avgDurationMs": {
             "type": "number",
             "format": "double",
             "description": "Average duration in milliseconds",
             "example": 1500.5
           },
-          "avg_queue_wait_ms": {
+          "avgQueueWaitMs": {
             "type": "number",
             "format": "double",
             "description": "Average queue wait time in milliseconds",
             "example": 250.0
           },
-          "tasks_per_minute": {
+          "tasksPerMinute": {
             "type": "number",
             "format": "double",
             "description": "Tasks processed per minute (recent average)",
             "example": 15.5
           },
-          "total_executed": {
+          "totalExecuted": {
             "type": "integer",
             "format": "int64",
             "description": "Total tasks executed since last restart",
             "example": 1250,
             "minimum": 0
           },
-          "total_failed": {
+          "totalFailed": {
             "type": "integer",
             "format": "int64",
             "description": "Total failed tasks",
             "example": 50,
             "minimum": 0
           },
-          "total_succeeded": {
+          "totalSucceeded": {
             "type": "integer",
             "format": "int64",
             "description": "Total successful tasks",
@@ -26485,13 +26485,13 @@
         "type": "object",
         "description": "Task progress event for background operations",
         "required": [
-          "task_id",
-          "task_type",
+          "taskId",
+          "taskType",
           "status",
-          "started_at"
+          "startedAt"
         ],
         "properties": {
-          "book_id": {
+          "bookId": {
             "type": [
               "string",
               "null"
@@ -26499,7 +26499,7 @@
             "format": "uuid",
             "description": "Book ID if this task is related to a book"
           },
-          "completed_at": {
+          "completedAt": {
             "type": [
               "string",
               "null"
@@ -26514,7 +26514,7 @@
             ],
             "description": "Error message (for failed tasks)"
           },
-          "library_id": {
+          "libraryId": {
             "type": [
               "string",
               "null"
@@ -26533,7 +26533,7 @@
               }
             ]
           },
-          "series_id": {
+          "seriesId": {
             "type": [
               "string",
               "null"
@@ -26541,7 +26541,7 @@
             "format": "uuid",
             "description": "Series ID if this task is related to a series"
           },
-          "started_at": {
+          "startedAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the task started"
@@ -26550,12 +26550,12 @@
             "$ref": "#/components/schemas/TaskStatus",
             "description": "Current status of the task"
           },
-          "task_id": {
+          "taskId": {
             "type": "string",
             "format": "uuid",
             "description": "Unique identifier for this task instance"
           },
-          "task_type": {
+          "taskType": {
             "type": "string",
             "description": "Type of task being executed"
           }
@@ -26565,13 +26565,13 @@
         "type": "object",
         "required": [
           "id",
-          "task_type",
+          "taskType",
           "status",
           "priority",
           "attempts",
-          "max_attempts",
-          "scheduled_for",
-          "created_at"
+          "maxAttempts",
+          "scheduledFor",
+          "createdAt"
         ],
         "properties": {
           "attempts": {
@@ -26580,7 +26580,7 @@
             "description": "Number of execution attempts",
             "example": 0
           },
-          "book_id": {
+          "bookId": {
             "type": [
               "string",
               "null"
@@ -26588,7 +26588,7 @@
             "format": "uuid",
             "description": "Associated book ID (if applicable)"
           },
-          "completed_at": {
+          "completedAt": {
             "type": [
               "string",
               "null"
@@ -26596,7 +26596,7 @@
             "format": "date-time",
             "description": "When task execution completed"
           },
-          "created_at": {
+          "createdAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the task was created",
@@ -26608,14 +26608,14 @@
             "description": "Unique task identifier",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "last_error": {
+          "lastError": {
             "type": [
               "string",
               "null"
             ],
             "description": "Error message from last failed attempt"
           },
-          "library_id": {
+          "libraryId": {
             "type": [
               "string",
               "null"
@@ -26624,7 +26624,7 @@
             "description": "Associated library ID (if applicable)",
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
-          "locked_by": {
+          "lockedBy": {
             "type": [
               "string",
               "null"
@@ -26632,7 +26632,7 @@
             "description": "Worker ID that has locked this task",
             "example": "worker-1"
           },
-          "locked_until": {
+          "lockedUntil": {
             "type": [
               "string",
               "null"
@@ -26640,7 +26640,7 @@
             "format": "date-time",
             "description": "When the lock expires"
           },
-          "max_attempts": {
+          "maxAttempts": {
             "type": "integer",
             "format": "int32",
             "description": "Maximum number of allowed attempts",
@@ -26658,13 +26658,13 @@
           "result": {
             "description": "Task execution result"
           },
-          "scheduled_for": {
+          "scheduledFor": {
             "type": "string",
             "format": "date-time",
             "description": "When the task is scheduled to run",
             "example": "2024-01-15T12:00:00Z"
           },
-          "series_id": {
+          "seriesId": {
             "type": [
               "string",
               "null"
@@ -26672,7 +26672,7 @@
             "format": "uuid",
             "description": "Associated series ID (if applicable)"
           },
-          "started_at": {
+          "startedAt": {
             "type": [
               "string",
               "null"
@@ -26685,7 +26685,7 @@
             "description": "Current status (pending, processing, completed, failed)",
             "example": "pending"
           },
-          "task_type": {
+          "taskType": {
             "type": "string",
             "description": "Type of task (scan_library, generate_thumbnail, etc.)",
             "example": "scan_library"
@@ -26702,10 +26702,10 @@
           "failed",
           "stale",
           "total",
-          "by_type"
+          "byType"
         ],
         "properties": {
-          "by_type": {
+          "byType": {
             "type": "object",
             "description": "Breakdown by task type and status",
             "additionalProperties": {
@@ -26764,11 +26764,11 @@
             "type": "object",
             "description": "Scan a library for new/changed books",
             "required": [
-              "library_id",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -26787,11 +26787,11 @@
             "type": "object",
             "description": "Analyze a single book's metadata",
             "required": [
-              "book_id",
+              "bookId",
               "type"
             ],
             "properties": {
-              "book_id": {
+              "bookId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -26810,11 +26810,11 @@
             "type": "object",
             "description": "Analyze all books in a series (always forces re-analysis)",
             "required": [
-              "series_id",
+              "seriesId",
               "type"
             ],
             "properties": {
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -26830,11 +26830,11 @@
             "type": "object",
             "description": "Purge soft-deleted books from a library",
             "required": [
-              "library_id",
+              "libraryId",
               "type"
             ],
             "properties": {
-              "library_id": {
+              "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -26850,12 +26850,12 @@
             "type": "object",
             "description": "Refresh metadata from external source",
             "required": [
-              "book_id",
+              "bookId",
               "source",
               "type"
             ],
             "properties": {
-              "book_id": {
+              "bookId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -26877,7 +26877,7 @@
               "type"
             ],
             "properties": {
-              "book_ids": {
+              "bookIds": {
                 "type": [
                   "array",
                   "null"
@@ -26890,21 +26890,21 @@
               "force": {
                 "type": "boolean"
               },
-              "library_id": {
+              "libraryId": {
                 "type": [
                   "string",
                   "null"
                 ],
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": [
                   "string",
                   "null"
                 ],
                 "format": "uuid"
               },
-              "series_ids": {
+              "seriesIds": {
                 "type": [
                   "array",
                   "null"
@@ -26926,11 +26926,11 @@
             "type": "object",
             "description": "Generate thumbnail for a single book",
             "required": [
-              "book_id",
+              "bookId",
               "type"
             ],
             "properties": {
-              "book_id": {
+              "bookId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -26949,14 +26949,14 @@
             "type": "object",
             "description": "Generate thumbnail for a series (from first book's cover)",
             "required": [
-              "series_id",
+              "seriesId",
               "type"
             ],
             "properties": {
               "force": {
                 "type": "boolean"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -26978,14 +26978,14 @@
               "force": {
                 "type": "boolean"
               },
-              "library_id": {
+              "libraryId": {
                 "type": [
                   "string",
                   "null"
                 ],
                 "format": "uuid"
               },
-              "series_ids": {
+              "seriesIds": {
                 "type": [
                   "array",
                   "null"
@@ -27022,15 +27022,15 @@
             "type": "object",
             "description": "Clean up files for a deleted book (thumbnail + cover references)",
             "required": [
-              "book_id",
+              "bookId",
               "type"
             ],
             "properties": {
-              "book_id": {
+              "bookId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": [
                   "string",
                   "null"
@@ -27038,7 +27038,7 @@
                 "format": "uuid",
                 "description": "Optional series_id to invalidate series thumbnail cache"
               },
-              "thumbnail_path": {
+              "thumbnailPath": {
                 "type": [
                   "string",
                   "null"
@@ -27057,11 +27057,11 @@
             "type": "object",
             "description": "Clean up files for a deleted series (cover files)",
             "required": [
-              "series_id",
+              "seriesId",
               "type"
             ],
             "properties": {
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -27107,20 +27107,20 @@
             "type": "object",
             "description": "Auto-match metadata for a series using a plugin",
             "required": [
-              "series_id",
-              "plugin_id",
+              "seriesId",
+              "pluginId",
               "type"
             ],
             "properties": {
-              "plugin_id": {
+              "pluginId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
-              "source_scope": {
+              "sourceScope": {
                 "type": [
                   "string",
                   "null"
@@ -27139,11 +27139,11 @@
             "type": "object",
             "description": "Reprocess a single series title using library preprocessing rules",
             "required": [
-              "series_id",
+              "seriesId",
               "type"
             ],
             "properties": {
-              "series_id": {
+              "seriesId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -27162,14 +27162,14 @@
               "type"
             ],
             "properties": {
-              "library_id": {
+              "libraryId": {
                 "type": [
                   "string",
                   "null"
                 ],
                 "format": "uuid"
               },
-              "series_ids": {
+              "seriesIds": {
                 "type": [
                   "array",
                   "null"
@@ -27194,43 +27194,43 @@
         "type": "object",
         "description": "Metrics for a specific task type",
         "required": [
-          "task_type",
+          "taskType",
           "executed",
           "succeeded",
           "failed",
           "retried",
-          "avg_duration_ms",
-          "min_duration_ms",
-          "max_duration_ms",
-          "p50_duration_ms",
-          "p95_duration_ms",
-          "avg_queue_wait_ms",
-          "items_processed",
-          "bytes_processed",
-          "throughput_per_sec",
-          "error_rate_pct"
+          "avgDurationMs",
+          "minDurationMs",
+          "maxDurationMs",
+          "p50DurationMs",
+          "p95DurationMs",
+          "avgQueueWaitMs",
+          "itemsProcessed",
+          "bytesProcessed",
+          "throughputPerSec",
+          "errorRatePct"
         ],
         "properties": {
-          "avg_duration_ms": {
+          "avgDurationMs": {
             "type": "number",
             "format": "double",
             "description": "Average duration in milliseconds",
             "example": 2500.0
           },
-          "avg_queue_wait_ms": {
+          "avgQueueWaitMs": {
             "type": "number",
             "format": "double",
             "description": "Average queue wait time in milliseconds",
             "example": 150.0
           },
-          "bytes_processed": {
+          "bytesProcessed": {
             "type": "integer",
             "format": "int64",
             "description": "Total bytes processed",
             "example": 1073741824,
             "minimum": 0
           },
-          "error_rate_pct": {
+          "errorRatePct": {
             "type": "number",
             "format": "double",
             "description": "Error rate as percentage",
@@ -27250,21 +27250,21 @@
             "example": 5,
             "minimum": 0
           },
-          "items_processed": {
+          "itemsProcessed": {
             "type": "integer",
             "format": "int64",
             "description": "Total items processed",
             "example": 5000,
             "minimum": 0
           },
-          "last_error": {
+          "lastError": {
             "type": [
               "string",
               "null"
             ],
             "description": "Most recent error message"
           },
-          "last_error_at": {
+          "lastErrorAt": {
             "type": [
               "string",
               "null"
@@ -27272,28 +27272,28 @@
             "format": "date-time",
             "description": "When the last error occurred"
           },
-          "max_duration_ms": {
+          "maxDurationMs": {
             "type": "integer",
             "format": "int64",
             "description": "Maximum duration in milliseconds",
             "example": 15000,
             "minimum": 0
           },
-          "min_duration_ms": {
+          "minDurationMs": {
             "type": "integer",
             "format": "int64",
             "description": "Minimum duration in milliseconds",
             "example": 500,
             "minimum": 0
           },
-          "p50_duration_ms": {
+          "p50DurationMs": {
             "type": "integer",
             "format": "int64",
             "description": "50th percentile (median) duration",
             "example": 2000,
             "minimum": 0
           },
-          "p95_duration_ms": {
+          "p95DurationMs": {
             "type": "integer",
             "format": "int64",
             "description": "95th percentile duration",
@@ -27314,12 +27314,12 @@
             "example": 95,
             "minimum": 0
           },
-          "task_type": {
+          "taskType": {
             "type": "string",
             "description": "Task type name",
             "example": "scan_library"
           },
-          "throughput_per_sec": {
+          "throughputPerSec": {
             "type": "number",
             "format": "double",
             "description": "Throughput rate per second",
@@ -27431,7 +27431,7 @@
         "type": "object",
         "description": "Response when triggering a cleanup task",
         "required": [
-          "task_id",
+          "taskId",
           "message"
         ],
         "properties": {
@@ -27440,7 +27440,7 @@
             "description": "Message describing the action taken",
             "example": "Cleanup task queued successfully"
           },
-          "task_id": {
+          "taskId": {
             "type": "string",
             "format": "uuid",
             "description": "ID of the queued cleanup task",
@@ -27452,7 +27452,7 @@
         "type": "object",
         "description": "Response for triggering a duplicate scan",
         "required": [
-          "task_id",
+          "taskId",
           "message"
         ],
         "properties": {
@@ -27461,7 +27461,7 @@
             "description": "Status message",
             "example": "Duplicate scan started"
           },
-          "task_id": {
+          "taskId": {
             "type": "string",
             "format": "uuid",
             "description": "Task ID for tracking the scan progress",
@@ -27473,12 +27473,12 @@
         "type": "object",
         "description": "Response when triggering a PDF cache cleanup task",
         "required": [
-          "task_id",
+          "taskId",
           "message",
-          "max_age_days"
+          "maxAgeDays"
         ],
         "properties": {
-          "max_age_days": {
+          "maxAgeDays": {
             "type": "integer",
             "format": "int32",
             "description": "Max age setting being used for cleanup (in days)",
@@ -27490,7 +27490,7 @@
             "description": "Message describing the action taken",
             "example": "PDF cache cleanup task queued successfully"
           },
-          "task_id": {
+          "taskId": {
             "type": "string",
             "format": "uuid",
             "description": "ID of the queued cleanup task",
@@ -28100,7 +28100,7 @@
         "type": "object",
         "description": "Request to update reading progress for a book",
         "required": [
-          "current_page"
+          "currentPage"
         ],
         "properties": {
           "completed": {
@@ -28108,13 +28108,13 @@
             "description": "Whether the book is marked as completed",
             "example": false
           },
-          "current_page": {
+          "currentPage": {
             "type": "integer",
             "format": "int32",
             "description": "Current page number (1-indexed)",
             "example": 42
           },
-          "progress_percentage": {
+          "progressPercentage": {
             "type": [
               "number",
               "null"
@@ -28132,7 +28132,7 @@
           "value"
         ],
         "properties": {
-          "change_reason": {
+          "changeReason": {
             "type": [
               "string",
               "null"

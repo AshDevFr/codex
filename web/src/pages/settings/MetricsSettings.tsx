@@ -118,19 +118,19 @@ function LibraryCard({ library }: { library: LibraryMetricsDto }) {
           <Text size="xs" c="dimmed">
             Series
           </Text>
-          <Text fw={500}>{library.series_count.toLocaleString()}</Text>
+          <Text fw={500}>{library.seriesCount.toLocaleString()}</Text>
         </div>
         <div>
           <Text size="xs" c="dimmed">
             Books
           </Text>
-          <Text fw={500}>{library.book_count.toLocaleString()}</Text>
+          <Text fw={500}>{library.bookCount.toLocaleString()}</Text>
         </div>
         <div>
           <Text size="xs" c="dimmed">
             Size
           </Text>
-          <Text fw={500}>{formatBytes(library.total_size)}</Text>
+          <Text fw={500}>{formatBytes(library.totalSize)}</Text>
         </div>
       </SimpleGrid>
     </Card>
@@ -156,7 +156,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
               <IconChevronRight size={14} />
             )}
             <Text fw={500} size="sm">
-              {metrics.task_type.replace(/_/g, " ")}
+              {metrics.taskType.replace(/_/g, " ")}
             </Text>
           </Group>
         </Table.Td>
@@ -181,22 +181,22 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
           </Group>
         </Table.Td>
         <Table.Td>
-          <Text size="sm">{formatDuration(metrics.avg_duration_ms)}</Text>
+          <Text size="sm">{formatDuration(metrics.avgDurationMs)}</Text>
         </Table.Td>
         <Table.Td>
           <Tooltip label="Median / 95th percentile">
             <Text size="sm" c="dimmed">
-              {formatDuration(metrics.p50_duration_ms)} /{" "}
-              {formatDuration(metrics.p95_duration_ms)}
+              {formatDuration(metrics.p50DurationMs)} /{" "}
+              {formatDuration(metrics.p95DurationMs)}
             </Text>
           </Tooltip>
         </Table.Td>
         <Table.Td>
-          <Text size="sm">{metrics.items_processed.toLocaleString()}</Text>
+          <Text size="sm">{metrics.itemsProcessed.toLocaleString()}</Text>
         </Table.Td>
         <Table.Td>
-          {metrics.last_error ? (
-            <Tooltip label={metrics.last_error}>
+          {metrics.lastError ? (
+            <Tooltip label={metrics.lastError}>
               <Badge
                 color="red"
                 size="sm"
@@ -258,14 +258,14 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     size="sm"
                     fw={500}
                     c={
-                      metrics.error_rate_pct > 5
+                      metrics.errorRatePct > 5
                         ? "red"
-                        : metrics.error_rate_pct > 1
+                        : metrics.errorRatePct > 1
                           ? "yellow"
                           : undefined
                     }
                   >
-                    {metrics.error_rate_pct.toFixed(2)}%
+                    {metrics.errorRatePct.toFixed(2)}%
                   </Text>
                 </div>
                 <div>
@@ -273,7 +273,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     Min Duration
                   </Text>
                   <Text size="sm" fw={500}>
-                    {formatDuration(metrics.min_duration_ms)}
+                    {formatDuration(metrics.minDurationMs)}
                   </Text>
                 </div>
                 <div>
@@ -281,7 +281,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     Max Duration
                   </Text>
                   <Text size="sm" fw={500}>
-                    {formatDuration(metrics.max_duration_ms)}
+                    {formatDuration(metrics.maxDurationMs)}
                   </Text>
                 </div>
                 <div>
@@ -289,7 +289,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     P50 Duration
                   </Text>
                   <Text size="sm" fw={500}>
-                    {formatDuration(metrics.p50_duration_ms)}
+                    {formatDuration(metrics.p50DurationMs)}
                   </Text>
                 </div>
                 <div>
@@ -297,7 +297,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     P95 Duration
                   </Text>
                   <Text size="sm" fw={500}>
-                    {formatDuration(metrics.p95_duration_ms)}
+                    {formatDuration(metrics.p95DurationMs)}
                   </Text>
                 </div>
                 <div>
@@ -305,7 +305,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     Avg Queue Wait
                   </Text>
                   <Text size="sm" fw={500}>
-                    {formatDuration(metrics.avg_queue_wait_ms)}
+                    {formatDuration(metrics.avgQueueWaitMs)}
                   </Text>
                 </div>
                 <div>
@@ -313,7 +313,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     Bytes Processed
                   </Text>
                   <Text size="sm" fw={500}>
-                    {formatBytes(metrics.bytes_processed)}
+                    {formatBytes(metrics.bytesProcessed)}
                   </Text>
                 </div>
                 <div>
@@ -321,21 +321,21 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     Throughput
                   </Text>
                   <Text size="sm" fw={500}>
-                    {metrics.throughput_per_sec.toFixed(1)}/sec
+                    {metrics.throughputPerSec.toFixed(1)}/sec
                   </Text>
                 </div>
-                {metrics.last_error_at && (
+                {metrics.lastErrorAt && (
                   <div>
                     <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
                       Last Error At
                     </Text>
                     <Text size="sm" fw={500} c="red">
-                      {new Date(metrics.last_error_at).toLocaleString()}
+                      {new Date(metrics.lastErrorAt).toLocaleString()}
                     </Text>
                   </div>
                 )}
               </SimpleGrid>
-              {metrics.last_error && (
+              {metrics.lastError && (
                 <Box
                   mt="md"
                   p="sm"
@@ -352,7 +352,7 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
                     </Text>
                   </Group>
                   <Text size="sm" style={{ fontFamily: "monospace" }}>
-                    {metrics.last_error}
+                    {metrics.lastError}
                   </Text>
                 </Box>
               )}
@@ -371,25 +371,25 @@ function InventoryTab({ metrics }: { metrics: MetricsDto }) {
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
         <StatCard
           title="Libraries"
-          value={(metrics.library_count ?? 0).toLocaleString()}
+          value={(metrics.libraryCount ?? 0).toLocaleString()}
           icon={IconFolder}
           color="blue"
         />
         <StatCard
           title="Series"
-          value={(metrics.series_count ?? 0).toLocaleString()}
+          value={(metrics.seriesCount ?? 0).toLocaleString()}
           icon={IconBooks}
           color="teal"
         />
         <StatCard
           title="Books"
-          value={(metrics.book_count ?? 0).toLocaleString()}
+          value={(metrics.bookCount ?? 0).toLocaleString()}
           icon={IconBook}
           color="violet"
         />
         <StatCard
           title="Users"
-          value={(metrics.user_count ?? 0).toLocaleString()}
+          value={(metrics.userCount ?? 0).toLocaleString()}
           icon={IconUsers}
           color="orange"
         />
@@ -398,13 +398,13 @@ function InventoryTab({ metrics }: { metrics: MetricsDto }) {
       <SimpleGrid cols={{ base: 1, sm: 2 }}>
         <StatCard
           title="Total Book Size"
-          value={formatBytes(metrics.total_book_size ?? 0)}
+          value={formatBytes(metrics.totalBookSize ?? 0)}
           icon={IconDatabase}
           color="cyan"
         />
         <StatCard
           title="Database Size"
-          value={formatBytes(metrics.database_size ?? 0)}
+          value={formatBytes(metrics.databaseSize ?? 0)}
           icon={IconDatabase}
           color="pink"
         />
@@ -444,13 +444,13 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
     stale_count: 0,
     oldest_pending_age_ms: null,
   };
-  const byType = metrics.by_type ?? [];
+  const byType = metrics.byType ?? [];
 
   // Calculate aggregates from by_type data
   const totalRetried = byType.reduce((sum, t) => sum + (t.retried ?? 0), 0);
   const successRate =
-    summary.total_executed > 0
-      ? ((summary.total_succeeded ?? 0) / summary.total_executed) * 100
+    summary.totalExecuted > 0
+      ? ((summary.totalSucceeded ?? 0) / summary.totalExecuted) * 100
       : 0;
 
   return (
@@ -462,7 +462,7 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
             Total Executed
           </Text>
           <Text fw={700} size="xl">
-            {(summary.total_executed ?? 0).toLocaleString()}
+            {(summary.totalExecuted ?? 0).toLocaleString()}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -470,7 +470,7 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
             Succeeded
           </Text>
           <Text fw={700} size="xl" c="green">
-            {(summary.total_succeeded ?? 0).toLocaleString()}
+            {(summary.totalSucceeded ?? 0).toLocaleString()}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -480,9 +480,9 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
           <Text
             fw={700}
             size="xl"
-            c={(summary.total_failed ?? 0) > 0 ? "red" : undefined}
+            c={(summary.totalFailed ?? 0) > 0 ? "red" : undefined}
           >
-            {(summary.total_failed ?? 0).toLocaleString()}
+            {(summary.totalFailed ?? 0).toLocaleString()}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -518,7 +518,7 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
             Throughput
           </Text>
           <Text fw={700} size="xl">
-            {(summary.tasks_per_minute ?? 0).toFixed(1)}/min
+            {(summary.tasksPerMinute ?? 0).toFixed(1)}/min
           </Text>
         </Paper>
       </SimpleGrid>
@@ -535,7 +535,7 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
                 Avg Duration
               </Text>
               <Text fw={500} size="lg">
-                {formatDuration(summary.avg_duration_ms ?? 0)}
+                {formatDuration(summary.avgDurationMs ?? 0)}
               </Text>
             </div>
             <div>
@@ -543,7 +543,7 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
                 Avg Queue Wait
               </Text>
               <Text fw={500} size="lg">
-                {formatDuration(summary.avg_queue_wait_ms ?? 0)}
+                {formatDuration(summary.avgQueueWaitMs ?? 0)}
               </Text>
             </div>
           </SimpleGrid>
@@ -560,7 +560,7 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
                 Pending
               </Text>
               <Text fw={500} size="lg">
-                {queue.pending_count ?? 0}
+                {queue.pendingCount ?? 0}
               </Text>
             </div>
             <div>
@@ -568,7 +568,7 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
                 Processing
               </Text>
               <Text fw={500} size="lg">
-                {queue.processing_count ?? 0}
+                {queue.processingCount ?? 0}
               </Text>
             </div>
             <div>
@@ -578,9 +578,9 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
               <Text
                 fw={500}
                 size="lg"
-                c={(queue.stale_count ?? 0) > 0 ? "red" : "green"}
+                c={(queue.staleCount ?? 0) > 0 ? "red" : "green"}
               >
-                {queue.stale_count ?? 0}
+                {queue.staleCount ?? 0}
               </Text>
             </div>
             <div>
@@ -588,8 +588,8 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
                 Oldest Pending
               </Text>
               <Text fw={500} size="lg">
-                {queue.oldest_pending_age_ms
-                  ? formatDuration(queue.oldest_pending_age_ms)
+                {queue.oldestPendingAgeMs
+                  ? formatDuration(queue.oldestPendingAgeMs)
                   : "-"}
               </Text>
             </div>
@@ -617,10 +617,10 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
             </Table.Thead>
             <Table.Tbody>
               {[...byType]
-                .sort((a, b) => a.task_type.localeCompare(b.task_type))
+                .sort((a, b) => a.taskType.localeCompare(b.taskType))
                 .map((taskMetrics) => (
                   <TaskTypeRow
-                    key={taskMetrics.task_type}
+                    key={taskMetrics.taskType}
                     metrics={taskMetrics}
                   />
                 ))}
@@ -636,19 +636,19 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
 function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
   const [opened, { toggle }] = useDisclosure(false);
   const successRate =
-    metrics.requests_total > 0
+    metrics.requestsTotal > 0
       ? (
-          ((metrics.requests_success ?? 0) / metrics.requests_total) *
+          ((metrics.requestsSuccess ?? 0) / metrics.requestsTotal) *
           100
         ).toFixed(1)
       : "0";
 
   const healthColor =
-    metrics.health_status === "healthy"
+    metrics.healthStatus === "healthy"
       ? "green"
-      : metrics.health_status === "degraded"
+      : metrics.healthStatus === "degraded"
         ? "yellow"
-        : metrics.health_status === "unhealthy"
+        : metrics.healthStatus === "unhealthy"
           ? "red"
           : "gray";
 
@@ -663,12 +663,12 @@ function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
               <IconChevronRight size={14} />
             )}
             <Text fw={500} size="sm">
-              {metrics.plugin_name}
+              {metrics.pluginName}
             </Text>
           </Group>
         </Table.Td>
         <Table.Td>
-          <Text size="sm">{metrics.requests_total.toLocaleString()}</Text>
+          <Text size="sm">{metrics.requestsTotal.toLocaleString()}</Text>
         </Table.Td>
         <Table.Td>
           <Group gap="xs">
@@ -688,16 +688,16 @@ function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
           </Group>
         </Table.Td>
         <Table.Td>
-          <Text size="sm">{formatDuration(metrics.avg_duration_ms ?? 0)}</Text>
+          <Text size="sm">{formatDuration(metrics.avgDurationMs ?? 0)}</Text>
         </Table.Td>
         <Table.Td>
           <Text size="sm">
-            {(metrics.rate_limit_rejections ?? 0).toLocaleString()}
+            {(metrics.rateLimitRejections ?? 0).toLocaleString()}
           </Text>
         </Table.Td>
         <Table.Td>
           <Badge color={healthColor} size="sm" variant="light">
-            {metrics.health_status}
+            {metrics.healthStatus}
           </Badge>
         </Table.Td>
       </Table.Tr>
@@ -711,7 +711,7 @@ function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
                     Succeeded
                   </Text>
                   <Text size="sm" fw={500} c="green">
-                    {(metrics.requests_success ?? 0).toLocaleString()}
+                    {(metrics.requestsSuccess ?? 0).toLocaleString()}
                   </Text>
                 </div>
                 <div>
@@ -721,9 +721,9 @@ function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
                   <Text
                     size="sm"
                     fw={500}
-                    c={(metrics.requests_failed ?? 0) > 0 ? "red" : undefined}
+                    c={(metrics.requestsFailed ?? 0) > 0 ? "red" : undefined}
                   >
-                    {(metrics.requests_failed ?? 0).toLocaleString()}
+                    {(metrics.requestsFailed ?? 0).toLocaleString()}
                   </Text>
                 </div>
                 <div>
@@ -734,14 +734,14 @@ function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
                     size="sm"
                     fw={500}
                     c={
-                      (metrics.error_rate_pct ?? 0) > 10
+                      (metrics.errorRatePct ?? 0) > 10
                         ? "red"
-                        : (metrics.error_rate_pct ?? 0) > 5
+                        : (metrics.errorRatePct ?? 0) > 5
                           ? "yellow"
                           : undefined
                     }
                   >
-                    {(metrics.error_rate_pct ?? 0).toFixed(2)}%
+                    {(metrics.errorRatePct ?? 0).toFixed(2)}%
                   </Text>
                 </div>
                 <div>
@@ -752,85 +752,83 @@ function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
                     size="sm"
                     fw={500}
                     c={
-                      (metrics.rate_limit_rejections ?? 0) > 0
+                      (metrics.rateLimitRejections ?? 0) > 0
                         ? "yellow"
                         : undefined
                     }
                   >
-                    {(metrics.rate_limit_rejections ?? 0).toLocaleString()}
+                    {(metrics.rateLimitRejections ?? 0).toLocaleString()}
                   </Text>
                 </div>
-                {metrics.last_success && (
+                {metrics.lastSuccess && (
                   <div>
                     <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
                       Last Success
                     </Text>
                     <Text size="sm" fw={500}>
-                      {new Date(metrics.last_success).toLocaleString()}
+                      {new Date(metrics.lastSuccess).toLocaleString()}
                     </Text>
                   </div>
                 )}
-                {metrics.last_failure && (
+                {metrics.lastFailure && (
                   <div>
                     <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
                       Last Failure
                     </Text>
                     <Text size="sm" fw={500} c="red">
-                      {new Date(metrics.last_failure).toLocaleString()}
+                      {new Date(metrics.lastFailure).toLocaleString()}
                     </Text>
                   </div>
                 )}
               </SimpleGrid>
 
               {/* Method breakdown */}
-              {metrics.by_method &&
-                Object.keys(metrics.by_method).length > 0 && (
-                  <Box mt="md">
-                    <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
-                      By Method
-                    </Text>
-                    <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
-                      {Object.entries(metrics.by_method).map(
-                        ([method, methodMetrics]) => (
-                          <Paper key={method} p="xs" withBorder>
-                            <Group justify="space-between" mb={4}>
-                              <Text size="xs" fw={500}>
-                                {method}
+              {metrics.byMethod && Object.keys(metrics.byMethod).length > 0 && (
+                <Box mt="md">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
+                    By Method
+                  </Text>
+                  <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
+                    {Object.entries(metrics.byMethod).map(
+                      ([method, methodMetrics]) => (
+                        <Paper key={method} p="xs" withBorder>
+                          <Group justify="space-between" mb={4}>
+                            <Text size="xs" fw={500}>
+                              {method}
+                            </Text>
+                            <Badge size="xs" variant="light">
+                              {methodMetrics.requestsTotal} calls
+                            </Badge>
+                          </Group>
+                          <Group gap="xs">
+                            <Text size="xs" c="dimmed">
+                              {methodMetrics.requestsSuccess} ok
+                            </Text>
+                            {(methodMetrics.requestsFailed ?? 0) > 0 && (
+                              <Text size="xs" c="red">
+                                {methodMetrics.requestsFailed} failed
                               </Text>
-                              <Badge size="xs" variant="light">
-                                {methodMetrics.requests_total} calls
-                              </Badge>
-                            </Group>
-                            <Group gap="xs">
-                              <Text size="xs" c="dimmed">
-                                {methodMetrics.requests_success} ok
-                              </Text>
-                              {(methodMetrics.requests_failed ?? 0) > 0 && (
-                                <Text size="xs" c="red">
-                                  {methodMetrics.requests_failed} failed
-                                </Text>
-                              )}
-                              <Text size="xs" c="dimmed">
-                                avg{" "}
-                                {formatDuration(methodMetrics.avg_duration_ms)}
-                              </Text>
-                            </Group>
-                          </Paper>
-                        ),
-                      )}
-                    </SimpleGrid>
-                  </Box>
-                )}
+                            )}
+                            <Text size="xs" c="dimmed">
+                              avg {formatDuration(methodMetrics.avgDurationMs)}
+                            </Text>
+                          </Group>
+                        </Paper>
+                      ),
+                    )}
+                  </SimpleGrid>
+                </Box>
+              )}
 
               {/* Failure breakdown */}
-              {metrics.failure_counts &&
-                Object.keys(metrics.failure_counts).length > 0 && (
+              {metrics.failureCounts &&
+                Object.keys(metrics.failureCounts).length > 0 && (
                   <Box mt="md">
                     <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
                       Failures by Type
                     </Text>
                     <Group gap="xs">
-                      {Object.entries(metrics.failure_counts).map(
+                      {Object.entries(metrics.failureCounts).map(
                         ([code, count]) => (
                           <Badge
                             key={code}
@@ -859,8 +857,8 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
   const plugins = metrics.plugins ?? [];
 
   const successRate =
-    summary.total_requests > 0
-      ? ((summary.total_success ?? 0) / summary.total_requests) * 100
+    summary.totalRequests > 0
+      ? ((summary.totalSuccess ?? 0) / summary.totalRequests) * 100
       : 0;
 
   return (
@@ -872,7 +870,7 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
             Total Plugins
           </Text>
           <Text fw={700} size="xl">
-            {summary.total_plugins}
+            {summary.totalPlugins}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -880,7 +878,7 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
             Healthy
           </Text>
           <Text fw={700} size="xl" c="green">
-            {summary.healthy_plugins}
+            {summary.healthyPlugins}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -890,9 +888,9 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
           <Text
             fw={700}
             size="xl"
-            c={(summary.degraded_plugins ?? 0) > 0 ? "yellow" : undefined}
+            c={(summary.degradedPlugins ?? 0) > 0 ? "yellow" : undefined}
           >
-            {summary.degraded_plugins}
+            {summary.degradedPlugins}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -902,9 +900,9 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
           <Text
             fw={700}
             size="xl"
-            c={(summary.unhealthy_plugins ?? 0) > 0 ? "red" : undefined}
+            c={(summary.unhealthyPlugins ?? 0) > 0 ? "red" : undefined}
           >
-            {summary.unhealthy_plugins}
+            {summary.unhealthyPlugins}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -912,7 +910,7 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
             Total Requests
           </Text>
           <Text fw={700} size="xl">
-            {(summary.total_requests ?? 0).toLocaleString()}
+            {(summary.totalRequests ?? 0).toLocaleString()}
           </Text>
         </Paper>
         <Paper p="md" withBorder>
@@ -941,7 +939,7 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
                 Successful Requests
               </Text>
               <Text fw={500} size="lg">
-                {(summary.total_success ?? 0).toLocaleString()}
+                {(summary.totalSuccess ?? 0).toLocaleString()}
               </Text>
             </div>
           </Group>
@@ -956,9 +954,9 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
               <Text
                 fw={500}
                 size="lg"
-                c={(summary.total_failed ?? 0) > 0 ? "red" : undefined}
+                c={(summary.totalFailed ?? 0) > 0 ? "red" : undefined}
               >
-                {(summary.total_failed ?? 0).toLocaleString()}
+                {(summary.totalFailed ?? 0).toLocaleString()}
               </Text>
             </div>
           </Group>
@@ -974,12 +972,12 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
                 fw={500}
                 size="lg"
                 c={
-                  (summary.total_rate_limit_rejections ?? 0) > 0
+                  (summary.totalRateLimitRejections ?? 0) > 0
                     ? "yellow"
                     : undefined
                 }
               >
-                {(summary.total_rate_limit_rejections ?? 0).toLocaleString()}
+                {(summary.totalRateLimitRejections ?? 0).toLocaleString()}
               </Text>
             </div>
           </Group>
@@ -1005,9 +1003,9 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
             </Table.Thead>
             <Table.Tbody>
               {[...plugins]
-                .sort((a, b) => a.plugin_name.localeCompare(b.plugin_name))
+                .sort((a, b) => a.pluginName.localeCompare(b.pluginName))
                 .map((plugin) => (
-                  <PluginMetricsRow key={plugin.plugin_id} metrics={plugin} />
+                  <PluginMetricsRow key={plugin.pluginId} metrics={plugin} />
                 ))}
             </Table.Tbody>
           </Table>
@@ -1073,7 +1071,7 @@ export function MetricsSettings() {
     onSuccess: (result) => {
       notifications.show({
         title: "Cleanup Complete",
-        message: `Deleted ${result.deleted_count} old metric records`,
+        message: `Deleted ${result.deletedCount} old metric records`,
         color: "green",
       });
       queryClient.invalidateQueries({ queryKey: ["metrics", "tasks"] });

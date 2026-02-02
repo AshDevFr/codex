@@ -40,7 +40,7 @@ export function TaskNotificationBadge() {
   };
 
   const getTaskSummary = (task: (typeof runningTasks)[0]) => {
-    const taskName = formatTaskType(task.task_type);
+    const taskName = formatTaskType(task.taskType);
     const progress = task.progress
       ? ` (${task.progress.current}/${task.progress.total})`
       : "";
@@ -49,8 +49,8 @@ export function TaskNotificationBadge() {
 
   // Sort running tasks by formatted task type name
   const sortedRunningTasks = [...runningTasks].sort((a, b) => {
-    const nameA = formatTaskType(a.task_type);
-    const nameB = formatTaskType(b.task_type);
+    const nameA = formatTaskType(a.taskType);
+    const nameB = formatTaskType(b.taskType);
     return nameA.localeCompare(nameB);
   });
 
@@ -71,7 +71,7 @@ export function TaskNotificationBadge() {
             Running Tasks
           </Text>
           {sortedRunningTasks.map((task) => (
-            <Group key={task.task_id} gap="xs">
+            <Group key={task.taskId} gap="xs">
               <IconLoader2
                 size={12}
                 style={{ color: "var(--mantine-color-blue-4)" }}

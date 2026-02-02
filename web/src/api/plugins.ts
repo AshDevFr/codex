@@ -336,7 +336,7 @@ export const pluginsApi = {
       action: {
         metadata: {
           action: "search",
-          content_type: contentType,
+          contentType: contentType,
           params: { query },
         },
       },
@@ -355,7 +355,7 @@ export const pluginsApi = {
       action: {
         metadata: {
           action: "get",
-          content_type: contentType,
+          contentType: contentType,
           params: { externalId },
         },
       },

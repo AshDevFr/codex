@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 /// A group of duplicate books
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DuplicateGroup {
     /// Unique identifier for the duplicate group
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -31,6 +32,7 @@ pub struct DuplicateGroup {
 
 /// Response for listing duplicates
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ListDuplicatesResponse {
     /// List of duplicate groups
     pub duplicates: Vec<DuplicateGroup>,
@@ -46,6 +48,7 @@ pub struct ListDuplicatesResponse {
 
 /// Response for triggering a duplicate scan
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TriggerDuplicateScanResponse {
     /// Task ID for tracking the scan progress
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]

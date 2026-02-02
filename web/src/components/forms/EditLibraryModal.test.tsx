@@ -57,8 +57,8 @@ describe("LibraryModal (Edit Mode)", () => {
     vi.mocked(filesystemApi.getDrives).mockResolvedValue([]);
     vi.mocked(filesystemApi.browse).mockResolvedValue({
       entries: [],
-      current_path: "/",
-      parent_path: null,
+      currentPath: "/",
+      parentPath: null,
     });
     // Mock scrollIntoView for Mantine Combobox
     Element.prototype.scrollIntoView = vi.fn();

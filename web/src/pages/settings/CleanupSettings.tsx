@@ -105,15 +105,15 @@ export function CleanupSettings() {
   useEffect(() => {
     const completedCleanupTasks = activeTasks.filter(
       (task) =>
-        CLEANUP_TASK_TYPES.includes(task.task_type) &&
+        CLEANUP_TASK_TYPES.includes(task.taskType) &&
         task.status === "completed" &&
-        !processedTaskIds.current.has(task.task_id),
+        !processedTaskIds.current.has(task.taskId),
     );
 
     if (completedCleanupTasks.length > 0) {
       // Mark these tasks as processed
       for (const task of completedCleanupTasks) {
-        processedTaskIds.current.add(task.task_id);
+        processedTaskIds.current.add(task.taskId);
       }
 
       // Throttle refresh to avoid hammering the API
@@ -132,7 +132,7 @@ export function CleanupSettings() {
       setAsyncCleanupModalOpened(false);
       notifications.show({
         title: "Cleanup Task Queued",
-        message: `Task ${data.task_id.slice(0, 8)}... has been queued. Check the Tasks page for progress.`,
+        message: `Task ${data.taskId.slice(0, 8)}... has been queued. Check the Tasks page for progress.`,
         color: "blue",
       });
       // Invalidate task queries so the new task shows up
@@ -155,11 +155,11 @@ export function CleanupSettings() {
       setCleanupModalOpened(false);
       queryClient.invalidateQueries({ queryKey: ["orphan-stats"] });
 
-      const totalDeleted = data.thumbnails_deleted + data.covers_deleted;
+      const totalDeleted = data.thumbnailsDeleted + data.coversDeleted;
       if (totalDeleted > 0) {
         notifications.show({
           title: "Cleanup Complete",
-          message: `Deleted ${totalDeleted} orphaned files, freed ${formatBytes(data.bytes_freed)}`,
+          message: `Deleted ${totalDeleted} orphaned files, freed ${formatBytes(data.bytesFreed)}`,
           color: "green",
         });
       } else {
@@ -189,7 +189,7 @@ export function CleanupSettings() {
   });
 
   const totalOrphaned =
-    (stats?.orphaned_thumbnails || 0) + (stats?.orphaned_covers || 0);
+    (stats?.orphanedThumbnails || 0) + (stats?.orphanedCovers || 0);
   const hasOrphanedFiles = totalOrphaned > 0;
 
   if (statsLoading) {
@@ -261,21 +261,21 @@ export function CleanupSettings() {
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
           <StatCard
             title="Orphaned Thumbnails"
-            value={stats?.orphaned_thumbnails || 0}
+            value={stats?.orphanedThumbnails || 0}
             subtitle="Book thumbnails without matching database records"
-            color={stats?.orphaned_thumbnails ? "orange" : "green"}
+            color={stats?.orphanedThumbnails ? "orange" : "green"}
             icon={<IconPhoto size={32} />}
           />
           <StatCard
             title="Orphaned Covers"
-            value={stats?.orphaned_covers || 0}
+            value={stats?.orphanedCovers || 0}
             subtitle="Series covers without matching database records"
-            color={stats?.orphaned_covers ? "orange" : "green"}
+            color={stats?.orphanedCovers ? "orange" : "green"}
             icon={<IconFileX size={32} />}
           />
           <StatCard
             title="Total Space"
-            value={formatBytes(stats?.total_size_bytes || 0)}
+            value={formatBytes(stats?.totalSizeBytes || 0)}
             subtitle="Disk space used by orphaned files"
             color={hasOrphanedFiles ? "orange" : "green"}
             icon={<IconTrash size={32} />}
@@ -299,8 +299,8 @@ export function CleanupSettings() {
             </Group>
             {hasOrphanedFiles ? (
               <Text c="dimmed">
-                Found {stats?.orphaned_thumbnails || 0} orphaned thumbnails and{" "}
-                {stats?.orphaned_covers || 0} orphaned covers. You can either
+                Found {stats?.orphanedThumbnails || 0} orphaned thumbnails and{" "}
+                {stats?.orphanedCovers || 0} orphaned covers. You can either
                 queue a background cleanup task or clean them immediately.
               </Text>
             ) : (
@@ -326,9 +326,9 @@ export function CleanupSettings() {
               interfere with other operations.
             </Text>
             <Text size="sm" c="dimmed">
-              Found: {stats?.orphaned_thumbnails || 0} thumbnails,{" "}
-              {stats?.orphaned_covers || 0} covers (
-              {formatBytes(stats?.total_size_bytes || 0)})
+              Found: {stats?.orphanedThumbnails || 0} thumbnails,{" "}
+              {stats?.orphanedCovers || 0} covers (
+              {formatBytes(stats?.totalSizeBytes || 0)})
             </Text>
             <Group justify="flex-end">
               <Button
@@ -365,7 +365,7 @@ export function CleanupSettings() {
             </Text>
             <Text size="sm" c="dimmed">
               This will free approximately{" "}
-              {formatBytes(stats?.total_size_bytes || 0)} of disk space.
+              {formatBytes(stats?.totalSizeBytes || 0)} of disk space.
             </Text>
             <Group justify="flex-end">
               <Button

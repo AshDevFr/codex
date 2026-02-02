@@ -72,7 +72,7 @@ export const fetchTaskStats = async (): Promise<TaskStats> => {
       failed: 0,
       stale: 0,
       total: 0,
-      by_type: {},
+      byType: {},
     };
   }
 
@@ -92,7 +92,7 @@ export const fetchTaskStats = async (): Promise<TaskStats> => {
         failed: 0,
         stale: 0,
         total: 0,
-        by_type: {},
+        byType: {},
       };
     }
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -113,7 +113,7 @@ export const fetchPendingTaskCounts = async (): Promise<PendingTaskCounts> => {
   const stats = await fetchTaskStats();
   const counts: PendingTaskCounts = {};
 
-  for (const [taskType, typeStats] of Object.entries(stats.by_type)) {
+  for (const [taskType, typeStats] of Object.entries(stats.byType)) {
     counts[taskType] = typeStats.pending;
   }
 

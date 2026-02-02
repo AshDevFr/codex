@@ -28,38 +28,38 @@ const mockDrives: FileSystemEntry[] = [
   {
     name: "Home Directory",
     path: "/home/user",
-    is_directory: true,
-    is_readable: true,
+    isDirectory: true,
+    isReadable: true,
   },
   {
     name: "Root",
     path: "/",
-    is_directory: true,
-    is_readable: true,
+    isDirectory: true,
+    isReadable: true,
   },
 ];
 
 const mockBrowseResponse: BrowseResponse = {
-  current_path: "/home/user",
-  parent_path: "/home",
+  currentPath: "/home/user",
+  parentPath: "/home",
   entries: [
     {
       name: "Documents",
       path: "/home/user/Documents",
-      is_directory: true,
-      is_readable: true,
+      isDirectory: true,
+      isReadable: true,
     },
     {
       name: "Comics",
       path: "/home/user/Comics",
-      is_directory: true,
-      is_readable: true,
+      isDirectory: true,
+      isReadable: true,
     },
     {
       name: "file.txt",
       path: "/home/user/file.txt",
-      is_directory: false,
-      is_readable: true,
+      isDirectory: false,
+      isReadable: true,
     },
   ],
 };
@@ -243,14 +243,14 @@ describe("LibraryModal (Add Mode)", () => {
   it("should navigate to parent directory", async () => {
     const user = userEvent.setup();
     const parentBrowseResponse: BrowseResponse = {
-      current_path: "/home",
-      parent_path: "/",
+      currentPath: "/home",
+      parentPath: "/",
       entries: [
         {
           name: "user",
           path: "/home/user",
-          is_directory: true,
-          is_readable: true,
+          isDirectory: true,
+          isReadable: true,
         },
       ],
     };

@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 /// Statistics about the PDF page cache
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PdfCacheStatsDto {
     /// Total number of cached page files
     #[schema(example = 1500)]
@@ -53,6 +54,7 @@ impl From<crate::services::CacheStats> for PdfCacheStatsDto {
 
 /// Result of a PDF cache cleanup operation
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PdfCacheCleanupResultDto {
     /// Number of cached page files deleted
     #[schema(example = 250)]
@@ -79,6 +81,7 @@ impl From<crate::services::CleanupResult> for PdfCacheCleanupResultDto {
 
 /// Response when triggering a PDF cache cleanup task
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TriggerPdfCacheCleanupResponse {
     /// ID of the queued cleanup task
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -110,9 +113,9 @@ mod tests {
         };
 
         let json = serde_json::to_string(&stats).unwrap();
-        assert!(json.contains("\"total_files\":100"));
-        assert!(json.contains("\"book_count\":10"));
-        assert!(json.contains("\"cache_enabled\":true"));
+        assert!(json.contains("\"totalFiles\":100"));
+        assert!(json.contains("\"bookCount\":10"));
+        assert!(json.contains("\"cacheEnabled\":true"));
     }
 
     #[test]
@@ -128,8 +131,8 @@ mod tests {
         };
 
         let json = serde_json::to_string(&stats).unwrap();
-        // oldest_file_age_days should be skipped when None
-        assert!(!json.contains("\"oldest_file_age_days\""));
+        // oldestFileAgeDays should be skipped when None
+        assert!(!json.contains("\"oldestFileAgeDays\""));
     }
 
     #[test]
@@ -141,8 +144,8 @@ mod tests {
         };
 
         let json = serde_json::to_string(&result).unwrap();
-        assert!(json.contains("\"files_deleted\":50"));
-        assert!(json.contains("\"bytes_reclaimed_human\":\"25.0 MB\""));
+        assert!(json.contains("\"filesDeleted\":50"));
+        assert!(json.contains("\"bytesReclaimedHuman\":\"25.0 MB\""));
     }
 
     #[test]
@@ -154,7 +157,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("\"task_id\""));
-        assert!(json.contains("\"max_age_days\":30"));
+        assert!(json.contains("\"taskId\""));
+        assert!(json.contains("\"maxAgeDays\":30"));
     }
 }

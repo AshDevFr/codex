@@ -70,7 +70,7 @@ export function useReadProgress({
 
       readProgressApi
         .update(currentBookId, {
-          current_page: page,
+          currentPage: page,
           completed: page >= currentTotalPages,
         })
         .then((updatedProgress) => {
@@ -162,8 +162,8 @@ export function useReadProgress({
   }, [saveToBackend]);
 
   // Calculate initial page from saved progress (1-indexed)
-  const initialPage = progress?.current_page
-    ? Math.min(progress.current_page, totalPages)
+  const initialPage = progress?.currentPage
+    ? Math.min(progress.currentPage, totalPages)
     : 1;
 
   return {

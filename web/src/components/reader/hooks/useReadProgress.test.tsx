@@ -23,22 +23,22 @@ const mockUpdate = vi.mocked(readProgressApi.update);
 const createProgress = (
   overrides: Partial<{
     id: string;
-    book_id: string;
-    user_id: string;
-    current_page: number;
+    bookId: string;
+    userId: string;
+    currentPage: number;
     completed: boolean;
-    completed_at: string | null;
-    started_at: string;
-    updated_at: string;
+    completedAt: string | null;
+    startedAt: string;
+    updatedAt: string;
   }>,
 ) => ({
   id: "progress-123",
-  book_id: "test-book",
-  user_id: "user-123",
-  current_page: 1,
+  bookId: "test-book",
+  userId: "user-123",
+  currentPage: 1,
   completed: false,
-  started_at: "2024-01-01T00:00:00Z",
-  updated_at: "2024-01-01T00:00:00Z",
+  startedAt: "2024-01-01T00:00:00Z",
+  updatedAt: "2024-01-01T00:00:00Z",
   ...overrides,
 });
 
@@ -89,7 +89,7 @@ describe("useReadProgress", () => {
     });
 
     it("should fetch progress from API", async () => {
-      mockGet.mockResolvedValue(createProgress({ current_page: 42 }));
+      mockGet.mockResolvedValue(createProgress({ currentPage: 42 }));
 
       const { result } = renderHook(
         () =>
@@ -128,7 +128,7 @@ describe("useReadProgress", () => {
     });
 
     it("should clamp initialPage to totalPages", async () => {
-      mockGet.mockResolvedValue(createProgress({ current_page: 150 }));
+      mockGet.mockResolvedValue(createProgress({ currentPage: 150 }));
 
       const { result } = renderHook(
         () =>
@@ -148,7 +148,7 @@ describe("useReadProgress", () => {
 
     it("should return completed status from API", async () => {
       mockGet.mockResolvedValue(
-        createProgress({ current_page: 100, completed: true }),
+        createProgress({ currentPage: 100, completed: true }),
       );
 
       const { result } = renderHook(
@@ -208,7 +208,7 @@ describe("useReadProgress", () => {
 
       // Now it should have been called
       expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-        current_page: 5,
+        currentPage: 5,
         completed: false,
       });
     });
@@ -277,7 +277,7 @@ describe("useReadProgress", () => {
 
       // Should be called immediately without waiting
       expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-        current_page: 25,
+        currentPage: 25,
         completed: false,
       });
     });
@@ -301,7 +301,7 @@ describe("useReadProgress", () => {
       });
 
       expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-        current_page: 100,
+        currentPage: 100,
         completed: true,
       });
     });
@@ -385,7 +385,7 @@ describe("useReadProgress", () => {
 
   describe("query cache", () => {
     it("should update cache on successful save", async () => {
-      mockUpdate.mockResolvedValue(createProgress({ current_page: 50 }));
+      mockUpdate.mockResolvedValue(createProgress({ currentPage: 50 }));
 
       const { result } = renderHook(
         () =>
@@ -410,7 +410,7 @@ describe("useReadProgress", () => {
           "readProgress",
           "test-book",
         ]);
-        expect(cachedData).toEqual(createProgress({ current_page: 50 }));
+        expect(cachedData).toEqual(createProgress({ currentPage: 50 }));
       });
     });
   });
@@ -444,7 +444,7 @@ describe("useReadProgress", () => {
 
       // The save should happen on unmount with final page
       expect(mockUpdate).toHaveBeenCalledWith("test-book", {
-        current_page: 30,
+        currentPage: 30,
         completed: false,
       });
 

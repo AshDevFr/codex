@@ -74,7 +74,7 @@ function TaskProgressItem({ task }: TaskProgressItemProps) {
         <Stack gap="xs" style={{ flex: 1 }}>
           <Group justify="space-between" gap="xs">
             <Text size="sm" fw={500} c={getStatusColor()}>
-              {formatTaskType(task.task_type)}
+              {formatTaskType(task.taskType)}
             </Text>
             {task.status !== "pending" && (
               <Text size="xs" c="dimmed" tt="capitalize">
@@ -128,7 +128,7 @@ export function TaskProgressIndicator() {
       }}
     >
       {visibleTasks.map((task) => (
-        <TaskProgressItem key={task.task_id} task={task} />
+        <TaskProgressItem key={task.taskId} task={task} />
       ))}
 
       {connectionState === "connecting" && (

@@ -375,7 +375,7 @@ async fn test_generate_series_thumbnails_batch_with_library_id() {
     let app = create_test_router_with_app_state(state);
 
     // Trigger with library_id scope
-    let request_body = json!({ "library_id": library.id.to_string() });
+    let request_body = json!({ "libraryId": library.id.to_string() });
     let request =
         post_json_request_with_auth("/api/v1/series/thumbnails/generate", &request_body, &token);
 
@@ -1093,7 +1093,7 @@ async fn test_generate_book_thumbnails_with_book_ids() {
 
     // Trigger with specific book_ids
     let request_body = json!({
-        "book_ids": book_ids,
+        "bookIds": book_ids,
         "force": true
     });
     let request =
@@ -1152,7 +1152,7 @@ async fn test_generate_series_thumbnails_with_series_ids() {
 
     // Trigger with specific series_ids
     let request_body = json!({
-        "series_ids": series_ids,
+        "seriesIds": series_ids,
         "force": true
     });
     let request =

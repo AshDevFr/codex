@@ -15,129 +15,129 @@ const mockSettings = [
   createSetting({
     key: "scanner.scan_timeout_minutes",
     value: "120",
-    value_type: "integer",
+    valueType: "integer",
     category: "Scanner",
     description: "Maximum time (in minutes) for a single scan before timeout",
-    default_value: "120",
+    defaultValue: "120",
   }),
   createSetting({
     key: "scanner.retry_failed_files",
     value: "false",
-    value_type: "boolean",
+    valueType: "boolean",
     category: "Scanner",
     description: "Automatically retry files that failed to scan",
-    default_value: "false",
+    defaultValue: "false",
   }),
   createSetting({
     key: "scanner.batch_size",
     value: "100",
-    value_type: "integer",
+    valueType: "integer",
     category: "Scanner",
     description:
       "Number of files to process in each batch during library scanning",
-    default_value: "100",
+    defaultValue: "100",
   }),
   createSetting({
     key: "scanner.parallel_hashing",
     value: "8",
-    value_type: "integer",
+    valueType: "integer",
     category: "Scanner",
     description: "Number of files to hash concurrently during scanning",
-    default_value: "8",
+    defaultValue: "8",
   }),
   createSetting({
     key: "scanner.parallel_series",
     value: "4",
-    value_type: "integer",
+    valueType: "integer",
     category: "Scanner",
     description: "Number of series to process concurrently during scanning",
-    default_value: "4",
+    defaultValue: "4",
   }),
   // Application settings
   createSetting({
     key: "application.name",
     value: "Codex - Mock",
-    value_type: "string",
+    valueType: "string",
     category: "Application",
     description: "Application display name (for branding/white-labeling)",
-    default_value: "Codex - Mock",
+    defaultValue: "Codex - Mock",
   }),
   // Authentication settings
   createSetting({
     key: "auth.registration_enabled",
     value: "false",
-    value_type: "boolean",
+    valueType: "boolean",
     category: "Authentication",
     description: "Allow new users to register accounts",
-    default_value: "false",
+    defaultValue: "false",
   }),
   // Task settings
   createSetting({
     key: "task.poll_interval_seconds",
     value: "5",
-    value_type: "integer",
+    valueType: "integer",
     category: "Task",
     description: "Interval (in seconds) for polling task queue",
-    default_value: "5",
+    defaultValue: "5",
   }),
   createSetting({
     key: "task.cleanup_interval_seconds",
     value: "30",
-    value_type: "integer",
+    valueType: "integer",
     category: "Task",
     description: "Interval (in seconds) for cleaning up completed tasks",
-    default_value: "30",
+    defaultValue: "30",
   }),
   createSetting({
     key: "task.prioritize_scans_over_analysis",
     value: "true",
-    value_type: "boolean",
+    valueType: "boolean",
     category: "Task",
     description: "Prioritize scan tasks over analysis tasks in the queue",
-    default_value: "true",
+    defaultValue: "true",
   }),
   // Deduplication settings
   createSetting({
     key: "deduplication.enabled",
     value: "true",
-    value_type: "boolean",
+    valueType: "boolean",
     category: "Deduplication",
     description: "Enable automatic duplicate detection scanning",
-    default_value: "true",
+    defaultValue: "true",
   }),
   createSetting({
     key: "deduplication.cron_schedule",
     value: "",
-    value_type: "string",
+    valueType: "string",
     category: "Deduplication",
     description: "Cron schedule for automatic duplicate detection",
-    default_value: "",
+    defaultValue: "",
   }),
   // Purge settings
   createSetting({
     key: "purge.purge_empty_series",
     value: "true",
-    value_type: "boolean",
+    valueType: "boolean",
     category: "Purge",
     description: "When purging deleted books, also delete empty series",
-    default_value: "true",
+    defaultValue: "true",
   }),
   // Thumbnail settings
   createSetting({
     key: "thumbnail.max_dimension",
     value: "400",
-    value_type: "integer",
+    valueType: "integer",
     category: "Thumbnail",
     description: "Maximum width or height for generated thumbnails",
-    default_value: "400",
+    defaultValue: "400",
   }),
   createSetting({
     key: "thumbnail.jpeg_quality",
     value: "85",
-    value_type: "integer",
+    valueType: "integer",
     category: "Thumbnail",
     description: "JPEG quality for thumbnail images (1-100)",
-    default_value: "85",
+    defaultValue: "85",
   }),
   // Display settings
   createSetting({
@@ -153,11 +153,11 @@ const mockSettings = [
 - **{{@key}}**: {{this}}
 {{/each}}
 {{/if}}`,
-    value_type: "string",
+    valueType: "string",
     category: "Display",
     description:
       "Handlebars-style Markdown template for displaying custom metadata on series detail pages.",
-    default_value: "",
+    defaultValue: "",
   }),
 ];
 
@@ -173,7 +173,7 @@ export const settingsHandlers = [
       (s) => s.key === "application.name",
     );
     return HttpResponse.json({
-      application_name: appNameSetting?.value || "Codex",
+      applicationName: appNameSetting?.value || "Codex",
     });
   }),
 
@@ -224,7 +224,7 @@ export const settingsHandlers = [
       mockSettings[settingIndex] = {
         ...mockSettings[settingIndex],
         value: body.value,
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         version: mockSettings[settingIndex].version + 1,
       };
 
@@ -244,8 +244,8 @@ export const settingsHandlers = [
 
     mockSettings[settingIndex] = {
       ...mockSettings[settingIndex],
-      value: mockSettings[settingIndex].default_value,
-      updated_at: new Date().toISOString(),
+      value: mockSettings[settingIndex].defaultValue,
+      updatedAt: new Date().toISOString(),
       version: mockSettings[settingIndex].version + 1,
     };
 
@@ -268,7 +268,7 @@ export const settingsHandlers = [
           mockSettings[settingIndex] = {
             ...mockSettings[settingIndex],
             value: update.value,
-            updated_at: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
             version: mockSettings[settingIndex].version + 1,
           };
           return mockSettings[settingIndex];

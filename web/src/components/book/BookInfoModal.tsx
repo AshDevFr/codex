@@ -177,13 +177,13 @@ export function BookInfoModal({ opened, onClose, book }: BookInfoModalProps) {
               </Text>
               <InfoRow
                 label="Current Page"
-                value={`${book.readProgress.current_page} / ${book.pageCount}`}
+                value={`${book.readProgress.currentPage} / ${book.pageCount}`}
               />
-              {book.readProgress.progress_percentage !== null &&
-                book.readProgress.progress_percentage !== undefined && (
+              {book.readProgress.progressPercentage !== null &&
+                book.readProgress.progressPercentage !== undefined && (
                   <InfoRow
                     label="Progress"
-                    value={`${Math.round(book.readProgress.progress_percentage * 100)}%`}
+                    value={`${Math.round(book.readProgress.progressPercentage * 100)}%`}
                   />
                 )}
               <Group justify="space-between" wrap="nowrap" gap="md">
@@ -200,18 +200,17 @@ export function BookInfoModal({ opened, onClose, book }: BookInfoModalProps) {
               </Group>
               <InfoRow
                 label="Started"
-                value={formatDateTime(book.readProgress.started_at)}
+                value={formatDateTime(book.readProgress.startedAt)}
               />
-              {book.readProgress.completed &&
-                book.readProgress.completed_at && (
-                  <InfoRow
-                    label="Completed"
-                    value={formatDateTime(book.readProgress.completed_at)}
-                  />
-                )}
+              {book.readProgress.completed && book.readProgress.completedAt && (
+                <InfoRow
+                  label="Completed"
+                  value={formatDateTime(book.readProgress.completedAt)}
+                />
+              )}
               <InfoRow
                 label="Last Read"
-                value={formatDateTime(book.readProgress.updated_at)}
+                value={formatDateTime(book.readProgress.updatedAt)}
               />
             </Stack>
           </Paper>

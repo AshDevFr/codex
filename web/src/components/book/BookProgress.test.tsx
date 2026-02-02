@@ -6,16 +6,16 @@ import { BookProgress } from "./BookProgress";
 // Helper to create a complete ReadProgress object
 const createProgress = (
   overrides: Partial<ReadProgress> & {
-    current_page: number;
+    currentPage: number;
     completed: boolean;
-    completed_at?: string | null;
+    completedAt?: string | null;
   },
 ): ReadProgress => ({
-  book_id: "book-123",
+  bookId: "book-123",
   id: "progress-123",
-  user_id: "user-123",
-  started_at: "2024-01-01T00:00:00Z",
-  updated_at: "2024-01-15T00:00:00Z",
+  userId: "user-123",
+  startedAt: "2024-01-01T00:00:00Z",
+  updatedAt: "2024-01-15T00:00:00Z",
   ...overrides,
 });
 
@@ -34,9 +34,9 @@ describe("BookProgress", () => {
 
   it("should show 'Completed' when book is completed", () => {
     const progress = createProgress({
-      current_page: 99,
+      currentPage: 99,
       completed: true,
-      completed_at: "2024-01-15T10:30:00Z",
+      completedAt: "2024-01-15T10:30:00Z",
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
@@ -46,9 +46,9 @@ describe("BookProgress", () => {
 
   it("should show completion date when book is completed", () => {
     const progress = createProgress({
-      current_page: 99,
+      currentPage: 99,
       completed: true,
-      completed_at: "2024-01-15T10:30:00Z",
+      completedAt: "2024-01-15T10:30:00Z",
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
@@ -59,9 +59,9 @@ describe("BookProgress", () => {
 
   it("should show progress bar when reading in progress", () => {
     const progress = createProgress({
-      current_page: 50, // 1-indexed
+      currentPage: 50, // 1-indexed
       completed: false,
-      completed_at: null,
+      completedAt: null,
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
@@ -72,9 +72,9 @@ describe("BookProgress", () => {
 
   it("should calculate percentage correctly", () => {
     const progress = createProgress({
-      current_page: 25, // 1-indexed
+      currentPage: 25, // 1-indexed
       completed: false,
-      completed_at: null,
+      completedAt: null,
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
@@ -85,9 +85,9 @@ describe("BookProgress", () => {
 
   it("should handle first page (1-indexed)", () => {
     const progress = createProgress({
-      current_page: 1, // 1-indexed
+      currentPage: 1, // 1-indexed
       completed: false,
-      completed_at: null,
+      completedAt: null,
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
@@ -98,9 +98,9 @@ describe("BookProgress", () => {
 
   it("should handle edge case of zero page count", () => {
     const progress = createProgress({
-      current_page: 1,
+      currentPage: 1,
       completed: false,
-      completed_at: null,
+      completedAt: null,
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={0} />);
@@ -111,9 +111,9 @@ describe("BookProgress", () => {
 
   it("should render progress bar element", () => {
     const progress = createProgress({
-      current_page: 49,
+      currentPage: 49,
       completed: false,
-      completed_at: null,
+      completedAt: null,
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={100} />);
@@ -124,9 +124,9 @@ describe("BookProgress", () => {
 
   it("should not show progress bar when completed", () => {
     const progress = createProgress({
-      current_page: 99,
+      currentPage: 99,
       completed: true,
-      completed_at: "2024-01-15T10:30:00Z",
+      completedAt: "2024-01-15T10:30:00Z",
     });
 
     renderWithProviders(<BookProgress progress={progress} pageCount={100} />);

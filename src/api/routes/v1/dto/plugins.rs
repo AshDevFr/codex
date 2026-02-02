@@ -929,6 +929,7 @@ pub enum PluginActionRequest {
         /// The metadata action to perform
         action: MetadataAction,
         /// Content type (series or book)
+        #[serde(rename = "contentType")]
         content_type: MetadataContentType,
         /// Action-specific parameters
         #[serde(default)]

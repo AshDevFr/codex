@@ -132,7 +132,7 @@ describe("MediaCard", () => {
     it("should navigate to reader with current page when book has progress", async () => {
       const user = userEvent.setup();
       const progress = createReadProgress({
-        current_page: 15,
+        currentPage: 15,
         completed: false,
       });
       const book = createBook({
@@ -151,7 +151,7 @@ describe("MediaCard", () => {
 
     it("should display progress bar for books with in-progress reading", () => {
       const progress = createReadProgress({
-        current_page: 10,
+        currentPage: 10,
         completed: false,
       });
       const book = createBook({ pageCount: 50, readProgress: progress });
@@ -166,7 +166,7 @@ describe("MediaCard", () => {
 
     it("should not display progress bar for completed books", () => {
       const progress = createReadProgress({
-        current_page: 50,
+        currentPage: 50,
         completed: true,
       });
       const book = createBook({ pageCount: 50, readProgress: progress });

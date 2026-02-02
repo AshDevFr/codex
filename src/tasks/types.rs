@@ -14,6 +14,7 @@ use uuid::Uuid;
 pub enum TaskType {
     /// Scan a library for new/changed books
     ScanLibrary {
+        #[serde(rename = "libraryId")]
         library_id: Uuid,
         #[serde(default = "default_mode")]
         mode: String, // "normal" or "deep"
@@ -21,19 +22,27 @@ pub enum TaskType {
 
     /// Analyze a single book's metadata
     AnalyzeBook {
+        #[serde(rename = "bookId")]
         book_id: Uuid,
         #[serde(default)]
         force: bool,
     },
 
     /// Analyze all books in a series (always forces re-analysis)
-    AnalyzeSeries { series_id: Uuid },
+    AnalyzeSeries {
+        #[serde(rename = "seriesId")]
+        series_id: Uuid,
+    },
 
     /// Purge soft-deleted books from a library
-    PurgeDeleted { library_id: Uuid },
+    PurgeDeleted {
+        #[serde(rename = "libraryId")]
+        library_id: Uuid,
+    },
 
     /// Refresh metadata from external source
     RefreshMetadata {
+        #[serde(rename = "bookId")]
         book_id: Uuid,
         source: String, // "comicvine", "openlibrary", etc.
     },
@@ -41,11 +50,13 @@ pub enum TaskType {
     /// Generate thumbnails for books in a scope (library, series, specific books, or all)
     /// This is a fan-out task that enqueues individual GenerateThumbnail tasks
     GenerateThumbnails {
+        #[serde(rename = "libraryId")]
         library_id: Option<Uuid>, // If set, only books in this library
+        #[serde(rename = "seriesId")]
         series_id: Option<Uuid>, // If set, only books in this series (takes precedence over library_id)
-        #[serde(default)]
+        #[serde(rename = "seriesIds", default)]
         series_ids: Option<Vec<Uuid>>, // If set, only books in these specific series (takes precedence over series_id and library_id)
-        #[serde(default)]
+        #[serde(rename = "bookIds", default)]
         book_ids: Option<Vec<Uuid>>, // If set, only these specific books (takes precedence over all other scopes)
         #[serde(default)]
         force: bool, // If true, regenerate all thumbnails; if false, only missing ones
@@ -53,6 +64,7 @@ pub enum TaskType {
 
     /// Generate thumbnail for a single book
     GenerateThumbnail {
+        #[serde(rename = "bookId")]
         book_id: Uuid,
         #[serde(default)]
         force: bool, // If true, regenerate even if thumbnail exists
@@ -60,6 +72,7 @@ pub enum TaskType {
 
     /// Generate thumbnail for a series (from first book's cover)
     GenerateSeriesThumbnail {
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
         #[serde(default)]
         force: bool, // If true, regenerate even if thumbnail exists
@@ -68,8 +81,9 @@ pub enum TaskType {
     /// Generate thumbnails for series in a scope (library, specific series, or all)
     /// This is a fan-out task that enqueues individual GenerateSeriesThumbnail tasks
     GenerateSeriesThumbnails {
+        #[serde(rename = "libraryId")]
         library_id: Option<Uuid>, // If set, only series in this library
-        #[serde(default)]
+        #[serde(rename = "seriesIds", default)]
         series_ids: Option<Vec<Uuid>>, // If set, only these specific series (takes precedence over library_id)
         #[serde(default)]
         force: bool, // If true, regenerate all thumbnails; if false, only missing ones
@@ -80,17 +94,21 @@ pub enum TaskType {
 
     /// Clean up files for a deleted book (thumbnail + cover references)
     CleanupBookFiles {
+        #[serde(rename = "bookId")]
         book_id: Uuid,
         /// Optional thumbnail path (if known at deletion time)
-        #[serde(default)]
+        #[serde(rename = "thumbnailPath", default)]
         thumbnail_path: Option<String>,
         /// Optional series_id to invalidate series thumbnail cache
-        #[serde(default)]
+        #[serde(rename = "seriesId", default)]
         series_id: Option<Uuid>,
     },
 
     /// Clean up files for a deleted series (cover files)
-    CleanupSeriesFiles { series_id: Uuid },
+    CleanupSeriesFiles {
+        #[serde(rename = "seriesId")]
+        series_id: Uuid,
+    },
 
     /// Scan filesystem for orphaned files and delete them
     CleanupOrphanedFiles,
@@ -100,21 +118,27 @@ pub enum TaskType {
 
     /// Auto-match metadata for a series using a plugin
     PluginAutoMatch {
+        #[serde(rename = "seriesId")]
         series_id: Uuid,
+        #[serde(rename = "pluginId")]
         plugin_id: Uuid,
         /// Source scope that triggered this task (for tracking)
-        #[serde(default)]
+        #[serde(rename = "sourceScope", default)]
         source_scope: Option<String>, // "series:detail", "series:bulk", "library:detail", "library:scan"
     },
 
     /// Reprocess a single series title using library preprocessing rules
-    ReprocessSeriesTitle { series_id: Uuid },
+    ReprocessSeriesTitle {
+        #[serde(rename = "seriesId")]
+        series_id: Uuid,
+    },
 
     /// Reprocess series titles in a scope (library, bulk selection, or specific series)
     /// This is a fan-out task that enqueues individual ReprocessSeriesTitle tasks
     ReprocessSeriesTitles {
+        #[serde(rename = "libraryId")]
         library_id: Option<Uuid>, // If set, process all series in this library
-        #[serde(default)]
+        #[serde(rename = "seriesIds", default)]
         series_ids: Option<Vec<Uuid>>, // If set, process only these specific series (bulk selection)
     },
 }
@@ -310,6 +334,7 @@ impl TaskResult {
 
 /// Task queue statistics
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskStats {
     /// Total counts across all task types
     pub pending: u64,
@@ -324,6 +349,7 @@ pub struct TaskStats {
 
 /// Statistics for a specific task type
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskTypeStats {
     pub pending: u64,
     pub processing: u64,

@@ -8,20 +8,20 @@ import { useTaskProgress } from "./useTaskProgress";
 // Helper to create a complete TaskResponse with defaults
 function createMockTask(overrides: {
   id: string;
-  task_type: string;
+  taskType: string;
   status: string;
-  library_id?: string;
+  libraryId?: string;
 }): TaskResponse {
   return {
     id: overrides.id,
-    task_type: overrides.task_type,
+    taskType: overrides.taskType,
     status: overrides.status,
     priority: 0,
     attempts: 0,
-    max_attempts: 3,
-    scheduled_for: "2026-01-07T12:00:00Z",
-    created_at: "2026-01-07T12:00:00Z",
-    library_id: overrides.library_id,
+    maxAttempts: 3,
+    scheduledFor: "2026-01-07T12:00:00Z",
+    createdAt: "2026-01-07T12:00:00Z",
+    libraryId: overrides.libraryId,
   };
 }
 
@@ -131,13 +131,13 @@ describe("useTaskProgress", () => {
 
     // Simulate task started
     const taskEvent: TaskProgressEvent = {
-      task_id: "task-1",
-      task_type: "analyze_book",
+      taskId: "task-1",
+      taskType: "analyze_book",
       status: "running",
       progress: undefined,
       error: undefined,
-      started_at: "2026-01-07T12:00:00Z",
-      library_id: "lib-1",
+      startedAt: "2026-01-07T12:00:00Z",
+      libraryId: "lib-1",
     };
 
     act(() => {
@@ -164,13 +164,13 @@ describe("useTaskProgress", () => {
 
     // Simulate task completed
     const completedTask: TaskProgressEvent = {
-      task_id: "task-2",
-      task_type: "generate_thumbnails",
+      taskId: "task-2",
+      taskType: "generate_thumbnails",
       status: "completed",
       progress: { current: 10, total: 10, message: "Done" },
       error: undefined,
-      started_at: "2026-01-07T12:00:00Z",
-      library_id: "lib-2",
+      startedAt: "2026-01-07T12:00:00Z",
+      libraryId: "lib-2",
     };
 
     act(() => {
@@ -203,13 +203,13 @@ describe("useTaskProgress", () => {
 
     // Simulate task failed
     const failedTask: TaskProgressEvent = {
-      task_id: "task-3",
-      task_type: "scan_library",
+      taskId: "task-3",
+      taskType: "scan_library",
       status: "failed",
       progress: undefined,
       error: "Database connection lost",
-      started_at: "2026-01-07T12:00:00Z",
-      library_id: "lib-3",
+      startedAt: "2026-01-07T12:00:00Z",
+      libraryId: "lib-3",
     };
 
     act(() => {
@@ -243,41 +243,41 @@ describe("useTaskProgress", () => {
     // Add multiple tasks with different statuses
     act(() => {
       capturedCallback?.({
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "pending",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       });
       capturedCallback?.({
-        task_id: "task-2",
-        task_type: "analyze_book",
+        taskId: "task-2",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:01:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:01:00Z",
+        libraryId: "lib-1",
       });
       capturedCallback?.({
-        task_id: "task-3",
-        task_type: "analyze_book",
+        taskId: "task-3",
+        taskType: "analyze_book",
         status: "completed",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:02:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:02:00Z",
+        libraryId: "lib-1",
       });
     });
 
     const runningTasks = result.current.getTasksByStatus("running");
     expect(runningTasks).toHaveLength(1);
-    expect(runningTasks[0].task_id).toBe("task-2");
+    expect(runningTasks[0].taskId).toBe("task-2");
 
     const pendingTasks = result.current.getTasksByStatus("pending");
     expect(pendingTasks).toHaveLength(1);
-    expect(pendingTasks[0].task_id).toBe("task-1");
+    expect(pendingTasks[0].taskId).toBe("task-1");
   });
 
   it("should filter tasks by library", () => {
@@ -297,32 +297,32 @@ describe("useTaskProgress", () => {
     // Add tasks for different libraries
     act(() => {
       capturedCallback?.({
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       });
       capturedCallback?.({
-        task_id: "task-2",
-        task_type: "analyze_book",
+        taskId: "task-2",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:01:00Z",
-        library_id: "lib-2",
+        startedAt: "2026-01-07T12:01:00Z",
+        libraryId: "lib-2",
       });
     });
 
     const lib1Tasks = result.current.getTasksByLibrary("lib-1");
     expect(lib1Tasks).toHaveLength(1);
-    expect(lib1Tasks[0].task_id).toBe("task-1");
+    expect(lib1Tasks[0].taskId).toBe("task-1");
 
     const lib2Tasks = result.current.getTasksByLibrary("lib-2");
     expect(lib2Tasks).toHaveLength(1);
-    expect(lib2Tasks[0].task_id).toBe("task-2");
+    expect(lib2Tasks[0].taskId).toBe("task-2");
   });
 
   it("should get specific task by ID", () => {
@@ -340,13 +340,13 @@ describe("useTaskProgress", () => {
     expect(capturedCallback).toBeDefined();
 
     const taskEvent: TaskProgressEvent = {
-      task_id: "task-unique",
-      task_type: "analyze_book",
+      taskId: "task-unique",
+      taskType: "analyze_book",
       status: "running",
       progress: undefined,
       error: undefined,
-      started_at: "2026-01-07T12:00:00Z",
-      library_id: "lib-1",
+      startedAt: "2026-01-07T12:00:00Z",
+      libraryId: "lib-1",
     };
 
     act(() => {
@@ -434,13 +434,13 @@ describe("useTaskProgress", () => {
     // Add initial task
     act(() => {
       capturedCallback?.({
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: { current: 5, total: 10, message: "Processing..." },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       });
     });
 
@@ -449,13 +449,13 @@ describe("useTaskProgress", () => {
     // Update task progress
     act(() => {
       capturedCallback?.({
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: { current: 10, total: 10, message: "Almost done..." },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       });
     });
 
@@ -469,15 +469,15 @@ describe("useTaskProgress", () => {
     const initialTasks = [
       createMockTask({
         id: "task-1",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-1",
+        libraryId: "lib-1",
       }),
       createMockTask({
         id: "task-2",
-        task_type: "generate_thumbnails",
+        taskType: "generate_thumbnails",
         status: "processing",
-        library_id: "lib-2",
+        libraryId: "lib-2",
       }),
     ];
 
@@ -530,21 +530,21 @@ describe("useTaskProgress", () => {
     const initialTasks = [
       createMockTask({
         id: "task-1",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-1",
+        libraryId: "lib-1",
       }),
       createMockTask({
         id: "task-2",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-2",
+        libraryId: "lib-2",
       }),
       createMockTask({
         id: "task-3",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-3",
+        libraryId: "lib-3",
       }),
     ];
 
@@ -565,9 +565,9 @@ describe("useTaskProgress", () => {
     const polledTasks = [
       createMockTask({
         id: "task-1",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-1",
+        libraryId: "lib-1",
       }),
     ];
 
@@ -582,7 +582,7 @@ describe("useTaskProgress", () => {
 
     // Should only have 1 task now (task-2 and task-3 should be removed)
     expect(result.current.activeTasks).toHaveLength(1);
-    expect(result.current.activeTasks[0].task_id).toBe("task-1");
+    expect(result.current.activeTasks[0].taskId).toBe("task-1");
   });
 
   it("should preserve completed tasks from SSE when polling", async () => {
@@ -599,9 +599,9 @@ describe("useTaskProgress", () => {
     const initialTasks = [
       createMockTask({
         id: "task-1",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-1",
+        libraryId: "lib-1",
       }),
     ];
 
@@ -621,13 +621,13 @@ describe("useTaskProgress", () => {
     // Simulate SSE event marking task as completed
     act(() => {
       capturedCallback?.({
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "completed",
         progress: { current: 10, total: 10, message: "Done" },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       });
     });
 
@@ -686,9 +686,9 @@ describe("useTaskProgress", () => {
     const initialTasks = [
       createMockTask({
         id: "task-1",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-1",
+        libraryId: "lib-1",
       }),
     ];
 
@@ -706,13 +706,13 @@ describe("useTaskProgress", () => {
     // Simulate SSE event with progress
     act(() => {
       capturedCallback?.({
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: { current: 5, total: 10, message: "Processing..." },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       });
     });
 
@@ -722,9 +722,9 @@ describe("useTaskProgress", () => {
     const polledTasks = [
       createMockTask({
         id: "task-1",
-        task_type: "analyze_book",
+        taskType: "analyze_book",
         status: "processing",
-        library_id: "lib-1",
+        libraryId: "lib-1",
       }),
     ];
 

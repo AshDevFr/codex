@@ -161,7 +161,7 @@ async fn test_task_type_serialization_with_force() -> Result<()> {
     let json = serde_json::to_string(&task)?;
     // AnalyzeSeries no longer has parameters - verify basic serialization
     assert!(json.contains("\"type\":\"analyze_series\""));
-    assert!(json.contains("\"series_id\""));
+    assert!(json.contains("\"seriesId\""));
 
     let deserialized: TaskType = serde_json::from_str(&json)?;
     match deserialized {
@@ -179,7 +179,7 @@ async fn test_task_type_default_force_false() -> Result<()> {
     use codex::tasks::types::TaskType;
 
     // Test that force defaults to false when not specified
-    let json = r#"{"type":"analyze_book","book_id":"00000000-0000-0000-0000-000000000000"}"#;
+    let json = r#"{"type":"analyze_book","bookId":"00000000-0000-0000-0000-000000000000"}"#;
     let task: TaskType = serde_json::from_str(json)?;
 
     match task {

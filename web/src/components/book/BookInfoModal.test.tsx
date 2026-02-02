@@ -29,14 +29,14 @@ const createMockReadProgress = (
   overrides?: Partial<ReadProgress>,
 ): ReadProgress => ({
   id: "progress-1",
-  book_id: "book-123",
-  user_id: "user-123",
-  current_page: 50,
+  bookId: "book-123",
+  userId: "user-123",
+  currentPage: 50,
   completed: false,
-  completed_at: null,
-  progress_percentage: 0.25,
-  started_at: "2024-06-15T10:00:00Z",
-  updated_at: "2024-06-15T12:00:00Z",
+  completedAt: null,
+  progressPercentage: 0.25,
+  startedAt: "2024-06-15T10:00:00Z",
+  updatedAt: "2024-06-15T12:00:00Z",
   ...overrides,
 });
 
@@ -130,8 +130,8 @@ describe("BookInfoModal", () => {
         book={createMockBook({
           pageCount: 200,
           readProgress: createMockReadProgress({
-            current_page: 50,
-            progress_percentage: 0.25,
+            currentPage: 50,
+            progressPercentage: 0.25,
             completed: false,
           }),
         })}
@@ -152,7 +152,7 @@ describe("BookInfoModal", () => {
         book={createMockBook({
           readProgress: createMockReadProgress({
             completed: true,
-            completed_at: "2024-06-16T10:00:00Z",
+            completedAt: "2024-06-16T10:00:00Z",
           }),
         })}
       />,

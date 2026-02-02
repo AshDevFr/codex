@@ -132,8 +132,8 @@ export function useEpubProgress({
 
       readProgressApi
         .update(currentBookId, {
-          current_page: currentPage,
-          progress_percentage: percentage,
+          currentPage: currentPage,
+          progressPercentage: percentage,
           completed: isCompleted,
         })
         .then(() => {
@@ -263,8 +263,8 @@ export function useEpubProgress({
         ) {
           readProgressApi
             .update(currentBookId, {
-              current_page: currentPage,
-              progress_percentage: percentage,
+              currentPage: currentPage,
+              progressPercentage: percentage,
               completed: percentage >= 0.98,
             })
             .catch(() => {

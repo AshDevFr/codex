@@ -20,7 +20,7 @@ export function BookProgress({
     );
   }
 
-  const currentPage = progress.current_page; // Already 1-indexed
+  const currentPage = progress.currentPage; // Already 1-indexed
   const percentage = pageCount > 0 ? (currentPage / pageCount) * 100 : 0;
 
   if (progress.completed) {
@@ -29,9 +29,9 @@ export function BookProgress({
         <Text size="sm" c="green" fw={500}>
           Completed
         </Text>
-        {progress.completed_at && (
+        {progress.completedAt && (
           <Text size="xs" c="dimmed">
-            on {new Date(progress.completed_at).toLocaleDateString()}
+            on {new Date(progress.completedAt).toLocaleDateString()}
           </Text>
         )}
       </Group>

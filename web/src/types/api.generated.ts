@@ -5665,35 +5665,35 @@ export interface components {
              * @description The application name to display
              * @example Codex
              */
-            application_name: string;
+            applicationName: string;
         };
         /**
          * @example {
-         *       "current_path": "/home/user/Documents",
+         *       "currentPath": "/home/user/Documents",
          *       "entries": [
          *         {
-         *           "is_directory": true,
-         *           "is_readable": true,
+         *           "isDirectory": true,
+         *           "isReadable": true,
          *           "name": "Comics",
          *           "path": "/home/user/Documents/Comics"
          *         },
          *         {
-         *           "is_directory": true,
-         *           "is_readable": true,
+         *           "isDirectory": true,
+         *           "isReadable": true,
          *           "name": "Manga",
          *           "path": "/home/user/Documents/Manga"
          *         }
          *       ],
-         *       "parent_path": "/home/user"
+         *       "parentPath": "/home/user"
          *     }
          */
         BrowseResponse: {
             /** @description Current directory path */
-            current_path: string;
+            currentPath: string;
             /** @description List of entries in the current directory */
             entries: components["schemas"]["FileSystemEntry"][];
             /** @description Parent directory path (None if at root) */
-            parent_path?: string | null;
+            parentPath?: string | null;
         };
         /** @description Request to perform bulk analyze operations on multiple books */
         BulkAnalyzeBooksRequest: {
@@ -5867,7 +5867,7 @@ export interface components {
              * @description Optional reason for the changes (for audit log)
              * @example Batch configuration update for production
              */
-            change_reason?: string | null;
+            changeReason?: string | null;
             /** @description List of settings to update */
             updates: components["schemas"]["BulkSettingUpdate"][];
         };
@@ -5894,13 +5894,13 @@ export interface components {
              * @description Total bytes freed by deletion
              * @example 1073741824
              */
-            bytes_freed: number;
+            bytesFreed: number;
             /**
              * Format: int32
              * @description Number of cover files deleted
              * @example 5
              */
-            covers_deleted: number;
+            coversDeleted: number;
             /** @description Error messages for any failed deletions */
             errors?: string[];
             /**
@@ -5914,7 +5914,7 @@ export interface components {
              * @description Number of thumbnail files deleted
              * @example 42
              */
-            thumbnails_deleted: number;
+            thumbnailsDeleted: number;
         };
         /** @description Configuration field definition for documenting plugin config options */
         ConfigFieldDto: {
@@ -6227,9 +6227,9 @@ export interface components {
              * @description When to run the task (defaults to now)
              * @example 2024-01-15T12:00:00Z
              */
-            scheduled_for?: string | null;
+            scheduledFor?: string | null;
             /** @description Type of task to create */
-            task_type: components["schemas"]["TaskType"];
+            taskType: components["schemas"]["TaskType"];
         };
         CreateTaskResponse: {
             /**
@@ -6237,7 +6237,7 @@ export interface components {
              * @description ID of the created task
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            task_id: string;
+            taskId: string;
         };
         /** @description Create user request */
         CreateUserRequest: {
@@ -6327,23 +6327,23 @@ export interface components {
         /** @description A group of duplicate books */
         DuplicateGroup: {
             /** @description List of book IDs that share this hash */
-            book_ids: string[];
+            bookIds: string[];
             /**
              * @description When the duplicate was first detected
              * @example 2024-01-15T10:30:00Z
              */
-            created_at: string;
+            createdAt: string;
             /**
              * Format: int32
              * @description Number of duplicate copies found
              * @example 3
              */
-            duplicate_count: number;
+            duplicateCount: number;
             /**
              * @description SHA-256 hash of the file content
              * @example e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
              */
-            file_hash: string;
+            fileHash: string;
             /**
              * Format: uuid
              * @description Unique identifier for the duplicate group
@@ -6354,7 +6354,7 @@ export interface components {
              * @description When the group was last updated
              * @example 2024-01-15T10:30:00Z
              */
-            updated_at: string;
+            updatedAt: string;
         };
         /** @description Request to enqueue plugin auto-match task for a single series */
         EnqueueAutoMatchRequest: {
@@ -6432,123 +6432,123 @@ export interface components {
              * Format: uuid
              * @description User who triggered the change (if applicable)
              */
-            user_id?: string | null;
+            userId?: string | null;
         };
         /** @description Specific event types for entity changes */
         EntityEvent: {
             /** Format: uuid */
-            book_id: string;
+            bookId: string;
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "book_created";
         } | {
             /** Format: uuid */
-            book_id: string;
+            bookId: string;
             fields?: string[] | null;
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "book_updated";
         } | {
             /** Format: uuid */
-            book_id: string;
+            bookId: string;
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "book_deleted";
         } | {
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "series_created";
         } | {
             fields?: string[] | null;
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "series_updated";
         } | {
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "series_deleted";
         } | {
             /** @description Fields that were updated */
-            fields_updated: string[];
+            fieldsUpdated: string[];
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /**
              * Format: uuid
              * @description Plugin that updated the metadata
              */
-            plugin_id: string;
+            pluginId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "series_metadata_updated";
         } | {
             /** Format: int64 */
             count: number;
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "series_bulk_purged";
         } | {
             /** Format: uuid */
-            entity_id: string;
-            entity_type: components["schemas"]["EntityType"];
+            entityId: string;
+            entityType: components["schemas"]["EntityType"];
             /** Format: uuid */
-            library_id?: string | null;
+            libraryId?: string | null;
             /** @enum {string} */
             type: "cover_updated";
         } | {
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** @enum {string} */
             type: "library_updated";
         } | {
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** @enum {string} */
             type: "library_deleted";
         } | {
             /** Format: uuid */
-            plugin_id: string;
+            pluginId: string;
             /** @enum {string} */
             type: "plugin_created";
         } | {
             /** Format: uuid */
-            plugin_id: string;
+            pluginId: string;
             /** @enum {string} */
             type: "plugin_updated";
         } | {
             /** Format: uuid */
-            plugin_id: string;
+            pluginId: string;
             /** @enum {string} */
             type: "plugin_enabled";
         } | {
             /** Format: uuid */
-            plugin_id: string;
+            pluginId: string;
             /** @enum {string} */
             type: "plugin_disabled";
         } | {
             /** Format: uuid */
-            plugin_id: string;
+            pluginId: string;
             /** @enum {string} */
             type: "plugin_deleted";
         };
@@ -6796,17 +6796,17 @@ export interface components {
         };
         /**
          * @example {
-         *       "is_directory": true,
-         *       "is_readable": true,
+         *       "isDirectory": true,
+         *       "isReadable": true,
          *       "name": "Documents",
          *       "path": "/home/user/Documents"
          *     }
          */
         FileSystemEntry: {
             /** @description Whether this is a directory */
-            is_directory: boolean;
+            isDirectory: boolean;
             /** @description Whether the entry is readable */
-            is_readable: boolean;
+            isReadable: boolean;
             /** @description Name of the file or directory */
             name: string;
             /** @description Full path to the entry */
@@ -7101,7 +7101,7 @@ export interface components {
         /** @description Request body for batch book thumbnail generation */
         GenerateBookThumbnailsRequest: {
             /** @description Optional: specific book IDs to generate thumbnails for (takes precedence over all other scopes) */
-            book_ids?: string[] | null;
+            bookIds?: string[] | null;
             /**
              * @description If true, regenerate all thumbnails even if they exist. If false (default), only generate missing thumbnails.
              * @example false
@@ -7112,15 +7112,15 @@ export interface components {
              * @description Optional: scope to a specific library
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            library_id?: string | null;
+            libraryId?: string | null;
             /**
              * Format: uuid
              * @description Optional: scope to a specific series (within library if both provided)
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
-            series_id?: string | null;
+            seriesId?: string | null;
             /** @description Optional: specific series IDs to generate thumbnails for books within (takes precedence over series_id and library_id) */
-            series_ids?: string[] | null;
+            seriesIds?: string[] | null;
         };
         /** @description Request body for batch series thumbnail generation */
         GenerateSeriesThumbnailsRequest: {
@@ -7134,9 +7134,9 @@ export interface components {
              * @description Optional: scope to a specific library
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            library_id?: string | null;
+            libraryId?: string | null;
             /** @description Optional: specific series IDs to generate thumbnails for (takes precedence over library_id) */
-            series_ids?: string[] | null;
+            seriesIds?: string[] | null;
         };
         /** @description Genre data transfer object */
         GenreDto: {
@@ -8034,7 +8034,7 @@ export interface components {
              * @description Number of books in this library
              * @example 1200
              */
-            book_count: number;
+            bookCount: number;
             /**
              * Format: uuid
              * @description Library ID
@@ -8051,13 +8051,13 @@ export interface components {
              * @description Number of series in this library
              * @example 45
              */
-            series_count: number;
+            seriesCount: number;
             /**
              * Format: int64
              * @description Total size of books in bytes (approx. 15GB)
              * @example 15728640000
              */
-            total_size: number;
+            totalSize: number;
         };
         /** @description Additional properties that can be attached to links */
         LinkProperties: {
@@ -8075,12 +8075,12 @@ export interface components {
              * @description Total number of books that are duplicates
              * @example 15
              */
-            total_duplicate_books: number;
+            totalDuplicateBooks: number;
             /**
              * @description Total number of duplicate groups
              * @example 5
              */
-            total_groups: number;
+            totalGroups: number;
         };
         /** @description Query parameters for listing settings */
         ListSettingsQuery: {
@@ -8434,17 +8434,17 @@ export interface components {
              * @description Number of metric records deleted
              * @example 500
              */
-            deleted_count: number;
+            deletedCount: number;
             /**
              * Format: date-time
              * @description Timestamp of oldest remaining record
              */
-            oldest_remaining?: string | null;
+            oldestRemaining?: string | null;
             /**
              * @description Current retention setting
              * @example 30
              */
-            retention_days: string;
+            retentionDays: string;
         };
         /** @description Application metrics response */
         MetricsDto: {
@@ -8453,13 +8453,13 @@ export interface components {
              * @description Total number of books across all libraries
              * @example 3500
              */
-            book_count: number;
+            bookCount: number;
             /**
              * Format: int64
              * @description Database size in bytes (approximate)
              * @example 10485760
              */
-            database_size: number;
+            databaseSize: number;
             /** @description Breakdown by library */
             libraries: components["schemas"]["LibraryMetricsDto"][];
             /**
@@ -8467,31 +8467,31 @@ export interface components {
              * @description Total number of libraries in the system
              * @example 5
              */
-            library_count: number;
+            libraryCount: number;
             /**
              * Format: int64
              * @description Number of pages across all books
              * @example 175000
              */
-            page_count: number;
+            pageCount: number;
             /**
              * Format: int64
              * @description Total number of series across all libraries
              * @example 150
              */
-            series_count: number;
+            seriesCount: number;
             /**
              * Format: int64
              * @description Total size of all books in bytes (approx. 50GB)
              * @example 52428800000
              */
-            total_book_size: number;
+            totalBookSize: number;
             /**
              * Format: int64
              * @description Number of registered users
              * @example 12
              */
-            user_count: number;
+            userCount: number;
         };
         /** @description Response for nuke (delete all) operation */
         MetricsNukeResponse: {
@@ -8500,7 +8500,7 @@ export interface components {
              * @description Number of metric records deleted
              * @example 15000
              */
-            deleted_count: number;
+            deletedCount: number;
         };
         /** @description Add/remove single sharing tag from series request */
         ModifySeriesSharingTagRequest: {
@@ -8564,19 +8564,19 @@ export interface components {
              * @description Number of orphaned cover files (no matching series in database)
              * @example 5
              */
-            orphaned_covers: number;
+            orphanedCovers: number;
             /**
              * Format: int32
              * @description Number of orphaned thumbnail files (no matching book in database)
              * @example 42
              */
-            orphaned_thumbnails: number;
+            orphanedThumbnails: number;
             /**
              * Format: int64
              * @description Total size of all orphaned files in bytes
              * @example 1073741824
              */
-            total_size_bytes: number;
+            totalSizeBytes: number;
         };
         /** @description Query parameters for orphan stats endpoint */
         OrphanStatsQuery: {
@@ -8590,12 +8590,12 @@ export interface components {
              * @description The entity UUID extracted from the filename
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            entity_id?: string | null;
+            entityId?: string | null;
             /**
              * @description Type of file: "thumbnail" or "cover"
              * @example thumbnail
              */
-            file_type: string;
+            fileType: string;
             /**
              * @description Path to the orphaned file (relative to data directory)
              * @example thumbnails/books/55/550e8400-e29b-41d4-a716-446655440000.jpg
@@ -8606,7 +8606,7 @@ export interface components {
              * @description Size of the file in bytes
              * @example 25600
              */
-            size_bytes: number;
+            sizeBytes: number;
         };
         /** @description Page data transfer object */
         PageDto: {
@@ -9650,18 +9650,18 @@ export interface components {
              * @description Bytes freed by the cleanup
              * @example 26214400
              */
-            bytes_reclaimed: number;
+            bytesReclaimed: number;
             /**
              * @description Human-readable size reclaimed (e.g., "25.0 MB")
              * @example 25.0 MB
              */
-            bytes_reclaimed_human: string;
+            bytesReclaimedHuman: string;
             /**
              * Format: int64
              * @description Number of cached page files deleted
              * @example 250
              */
-            files_deleted: number;
+            filesDeleted: number;
         };
         /** @description Statistics about the PDF page cache */
         PdfCacheStatsDto: {
@@ -9670,40 +9670,40 @@ export interface components {
              * @description Number of unique books with cached pages
              * @example 45
              */
-            book_count: number;
+            bookCount: number;
             /**
              * @description Path to the cache directory
              * @example /data/cache
              */
-            cache_dir: string;
+            cacheDir: string;
             /**
              * @description Whether the PDF page cache is enabled
              * @example true
              */
-            cache_enabled: boolean;
+            cacheEnabled: boolean;
             /**
              * Format: int32
              * @description Age of the oldest cached file in days (if any files exist)
              * @example 15
              */
-            oldest_file_age_days?: number | null;
+            oldestFileAgeDays?: number | null;
             /**
              * Format: int64
              * @description Total number of cached page files
              * @example 1500
              */
-            total_files: number;
+            totalFiles: number;
             /**
              * Format: int64
              * @description Total size of cache in bytes
              * @example 157286400
              */
-            total_size_bytes: number;
+            totalSizeBytes: number;
             /**
              * @description Human-readable total size (e.g., "150.0 MB")
              * @example 150.0 MB
              */
-            total_size_human: string;
+            totalSizeHuman: string;
         };
         /** @description A plugin action available for a specific scope */
         PluginActionDto: {
@@ -9742,7 +9742,7 @@ export interface components {
                 /** @description The metadata action to perform */
                 action: components["schemas"]["MetadataAction"];
                 /** @description Content type (series or book) */
-                content_type: components["schemas"]["MetadataContentType"];
+                contentType: components["schemas"]["MetadataContentType"];
                 /** @description Action-specific parameters */
                 params?: unknown;
             };
@@ -10026,7 +10026,7 @@ export interface components {
              * @description Average duration in milliseconds
              * @example 180.5
              */
-            avg_duration_ms: number;
+            avgDurationMs: number;
             /**
              * @description Method name
              * @example search
@@ -10037,19 +10037,19 @@ export interface components {
              * @description Failed requests
              * @example 5
              */
-            requests_failed: number;
+            requestsFailed: number;
             /**
              * Format: int64
              * @description Successful requests
              * @example 195
              */
-            requests_success: number;
+            requestsSuccess: number;
             /**
              * Format: int64
              * @description Total requests for this method
              * @example 200
              */
-            requests_total: number;
+            requestsTotal: number;
         };
         /** @description Metrics for a single plugin */
         PluginMetricsDto: {
@@ -10058,9 +10058,9 @@ export interface components {
              * @description Average request duration in milliseconds
              * @example 250.5
              */
-            avg_duration_ms: number;
+            avgDurationMs: number;
             /** @description Per-method breakdown */
-            by_method?: {
+            byMethod?: {
                 [key: string]: components["schemas"]["PluginMethodMetricsDto"];
             } | null;
             /**
@@ -10068,61 +10068,61 @@ export interface components {
              * @description Error rate as percentage
              * @example 4
              */
-            error_rate_pct: number;
+            errorRatePct: number;
             /** @description Failure counts by error code */
-            failure_counts?: {
+            failureCounts?: {
                 [key: string]: number;
             } | null;
             /**
              * @description Current health status
              * @example healthy
              */
-            health_status: string;
+            healthStatus: string;
             /**
              * Format: date-time
              * @description Last failure timestamp
              */
-            last_failure?: string | null;
+            lastFailure?: string | null;
             /**
              * Format: date-time
              * @description Last successful request timestamp
              */
-            last_success?: string | null;
+            lastSuccess?: string | null;
             /**
              * Format: uuid
              * @description Plugin ID
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            plugin_id: string;
+            pluginId: string;
             /**
              * @description Plugin name
              * @example AniList Provider
              */
-            plugin_name: string;
+            pluginName: string;
             /**
              * Format: int64
              * @description Number of rate limit rejections
              * @example 2
              */
-            rate_limit_rejections: number;
+            rateLimitRejections: number;
             /**
              * Format: int64
              * @description Failed requests
              * @example 20
              */
-            requests_failed: number;
+            requestsFailed: number;
             /**
              * Format: int64
              * @description Successful requests
              * @example 480
              */
-            requests_success: number;
+            requestsSuccess: number;
             /**
              * Format: int64
              * @description Total requests made
              * @example 500
              */
-            requests_total: number;
+            requestsTotal: number;
         };
         /** @description Plugin metrics response - current performance statistics for all plugins */
         PluginMetricsResponse: {
@@ -10135,7 +10135,7 @@ export interface components {
              * @description When the metrics were last updated
              * @example 2026-01-30T12:00:00Z
              */
-            updated_at: string;
+            updatedAt: string;
         };
         /** @description Summary metrics across all plugins */
         PluginMetricsSummaryDto: {
@@ -10144,49 +10144,49 @@ export interface components {
              * @description Number of degraded plugins
              * @example 1
              */
-            degraded_plugins: number;
+            degradedPlugins: number;
             /**
              * Format: int64
              * @description Number of healthy plugins
              * @example 2
              */
-            healthy_plugins: number;
+            healthyPlugins: number;
             /**
              * Format: int64
              * @description Total failed requests
              * @example 100
              */
-            total_failed: number;
+            totalFailed: number;
             /**
              * Format: int64
              * @description Total number of registered plugins
              * @example 3
              */
-            total_plugins: number;
+            totalPlugins: number;
             /**
              * Format: int64
              * @description Total rate limit rejections
              * @example 5
              */
-            total_rate_limit_rejections: number;
+            totalRateLimitRejections: number;
             /**
              * Format: int64
              * @description Total requests made across all plugins
              * @example 1500
              */
-            total_requests: number;
+            totalRequests: number;
             /**
              * Format: int64
              * @description Total successful requests
              * @example 1400
              */
-            total_success: number;
+            totalSuccess: number;
             /**
              * Format: int64
              * @description Number of unhealthy plugins
              * @example 0
              */
-            unhealthy_plugins: number;
+            unhealthyPlugins: number;
         };
         /** @description Response containing search results from a plugin */
         PluginSearchResponse: {
@@ -10409,25 +10409,25 @@ export interface components {
              * Format: int64
              * @description Age of oldest pending task in milliseconds
              */
-            oldest_pending_age_ms?: number | null;
+            oldestPendingAgeMs?: number | null;
             /**
              * Format: int64
              * @description Number of tasks waiting to run
              * @example 25
              */
-            pending_count: number;
+            pendingCount: number;
             /**
              * Format: int64
              * @description Number of tasks currently executing
              * @example 4
              */
-            processing_count: number;
+            processingCount: number;
             /**
              * Format: int64
              * @description Number of stale/stuck tasks
              * @example 0
              */
-            stale_count: number;
+            staleCount: number;
         };
         /** @description Response containing a list of reading progress records */
         ReadProgressListResponse: {
@@ -10446,7 +10446,7 @@ export interface components {
              * @description Book ID
              * @example 550e8400-e29b-41d4-a716-446655440002
              */
-            book_id: string;
+            bookId: string;
             /**
              * @description Whether the book is completed
              * @example false
@@ -10457,13 +10457,13 @@ export interface components {
              * @description When the book was completed (if completed)
              * @example 2024-01-20T20:00:00Z
              */
-            completed_at?: string | null;
+            completedAt?: string | null;
             /**
              * Format: int32
              * @description Current page (1-indexed)
              * @example 42
              */
-            current_page: number;
+            currentPage: number;
             /**
              * Format: uuid
              * @description Progress record ID
@@ -10477,25 +10477,25 @@ export interface components {
              *     For other formats, this is calculated from current_page / total_pages
              * @example 0.45
              */
-            progress_percentage?: number | null;
+            progressPercentage?: number | null;
             /**
              * Format: date-time
              * @description When reading started
              * @example 2024-01-10T14:30:00Z
              */
-            started_at: string;
+            startedAt: string;
             /**
              * Format: date-time
              * @description When progress was last updated
              * @example 2024-01-15T18:45:00Z
              */
-            updated_at: string;
+            updatedAt: string;
             /**
              * Format: uuid
              * @description User ID
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
-            user_id: string;
+            userId: string;
         };
         /**
          * @description Reading progress information for a publication
@@ -11655,7 +11655,7 @@ export interface components {
              * @description Default value for this setting
              * @example 2
              */
-            default_value: string;
+            defaultValue: string;
             /**
              * @description Human-readable description
              * @example Number of concurrent scanning jobs
@@ -11671,7 +11671,7 @@ export interface components {
              * @description Whether value should be masked in responses
              * @example false
              */
-            is_sensitive: boolean;
+            isSensitive: boolean;
             /**
              * @description Setting key name
              * @example scan.concurrent_jobs
@@ -11682,24 +11682,24 @@ export interface components {
              * @description Maximum allowed value (for numeric settings)
              * @example 16
              */
-            max_value?: number | null;
+            maxValue?: number | null;
             /**
              * Format: int64
              * @description Minimum allowed value (for numeric settings)
              * @example 1
              */
-            min_value?: number | null;
+            minValue?: number | null;
             /**
              * Format: date-time
              * @description When the setting was last updated
              * @example 2024-01-15T10:30:00Z
              */
-            updated_at: string;
+            updatedAt: string;
             /**
              * Format: uuid
              * @description User who last updated the setting
              */
-            updated_by?: string | null;
+            updatedBy?: string | null;
             /**
              * @description Current setting value
              * @example 4
@@ -11709,7 +11709,7 @@ export interface components {
              * @description Data type of the value (string, integer, boolean, etc.)
              * @example integer
              */
-            value_type: string;
+            valueType: string;
             /**
              * Format: int32
              * @description Version number for optimistic locking
@@ -11723,19 +11723,19 @@ export interface components {
              * @description Reason provided for the change
              * @example Performance optimization
              */
-            change_reason?: string | null;
+            changeReason?: string | null;
             /**
              * Format: date-time
              * @description When the change was made
              * @example 2024-01-15T10:30:00Z
              */
-            changed_at: string;
+            changedAt: string;
             /**
              * Format: uuid
              * @description User who made the change
              * @example 550e8400-e29b-41d4-a716-446655440002
              */
-            changed_by: string;
+            changedBy: string;
             /**
              * Format: uuid
              * @description History entry ID
@@ -11746,7 +11746,7 @@ export interface components {
              * @description IP address of the user who made the change
              * @example 192.168.1.100
              */
-            ip_address?: string | null;
+            ipAddress?: string | null;
             /**
              * @description Setting key that was changed
              * @example scan.concurrent_jobs
@@ -11756,18 +11756,18 @@ export interface components {
              * @description New value after the change
              * @example 4
              */
-            new_value: string;
+            newValue: string;
             /**
              * @description Previous value before the change
              * @example 2
              */
-            old_value: string;
+            oldValue: string;
             /**
              * Format: uuid
              * @description ID of the setting that was changed
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            setting_id: string;
+            settingId: string;
         };
         /** @description Setup status response */
         SetupStatusResponse: {
@@ -11900,13 +11900,13 @@ export interface components {
              * @description Average duration in milliseconds
              * @example 1200
              */
-            avg_duration_ms: number;
+            avgDurationMs: number;
             /**
              * Format: int64
              * @description Bytes processed in this period
              * @example 1073741824
              */
-            bytes_processed: number;
+            bytesProcessed: number;
             /**
              * Format: int64
              * @description Number of tasks in this period
@@ -11924,25 +11924,25 @@ export interface components {
              * @description Items processed in this period
              * @example 500
              */
-            items_processed: number;
+            itemsProcessed: number;
             /**
              * Format: int64
              * @description Maximum duration
              * @example 5000
              */
-            max_duration_ms: number;
+            maxDurationMs: number;
             /**
              * Format: int64
              * @description Minimum duration
              * @example 200
              */
-            min_duration_ms: number;
+            minDurationMs: number;
             /**
              * Format: date-time
              * @description Start of this period
              * @example 2026-01-11T10:00:00Z
              */
-            period_start: string;
+            periodStart: string;
             /**
              * Format: int64
              * @description Successful tasks
@@ -11950,7 +11950,7 @@ export interface components {
              */
             succeeded: number;
             /** @description Task type (if filtered) */
-            task_type?: string | null;
+            taskType?: string | null;
         };
         /** @description Task metrics history response */
         TaskMetricsHistoryResponse: {
@@ -11977,7 +11977,7 @@ export interface components {
         /** @description Task metrics response - current performance statistics */
         TaskMetricsResponse: {
             /** @description Per-task-type breakdown */
-            by_type: components["schemas"]["TaskTypeMetricsDto"][];
+            byType: components["schemas"]["TaskTypeMetricsDto"][];
             /** @description Queue health metrics */
             queue: components["schemas"]["QueueHealthMetricsDto"];
             /**
@@ -11992,7 +11992,7 @@ export interface components {
              * @description When the metrics were last updated
              * @example 2026-01-11T12:00:00Z
              */
-            updated_at: string;
+            updatedAt: string;
         };
         /** @description Summary metrics across all task types */
         TaskMetricsSummaryDto: {
@@ -12001,37 +12001,37 @@ export interface components {
              * @description Average duration in milliseconds
              * @example 1500.5
              */
-            avg_duration_ms: number;
+            avgDurationMs: number;
             /**
              * Format: double
              * @description Average queue wait time in milliseconds
              * @example 250
              */
-            avg_queue_wait_ms: number;
+            avgQueueWaitMs: number;
             /**
              * Format: double
              * @description Tasks processed per minute (recent average)
              * @example 15.5
              */
-            tasks_per_minute: number;
+            tasksPerMinute: number;
             /**
              * Format: int64
              * @description Total tasks executed since last restart
              * @example 1250
              */
-            total_executed: number;
+            totalExecuted: number;
             /**
              * Format: int64
              * @description Total failed tasks
              * @example 50
              */
-            total_failed: number;
+            totalFailed: number;
             /**
              * Format: int64
              * @description Total successful tasks
              * @example 1200
              */
-            total_succeeded: number;
+            totalSucceeded: number;
         };
         /** @description Progress information for a running task */
         TaskProgress: {
@@ -12057,39 +12057,39 @@ export interface components {
              * Format: uuid
              * @description Book ID if this task is related to a book
              */
-            book_id?: string | null;
+            bookId?: string | null;
             /**
              * Format: date-time
              * @description When the task completed (success or failure)
              */
-            completed_at?: string | null;
+            completedAt?: string | null;
             /** @description Error message (for failed tasks) */
             error?: string | null;
             /**
              * Format: uuid
              * @description Library ID if this task is related to a library
              */
-            library_id?: string | null;
+            libraryId?: string | null;
             progress?: null | components["schemas"]["TaskProgress"];
             /**
              * Format: uuid
              * @description Series ID if this task is related to a series
              */
-            series_id?: string | null;
+            seriesId?: string | null;
             /**
              * Format: date-time
              * @description When the task started
              */
-            started_at: string;
+            startedAt: string;
             /** @description Current status of the task */
             status: components["schemas"]["TaskStatus"];
             /**
              * Format: uuid
              * @description Unique identifier for this task instance
              */
-            task_id: string;
+            taskId: string;
             /** @description Type of task being executed */
-            task_type: string;
+            taskType: string;
         };
         TaskResponse: {
             /**
@@ -12102,18 +12102,18 @@ export interface components {
              * Format: uuid
              * @description Associated book ID (if applicable)
              */
-            book_id?: string | null;
+            bookId?: string | null;
             /**
              * Format: date-time
              * @description When task execution completed
              */
-            completed_at?: string | null;
+            completedAt?: string | null;
             /**
              * Format: date-time
              * @description When the task was created
              * @example 2024-01-15T10:00:00Z
              */
-            created_at: string;
+            createdAt: string;
             /**
              * Format: uuid
              * @description Unique task identifier
@@ -12121,29 +12121,29 @@ export interface components {
              */
             id: string;
             /** @description Error message from last failed attempt */
-            last_error?: string | null;
+            lastError?: string | null;
             /**
              * Format: uuid
              * @description Associated library ID (if applicable)
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
-            library_id?: string | null;
+            libraryId?: string | null;
             /**
              * @description Worker ID that has locked this task
              * @example worker-1
              */
-            locked_by?: string | null;
+            lockedBy?: string | null;
             /**
              * Format: date-time
              * @description When the lock expires
              */
-            locked_until?: string | null;
+            lockedUntil?: string | null;
             /**
              * Format: int32
              * @description Maximum number of allowed attempts
              * @example 3
              */
-            max_attempts: number;
+            maxAttempts: number;
             /** @description Task-specific parameters */
             params?: unknown;
             /**
@@ -12159,17 +12159,17 @@ export interface components {
              * @description When the task is scheduled to run
              * @example 2024-01-15T12:00:00Z
              */
-            scheduled_for: string;
+            scheduledFor: string;
             /**
              * Format: uuid
              * @description Associated series ID (if applicable)
              */
-            series_id?: string | null;
+            seriesId?: string | null;
             /**
              * Format: date-time
              * @description When task execution started
              */
-            started_at?: string | null;
+            startedAt?: string | null;
             /**
              * @description Current status (pending, processing, completed, failed)
              * @example pending
@@ -12179,12 +12179,12 @@ export interface components {
              * @description Type of task (scan_library, generate_thumbnail, etc.)
              * @example scan_library
              */
-            task_type: string;
+            taskType: string;
         };
         /** @description Task queue statistics */
         TaskStats: {
             /** @description Breakdown by task type and status */
-            by_type: {
+            byType: {
                 [key: string]: components["schemas"]["TaskTypeStats"];
             };
             /** Format: int64 */
@@ -12211,59 +12211,59 @@ export interface components {
         /** @description Task types supported by the distributed task queue */
         TaskType: {
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             mode?: string;
             /** @enum {string} */
             type: "scan_library";
         } | {
             /** Format: uuid */
-            book_id: string;
+            bookId: string;
             force?: boolean;
             /** @enum {string} */
             type: "analyze_book";
         } | {
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "analyze_series";
         } | {
             /** Format: uuid */
-            library_id: string;
+            libraryId: string;
             /** @enum {string} */
             type: "purge_deleted";
         } | {
             /** Format: uuid */
-            book_id: string;
+            bookId: string;
             source: string;
             /** @enum {string} */
             type: "refresh_metadata";
         } | {
-            book_ids?: string[] | null;
+            bookIds?: string[] | null;
             force?: boolean;
             /** Format: uuid */
-            library_id?: string | null;
+            libraryId?: string | null;
             /** Format: uuid */
-            series_id?: string | null;
-            series_ids?: string[] | null;
+            seriesId?: string | null;
+            seriesIds?: string[] | null;
             /** @enum {string} */
             type: "generate_thumbnails";
         } | {
             /** Format: uuid */
-            book_id: string;
+            bookId: string;
             force?: boolean;
             /** @enum {string} */
             type: "generate_thumbnail";
         } | {
             force?: boolean;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "generate_series_thumbnail";
         } | {
             force?: boolean;
             /** Format: uuid */
-            library_id?: string | null;
-            series_ids?: string[] | null;
+            libraryId?: string | null;
+            seriesIds?: string[] | null;
             /** @enum {string} */
             type: "generate_series_thumbnails";
         } | {
@@ -12271,19 +12271,19 @@ export interface components {
             type: "find_duplicates";
         } | {
             /** Format: uuid */
-            book_id: string;
+            bookId: string;
             /**
              * Format: uuid
              * @description Optional series_id to invalidate series thumbnail cache
              */
-            series_id?: string | null;
+            seriesId?: string | null;
             /** @description Optional thumbnail path (if known at deletion time) */
-            thumbnail_path?: string | null;
+            thumbnailPath?: string | null;
             /** @enum {string} */
             type: "cleanup_book_files";
         } | {
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "cleanup_series_files";
         } | {
@@ -12294,22 +12294,22 @@ export interface components {
             type: "cleanup_pdf_cache";
         } | {
             /** Format: uuid */
-            plugin_id: string;
+            pluginId: string;
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @description Source scope that triggered this task (for tracking) */
-            source_scope?: string | null;
+            sourceScope?: string | null;
             /** @enum {string} */
             type: "plugin_auto_match";
         } | {
             /** Format: uuid */
-            series_id: string;
+            seriesId: string;
             /** @enum {string} */
             type: "reprocess_series_title";
         } | {
             /** Format: uuid */
-            library_id?: string | null;
-            series_ids?: string[] | null;
+            libraryId?: string | null;
+            seriesIds?: string[] | null;
             /** @enum {string} */
             type: "reprocess_series_titles";
         };
@@ -12320,25 +12320,25 @@ export interface components {
              * @description Average duration in milliseconds
              * @example 2500
              */
-            avg_duration_ms: number;
+            avgDurationMs: number;
             /**
              * Format: double
              * @description Average queue wait time in milliseconds
              * @example 150
              */
-            avg_queue_wait_ms: number;
+            avgQueueWaitMs: number;
             /**
              * Format: int64
              * @description Total bytes processed
              * @example 1073741824
              */
-            bytes_processed: number;
+            bytesProcessed: number;
             /**
              * Format: double
              * @description Error rate as percentage
              * @example 5
              */
-            error_rate_pct: number;
+            errorRatePct: number;
             /**
              * Format: int64
              * @description Number of executions
@@ -12356,38 +12356,38 @@ export interface components {
              * @description Total items processed
              * @example 5000
              */
-            items_processed: number;
+            itemsProcessed: number;
             /** @description Most recent error message */
-            last_error?: string | null;
+            lastError?: string | null;
             /**
              * Format: date-time
              * @description When the last error occurred
              */
-            last_error_at?: string | null;
+            lastErrorAt?: string | null;
             /**
              * Format: int64
              * @description Maximum duration in milliseconds
              * @example 15000
              */
-            max_duration_ms: number;
+            maxDurationMs: number;
             /**
              * Format: int64
              * @description Minimum duration in milliseconds
              * @example 500
              */
-            min_duration_ms: number;
+            minDurationMs: number;
             /**
              * Format: int64
              * @description 50th percentile (median) duration
              * @example 2000
              */
-            p50_duration_ms: number;
+            p50DurationMs: number;
             /**
              * Format: int64
              * @description 95th percentile duration
              * @example 8000
              */
-            p95_duration_ms: number;
+            p95DurationMs: number;
             /**
              * Format: int64
              * @description Retried executions
@@ -12404,13 +12404,13 @@ export interface components {
              * @description Task type name
              * @example scan_library
              */
-            task_type: string;
+            taskType: string;
             /**
              * Format: double
              * @description Throughput rate per second
              * @example 25.5
              */
-            throughput_per_sec: number;
+            throughputPerSec: number;
         };
         /** @description Statistics for a specific task type */
         TaskTypeStats: {
@@ -12475,7 +12475,7 @@ export interface components {
              * @description ID of the queued cleanup task
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            task_id: string;
+            taskId: string;
         };
         /** @description Response for triggering a duplicate scan */
         TriggerDuplicateScanResponse: {
@@ -12489,7 +12489,7 @@ export interface components {
              * @description Task ID for tracking the scan progress
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            task_id: string;
+            taskId: string;
         };
         /** @description Response when triggering a PDF cache cleanup task */
         TriggerPdfCacheCleanupResponse: {
@@ -12498,7 +12498,7 @@ export interface components {
              * @description Max age setting being used for cleanup (in days)
              * @example 30
              */
-            max_age_days: number;
+            maxAgeDays: number;
             /**
              * @description Message describing the action taken
              * @example PDF cache cleanup task queued successfully
@@ -12509,7 +12509,7 @@ export interface components {
              * @description ID of the queued cleanup task
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
-            task_id: string;
+            taskId: string;
         };
         /** @description Query parameters for triggering a scan */
         TriggerScanQuery: {
@@ -12805,13 +12805,13 @@ export interface components {
              * @description Current page number (1-indexed)
              * @example 42
              */
-            current_page: number;
+            currentPage: number;
             /**
              * Format: double
              * @description Progress as a percentage (0.0-1.0), used for EPUB books with reflowable content
              * @example 0.45
              */
-            progress_percentage?: number | null;
+            progressPercentage?: number | null;
         };
         /** @description Update setting request */
         UpdateSettingRequest: {
@@ -12819,7 +12819,7 @@ export interface components {
              * @description Optional reason for the change (for audit log)
              * @example Increased concurrency for faster scanning
              */
-            change_reason?: string | null;
+            changeReason?: string | null;
             /**
              * @description New value for the setting
              * @example 8
@@ -13188,7 +13188,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "message": "Cleanup task queued successfully",
-                     *       "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                     *       "taskId": "550e8400-e29b-41d4-a716-446655440000"
                      *     }
                      */
                     "application/json": components["schemas"]["TriggerCleanupResponse"];
@@ -13220,10 +13220,10 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "bytes_freed": 1073741824,
-                     *       "covers_deleted": 5,
+                     *       "bytesFreed": 1073741824,
+                     *       "coversDeleted": 5,
                      *       "failures": 0,
-                     *       "thumbnails_deleted": 42
+                     *       "thumbnailsDeleted": 42
                      *     }
                      */
                     "application/json": components["schemas"]["CleanupResultDto"];
@@ -13258,9 +13258,9 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "orphaned_covers": 5,
-                     *       "orphaned_thumbnails": 42,
-                     *       "total_size_bytes": 1073741824
+                     *       "orphanedCovers": 5,
+                     *       "orphanedThumbnails": 42,
+                     *       "totalSizeBytes": 1073741824
                      *     }
                      */
                     "application/json": components["schemas"]["OrphanStatsDto"];
@@ -13292,9 +13292,9 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "bytes_reclaimed": 157286400,
-                     *       "bytes_reclaimed_human": "150.0 MB",
-                     *       "files_deleted": 1500
+                     *       "bytesReclaimed": 157286400,
+                     *       "bytesReclaimedHuman": "150.0 MB",
+                     *       "filesDeleted": 1500
                      *     }
                      */
                     "application/json": components["schemas"]["PdfCacheCleanupResultDto"];
@@ -13326,9 +13326,9 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "max_age_days": 30,
+                     *       "maxAgeDays": 30,
                      *       "message": "PDF cache cleanup task queued successfully",
-                     *       "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                     *       "taskId": "550e8400-e29b-41d4-a716-446655440000"
                      *     }
                      */
                     "application/json": components["schemas"]["TriggerPdfCacheCleanupResponse"];
@@ -13360,13 +13360,13 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "book_count": 45,
-                     *       "cache_dir": "/data/cache",
-                     *       "cache_enabled": true,
-                     *       "oldest_file_age_days": 15,
-                     *       "total_files": 1500,
-                     *       "total_size_bytes": 157286400,
-                     *       "total_size_human": "150.0 MB"
+                     *       "bookCount": 45,
+                     *       "cacheDir": "/data/cache",
+                     *       "cacheEnabled": true,
+                     *       "oldestFileAgeDays": 15,
+                     *       "totalFiles": 1500,
+                     *       "totalSizeBytes": 157286400,
+                     *       "totalSizeHuman": "150.0 MB"
                      *     }
                      */
                     "application/json": components["schemas"]["PdfCacheStatsDto"];
@@ -20471,7 +20471,7 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "application_name": "Codex"
+                     *       "applicationName": "Codex"
                      *     }
                      */
                     "application/json": components["schemas"]["BrandingSettingsDto"];

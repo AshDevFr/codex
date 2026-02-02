@@ -514,15 +514,15 @@ export function BooksInErrorSettings() {
   useEffect(() => {
     const completedTasks = activeTasks.filter(
       (task) =>
-        BOOK_ERROR_TASK_TYPES.includes(task.task_type) &&
+        BOOK_ERROR_TASK_TYPES.includes(task.taskType) &&
         task.status === "completed" &&
-        !processedTaskIds.current.has(task.task_id),
+        !processedTaskIds.current.has(task.taskId),
     );
 
     if (completedTasks.length > 0) {
       // Mark these tasks as processed
       for (const task of completedTasks) {
-        processedTaskIds.current.add(task.task_id);
+        processedTaskIds.current.add(task.taskId);
       }
 
       // Throttle refresh

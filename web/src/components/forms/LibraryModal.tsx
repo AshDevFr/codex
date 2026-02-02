@@ -263,20 +263,20 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
   };
 
   const handleDirectoryClick = (entry: FileSystemEntry) => {
-    if (entry.is_directory) {
+    if (entry.isDirectory) {
       setCurrentPath(entry.path);
     }
   };
 
   const handleSelectCurrentPath = () => {
     if (browseData) {
-      setSelectedPath(browseData.current_path);
-      setLibraryPath(browseData.current_path);
+      setSelectedPath(browseData.currentPath);
+      setLibraryPath(browseData.currentPath);
       setShowPathBrowser(false);
 
       // Auto-generate library name from path if empty
       if (!libraryName) {
-        const pathParts = browseData.current_path.split(/[/\\]/);
+        const pathParts = browseData.currentPath.split(/[/\\]/);
         const folderName =
           pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
         if (folderName) {
@@ -287,8 +287,8 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
   };
 
   const handleNavigateToParent = () => {
-    if (browseData?.parent_path) {
-      setCurrentPath(browseData.parent_path);
+    if (browseData?.parentPath) {
+      setCurrentPath(browseData.parentPath);
     }
   };
 
@@ -523,7 +523,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
               size="xs"
               variant="subtle"
               onClick={handleNavigateToParent}
-              disabled={!browseData?.parent_path}
+              disabled={!browseData?.parentPath}
             >
               Up One Level
             </Button>
@@ -543,7 +543,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
             <ScrollArea h={400} type="auto">
               <Stack gap={6}>
                 {browseData?.entries
-                  .filter((entry) => entry.is_directory)
+                  .filter((entry) => entry.isDirectory)
                   .map((entry) => (
                     <UnstyledButton
                       key={entry.path}
@@ -565,7 +565,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
           )}
 
           <Text size="xs" c="dimmed">
-            Current: {browseData?.current_path}
+            Current: {browseData?.currentPath}
           </Text>
         </>
       )}

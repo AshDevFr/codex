@@ -5,6 +5,7 @@ use utoipa::ToSchema;
 
 /// Application information response
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AppInfoDto {
     /// Application version from Cargo.toml
     #[schema(example = "1.0.0")]

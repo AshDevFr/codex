@@ -113,8 +113,8 @@ for (let seriesIndex = 0; seriesIndex < mockSeries.length; seriesIndex++) {
       const totalPages = book.pageCount;
       const currentPage = faker.number.int({ min: 1, max: totalPages - 1 });
       book.readProgress = createReadProgress({
-        book_id: book.id,
-        current_page: currentPage,
+        bookId: book.id,
+        currentPage: currentPage,
         completed: false,
       });
     }
@@ -187,8 +187,8 @@ export const resetMockData = () => {
         const totalPages = book.pageCount;
         const currentPage = faker.number.int({ min: 1, max: totalPages - 1 });
         book.readProgress = createReadProgress({
-          book_id: book.id,
-          current_page: currentPage,
+          bookId: book.id,
+          currentPage: currentPage,
           completed: false,
         });
       }

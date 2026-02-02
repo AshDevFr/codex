@@ -374,7 +374,7 @@ describe("fetchTaskStats", () => {
       failed: 0,
       stale: 0,
       total: 20,
-      by_type: {
+      byType: {
         analyze_book: {
           pending: 8,
           processing: 2,
@@ -422,7 +422,7 @@ describe("fetchTaskStats", () => {
       failed: 0,
       stale: 0,
       total: 0,
-      by_type: {},
+      byType: {},
     });
 
     expect(mockFetch).not.toHaveBeenCalled();
@@ -443,7 +443,7 @@ describe("fetchTaskStats", () => {
       failed: 0,
       stale: 0,
       total: 0,
-      by_type: {},
+      byType: {},
     });
   });
 
@@ -485,7 +485,7 @@ describe("fetchPendingTaskCounts", () => {
       failed: 0,
       stale: 0,
       total: 24,
-      by_type: {
+      byType: {
         analyze_book: {
           pending: 12,
           processing: 2,
@@ -526,7 +526,7 @@ describe("fetchPendingTaskCounts", () => {
       failed: 0,
       stale: 0,
       total: 10,
-      by_type: {
+      byType: {
         analyze_book: {
           pending: 0,
           processing: 0,

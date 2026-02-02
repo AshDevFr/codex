@@ -56,15 +56,15 @@ function DuplicateGroupCard({
         <Group gap="sm">
           <IconCopy size={20} />
           <Box>
-            <Text fw={500}>{group.duplicate_count} Duplicates</Text>
+            <Text fw={500}>{group.duplicateCount} Duplicates</Text>
             <Text size="xs" c="dimmed" style={{ fontFamily: "monospace" }}>
-              {group.file_hash.slice(0, 16)}...
+              {group.fileHash.slice(0, 16)}...
             </Text>
           </Box>
         </Group>
         <Group gap="xs">
           <Badge variant="light" color="orange">
-            {group.duplicate_count} copies
+            {group.duplicateCount} copies
           </Badge>
           <Button
             variant="subtle"
@@ -161,7 +161,7 @@ function DuplicateGroupCard({
       )}
 
       <Text size="xs" c="dimmed" mt="sm">
-        Detected: {new Date(group.created_at).toLocaleString()}
+        Detected: {new Date(group.createdAt).toLocaleString()}
       </Text>
     </Card>
   );
@@ -194,15 +194,15 @@ export function DuplicatesSettings() {
   useEffect(() => {
     const completedScanTasks = activeTasks.filter(
       (task) =>
-        task.task_type === DUPLICATE_SCAN_TASK_TYPE &&
+        task.taskType === DUPLICATE_SCAN_TASK_TYPE &&
         task.status === "completed" &&
-        !processedTaskIds.current.has(task.task_id),
+        !processedTaskIds.current.has(task.taskId),
     );
 
     if (completedScanTasks.length > 0) {
       // Mark these tasks as processed
       for (const task of completedScanTasks) {
-        processedTaskIds.current.add(task.task_id);
+        processedTaskIds.current.add(task.taskId);
       }
 
       // Throttle refresh to avoid hammering the API
@@ -220,7 +220,7 @@ export function DuplicatesSettings() {
     if (cached) return cached;
 
     const books: Book[] = [];
-    for (const bookId of group.book_ids) {
+    for (const bookId of group.bookIds) {
       try {
         // API returns { book: BookDto, metadata: ... }
         const response = await api.get<{ book: Book }>(`/books/${bookId}`);
@@ -297,7 +297,7 @@ export function DuplicatesSettings() {
   });
 
   const totalDuplicates =
-    duplicates?.reduce((sum, group) => sum + group.duplicate_count, 0) || 0;
+    duplicates?.reduce((sum, group) => sum + group.duplicateCount, 0) || 0;
 
   return (
     <Box py="xl" px="md">

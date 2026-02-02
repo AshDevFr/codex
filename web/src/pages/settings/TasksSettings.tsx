@@ -94,24 +94,24 @@ function TaskRow({
         </Text>
       </Table.Td>
       <Table.Td>
-        <Badge variant="light">{task.task_type}</Badge>
+        <Badge variant="light">{task.taskType}</Badge>
       </Table.Td>
       <Table.Td>
         <Badge color={statusColor}>{task.status}</Badge>
       </Table.Td>
       <Table.Td>
         <Text size="sm">
-          {task.attempts}/{task.max_attempts}
+          {task.attempts}/{task.maxAttempts}
         </Text>
       </Table.Td>
       <Table.Td>
-        <Text size="sm">{new Date(task.created_at).toLocaleString()}</Text>
+        <Text size="sm">{new Date(task.createdAt).toLocaleString()}</Text>
       </Table.Td>
       <Table.Td>
-        {task.last_error ? (
-          <Tooltip label={task.last_error}>
+        {task.lastError ? (
+          <Tooltip label={task.lastError}>
             <Text size="sm" c="red" lineClamp={1} style={{ maxWidth: 200 }}>
-              {task.last_error}
+              {task.lastError}
             </Text>
           </Tooltip>
         ) : (
@@ -136,7 +136,7 @@ function TaskRow({
               </ActionIcon>
             </Tooltip>
           )}
-          {task.locked_by && task.status === "processing" && (
+          {task.lockedBy && task.status === "processing" && (
             <Tooltip label="Unlock Task (Force)">
               <ActionIcon variant="subtle" color="orange" onClick={onUnlock}>
                 <IconPlayerPlay size={16} />
@@ -191,12 +191,12 @@ export function TasksSettings() {
         setActiveProgress((prev) => {
           const next = new Map(prev);
           if (event.status === "completed" || event.status === "failed") {
-            next.delete(event.task_id);
+            next.delete(event.taskId);
             // Refetch tasks when a task completes
             refetchTasks();
             queryClient.invalidateQueries({ queryKey: ["task-stats"] });
           } else {
-            next.set(event.task_id, event);
+            next.set(event.taskId, event);
           }
           return next;
         });
@@ -404,12 +404,12 @@ export function TasksSettings() {
             <Stack gap="md">
               <Title order={3}>Active Tasks</Title>
               {Array.from(activeProgress.values())
-                .sort((a, b) => a.task_type.localeCompare(b.task_type))
+                .sort((a, b) => a.taskType.localeCompare(b.taskType))
                 .map((event) => (
-                  <div key={event.task_id}>
+                  <div key={event.taskId}>
                     <Group justify="space-between" mb="xs">
                       <Group gap="xs">
-                        <Badge variant="light">{event.task_type}</Badge>
+                        <Badge variant="light">{event.taskType}</Badge>
                         <Text size="sm">
                           {event.progress?.message || "Processing..."}
                         </Text>
@@ -496,7 +496,7 @@ export function TasksSettings() {
         </Card>
 
         {/* Task Type Breakdown */}
-        {stats?.by_type && Object.keys(stats.by_type).length > 0 && (
+        {stats?.byType && Object.keys(stats.byType).length > 0 && (
           <Card withBorder>
             <Stack gap="md">
               <Title order={3}>By Task Type</Title>
@@ -512,7 +512,7 @@ export function TasksSettings() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {Object.entries(stats.by_type)
+                  {Object.entries(stats.byType)
                     .sort(([typeA], [typeB]) => typeA.localeCompare(typeB))
                     .map(([type, typeStats]) => (
                       <Table.Tr key={type}>

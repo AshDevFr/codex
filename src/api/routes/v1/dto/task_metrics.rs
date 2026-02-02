@@ -4,6 +4,7 @@ use utoipa::{IntoParams, ToSchema};
 
 /// Task metrics response - current performance statistics
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskMetricsResponse {
     /// When the metrics were last updated
     #[schema(example = "2026-01-11T12:00:00Z")]
@@ -25,6 +26,7 @@ pub struct TaskMetricsResponse {
 
 /// Summary metrics across all task types
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskMetricsSummaryDto {
     /// Total tasks executed since last restart
     #[schema(example = 1250)]
@@ -53,6 +55,7 @@ pub struct TaskMetricsSummaryDto {
 
 /// Metrics for a specific task type
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskTypeMetricsDto {
     /// Task type name
     #[schema(example = "scan_library")]
@@ -125,6 +128,7 @@ pub struct TaskTypeMetricsDto {
 
 /// Queue health metrics
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct QueueHealthMetricsDto {
     /// Number of tasks waiting to run
     #[schema(example = 25)]
@@ -145,6 +149,7 @@ pub struct QueueHealthMetricsDto {
 
 /// Task metrics history response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskMetricsHistoryResponse {
     /// Start of the time range
     #[schema(example = "2026-01-04T00:00:00Z")]
@@ -164,6 +169,7 @@ pub struct TaskMetricsHistoryResponse {
 
 /// A single historical data point
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskMetricsDataPointDto {
     /// Start of this period
     #[schema(example = "2026-01-11T10:00:00Z")]
@@ -226,6 +232,7 @@ pub struct TaskMetricsHistoryQuery {
 
 /// Response for cleanup operation
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct MetricsCleanupResponse {
     /// Number of metric records deleted
     #[schema(example = 500)]
@@ -242,6 +249,7 @@ pub struct MetricsCleanupResponse {
 
 /// Response for nuke (delete all) operation
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct MetricsNukeResponse {
     /// Number of metric records deleted
     #[schema(example = 15000)]

@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 /// Statistics about orphaned files in the system
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OrphanStatsDto {
     /// Number of orphaned thumbnail files (no matching book in database)
     #[schema(example = 42)]
@@ -26,6 +27,7 @@ pub struct OrphanStatsDto {
 
 /// Information about a single orphaned file
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OrphanedFileDto {
     /// Path to the orphaned file (relative to data directory)
     #[schema(example = "thumbnails/books/55/550e8400-e29b-41d4-a716-446655440000.jpg")]
@@ -46,6 +48,7 @@ pub struct OrphanedFileDto {
 
 /// Result of a cleanup operation
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CleanupResultDto {
     /// Number of thumbnail files deleted
     #[schema(example = 42)]
@@ -82,6 +85,7 @@ impl From<crate::services::file_cleanup::CleanupStats> for CleanupResultDto {
 
 /// Response when triggering a cleanup task
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct TriggerCleanupResponse {
     /// ID of the queued cleanup task
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -116,8 +120,8 @@ mod tests {
         };
 
         let json = serde_json::to_string(&stats).unwrap();
-        assert!(json.contains("\"orphaned_thumbnails\":42"));
-        assert!(json.contains("\"orphaned_covers\":5"));
+        assert!(json.contains("\"orphanedThumbnails\":42"));
+        assert!(json.contains("\"orphanedCovers\":5"));
         // files field should be skipped when None
         assert!(!json.contains("\"files\""));
     }
@@ -140,7 +144,7 @@ mod tests {
 
         let json = serde_json::to_string(&stats).unwrap();
         assert!(json.contains("\"files\""));
-        assert!(json.contains("\"file_type\":\"thumbnail\""));
+        assert!(json.contains("\"fileType\":\"thumbnail\""));
     }
 
     #[test]
@@ -184,7 +188,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("\"task_id\""));
+        assert!(json.contains("\"taskId\""));
         assert!(json.contains("\"message\":\"Task queued\""));
     }
 }

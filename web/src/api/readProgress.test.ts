@@ -19,10 +19,10 @@ describe("readProgressApi", () => {
     it("should fetch reading progress for a book", async () => {
       const mockProgress = {
         id: "progress-123",
-        book_id: "book-123",
-        current_page: 42,
+        bookId: "book-123",
+        currentPage: 42,
         completed: false,
-        started_at: "2024-01-01T00:00:00Z",
+        startedAt: "2024-01-01T00:00:00Z",
       };
       vi.mocked(api.get).mockResolvedValueOnce({ data: mockProgress });
 
@@ -53,19 +53,19 @@ describe("readProgressApi", () => {
     it("should update reading progress", async () => {
       const mockProgress = {
         id: "progress-123",
-        book_id: "book-123",
-        current_page: 50,
+        bookId: "book-123",
+        currentPage: 50,
         completed: false,
-        started_at: "2024-01-01T00:00:00Z",
+        startedAt: "2024-01-01T00:00:00Z",
       };
       vi.mocked(api.put).mockResolvedValueOnce({ data: mockProgress });
 
       const result = await readProgressApi.update("book-123", {
-        current_page: 50,
+        currentPage: 50,
       });
 
       expect(api.put).toHaveBeenCalledWith("/books/book-123/progress", {
-        current_page: 50,
+        currentPage: 50,
       });
       expect(result).toEqual(mockProgress);
     });
@@ -73,21 +73,21 @@ describe("readProgressApi", () => {
     it("should mark book as completed", async () => {
       const mockProgress = {
         id: "progress-123",
-        book_id: "book-123",
-        current_page: 100,
+        bookId: "book-123",
+        currentPage: 100,
         completed: true,
-        completed_at: "2024-01-15T10:00:00Z",
-        started_at: "2024-01-01T00:00:00Z",
+        completedAt: "2024-01-15T10:00:00Z",
+        startedAt: "2024-01-01T00:00:00Z",
       };
       vi.mocked(api.put).mockResolvedValueOnce({ data: mockProgress });
 
       const result = await readProgressApi.update("book-123", {
-        current_page: 100,
+        currentPage: 100,
         completed: true,
       });
 
       expect(api.put).toHaveBeenCalledWith("/books/book-123/progress", {
-        current_page: 100,
+        currentPage: 100,
         completed: true,
       });
       expect(result).toEqual(mockProgress);
@@ -96,22 +96,22 @@ describe("readProgressApi", () => {
     it("should update progress with percentage for EPUB books", async () => {
       const mockProgress = {
         id: "progress-123",
-        book_id: "book-123",
-        current_page: 45,
-        progress_percentage: 0.45,
+        bookId: "book-123",
+        currentPage: 45,
+        progressPercentage: 0.45,
         completed: false,
-        started_at: "2024-01-01T00:00:00Z",
+        startedAt: "2024-01-01T00:00:00Z",
       };
       vi.mocked(api.put).mockResolvedValueOnce({ data: mockProgress });
 
       const result = await readProgressApi.update("book-123", {
-        current_page: 45,
-        progress_percentage: 0.45,
+        currentPage: 45,
+        progressPercentage: 0.45,
       });
 
       expect(api.put).toHaveBeenCalledWith("/books/book-123/progress", {
-        current_page: 45,
-        progress_percentage: 0.45,
+        currentPage: 45,
+        progressPercentage: 0.45,
       });
       expect(result).toEqual(mockProgress);
     });

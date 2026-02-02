@@ -76,13 +76,13 @@ describe("TaskNotificationBadge", () => {
   it("should render badge with single task count", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -103,13 +103,13 @@ describe("TaskNotificationBadge", () => {
   it("should render badge with multiple task count (plural)", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -119,7 +119,7 @@ describe("TaskNotificationBadge", () => {
       pendingCounts: { generate_thumbnails: 1 },
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
-      getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+      getTask: vi.fn((id) => mockTasks.find((t) => t.taskId === id)),
     });
 
     renderWithMantine(<TaskNotificationBadge />);
@@ -131,13 +131,13 @@ describe("TaskNotificationBadge", () => {
   it("should show tooltip on hover", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -159,13 +159,13 @@ describe("TaskNotificationBadge", () => {
   it("should format task names in tooltip", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "generate_thumbnails",
+        taskId: "task-1",
+        taskType: "generate_thumbnails",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -187,13 +187,13 @@ describe("TaskNotificationBadge", () => {
   it("should show progress info in tooltip when available", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "scan_library",
+        taskId: "task-1",
+        taskType: "scan_library",
         status: "running",
         progress: { current: 50, total: 100, message: "Scanning..." },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -215,13 +215,13 @@ describe("TaskNotificationBadge", () => {
   it("should show spinner icon for running tasks in tooltip", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -243,22 +243,22 @@ describe("TaskNotificationBadge", () => {
   it("should list multiple tasks in tooltip", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
       {
-        task_id: "task-3",
-        task_type: "scan_library",
+        taskId: "task-3",
+        taskType: "scan_library",
         status: "running",
         progress: { current: 10, total: 50, message: undefined },
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-3",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-3",
       },
     ];
 
@@ -268,7 +268,7 @@ describe("TaskNotificationBadge", () => {
       pendingCounts: { generate_thumbnails: 1 },
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
-      getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+      getTask: vi.fn((id) => mockTasks.find((t) => t.taskId === id)),
     });
 
     renderWithMantine(<TaskNotificationBadge />);
@@ -280,13 +280,13 @@ describe("TaskNotificationBadge", () => {
   it("should have blue color scheme", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -312,13 +312,13 @@ describe("TaskNotificationBadge", () => {
   it("should have pulse animation", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -344,13 +344,13 @@ describe("TaskNotificationBadge", () => {
   it("should exclude completed tasks from count", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -360,7 +360,7 @@ describe("TaskNotificationBadge", () => {
       pendingCounts: {},
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
-      getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+      getTask: vi.fn((id) => mockTasks.find((t) => t.taskId === id)),
     });
 
     renderWithMantine(<TaskNotificationBadge />);
@@ -372,22 +372,22 @@ describe("TaskNotificationBadge", () => {
   it("should not include pending tasks in running tasks list", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
       {
-        task_id: "task-2",
-        task_type: "analyze_book",
+        taskId: "task-2",
+        taskType: "analyze_book",
         status: "pending",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:01:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:01:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -397,7 +397,7 @@ describe("TaskNotificationBadge", () => {
       pendingCounts: { analyze_book: 5 },
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
-      getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+      getTask: vi.fn((id) => mockTasks.find((t) => t.taskId === id)),
     });
 
     renderWithMantine(<TaskNotificationBadge />);
@@ -411,13 +411,13 @@ describe("TaskNotificationBadge", () => {
     const user = userEvent.setup();
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -427,7 +427,7 @@ describe("TaskNotificationBadge", () => {
       pendingCounts: { analyze_book: 3, scan_library: 2 },
       getTasksByStatus: vi.fn(() => mockTasks),
       getTasksByLibrary: vi.fn(() => mockTasks),
-      getTask: vi.fn((id) => mockTasks.find((t) => t.task_id === id)),
+      getTask: vi.fn((id) => mockTasks.find((t) => t.taskId === id)),
     });
 
     renderWithMantine(<TaskNotificationBadge />);
@@ -450,13 +450,13 @@ describe("TaskNotificationBadge", () => {
     const user = userEvent.setup();
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -483,13 +483,13 @@ describe("TaskNotificationBadge", () => {
 
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -513,13 +513,13 @@ describe("TaskNotificationBadge", () => {
   it("should have pointer cursor for admin", () => {
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 
@@ -543,13 +543,13 @@ describe("TaskNotificationBadge", () => {
 
     const mockTasks: TaskProgressEvent[] = [
       {
-        task_id: "task-1",
-        task_type: "analyze_book",
+        taskId: "task-1",
+        taskType: "analyze_book",
         status: "running",
         progress: undefined,
         error: undefined,
-        started_at: "2026-01-07T12:00:00Z",
-        library_id: "lib-1",
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
       },
     ];
 

@@ -10,9 +10,9 @@ type CleanupResultDto = components["schemas"]["CleanupResultDto"];
 
 // Mock data for orphan stats
 let mockOrphanStats: Omit<OrphanStatsDto, "files"> = {
-  orphaned_thumbnails: 42,
-  orphaned_covers: 5,
-  total_size_bytes: 15_728_640, // ~15 MB
+  orphanedThumbnails: 42,
+  orphanedCovers: 5,
+  totalSizeBytes: 15_728_640, // ~15 MB
 };
 
 export const cleanupHandlers = [
@@ -24,14 +24,14 @@ export const cleanupHandlers = [
     const includeFiles = url.searchParams.get("includeFiles") === "true";
 
     const response: {
-      orphaned_thumbnails: number;
-      orphaned_covers: number;
-      total_size_bytes: number;
+      orphanedThumbnails: number;
+      orphanedCovers: number;
+      totalSizeBytes: number;
       files?: Array<{
         path: string;
-        entity_id: string;
-        size_bytes: number;
-        file_type: string;
+        entityId: string;
+        sizeBytes: number;
+        fileType: string;
       }>;
     } = {
       ...mockOrphanStats,
@@ -40,20 +40,20 @@ export const cleanupHandlers = [
     if (includeFiles) {
       response.files = [];
       // Generate mock orphaned files
-      for (let i = 0; i < mockOrphanStats.orphaned_thumbnails; i++) {
+      for (let i = 0; i < mockOrphanStats.orphanedThumbnails; i++) {
         response.files.push({
           path: `/data/thumbnails/books/${i.toString(16).padStart(2, "0")}/${crypto.randomUUID()}.jpg`,
-          entity_id: crypto.randomUUID(),
-          size_bytes: Math.floor(Math.random() * 500000) + 10000,
-          file_type: "thumbnail",
+          entityId: crypto.randomUUID(),
+          sizeBytes: Math.floor(Math.random() * 500000) + 10000,
+          fileType: "thumbnail",
         });
       }
-      for (let i = 0; i < mockOrphanStats.orphaned_covers; i++) {
+      for (let i = 0; i < mockOrphanStats.orphanedCovers; i++) {
         response.files.push({
           path: `/data/uploads/covers/${crypto.randomUUID()}.jpg`,
-          entity_id: crypto.randomUUID(),
-          size_bytes: Math.floor(Math.random() * 1000000) + 50000,
-          file_type: "cover",
+          entityId: crypto.randomUUID(),
+          sizeBytes: Math.floor(Math.random() * 1000000) + 50000,
+          fileType: "cover",
         });
       }
     }
@@ -66,7 +66,7 @@ export const cleanupHandlers = [
     await delay(200);
 
     return HttpResponse.json({
-      task_id: crypto.randomUUID(),
+      taskId: crypto.randomUUID(),
       message: "Cleanup task queued successfully",
     });
   }),
@@ -76,18 +76,18 @@ export const cleanupHandlers = [
     await delay(500);
 
     const result: CleanupResultDto = {
-      thumbnails_deleted: mockOrphanStats.orphaned_thumbnails,
-      covers_deleted: mockOrphanStats.orphaned_covers,
-      bytes_freed: mockOrphanStats.total_size_bytes,
+      thumbnailsDeleted: mockOrphanStats.orphanedThumbnails,
+      coversDeleted: mockOrphanStats.orphanedCovers,
+      bytesFreed: mockOrphanStats.totalSizeBytes,
       failures: 0,
       errors: [],
     };
 
     // Reset mock stats after cleanup
     mockOrphanStats = {
-      orphaned_thumbnails: 0,
-      orphaned_covers: 0,
-      total_size_bytes: 0,
+      orphanedThumbnails: 0,
+      orphanedCovers: 0,
+      totalSizeBytes: 0,
     };
 
     return HttpResponse.json(result);
@@ -97,8 +97,8 @@ export const cleanupHandlers = [
 // Helper to reset mock state (useful for tests)
 export function resetCleanupMockState() {
   mockOrphanStats = {
-    orphaned_thumbnails: 42,
-    orphaned_covers: 5,
-    total_size_bytes: 15_728_640,
+    orphanedThumbnails: 42,
+    orphanedCovers: 5,
+    totalSizeBytes: 15_728_640,
   };
 }
