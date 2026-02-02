@@ -2,6 +2,26 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.5.0] - 2026-02-02
+
+### 🚀 Features
+
+- *(api)* Add GET /api/v1/user endpoint for current user profile
+- *(scanner)* Add ZeroPages error type for books with no pages
+- *(scripts)* Add komga-sync tool for reading progress migration
+- *(plugin)* Add internal retry with exponential backoff for rate-limited requests
+
+### 🐛 Bug Fixes
+
+- *(pdf)* Handle PDFs with indirect Kids array references in page tree
+- *(api)* Include ZeroPages in retry error type handlers
+- *(web)* Add zero_pages error type to bookErrors utility
+- *(web)* Display completion and hasExternalIds filters in active filters bar
+
+### 🎨 Styling
+
+- *(api)* Standardize JSON field names to camelCase across v1 API
+
 ## [1.4.0] - 2026-02-02
 
 ### 🚀 Features
