@@ -2,6 +2,24 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.4.0] - 2026-02-02
+
+### 🚀 Features
+
+- Add external source ID filter and improve metadata display
+- *(plugins)* Add config schema support and improve plugin logging
+
+### 🐛 Bug Fixes
+
+- *(tasks)* Handle claim race condition gracefully instead of logging error
+- *(docker)* Add profiles to postgres service for dev and prod environments
+- *(plugins)* Correctly clear search template when set to null
+- *(mangabaka)* Strip HTML tags from summaries
+
+### 🚜 Refactor
+
+- *(setup)* Simplify setup wizard to single settings step
+
 ## [1.3.0] - 2026-02-01
 
 ### 🚀 Features
