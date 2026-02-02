@@ -259,8 +259,8 @@ describe("SeriesBookList", () => {
 
   describe("pagination", () => {
     it("should show pagination when there are more books than page size", async () => {
-      // Create 25 books to trigger pagination (default page size is 20)
-      const manyBooks = Array.from({ length: 25 }, (_, i) =>
+      // Create 55 books to trigger pagination (default page size is 50)
+      const manyBooks = Array.from({ length: 55 }, (_, i) =>
         createBook({
           id: `book-${i + 1}`,
           title: `Book ${i + 1}`,
@@ -273,7 +273,7 @@ describe("SeriesBookList", () => {
         <SeriesBookList
           seriesId={seriesId}
           seriesName={seriesName}
-          bookCount={25}
+          bookCount={55}
         />,
       );
 
@@ -294,7 +294,7 @@ describe("SeriesBookList", () => {
         expect(screen.getByText("1 - Book One")).toBeInTheDocument();
       });
 
-      // Pagination should not be visible for 5 books with default page size of 20
+      // Pagination should not be visible for 5 books with default page size of 50
       expect(
         container.querySelector(".mantine-Pagination-root"),
       ).not.toBeInTheDocument();

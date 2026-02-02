@@ -52,7 +52,7 @@ export function SeriesBookList({
   bookCount,
 }: SeriesBookListProps) {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(50);
   const [sort, setSort] = useState("number,asc");
 
   // Bulk selection state - use stable selectors to minimize re-renders
