@@ -39,6 +39,17 @@ export function LibraryActionsMenu({
   onDelete,
   onPurge,
 }: LibraryActionsMenuProps) {
+  // Wrapper to stop event propagation and prevent navigation to library page
+  // when triggering actions from the sidebar menu
+  const handleMenuAction = <T extends unknown[]>(
+    action: (...args: T) => void,
+  ) => {
+    return (e: React.MouseEvent, ...args: T) => {
+      e.stopPropagation();
+      e.preventDefault();
+      action(...args);
+    };
+  };
   const { hasPermission } = usePermissions();
   const canEditLibrary = hasPermission(PERMISSIONS.LIBRARIES_WRITE);
   const canDeleteLibrary = hasPermission(PERMISSIONS.LIBRARIES_DELETE);
@@ -213,18 +224,25 @@ export function LibraryActionsMenu({
         <>
           <Menu.Item
             leftSection={<IconScan size={16} />}
-            onClick={() => scanMutation.mutate({ mode: "normal" })}
+            onClick={handleMenuAction(() =>
+              scanMutation.mutate({ mode: "normal" }),
+            )}
           >
             Scan Library
           </Menu.Item>
           <Menu.Item
             leftSection={<IconRadar size={16} />}
-            onClick={() => scanMutation.mutate({ mode: "deep" })}
+            onClick={handleMenuAction(() =>
+              scanMutation.mutate({ mode: "deep" }),
+            )}
           >
             Scan Library (Deep)
           </Menu.Item>
           <Menu.Divider />
-          <Menu.Item leftSection={<IconEdit size={16} />} onClick={onEdit}>
+          <Menu.Item
+            leftSection={<IconEdit size={16} />}
+            onClick={handleMenuAction(() => onEdit?.())}
+          >
             Edit Library
           </Menu.Item>
           {canWriteTasks && (
@@ -233,14 +251,18 @@ export function LibraryActionsMenu({
               <Menu.Label>Book Thumbnails</Menu.Label>
               <Menu.Item
                 leftSection={<IconPhoto size={16} />}
-                onClick={() => generateMissingThumbnailsMutation.mutate()}
+                onClick={handleMenuAction(() =>
+                  generateMissingThumbnailsMutation.mutate(),
+                )}
                 disabled={generateMissingThumbnailsMutation.isPending}
               >
                 Generate Missing
               </Menu.Item>
               <Menu.Item
                 leftSection={<IconPhoto size={16} />}
-                onClick={() => regenerateAllThumbnailsMutation.mutate()}
+                onClick={handleMenuAction(() =>
+                  regenerateAllThumbnailsMutation.mutate(),
+                )}
                 disabled={regenerateAllThumbnailsMutation.isPending}
               >
                 Regenerate All
@@ -249,14 +271,18 @@ export function LibraryActionsMenu({
               <Menu.Label>Series Thumbnails</Menu.Label>
               <Menu.Item
                 leftSection={<IconPhoto size={16} />}
-                onClick={() => generateMissingSeriesThumbnailsMutation.mutate()}
+                onClick={handleMenuAction(() =>
+                  generateMissingSeriesThumbnailsMutation.mutate(),
+                )}
                 disabled={generateMissingSeriesThumbnailsMutation.isPending}
               >
                 Generate Missing
               </Menu.Item>
               <Menu.Item
                 leftSection={<IconPhoto size={16} />}
-                onClick={() => regenerateAllSeriesThumbnailsMutation.mutate()}
+                onClick={handleMenuAction(() =>
+                  regenerateAllSeriesThumbnailsMutation.mutate(),
+                )}
                 disabled={regenerateAllSeriesThumbnailsMutation.isPending}
               >
                 Regenerate All
@@ -264,7 +290,9 @@ export function LibraryActionsMenu({
               <Menu.Divider />
               <Menu.Item
                 leftSection={<IconRefresh size={16} />}
-                onClick={() => reprocessSeriesTitlesMutation.mutate()}
+                onClick={handleMenuAction(() =>
+                  reprocessSeriesTitlesMutation.mutate(),
+                )}
                 disabled={reprocessSeriesTitlesMutation.isPending}
               >
                 Reprocess Series Titles
@@ -280,7 +308,7 @@ export function LibraryActionsMenu({
                 <Menu.Item
                   key={`auto-match-${action.pluginId}`}
                   leftSection={<IconWand size={16} />}
-                  onClick={() => handleAutoMatch(action)}
+                  onClick={handleMenuAction(() => handleAutoMatch(action))}
                   disabled={autoMatchMutation.isPending}
                 >
                   {action.pluginDisplayName}
@@ -292,7 +320,7 @@ export function LibraryActionsMenu({
           <Menu.Item
             leftSection={<IconTrashX size={16} />}
             color="orange"
-            onClick={onPurge}
+            onClick={handleMenuAction(() => onPurge?.())}
           >
             Purge Deleted Books
           </Menu.Item>
@@ -302,7 +330,7 @@ export function LibraryActionsMenu({
         <Menu.Item
           leftSection={<IconTrash size={16} />}
           color="red"
-          onClick={onDelete}
+          onClick={handleMenuAction(() => onDelete?.())}
         >
           Delete Library
         </Menu.Item>
