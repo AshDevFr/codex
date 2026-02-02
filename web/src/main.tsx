@@ -14,59 +14,59 @@ import "./index.css";
 
 // Create React Query client
 const queryClient = new QueryClient({
-	defaultOptions: {
-		queries: {
-			staleTime: 5000, // 5 seconds - reduced for real-time updates
-			refetchOnWindowFocus: true, // Refetch when switching tabs
-			refetchOnMount: true, // Refetch when component mounts
-			refetchOnReconnect: true, // Refetch when network reconnects
-			retry: (failureCount, error) => {
-				// Don't retry on client errors (4xx) - axios handles 429 retries internally
-				const apiError = error as { error?: string };
-				if (
-					apiError?.error === "rate_limit_exceeded" ||
-					apiError?.error?.startsWith("4")
-				) {
-					return false;
-				}
-				// Retry server errors (5xx) and network errors up to 1 time
-				return failureCount < 1;
-			},
-		},
-		mutations: {
-			retry: false, // Don't retry mutations by default
-		},
-	},
+  defaultOptions: {
+    queries: {
+      staleTime: 5000, // 5 seconds - reduced for real-time updates
+      refetchOnWindowFocus: true, // Refetch when switching tabs
+      refetchOnMount: true, // Refetch when component mounts
+      refetchOnReconnect: true, // Refetch when network reconnects
+      retry: (failureCount, error) => {
+        // Don't retry on client errors (4xx) - axios handles 429 retries internally
+        const apiError = error as { error?: string };
+        if (
+          apiError?.error === "rate_limit_exceeded" ||
+          apiError?.error?.startsWith("4")
+        ) {
+          return false;
+        }
+        // Retry server errors (5xx) and network errors up to 1 time
+        return failureCount < 1;
+      },
+    },
+    mutations: {
+      retry: false, // Don't retry mutations by default
+    },
+  },
 });
 
 // Initialize mock service worker in development
 async function enableMocking() {
-	if (import.meta.env.VITE_MOCK_API !== "true") {
-		return;
-	}
+  if (import.meta.env.VITE_MOCK_API !== "true") {
+    return;
+  }
 
-	const { startMockServiceWorker } = await import("./mocks/browser");
-	return startMockServiceWorker();
+  const { startMockServiceWorker } = await import("./mocks/browser");
+  return startMockServiceWorker();
 }
 
 // Start the application after mocking is ready
 enableMocking().then(() => {
-	const rootElement = document.getElementById("root");
-	if (rootElement) {
-		createRoot(rootElement).render(
-			<StrictMode>
-				<MantineProvider
-					theme={theme}
-					defaultColorScheme="dark"
-					cssVariablesResolver={cssVariablesResolver}
-				>
-					<ThemeSync />
-					<Notifications zIndex={10000} />
-					<QueryClientProvider client={queryClient}>
-						<App />
-					</QueryClientProvider>
-				</MantineProvider>
-			</StrictMode>,
-		);
-	}
+  const rootElement = document.getElementById("root");
+  if (rootElement) {
+    createRoot(rootElement).render(
+      <StrictMode>
+        <MantineProvider
+          theme={theme}
+          defaultColorScheme="dark"
+          cssVariablesResolver={cssVariablesResolver}
+        >
+          <ThemeSync />
+          <Notifications zIndex={10000} />
+          <QueryClientProvider client={queryClient}>
+            <App />
+          </QueryClientProvider>
+        </MantineProvider>
+      </StrictMode>,
+    );
+  }
 });

@@ -26,16 +26,16 @@ export const brandingQueryKey = ["branding"] as const;
  * ```
  */
 export function useAppName(): string {
-	const { data } = useQuery<BrandingSettingsDto>({
-		queryKey: brandingQueryKey,
-		queryFn: settingsApi.getBranding,
-		staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-		gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-		retry: 1, // Only retry once on failure
-		refetchOnWindowFocus: false, // Don't refetch on window focus
-	});
+  const { data } = useQuery<BrandingSettingsDto>({
+    queryKey: brandingQueryKey,
+    queryFn: settingsApi.getBranding,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    retry: 1, // Only retry once on failure
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+  });
 
-	return data?.application_name ?? DEFAULT_APP_NAME;
+  return data?.application_name ?? DEFAULT_APP_NAME;
 }
 
 /**
@@ -56,19 +56,19 @@ export function useAppName(): string {
  * ```
  */
 export function useBranding() {
-	const { data, isLoading, error, isError } = useQuery<BrandingSettingsDto>({
-		queryKey: brandingQueryKey,
-		queryFn: settingsApi.getBranding,
-		staleTime: 5 * 60 * 1000,
-		gcTime: 10 * 60 * 1000,
-		retry: 1,
-		refetchOnWindowFocus: false,
-	});
+  const { data, isLoading, error, isError } = useQuery<BrandingSettingsDto>({
+    queryKey: brandingQueryKey,
+    queryFn: settingsApi.getBranding,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
 
-	return {
-		appName: data?.application_name ?? DEFAULT_APP_NAME,
-		isLoading,
-		error: error as Error | null,
-		isError,
-	};
+  return {
+    appName: data?.application_name ?? DEFAULT_APP_NAME,
+    isLoading,
+    error: error as Error | null,
+    isError,
+  };
 }

@@ -1,124 +1,124 @@
 import type {
-	CreateLibraryRequest,
-	Library,
-	PaginatedResponse,
-	PreviewScanRequest,
-	PreviewScanResponse,
-	ScanningConfig,
+  CreateLibraryRequest,
+  Library,
+  PaginatedResponse,
+  PreviewScanRequest,
+  PreviewScanResponse,
+  ScanningConfig,
 } from "@/types";
 import { api } from "./client";
 
 export const librariesApi = {
-	// Get all libraries
-	getAll: async (): Promise<Library[]> => {
-		const response = await api.get<PaginatedResponse<Library>>("/libraries");
-		return response.data.data;
-	},
+  // Get all libraries
+  getAll: async (): Promise<Library[]> => {
+    const response = await api.get<PaginatedResponse<Library>>("/libraries");
+    return response.data.data;
+  },
 
-	// Get a single library by ID
-	getById: async (id: string): Promise<Library> => {
-		const response = await api.get<Library>(`/libraries/${id}`);
-		return response.data;
-	},
+  // Get a single library by ID
+  getById: async (id: string): Promise<Library> => {
+    const response = await api.get<Library>(`/libraries/${id}`);
+    return response.data;
+  },
 
-	// Create a new library
-	create: async (library: CreateLibraryRequest): Promise<Library> => {
-		const response = await api.post<Library>("/libraries", library);
-		return response.data;
-	},
+  // Create a new library
+  create: async (library: CreateLibraryRequest): Promise<Library> => {
+    const response = await api.post<Library>("/libraries", library);
+    return response.data;
+  },
 
-	// Update a library
-	update: async (
-		id: string,
-		library:
-			| Partial<Library>
-			| {
-					name?: string;
-					scanningConfig?: ScanningConfig;
-			  },
-	): Promise<Library> => {
-		const response = await api.patch<Library>(`/libraries/${id}`, library);
-		return response.data;
-	},
+  // Update a library
+  update: async (
+    id: string,
+    library:
+      | Partial<Library>
+      | {
+          name?: string;
+          scanningConfig?: ScanningConfig;
+        },
+  ): Promise<Library> => {
+    const response = await api.patch<Library>(`/libraries/${id}`, library);
+    return response.data;
+  },
 
-	// Delete a library
-	delete: async (id: string): Promise<void> => {
-		await api.delete(`/libraries/${id}`);
-	},
+  // Delete a library
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/libraries/${id}`);
+  },
 
-	// Trigger a scan
-	scan: async (
-		id: string,
-		mode: "normal" | "deep" = "normal",
-	): Promise<void> => {
-		await api.post(`/libraries/${id}/scan?mode=${mode}`);
-	},
+  // Trigger a scan
+  scan: async (
+    id: string,
+    mode: "normal" | "deep" = "normal",
+  ): Promise<void> => {
+    await api.post(`/libraries/${id}/scan?mode=${mode}`);
+  },
 
-	// Purge deleted books from a library
-	purgeDeleted: async (id: string): Promise<number> => {
-		const response = await api.delete<number>(`/libraries/${id}/purge-deleted`);
-		return response.data;
-	},
+  // Purge deleted books from a library
+  purgeDeleted: async (id: string): Promise<number> => {
+    const response = await api.delete<number>(`/libraries/${id}/purge-deleted`);
+    return response.data;
+  },
 
-	// Preview scan to detect series before creating library
-	previewScan: async (
-		request: PreviewScanRequest,
-	): Promise<PreviewScanResponse> => {
-		const response = await api.post<PreviewScanResponse>(
-			"/libraries/preview-scan",
-			request,
-		);
-		return response.data;
-	},
+  // Preview scan to detect series before creating library
+  previewScan: async (
+    request: PreviewScanRequest,
+  ): Promise<PreviewScanResponse> => {
+    const response = await api.post<PreviewScanResponse>(
+      "/libraries/preview-scan",
+      request,
+    );
+    return response.data;
+  },
 
-	// Generate missing thumbnails for all books in a library
-	generateMissingThumbnails: async (
-		id: string,
-	): Promise<{ task_id: string }> => {
-		const response = await api.post<{ task_id: string }>(
-			`/libraries/${id}/books/thumbnails/generate`,
-			{ force: false },
-		);
-		return response.data;
-	},
+  // Generate missing thumbnails for all books in a library
+  generateMissingThumbnails: async (
+    id: string,
+  ): Promise<{ task_id: string }> => {
+    const response = await api.post<{ task_id: string }>(
+      `/libraries/${id}/books/thumbnails/generate`,
+      { force: false },
+    );
+    return response.data;
+  },
 
-	// Regenerate all thumbnails for all books in a library (force)
-	regenerateAllThumbnails: async (id: string): Promise<{ task_id: string }> => {
-		const response = await api.post<{ task_id: string }>(
-			`/libraries/${id}/books/thumbnails/generate`,
-			{ force: true },
-		);
-		return response.data;
-	},
+  // Regenerate all thumbnails for all books in a library (force)
+  regenerateAllThumbnails: async (id: string): Promise<{ task_id: string }> => {
+    const response = await api.post<{ task_id: string }>(
+      `/libraries/${id}/books/thumbnails/generate`,
+      { force: true },
+    );
+    return response.data;
+  },
 
-	// Generate missing series thumbnails for all series in a library
-	generateMissingSeriesThumbnails: async (
-		id: string,
-	): Promise<{ task_id: string }> => {
-		const response = await api.post<{ task_id: string }>(
-			`/libraries/${id}/series/thumbnails/generate`,
-			{ force: false },
-		);
-		return response.data;
-	},
+  // Generate missing series thumbnails for all series in a library
+  generateMissingSeriesThumbnails: async (
+    id: string,
+  ): Promise<{ task_id: string }> => {
+    const response = await api.post<{ task_id: string }>(
+      `/libraries/${id}/series/thumbnails/generate`,
+      { force: false },
+    );
+    return response.data;
+  },
 
-	// Regenerate all series thumbnails for all series in a library (force)
-	regenerateAllSeriesThumbnails: async (
-		id: string,
-	): Promise<{ task_id: string }> => {
-		const response = await api.post<{ task_id: string }>(
-			`/libraries/${id}/series/thumbnails/generate`,
-			{ force: true },
-		);
-		return response.data;
-	},
+  // Regenerate all series thumbnails for all series in a library (force)
+  regenerateAllSeriesThumbnails: async (
+    id: string,
+  ): Promise<{ task_id: string }> => {
+    const response = await api.post<{ task_id: string }>(
+      `/libraries/${id}/series/thumbnails/generate`,
+      { force: true },
+    );
+    return response.data;
+  },
 
-	// Reprocess all series titles in a library using preprocessing rules
-	reprocessSeriesTitles: async (id: string): Promise<{ taskId: string }> => {
-		const response = await api.post<{ taskId: string }>(
-			`/libraries/${id}/series/titles/reprocess`,
-			{},
-		);
-		return response.data;
-	},
+  // Reprocess all series titles in a library using preprocessing rules
+  reprocessSeriesTitles: async (id: string): Promise<{ taskId: string }> => {
+    const response = await api.post<{ taskId: string }>(
+      `/libraries/${id}/series/titles/reprocess`,
+      {},
+    );
+    return response.data;
+  },
 };

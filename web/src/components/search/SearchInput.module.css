@@ -1,27 +1,27 @@
 .dropdown {
-	min-width: 350px;
+  min-width: 350px;
 }
 
 .option {
-	padding: 8px 12px;
+  padding: 8px 12px;
 }
 
 .option:hover {
-	background-color: light-dark(
-		var(--mantine-color-gray-1),
-		var(--mantine-color-dark-5)
-	);
+  background-color: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-5)
+  );
 }
 
 .footer {
-	padding: 8px 12px;
-	border-top: 1px solid
-		light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  padding: 8px 12px;
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
 }
 
 .footer:hover {
-	background-color: light-dark(
-		var(--mantine-color-gray-1),
-		var(--mantine-color-dark-5)
-	);
+  background-color: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-5)
+  );
 }

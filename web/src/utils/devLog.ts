@@ -12,9 +12,9 @@
  * ```
  */
 export function createDevLog(prefix: string) {
-	if (import.meta.env.DEV) {
-		return (message: string, ...args: unknown[]) =>
-			console.debug(`${prefix} ${message}`, ...args);
-	}
-	return () => {};
+  if (import.meta.env.DEV) {
+    return (message: string, ...args: unknown[]) =>
+      console.debug(`${prefix} ${message}`, ...args);
+  }
+  return () => {};
 }

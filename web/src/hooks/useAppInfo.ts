@@ -23,14 +23,14 @@ export const appInfoQueryKey = ["app-info"] as const;
  * ```
  */
 export function useAppInfo() {
-	return useQuery<AppInfoDto>({
-		queryKey: appInfoQueryKey,
-		queryFn: infoApi.getInfo,
-		staleTime: Number.POSITIVE_INFINITY, // Version never changes during session
-		gcTime: Number.POSITIVE_INFINITY, // Keep in cache forever
-		retry: 1, // Only retry once on failure
-		refetchOnWindowFocus: false, // Don't refetch on window focus
-	});
+  return useQuery<AppInfoDto>({
+    queryKey: appInfoQueryKey,
+    queryFn: infoApi.getInfo,
+    staleTime: Number.POSITIVE_INFINITY, // Version never changes during session
+    gcTime: Number.POSITIVE_INFINITY, // Keep in cache forever
+    retry: 1, // Only retry once on failure
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+  });
 }
 
 /**
@@ -46,6 +46,6 @@ export function useAppInfo() {
  * ```
  */
 export function useAppVersion(): string | undefined {
-	const { data } = useAppInfo();
-	return data?.version;
+  const { data } = useAppInfo();
+  return data?.version;
 }

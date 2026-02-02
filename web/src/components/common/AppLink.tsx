@@ -2,8 +2,8 @@ import { forwardRef } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 
 export interface AppLinkProps extends LinkProps {
-	/** Stop click propagation (use when inside clickable parents like cards) */
-	stopPropagation?: boolean;
+  /** Stop click propagation (use when inside clickable parents like cards) */
+  stopPropagation?: boolean;
 }
 
 /**
@@ -13,29 +13,29 @@ export interface AppLinkProps extends LinkProps {
  * - Forward ref support for Mantine component integration
  */
 export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(
-	({ stopPropagation, onClick, style, children, ...props }, ref) => {
-		const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-			if (stopPropagation) {
-				e.stopPropagation();
-			}
-			onClick?.(e);
-		};
+  ({ stopPropagation, onClick, style, children, ...props }, ref) => {
+    const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (stopPropagation) {
+        e.stopPropagation();
+      }
+      onClick?.(e);
+    };
 
-		return (
-			<Link
-				ref={ref}
-				onClick={handleClick}
-				style={{
-					color: "inherit",
-					textDecoration: "none",
-					...style,
-				}}
-				{...props}
-			>
-				{children}
-			</Link>
-		);
-	},
+    return (
+      <Link
+        ref={ref}
+        onClick={handleClick}
+        style={{
+          color: "inherit",
+          textDecoration: "none",
+          ...style,
+        }}
+        {...props}
+      >
+        {children}
+      </Link>
+    );
+  },
 );
 
 AppLink.displayName = "AppLink";

@@ -10,8 +10,8 @@ export { EpubSearch } from "./EpubSearch";
 export { EpubTableOfContents } from "./EpubTableOfContents";
 export * from "./hooks";
 export {
-	getSlideDirection,
-	PageTransitionWrapper,
+  getSlideDirection,
+  PageTransitionWrapper,
 } from "./PageTransitionWrapper";
 export { PdfContinuousScrollReader } from "./PdfContinuousScrollReader";
 export { PdfReader, type PdfZoomLevel } from "./PdfReader";

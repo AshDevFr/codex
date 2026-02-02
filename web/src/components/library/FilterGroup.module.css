@@ -1,60 +1,60 @@
 .container {
-	padding: var(--mantine-spacing-sm);
-	border-radius: var(--mantine-radius-md);
-	background-color: light-dark(
-		var(--mantine-color-gray-1),
-		var(--mantine-color-dark-7)
-	);
+  padding: var(--mantine-spacing-sm);
+  border-radius: var(--mantine-radius-md);
+  background-color: light-dark(
+    var(--mantine-color-gray-1),
+    var(--mantine-color-dark-7)
+  );
 }
 
 .modeToggle {
-	background-color: light-dark(
-		var(--mantine-color-gray-2),
-		var(--mantine-color-dark-6)
-	);
+  background-color: light-dark(
+    var(--mantine-color-gray-2),
+    var(--mantine-color-dark-6)
+  );
 }
 
 .chipsContainer {
-	max-height: 200px;
-	overflow-y: auto;
-	padding-right: var(--mantine-spacing-xs);
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: var(--mantine-spacing-xs);
 }
 
 /* Custom scrollbar for chips container */
 .chipsContainer::-webkit-scrollbar {
-	width: 6px;
+  width: 6px;
 }
 
 .chipsContainer::-webkit-scrollbar-track {
-	background: light-dark(
-		var(--mantine-color-gray-2),
-		var(--mantine-color-dark-6)
-	);
-	border-radius: 3px;
+  background: light-dark(
+    var(--mantine-color-gray-2),
+    var(--mantine-color-dark-6)
+  );
+  border-radius: 3px;
 }
 
 .chipsContainer::-webkit-scrollbar-thumb {
-	background: light-dark(
-		var(--mantine-color-gray-4),
-		var(--mantine-color-dark-4)
-	);
-	border-radius: 3px;
+  background: light-dark(
+    var(--mantine-color-gray-4),
+    var(--mantine-color-dark-4)
+  );
+  border-radius: 3px;
 }
 
 .chipsContainer::-webkit-scrollbar-thumb:hover {
-	background: light-dark(
-		var(--mantine-color-gray-5),
-		var(--mantine-color-dark-3)
-	);
+  background: light-dark(
+    var(--mantine-color-gray-5),
+    var(--mantine-color-dark-3)
+  );
 }
 
 /* Mobile-first responsive adjustments */
 @media (max-width: 768px) {
-	.container {
-		padding: var(--mantine-spacing-xs);
-	}
+  .container {
+    padding: var(--mantine-spacing-xs);
+  }
 
-	.chipsContainer {
-		max-height: 150px;
-	}
+  .chipsContainer {
+    max-height: 150px;
+  }
 }

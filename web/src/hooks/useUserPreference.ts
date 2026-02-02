@@ -1,10 +1,10 @@
 import { useCallback, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import {
-	selectIsLoaded,
-	selectPreference,
-	useUserPreferencesHydrated,
-	useUserPreferencesStore,
+  selectIsLoaded,
+  selectPreference,
+  useUserPreferencesHydrated,
+  useUserPreferencesStore,
 } from "@/store/userPreferencesStore";
 import type { PreferenceKey, TypedPreferences } from "@/types/preferences";
 
@@ -36,31 +36,31 @@ import type { PreferenceKey, TypedPreferences } from "@/types/preferences";
  * ```
  */
 export function useUserPreference<K extends PreferenceKey>(
-	key: K,
+  key: K,
 ): [TypedPreferences[K], (value: TypedPreferences[K]) => void] {
-	const { isAuthenticated } = useAuthStore();
-	const value = useUserPreferencesStore(selectPreference(key));
-	const setPreference = useUserPreferencesStore((state) => state.setPreference);
-	const loadFromServer = useUserPreferencesStore(
-		(state) => state.loadFromServer,
-	);
-	const isLoaded = useUserPreferencesStore(selectIsLoaded);
+  const { isAuthenticated } = useAuthStore();
+  const value = useUserPreferencesStore(selectPreference(key));
+  const setPreference = useUserPreferencesStore((state) => state.setPreference);
+  const loadFromServer = useUserPreferencesStore(
+    (state) => state.loadFromServer,
+  );
+  const isLoaded = useUserPreferencesStore(selectIsLoaded);
 
-	// Load preferences from server when authenticated and not yet loaded
-	useEffect(() => {
-		if (isAuthenticated && !isLoaded) {
-			loadFromServer();
-		}
-	}, [isAuthenticated, isLoaded, loadFromServer]);
+  // Load preferences from server when authenticated and not yet loaded
+  useEffect(() => {
+    if (isAuthenticated && !isLoaded) {
+      loadFromServer();
+    }
+  }, [isAuthenticated, isLoaded, loadFromServer]);
 
-	const setValue = useCallback(
-		(newValue: TypedPreferences[K]) => {
-			setPreference(key, newValue);
-		},
-		[key, setPreference],
-	);
+  const setValue = useCallback(
+    (newValue: TypedPreferences[K]) => {
+      setPreference(key, newValue);
+    },
+    [key, setPreference],
+  );
 
-	return [value, setValue];
+  return [value, setValue];
 }
 
 /**
@@ -88,59 +88,59 @@ export function useUserPreference<K extends PreferenceKey>(
  * ```
  */
 export function useUserPreferences() {
-	const { isAuthenticated } = useAuthStore();
-	const preferences = useUserPreferencesStore((state) => state.preferences);
-	const isLoaded = useUserPreferencesStore(selectIsLoaded);
-	const loadError = useUserPreferencesStore((state) => state.loadError);
-	const setPreference = useUserPreferencesStore((state) => state.setPreference);
-	const resetPreference = useUserPreferencesStore(
-		(state) => state.resetPreference,
-	);
-	const loadFromServer = useUserPreferencesStore(
-		(state) => state.loadFromServer,
-	);
-	const getPreference = useUserPreferencesStore((state) => state.getPreference);
-	const hasHydrated = useUserPreferencesHydrated();
+  const { isAuthenticated } = useAuthStore();
+  const preferences = useUserPreferencesStore((state) => state.preferences);
+  const isLoaded = useUserPreferencesStore(selectIsLoaded);
+  const loadError = useUserPreferencesStore((state) => state.loadError);
+  const setPreference = useUserPreferencesStore((state) => state.setPreference);
+  const resetPreference = useUserPreferencesStore(
+    (state) => state.resetPreference,
+  );
+  const loadFromServer = useUserPreferencesStore(
+    (state) => state.loadFromServer,
+  );
+  const getPreference = useUserPreferencesStore((state) => state.getPreference);
+  const hasHydrated = useUserPreferencesHydrated();
 
-	// Load preferences from server when authenticated and not yet loaded
-	useEffect(() => {
-		if (isAuthenticated && !isLoaded && hasHydrated) {
-			loadFromServer();
-		}
-	}, [isAuthenticated, isLoaded, hasHydrated, loadFromServer]);
+  // Load preferences from server when authenticated and not yet loaded
+  useEffect(() => {
+    if (isAuthenticated && !isLoaded && hasHydrated) {
+      loadFromServer();
+    }
+  }, [isAuthenticated, isLoaded, hasHydrated, loadFromServer]);
 
-	return {
-		/**
-		 * All cached preferences (may not include all keys if some use defaults)
-		 */
-		preferences,
-		/**
-		 * Whether preferences have been loaded from the server
-		 */
-		isLoaded,
-		/**
-		 * Whether the store has hydrated from localStorage
-		 */
-		hasHydrated,
-		/**
-		 * Error message if loading failed
-		 */
-		loadError,
-		/**
-		 * Get a preference value (returns default if not set)
-		 */
-		getPreference,
-		/**
-		 * Set a preference value
-		 */
-		setPreference,
-		/**
-		 * Reset a preference to its default value
-		 */
-		resetPreference,
-		/**
-		 * Reload all preferences from the server
-		 */
-		reload: loadFromServer,
-	};
+  return {
+    /**
+     * All cached preferences (may not include all keys if some use defaults)
+     */
+    preferences,
+    /**
+     * Whether preferences have been loaded from the server
+     */
+    isLoaded,
+    /**
+     * Whether the store has hydrated from localStorage
+     */
+    hasHydrated,
+    /**
+     * Error message if loading failed
+     */
+    loadError,
+    /**
+     * Get a preference value (returns default if not set)
+     */
+    getPreference,
+    /**
+     * Set a preference value
+     */
+    setPreference,
+    /**
+     * Reset a preference to its default value
+     */
+    resetPreference,
+    /**
+     * Reload all preferences from the server
+     */
+    reload: loadFromServer,
+  };
 }

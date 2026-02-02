@@ -8,170 +8,170 @@ import { useAdjacentBooks } from "./useAdjacentBooks";
 
 // Mock the books API
 vi.mock("@/api/books", () => ({
-	booksApi: {
-		getAdjacent: vi.fn(),
-	},
+  booksApi: {
+    getAdjacent: vi.fn(),
+  },
 }));
 
 const mockGetAdjacent = vi.mocked(booksApi.getAdjacent);
 
 function createWrapper() {
-	const queryClient = new QueryClient({
-		defaultOptions: {
-			queries: {
-				retry: false,
-			},
-		},
-	});
-	return ({ children }: { children: ReactNode }) => (
-		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-	);
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
 }
 
 describe("useAdjacentBooks", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		useReaderStore.getState().resetSession();
-	});
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useReaderStore.getState().resetSession();
+  });
 
-	it("should return null books while loading", () => {
-		mockGetAdjacent.mockReturnValue(new Promise(() => {})); // Never resolves
+  it("should return null books while loading", () => {
+    mockGetAdjacent.mockReturnValue(new Promise(() => {})); // Never resolves
 
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1" }),
-			{ wrapper: createWrapper() },
-		);
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
 
-		expect(result.current.isLoading).toBe(true);
-		expect(result.current.prevBook).toBeNull();
-		expect(result.current.nextBook).toBeNull();
-	});
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.prevBook).toBeNull();
+    expect(result.current.nextBook).toBeNull();
+  });
 
-	it("should return adjacent books when loaded", async () => {
-		mockGetAdjacent.mockResolvedValue({
-			prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
-			next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
-		});
+  it("should return adjacent books when loaded", async () => {
+    mockGetAdjacent.mockResolvedValue({
+      prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
+      next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
+    });
 
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1" }),
-			{ wrapper: createWrapper() },
-		);
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
 
-		await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-		expect(result.current.prevBook).toEqual({
-			id: "book-0",
-			title: "Previous Book",
-			pageCount: 50,
-		});
-		expect(result.current.nextBook).toEqual({
-			id: "book-2",
-			title: "Next Book",
-			pageCount: 100,
-		});
-	});
+    expect(result.current.prevBook).toEqual({
+      id: "book-0",
+      title: "Previous Book",
+      pageCount: 50,
+    });
+    expect(result.current.nextBook).toEqual({
+      id: "book-2",
+      title: "Next Book",
+      pageCount: 100,
+    });
+  });
 
-	it("should sync adjacent books to the store", async () => {
-		mockGetAdjacent.mockResolvedValue({
-			prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
-			next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
-		});
+  it("should sync adjacent books to the store", async () => {
+    mockGetAdjacent.mockResolvedValue({
+      prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
+      next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
+    });
 
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1" }),
-			{ wrapper: createWrapper() },
-		);
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
 
-		await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-		const storeState = useReaderStore.getState();
-		expect(storeState.adjacentBooks).toEqual({
-			prev: { id: "book-0", title: "Previous Book", pageCount: 50 },
-			next: { id: "book-2", title: "Next Book", pageCount: 100 },
-		});
-	});
+    const storeState = useReaderStore.getState();
+    expect(storeState.adjacentBooks).toEqual({
+      prev: { id: "book-0", title: "Previous Book", pageCount: 50 },
+      next: { id: "book-2", title: "Next Book", pageCount: 100 },
+    });
+  });
 
-	it("should handle null prev book", async () => {
-		mockGetAdjacent.mockResolvedValue({
-			prev: null,
-			next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
-		});
+  it("should handle null prev book", async () => {
+    mockGetAdjacent.mockResolvedValue({
+      prev: null,
+      next: { id: "book-2", title: "Next Book", pageCount: 100 } as never,
+    });
 
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1" }),
-			{ wrapper: createWrapper() },
-		);
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
 
-		await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-		expect(result.current.prevBook).toBeNull();
-		expect(result.current.nextBook).toEqual({
-			id: "book-2",
-			title: "Next Book",
-			pageCount: 100,
-		});
-	});
+    expect(result.current.prevBook).toBeNull();
+    expect(result.current.nextBook).toEqual({
+      id: "book-2",
+      title: "Next Book",
+      pageCount: 100,
+    });
+  });
 
-	it("should handle null next book", async () => {
-		mockGetAdjacent.mockResolvedValue({
-			prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
-			next: null,
-		});
+  it("should handle null next book", async () => {
+    mockGetAdjacent.mockResolvedValue({
+      prev: { id: "book-0", title: "Previous Book", pageCount: 50 } as never,
+      next: null,
+    });
 
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1" }),
-			{ wrapper: createWrapper() },
-		);
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
 
-		await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-		expect(result.current.prevBook).toEqual({
-			id: "book-0",
-			title: "Previous Book",
-			pageCount: 50,
-		});
-		expect(result.current.nextBook).toBeNull();
-	});
+    expect(result.current.prevBook).toEqual({
+      id: "book-0",
+      title: "Previous Book",
+      pageCount: 50,
+    });
+    expect(result.current.nextBook).toBeNull();
+  });
 
-	it("should handle both books being null", async () => {
-		mockGetAdjacent.mockResolvedValue({
-			prev: null,
-			next: null,
-		});
+  it("should handle both books being null", async () => {
+    mockGetAdjacent.mockResolvedValue({
+      prev: null,
+      next: null,
+    });
 
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1" }),
-			{ wrapper: createWrapper() },
-		);
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
 
-		await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-		expect(result.current.prevBook).toBeNull();
-		expect(result.current.nextBook).toBeNull();
-	});
+    expect(result.current.prevBook).toBeNull();
+    expect(result.current.nextBook).toBeNull();
+  });
 
-	it("should not fetch when disabled", () => {
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1", enabled: false }),
-			{ wrapper: createWrapper() },
-		);
+  it("should not fetch when disabled", () => {
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1", enabled: false }),
+      { wrapper: createWrapper() },
+    );
 
-		expect(mockGetAdjacent).not.toHaveBeenCalled();
-		expect(result.current.isLoading).toBe(false);
-	});
+    expect(mockGetAdjacent).not.toHaveBeenCalled();
+    expect(result.current.isLoading).toBe(false);
+  });
 
-	it("should handle API errors", async () => {
-		mockGetAdjacent.mockRejectedValue(new Error("API Error"));
+  it("should handle API errors", async () => {
+    mockGetAdjacent.mockRejectedValue(new Error("API Error"));
 
-		const { result } = renderHook(
-			() => useAdjacentBooks({ bookId: "book-1" }),
-			{ wrapper: createWrapper() },
-		);
+    const { result } = renderHook(
+      () => useAdjacentBooks({ bookId: "book-1" }),
+      { wrapper: createWrapper() },
+    );
 
-		await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
 
-		expect(result.current.prevBook).toBeNull();
-		expect(result.current.nextBook).toBeNull();
-	});
+    expect(result.current.prevBook).toBeNull();
+    expect(result.current.nextBook).toBeNull();
+  });
 });

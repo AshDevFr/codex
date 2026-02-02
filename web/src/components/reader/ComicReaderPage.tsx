@@ -4,24 +4,24 @@ import type { BackgroundColor, FitMode } from "@/store/readerStore";
 import { useReaderStore } from "@/store/readerStore";
 
 interface ComicReaderPageProps {
-	/** URL of the page image */
-	src: string;
-	/** Alt text for the image */
-	alt: string;
-	/** How to fit the image */
-	fitMode: FitMode;
-	/** Background color */
-	backgroundColor: BackgroundColor;
-	/** Whether this page is currently visible */
-	isVisible?: boolean;
-	/** Click handler for navigation zones */
-	onClick?: (zone: "left" | "center" | "right") => void;
+  /** URL of the page image */
+  src: string;
+  /** Alt text for the image */
+  alt: string;
+  /** How to fit the image */
+  fitMode: FitMode;
+  /** Background color */
+  backgroundColor: BackgroundColor;
+  /** Whether this page is currently visible */
+  isVisible?: boolean;
+  /** Click handler for navigation zones */
+  onClick?: (zone: "left" | "center" | "right") => void;
 }
 
 const BACKGROUND_COLORS: Record<BackgroundColor, string> = {
-	black: "#000000",
-	gray: "#1a1a1a",
-	white: "#ffffff",
+  black: "#000000",
+  gray: "#1a1a1a",
+  white: "#ffffff",
 };
 
 /**
@@ -35,51 +35,51 @@ const BACKGROUND_COLORS: Record<BackgroundColor, string> = {
  * - original: Display at native resolution (1:1 pixels)
  */
 function getFitModeStyles(fitMode: FitMode): React.CSSProperties {
-	switch (fitMode) {
-		case "screen":
-			// Fit entire page within viewport - scale to fill available space
-			return {
-				width: "auto",
-				height: "100%",
-				maxWidth: "100%",
-				maxHeight: "100%",
-			};
-		case "width":
-			// Scale to viewport width (may need vertical scroll)
-			return {
-				width: "100%",
-				height: "auto",
-				maxHeight: "none",
-			};
-		case "width-shrink":
-			// Fit to width, but only shrink (never upscale small images)
-			return {
-				maxWidth: "100%",
-				width: "auto",
-				height: "auto",
-				maxHeight: "none",
-			};
-		case "height":
-			// Scale to viewport height (may need horizontal scroll)
-			return {
-				width: "auto",
-				height: "100%",
-				maxWidth: "none",
-			};
-		case "original":
-			// Display at native resolution (1:1 pixels)
-			return {
-				width: "auto",
-				height: "auto",
-				maxWidth: "none",
-				maxHeight: "none",
-			};
-		default:
-			return {
-				maxWidth: "100%",
-				maxHeight: "100%",
-			};
-	}
+  switch (fitMode) {
+    case "screen":
+      // Fit entire page within viewport - scale to fill available space
+      return {
+        width: "auto",
+        height: "100%",
+        maxWidth: "100%",
+        maxHeight: "100%",
+      };
+    case "width":
+      // Scale to viewport width (may need vertical scroll)
+      return {
+        width: "100%",
+        height: "auto",
+        maxHeight: "none",
+      };
+    case "width-shrink":
+      // Fit to width, but only shrink (never upscale small images)
+      return {
+        maxWidth: "100%",
+        width: "auto",
+        height: "auto",
+        maxHeight: "none",
+      };
+    case "height":
+      // Scale to viewport height (may need horizontal scroll)
+      return {
+        width: "auto",
+        height: "100%",
+        maxWidth: "none",
+      };
+    case "original":
+      // Display at native resolution (1:1 pixels)
+      return {
+        width: "auto",
+        height: "auto",
+        maxWidth: "none",
+        maxHeight: "none",
+      };
+    default:
+      return {
+        maxWidth: "100%",
+        maxHeight: "100%",
+      };
+  }
 }
 
 /**
@@ -92,109 +92,109 @@ function getFitModeStyles(fitMode: FitMode): React.CSSProperties {
  * - Error handling with retry
  */
 export function ComicReaderPage({
-	src,
-	alt,
-	fitMode,
-	backgroundColor,
-	isVisible = true,
-	onClick,
+  src,
+  alt,
+  fitMode,
+  backgroundColor,
+  isVisible = true,
+  onClick,
 }: ComicReaderPageProps) {
-	// Check if this image is already preloaded to avoid showing loader
-	const isPreloaded = useReaderStore((state) => state.preloadedImages.has(src));
-	const [loadingState, setLoadingState] = useState<{
-		src: string;
-		isLoading: boolean;
-		hasError: boolean;
-	}>({ src, isLoading: !isPreloaded, hasError: false });
+  // Check if this image is already preloaded to avoid showing loader
+  const isPreloaded = useReaderStore((state) => state.preloadedImages.has(src));
+  const [loadingState, setLoadingState] = useState<{
+    src: string;
+    isLoading: boolean;
+    hasError: boolean;
+  }>({ src, isLoading: !isPreloaded, hasError: false });
 
-	// Reset state when src changes
-	const isLoading =
-		loadingState.src === src ? loadingState.isLoading : !isPreloaded;
-	const hasError = loadingState.src === src ? loadingState.hasError : false;
+  // Reset state when src changes
+  const isLoading =
+    loadingState.src === src ? loadingState.isLoading : !isPreloaded;
+  const hasError = loadingState.src === src ? loadingState.hasError : false;
 
-	const handleImageLoad = () => {
-		setLoadingState({ src, isLoading: false, hasError: false });
-	};
+  const handleImageLoad = () => {
+    setLoadingState({ src, isLoading: false, hasError: false });
+  };
 
-	const handleImageError = () => {
-		setLoadingState({ src, isLoading: false, hasError: true });
-	};
+  const handleImageError = () => {
+    setLoadingState({ src, isLoading: false, hasError: true });
+  };
 
-	const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-		if (!onClick) return;
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onClick) return;
 
-		const rect = event.currentTarget.getBoundingClientRect();
-		const x = event.clientX - rect.left;
-		const width = rect.width;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const width = rect.width;
 
-		// Divide into thirds: left, center, right
-		const third = width / 3;
-		if (x < third) {
-			onClick("left");
-		} else if (x > 2 * third) {
-			onClick("right");
-		} else {
-			onClick("center");
-		}
-	};
+    // Divide into thirds: left, center, right
+    const third = width / 3;
+    if (x < third) {
+      onClick("left");
+    } else if (x > 2 * third) {
+      onClick("right");
+    } else {
+      onClick("center");
+    }
+  };
 
-	if (!isVisible) {
-		return null;
-	}
+  if (!isVisible) {
+    return null;
+  }
 
-	return (
-		<Box
-			style={{
-				width: "100%",
-				height: "100%",
-				backgroundColor: BACKGROUND_COLORS[backgroundColor],
-				overflow:
-					fitMode === "original" ||
-					fitMode === "width" ||
-					fitMode === "width-shrink"
-						? "auto"
-						: "hidden",
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				cursor: onClick ? "pointer" : "default",
-				userSelect: "none",
-				position: "relative",
-			}}
-			onClick={handleClick}
-		>
-			{hasError ? (
-				<Center style={{ color: "#666" }}>Failed to load page</Center>
-			) : (
-				<>
-					{/* Always render image - use opacity to hide while loading for smooth transitions */}
-					<img
-						src={src}
-						alt={alt}
-						style={{
-							...getFitModeStyles(fitMode),
-							objectFit: "contain",
-							opacity: isLoading ? 0 : 1,
-							transition: "opacity 50ms ease-in",
-						}}
-						onLoad={handleImageLoad}
-						onError={handleImageError}
-						draggable={false}
-					/>
-					{/* Loader - only show when actually loading (not preloaded) */}
-					{isLoading && (
-						<Center
-							style={{
-								position: "absolute",
-								inset: 0,
-								pointerEvents: "none",
-							}}
-						>
-							<Loader size="lg" color="gray" />
-						</Center>
-					)}
-				</>
-			)}
-		</Box>
-	);
+  return (
+    <Box
+      style={{
+        width: "100%",
+        height: "100%",
+        backgroundColor: BACKGROUND_COLORS[backgroundColor],
+        overflow:
+          fitMode === "original" ||
+          fitMode === "width" ||
+          fitMode === "width-shrink"
+            ? "auto"
+            : "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: onClick ? "pointer" : "default",
+        userSelect: "none",
+        position: "relative",
+      }}
+      onClick={handleClick}
+    >
+      {hasError ? (
+        <Center style={{ color: "#666" }}>Failed to load page</Center>
+      ) : (
+        <>
+          {/* Always render image - use opacity to hide while loading for smooth transitions */}
+          <img
+            src={src}
+            alt={alt}
+            style={{
+              ...getFitModeStyles(fitMode),
+              objectFit: "contain",
+              opacity: isLoading ? 0 : 1,
+              transition: "opacity 50ms ease-in",
+            }}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+            draggable={false}
+          />
+          {/* Loader - only show when actually loading (not preloaded) */}
+          {isLoading && (
+            <Center
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+              }}
+            >
+              <Loader size="lg" color="gray" />
+            </Center>
+          )}
+        </>
+      )}
+    </Box>
+  );
 }

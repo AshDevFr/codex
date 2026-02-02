@@ -3,56 +3,56 @@ import { IconExternalLink } from "@tabler/icons-react";
 import type { ExternalLink } from "@/api/seriesMetadata";
 
 interface ExternalLinksProps {
-	links: ExternalLink[];
+  links: ExternalLink[];
 }
 
 // Map source names to display names and colors
 const SOURCE_CONFIG: Record<
-	string,
-	{ name: string; color: string; abbrev?: string }
+  string,
+  { name: string; color: string; abbrev?: string }
 > = {
-	myanimelist: { name: "MyAnimeList", color: "#2e51a2", abbrev: "MAL" },
-	anilist: { name: "AniList", color: "#02a9ff" },
-	mangabaka: { name: "MangaBaka", color: "#ff6b35" },
-	mangadex: { name: "MangaDex", color: "#ff6740" },
-	kitsu: { name: "Kitsu", color: "#f75239" },
-	mangaupdates: { name: "MangaUpdates", color: "#2a4a6d", abbrev: "MU" },
-	comicvine: { name: "Comic Vine", color: "#e41d25" },
-	goodreads: { name: "Goodreads", color: "#553b08" },
-	amazon: { name: "Amazon", color: "#ff9900" },
+  myanimelist: { name: "MyAnimeList", color: "#2e51a2", abbrev: "MAL" },
+  anilist: { name: "AniList", color: "#02a9ff" },
+  mangabaka: { name: "MangaBaka", color: "#ff6b35" },
+  mangadex: { name: "MangaDex", color: "#ff6740" },
+  kitsu: { name: "Kitsu", color: "#f75239" },
+  mangaupdates: { name: "MangaUpdates", color: "#2a4a6d", abbrev: "MU" },
+  comicvine: { name: "Comic Vine", color: "#e41d25" },
+  goodreads: { name: "Goodreads", color: "#553b08" },
+  amazon: { name: "Amazon", color: "#ff9900" },
 };
 
 export function ExternalLinks({ links }: ExternalLinksProps) {
-	if (links.length === 0) {
-		return null;
-	}
+  if (links.length === 0) {
+    return null;
+  }
 
-	return (
-		<Group gap="xs">
-			{links.map((link) => {
-				const config = SOURCE_CONFIG[link.sourceName.toLowerCase()] || {
-					name: link.sourceName,
-					color: "gray",
-				};
-				const displayName = config.abbrev || config.name;
+  return (
+    <Group gap="xs">
+      {links.map((link) => {
+        const config = SOURCE_CONFIG[link.sourceName.toLowerCase()] || {
+          name: link.sourceName,
+          color: "gray",
+        };
+        const displayName = config.abbrev || config.name;
 
-				return (
-					<Badge
-						key={link.id}
-						component="a"
-						href={link.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						variant="light"
-						color={config.color}
-						size="sm"
-						rightSection={<IconExternalLink size={10} />}
-						style={{ cursor: "pointer" }}
-					>
-						{displayName}
-					</Badge>
-				);
-			})}
-		</Group>
-	);
+        return (
+          <Badge
+            key={link.id}
+            component="a"
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="light"
+            color={config.color}
+            size="sm"
+            rightSection={<IconExternalLink size={10} />}
+            style={{ cursor: "pointer" }}
+          >
+            {displayName}
+          </Badge>
+        );
+      })}
+    </Group>
+  );
 }

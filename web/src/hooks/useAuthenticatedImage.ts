@@ -7,42 +7,42 @@ import { api } from "@/api/client";
  * @returns The blob URL for the image, or null if not loaded yet
  */
 export function useAuthenticatedImage(imageUrl: string | null): string | null {
-	const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
-	useEffect(() => {
-		if (!imageUrl) {
-			setBlobUrl(null);
-			return;
-		}
+  useEffect(() => {
+    if (!imageUrl) {
+      setBlobUrl(null);
+      return;
+    }
 
-		let objectUrl: string | null = null;
-		let isCancelled = false;
+    let objectUrl: string | null = null;
+    let isCancelled = false;
 
-		// Fetch image through authenticated API client
-		api
-			.get(imageUrl, {
-				responseType: "blob",
-			})
-			.then((response) => {
-				if (isCancelled) return;
-				const url = URL.createObjectURL(response.data);
-				objectUrl = url;
-				setBlobUrl(url);
-			})
-			.catch((error) => {
-				if (isCancelled) return;
-				console.error("Failed to load authenticated image:", error);
-				setBlobUrl(null);
-			});
+    // Fetch image through authenticated API client
+    api
+      .get(imageUrl, {
+        responseType: "blob",
+      })
+      .then((response) => {
+        if (isCancelled) return;
+        const url = URL.createObjectURL(response.data);
+        objectUrl = url;
+        setBlobUrl(url);
+      })
+      .catch((error) => {
+        if (isCancelled) return;
+        console.error("Failed to load authenticated image:", error);
+        setBlobUrl(null);
+      });
 
-		// Cleanup function
-		return () => {
-			isCancelled = true;
-			if (objectUrl) {
-				URL.revokeObjectURL(objectUrl);
-			}
-		};
-	}, [imageUrl]);
+    // Cleanup function
+    return () => {
+      isCancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [imageUrl]);
 
-	return blobUrl;
+  return blobUrl;
 }

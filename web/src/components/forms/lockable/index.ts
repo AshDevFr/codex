@@ -5,9 +5,9 @@ export { LockableChipInput } from "./LockableChipInput";
 export type { LockableInputProps } from "./LockableInput";
 export { LockableInput } from "./LockableInput";
 export type {
-	FieldConfig,
-	ListItem,
-	LockableListEditorProps,
+  FieldConfig,
+  ListItem,
+  LockableListEditorProps,
 } from "./LockableListEditor";
 export { LockableListEditor } from "./LockableListEditor";
 export type { LockableSelectProps } from "./LockableSelect";

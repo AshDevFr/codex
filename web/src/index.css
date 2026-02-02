@@ -1,189 +1,189 @@
 :root {
-	font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-	line-height: 1.5;
-	font-weight: 400;
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
 
-	color-scheme: light dark;
-	color: rgba(255, 255, 255, 0.87);
-	background-color: #242424;
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
 
-	font-synthesis: none;
-	text-rendering: optimizeLegibility;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
-	font-weight: 500;
-	color: #646cff;
-	text-decoration: inherit;
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
 }
 a:hover {
-	color: #535bf2;
+  color: #535bf2;
 }
 
 body {
-	margin: 0;
-	min-width: 320px;
-	min-height: 100vh;
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
 }
 
 #root {
-	min-height: 100vh;
+  min-height: 100vh;
 }
 
 h1 {
-	font-size: 3.2em;
-	line-height: 1.1;
+  font-size: 3.2em;
+  line-height: 1.1;
 }
 
 button {
-	border-radius: 8px;
-	border: 1px solid transparent;
-	padding: 0.6em 1.2em;
-	font-size: 1em;
-	font-weight: 500;
-	font-family: inherit;
-	background-color: #1a1a1a;
-	cursor: pointer;
-	transition: border-color 0.25s;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
 }
 button:hover {
-	border-color: #646cff;
+  border-color: #646cff;
 }
 button:focus-visible {
-	outline: 4px auto -webkit-focus-ring-color;
+  outline: 4px auto -webkit-focus-ring-color;
 }
 
 /* Hide focus outline for mouse clicks, show only for keyboard navigation */
 *:focus:not(:focus-visible) {
-	outline: none;
+  outline: none;
 }
 
 @media (prefers-color-scheme: light) {
-	:root {
-		color: #213547;
-		background-color: #ffffff;
-	}
-	a:hover {
-		color: #747bff;
-	}
-	button {
-		background-color: #f9f9f9;
-	}
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
 }
 
 /* Light theme improvements for Mantine components */
 [data-mantine-color-scheme="light"] {
-	/* AppShell main content area - subtle gray background for contrast */
-	.mantine-AppShell-main {
-		background-color: #f1f3f5;
-	}
+  /* AppShell main content area - subtle gray background for contrast */
+  .mantine-AppShell-main {
+    background-color: #f1f3f5;
+  }
 
-	/* Header styling */
-	.mantine-AppShell-header {
-		background-color: #ffffff;
-		border-bottom: 1px solid #dee2e6;
-	}
+  /* Header styling */
+  .mantine-AppShell-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #dee2e6;
+  }
 
-	/* Navbar/Sidebar styling */
-	.mantine-AppShell-navbar {
-		background-color: #ffffff;
-		border-right: 1px solid #dee2e6;
-	}
+  /* Navbar/Sidebar styling */
+  .mantine-AppShell-navbar {
+    background-color: #ffffff;
+    border-right: 1px solid #dee2e6;
+  }
 
-	/* Card improvements - white cards on gray background */
-	.mantine-Card-root {
-		background-color: #ffffff;
-		border-color: #dee2e6;
-	}
+  /* Card improvements - white cards on gray background */
+  .mantine-Card-root {
+    background-color: #ffffff;
+    border-color: #dee2e6;
+  }
 
-	/* NavLink active state - more visible in light mode */
-	.mantine-NavLink-root[data-active="true"] {
-		background-color: #e7f5ff;
-	}
+  /* NavLink active state - more visible in light mode */
+  .mantine-NavLink-root[data-active="true"] {
+    background-color: #e7f5ff;
+  }
 
-	/* Input fields - ensure good contrast */
-	.mantine-Input-input,
-	.mantine-TextInput-input,
-	.mantine-PasswordInput-input,
-	.mantine-Textarea-input,
-	.mantine-Select-input {
-		background-color: #ffffff;
-		border-color: #ced4da;
-	}
+  /* Input fields - ensure good contrast */
+  .mantine-Input-input,
+  .mantine-TextInput-input,
+  .mantine-PasswordInput-input,
+  .mantine-Textarea-input,
+  .mantine-Select-input {
+    background-color: #ffffff;
+    border-color: #ced4da;
+  }
 
-	/* Menu dropdown */
-	.mantine-Menu-dropdown {
-		background-color: #ffffff;
-		border-color: #dee2e6;
-	}
+  /* Menu dropdown */
+  .mantine-Menu-dropdown {
+    background-color: #ffffff;
+    border-color: #dee2e6;
+  }
 
-	/* Modal content */
-	.mantine-Modal-content {
-		background-color: #ffffff;
-	}
+  /* Modal content */
+  .mantine-Modal-content {
+    background-color: #ffffff;
+  }
 
-	/* Paper component */
-	.mantine-Paper-root {
-		background-color: #ffffff;
-	}
+  /* Paper component */
+  .mantine-Paper-root {
+    background-color: #ffffff;
+  }
 }
 
 /* Dark theme - ensure consistent dark styling */
 [data-mantine-color-scheme="dark"] {
-	.mantine-AppShell-main {
-		background-color: #242424;
-	}
+  .mantine-AppShell-main {
+    background-color: #242424;
+  }
 
-	.mantine-AppShell-header {
-		background-color: #242424;
-		border-bottom: 1px solid #373a40;
-	}
+  .mantine-AppShell-header {
+    background-color: #242424;
+    border-bottom: 1px solid #373a40;
+  }
 
-	.mantine-AppShell-navbar {
-		background-color: #242424;
-		border-right: 1px solid #373a40;
-	}
+  .mantine-AppShell-navbar {
+    background-color: #242424;
+    border-right: 1px solid #373a40;
+  }
 
-	.mantine-Card-root {
-		background-color: #2c2c2c;
-		border-color: #373a40;
-	}
+  .mantine-Card-root {
+    background-color: #2c2c2c;
+    border-color: #373a40;
+  }
 }
 
 /* Fade-in animation for new items */
 @keyframes fadeIn {
-	from {
-		opacity: 0;
-		transform: scale(0.95);
-	}
-	to {
-		opacity: 1;
-		transform: scale(1);
-	}
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Hover underline effect for clickable text */
 .hover-underline:hover {
-	text-decoration: underline;
+  text-decoration: underline;
 }
 
 /* Media card hover effect - show read button overlay */
 .media-card-read-overlay {
-	opacity: 0;
-	pointer-events: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .media-card-cover:hover .media-card-read-overlay {
-	opacity: 1;
-	pointer-events: auto;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Hide read button overlay when in selection mode.
    !important is needed to override the :hover pseudo-class specificity. */
 .media-card--selection-mode .media-card-read-overlay {
-	display: none !important;
+  display: none !important;
 }
 
 /* ============================================
@@ -192,61 +192,61 @@ button:focus-visible {
 
 /* Selection checkbox - positioned top-left of card cover */
 .media-card-checkbox {
-	position: absolute;
-	top: 12px;
-	left: 12px;
-	z-index: 5;
-	opacity: 0;
-	transition: opacity 0.15s ease;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
 /* Circular checkbox styling */
 .media-card-checkbox .mantine-Checkbox-input {
-	border-radius: 50%;
-	width: 20px;
-	height: 20px;
-	border: 2px solid rgba(255, 255, 255, 0.9);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-	background-color: rgba(0, 0, 0, 0.4);
-	transition: all 0.15s ease;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
 }
 
 .media-card-checkbox .mantine-Checkbox-input:checked {
-	background-color: var(--mantine-color-orange-6);
-	border-color: var(--mantine-color-orange-6);
+  background-color: var(--mantine-color-orange-6);
+  border-color: var(--mantine-color-orange-6);
 }
 
 .media-card-checkbox .mantine-Checkbox-inner {
-	width: 20px;
-	height: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .media-card-checkbox .mantine-Checkbox-icon {
-	color: white;
-	padding-top: 2px;
+  color: white;
+  padding-top: 2px;
 }
 
 /* Show checkbox on card hover */
 .media-card-cover:hover .media-card-checkbox {
-	opacity: 1;
+  opacity: 1;
 }
 
 /* Always show checkbox when in selection mode */
 .media-card-checkbox--visible {
-	opacity: 1;
+  opacity: 1;
 }
 
 /* Always show checkbox when selected */
 .media-card-checkbox--selected {
-	opacity: 1;
+  opacity: 1;
 }
 
 /* Disabled card styling (type mismatch during selection) */
 .media-card--disabled {
-	opacity: 0.5;
+  opacity: 0.5;
 }
 
 /* Selected card styling - orange border applied via inline style */
 .media-card--selected {
-	/* Border applied via inline style for better specificity with isNew state */
+  /* Border applied via inline style for better specificity with isNew state */
 }

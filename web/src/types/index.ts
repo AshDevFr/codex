@@ -92,10 +92,10 @@ export type BrowseResponse = Schemas["BrowseResponse"];
 export type PaginationLinks = Schemas["PaginationLinks"];
 
 export type PaginatedResponse<T> = Omit<
-	Schemas["PaginatedResponse"],
-	"data"
+  Schemas["PaginatedResponse"],
+  "data"
 > & {
-	data: T[];
+  data: T[];
 };
 
 // =============================================================================
@@ -137,57 +137,57 @@ export type TaskResponse = Schemas["TaskResponse"];
 // Type guards for entity events
 // =============================================================================
 export function isBookEvent(event: EntityEvent): event is EntityEvent & {
-	type: "book_created" | "book_updated" | "book_deleted";
+  type: "book_created" | "book_updated" | "book_deleted";
 } {
-	return (
-		event.type === "book_created" ||
-		event.type === "book_updated" ||
-		event.type === "book_deleted"
-	);
+  return (
+    event.type === "book_created" ||
+    event.type === "book_updated" ||
+    event.type === "book_deleted"
+  );
 }
 
 export function isSeriesEvent(event: EntityEvent): event is EntityEvent & {
-	type:
-		| "series_created"
-		| "series_updated"
-		| "series_deleted"
-		| "series_bulk_purged";
+  type:
+    | "series_created"
+    | "series_updated"
+    | "series_deleted"
+    | "series_bulk_purged";
 } {
-	return (
-		event.type === "series_created" ||
-		event.type === "series_updated" ||
-		event.type === "series_deleted" ||
-		event.type === "series_bulk_purged"
-	);
+  return (
+    event.type === "series_created" ||
+    event.type === "series_updated" ||
+    event.type === "series_deleted" ||
+    event.type === "series_bulk_purged"
+  );
 }
 
 export function isCoverEvent(
-	event: EntityEvent,
+  event: EntityEvent,
 ): event is EntityEvent & { type: "cover_updated" } {
-	return event.type === "cover_updated";
+  return event.type === "cover_updated";
 }
 
 export function isLibraryEvent(
-	event: EntityEvent,
+  event: EntityEvent,
 ): event is EntityEvent & { type: "library_updated" | "library_deleted" } {
-	return event.type === "library_updated" || event.type === "library_deleted";
+  return event.type === "library_updated" || event.type === "library_deleted";
 }
 
 export function isPluginEvent(event: EntityEvent): event is EntityEvent & {
-	type:
-		| "plugin_created"
-		| "plugin_updated"
-		| "plugin_enabled"
-		| "plugin_disabled"
-		| "plugin_deleted";
+  type:
+    | "plugin_created"
+    | "plugin_updated"
+    | "plugin_enabled"
+    | "plugin_disabled"
+    | "plugin_deleted";
 } {
-	return (
-		event.type === "plugin_created" ||
-		event.type === "plugin_updated" ||
-		event.type === "plugin_enabled" ||
-		event.type === "plugin_disabled" ||
-		event.type === "plugin_deleted"
-	);
+  return (
+    event.type === "plugin_created" ||
+    event.type === "plugin_updated" ||
+    event.type === "plugin_enabled" ||
+    event.type === "plugin_disabled" ||
+    event.type === "plugin_deleted"
+  );
 }
 
 // =============================================================================

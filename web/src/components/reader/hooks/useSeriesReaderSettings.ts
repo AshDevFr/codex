@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import {
-	type BackgroundColor,
-	createSeriesOverride,
-	extractForkableSettings,
-	type FitMode,
-	type ForkableReaderSettings,
-	isSeriesReaderOverride,
-	type PageLayout,
-	type ReadingDirection,
-	type SeriesReaderOverride,
-	useReaderStore,
+  type BackgroundColor,
+  createSeriesOverride,
+  extractForkableSettings,
+  type FitMode,
+  type ForkableReaderSettings,
+  isSeriesReaderOverride,
+  type PageLayout,
+  type ReadingDirection,
+  type SeriesReaderOverride,
+  useReaderStore,
 } from "@/store/readerStore";
 
 // =============================================================================
@@ -39,15 +39,15 @@ const SERIES_SETTINGS_UPDATE_EVENT = "codex-series-settings-update";
  * @param seriesId - Series UUID
  */
 export function getSeriesStorageKey(userId: string, seriesId: string): string {
-	return `${STORAGE_KEY_PREFIX}${userId}-series-${seriesId}`;
+  return `${STORAGE_KEY_PREFIX}${userId}-series-${seriesId}`;
 }
 
 /**
  * Get the current user ID from auth store, or fallback to anonymous.
  */
 function useUserId(): string {
-	const user = useAuthStore((state) => state.user);
-	return user?.id ?? ANONYMOUS_USER_ID;
+  const user = useAuthStore((state) => state.user);
+  return user?.id ?? ANONYMOUS_USER_ID;
 }
 
 // =============================================================================
@@ -59,24 +59,24 @@ function useUserId(): string {
  * Returns null if not found or invalid.
  */
 function readSeriesOverride(storageKey: string): SeriesReaderOverride | null {
-	try {
-		const stored = localStorage.getItem(storageKey);
-		if (!stored) return null;
+  try {
+    const stored = localStorage.getItem(storageKey);
+    if (!stored) return null;
 
-		const parsed: unknown = JSON.parse(stored);
-		if (!isSeriesReaderOverride(parsed)) {
-			console.warn(`Invalid series override in localStorage: ${storageKey}`);
-			return null;
-		}
+    const parsed: unknown = JSON.parse(stored);
+    if (!isSeriesReaderOverride(parsed)) {
+      console.warn(`Invalid series override in localStorage: ${storageKey}`);
+      return null;
+    }
 
-		return parsed;
-	} catch (error) {
-		console.warn(
-			`Failed to read series override from localStorage: ${storageKey}`,
-			error,
-		);
-		return null;
-	}
+    return parsed;
+  } catch (error) {
+    console.warn(
+      `Failed to read series override from localStorage: ${storageKey}`,
+      error,
+    );
+    return null;
+  }
 }
 
 /**
@@ -85,24 +85,24 @@ function readSeriesOverride(storageKey: string): SeriesReaderOverride | null {
  * Dispatches a custom event to notify other hook instances.
  */
 function writeSeriesOverride(
-	storageKey: string,
-	override: SeriesReaderOverride,
+  storageKey: string,
+  override: SeriesReaderOverride,
 ): boolean {
-	try {
-		localStorage.setItem(storageKey, JSON.stringify(override));
-		// Dispatch custom event to sync other hook instances
-		window.dispatchEvent(
-			new CustomEvent(SERIES_SETTINGS_UPDATE_EVENT, { detail: { storageKey } }),
-		);
-		return true;
-	} catch (error) {
-		// Handle quota exceeded or other storage errors
-		console.error(
-			`Failed to write series override to localStorage: ${storageKey}`,
-			error,
-		);
-		return false;
-	}
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(override));
+    // Dispatch custom event to sync other hook instances
+    window.dispatchEvent(
+      new CustomEvent(SERIES_SETTINGS_UPDATE_EVENT, { detail: { storageKey } }),
+    );
+    return true;
+  } catch (error) {
+    // Handle quota exceeded or other storage errors
+    console.error(
+      `Failed to write series override to localStorage: ${storageKey}`,
+      error,
+    );
+    return false;
+  }
 }
 
 /**
@@ -110,18 +110,18 @@ function writeSeriesOverride(
  * Dispatches a custom event to notify other hook instances.
  */
 function removeSeriesOverride(storageKey: string): void {
-	try {
-		localStorage.removeItem(storageKey);
-		// Dispatch custom event to sync other hook instances
-		window.dispatchEvent(
-			new CustomEvent(SERIES_SETTINGS_UPDATE_EVENT, { detail: { storageKey } }),
-		);
-	} catch (error) {
-		console.warn(
-			`Failed to remove series override from localStorage: ${storageKey}`,
-			error,
-		);
-	}
+  try {
+    localStorage.removeItem(storageKey);
+    // Dispatch custom event to sync other hook instances
+    window.dispatchEvent(
+      new CustomEvent(SERIES_SETTINGS_UPDATE_EVENT, { detail: { storageKey } }),
+    );
+  } catch (error) {
+    console.warn(
+      `Failed to remove series override from localStorage: ${storageKey}`,
+      error,
+    );
+  }
 }
 
 // =============================================================================
@@ -129,29 +129,29 @@ function removeSeriesOverride(storageKey: string): void {
 // =============================================================================
 
 export interface UseSeriesReaderSettingsReturn {
-	/** Whether series-specific settings exist */
-	hasSeriesOverride: boolean;
+  /** Whether series-specific settings exist */
+  hasSeriesOverride: boolean;
 
-	/** The effective settings (series override merged with global) */
-	effectiveSettings: ForkableReaderSettings;
+  /** The effective settings (series override merged with global) */
+  effectiveSettings: ForkableReaderSettings;
 
-	/** Create series override by forking current global settings */
-	forkToSeries: () => void;
+  /** Create series override by forking current global settings */
+  forkToSeries: () => void;
 
-	/** Delete series override (return to global) */
-	resetToGlobal: () => void;
+  /** Delete series override (return to global) */
+  resetToGlobal: () => void;
 
-	/** Update a specific setting (creates override if needed) */
-	updateSetting: <K extends keyof ForkableReaderSettings>(
-		key: K,
-		value: ForkableReaderSettings[K],
-	) => void;
+  /** Update a specific setting (creates override if needed) */
+  updateSetting: <K extends keyof ForkableReaderSettings>(
+    key: K,
+    value: ForkableReaderSettings[K],
+  ) => void;
 
-	/** Whether hook has loaded from localStorage */
-	isLoaded: boolean;
+  /** Whether hook has loaded from localStorage */
+  isLoaded: boolean;
 
-	/** The raw series override (null if using global) */
-	seriesOverride: SeriesReaderOverride | null;
+  /** The raw series override (null if using global) */
+  seriesOverride: SeriesReaderOverride | null;
 }
 
 // =============================================================================
@@ -168,161 +168,161 @@ export interface UseSeriesReaderSettingsReturn {
  * @param seriesId - The series ID to manage settings for (null/undefined = global only)
  */
 export function useSeriesReaderSettings(
-	seriesId: string | null | undefined,
+  seriesId: string | null | undefined,
 ): UseSeriesReaderSettingsReturn {
-	const userId = useUserId();
-	const globalSettings = useReaderStore((state) => state.settings);
+  const userId = useUserId();
+  const globalSettings = useReaderStore((state) => state.settings);
 
-	// Local state for series override
-	const [seriesOverride, setSeriesOverride] =
-		useState<SeriesReaderOverride | null>(null);
-	const [isLoaded, setIsLoaded] = useState(false);
+  // Local state for series override
+  const [seriesOverride, setSeriesOverride] =
+    useState<SeriesReaderOverride | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-	// Compute storage key
-	const storageKey = useMemo(() => {
-		if (!seriesId) return null;
-		return getSeriesStorageKey(userId, seriesId);
-	}, [userId, seriesId]);
+  // Compute storage key
+  const storageKey = useMemo(() => {
+    if (!seriesId) return null;
+    return getSeriesStorageKey(userId, seriesId);
+  }, [userId, seriesId]);
 
-	// Load series override from localStorage on mount or when key changes
-	useEffect(() => {
-		if (!storageKey) {
-			setSeriesOverride(null);
-			setIsLoaded(true);
-			return;
-		}
+  // Load series override from localStorage on mount or when key changes
+  useEffect(() => {
+    if (!storageKey) {
+      setSeriesOverride(null);
+      setIsLoaded(true);
+      return;
+    }
 
-		const override = readSeriesOverride(storageKey);
-		setSeriesOverride(override);
-		setIsLoaded(true);
+    const override = readSeriesOverride(storageKey);
+    setSeriesOverride(override);
+    setIsLoaded(true);
 
-		// Listen for updates from other hook instances
-		const handleSettingsUpdate = (event: Event) => {
-			const customEvent = event as CustomEvent<{ storageKey: string }>;
-			if (customEvent.detail?.storageKey === storageKey) {
-				const updatedOverride = readSeriesOverride(storageKey);
-				setSeriesOverride(updatedOverride);
-			}
-		};
+    // Listen for updates from other hook instances
+    const handleSettingsUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ storageKey: string }>;
+      if (customEvent.detail?.storageKey === storageKey) {
+        const updatedOverride = readSeriesOverride(storageKey);
+        setSeriesOverride(updatedOverride);
+      }
+    };
 
-		window.addEventListener(SERIES_SETTINGS_UPDATE_EVENT, handleSettingsUpdate);
-		return () => {
-			window.removeEventListener(
-				SERIES_SETTINGS_UPDATE_EVENT,
-				handleSettingsUpdate,
-			);
-		};
-	}, [storageKey]);
+    window.addEventListener(SERIES_SETTINGS_UPDATE_EVENT, handleSettingsUpdate);
+    return () => {
+      window.removeEventListener(
+        SERIES_SETTINGS_UPDATE_EVENT,
+        handleSettingsUpdate,
+      );
+    };
+  }, [storageKey]);
 
-	// Compute effective settings (series override merged with global)
-	const effectiveSettings = useMemo((): ForkableReaderSettings => {
-		const globalForkable = extractForkableSettings(globalSettings);
+  // Compute effective settings (series override merged with global)
+  const effectiveSettings = useMemo((): ForkableReaderSettings => {
+    const globalForkable = extractForkableSettings(globalSettings);
 
-		if (!seriesOverride) {
-			return globalForkable;
-		}
+    if (!seriesOverride) {
+      return globalForkable;
+    }
 
-		// Series override takes precedence for all forkable settings
-		return {
-			fitMode: seriesOverride.fitMode,
-			pageLayout: seriesOverride.pageLayout,
-			readingDirection: seriesOverride.readingDirection,
-			backgroundColor: seriesOverride.backgroundColor,
-			doublePageShowWideAlone: seriesOverride.doublePageShowWideAlone,
-			doublePageStartOnOdd: seriesOverride.doublePageStartOnOdd,
-		};
-	}, [globalSettings, seriesOverride]);
+    // Series override takes precedence for all forkable settings
+    return {
+      fitMode: seriesOverride.fitMode,
+      pageLayout: seriesOverride.pageLayout,
+      readingDirection: seriesOverride.readingDirection,
+      backgroundColor: seriesOverride.backgroundColor,
+      doublePageShowWideAlone: seriesOverride.doublePageShowWideAlone,
+      doublePageStartOnOdd: seriesOverride.doublePageStartOnOdd,
+    };
+  }, [globalSettings, seriesOverride]);
 
-	// Fork current global settings to create a series override
-	const forkToSeries = useCallback(() => {
-		if (!storageKey) {
-			console.warn("Cannot fork to series: no seriesId provided");
-			return;
-		}
+  // Fork current global settings to create a series override
+  const forkToSeries = useCallback(() => {
+    if (!storageKey) {
+      console.warn("Cannot fork to series: no seriesId provided");
+      return;
+    }
 
-		const globalForkable = extractForkableSettings(globalSettings);
-		const newOverride = createSeriesOverride(globalForkable);
+    const globalForkable = extractForkableSettings(globalSettings);
+    const newOverride = createSeriesOverride(globalForkable);
 
-		if (writeSeriesOverride(storageKey, newOverride)) {
-			setSeriesOverride(newOverride);
-		}
-	}, [storageKey, globalSettings]);
+    if (writeSeriesOverride(storageKey, newOverride)) {
+      setSeriesOverride(newOverride);
+    }
+  }, [storageKey, globalSettings]);
 
-	// Reset series settings to use global defaults
-	const resetToGlobal = useCallback(() => {
-		if (!storageKey) return;
+  // Reset series settings to use global defaults
+  const resetToGlobal = useCallback(() => {
+    if (!storageKey) return;
 
-		removeSeriesOverride(storageKey);
-		setSeriesOverride(null);
-	}, [storageKey]);
+    removeSeriesOverride(storageKey);
+    setSeriesOverride(null);
+  }, [storageKey]);
 
-	// Update a specific setting
-	const updateSetting = useCallback(
-		<K extends keyof ForkableReaderSettings>(
-			key: K,
-			value: ForkableReaderSettings[K],
-		) => {
-			if (!storageKey) {
-				// No series context - update global store directly
-				const state = useReaderStore.getState();
-				switch (key) {
-					case "fitMode":
-						state.setFitMode(value as FitMode);
-						break;
-					case "pageLayout":
-						state.setPageLayout(value as PageLayout);
-						break;
-					case "readingDirection":
-						state.setReadingDirection(value as ReadingDirection);
-						break;
-					case "backgroundColor":
-						state.setBackgroundColor(value as BackgroundColor);
-						break;
-					case "doublePageShowWideAlone":
-						state.setDoublePageShowWideAlone(value as boolean);
-						break;
-					case "doublePageStartOnOdd":
-						state.setDoublePageStartOnOdd(value as boolean);
-						break;
-				}
-				return;
-			}
+  // Update a specific setting
+  const updateSetting = useCallback(
+    <K extends keyof ForkableReaderSettings>(
+      key: K,
+      value: ForkableReaderSettings[K],
+    ) => {
+      if (!storageKey) {
+        // No series context - update global store directly
+        const state = useReaderStore.getState();
+        switch (key) {
+          case "fitMode":
+            state.setFitMode(value as FitMode);
+            break;
+          case "pageLayout":
+            state.setPageLayout(value as PageLayout);
+            break;
+          case "readingDirection":
+            state.setReadingDirection(value as ReadingDirection);
+            break;
+          case "backgroundColor":
+            state.setBackgroundColor(value as BackgroundColor);
+            break;
+          case "doublePageShowWideAlone":
+            state.setDoublePageShowWideAlone(value as boolean);
+            break;
+          case "doublePageStartOnOdd":
+            state.setDoublePageStartOnOdd(value as boolean);
+            break;
+        }
+        return;
+      }
 
-			// Update or create series override
-			const currentOverride = seriesOverride;
-			let newOverride: SeriesReaderOverride;
+      // Update or create series override
+      const currentOverride = seriesOverride;
+      let newOverride: SeriesReaderOverride;
 
-			if (currentOverride) {
-				// Update existing override
-				newOverride = {
-					...currentOverride,
-					[key]: value,
-				};
-			} else {
-				// Create new override based on current global settings
-				const globalForkable = extractForkableSettings(globalSettings);
-				newOverride = createSeriesOverride({
-					...globalForkable,
-					[key]: value,
-				});
-			}
+      if (currentOverride) {
+        // Update existing override
+        newOverride = {
+          ...currentOverride,
+          [key]: value,
+        };
+      } else {
+        // Create new override based on current global settings
+        const globalForkable = extractForkableSettings(globalSettings);
+        newOverride = createSeriesOverride({
+          ...globalForkable,
+          [key]: value,
+        });
+      }
 
-			if (writeSeriesOverride(storageKey, newOverride)) {
-				setSeriesOverride(newOverride);
-			}
-		},
-		[storageKey, seriesOverride, globalSettings],
-	);
+      if (writeSeriesOverride(storageKey, newOverride)) {
+        setSeriesOverride(newOverride);
+      }
+    },
+    [storageKey, seriesOverride, globalSettings],
+  );
 
-	return {
-		hasSeriesOverride: seriesOverride !== null,
-		effectiveSettings,
-		forkToSeries,
-		resetToGlobal,
-		updateSetting,
-		isLoaded,
-		seriesOverride,
-	};
+  return {
+    hasSeriesOverride: seriesOverride !== null,
+    effectiveSettings,
+    forkToSeries,
+    resetToGlobal,
+    updateSetting,
+    isLoaded,
+    seriesOverride,
+  };
 }
 
 // =============================================================================
@@ -333,26 +333,26 @@ export function useSeriesReaderSettings(
  * Information about a series settings entry in localStorage.
  */
 export interface SeriesSettingsEntry {
-	/** The full localStorage key */
-	key: string;
-	/** The series ID extracted from the key */
-	seriesId: string;
-	/** The stored override data (null if corrupted/invalid) */
-	data: SeriesReaderOverride | null;
-	/** When the override was created */
-	createdAt: number | null;
+  /** The full localStorage key */
+  key: string;
+  /** The series ID extracted from the key */
+  seriesId: string;
+  /** The stored override data (null if corrupted/invalid) */
+  data: SeriesReaderOverride | null;
+  /** When the override was created */
+  createdAt: number | null;
 }
 
 /**
  * Result of a cleanup operation.
  */
 export interface CleanupResult {
-	/** Number of entries removed */
-	removed: number;
-	/** Keys that were removed */
-	removedKeys: string[];
-	/** Number of entries that failed to remove */
-	errors: number;
+  /** Number of entries removed */
+  removed: number;
+  /** Keys that were removed */
+  removedKeys: string[];
+  /** Number of entries that failed to remove */
+  errors: number;
 }
 
 /**
@@ -361,35 +361,35 @@ export interface CleanupResult {
  * @returns Array of SeriesSettingsEntry objects
  */
 export function getSeriesSettingsForUser(
-	userId: string,
+  userId: string,
 ): SeriesSettingsEntry[] {
-	const entries: SeriesSettingsEntry[] = [];
-	const keyPrefix = `${STORAGE_KEY_PREFIX}${userId}${SERIES_KEY_SUFFIX}`;
+  const entries: SeriesSettingsEntry[] = [];
+  const keyPrefix = `${STORAGE_KEY_PREFIX}${userId}${SERIES_KEY_SUFFIX}`;
 
-	try {
-		for (let i = 0; i < localStorage.length; i++) {
-			const key = localStorage.key(i);
-			if (!key || !key.startsWith(keyPrefix)) continue;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(keyPrefix)) continue;
 
-			// Extract series ID from key
-			const seriesId = key.slice(keyPrefix.length);
-			if (!seriesId) continue;
+      // Extract series ID from key
+      const seriesId = key.slice(keyPrefix.length);
+      if (!seriesId) continue;
 
-			// Try to read the data
-			const data = readSeriesOverride(key);
+      // Try to read the data
+      const data = readSeriesOverride(key);
 
-			entries.push({
-				key,
-				seriesId,
-				data,
-				createdAt: data?.createdAt ?? null,
-			});
-		}
-	} catch (error) {
-		console.warn("Failed to enumerate localStorage keys:", error);
-	}
+      entries.push({
+        key,
+        seriesId,
+        data,
+        createdAt: data?.createdAt ?? null,
+      });
+    }
+  } catch (error) {
+    console.warn("Failed to enumerate localStorage keys:", error);
+  }
 
-	return entries;
+  return entries;
 }
 
 /**
@@ -401,33 +401,33 @@ export function getSeriesSettingsForUser(
  * @returns Cleanup result with counts and removed keys
  */
 export function cleanupOrphanedSeriesSettings(
-	userId: string,
-	validSeriesIds: Set<string>,
+  userId: string,
+  validSeriesIds: Set<string>,
 ): CleanupResult {
-	const entries = getSeriesSettingsForUser(userId);
-	const result: CleanupResult = {
-		removed: 0,
-		removedKeys: [],
-		errors: 0,
-	};
+  const entries = getSeriesSettingsForUser(userId);
+  const result: CleanupResult = {
+    removed: 0,
+    removedKeys: [],
+    errors: 0,
+  };
 
-	for (const entry of entries) {
-		if (!validSeriesIds.has(entry.seriesId)) {
-			try {
-				localStorage.removeItem(entry.key);
-				result.removed++;
-				result.removedKeys.push(entry.key);
-			} catch (error) {
-				console.warn(
-					`Failed to remove orphaned series settings: ${entry.key}`,
-					error,
-				);
-				result.errors++;
-			}
-		}
-	}
+  for (const entry of entries) {
+    if (!validSeriesIds.has(entry.seriesId)) {
+      try {
+        localStorage.removeItem(entry.key);
+        result.removed++;
+        result.removedKeys.push(entry.key);
+      } catch (error) {
+        console.warn(
+          `Failed to remove orphaned series settings: ${entry.key}`,
+          error,
+        );
+        result.errors++;
+      }
+    }
+  }
 
-	return result;
+  return result;
 }
 
 /**
@@ -438,25 +438,25 @@ export function cleanupOrphanedSeriesSettings(
  * @returns Cleanup result with counts and removed keys
  */
 export function clearAllSeriesSettings(userId: string): CleanupResult {
-	const entries = getSeriesSettingsForUser(userId);
-	const result: CleanupResult = {
-		removed: 0,
-		removedKeys: [],
-		errors: 0,
-	};
+  const entries = getSeriesSettingsForUser(userId);
+  const result: CleanupResult = {
+    removed: 0,
+    removedKeys: [],
+    errors: 0,
+  };
 
-	for (const entry of entries) {
-		try {
-			localStorage.removeItem(entry.key);
-			result.removed++;
-			result.removedKeys.push(entry.key);
-		} catch (error) {
-			console.warn(`Failed to remove series settings: ${entry.key}`, error);
-			result.errors++;
-		}
-	}
+  for (const entry of entries) {
+    try {
+      localStorage.removeItem(entry.key);
+      result.removed++;
+      result.removedKeys.push(entry.key);
+    } catch (error) {
+      console.warn(`Failed to remove series settings: ${entry.key}`, error);
+      result.errors++;
+    }
+  }
 
-	return result;
+  return result;
 }
 
 /**
@@ -466,29 +466,29 @@ export function clearAllSeriesSettings(userId: string): CleanupResult {
  * @returns Cleanup result with counts and removed keys
  */
 export function cleanupCorruptedSeriesSettings(userId: string): CleanupResult {
-	const entries = getSeriesSettingsForUser(userId);
-	const result: CleanupResult = {
-		removed: 0,
-		removedKeys: [],
-		errors: 0,
-	};
+  const entries = getSeriesSettingsForUser(userId);
+  const result: CleanupResult = {
+    removed: 0,
+    removedKeys: [],
+    errors: 0,
+  };
 
-	for (const entry of entries) {
-		// If data is null, it means the entry is corrupted/invalid
-		if (entry.data === null) {
-			try {
-				localStorage.removeItem(entry.key);
-				result.removed++;
-				result.removedKeys.push(entry.key);
-			} catch (error) {
-				console.warn(
-					`Failed to remove corrupted series settings: ${entry.key}`,
-					error,
-				);
-				result.errors++;
-			}
-		}
-	}
+  for (const entry of entries) {
+    // If data is null, it means the entry is corrupted/invalid
+    if (entry.data === null) {
+      try {
+        localStorage.removeItem(entry.key);
+        result.removed++;
+        result.removedKeys.push(entry.key);
+      } catch (error) {
+        console.warn(
+          `Failed to remove corrupted series settings: ${entry.key}`,
+          error,
+        );
+        result.errors++;
+      }
+    }
+  }
 
-	return result;
+  return result;
 }

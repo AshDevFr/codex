@@ -1,28 +1,28 @@
 import {
-	ActionIcon,
-	Badge,
-	Box,
-	Button,
-	Center,
-	Container,
-	Group,
-	Loader,
-	Menu,
-	Modal,
-	Stack,
-	Text,
-	Title,
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Center,
+  Container,
+  Group,
+  Loader,
+  Menu,
+  Modal,
+  Stack,
+  Text,
+  Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconDotsVertical } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
-	Navigate,
-	useLocation,
-	useNavigate,
-	useParams,
-	useSearchParams,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
 } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { LibraryModal } from "@/components/forms/LibraryModal";
@@ -37,599 +37,599 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
 import {
-	useLibraryPreferencesHydrated,
-	useLibraryPreferencesStore,
+  useLibraryPreferencesHydrated,
+  useLibraryPreferencesStore,
 } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
 
 export function LibraryPage() {
-	const { libraryId } = useParams<{ libraryId: string }>();
-	const location = useLocation();
-	const navigate = useNavigate();
-	const [searchParams, setSearchParams] = useSearchParams();
+  const { libraryId } = useParams<{ libraryId: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-	// Wait for preferences store to hydrate from localStorage
-	const hasHydrated = useLibraryPreferencesHydrated();
+  // Wait for preferences store to hydrate from localStorage
+  const hasHydrated = useLibraryPreferencesHydrated();
 
-	// Use performance selectors - only subscribe to actions (no re-renders)
-	const getTabPreferences = useLibraryPreferencesStore(
-		(state) => state.getTabPreferences,
-	);
-	const setTabPreferences = useLibraryPreferencesStore(
-		(state) => state.setTabPreferences,
-	);
-	const setLastTab = useLibraryPreferencesStore((state) => state.setLastTab);
+  // Use performance selectors - only subscribe to actions (no re-renders)
+  const getTabPreferences = useLibraryPreferencesStore(
+    (state) => state.getTabPreferences,
+  );
+  const setTabPreferences = useLibraryPreferencesStore(
+    (state) => state.setTabPreferences,
+  );
+  const setLastTab = useLibraryPreferencesStore((state) => state.setLastTab);
 
-	// Determine current tab from URL
-	const pathParts = location.pathname.split("/");
+  // Determine current tab from URL
+  const pathParts = location.pathname.split("/");
 
-	// Handle libraryId === "all" case
-	const isAllLibraries = libraryId === "all";
+  // Handle libraryId === "all" case
+  const isAllLibraries = libraryId === "all";
 
-	// Default tab: "recommended" for specific libraries, "series" for all libraries
-	const defaultTab = isAllLibraries ? "series" : "recommended";
-	const currentTab = pathParts[pathParts.length - 1] || defaultTab;
+  // Default tab: "recommended" for specific libraries, "series" for all libraries
+  const defaultTab = isAllLibraries ? "series" : "recommended";
+  const currentTab = pathParts[pathParts.length - 1] || defaultTab;
 
-	// State for total counts
-	const [booksCount, setBooksCount] = useState<number | null>(null);
-	const [seriesCount, setSeriesCount] = useState<number | null>(null);
+  // State for total counts
+  const [booksCount, setBooksCount] = useState<number | null>(null);
+  const [seriesCount, setSeriesCount] = useState<number | null>(null);
 
-	// State for library actions
-	const [editLibraryOpened, setEditLibraryOpened] = useState(false);
-	const [deleteConfirmOpened, setDeleteConfirmOpened] = useState(false);
-	const [purgeConfirmOpened, setPurgeConfirmOpened] = useState(false);
-	const [libraryToDelete, setLibraryToDelete] = useState<Library | null>(null);
-	const [libraryToPurge, setLibraryToPurge] = useState<Library | null>(null);
+  // State for library actions
+  const [editLibraryOpened, setEditLibraryOpened] = useState(false);
+  const [deleteConfirmOpened, setDeleteConfirmOpened] = useState(false);
+  const [purgeConfirmOpened, setPurgeConfirmOpened] = useState(false);
+  const [libraryToDelete, setLibraryToDelete] = useState<Library | null>(null);
+  const [libraryToPurge, setLibraryToPurge] = useState<Library | null>(null);
 
-	const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
 
-	// Permission checks
-	const { hasPermission } = usePermissions();
-	const canEditLibrary = hasPermission(PERMISSIONS.LIBRARIES_WRITE);
-	const canDeleteLibrary = hasPermission(PERMISSIONS.LIBRARIES_DELETE);
+  // Permission checks
+  const { hasPermission } = usePermissions();
+  const canEditLibrary = hasPermission(PERMISSIONS.LIBRARIES_WRITE);
+  const canDeleteLibrary = hasPermission(PERMISSIONS.LIBRARIES_DELETE);
 
-	// Get active tasks for progress display
-	const { getTasksByLibrary } = useTaskProgress();
+  // Get active tasks for progress display
+  const { getTasksByLibrary } = useTaskProgress();
 
-	// Get active scan tasks for this library
-	const activeScanTasks = libraryId
-		? getTasksByLibrary(libraryId).filter(
-				(task) =>
-					task.task_type === "scan_library" && task.status === "running",
-			)
-		: [];
+  // Get active scan tasks for this library
+  const activeScanTasks = libraryId
+    ? getTasksByLibrary(libraryId).filter(
+        (task) =>
+          task.task_type === "scan_library" && task.status === "running",
+      )
+    : [];
 
-	// Reset counts when tab changes
-	useEffect(() => {
-		if (currentTab === "recommended") {
-			setBooksCount(null);
-			setSeriesCount(null);
-		}
-	}, [currentTab]);
+  // Reset counts when tab changes
+  useEffect(() => {
+    if (currentTab === "recommended") {
+      setBooksCount(null);
+      setSeriesCount(null);
+    }
+  }, [currentTab]);
 
-	// Clear bulk selection when navigating away or changing tabs
-	const clearSelection = useBulkSelectionStore((state) => state.clearSelection);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally clear on library/tab change
-	useEffect(() => {
-		// Clear selection when library or tab changes
-		clearSelection();
-	}, [libraryId, currentTab]);
+  // Clear bulk selection when navigating away or changing tabs
+  const clearSelection = useBulkSelectionStore((state) => state.clearSelection);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally clear on library/tab change
+  useEffect(() => {
+    // Clear selection when library or tab changes
+    clearSelection();
+  }, [libraryId, currentTab]);
 
-	// Fetch library data (if not "all")
-	const {
-		data: library,
-		isLoading,
-		error,
-	} = useQuery({
-		queryKey: ["library", libraryId],
-		queryFn: () => {
-			if (!libraryId) throw new Error("Library ID is required");
-			return librariesApi.getById(libraryId);
-		},
-		enabled: !isAllLibraries && !!libraryId,
-	});
+  // Fetch library data (if not "all")
+  const {
+    data: library,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["library", libraryId],
+    queryFn: () => {
+      if (!libraryId) throw new Error("Library ID is required");
+      return librariesApi.getById(libraryId);
+    },
+    enabled: !isAllLibraries && !!libraryId,
+  });
 
-	// Set document title based on library name
-	useDynamicDocumentTitle(
-		isAllLibraries ? "All Libraries" : library?.name,
-		"Library",
-	);
+  // Set document title based on library name
+  useDynamicDocumentTitle(
+    isAllLibraries ? "All Libraries" : library?.name,
+    "Library",
+  );
 
-	// Redirect to base path if no tab specified
-	useEffect(() => {
-		if (
-			location.pathname === `/libraries/${libraryId}` ||
-			location.pathname === `/libraries/${libraryId}/`
-		) {
-			navigate(`/libraries/${libraryId}/${defaultTab}`, { replace: true });
-		}
-	}, [location.pathname, libraryId, navigate, defaultTab]);
+  // Redirect to base path if no tab specified
+  useEffect(() => {
+    if (
+      location.pathname === `/libraries/${libraryId}` ||
+      location.pathname === `/libraries/${libraryId}/`
+    ) {
+      navigate(`/libraries/${libraryId}/${defaultTab}`, { replace: true });
+    }
+  }, [location.pathname, libraryId, navigate, defaultTab]);
 
-	// Handle 404 - redirect to home
-	useEffect(() => {
-		if (error && !isAllLibraries) {
-			navigate("/", { replace: true });
-		}
-	}, [error, isAllLibraries, navigate]);
+  // Handle 404 - redirect to home
+  useEffect(() => {
+    if (error && !isAllLibraries) {
+      navigate("/", { replace: true });
+    }
+  }, [error, isAllLibraries, navigate]);
 
-	// Restore preferences from localStorage or update store from URL
-	useEffect(() => {
-		if (!libraryId) return;
+  // Restore preferences from localStorage or update store from URL
+  useEffect(() => {
+    if (!libraryId) return;
 
-		const hasUrlParams = Array.from(searchParams.keys()).length > 0;
-		const storedPrefs = getTabPreferences(libraryId, currentTab);
+    const hasUrlParams = Array.from(searchParams.keys()).length > 0;
+    const storedPrefs = getTabPreferences(libraryId, currentTab);
 
-		if (!hasUrlParams && storedPrefs) {
-			// Restore from localStorage
-			const params = new URLSearchParams();
-			if (storedPrefs.pageSize)
-				params.set("pageSize", storedPrefs.pageSize.toString());
-			if (storedPrefs.sort) params.set("sort", storedPrefs.sort);
-			if (storedPrefs.filters) {
-				Object.entries(storedPrefs.filters).forEach(([key, value]) => {
-					params.set(key, value);
-				});
-			}
-			setSearchParams(params, { replace: true });
-		} else if (hasUrlParams) {
-			// URL params exist - update store to match
-			const currentPrefs = {
-				pageSize: parseInt(searchParams.get("pageSize") || "50", 10),
-				sort: searchParams.get("sort") || undefined,
-				filters: {} as Record<string, string>,
-			};
+    if (!hasUrlParams && storedPrefs) {
+      // Restore from localStorage
+      const params = new URLSearchParams();
+      if (storedPrefs.pageSize)
+        params.set("pageSize", storedPrefs.pageSize.toString());
+      if (storedPrefs.sort) params.set("sort", storedPrefs.sort);
+      if (storedPrefs.filters) {
+        Object.entries(storedPrefs.filters).forEach(([key, value]) => {
+          params.set(key, value);
+        });
+      }
+      setSearchParams(params, { replace: true });
+    } else if (hasUrlParams) {
+      // URL params exist - update store to match
+      const currentPrefs = {
+        pageSize: parseInt(searchParams.get("pageSize") || "50", 10),
+        sort: searchParams.get("sort") || undefined,
+        filters: {} as Record<string, string>,
+      };
 
-			// Capture filter params (anything that's not page/pageSize/sort)
-			searchParams.forEach((value, key) => {
-				if (!["page", "pageSize", "sort"].includes(key)) {
-					currentPrefs.filters[key] = value;
-				}
-			});
+      // Capture filter params (anything that's not page/pageSize/sort)
+      searchParams.forEach((value, key) => {
+        if (!["page", "pageSize", "sort"].includes(key)) {
+          currentPrefs.filters[key] = value;
+        }
+      });
 
-			setTabPreferences(libraryId, currentTab, currentPrefs);
-		}
-	}, [
-		libraryId,
-		currentTab,
-		searchParams,
-		getTabPreferences,
-		setTabPreferences,
-		setSearchParams,
-	]);
+      setTabPreferences(libraryId, currentTab, currentPrefs);
+    }
+  }, [
+    libraryId,
+    currentTab,
+    searchParams,
+    getTabPreferences,
+    setTabPreferences,
+    setSearchParams,
+  ]);
 
-	// Mutations for delete/purge confirmation modals (need to handle navigation/state)
-	const deleteMutation = useMutation({
-		mutationFn: (libraryId: string) => librariesApi.delete(libraryId),
-		onSuccess: () => {
-			notifications.show({
-				title: "Success",
-				message: "Library deleted successfully",
-				color: "green",
-			});
-			queryClient.refetchQueries({ queryKey: ["libraries"] });
-			setDeleteConfirmOpened(false);
-			setLibraryToDelete(null);
-			navigate("/");
-		},
-		onError: (error: Error) => {
-			notifications.show({
-				title: "Error",
-				message: error.message || "Failed to delete library",
-				color: "red",
-			});
-		},
-	});
+  // Mutations for delete/purge confirmation modals (need to handle navigation/state)
+  const deleteMutation = useMutation({
+    mutationFn: (libraryId: string) => librariesApi.delete(libraryId),
+    onSuccess: () => {
+      notifications.show({
+        title: "Success",
+        message: "Library deleted successfully",
+        color: "green",
+      });
+      queryClient.refetchQueries({ queryKey: ["libraries"] });
+      setDeleteConfirmOpened(false);
+      setLibraryToDelete(null);
+      navigate("/");
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to delete library",
+        color: "red",
+      });
+    },
+  });
 
-	const purgeMutation = useMutation({
-		mutationFn: (libraryId: string) => librariesApi.purgeDeleted(libraryId),
-		onSuccess: (count) => {
-			notifications.show({
-				title: "Success",
-				message: `Purged ${count} deleted book${count !== 1 ? "s" : ""} from library`,
-				color: "green",
-			});
-			queryClient.refetchQueries({ queryKey: ["libraries"] });
-			queryClient.refetchQueries({ queryKey: ["library", libraryId] });
-			setPurgeConfirmOpened(false);
-			setLibraryToPurge(null);
-		},
-		onError: (error: Error) => {
-			notifications.show({
-				title: "Error",
-				message: error.message || "Failed to purge deleted books",
-				color: "red",
-			});
-		},
-	});
+  const purgeMutation = useMutation({
+    mutationFn: (libraryId: string) => librariesApi.purgeDeleted(libraryId),
+    onSuccess: (count) => {
+      notifications.show({
+        title: "Success",
+        message: `Purged ${count} deleted book${count !== 1 ? "s" : ""} from library`,
+        color: "green",
+      });
+      queryClient.refetchQueries({ queryKey: ["libraries"] });
+      queryClient.refetchQueries({ queryKey: ["library", libraryId] });
+      setPurgeConfirmOpened(false);
+      setLibraryToPurge(null);
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to purge deleted books",
+        color: "red",
+      });
+    },
+  });
 
-	// Tab navigation
-	const handleTabChange = (value: string | null) => {
-		if (value && libraryId) {
-			setLastTab(libraryId, value);
-			navigate(`/libraries/${libraryId}/${value}`);
-		}
-	};
+  // Tab navigation
+  const handleTabChange = (value: string | null) => {
+    if (value && libraryId) {
+      setLastTab(libraryId, value);
+      navigate(`/libraries/${libraryId}/${value}`);
+    }
+  };
 
-	// Library action handlers
-	const handleEditLibrary = () => {
-		if (library) {
-			setEditLibraryOpened(true);
-		}
-	};
+  // Library action handlers
+  const handleEditLibrary = () => {
+    if (library) {
+      setEditLibraryOpened(true);
+    }
+  };
 
-	const handleDeleteLibrary = () => {
-		if (library) {
-			setLibraryToDelete(library);
-			setDeleteConfirmOpened(true);
-		}
-	};
+  const handleDeleteLibrary = () => {
+    if (library) {
+      setLibraryToDelete(library);
+      setDeleteConfirmOpened(true);
+    }
+  };
 
-	const confirmDelete = () => {
-		if (libraryToDelete) {
-			deleteMutation.mutate(libraryToDelete.id);
-		}
-	};
+  const confirmDelete = () => {
+    if (libraryToDelete) {
+      deleteMutation.mutate(libraryToDelete.id);
+    }
+  };
 
-	const handlePurgeDeleted = () => {
-		if (library) {
-			setLibraryToPurge(library);
-			setPurgeConfirmOpened(true);
-		}
-	};
+  const handlePurgeDeleted = () => {
+    if (library) {
+      setLibraryToPurge(library);
+      setPurgeConfirmOpened(true);
+    }
+  };
 
-	const confirmPurge = () => {
-		if (libraryToPurge) {
-			purgeMutation.mutate(libraryToPurge.id);
-		}
-	};
+  const confirmPurge = () => {
+    if (libraryToPurge) {
+      purgeMutation.mutate(libraryToPurge.id);
+    }
+  };
 
-	// Read sort and page size from URL
-	const pageSize = parseInt(searchParams.get("pageSize") || "50", 10);
-	const sort =
-		searchParams.get("sort") ||
-		(currentTab === "books" ? "title,asc" : "name,asc");
+  // Read sort and page size from URL
+  const pageSize = parseInt(searchParams.get("pageSize") || "50", 10);
+  const sort =
+    searchParams.get("sort") ||
+    (currentTab === "books" ? "title,asc" : "name,asc");
 
-	// Handle filter changes
-	const handleFilterChange = (updates: Record<string, string | number>) => {
-		if (!libraryId) return;
+  // Handle filter changes
+  const handleFilterChange = (updates: Record<string, string | number>) => {
+    if (!libraryId) return;
 
-		const params = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(searchParams);
 
-		Object.entries(updates).forEach(([key, value]) => {
-			if (value) {
-				params.set(key, value.toString());
-			} else {
-				params.delete(key);
-			}
-		});
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value.toString());
+      } else {
+        params.delete(key);
+      }
+    });
 
-		// Reset to page 1 when filters change
-		if (!("page" in updates)) {
-			params.set("page", "1");
-		}
+    // Reset to page 1 when filters change
+    if (!("page" in updates)) {
+      params.set("page", "1");
+    }
 
-		setSearchParams(params, { replace: true });
+    setSearchParams(params, { replace: true });
 
-		// Persist filters to store (exclude page/pageSize/sort)
-		const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
-		const newFilters = { ...currentPrefs.filters };
+    // Persist filters to store (exclude page/pageSize/sort)
+    const currentPrefs = getTabPreferences(libraryId, currentTab) || {};
+    const newFilters = { ...currentPrefs.filters };
 
-		Object.entries(updates).forEach(([key, value]) => {
-			if (!["page", "pageSize", "sort"].includes(key)) {
-				if (value) {
-					newFilters[key] = value.toString();
-				} else {
-					delete newFilters[key];
-				}
-			}
-		});
+    Object.entries(updates).forEach(([key, value]) => {
+      if (!["page", "pageSize", "sort"].includes(key)) {
+        if (value) {
+          newFilters[key] = value.toString();
+        } else {
+          delete newFilters[key];
+        }
+      }
+    });
 
-		setTabPreferences(libraryId, currentTab, {
-			...currentPrefs,
-			filters: newFilters,
-		});
-	};
+    setTabPreferences(libraryId, currentTab, {
+      ...currentPrefs,
+      filters: newFilters,
+    });
+  };
 
-	// Get current count based on tab
-	const currentCount =
-		currentTab === "books"
-			? booksCount
-			: currentTab === "series"
-				? seriesCount
-				: null;
-	const countLabel =
-		currentTab === "books" ? "books" : currentTab === "series" ? "series" : "";
+  // Get current count based on tab
+  const currentCount =
+    currentTab === "books"
+      ? booksCount
+      : currentTab === "series"
+        ? seriesCount
+        : null;
+  const countLabel =
+    currentTab === "books" ? "books" : currentTab === "series" ? "series" : "";
 
-	// Sort options based on tab
-	const sortOptions =
-		currentTab === "books"
-			? [
-					{
-						field: "series",
-						label: "Series",
-						defaultDirection: "asc" as const,
-					},
-					{ field: "title", label: "Title", defaultDirection: "asc" as const },
-					{
-						field: "created_at",
-						label: "Date Added",
-						defaultDirection: "desc" as const,
-					},
-					{
-						field: "release_date",
-						label: "Release Date",
-						defaultDirection: "desc" as const,
-					},
-					{
-						field: "chapter_number",
-						label: "Chapter Number",
-						defaultDirection: "asc" as const,
-					},
-					{
-						field: "file_size",
-						label: "File Size",
-						defaultDirection: "desc" as const,
-					},
-					{
-						field: "filename",
-						label: "Filename",
-						defaultDirection: "asc" as const,
-					},
-					{
-						field: "page_count",
-						label: "Page Count",
-						defaultDirection: "desc" as const,
-					},
-				]
-			: [
-					{ field: "name", label: "Name", defaultDirection: "asc" as const },
-					{
-						field: "date_added",
-						label: "Date Added",
-						defaultDirection: "desc" as const,
-					},
-					{
-						field: "date_updated",
-						label: "Date Updated",
-						defaultDirection: "desc" as const,
-					},
-					{
-						field: "release_date",
-						label: "Release Date",
-						defaultDirection: "desc" as const,
-					},
-					{
-						field: "date_read",
-						label: "Recently Read",
-						defaultDirection: "desc" as const,
-					},
-					{
-						field: "book_count",
-						label: "Book Count",
-						defaultDirection: "desc" as const,
-					},
-				];
+  // Sort options based on tab
+  const sortOptions =
+    currentTab === "books"
+      ? [
+          {
+            field: "series",
+            label: "Series",
+            defaultDirection: "asc" as const,
+          },
+          { field: "title", label: "Title", defaultDirection: "asc" as const },
+          {
+            field: "created_at",
+            label: "Date Added",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "release_date",
+            label: "Release Date",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "chapter_number",
+            label: "Chapter Number",
+            defaultDirection: "asc" as const,
+          },
+          {
+            field: "file_size",
+            label: "File Size",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "filename",
+            label: "Filename",
+            defaultDirection: "asc" as const,
+          },
+          {
+            field: "page_count",
+            label: "Page Count",
+            defaultDirection: "desc" as const,
+          },
+        ]
+      : [
+          { field: "name", label: "Name", defaultDirection: "asc" as const },
+          {
+            field: "date_added",
+            label: "Date Added",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "date_updated",
+            label: "Date Updated",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "release_date",
+            label: "Release Date",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "date_read",
+            label: "Recently Read",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "book_count",
+            label: "Book Count",
+            defaultDirection: "desc" as const,
+          },
+        ];
 
-	if (!libraryId) {
-		return <Navigate to="/" replace />;
-	}
+  if (!libraryId) {
+    return <Navigate to="/" replace />;
+  }
 
-	// Wait for preferences to hydrate before rendering to prevent flash of default values
-	if (!hasHydrated || (isLoading && !isAllLibraries)) {
-		return (
-			<Center h={400}>
-				<Loader size="lg" />
-			</Center>
-		);
-	}
+  // Wait for preferences to hydrate before rendering to prevent flash of default values
+  if (!hasHydrated || (isLoading && !isAllLibraries)) {
+    return (
+      <Center h={400}>
+        <Loader size="lg" />
+      </Center>
+    );
+  }
 
-	if (error && !isAllLibraries) {
-		return (
-			<Container size="xl" py="xl">
-				<Center h={400}>
-					<Stack align="center" gap="md">
-						<Text size="xl" fw={600}>
-							Library Not Found
-						</Text>
-						<Text c="dimmed">The requested library could not be found.</Text>
-					</Stack>
-				</Center>
-			</Container>
-		);
-	}
+  if (error && !isAllLibraries) {
+    return (
+      <Container size="xl" py="xl">
+        <Center h={400}>
+          <Stack align="center" gap="md">
+            <Text size="xl" fw={600}>
+              Library Not Found
+            </Text>
+            <Text c="dimmed">The requested library could not be found.</Text>
+          </Stack>
+        </Center>
+      </Container>
+    );
+  }
 
-	return (
-		<>
-			<Box
-				style={{
-					display: "flex",
-					flexDirection: "column",
-					height: "calc(100vh - 64px)", // Subtract AppShell header height
-					overflow: "hidden",
-					margin: "calc(-1 * var(--mantine-spacing-md))", // Offset AppShell padding
-				}}
-			>
-				{/* Fixed header area - does not scroll */}
-				<Box
-					px="md"
-					pt="sm"
-					pb="xs"
-					style={{
-						flexShrink: 0,
-						backgroundColor: "var(--mantine-color-body)",
-					}}
-				>
-					<Stack gap="xs">
-						{/* Header with library name, count, and action menu */}
-						<Group gap="md" align="center" justify="space-between">
-							<Group gap="xs" align="baseline">
-								{!isAllLibraries &&
-									library &&
-									(canEditLibrary || canDeleteLibrary) && (
-										<Menu shadow="md" width={200} position="bottom-start">
-											<Menu.Target>
-												<ActionIcon variant="subtle" color="gray" size="lg">
-													<IconDotsVertical size={20} />
-												</ActionIcon>
-											</Menu.Target>
-											<LibraryActionsMenu
-												library={library}
-												onEdit={handleEditLibrary}
-												onDelete={handleDeleteLibrary}
-												onPurge={handlePurgeDeleted}
-											/>
-										</Menu>
-									)}
-								<Title order={3} tt="capitalize">
-									{isAllLibraries
-										? "All Libraries"
-										: library?.name || "Library"}
-								</Title>
-								{currentCount !== null && (
-									<Text size="sm" c="dimmed" fw={500}>
-										{currentCount} {countLabel}
-									</Text>
-								)}
-								{/* Show scan progress badge when scanning */}
-								{activeScanTasks.length > 0 && activeScanTasks[0].progress && (
-									<Badge color="blue" variant="filled" size="sm">
-										Scanning... {activeScanTasks[0].progress.current} /{" "}
-										{activeScanTasks[0].progress.total}
-									</Badge>
-								)}
-							</Group>
-						</Group>
+  return (
+    <>
+      <Box
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          height: "calc(100vh - 64px)", // Subtract AppShell header height
+          overflow: "hidden",
+          margin: "calc(-1 * var(--mantine-spacing-md))", // Offset AppShell padding
+        }}
+      >
+        {/* Fixed header area - does not scroll */}
+        <Box
+          px="md"
+          pt="sm"
+          pb="xs"
+          style={{
+            flexShrink: 0,
+            backgroundColor: "var(--mantine-color-body)",
+          }}
+        >
+          <Stack gap="xs">
+            {/* Header with library name, count, and action menu */}
+            <Group gap="md" align="center" justify="space-between">
+              <Group gap="xs" align="baseline">
+                {!isAllLibraries &&
+                  library &&
+                  (canEditLibrary || canDeleteLibrary) && (
+                    <Menu shadow="md" width={200} position="bottom-start">
+                      <Menu.Target>
+                        <ActionIcon variant="subtle" color="gray" size="lg">
+                          <IconDotsVertical size={20} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <LibraryActionsMenu
+                        library={library}
+                        onEdit={handleEditLibrary}
+                        onDelete={handleDeleteLibrary}
+                        onPurge={handlePurgeDeleted}
+                      />
+                    </Menu>
+                  )}
+                <Title order={3} tt="capitalize">
+                  {isAllLibraries
+                    ? "All Libraries"
+                    : library?.name || "Library"}
+                </Title>
+                {currentCount !== null && (
+                  <Text size="sm" c="dimmed" fw={500}>
+                    {currentCount} {countLabel}
+                  </Text>
+                )}
+                {/* Show scan progress badge when scanning */}
+                {activeScanTasks.length > 0 && activeScanTasks[0].progress && (
+                  <Badge color="blue" variant="filled" size="sm">
+                    Scanning... {activeScanTasks[0].progress.current} /{" "}
+                    {activeScanTasks[0].progress.total}
+                  </Badge>
+                )}
+              </Group>
+            </Group>
 
-						{/* Toolbar with Tabs and Controls */}
-						<LibraryToolbar
-							currentTab={currentTab}
-							onTabChange={handleTabChange}
-							showRecommended={!isAllLibraries}
-							sort={sort}
-							onSortChange={(value) => {
-								if (libraryId) {
-									handleFilterChange({ sort: value });
-									const currentPrefs =
-										getTabPreferences(libraryId, currentTab) || {};
-									setTabPreferences(libraryId, currentTab, {
-										...currentPrefs,
-										sort: value,
-									});
-								}
-							}}
-							sortOptions={sortOptions}
-							pageSize={pageSize}
-							onPageSizeChange={(value) => {
-								if (libraryId) {
-									handleFilterChange({ pageSize: value });
-									const currentPrefs =
-										getTabPreferences(libraryId, currentTab) || {};
-									setTabPreferences(libraryId, currentTab, {
-										...currentPrefs,
-										pageSize: value,
-									});
-								}
-							}}
-						/>
+            {/* Toolbar with Tabs and Controls */}
+            <LibraryToolbar
+              currentTab={currentTab}
+              onTabChange={handleTabChange}
+              showRecommended={!isAllLibraries}
+              sort={sort}
+              onSortChange={(value) => {
+                if (libraryId) {
+                  handleFilterChange({ sort: value });
+                  const currentPrefs =
+                    getTabPreferences(libraryId, currentTab) || {};
+                  setTabPreferences(libraryId, currentTab, {
+                    ...currentPrefs,
+                    sort: value,
+                  });
+                }
+              }}
+              sortOptions={sortOptions}
+              pageSize={pageSize}
+              onPageSizeChange={(value) => {
+                if (libraryId) {
+                  handleFilterChange({ pageSize: value });
+                  const currentPrefs =
+                    getTabPreferences(libraryId, currentTab) || {};
+                  setTabPreferences(libraryId, currentTab, {
+                    ...currentPrefs,
+                    pageSize: value,
+                  });
+                }
+              }}
+            />
 
-						{/* Bulk Selection Toolbar - shows when items are selected */}
-						<BulkSelectionToolbar />
-					</Stack>
-				</Box>
+            {/* Bulk Selection Toolbar - shows when items are selected */}
+            <BulkSelectionToolbar />
+          </Stack>
+        </Box>
 
-				{/* Scrollable content area */}
-				<Box
-					px="md"
-					pb="xl"
-					style={{
-						flex: 1,
-						overflowY: "auto",
-					}}
-				>
-					{currentTab === "recommended" && !isAllLibraries && (
-						<RecommendedSection libraryId={libraryId} />
-					)}
+        {/* Scrollable content area */}
+        <Box
+          px="md"
+          pb="xl"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+          }}
+        >
+          {currentTab === "recommended" && !isAllLibraries && (
+            <RecommendedSection libraryId={libraryId} />
+          )}
 
-					{currentTab === "series" && (
-						<SeriesSection
-							libraryId={libraryId}
-							searchParams={searchParams}
-							onTotalChange={setSeriesCount}
-						/>
-					)}
+          {currentTab === "series" && (
+            <SeriesSection
+              libraryId={libraryId}
+              searchParams={searchParams}
+              onTotalChange={setSeriesCount}
+            />
+          )}
 
-					{currentTab === "books" && (
-						<BooksSection
-							libraryId={libraryId}
-							searchParams={searchParams}
-							onTotalChange={setBooksCount}
-						/>
-					)}
-				</Box>
-			</Box>
+          {currentTab === "books" && (
+            <BooksSection
+              libraryId={libraryId}
+              searchParams={searchParams}
+              onTotalChange={setBooksCount}
+            />
+          )}
+        </Box>
+      </Box>
 
-			{/* Edit Library Modal */}
-			<LibraryModal
-				opened={editLibraryOpened}
-				onClose={() => {
-					setEditLibraryOpened(false);
-					queryClient.refetchQueries({ queryKey: ["library", libraryId] });
-				}}
-				library={library || undefined}
-			/>
+      {/* Edit Library Modal */}
+      <LibraryModal
+        opened={editLibraryOpened}
+        onClose={() => {
+          setEditLibraryOpened(false);
+          queryClient.refetchQueries({ queryKey: ["library", libraryId] });
+        }}
+        library={library || undefined}
+      />
 
-			{/* Delete Confirmation Modal */}
-			<Modal
-				opened={deleteConfirmOpened}
-				onClose={() => setDeleteConfirmOpened(false)}
-				title="Delete Library"
-				centered
-			>
-				<Stack gap="md">
-					<Text>
-						Are you sure you want to delete "{libraryToDelete?.name}"? This
-						action cannot be undone.
-					</Text>
-					<Group justify="flex-end" gap="sm">
-						<Button
-							variant="subtle"
-							onClick={() => setDeleteConfirmOpened(false)}
-						>
-							Cancel
-						</Button>
-						<Button color="red" onClick={confirmDelete}>
-							Delete
-						</Button>
-					</Group>
-				</Stack>
-			</Modal>
+      {/* Delete Confirmation Modal */}
+      <Modal
+        opened={deleteConfirmOpened}
+        onClose={() => setDeleteConfirmOpened(false)}
+        title="Delete Library"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            Are you sure you want to delete "{libraryToDelete?.name}"? This
+            action cannot be undone.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button
+              variant="subtle"
+              onClick={() => setDeleteConfirmOpened(false)}
+            >
+              Cancel
+            </Button>
+            <Button color="red" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
-			{/* Purge Deleted Confirmation Modal */}
-			<Modal
-				opened={purgeConfirmOpened}
-				onClose={() => setPurgeConfirmOpened(false)}
-				title="Purge Deleted Books"
-				centered
-			>
-				<Stack gap="md">
-					<Text>
-						Are you sure you want to permanently delete all soft-deleted books
-						from "{libraryToPurge?.name}"? This action cannot be undone.
-					</Text>
-					<Group justify="flex-end" gap="sm">
-						<Button
-							variant="subtle"
-							onClick={() => setPurgeConfirmOpened(false)}
-						>
-							Cancel
-						</Button>
-						<Button color="orange" onClick={confirmPurge}>
-							Purge
-						</Button>
-					</Group>
-				</Stack>
-			</Modal>
-		</>
-	);
+      {/* Purge Deleted Confirmation Modal */}
+      <Modal
+        opened={purgeConfirmOpened}
+        onClose={() => setPurgeConfirmOpened(false)}
+        title="Purge Deleted Books"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            Are you sure you want to permanently delete all soft-deleted books
+            from "{libraryToPurge?.name}"? This action cannot be undone.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button
+              variant="subtle"
+              onClick={() => setPurgeConfirmOpened(false)}
+            >
+              Cancel
+            </Button>
+            <Button color="orange" onClick={confirmPurge}>
+              Purge
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </>
+  );
 }

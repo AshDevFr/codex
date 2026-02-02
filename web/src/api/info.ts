@@ -5,11 +5,11 @@ import { api } from "./client";
 export type AppInfoDto = components["schemas"]["AppInfoDto"];
 
 export const infoApi = {
-	/**
-	 * Get application info (public, no authentication required)
-	 */
-	getInfo: async (): Promise<AppInfoDto> => {
-		const response = await api.get<AppInfoDto>("/info");
-		return response.data;
-	},
+  /**
+   * Get application info (public, no authentication required)
+   */
+  getInfo: async (): Promise<AppInfoDto> => {
+    const response = await api.get<AppInfoDto>("/info");
+    return response.data;
+  },
 };

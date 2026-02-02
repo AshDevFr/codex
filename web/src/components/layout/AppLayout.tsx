@@ -8,40 +8,40 @@ import { PluginStatusBanner } from "./PluginStatusBanner";
 import { Sidebar } from "./Sidebar";
 
 interface AppLayoutProps {
-	children: React.ReactNode;
-	currentPath?: string;
+  children: React.ReactNode;
+  currentPath?: string;
 }
 
 export function AppLayout({ children, currentPath }: AppLayoutProps) {
-	const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
-	const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
-	const searchInputRef = useRef<SearchInputHandle>(null);
+  const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
+  const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
+  const searchInputRef = useRef<SearchInputHandle>(null);
 
-	// Enable 'S' keyboard shortcut to focus search bar
-	useSearchShortcut({ searchInputRef });
+  // Enable 'S' keyboard shortcut to focus search bar
+  useSearchShortcut({ searchInputRef });
 
-	return (
-		<AppShell
-			header={{ height: 64 }}
-			navbar={{
-				width: 280,
-				breakpoint: "sm",
-				collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
-			}}
-			padding="md"
-		>
-			<Header
-				mobileOpened={mobileOpened}
-				toggleMobile={toggleMobile}
-				toggleDesktop={toggleDesktop}
-				searchInputRef={searchInputRef}
-			/>
-			<Sidebar currentPath={currentPath} />
+  return (
+    <AppShell
+      header={{ height: 64 }}
+      navbar={{
+        width: 280,
+        breakpoint: "sm",
+        collapsed: { mobile: !mobileOpened, desktop: !desktopOpened },
+      }}
+      padding="md"
+    >
+      <Header
+        mobileOpened={mobileOpened}
+        toggleMobile={toggleMobile}
+        toggleDesktop={toggleDesktop}
+        searchInputRef={searchInputRef}
+      />
+      <Sidebar currentPath={currentPath} />
 
-			<AppShell.Main>
-				<PluginStatusBanner />
-				{children}
-			</AppShell.Main>
-		</AppShell>
-	);
+      <AppShell.Main>
+        <PluginStatusBanner />
+        {children}
+      </AppShell.Main>
+    </AppShell>
+  );
 }

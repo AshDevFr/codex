@@ -31,15 +31,15 @@ import { useAppName } from "./useAppName";
  * ```
  */
 export function useDocumentTitle(pageTitle?: string): void {
-	const appName = useAppName();
+  const appName = useAppName();
 
-	useEffect(() => {
-		const title = pageTitle ? `${pageTitle} - ${appName}` : appName;
-		document.title = title;
+  useEffect(() => {
+    const title = pageTitle ? `${pageTitle} - ${appName}` : appName;
+    document.title = title;
 
-		// Cleanup: We don't reset the title on unmount since the next page
-		// will set its own title. This avoids a flash of the old title.
-	}, [pageTitle, appName]);
+    // Cleanup: We don't reset the title on unmount since the next page
+    // will set its own title. This avoids a flash of the old title.
+  }, [pageTitle, appName]);
 }
 
 /**
@@ -61,9 +61,9 @@ export function useDocumentTitle(pageTitle?: string): void {
  * ```
  */
 export function useDynamicDocumentTitle(
-	pageTitle: string | undefined,
-	fallbackTitle?: string,
+  pageTitle: string | undefined,
+  fallbackTitle?: string,
 ): void {
-	const title = pageTitle ?? fallbackTitle;
-	useDocumentTitle(title);
+  const title = pageTitle ?? fallbackTitle;
+  useDocumentTitle(title);
 }

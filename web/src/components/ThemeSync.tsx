@@ -7,18 +7,18 @@ import { useUserPreferencesStore } from "@/store/userPreferencesStore";
  * This component should be rendered once inside the MantineProvider.
  */
 export function ThemeSync() {
-	const { setColorScheme } = useMantineColorScheme();
-	const themePreference = useUserPreferencesStore((state) =>
-		state.getPreference("ui.theme"),
-	);
+  const { setColorScheme } = useMantineColorScheme();
+  const themePreference = useUserPreferencesStore((state) =>
+    state.getPreference("ui.theme"),
+  );
 
-	useEffect(() => {
-		// Map our preference value to Mantine's color scheme value
-		// Our "system" maps to Mantine's "auto"
-		const mantineScheme =
-			themePreference === "system" ? "auto" : themePreference;
-		setColorScheme(mantineScheme);
-	}, [themePreference, setColorScheme]);
+  useEffect(() => {
+    // Map our preference value to Mantine's color scheme value
+    // Our "system" maps to Mantine's "auto"
+    const mantineScheme =
+      themePreference === "system" ? "auto" : themePreference;
+    setColorScheme(mantineScheme);
+  }, [themePreference, setColorScheme]);
 
-	return null;
+  return null;
 }

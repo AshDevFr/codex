@@ -10,11 +10,11 @@ import sampleEpubUrl from "./sample.epub?url";
 import samplePdfUrl from "./sample.pdf?url";
 
 export const fixtures = {
-	cbz: sampleCbzUrl,
-	epub: sampleEpubUrl,
-	pdf: samplePdfUrl,
-	cover: coverSvgUrl,
-	page: pageSvgUrl,
+  cbz: sampleCbzUrl,
+  epub: sampleEpubUrl,
+  pdf: samplePdfUrl,
+  cover: coverSvgUrl,
+  page: pageSvgUrl,
 };
 
 export { sampleCbzUrl, sampleEpubUrl, samplePdfUrl, coverSvgUrl, pageSvgUrl };
