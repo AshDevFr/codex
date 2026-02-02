@@ -2893,6 +2893,7 @@ pub async fn retry_book_errors(
                 | BookErrorType::PageExtraction
                 | BookErrorType::FormatDetection
                 | BookErrorType::PdfRendering
+                | BookErrorType::ZeroPages
                 | BookErrorType::Other
         )
     });
@@ -3023,6 +3024,7 @@ pub async fn retry_all_book_errors(
                     | BookErrorType::PageExtraction
                     | BookErrorType::FormatDetection
                     | BookErrorType::PdfRendering
+                    | BookErrorType::ZeroPages
                     | BookErrorType::Other
             )
         });
