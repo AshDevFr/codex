@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.6.1] - 2026-02-02
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Use package.json version in manifests instead of hardcoded values
+
 ## [1.6.0] - 2026-02-02
 
 ### 🚀 Features
