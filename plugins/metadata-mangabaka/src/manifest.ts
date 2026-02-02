@@ -1,9 +1,10 @@
 import type { MetadataContentType, PluginManifest } from "@ashdev/codex-plugin-sdk";
+import packageJson from "../package.json" with { type: "json" };
 
 export const manifest = {
   name: "metadata-mangabaka",
   displayName: "MangaBaka Metadata",
-  version: "1.0.0",
+  version: packageJson.version,
   description: "Fetch manga metadata from MangaBaka - aggregated data from multiple sources",
   author: "Codex",
   homepage: "https://mangabaka.org",

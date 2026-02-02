@@ -19,6 +19,7 @@ import {
   type PluginManifest,
   type PluginSeriesMetadata,
 } from "@ashdev/codex-plugin-sdk";
+import packageJson from "../package.json" with { type: "json" };
 
 // Default config values
 const DEFAULT_MAX_RESULTS = 5;
@@ -31,7 +32,7 @@ const config = {
 const manifest = {
   name: "metadata-echo",
   displayName: "Echo Metadata Plugin",
-  version: "1.0.0",
+  version: packageJson.version,
   description: "Test metadata plugin that echoes back search queries",
   author: "Codex",
   homepage: "https://github.com/AshDevFr/codex",
