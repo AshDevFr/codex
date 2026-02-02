@@ -2,6 +2,20 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.6.0] - 2026-02-02
+
+### 🚀 Features
+
+- *(web)* Change default books per page to 50 in series detail
+- *(plugin)* Add book count to metadata search results
+- *(metadata)* Add cover lock to preserve user cover selection during auto-fetch
+- *(release)* Add openapi-all step to release-prepare
+
+### 🐛 Bug Fixes
+
+- *(web)* Prevent focus loss when typing in preprocessing rule fields
+- *(web)* Add cover lock field to mocks and tests
+
 ## [1.5.0] - 2026-02-02
 
 ### 🚀 Features
