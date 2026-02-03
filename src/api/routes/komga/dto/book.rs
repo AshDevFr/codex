@@ -503,6 +503,47 @@ pub fn extract_series_id_from_condition(condition: &serde_json::Value) -> Option
     None
 }
 
+/// Extract libraryId value from Komga condition object
+///
+/// Komic sends conditions like:
+/// ```json
+/// {
+///   "condition": {
+///     "allOf": [
+///       { "libraryId": { "operator": "is", "value": "283d008a-3e47-4a2a-9b29-8af595120577" } }
+///     ]
+///   }
+/// }
+/// ```
+pub fn extract_library_id_from_condition(condition: &serde_json::Value) -> Option<&str> {
+    // Check allOf array
+    if let Some(all_of) = condition.get("allOf").and_then(|v| v.as_array()) {
+        for item in all_of {
+            // Check for direct libraryId
+            if let Some(value) = item
+                .get("libraryId")
+                .and_then(|rs| rs.get("value"))
+                .and_then(|v| v.as_str())
+            {
+                return Some(value);
+            }
+            // Check for anyOf containing libraryId (nested condition)
+            if let Some(any_of) = item.get("anyOf").and_then(|v| v.as_array()) {
+                for inner_item in any_of {
+                    if let Some(value) = inner_item
+                        .get("libraryId")
+                        .and_then(|rs| rs.get("value"))
+                        .and_then(|v| v.as_str())
+                    {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -770,5 +811,44 @@ mod tests {
             serde_json::from_str(r#"{"allOf":[{"readStatus":{"operator":"is","value":"READ"}}]}"#)
                 .unwrap();
         assert_eq!(extract_series_id_from_condition(&condition), None);
+    }
+
+    #[test]
+    fn test_extract_library_id_from_condition() {
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"libraryId":{"operator":"is","value":"283d008a-3e47-4a2a-9b29-8af595120577"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_library_id_from_condition(&condition),
+            Some("283d008a-3e47-4a2a-9b29-8af595120577")
+        );
+    }
+
+    #[test]
+    fn test_extract_library_id_empty_condition() {
+        let condition: serde_json::Value = serde_json::from_str(r#"{"allOf":[]}"#).unwrap();
+        assert_eq!(extract_library_id_from_condition(&condition), None);
+    }
+
+    #[test]
+    fn test_extract_library_id_no_library_id() {
+        let condition: serde_json::Value =
+            serde_json::from_str(r#"{"allOf":[{"readStatus":{"operator":"is","value":"READ"}}]}"#)
+                .unwrap();
+        assert_eq!(extract_library_id_from_condition(&condition), None);
+    }
+
+    #[test]
+    fn test_extract_library_id_with_multiple_conditions() {
+        // Test the actual format Komic sends
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"libraryId":{"operator":"is","value":"283d008a-3e47-4a2a-9b29-8af595120577"}},{"releaseDate":{"dateTime":"2026-01-02T21:36:17Z","operator":"after"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            extract_library_id_from_condition(&condition),
+            Some("283d008a-3e47-4a2a-9b29-8af595120577")
+        );
     }
 }

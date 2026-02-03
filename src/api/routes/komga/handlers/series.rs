@@ -2,7 +2,7 @@
 //!
 //! Handlers for series-related endpoints in the Komga-compatible API.
 
-use super::super::dto::book::KomgaBookDto;
+use super::super::dto::book::{extract_library_id_from_condition, KomgaBookDto};
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::series::{
     codex_to_komga_reading_direction, codex_to_komga_status, extract_read_status_from_condition,
@@ -183,19 +183,31 @@ pub async fn list_series(
     let size = query.size.clamp(1, 500) as u64;
     let offset = page * size;
 
-    // Get series based on filters
-    let series_list = if let Some(library_id) = query.library_id {
-        SeriesRepository::list_by_library(&state.db, library_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-    } else if let Some(search) = &query.search {
-        SeriesRepository::search_by_name(&state.db, search)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?
-    } else {
-        SeriesRepository::list_all(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+    // Get series based on filters (no pagination - we paginate in-memory after DTO conversion)
+    let series_list = match (
+        query.library_id,
+        query.search.as_ref().filter(|s| !s.is_empty()),
+    ) {
+        (library_id, Some(search)) => {
+            // Search with optional library filter
+            let (results, _) =
+                SeriesRepository::search_by_title(&state.db, search, library_id, None, None)
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
+            results
+        }
+        (Some(library_id), None) => {
+            // Library filter only
+            SeriesRepository::list_by_library(&state.db, library_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        }
+        (None, None) => {
+            // No filters
+            SeriesRepository::list_all(&state.db)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        }
     };
 
     let total = series_list.len() as i64;
@@ -267,12 +279,18 @@ pub async fn search_series(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
-    // Parse library_id from body if present
+    // Parse library_id from body - first try direct field, then from condition object
     let library_id = body
         .library_id
         .as_ref()
         .and_then(|ids| ids.first())
-        .and_then(|id| Uuid::parse_str(id).ok());
+        .and_then(|id| Uuid::parse_str(id).ok())
+        .or_else(|| {
+            body.condition
+                .as_ref()
+                .and_then(extract_library_id_from_condition)
+                .and_then(|id| Uuid::parse_str(id).ok())
+        });
 
     // Use fullTextSearch from body as search term
     let search_term = body.full_text_search.as_ref().filter(|s| !s.is_empty());
@@ -283,19 +301,28 @@ pub async fn search_series(
         .as_ref()
         .and_then(extract_read_status_from_condition);
 
-    // Get series based on filters
-    let series_list = if let Some(library_id) = library_id {
-        SeriesRepository::list_by_library(&state.db, library_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-    } else if let Some(search) = search_term {
-        SeriesRepository::search_by_name(&state.db, search)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?
-    } else {
-        SeriesRepository::list_all(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+    // Get series based on filters (no pagination - we paginate in-memory after DTO conversion)
+    let series_list = match (library_id, search_term) {
+        (library_id, Some(search)) => {
+            // Search with optional library filter
+            let (results, _) =
+                SeriesRepository::search_by_title(&state.db, search, library_id, None, None)
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
+            results
+        }
+        (Some(library_id), None) => {
+            // Library filter only
+            SeriesRepository::list_by_library(&state.db, library_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        }
+        (None, None) => {
+            // No filters
+            SeriesRepository::list_all(&state.db)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        }
     };
 
     // Convert all series to DTOs first (needed for readStatus filtering)

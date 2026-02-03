@@ -178,8 +178,8 @@ pub async fn search(
         feed = feed.add_entry(entry);
     }
 
-    // Search books by title
-    let books = BookRepository::search_by_title(&state.db, query)
+    // Search books by name/title
+    let books = BookRepository::search_by_name(&state.db, query)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?;
 

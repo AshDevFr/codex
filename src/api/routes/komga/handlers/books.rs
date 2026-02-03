@@ -3,8 +3,8 @@
 //! Handlers for book-related endpoints in the Komga-compatible API.
 
 use super::super::dto::book::{
-    extract_read_status_from_condition, extract_series_id_from_condition, KomgaBookDto,
-    KomgaBooksSearchRequestDto,
+    extract_library_id_from_condition, extract_read_status_from_condition,
+    extract_series_id_from_condition, KomgaBookDto, KomgaBooksSearchRequestDto,
 };
 use super::super::dto::pagination::KomgaPage;
 use super::libraries::{extract_page_image, generate_thumbnail};
@@ -41,6 +41,8 @@ pub struct BooksPaginationQuery {
     pub size: i32,
     /// Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc")
     pub sort: Option<String>,
+    /// Filter by library ID
+    pub library_id: Option<Uuid>,
 }
 
 fn default_page_size() -> i32 {
@@ -303,12 +305,12 @@ pub async fn get_books_ondeck(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
-    // Get in-progress books (completed = false)
+    // Get in-progress books (completed = false), optionally filtered by library
     let (books, total) = BookRepository::list_with_progress(
         &state.db,
         user_id,
-        None,        // library_id
-        Some(false), // completed = false means in-progress
+        query.library_id, // library_id from query params
+        Some(false),      // completed = false means in-progress
         page,
         size,
     )
@@ -390,12 +392,18 @@ pub async fn search_books(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
-    // Parse filter criteria
+    // Parse filter criteria - first try direct field, then from condition object
     let library_id = body
         .library_id
         .as_ref()
         .and_then(|ids| ids.first())
-        .and_then(|id| Uuid::parse_str(id).ok());
+        .and_then(|id| Uuid::parse_str(id).ok())
+        .or_else(|| {
+            body.condition
+                .as_ref()
+                .and_then(extract_library_id_from_condition)
+                .and_then(|id| Uuid::parse_str(id).ok())
+        });
 
     // First try to get series_id from direct field, then from condition object
     let series_id = body
@@ -415,6 +423,13 @@ pub async fn search_books(
         .condition
         .as_ref()
         .and_then(extract_read_status_from_condition);
+
+    // Get search term from either field
+    let search_term = body
+        .full_text_search
+        .as_ref()
+        .filter(|s| !s.is_empty())
+        .or(body.search_term.as_ref().filter(|s| !s.is_empty()));
 
     // Fetch books based on filters
     let (books, total) = match read_status {
@@ -451,9 +466,9 @@ pub async fn search_books(
                 .map_err(|e| ApiError::Internal(format!("Failed to fetch unread books: {}", e)))?
         }
         _ => {
-            // No readStatus filter - use original logic
+            // No readStatus filter - check for text search and other filters
             if let Some(series_id) = series_id {
-                // Filter by series
+                // Filter by series (search within series not supported yet)
                 let all_books = BookRepository::list_by_series(&state.db, series_id, false)
                     .await
                     .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
@@ -465,8 +480,20 @@ pub async fn search_books(
                     .take(size as usize)
                     .collect();
                 (paginated, total)
+            } else if let Some(search) = search_term {
+                // Text search with optional library filter
+                BookRepository::search_by_title(
+                    &state.db,
+                    search,
+                    library_id,
+                    None,
+                    false,
+                    Some((page, size)),
+                )
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
             } else if let Some(library_id) = library_id {
-                // Filter by library
+                // Filter by library only (no search)
                 BookRepository::list_by_library(&state.db, library_id, false, page, size)
                     .await
                     .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?

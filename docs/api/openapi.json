@@ -12021,6 +12021,19 @@
                 "null"
               ]
             }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -12106,6 +12119,19 @@
                 "string",
                 "null"
               ]
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
             }
           }
         ],
@@ -15003,6 +15029,14 @@
         "type": "object",
         "description": "Query parameters for paginated book endpoints",
         "properties": {
+          "library_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Filter by library ID"
+          },
           "page": {
             "type": "integer",
             "format": "int32",

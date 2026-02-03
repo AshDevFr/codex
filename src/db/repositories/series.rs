@@ -647,61 +647,27 @@ impl SeriesRepository {
             .context("Failed to list in-progress series")
     }
 
-    /// Search series by title (case-insensitive via series_metadata)
-    pub async fn search_by_name(
+    /// Search series by metadata title with optional pagination (case-insensitive)
+    ///
+    /// Unified search method with optional filters:
+    /// - `library_id`: Filter to a specific library (None = all libraries)
+    /// - `candidate_ids`: Filter to specific series IDs (None = no ID filter)
+    /// - `pagination`: Optional (page, page_size) tuple. If None, returns all results.
+    ///
+    /// Returns (results, total_count). If pagination is None, total_count equals results.len().
+    /// Returns empty vec if candidate_ids is Some but empty.
+    pub async fn search_by_title(
         db: &DatabaseConnection,
         query: &str,
-    ) -> Result<Vec<series::Model>> {
-        let pattern = format!("%{}%", query.to_lowercase());
-
-        // Use LOWER(title) LIKE pattern from series_metadata for case-insensitive search
-        let lower_title = Func::lower(Expr::col((
-            series_metadata::Entity,
-            series_metadata::Column::Title,
-        )));
-        let search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
-
-        Series::find()
-            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-            .filter(search_condition)
-            .order_by_asc(series_metadata::Column::Title)
-            .limit(50)
-            .all(db)
-            .await
-            .context("Failed to search series by name")
-    }
-
-    /// Full-text search series by title (case-insensitive using LOWER())
-    pub async fn full_text_search(
-        db: &DatabaseConnection,
-        query: &str,
-    ) -> Result<Vec<series::Model>> {
-        let pattern = format!("%{}%", query.to_lowercase());
-
-        // Use LOWER(title) LIKE pattern from series_metadata for case-insensitive search
-        let lower_title = Func::lower(Expr::col((
-            series_metadata::Entity,
-            series_metadata::Column::Title,
-        )));
-        let search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
-
-        Series::find()
-            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-            .filter(search_condition)
-            .order_by_asc(series_metadata::Column::Title)
-            .all(db)
-            .await
-            .context("Failed to execute full-text search")
-    }
-
-    /// Full-text search series by title within candidate IDs (case-insensitive)
-    pub async fn full_text_search_filtered(
-        db: &DatabaseConnection,
-        query: &str,
-        candidate_ids: &[Uuid],
-    ) -> Result<Vec<series::Model>> {
-        if candidate_ids.is_empty() {
-            return Ok(vec![]);
+        library_id: Option<Uuid>,
+        candidate_ids: Option<&[Uuid]>,
+        pagination: Option<(u64, u64)>,
+    ) -> Result<(Vec<series::Model>, u64)> {
+        // Short-circuit if candidate_ids is explicitly empty
+        if let Some(ids) = candidate_ids {
+            if ids.is_empty() {
+                return Ok((vec![], 0));
+            }
         }
 
         let pattern = format!("%{}%", query.to_lowercase());
@@ -711,17 +677,61 @@ impl SeriesRepository {
             series_metadata::Entity,
             series_metadata::Column::Title,
         )));
-        let search_condition = Condition::all()
-            .add(Expr::expr(lower_title).like(&pattern))
-            .add(series::Column::Id.is_in(candidate_ids.to_vec()));
+        let mut search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
 
-        Series::find()
+        // Add library filter if specified
+        if let Some(lib_id) = library_id {
+            search_condition = search_condition.add(series::Column::LibraryId.eq(lib_id));
+        }
+
+        // Add candidate IDs filter if specified
+        if let Some(ids) = candidate_ids {
+            search_condition = search_condition.add(series::Column::Id.is_in(ids.to_vec()));
+        }
+
+        let base_query = Series::find()
             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-            .filter(search_condition)
-            .order_by_asc(series_metadata::Column::Title)
-            .all(db)
-            .await
-            .context("Failed to execute full-text search")
+            .filter(search_condition.clone());
+
+        if let Some((page, page_size)) = pagination {
+            // With pagination: count total and fetch page
+            let total = Series::find()
+                .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                .filter(search_condition)
+                .count(db)
+                .await
+                .context("Failed to count search results")?;
+
+            let results = base_query
+                .order_by_asc(series_metadata::Column::Title)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to search series by title")?;
+
+            Ok((results, total))
+        } else {
+            // Without pagination: return all results
+            let results = base_query
+                .order_by_asc(series_metadata::Column::Title)
+                .all(db)
+                .await
+                .context("Failed to search series by title")?;
+
+            let total = results.len() as u64;
+            Ok((results, total))
+        }
+    }
+
+    /// Search series by title (case-insensitive via series_metadata)
+    /// Convenience wrapper for search_by_title with no filters, returns all results
+    pub async fn search_by_name(
+        db: &DatabaseConnection,
+        query: &str,
+    ) -> Result<Vec<series::Model>> {
+        let (results, _) = Self::search_by_title(db, query, None, None, None).await?;
+        Ok(results)
     }
 
     /// Update series core fields

@@ -651,13 +651,13 @@ pub async fn list_books_filtered(
                 (vec![], 0)
             } else {
                 let id_vec: Vec<Uuid> = ids.iter().cloned().collect();
-                BookRepository::full_text_search_filtered(
+                BookRepository::search_by_title(
                     &state.db,
                     search_query,
-                    &id_vec,
+                    None,
+                    Some(&id_vec),
                     request.include_deleted,
-                    offset,
-                    page_size,
+                    Some((offset, page_size)),
                 )
                 .await
                 .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
@@ -665,12 +665,13 @@ pub async fn list_books_filtered(
         }
         // Full-text search without filter conditions
         (None, Some(search_query)) if !search_query.trim().is_empty() => {
-            BookRepository::full_text_search(
+            BookRepository::search_by_title(
                 &state.db,
                 search_query,
+                None,
+                None,
                 request.include_deleted,
-                offset,
-                page_size,
+                Some((offset, page_size)),
             )
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?

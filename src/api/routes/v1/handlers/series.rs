@@ -945,10 +945,12 @@ pub async fn list_series_filtered(
         if !search_query.trim().is_empty() {
             // Use full-text search with candidate filtering
             let candidate_ids: Vec<Uuid> = matching_ids.iter().cloned().collect();
-            let search_results = SeriesRepository::full_text_search_filtered(
+            let (search_results, _) = SeriesRepository::search_by_title(
                 &state.db,
                 search_query,
-                &candidate_ids,
+                None,
+                Some(&candidate_ids),
+                None, // No pagination - we need all matching IDs
             )
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;

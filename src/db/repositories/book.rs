@@ -928,45 +928,40 @@ impl BookRepository {
         Ok((paginated_books, total))
     }
 
-    /// Search books by title (case-insensitive via book_metadata)
+    /// Search books by name/title (case-insensitive via book_metadata)
+    /// Convenience wrapper for OPDS - returns first 50 results
+    pub async fn search_by_name(db: &DatabaseConnection, query: &str) -> Result<Vec<books::Model>> {
+        let (books, _) = Self::search_by_title(db, query, None, None, false, Some((0, 50))).await?;
+        Ok(books)
+    }
+
+    /// Search books by metadata title with optional pagination (case-insensitive)
+    ///
+    /// Unified search method with optional filters:
+    /// - `library_id`: Filter to a specific library (None = all libraries)
+    /// - `candidate_ids`: Filter to specific book IDs (None = no ID filter)
+    /// - `include_deleted`: Include soft-deleted books
+    /// - `pagination`: Optional (page, page_size) tuple. If None, returns all results.
+    ///
+    /// Returns (results, total_count). If pagination is None, total_count equals results.len().
+    /// Returns empty vec if candidate_ids is Some but empty.
     pub async fn search_by_title(
         db: &DatabaseConnection,
         query: &str,
-    ) -> Result<Vec<books::Model>> {
-        use crate::db::entities::book_metadata;
-        use sea_orm::JoinType;
-
-        let pattern = format!("%{}%", query.to_lowercase());
-
-        // Use LOWER(title) LIKE pattern from book_metadata for case-insensitive search
-        let lower_title = Func::lower(Expr::col((
-            book_metadata::Entity,
-            book_metadata::Column::Title,
-        )));
-        let search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
-
-        Books::find()
-            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            .filter(search_condition)
-            .filter(books::Column::Deleted.eq(false))
-            .order_by_asc(book_metadata::Column::Title)
-            .limit(50)
-            .all(db)
-            .await
-            .context("Failed to search books by title")
-    }
-
-    /// Full-text search books by title (truly case-insensitive using LOWER())
-    /// Returns book IDs matching the search query with pagination
-    pub async fn full_text_search(
-        db: &DatabaseConnection,
-        query: &str,
+        library_id: Option<Uuid>,
+        candidate_ids: Option<&[Uuid]>,
         include_deleted: bool,
-        page: u64,
-        page_size: u64,
+        pagination: Option<(u64, u64)>,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::db::entities::book_metadata;
         use sea_orm::JoinType;
+
+        // Short-circuit if candidate_ids is explicitly empty
+        if let Some(ids) = candidate_ids {
+            if ids.is_empty() {
+                return Ok((vec![], 0));
+            }
+        }
 
         let pattern = format!("%{}%", query.to_lowercase());
 
@@ -977,79 +972,53 @@ impl BookRepository {
         )));
         let mut search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
 
-        if !include_deleted {
-            search_condition = search_condition.add(books::Column::Deleted.eq(false));
+        // Add library filter if specified
+        if let Some(lib_id) = library_id {
+            search_condition = search_condition.add(books::Column::LibraryId.eq(lib_id));
         }
 
-        let total = Books::find()
-            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            .filter(search_condition.clone())
-            .count(db)
-            .await
-            .context("Failed to count full-text search results")?;
-
-        let books_list = Books::find()
-            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            .filter(search_condition)
-            .order_by_asc(book_metadata::Column::Title)
-            .offset(page * page_size)
-            .limit(page_size)
-            .all(db)
-            .await
-            .context("Failed to execute full-text search")?;
-
-        Ok((books_list, total))
-    }
-
-    /// Full-text search books by title within a set of candidate IDs
-    pub async fn full_text_search_filtered(
-        db: &DatabaseConnection,
-        query: &str,
-        candidate_ids: &[Uuid],
-        include_deleted: bool,
-        page: u64,
-        page_size: u64,
-    ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::db::entities::book_metadata;
-        use sea_orm::JoinType;
-
-        if candidate_ids.is_empty() {
-            return Ok((vec![], 0));
+        // Add candidate IDs filter if specified
+        if let Some(ids) = candidate_ids {
+            search_condition = search_condition.add(books::Column::Id.is_in(ids.to_vec()));
         }
-
-        let pattern = format!("%{}%", query.to_lowercase());
-
-        // Use LOWER(title) LIKE pattern from book_metadata for case-insensitive search
-        let lower_title = Func::lower(Expr::col((
-            book_metadata::Entity,
-            book_metadata::Column::Title,
-        )));
-        let mut search_condition = Condition::all()
-            .add(Expr::expr(lower_title).like(&pattern))
-            .add(books::Column::Id.is_in(candidate_ids.to_vec()));
 
         if !include_deleted {
             search_condition = search_condition.add(books::Column::Deleted.eq(false));
         }
 
-        let total = Books::find()
+        let base_query = Books::find()
             .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            .filter(search_condition.clone())
-            .count(db)
-            .await
-            .context("Failed to count full-text search results")?;
+            .filter(search_condition.clone());
 
-        let books_list = Books::find()
-            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
-            .filter(search_condition)
-            .order_by_asc(book_metadata::Column::Title)
-            .offset(page * page_size)
-            .limit(page_size)
-            .all(db)
-            .await
-            .context("Failed to execute full-text search")?;
+        if let Some((page, page_size)) = pagination {
+            // With pagination: count total and fetch page
+            let total = Books::find()
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .filter(search_condition)
+                .count(db)
+                .await
+                .context("Failed to count search results")?;
 
-        Ok((books_list, total))
+            let books_list = base_query
+                .order_by_asc(book_metadata::Column::Title)
+                .offset(page * page_size)
+                .limit(page_size)
+                .all(db)
+                .await
+                .context("Failed to search books by title")?;
+
+            Ok((books_list, total))
+        } else {
+            // Without pagination: return all results
+            let books_list = base_query
+                .order_by_asc(book_metadata::Column::Title)
+                .all(db)
+                .await
+                .context("Failed to search books by title")?;
+
+            let total = books_list.len() as u64;
+            Ok((books_list, total))
+        }
     }
 
     /// Update book

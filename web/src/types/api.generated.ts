@@ -5643,6 +5643,11 @@ export interface components {
         /** @description Query parameters for paginated book endpoints */
         BooksPaginationQuery: {
             /**
+             * Format: uuid
+             * @description Filter by library ID
+             */
+            library_id?: string | null;
+            /**
              * Format: int32
              * @description Page number (0-indexed, Komga-style)
              */
@@ -22107,6 +22112,8 @@ export interface operations {
                 size?: number;
                 /** @description Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc") */
                 sort?: string | null;
+                /** @description Filter by library ID */
+                library_id?: string | null;
             };
             header?: never;
             path: {
@@ -22148,6 +22155,8 @@ export interface operations {
                 size?: number;
                 /** @description Sort parameter (e.g., "createdDate,desc", "metadata.numberSort,asc") */
                 sort?: string | null;
+                /** @description Filter by library ID */
+                library_id?: string | null;
             };
             header?: never;
             path: {
