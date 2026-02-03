@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.7.1] - 2026-02-03
+
+### 🚀 Features
+
+- *(komga)* Add sort fields, condition filters, and integration tests for Komic compatibility
+
 ## [1.7.0] - 2026-02-03
 
 ### 🚀 Features
