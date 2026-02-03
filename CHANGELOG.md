@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.7.0] - 2026-02-03
+
+### 🚀 Features
+
+- *(tasks)* Handle rate-limited tasks with rescheduling instead of retries
+
 ## [1.6.3] - 2026-02-02
 
 ### 🐛 Bug Fixes
