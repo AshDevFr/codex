@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Alias, Expr, Func},
+    sea_query::{Alias, Expr, Func, IntoCondition},
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
@@ -17,6 +17,45 @@ use crate::api::routes::v1::dto::series::{SeriesSortField, SeriesSortParam, Sort
 use crate::db::entities::{books, prelude::*, read_progress, series, series_metadata};
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use std::sync::Arc;
+
+/// Options for querying series with filtering, sorting, and pagination
+#[derive(Debug, Clone, Default)]
+pub struct SeriesQueryOptions<'a> {
+    /// Filter by library ID
+    pub library_id: Option<Uuid>,
+    /// User ID for user-specific sorts (date_read)
+    pub user_id: Option<Uuid>,
+    /// Text search query (searches title)
+    pub search: Option<&'a str>,
+    /// Sort field and direction
+    pub sort: Option<SeriesQuerySort>,
+    /// Page offset (0-indexed)
+    pub page: u64,
+    /// Page size
+    pub page_size: u64,
+}
+
+/// Sort configuration for series queries
+#[derive(Debug, Clone, Copy)]
+pub struct SeriesQuerySort {
+    pub field: SeriesSortFieldRepo,
+    pub ascending: bool,
+}
+
+/// Sort field options for series queries (repository-level)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SeriesSortFieldRepo {
+    /// Sort by title (title_sort then title from metadata)
+    Title,
+    /// Sort by date added (created_at)
+    DateAdded,
+    /// Sort by date updated (updated_at)
+    DateUpdated,
+    /// Sort by release date (year from metadata)
+    ReleaseDate,
+    /// Sort by last read date (requires user_id)
+    DateRead,
+}
 
 /// Result type for series with aggregated data (used for date_read sorting)
 #[derive(Debug, FromQueryResult)]
@@ -53,6 +92,190 @@ impl From<SeriesWithAggregates> for series::Model {
 pub struct SeriesRepository;
 
 impl SeriesRepository {
+    /// Query series with flexible filtering, sorting, and pagination.
+    ///
+    /// This is the primary composable query method that supports all filtering
+    /// and sorting options. Use `SeriesQueryOptions` to configure the query.
+    pub async fn query(
+        db: &DatabaseConnection,
+        options: SeriesQueryOptions<'_>,
+    ) -> Result<(Vec<series::Model>, u64)> {
+        let order = options
+            .sort
+            .map(|s| if s.ascending { Order::Asc } else { Order::Desc })
+            .unwrap_or(Order::Asc);
+
+        let sort_field = options.sort.map(|s| s.field);
+
+        // Handle DateRead sort separately as it requires special aggregation
+        if matches!(sort_field, Some(SeriesSortFieldRepo::DateRead)) {
+            if let Some(user_id) = options.user_id {
+                return Self::query_with_date_read_sort(db, options, user_id, order).await;
+            }
+        }
+
+        let mut query =
+            Series::find().join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
+
+        // Apply filters
+        if let Some(library_id) = options.library_id {
+            query = query.filter(series::Column::LibraryId.eq(library_id));
+        }
+
+        // Handle text search
+        if let Some(search) = options.search {
+            if !search.is_empty() {
+                let pattern = format!("%{}%", search.to_lowercase());
+                let lower_title = Func::lower(Expr::col((
+                    series_metadata::Entity,
+                    series_metadata::Column::Title,
+                )));
+                query = query.filter(Expr::expr(lower_title).like(&pattern));
+            }
+        }
+
+        // Get total count before pagination
+        let total = query
+            .clone()
+            .select_only()
+            .column(series::Column::Id)
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count series")?;
+
+        // Apply sorting
+        query = match sort_field {
+            Some(SeriesSortFieldRepo::Title) | None => query
+                .order_by(series_metadata::Column::TitleSort, order.clone())
+                .order_by(series_metadata::Column::Title, order),
+            Some(SeriesSortFieldRepo::DateAdded) => {
+                query.order_by(series::Column::CreatedAt, order)
+            }
+            Some(SeriesSortFieldRepo::DateUpdated) => {
+                query.order_by(series::Column::UpdatedAt, order)
+            }
+            Some(SeriesSortFieldRepo::ReleaseDate) => {
+                query.order_by(series_metadata::Column::Year, order)
+            }
+            Some(SeriesSortFieldRepo::DateRead) => {
+                // Fallback: shouldn't reach here, handled above
+                query.order_by(series::Column::UpdatedAt, order)
+            }
+        };
+
+        // Apply pagination
+        let series_list = query
+            .offset(options.page * options.page_size)
+            .limit(options.page_size)
+            .all(db)
+            .await
+            .context("Failed to query series")?;
+
+        Ok((series_list, total))
+    }
+
+    /// Query series with DateRead sort (requires user_id for aggregation)
+    async fn query_with_date_read_sort(
+        db: &DatabaseConnection,
+        options: SeriesQueryOptions<'_>,
+        user_id: Uuid,
+        order: Order,
+    ) -> Result<(Vec<series::Model>, u64)> {
+        let mut query = Series::find()
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            .join(JoinType::LeftJoin, series::Relation::Books.def())
+            .join(
+                JoinType::LeftJoin,
+                books::Relation::ReadProgress
+                    .def()
+                    .on_condition(move |_left, right| {
+                        Expr::col((right, read_progress::Column::UserId))
+                            .eq(user_id)
+                            .into_condition()
+                    }),
+            );
+
+        // Apply filters
+        if let Some(library_id) = options.library_id {
+            query = query.filter(series::Column::LibraryId.eq(library_id));
+        }
+
+        // Handle text search
+        if let Some(search) = options.search {
+            if !search.is_empty() {
+                let pattern = format!("%{}%", search.to_lowercase());
+                let lower_title = Func::lower(Expr::col((
+                    series_metadata::Entity,
+                    series_metadata::Column::Title,
+                )));
+                query = query.filter(Expr::expr(lower_title).like(&pattern));
+            }
+        }
+
+        // Get total count (before aggregation)
+        let count_query =
+            Series::find().join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
+
+        let mut count_query = if let Some(library_id) = options.library_id {
+            count_query.filter(series::Column::LibraryId.eq(library_id))
+        } else {
+            count_query
+        };
+
+        if let Some(search) = options.search {
+            if !search.is_empty() {
+                let pattern = format!("%{}%", search.to_lowercase());
+                let lower_title = Func::lower(Expr::col((
+                    series_metadata::Entity,
+                    series_metadata::Column::Title,
+                )));
+                count_query = count_query.filter(Expr::expr(lower_title).like(&pattern));
+            }
+        }
+
+        let total = count_query
+            .select_only()
+            .column(series::Column::Id)
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count series")?;
+
+        // Add aggregation for date_read sort
+        let series_list: Vec<SeriesWithAggregates> = query
+            .select_only()
+            .column(series::Column::Id)
+            .column(series::Column::LibraryId)
+            .column(series::Column::Fingerprint)
+            .column(series::Column::Path)
+            .column(series::Column::Name)
+            .column(series::Column::NormalizedName)
+            .column(series::Column::CreatedAt)
+            .column(series::Column::UpdatedAt)
+            .column_as(
+                Expr::col((
+                    Alias::new("read_progress"),
+                    read_progress::Column::UpdatedAt,
+                ))
+                .max(),
+                "last_read_at",
+            )
+            .group_by(series::Column::Id)
+            .order_by(Expr::col(Alias::new("last_read_at")), order)
+            .offset(options.page * options.page_size)
+            .limit(options.page_size)
+            .into_model::<SeriesWithAggregates>()
+            .all(db)
+            .await
+            .context("Failed to query series with date_read sort")?;
+
+        // Convert to series::Model
+        let series_models: Vec<series::Model> = series_list.into_iter().map(|s| s.into()).collect();
+
+        Ok((series_models, total))
+    }
+
     /// Normalize name for searching (lowercase, alphanumeric only)
     pub fn normalize_name(name: &str) -> String {
         name.to_lowercase()

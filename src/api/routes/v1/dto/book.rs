@@ -31,6 +31,8 @@ pub enum BookSortField {
     Filename,
     /// Sort by page count
     PageCount,
+    /// Sort by last read date (requires user_id for filtering)
+    LastRead,
 }
 
 impl fmt::Display for BookSortField {
@@ -44,6 +46,7 @@ impl fmt::Display for BookSortField {
             BookSortField::FileSize => write!(f, "file_size"),
             BookSortField::Filename => write!(f, "filename"),
             BookSortField::PageCount => write!(f, "page_count"),
+            BookSortField::LastRead => write!(f, "last_read"),
         }
     }
 }
@@ -61,6 +64,7 @@ impl FromStr for BookSortField {
             "file_size" => Ok(BookSortField::FileSize),
             "filename" => Ok(BookSortField::Filename),
             "page_count" => Ok(BookSortField::PageCount),
+            "last_read" | "read_date" => Ok(BookSortField::LastRead),
             _ => Err(format!("Invalid sort field: {}", s)),
         }
     }

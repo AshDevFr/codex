@@ -14,7 +14,8 @@ use codex::api::routes::komga::dto::library::KomgaLibraryDto;
 use codex::api::routes::komga::dto::pagination::KomgaPage;
 use codex::api::routes::komga::dto::series::KomgaSeriesDto;
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
+    SeriesRepository, UserRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::utils::password;
@@ -1896,7 +1897,828 @@ async fn test_komga_mark_series_as_unread_not_found() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-/// Test that marking series as read is reflected in series response
+// ============================================================================
+// Sort and Filter Tests (Phase 3 - Komga sort/filter fixes)
+// ============================================================================
+
+/// Helper to create a book_metadata record with release date
+async fn create_book_metadata_with_date(
+    db: &sea_orm::DatabaseConnection,
+    book_id: uuid::Uuid,
+    title: Option<&str>,
+    year: Option<i32>,
+    month: Option<i32>,
+    day: Option<i32>,
+) {
+    use codex::db::entities::book_metadata;
+    let metadata = book_metadata::Model {
+        id: uuid::Uuid::new_v4(),
+        book_id,
+        title: title.map(|s| s.to_string()),
+        title_sort: title.map(|s| s.to_string()),
+        number: None,
+        summary: None,
+        writer: None,
+        penciller: None,
+        inker: None,
+        colorist: None,
+        letterer: None,
+        cover_artist: None,
+        editor: None,
+        publisher: None,
+        imprint: None,
+        genre: None,
+        web: None,
+        language_iso: None,
+        format_detail: None,
+        black_and_white: None,
+        manga: None,
+        year,
+        month,
+        day,
+        volume: None,
+        count: None,
+        isbns: None,
+        title_lock: false,
+        title_sort_lock: false,
+        number_lock: false,
+        summary_lock: false,
+        writer_lock: false,
+        penciller_lock: false,
+        inker_lock: false,
+        colorist_lock: false,
+        letterer_lock: false,
+        cover_artist_lock: false,
+        editor_lock: false,
+        publisher_lock: false,
+        imprint_lock: false,
+        genre_lock: false,
+        web_lock: false,
+        language_iso_lock: false,
+        format_detail_lock: false,
+        black_and_white_lock: false,
+        manga_lock: false,
+        year_lock: false,
+        month_lock: false,
+        day_lock: false,
+        volume_lock: false,
+        count_lock: false,
+        isbns_lock: false,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    BookMetadataRepository::upsert(db, &metadata).await.unwrap();
+}
+
+/// Test that POST /books/list supports sort by createdDate ascending
+#[tokio::test]
+async fn test_komga_search_books_sort_by_created_date_asc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Create books with different file sizes to distinguish them
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.cbz",
+        "issue1.cbz",
+        "hash_sort_1",
+        "cbz",
+        10,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue2.cbz",
+        "issue2.cbz",
+        "hash_sort_2",
+        "cbz",
+        20,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by createdDate ascending
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=createdDate,asc",
+        &token,
+        "{}",
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 2);
+    assert_eq!(page.content.len(), 2);
+    // First created should be first
+    assert_eq!(page.content[0].id, created_book1.id.to_string());
+    assert_eq!(page.content[1].id, created_book2.id.to_string());
+}
+
+/// Test that POST /books/list supports sort by createdDate descending
+#[tokio::test]
+async fn test_komga_search_books_sort_by_created_date_desc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.cbz",
+        "issue1.cbz",
+        "hash_desc_1",
+        "cbz",
+        10,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue2.cbz",
+        "issue2.cbz",
+        "hash_desc_2",
+        "cbz",
+        20,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by createdDate descending
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=createdDate,desc",
+        &token,
+        "{}",
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 2);
+    // Descending: most recently created first
+    assert_eq!(page.content[0].id, created_book2.id.to_string());
+    assert_eq!(page.content[1].id, created_book1.id.to_string());
+}
+
+/// Test that POST /books/list supports sort by page count
+#[tokio::test]
+async fn test_komga_search_books_sort_by_page_count() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Book with 50 pages
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/long.cbz",
+        "long.cbz",
+        "hash_pc_1",
+        "cbz",
+        50,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    // Book with 10 pages
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/short.cbz",
+        "short.cbz",
+        "hash_pc_2",
+        "cbz",
+        10,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by pagesCount ascending
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=media.pagesCount,asc",
+        &token,
+        "{}",
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 2);
+    // 10 pages before 50 pages
+    assert_eq!(page.content[0].id, created_book2.id.to_string());
+    assert_eq!(page.content[1].id, created_book1.id.to_string());
+}
+
+/// Test that POST /books/list supports sort by releaseDate
+#[tokio::test]
+async fn test_komga_search_books_sort_by_release_date() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Book released in 2020
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/old.cbz",
+        "old.cbz",
+        "hash_rd_1",
+        "cbz",
+        20,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book1.id,
+        Some("Old Issue"),
+        Some(2020),
+        Some(3),
+        Some(15),
+    )
+    .await;
+
+    // Book released in 2024
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/new.cbz",
+        "new.cbz",
+        "hash_rd_2",
+        "cbz",
+        20,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book2.id,
+        Some("New Issue"),
+        Some(2024),
+        Some(6),
+        Some(1),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by releaseDate ascending
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=metadata.releaseDate,asc",
+        &token,
+        "{}",
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 2);
+    // 2020 before 2024
+    assert_eq!(page.content[0].id, created_book1.id.to_string());
+    assert_eq!(page.content[1].id, created_book2.id.to_string());
+}
+
+/// Test that POST /books/list supports readStatus IN_PROGRESS filter
+#[tokio::test]
+async fn test_komga_search_books_read_status_in_progress() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Create two books
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.cbz",
+        "issue1.cbz",
+        "hash_rp_1",
+        "cbz",
+        50,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue2.cbz",
+        "issue2.cbz",
+        "hash_rp_2",
+        "cbz",
+        50,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Get user_id from token - create admin user and look up
+    let user = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Mark book1 as in-progress (page 10 of 50)
+    ReadProgressRepository::upsert(&db, user.id, created_book1.id, 10, false)
+        .await
+        .unwrap();
+
+    // book2 has no read progress (unread)
+
+    let app = create_test_router_with_komga(state);
+
+    // Filter by readStatus IN_PROGRESS via condition (Komic format with operator/value)
+    let body =
+        r#"{"condition":{"allOf":[{"readStatus":{"operator":"is","value":"IN_PROGRESS"}}]}}"#;
+    let request = post_request_with_auth_json("/komga/api/v1/books/list", &token, body);
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 1);
+    assert_eq!(page.content[0].id, created_book1.id.to_string());
+}
+
+/// Test that POST /books/list supports sort by readProgress.readDate (LastRead)
+#[tokio::test]
+async fn test_komga_search_books_sort_by_read_date() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.cbz",
+        "issue1.cbz",
+        "hash_lr_1",
+        "cbz",
+        50,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue2.cbz",
+        "issue2.cbz",
+        "hash_lr_2",
+        "cbz",
+        50,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let user = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Mark book1 as in-progress first
+    ReadProgressRepository::upsert(&db, user.id, created_book1.id, 5, false)
+        .await
+        .unwrap();
+
+    // Then mark book2 as in-progress (more recently)
+    ReadProgressRepository::upsert(&db, user.id, created_book2.id, 10, false)
+        .await
+        .unwrap();
+
+    let app = create_test_router_with_komga(state);
+
+    // Sort by readProgress.readDate descending (most recently read first)
+    // Also filter by IN_PROGRESS so we only get books with read progress
+    let body =
+        r#"{"condition":{"allOf":[{"readStatus":{"operator":"is","value":"IN_PROGRESS"}}]}}"#;
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=readProgress.readDate,desc",
+        &token,
+        body,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 2);
+    // Most recently read first (book2)
+    assert_eq!(page.content[0].id, created_book2.id.to_string());
+    assert_eq!(page.content[1].id, created_book1.id.to_string());
+}
+
+/// Test that POST /books/list supports releaseDate condition filter with "after" operator
+#[tokio::test]
+async fn test_komga_search_books_release_date_filter_after() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Book released 2020-06-15
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/old.cbz",
+        "old.cbz",
+        "hash_rdf_1",
+        "cbz",
+        20,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book1.id,
+        Some("Old Issue"),
+        Some(2020),
+        Some(6),
+        Some(15),
+    )
+    .await;
+
+    // Book released 2025-01-10
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/new.cbz",
+        "new.cbz",
+        "hash_rdf_2",
+        "cbz",
+        20,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book2.id,
+        Some("New Issue"),
+        Some(2025),
+        Some(1),
+        Some(10),
+    )
+    .await;
+
+    // Book with no release date
+    let book3 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/undated.cbz",
+        "undated.cbz",
+        "hash_rdf_3",
+        "cbz",
+        20,
+    );
+    let created_book3 = BookRepository::create(&db, &book3, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book3.id,
+        Some("Undated Issue"),
+        None,
+        None,
+        None,
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Filter: releaseDate after 2024-01-01
+    let body = r#"{"condition":{"allOf":[{"releaseDate":{"dateTime":"2024-01-01T00:00:00Z","operator":"after"}}]}}"#;
+    let request = post_request_with_auth_json("/komga/api/v1/books/list", &token, body);
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    // Only book2 (2025-01-10) should be after 2024-01-01
+    // book1 (2020-06-15) is before, book3 has no date
+    assert_eq!(page.total_elements, 1);
+    assert_eq!(page.content[0].id, created_book2.id.to_string());
+}
+
+/// Test that POST /books/list supports releaseDate condition filter with "before" operator
+#[tokio::test]
+async fn test_komga_search_books_release_date_filter_before() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Book released 2020-06-15
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/old.cbz",
+        "old.cbz",
+        "hash_rdb_1",
+        "cbz",
+        20,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book1.id,
+        Some("Old Issue"),
+        Some(2020),
+        Some(6),
+        Some(15),
+    )
+    .await;
+
+    // Book released 2025-01-10
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/new.cbz",
+        "new.cbz",
+        "hash_rdb_2",
+        "cbz",
+        20,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book2.id,
+        Some("New Issue"),
+        Some(2025),
+        Some(1),
+        Some(10),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Filter: releaseDate before 2022-01-01
+    let body = r#"{"condition":{"allOf":[{"releaseDate":{"dateTime":"2022-01-01T00:00:00Z","operator":"before"}}]}}"#;
+    let request = post_request_with_auth_json("/komga/api/v1/books/list", &token, body);
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    // Only book1 (2020-06-15) should be before 2022-01-01
+    assert_eq!(page.total_elements, 1);
+    assert_eq!(page.content[0].id, created_book1.id.to_string());
+}
+
+/// Test that POST /books/list supports combined releaseDate filter with sort
+#[tokio::test]
+async fn test_komga_search_books_release_date_filter_with_sort() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    // Book released 2023-03-01
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/mar2023.cbz",
+        "mar2023.cbz",
+        "hash_rds_1",
+        "cbz",
+        20,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book1.id,
+        Some("March 2023"),
+        Some(2023),
+        Some(3),
+        Some(1),
+    )
+    .await;
+
+    // Book released 2024-06-15
+    let book2 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/jun2024.cbz",
+        "jun2024.cbz",
+        "hash_rds_2",
+        "cbz",
+        20,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book2.id,
+        Some("June 2024"),
+        Some(2024),
+        Some(6),
+        Some(15),
+    )
+    .await;
+
+    // Book released 2025-01-10
+    let book3 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/jan2025.cbz",
+        "jan2025.cbz",
+        "hash_rds_3",
+        "cbz",
+        20,
+    );
+    let created_book3 = BookRepository::create(&db, &book3, None).await.unwrap();
+    create_book_metadata_with_date(
+        &db,
+        created_book3.id,
+        Some("January 2025"),
+        Some(2025),
+        Some(1),
+        Some(10),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Filter: releaseDate after 2023-01-01, sort by releaseDate desc
+    let body = r#"{"condition":{"allOf":[{"releaseDate":{"dateTime":"2023-01-01T00:00:00Z","operator":"after"}}]}}"#;
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=metadata.releaseDate,desc",
+        &token,
+        body,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    // All 3 books are after 2023-01-01, sorted desc by release date
+    assert_eq!(page.total_elements, 3);
+    assert_eq!(page.content[0].id, created_book3.id.to_string()); // 2025-01-10
+    assert_eq!(page.content[1].id, created_book2.id.to_string()); // 2024-06-15
+    assert_eq!(page.content[2].id, created_book1.id.to_string()); // 2023-03-01
+}
+
+/// Test that POST /books/list with unknown sort field falls back to default (title)
+#[tokio::test]
+async fn test_komga_search_books_unknown_sort_uses_default() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    let book1 = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.cbz",
+        "issue1.cbz",
+        "hash_unk_1",
+        "cbz",
+        20,
+    );
+    BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Use an unknown sort field - should not error
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=unknownField,asc",
+        &token,
+        "{}",
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 1);
+}
+
+/// Test that POST /books/list supports the compound sort "series,metadata.numberSort,asc"
+#[tokio::test]
+async fn test_komga_search_books_sort_by_series_compound() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create two series
+    let series_a = SeriesRepository::create(&db, library.id, "Alpha Series", None)
+        .await
+        .unwrap();
+    let series_b = SeriesRepository::create(&db, library.id, "Beta Series", None)
+        .await
+        .unwrap();
+
+    // Book in Beta series
+    let book1 = create_test_book(
+        series_b.id,
+        library.id,
+        "/comics/Beta/issue1.cbz",
+        "issue1.cbz",
+        "hash_cs_1",
+        "cbz",
+        20,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    // Book in Alpha series
+    let book2 = create_test_book(
+        series_a.id,
+        library.id,
+        "/comics/Alpha/issue1.cbz",
+        "issue1.cbz",
+        "hash_cs_2",
+        "cbz",
+        20,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by series,metadata.numberSort ascending (alphabetical series order)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/books/list?sort=series,metadata.numberSort,asc",
+        &token,
+        "{}",
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 2);
+    // Alpha Series before Beta Series
+    assert_eq!(page.content[0].id, created_book2.id.to_string());
+    assert_eq!(page.content[1].id, created_book1.id.to_string());
+}
+
 #[tokio::test]
 async fn test_komga_series_read_progress_reflected_in_response() {
     let (db, temp_dir) = setup_test_db().await;

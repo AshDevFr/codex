@@ -503,6 +503,66 @@ pub fn extract_series_id_from_condition(condition: &serde_json::Value) -> Option
     None
 }
 
+/// Release date condition extracted from Komga condition object
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseDateCondition {
+    /// The operator: "after" or "before"
+    pub operator: String,
+    /// The ISO 8601 datetime string
+    pub date_time: String,
+}
+
+/// Extract releaseDate condition from Komga condition object
+///
+/// Komic sends conditions like:
+/// ```json
+/// {
+///   "condition": {
+///     "allOf": [
+///       { "releaseDate": { "dateTime": "2026-01-02T21:36:17Z", "operator": "after" } }
+///     ]
+///   }
+/// }
+/// ```
+pub fn extract_release_date_from_condition(
+    condition: &serde_json::Value,
+) -> Option<ReleaseDateCondition> {
+    // Check allOf array
+    if let Some(all_of) = condition.get("allOf").and_then(|v| v.as_array()) {
+        for item in all_of {
+            // Check for direct releaseDate
+            if let Some(rd) = item.get("releaseDate") {
+                if let (Some(operator), Some(date_time)) = (
+                    rd.get("operator").and_then(|v| v.as_str()),
+                    rd.get("dateTime").and_then(|v| v.as_str()),
+                ) {
+                    return Some(ReleaseDateCondition {
+                        operator: operator.to_string(),
+                        date_time: date_time.to_string(),
+                    });
+                }
+            }
+            // Check for anyOf containing releaseDate (nested condition)
+            if let Some(any_of) = item.get("anyOf").and_then(|v| v.as_array()) {
+                for inner_item in any_of {
+                    if let Some(rd) = inner_item.get("releaseDate") {
+                        if let (Some(operator), Some(date_time)) = (
+                            rd.get("operator").and_then(|v| v.as_str()),
+                            rd.get("dateTime").and_then(|v| v.as_str()),
+                        ) {
+                            return Some(ReleaseDateCondition {
+                                operator: operator.to_string(),
+                                date_time: date_time.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Extract libraryId value from Komga condition object
 ///
 /// Komic sends conditions like:
@@ -850,5 +910,79 @@ mod tests {
             extract_library_id_from_condition(&condition),
             Some("283d008a-3e47-4a2a-9b29-8af595120577")
         );
+    }
+
+    #[test]
+    fn test_extract_release_date_after() {
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"releaseDate":{"dateTime":"2026-01-02T21:36:17Z","operator":"after"}}]}"#,
+        )
+        .unwrap();
+        let result = extract_release_date_from_condition(&condition).unwrap();
+        assert_eq!(result.operator, "after");
+        assert_eq!(result.date_time, "2026-01-02T21:36:17Z");
+    }
+
+    #[test]
+    fn test_extract_release_date_before() {
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"releaseDate":{"dateTime":"2025-06-15T00:00:00Z","operator":"before"}}]}"#,
+        )
+        .unwrap();
+        let result = extract_release_date_from_condition(&condition).unwrap();
+        assert_eq!(result.operator, "before");
+        assert_eq!(result.date_time, "2025-06-15T00:00:00Z");
+    }
+
+    #[test]
+    fn test_extract_release_date_with_other_conditions() {
+        // Test extraction when releaseDate is alongside other conditions (actual Komic format)
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"libraryId":{"operator":"is","value":"283d008a-3e47-4a2a-9b29-8af595120577"}},{"releaseDate":{"dateTime":"2026-01-02T21:36:17Z","operator":"after"}}]}"#,
+        )
+        .unwrap();
+        let result = extract_release_date_from_condition(&condition).unwrap();
+        assert_eq!(result.operator, "after");
+        assert_eq!(result.date_time, "2026-01-02T21:36:17Z");
+    }
+
+    #[test]
+    fn test_extract_release_date_nested_any_of() {
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"anyOf":[{"releaseDate":{"dateTime":"2026-01-02T21:36:17Z","operator":"after"}}]}]}"#,
+        )
+        .unwrap();
+        let result = extract_release_date_from_condition(&condition).unwrap();
+        assert_eq!(result.operator, "after");
+        assert_eq!(result.date_time, "2026-01-02T21:36:17Z");
+    }
+
+    #[test]
+    fn test_extract_release_date_empty_condition() {
+        let condition: serde_json::Value = serde_json::from_str(r#"{"allOf":[]}"#).unwrap();
+        assert!(extract_release_date_from_condition(&condition).is_none());
+    }
+
+    #[test]
+    fn test_extract_release_date_no_release_date() {
+        let condition: serde_json::Value =
+            serde_json::from_str(r#"{"allOf":[{"readStatus":{"operator":"is","value":"READ"}}]}"#)
+                .unwrap();
+        assert!(extract_release_date_from_condition(&condition).is_none());
+    }
+
+    #[test]
+    fn test_extract_release_date_missing_fields() {
+        // Missing dateTime
+        let condition: serde_json::Value =
+            serde_json::from_str(r#"{"allOf":[{"releaseDate":{"operator":"after"}}]}"#).unwrap();
+        assert!(extract_release_date_from_condition(&condition).is_none());
+
+        // Missing operator
+        let condition: serde_json::Value = serde_json::from_str(
+            r#"{"allOf":[{"releaseDate":{"dateTime":"2026-01-02T21:36:17Z"}}]}"#,
+        )
+        .unwrap();
+        assert!(extract_release_date_from_condition(&condition).is_none());
     }
 }

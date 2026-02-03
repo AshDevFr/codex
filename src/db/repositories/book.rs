@@ -7,8 +7,8 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Alias, Expr, Func},
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, Order,
+    sea_query::{Alias, Expr, ExprTrait, Func, IntoCondition},
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, JoinType, Order,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
 };
 use std::sync::Arc;
@@ -18,10 +18,359 @@ use crate::db::entities::{books, prelude::*};
 use crate::db::repositories::SeriesRepository;
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
+/// Options for querying books with filtering, sorting, and pagination
+#[derive(Debug, Clone, Default)]
+pub struct BookQueryOptions<'a> {
+    /// Filter by library ID
+    pub library_id: Option<Uuid>,
+    /// Filter by series ID
+    pub series_id: Option<Uuid>,
+    /// Filter by user's read status (requires user_id)
+    pub read_status: Option<ReadStatusFilter>,
+    /// User ID for user-specific filters and sorts (read_status, last_read sort)
+    pub user_id: Option<Uuid>,
+    /// Text search query (searches title, filename)
+    pub search: Option<&'a str>,
+    /// Filter by release date (after/before a given date)
+    pub release_date: Option<ReleaseDateFilter>,
+    /// Include soft-deleted books
+    pub include_deleted: bool,
+    /// Sort field and direction
+    pub sort: Option<BookQuerySort>,
+    /// Page offset (0-indexed)
+    pub page: u64,
+    /// Page size
+    pub page_size: u64,
+}
+
+/// Release date filter for querying books by their metadata release date
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseDateFilter {
+    /// The comparison operator
+    pub operator: ReleaseDateOperator,
+    /// Year component
+    pub year: i32,
+    /// Month component (1-12)
+    pub month: i32,
+    /// Day component (1-31)
+    pub day: i32,
+}
+
+/// Operator for release date comparison
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseDateOperator {
+    /// Books released after the given date
+    After,
+    /// Books released before the given date
+    Before,
+}
+
+/// Read status filter options
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadStatusFilter {
+    /// Books with progress that are not completed
+    InProgress,
+    /// Books with progress that are completed
+    Read,
+    /// Books without any progress record for the user
+    Unread,
+}
+
+/// Sort configuration for book queries
+#[derive(Debug, Clone, Copy)]
+pub struct BookQuerySort {
+    pub field: BookSortField,
+    pub ascending: bool,
+}
+
+/// Sort field options for book queries (repository-level)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BookSortField {
+    /// Sort by series name, then book number within series
+    Series,
+    /// Sort by book title
+    Title,
+    /// Sort by date added (created_at)
+    DateAdded,
+    /// Sort by release date (year from metadata)
+    ReleaseDate,
+    /// Sort by chapter/book number
+    ChapterNumber,
+    /// Sort by file size
+    FileSize,
+    /// Sort by filename
+    Filename,
+    /// Sort by page count
+    PageCount,
+    /// Sort by last read date (requires user_id)
+    LastRead,
+}
+
 /// Repository for Book operations
 pub struct BookRepository;
 
 impl BookRepository {
+    /// Query books with flexible filtering, sorting, and pagination.
+    ///
+    /// This is the primary composable query method that supports all filtering
+    /// and sorting options. Use `BookQueryOptions` to configure the query.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Get all books in a library sorted by last read date
+    /// let options = BookQueryOptions {
+    ///     library_id: Some(library_id),
+    ///     user_id: Some(user_id),
+    ///     sort: Some(BookQuerySort {
+    ///         field: BookSortField::LastRead,
+    ///         ascending: false,
+    ///     }),
+    ///     page: 0,
+    ///     page_size: 20,
+    ///     ..Default::default()
+    /// };
+    /// let (books, total) = BookRepository::query(db, options).await?;
+    /// ```
+    pub async fn query(
+        db: &DatabaseConnection,
+        options: BookQueryOptions<'_>,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::db::entities::{book_metadata, read_progress, series, series_metadata};
+
+        let mut query = Books::find();
+        // Track whether book_metadata has been joined to avoid ambiguous column references
+        let mut metadata_joined = false;
+
+        // Apply filters
+        if let Some(library_id) = options.library_id {
+            query = query.filter(books::Column::LibraryId.eq(library_id));
+        }
+
+        if let Some(series_id) = options.series_id {
+            query = query.filter(books::Column::SeriesId.eq(series_id));
+        }
+
+        if !options.include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        // Handle text search
+        if let Some(search) = options.search {
+            if !search.is_empty() {
+                let pattern = format!("%{}%", search.to_lowercase());
+                // Join with book_metadata for title search
+                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+                metadata_joined = true;
+
+                // Search in title (case-insensitive)
+                let lower_title = Func::lower(Expr::col((
+                    book_metadata::Entity,
+                    book_metadata::Column::Title,
+                )));
+                query = query.filter(Expr::expr(lower_title).like(&pattern));
+            }
+        }
+
+        // Handle read status filter (requires user_id)
+        if let (Some(read_status), Some(user_id)) = (options.read_status, options.user_id) {
+            match read_status {
+                ReadStatusFilter::InProgress | ReadStatusFilter::Read => {
+                    // Join with read_progress and filter by status
+                    let completed = matches!(read_status, ReadStatusFilter::Read);
+                    query = query
+                        .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+                        .filter(read_progress::Column::UserId.eq(user_id))
+                        .filter(read_progress::Column::Completed.eq(completed));
+                }
+                ReadStatusFilter::Unread => {
+                    // Subquery: books that DON'T have read_progress for this user
+                    // This requires a NOT EXISTS subquery, which is complex in SeaORM
+                    // For now, we'll use a left join and filter for NULL
+                    query = query
+                        .join(
+                            JoinType::LeftJoin,
+                            books::Relation::ReadProgress.def().on_condition(
+                                move |_left, right| {
+                                    Expr::col((right, read_progress::Column::UserId))
+                                        .eq(user_id)
+                                        .into_condition()
+                                },
+                            ),
+                        )
+                        .filter(read_progress::Column::Id.is_null());
+                }
+            }
+        }
+
+        // Handle release date filter
+        if let Some(ref release_date) = options.release_date {
+            // Join with book_metadata if not already joined
+            if !metadata_joined {
+                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+                metadata_joined = true;
+            }
+
+            // Filter books that have release date metadata (year is required)
+            query = query.filter(book_metadata::Column::Year.is_not_null());
+
+            // Build date comparison using year * 10000 + month * 100 + day
+            // This creates a single comparable integer for before/after comparisons
+            let target_date_val =
+                release_date.year * 10000 + release_date.month * 100 + release_date.day;
+
+            // Construct: (year * 10000 + COALESCE(month, 1) * 100 + COALESCE(day, 1))
+            let year_expr =
+                Expr::col((book_metadata::Entity, book_metadata::Column::Year)).mul(10000);
+            let month_expr = Expr::expr(Func::coalesce([
+                Expr::col((book_metadata::Entity, book_metadata::Column::Month)).into(),
+                Expr::val(1).into(),
+            ]))
+            .mul(100);
+            let day_expr = Expr::expr(Func::coalesce([
+                Expr::col((book_metadata::Entity, book_metadata::Column::Day)).into(),
+                Expr::val(1).into(),
+            ]));
+
+            let date_expr = Expr::expr(year_expr).add(month_expr).add(day_expr);
+
+            match release_date.operator {
+                ReleaseDateOperator::After => {
+                    query = query.filter(date_expr.gt(target_date_val));
+                }
+                ReleaseDateOperator::Before => {
+                    query = query.filter(date_expr.lt(target_date_val));
+                }
+            }
+        }
+
+        // Get total count before sorting/pagination
+        let total = query
+            .clone()
+            .select_only()
+            .column(books::Column::Id)
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count books")?;
+
+        // Apply sorting
+        if let Some(sort) = options.sort {
+            let order = if sort.ascending {
+                Order::Asc
+            } else {
+                Order::Desc
+            };
+
+            // Join book_metadata if needed for sort and not already joined
+            let needs_metadata = matches!(
+                sort.field,
+                BookSortField::Series
+                    | BookSortField::Title
+                    | BookSortField::ReleaseDate
+                    | BookSortField::ChapterNumber
+            );
+            if needs_metadata && !metadata_joined {
+                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+                #[allow(unused_assignments)]
+                {
+                    metadata_joined = true;
+                }
+            }
+
+            query = match sort.field {
+                BookSortField::Series => query
+                    .join(JoinType::LeftJoin, books::Relation::Series.def())
+                    .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                    .order_by(series_metadata::Column::TitleSort, order.clone())
+                    .order_by(series_metadata::Column::Title, order)
+                    .order_by(book_metadata::Column::Number, Order::Asc)
+                    .order_by(book_metadata::Column::Title, Order::Asc),
+
+                BookSortField::Title => query
+                    .order_by(book_metadata::Column::TitleSort, order.clone())
+                    .order_by(book_metadata::Column::Title, order)
+                    .order_by_asc(books::Column::FileName),
+
+                BookSortField::DateAdded => query.order_by(books::Column::CreatedAt, order),
+
+                BookSortField::ReleaseDate => query
+                    .order_by(book_metadata::Column::Year, order.clone())
+                    .order_by(book_metadata::Column::Month, order.clone())
+                    .order_by(book_metadata::Column::Day, order),
+
+                BookSortField::ChapterNumber => {
+                    query.order_by(book_metadata::Column::Number, order)
+                }
+
+                BookSortField::FileSize => query.order_by(books::Column::FileSize, order),
+
+                BookSortField::Filename => query.order_by(books::Column::FileName, order),
+
+                BookSortField::PageCount => query.order_by(books::Column::PageCount, order),
+
+                BookSortField::LastRead => {
+                    // LastRead sort requires user_id
+                    if let Some(user_id) = options.user_id {
+                        // Check if we already joined with read_progress (from read_status filter)
+                        // If not, we need to join
+                        let needs_join = options.read_status.is_none()
+                            || options.read_status == Some(ReadStatusFilter::Unread);
+
+                        let query = if needs_join {
+                            query.join(
+                                JoinType::LeftJoin,
+                                books::Relation::ReadProgress.def().on_condition(
+                                    move |_left, right| {
+                                        Expr::col((right, read_progress::Column::UserId))
+                                            .eq(user_id)
+                                            .into_condition()
+                                    },
+                                ),
+                            )
+                        } else {
+                            query
+                        };
+
+                        query
+                            .column_as(
+                                Expr::col((
+                                    Alias::new("read_progress"),
+                                    read_progress::Column::UpdatedAt,
+                                ))
+                                .max(),
+                                "last_read_at",
+                            )
+                            .group_by(books::Column::Id)
+                            .order_by(Expr::col(Alias::new("last_read_at")), order)
+                    } else {
+                        // No user_id, fall back to date added
+                        query.order_by(books::Column::CreatedAt, order)
+                    }
+                }
+            };
+        } else {
+            // Default sort by title
+            if !metadata_joined {
+                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+            }
+            query = query
+                .order_by(book_metadata::Column::TitleSort, Order::Asc)
+                .order_by(book_metadata::Column::Title, Order::Asc)
+                .order_by_asc(books::Column::FileName);
+        }
+
+        // Apply pagination
+        let books = query
+            .offset(options.page * options.page_size)
+            .limit(options.page_size)
+            .all(db)
+            .await
+            .context("Failed to query books")?;
+
+        Ok((books, total))
+    }
+
     /// Create a new book from entity model
     pub async fn create(
         db: &DatabaseConnection,
@@ -603,6 +952,17 @@ impl BookRepository {
                 .all(db)
                 .await
                 .context("Failed to list books with page count sort")?,
+            BookSortField::LastRead => {
+                // LastRead sort requires user_id which this method doesn't have
+                // Fall back to DateAdded sort; use BookRepository::query() for LastRead support
+                base_query
+                    .order_by(books::Column::CreatedAt, order)
+                    .offset(page * page_size)
+                    .limit(page_size)
+                    .all(db)
+                    .await
+                    .context("Failed to list books (LastRead fallback to DateAdded)")?
+            }
         };
 
         Ok((books, total))

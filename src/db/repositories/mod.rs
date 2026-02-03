@@ -31,7 +31,10 @@ pub mod sharing_tag;
 // Re-export repositories
 pub use alternate_title::AlternateTitleRepository;
 pub use api_key::ApiKeyRepository;
-pub use book::BookRepository;
+pub use book::{
+    BookQueryOptions, BookQuerySort, BookRepository, BookSortField, ReadStatusFilter,
+    ReleaseDateFilter, ReleaseDateOperator,
+};
 pub use book_duplicates::BookDuplicatesRepository;
 pub use email_verification_token::EmailVerificationTokenRepository;
 pub use external_link::ExternalLinkRepository;
@@ -44,7 +47,7 @@ pub use page::PageRepository;
 pub use plugin_failures::{FailureContext, PluginFailuresRepository};
 pub use plugins::PluginsRepository;
 pub use read_progress::ReadProgressRepository;
-pub use series::SeriesRepository;
+pub use series::{SeriesQueryOptions, SeriesQuerySort, SeriesRepository, SeriesSortFieldRepo};
 pub use series_covers::SeriesCoversRepository;
 pub use series_external_id::SeriesExternalIdRepository;
 pub use series_metadata::SeriesMetadataRepository;

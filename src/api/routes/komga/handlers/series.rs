@@ -16,8 +16,9 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::db::repositories::{
-    BookRepository, ReadProgressRepository, SeriesCoversRepository, SeriesMetadataRepository,
-    SeriesRepository,
+    BookQueryOptions, BookQuerySort, BookRepository, BookSortField, ReadProgressRepository,
+    SeriesCoversRepository, SeriesMetadataRepository, SeriesQueryOptions, SeriesQuerySort,
+    SeriesRepository, SeriesSortFieldRepo,
 };
 use crate::require_permission;
 use axum::{
@@ -50,87 +51,47 @@ pub struct SeriesPaginationQuery {
     pub sort: Option<String>,
 }
 
-/// Parse sort parameter into field and direction
+/// Parse Komga sort parameter into SeriesQuerySort for database-level sorting
 /// Format: "field,direction" e.g., "metadata.titleSort,asc" or "createdDate,desc"
-fn parse_sort_param(sort: Option<&str>) -> (Option<&str>, bool) {
-    match sort {
-        Some(s) => {
-            let parts: Vec<&str> = s.split(',').collect();
-            let field = parts.first().copied();
-            let ascending = parts.get(1).is_none_or(|d| d.to_lowercase() != "desc");
-            (field, ascending)
+fn parse_komga_series_sort_param(sort: Option<&str>) -> Option<SeriesQuerySort> {
+    let sort = sort?;
+    let parts: Vec<&str> = sort.split(',').collect();
+    let field_str = parts.first().copied()?;
+    let ascending = parts.get(1).is_none_or(|d| d.to_lowercase() != "desc");
+
+    let field = match field_str {
+        "metadata.titleSort" | "titleSort" | "name" | "metadata.title" => {
+            SeriesSortFieldRepo::Title
         }
-        None => (None, true),
-    }
+        "createdDate" | "created" | "dateAdded" => SeriesSortFieldRepo::DateAdded,
+        "lastModifiedDate" | "lastModified" | "dateUpdated" => SeriesSortFieldRepo::DateUpdated,
+        "metadata.releaseDate" | "releaseDate" | "year" => SeriesSortFieldRepo::ReleaseDate,
+        "lastReadDate" | "readProgress.lastReadDate" | "dateRead" => SeriesSortFieldRepo::DateRead,
+        _ => return None,
+    };
+
+    Some(SeriesQuerySort { field, ascending })
 }
 
-/// Sort book DTOs based on sort parameter
-fn sort_book_dtos(dtos: &mut [KomgaBookDto], sort_field: Option<&str>, ascending: bool) {
-    match sort_field {
-        Some("metadata.numberSort") | Some("numberSort") => {
-            dtos.sort_by(|a, b| {
-                let cmp = a
-                    .metadata
-                    .number_sort
-                    .partial_cmp(&b.metadata.number_sort)
-                    .unwrap_or(std::cmp::Ordering::Equal);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
+/// Parse Komga sort parameter into BookQuerySort for books within a series
+/// Format: "field,direction" e.g., "metadata.numberSort,asc"
+fn parse_komga_book_sort_param(sort: Option<&str>) -> Option<BookQuerySort> {
+    let sort = sort?;
+    let parts: Vec<&str> = sort.split(',').collect();
+    let field_str = parts.first().copied()?;
+    let ascending = parts.get(1).is_none_or(|d| d.to_lowercase() != "desc");
+
+    let field = match field_str {
+        "metadata.numberSort" | "numberSort" | "metadata.number" | "number" => {
+            BookSortField::ChapterNumber
         }
-        Some("metadata.number") | Some("number") => {
-            dtos.sort_by(|a, b| {
-                let cmp = a.number.cmp(&b.number);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        Some("createdDate") | Some("created") => {
-            dtos.sort_by(|a, b| {
-                let cmp = a.created.cmp(&b.created);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        Some("lastModifiedDate") | Some("lastModified") => {
-            dtos.sort_by(|a, b| {
-                let cmp = a.last_modified.cmp(&b.last_modified);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        Some("name") | Some("metadata.title") => {
-            dtos.sort_by(|a, b| {
-                let cmp = a.name.to_lowercase().cmp(&b.name.to_lowercase());
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        _ => {
-            // Default sort by numberSort ascending
-            dtos.sort_by(|a, b| {
-                a.metadata
-                    .number_sort
-                    .partial_cmp(&b.metadata.number_sort)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
-    }
+        "createdDate" | "created" => BookSortField::DateAdded,
+        "lastModifiedDate" | "lastModified" => BookSortField::DateAdded, // fallback
+        "name" | "metadata.title" => BookSortField::Title,
+        _ => return None,
+    };
+
+    Some(BookQuerySort { field, ascending })
 }
 
 fn default_page_size() -> i32 {
@@ -181,52 +142,34 @@ pub async fn list_series(
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
-    let offset = page * size;
 
-    // Get series based on filters (no pagination - we paginate in-memory after DTO conversion)
-    let series_list = match (
-        query.library_id,
-        query.search.as_ref().filter(|s| !s.is_empty()),
-    ) {
-        (library_id, Some(search)) => {
-            // Search with optional library filter
-            let (results, _) =
-                SeriesRepository::search_by_title(&state.db, search, library_id, None, None)
-                    .await
-                    .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
-            results
-        }
-        (Some(library_id), None) => {
-            // Library filter only
-            SeriesRepository::list_by_library(&state.db, library_id)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-        }
-        (None, None) => {
-            // No filters
-            SeriesRepository::list_all(&state.db)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-        }
+    // Build query options for database-level filtering, sorting, and pagination
+    let options = SeriesQueryOptions {
+        library_id: query.library_id,
+        user_id: Some(auth.user_id),
+        search: query.search.as_deref(),
+        sort: parse_komga_series_sort_param(query.sort.as_deref()),
+        page,
+        page_size: size,
     };
 
-    let total = series_list.len() as i64;
-
-    // Apply pagination
-    let paginated: Vec<_> = series_list
-        .into_iter()
-        .skip(offset as usize)
-        .take(size as usize)
-        .collect();
+    let (series_list, total) = SeriesRepository::query(&state.db, options)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
     // Convert to DTOs
-    let mut dtos = Vec::with_capacity(paginated.len());
-    for series in paginated {
+    let mut dtos = Vec::with_capacity(series_list.len());
+    for series in series_list {
         let dto = build_series_dto(&state, &series, user_id).await?;
         dtos.push(dto);
     }
 
-    Ok(Json(KomgaPage::new(dtos, query.page, query.size, total)))
+    Ok(Json(KomgaPage::new(
+        dtos,
+        query.page,
+        query.size,
+        total as i64,
+    )))
 }
 
 /// Search/filter series
@@ -293,7 +236,7 @@ pub async fn search_series(
         });
 
     // Use fullTextSearch from body as search term
-    let search_term = body.full_text_search.as_ref().filter(|s| !s.is_empty());
+    let search_term = body.full_text_search.clone();
 
     // Extract readStatus from condition if present
     let read_status = body
@@ -301,124 +244,109 @@ pub async fn search_series(
         .as_ref()
         .and_then(extract_read_status_from_condition);
 
-    // Get series based on filters (no pagination - we paginate in-memory after DTO conversion)
-    let series_list = match (library_id, search_term) {
-        (library_id, Some(search)) => {
-            // Search with optional library filter
-            let (results, _) =
-                SeriesRepository::search_by_title(&state.db, search, library_id, None, None)
-                    .await
-                    .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
-            results
-        }
-        (Some(library_id), None) => {
-            // Library filter only
-            SeriesRepository::list_by_library(&state.db, library_id)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-        }
-        (None, None) => {
-            // No filters
-            SeriesRepository::list_all(&state.db)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
-        }
+    // If readStatus filter is present, we need to fetch all results and filter in-memory
+    // because readStatus depends on book counts which require DTO building
+    if read_status.is_some() {
+        return search_series_with_read_status_filter(
+            &state,
+            user_id,
+            page,
+            size,
+            library_id,
+            search_term.as_deref(),
+            read_status,
+            query.sort.as_deref(),
+            query.page,
+            query.size,
+        )
+        .await;
+    }
+
+    // No readStatus filter - use efficient database-level sorting and pagination
+    let options = SeriesQueryOptions {
+        library_id,
+        user_id: Some(auth.user_id),
+        search: search_term.as_deref(),
+        sort: parse_komga_series_sort_param(query.sort.as_deref()),
+        page,
+        page_size: size,
     };
 
-    // Convert all series to DTOs first (needed for readStatus filtering)
-    let mut all_dtos = Vec::with_capacity(series_list.len());
+    let (series_list, total) = SeriesRepository::query(&state.db, options)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    // Convert to DTOs
+    let mut dtos = Vec::with_capacity(series_list.len());
     for series in series_list {
         let dto = build_series_dto(&state, &series, user_id).await?;
+        dtos.push(dto);
+    }
+
+    Ok(Json(KomgaPage::new(
+        dtos,
+        query.page,
+        query.size,
+        total as i64,
+    )))
+}
+
+/// Helper for search_series when readStatus filter is present
+/// This path requires fetching all results and filtering in-memory
+#[allow(clippy::too_many_arguments)]
+async fn search_series_with_read_status_filter(
+    state: &Arc<AuthState>,
+    user_id: Option<Uuid>,
+    page: u64,
+    size: u64,
+    library_id: Option<Uuid>,
+    search_term: Option<&str>,
+    read_status: Option<&str>,
+    sort_param: Option<&str>,
+    query_page: i32,
+    query_size: i32,
+) -> Result<Json<KomgaPage<KomgaSeriesDto>>, ApiError> {
+    // Fetch all series (no pagination) since we need to filter by readStatus
+    let options = SeriesQueryOptions {
+        library_id,
+        user_id,
+        search: search_term,
+        sort: parse_komga_series_sort_param(sort_param),
+        page: 0,
+        page_size: u64::MAX, // Fetch all for filtering
+    };
+
+    let (series_list, _) = SeriesRepository::query(&state.db, options)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+
+    // Convert all series to DTOs (needed for readStatus filtering)
+    let mut all_dtos = Vec::with_capacity(series_list.len());
+    for series in series_list {
+        let dto = build_series_dto(state, &series, user_id).await?;
         all_dtos.push(dto);
     }
 
-    // Apply readStatus filter if present
-    let mut filtered_dtos: Vec<_> = match read_status {
-        Some("IN_PROGRESS") => {
-            // Series with at least one book in progress
-            all_dtos
-                .into_iter()
-                .filter(|s| s.books_in_progress_count > 0)
-                .collect()
-        }
-        Some("READ") => {
-            // Series where all books are read (fully completed)
-            all_dtos
-                .into_iter()
-                .filter(|s| s.books_count > 0 && s.books_read_count == s.books_count)
-                .collect()
-        }
-        Some("UNREAD") => {
-            // Series with at least one unread book (and no in-progress)
-            all_dtos
-                .into_iter()
-                .filter(|s| s.books_unread_count > 0 && s.books_in_progress_count == 0)
-                .collect()
-        }
+    // Apply readStatus filter
+    let filtered_dtos: Vec<_> = match read_status {
+        Some("IN_PROGRESS") => all_dtos
+            .into_iter()
+            .filter(|s| s.books_in_progress_count > 0)
+            .collect(),
+        Some("READ") => all_dtos
+            .into_iter()
+            .filter(|s| s.books_count > 0 && s.books_read_count == s.books_count)
+            .collect(),
+        Some("UNREAD") => all_dtos
+            .into_iter()
+            .filter(|s| s.books_unread_count > 0 && s.books_in_progress_count == 0)
+            .collect(),
         _ => all_dtos,
     };
 
-    // Apply sorting
-    let (sort_field, ascending) = parse_sort_param(query.sort.as_deref());
-    match sort_field {
-        Some("metadata.titleSort") | Some("titleSort") => {
-            filtered_dtos.sort_by(|a, b| {
-                let cmp = a
-                    .metadata
-                    .title_sort
-                    .to_lowercase()
-                    .cmp(&b.metadata.title_sort.to_lowercase());
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        Some("createdDate") | Some("created") => {
-            filtered_dtos.sort_by(|a, b| {
-                let cmp = a.created.cmp(&b.created);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        Some("lastModifiedDate") | Some("lastModified") => {
-            filtered_dtos.sort_by(|a, b| {
-                let cmp = a.last_modified.cmp(&b.last_modified);
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        Some("name") => {
-            filtered_dtos.sort_by(|a, b| {
-                let cmp = a.name.to_lowercase().cmp(&b.name.to_lowercase());
-                if ascending {
-                    cmp
-                } else {
-                    cmp.reverse()
-                }
-            });
-        }
-        _ => {
-            // Default sort by titleSort ascending
-            filtered_dtos.sort_by(|a, b| {
-                a.metadata
-                    .title_sort
-                    .to_lowercase()
-                    .cmp(&b.metadata.title_sort.to_lowercase())
-            });
-        }
-    }
-
     let total = filtered_dtos.len() as i64;
 
-    // Apply pagination after filtering and sorting
+    // Apply pagination after filtering (sorting already done at DB level)
     let offset = page * size;
     let paginated: Vec<_> = filtered_dtos
         .into_iter()
@@ -427,7 +355,7 @@ pub async fn search_series(
         .collect();
 
     Ok(Json(KomgaPage::new(
-        paginated, query.page, query.size, total,
+        paginated, query_page, query_size, total,
     )))
 }
 
@@ -475,45 +403,36 @@ pub async fn get_series_new(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
-    // Get recently added series
-    // For now, we fetch a larger batch to enable pagination
-    // A more efficient approach would be to add count + offset to the repository
-    let series_list = SeriesRepository::list_recently_added(
-        &state.db,
-        query.library_id,
-        (page + 1) * size, // Fetch enough for this page
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
-
-    // Get total count for pagination info
-    let total = if let Some(library_id) = query.library_id {
-        SeriesRepository::count_by_library(&state.db, library_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?
-    } else {
-        SeriesRepository::list_all(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?
-            .len() as i64
+    // Use composable query with DateAdded sort descending
+    let options = SeriesQueryOptions {
+        library_id: query.library_id,
+        user_id: Some(auth.user_id),
+        search: None,
+        sort: Some(SeriesQuerySort {
+            field: SeriesSortFieldRepo::DateAdded,
+            ascending: false, // newest first
+        }),
+        page,
+        page_size: size,
     };
 
-    // Apply pagination offset
-    let offset = page * size;
-    let paginated: Vec<_> = series_list
-        .into_iter()
-        .skip(offset as usize)
-        .take(size as usize)
-        .collect();
+    let (series_list, total) = SeriesRepository::query(&state.db, options)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
     // Convert to DTOs
-    let mut dtos = Vec::with_capacity(paginated.len());
-    for series in paginated {
+    let mut dtos = Vec::with_capacity(series_list.len());
+    for series in series_list {
         let dto = build_series_dto(&state, &series, user_id).await?;
         dtos.push(dto);
     }
 
-    Ok(Json(KomgaPage::new(dtos, query.page, query.size, total)))
+    Ok(Json(KomgaPage::new(
+        dtos,
+        query.page,
+        query.size,
+        total as i64,
+    )))
 }
 
 /// Get recently updated series
@@ -560,43 +479,36 @@ pub async fn get_series_updated(
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
 
-    // Get recently updated series
-    let series_list = SeriesRepository::list_recently_updated(
-        &state.db,
-        query.library_id,
-        (page + 1) * size, // Fetch enough for this page
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
-
-    // Get total count for pagination info
-    let total = if let Some(library_id) = query.library_id {
-        SeriesRepository::count_by_library(&state.db, library_id)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?
-    } else {
-        SeriesRepository::list_all(&state.db)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to count series: {}", e)))?
-            .len() as i64
+    // Use composable query with DateUpdated sort descending
+    let options = SeriesQueryOptions {
+        library_id: query.library_id,
+        user_id: Some(auth.user_id),
+        search: None,
+        sort: Some(SeriesQuerySort {
+            field: SeriesSortFieldRepo::DateUpdated,
+            ascending: false, // most recently updated first
+        }),
+        page,
+        page_size: size,
     };
 
-    // Apply pagination offset
-    let offset = page * size;
-    let paginated: Vec<_> = series_list
-        .into_iter()
-        .skip(offset as usize)
-        .take(size as usize)
-        .collect();
+    let (series_list, total) = SeriesRepository::query(&state.db, options)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
 
     // Convert to DTOs
-    let mut dtos = Vec::with_capacity(paginated.len());
-    for series in paginated {
+    let mut dtos = Vec::with_capacity(series_list.len());
+    for series in series_list {
         let dto = build_series_dto(&state, &series, user_id).await?;
         dtos.push(dto);
     }
 
-    Ok(Json(KomgaPage::new(dtos, query.page, query.size, total)))
+    Ok(Json(KomgaPage::new(
+        dtos,
+        query.page,
+        query.size,
+        total as i64,
+    )))
 }
 
 /// Get series by ID
@@ -760,7 +672,6 @@ pub async fn get_series_books(
     let user_id = Some(auth.user_id);
     let page = query.page.max(0) as u64;
     let size = query.size.clamp(1, 500) as u64;
-    let offset = page * size;
 
     // Verify series exists and get its data
     let series = SeriesRepository::get_by_id(&state.db, series_id)
@@ -778,15 +689,28 @@ pub async fn get_series_books(
         .map(|m| m.title.clone())
         .unwrap_or_else(|| series.name.clone());
 
-    // Get books in series (excluding deleted)
-    let books = BookRepository::list_by_series(&state.db, series_id, false)
+    // Use composable query with database-level sorting and pagination
+    // Default sort is by chapter number (numberSort) ascending
+    let sort = parse_komga_book_sort_param(query.sort.as_deref()).unwrap_or(BookQuerySort {
+        field: BookSortField::ChapterNumber,
+        ascending: true,
+    });
+
+    let options = BookQueryOptions {
+        series_id: Some(series_id),
+        user_id: Some(auth.user_id),
+        sort: Some(sort),
+        page,
+        page_size: size,
+        ..Default::default()
+    };
+
+    let (books, total) = BookRepository::query(&state.db, options)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch books: {}", e)))?;
 
-    let total = books.len() as i64;
-
-    // Convert all books to DTOs first (for sorting)
-    let mut all_dtos = Vec::with_capacity(books.len());
+    // Convert to DTOs
+    let mut dtos = Vec::with_capacity(books.len());
     for (idx, book) in books.into_iter().enumerate() {
         // Get read progress for this book and user
         let read_progress = if let Some(uid) = user_id {
@@ -801,24 +725,18 @@ pub async fn get_series_books(
         let dto = KomgaBookDto::from_codex(
             &book,
             &series_title,
-            (idx as i32) + 1, // 1-indexed number
+            ((page * size) as i32) + (idx as i32) + 1, // 1-indexed number with offset
             read_progress.as_ref(),
         );
-        all_dtos.push(dto);
+        dtos.push(dto);
     }
 
-    // Apply sorting
-    let (sort_field, ascending) = parse_sort_param(query.sort.as_deref());
-    sort_book_dtos(&mut all_dtos, sort_field, ascending);
-
-    // Apply pagination after sorting
-    let dtos: Vec<_> = all_dtos
-        .into_iter()
-        .skip(offset as usize)
-        .take(size as usize)
-        .collect();
-
-    Ok(Json(KomgaPage::new(dtos, query.page, query.size, total)))
+    Ok(Json(KomgaPage::new(
+        dtos,
+        query.page,
+        query.size,
+        total as i64,
+    )))
 }
 
 // ============================================================================
@@ -1000,5 +918,107 @@ mod tests {
         assert_eq!(query.size, 20);
         assert!(query.library_id.is_none());
         assert!(query.search.is_none());
+    }
+
+    #[test]
+    fn test_parse_komga_series_sort_param_title() {
+        let result = parse_komga_series_sort_param(Some("metadata.titleSort,asc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, SeriesSortFieldRepo::Title);
+        assert!(sort.ascending);
+
+        let result = parse_komga_series_sort_param(Some("titleSort,desc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, SeriesSortFieldRepo::Title);
+        assert!(!sort.ascending);
+    }
+
+    #[test]
+    fn test_parse_komga_series_sort_param_dates() {
+        // createdDate
+        let result = parse_komga_series_sort_param(Some("createdDate,desc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, SeriesSortFieldRepo::DateAdded);
+        assert!(!sort.ascending);
+
+        // lastModifiedDate
+        let result = parse_komga_series_sort_param(Some("lastModifiedDate,asc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, SeriesSortFieldRepo::DateUpdated);
+        assert!(sort.ascending);
+
+        // lastReadDate
+        let result = parse_komga_series_sort_param(Some("lastReadDate,desc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, SeriesSortFieldRepo::DateRead);
+        assert!(!sort.ascending);
+    }
+
+    #[test]
+    fn test_parse_komga_series_sort_param_release_date() {
+        let result = parse_komga_series_sort_param(Some("metadata.releaseDate,desc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, SeriesSortFieldRepo::ReleaseDate);
+        assert!(!sort.ascending);
+    }
+
+    #[test]
+    fn test_parse_komga_series_sort_param_unknown() {
+        let result = parse_komga_series_sort_param(Some("unknownField,asc"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_komga_series_sort_param_none() {
+        let result = parse_komga_series_sort_param(None);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_komga_book_sort_param_number() {
+        let result = parse_komga_book_sort_param(Some("metadata.numberSort,asc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, BookSortField::ChapterNumber);
+        assert!(sort.ascending);
+    }
+
+    #[test]
+    fn test_parse_komga_book_sort_param_title() {
+        let result = parse_komga_book_sort_param(Some("metadata.title,desc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, BookSortField::Title);
+        assert!(!sort.ascending);
+    }
+
+    #[test]
+    fn test_parse_komga_book_sort_param_created() {
+        let result = parse_komga_book_sort_param(Some("createdDate,desc"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert_eq!(sort.field, BookSortField::DateAdded);
+        assert!(!sort.ascending);
+    }
+
+    #[test]
+    fn test_parse_komga_book_sort_param_unknown() {
+        let result = parse_komga_book_sort_param(Some("unknownField,asc"));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_komga_book_sort_param_default_ascending() {
+        // If direction is not specified, default to ascending
+        let result = parse_komga_book_sort_param(Some("metadata.numberSort"));
+        assert!(result.is_some());
+        let sort = result.unwrap();
+        assert!(sort.ascending);
     }
 }
