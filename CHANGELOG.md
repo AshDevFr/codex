@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.6.3] - 2026-02-02
+
+### 🐛 Bug Fixes
+
+- *(komga)* Book and series search with library filter
+
 ## [1.6.2] - 2026-02-02
 
 ### 🐛 Bug Fixes
