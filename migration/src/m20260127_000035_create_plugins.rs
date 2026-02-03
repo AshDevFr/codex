@@ -196,7 +196,7 @@ impl MigrationTrait for Migration {
         };
 
         let check_credential_delivery = if is_postgres {
-            "ALTER TABLE plugins ADD CONSTRAINT chk_plugins_credential_delivery CHECK (credential_delivery IN ('env', 'stdin'))"
+            "ALTER TABLE plugins ADD CONSTRAINT chk_plugins_credential_delivery CHECK (credential_delivery IN ('env', 'init_message', 'both'))"
         } else {
             ""
         };
