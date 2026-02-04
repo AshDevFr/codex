@@ -130,6 +130,7 @@ jobs:
           - sdk-typescript
           - metadata-echo
           - metadata-mangabaka
+          - metadata-openlibrary
     steps:
       - name: Install base dependencies
         run: |
