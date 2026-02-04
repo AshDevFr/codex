@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.8.2] - 2026-02-04
+
+### 🚀 Features
+
+- *(plugins)* Enhance plugin details with two-column layout, metadata targets, and search config indicators
+
 ## [1.8.1] - 2026-02-04
 
 ### ⚙️ Miscellaneous Tasks
