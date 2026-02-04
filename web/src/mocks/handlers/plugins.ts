@@ -44,6 +44,21 @@ const mockPlugins: PluginDto[] = [
       { pattern: "\\s*\\(Digital\\)\\s*$", replacement: "" },
       { pattern: "\\s*\\[Digital\\]\\s*$", replacement: "" },
     ],
+    autoMatchConditions: {
+      mode: "all",
+      rules: [
+        {
+          field: "external_ids.plugin:mangabaka",
+          operator: "is_null",
+        },
+        {
+          field: "book_count",
+          operator: "gte",
+          value: 1,
+        },
+      ],
+    },
+    metadataTargets: ["series"],
     searchQueryTemplate: "{{title}}",
     useExistingExternalId: true,
     enabled: true,
@@ -102,6 +117,8 @@ const mockPlugins: PluginDto[] = [
     config: {},
     // Search configuration
     searchPreprocessingRules: null,
+    autoMatchConditions: null,
+    metadataTargets: null,
     searchQueryTemplate: null,
     useExistingExternalId: false,
     enabled: false,

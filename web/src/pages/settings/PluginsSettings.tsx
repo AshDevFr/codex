@@ -8,6 +8,7 @@ import {
   Code,
   Collapse,
   Divider,
+  Grid,
   Group,
   Loader,
   Modal,
@@ -41,7 +42,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { librariesApi } from "@/api/libraries";
 import {
   AVAILABLE_PERMISSIONS,
@@ -505,8 +506,8 @@ export function PluginsSettings() {
                 </Table.Thead>
                 <Table.Tbody>
                   {plugins.map((plugin) => (
-                    <>
-                      <Table.Tr key={plugin.id}>
+                    <Fragment key={plugin.id}>
+                      <Table.Tr>
                         <Table.Td>
                           <ActionIcon
                             variant="subtle"
@@ -657,7 +658,7 @@ export function PluginsSettings() {
                           </Collapse>
                         </Table.Td>
                       </Table.Tr>
-                    </>
+                    </Fragment>
                   ))}
                 </Table.Tbody>
               </Table>
@@ -787,171 +788,283 @@ function PluginDetails({
   plugin: PluginDto;
   libraries: { id: string; name: string }[];
 }) {
+  const preprocessingRulesCount = Array.isArray(plugin.searchPreprocessingRules)
+    ? (plugin.searchPreprocessingRules as unknown[]).length
+    : 0;
+
+  const autoMatchConditionsCount =
+    plugin.autoMatchConditions &&
+    typeof plugin.autoMatchConditions === "object" &&
+    "rules" in (plugin.autoMatchConditions as Record<string, unknown>) &&
+    Array.isArray((plugin.autoMatchConditions as Record<string, unknown>).rules)
+      ? (
+          (plugin.autoMatchConditions as Record<string, unknown>)
+            .rules as unknown[]
+        ).length
+      : 0;
+
   return (
-    <Stack gap="sm">
-      <Group gap="xl">
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Description
-          </Text>
-          <Text size="sm">{plugin.description || "No description"}</Text>
-        </div>
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Credentials
-          </Text>
-          <Text size="sm">
-            {plugin.hasCredentials ? "Configured" : "Not configured"}
-          </Text>
-        </div>
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Delivery Method
-          </Text>
-          <Text size="sm">{plugin.credentialDelivery}</Text>
-        </div>
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Rate Limit
-          </Text>
-          <Text size="sm">
-            {plugin.rateLimitRequestsPerMinute != null
-              ? `${plugin.rateLimitRequestsPerMinute} req/min`
-              : "No limit"}
-          </Text>
-        </div>
-      </Group>
-
-      {plugin.args.length > 0 && (
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Arguments
-          </Text>
-          <Code block>{plugin.args.join("\n")}</Code>
-        </div>
-      )}
-
-      <Group gap="xl">
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Permissions
-          </Text>
-          <Group gap="xs" mt={4}>
-            {plugin.permissions.length > 0 ? (
-              plugin.permissions.map((perm) => (
-                <Badge key={perm} variant="outline" size="sm">
-                  {perm}
-                </Badge>
-              ))
-            ) : (
-              <Text size="sm" c="dimmed">
-                None
-              </Text>
-            )}
-          </Group>
-        </div>
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Scopes
-          </Text>
-          <Group gap="xs" mt={4}>
-            {plugin.scopes.length > 0 ? (
-              plugin.scopes.map((scope) => (
-                <Badge key={scope} variant="outline" size="sm" color="blue">
-                  {scope}
-                </Badge>
-              ))
-            ) : (
-              <Text size="sm" c="dimmed">
-                None
-              </Text>
-            )}
-          </Group>
-        </div>
-        <div>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-            Libraries
-          </Text>
-          <Group gap="xs" mt={4}>
-            {plugin.libraryIds.length === 0 ? (
-              <Badge variant="light" size="sm" color="gray">
-                All Libraries
-              </Badge>
-            ) : (
-              plugin.libraryIds.map((libId) => {
-                const lib = libraries.find((l) => l.id === libId);
-                return (
-                  <Badge key={libId} variant="outline" size="sm" color="cyan">
-                    {lib?.name || libId}
-                  </Badge>
-                );
-              })
-            )}
-          </Group>
-        </div>
-      </Group>
-
-      {plugin.manifest && (
-        <>
-          <Divider label="Manifest" labelPosition="left" />
+    <Grid gutter="xl">
+      {/* Left column: plugin configuration */}
+      <Grid.Col span={{ base: 12, md: 6 }}>
+        <Stack gap="sm">
+          <Divider label="Configuration" labelPosition="left" />
           <Group gap="xl">
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Version
+                Description
               </Text>
-              <Text size="sm">{plugin.manifest.version}</Text>
+              <Text size="sm">{plugin.description || "No description"}</Text>
             </div>
             <div>
               <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Protocol
+                Credentials
               </Text>
-              <Text size="sm">v{plugin.manifest.protocolVersion}</Text>
+              <Text size="sm">
+                {plugin.hasCredentials ? "Configured" : "Not configured"}
+              </Text>
             </div>
-            {plugin.manifest.author && (
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Delivery Method
+              </Text>
+              <Text size="sm">{plugin.credentialDelivery}</Text>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Rate Limit
+              </Text>
+              <Text size="sm">
+                {plugin.rateLimitRequestsPerMinute != null
+                  ? `${plugin.rateLimitRequestsPerMinute} req/min`
+                  : "No limit"}
+              </Text>
+            </div>
+          </Group>
+
+          {plugin.args.length > 0 && (
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Arguments
+              </Text>
+              <Code block>{plugin.args.join("\n")}</Code>
+            </div>
+          )}
+
+          <Group gap="xl">
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Permissions
+              </Text>
+              <Group gap="xs" mt={4}>
+                {plugin.permissions.length > 0 ? (
+                  plugin.permissions.map((perm) => (
+                    <Badge key={perm} variant="outline" size="sm">
+                      {perm}
+                    </Badge>
+                  ))
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    None
+                  </Text>
+                )}
+              </Group>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Scopes
+              </Text>
+              <Group gap="xs" mt={4}>
+                {plugin.scopes.length > 0 ? (
+                  plugin.scopes.map((scope) => (
+                    <Badge key={scope} variant="outline" size="sm" color="blue">
+                      {scope}
+                    </Badge>
+                  ))
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    None
+                  </Text>
+                )}
+              </Group>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Libraries
+              </Text>
+              <Group gap="xs" mt={4}>
+                {plugin.libraryIds.length === 0 ? (
+                  <Badge variant="light" size="sm" color="gray">
+                    All Libraries
+                  </Badge>
+                ) : (
+                  plugin.libraryIds.map((libId) => {
+                    const lib = libraries.find((l) => l.id === libId);
+                    return (
+                      <Badge
+                        key={libId}
+                        variant="outline"
+                        size="sm"
+                        color="cyan"
+                      >
+                        {lib?.name || libId}
+                      </Badge>
+                    );
+                  })
+                )}
+              </Group>
+            </div>
+          </Group>
+
+          <Group gap="xl">
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                External ID
+              </Text>
+              <Badge
+                variant="light"
+                size="sm"
+                color={plugin.useExistingExternalId ? "violet" : "gray"}
+                mt={4}
+              >
+                {plugin.useExistingExternalId
+                  ? "Prioritized"
+                  : "Not prioritized"}
+              </Badge>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Search Template
+              </Text>
+              <Badge
+                variant="light"
+                size="sm"
+                color={plugin.searchQueryTemplate ? "blue" : "gray"}
+                mt={4}
+              >
+                {plugin.searchQueryTemplate ? "Custom" : "Default"}
+              </Badge>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Preprocessing Rules
+              </Text>
+              <Text size="sm" mt={4}>
+                {preprocessingRulesCount}{" "}
+                {preprocessingRulesCount === 1 ? "rule" : "rules"}
+              </Text>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Auto-Match Conditions
+              </Text>
+              <Text size="sm" mt={4}>
+                {autoMatchConditionsCount}{" "}
+                {autoMatchConditionsCount === 1 ? "condition" : "conditions"}
+              </Text>
+            </div>
+          </Group>
+
+          {plugin.disabledReason && (
+            <Alert
+              icon={<IconAlertCircle size={16} />}
+              color="red"
+              variant="outline"
+            >
+              <Text fw={500} c="red.4">
+                Disabled Reason
+              </Text>
+              <Text size="sm" c="dimmed">
+                {plugin.disabledReason}
+              </Text>
+            </Alert>
+          )}
+        </Stack>
+      </Grid.Col>
+
+      {/* Right column: manifest & config schema */}
+      {plugin.manifest && (
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <Stack gap="sm">
+            <Divider label="Manifest" labelPosition="left" />
+            <Group gap="xl">
               <div>
                 <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                  Author
+                  Version
                 </Text>
-                <Text size="sm">{plugin.manifest.author}</Text>
+                <Text size="sm">{plugin.manifest.version}</Text>
               </div>
-            )}
-          </Group>
-          <Group gap="xs">
-            {plugin.manifest.capabilities.metadataProvider && (
-              <Badge color="teal" variant="light">
-                Metadata Provider
-              </Badge>
-            )}
-            {plugin.manifest.capabilities.userSyncProvider && (
-              <Badge color="violet" variant="light">
-                User Sync Provider
-              </Badge>
-            )}
-          </Group>
+              <div>
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                  Protocol
+                </Text>
+                <Text size="sm">v{plugin.manifest.protocolVersion}</Text>
+              </div>
+              {plugin.manifest.author && (
+                <div>
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                    Author
+                  </Text>
+                  <Text size="sm">{plugin.manifest.author}</Text>
+                </div>
+              )}
+            </Group>
+            <Group gap="xs">
+              {plugin.manifest.capabilities.metadataProvider && (
+                <Badge color="teal" variant="light">
+                  Metadata Provider
+                </Badge>
+              )}
+              {plugin.manifest.capabilities.userSyncProvider && (
+                <Badge color="violet" variant="light">
+                  User Sync Provider
+                </Badge>
+              )}
+            </Group>
 
-          {plugin.manifest.configSchema && (
-            <ConfigSchemaHelp schema={plugin.manifest.configSchema} />
-          )}
-        </>
+            {plugin.manifest.capabilities.metadataProvider &&
+              plugin.manifest.capabilities.metadataProvider.length > 0 && (
+                <div>
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                    Metadata Targets
+                  </Text>
+                  <Group gap="xs" mt={4}>
+                    {(["series", "book"] as const).map((target) => {
+                      const pluginSupports =
+                        plugin.manifest?.capabilities?.metadataProvider?.includes(
+                          target,
+                        ) ?? false;
+                      if (!pluginSupports) return null;
+                      const isActive = plugin.metadataTargets
+                        ? plugin.metadataTargets.includes(target)
+                        : true; // null = auto (all capabilities active)
+                      return (
+                        <Badge
+                          key={target}
+                          variant={isActive ? "light" : "outline"}
+                          color={isActive ? "teal" : "gray"}
+                          size="sm"
+                        >
+                          {target === "series" ? "Series" : "Books"}
+                        </Badge>
+                      );
+                    })}
+                  </Group>
+                </div>
+              )}
+
+            {plugin.manifest.configSchema && (
+              <ConfigSchemaHelp schema={plugin.manifest.configSchema} />
+            )}
+          </Stack>
+        </Grid.Col>
       )}
 
-      {plugin.disabledReason && (
-        <Alert
-          icon={<IconAlertCircle size={16} />}
-          color="red"
-          variant="outline"
-        >
-          <Text fw={500} c="red.4">
-            Disabled Reason
-          </Text>
-          <Text size="sm" c="dimmed">
-            {plugin.disabledReason}
-          </Text>
-        </Alert>
-      )}
-
-      <PluginFailureHistory pluginId={plugin.id} />
-    </Stack>
+      {/* Failure history spans full width */}
+      <Grid.Col span={12}>
+        <PluginFailureHistory pluginId={plugin.id} />
+      </Grid.Col>
+    </Grid>
   );
 }
 
