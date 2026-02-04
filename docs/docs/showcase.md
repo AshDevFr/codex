@@ -168,6 +168,8 @@ Configure plugins with general settings, credentials, permissions, and execution
 
 ![Plugin Settings - With Echo Plugin](../screenshots/plugins/settings-plugins-with-echo.png)
 
+![Plugin Settings - With Echo Plugin Expanded](../screenshots/plugins/settings-plugins-with-echo-expanded.png)
+
 ##### Using Plugins
 
 Access plugin actions from the library sidebar or series detail pages.

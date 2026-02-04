@@ -223,6 +223,26 @@ async function createPluginScreenshots(page: Page): Promise<void> {
   // Capture plugins list with new plugin (after test)
   await captureScreenshot(page, "plugins/settings-plugins-with-echo");
 
+  // === EXPANDED PLUGIN DETAILS ===
+  // Click the expand chevron to show plugin details row
+  const expandButton = page.locator('button:has(svg.tabler-icon-chevron-right)').first();
+  if ((await expandButton.count()) > 0) {
+    await expandButton.click();
+    await page.waitForTimeout(500);
+
+    // Capture expanded plugin details (two-column layout with manifest, permissions, scopes, etc.)
+    await captureScreenshot(page, "plugins/settings-plugins-with-echo-expanded");
+
+    // Collapse it back before continuing
+    const collapseButton = page.locator('button:has(svg.tabler-icon-chevron-down)').first();
+    if ((await collapseButton.count()) > 0) {
+      await collapseButton.click();
+      await page.waitForTimeout(300);
+    }
+  } else {
+    console.log("      ⚠️  Expand button not found on plugin row");
+  }
+
   // === SEARCH CONFIG MODAL (Separate from creation, for metadata providers) ===
   // Click the gear icon to open Search Configuration modal
   const searchConfigButton = page.locator('button:has(svg.tabler-icon-settings)').first();
