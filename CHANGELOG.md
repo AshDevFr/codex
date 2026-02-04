@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.8.1] - 2026-02-04
+
+### ⚙️ Miscellaneous Tasks
+
+- Add metadata-openlibrary plugin to build and CI workflows
+
 ## [1.8.0] - 2026-02-04
 
 ### 🚀 Features
