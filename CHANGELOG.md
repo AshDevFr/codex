@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.8.0] - 2026-02-04
+
+### 🚀 Features
+
+- *(book-metadata)* Add comprehensive book metadata system with plugin support
+- *(parsers)* Add sidecar metadata support for OPF and Mylar series.json
+
+### 🐛 Bug Fixes
+
+- *(migration)* Correct credential_delivery CHECK constraint values for PostgreSQL
+
 ## [1.7.1] - 2026-02-03
 
 ### 🚀 Features
