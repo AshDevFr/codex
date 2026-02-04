@@ -145,6 +145,7 @@ describe("MetadataApplyFlow", () => {
           "test-plugin-id",
           "My Series",
           "series",
+          undefined,
         );
       },
       { timeout: 1000 },

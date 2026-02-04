@@ -957,6 +957,169 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/covers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all covers for a book */
+        get: operations["list_book_covers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/covers/selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Reset book cover to default (deselect all custom covers) */
+        delete: operations["reset_book_cover"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/covers/{cover_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a specific cover for a book */
+        delete: operations["delete_book_cover"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/covers/{cover_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a specific cover image for a book */
+        get: operations["get_book_cover_image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/covers/{cover_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Select a cover as the primary cover for a book */
+        put: operations["select_book_cover"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/external-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all external IDs for a book */
+        get: operations["list_book_external_ids"];
+        put?: never;
+        /**
+         * Create or update an external ID for a book
+         * @description Upserts by book_id + source: if an external ID with the same source already exists,
+         *     it will be updated instead of creating a duplicate.
+         */
+        post: operations["create_book_external_id"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/external-ids/{external_id_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an external ID by ID */
+        delete: operations["delete_book_external_id"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/external-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all external links for a book */
+        get: operations["list_book_external_links"];
+        put?: never;
+        /**
+         * Create or update an external link for a book
+         * @description Upserts by book_id + source_name: if a link with the same source already exists,
+         *     it will be updated instead of creating a duplicate.
+         */
+        post: operations["create_book_external_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/external-links/{source}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an external link by source name */
+        delete: operations["delete_book_external_link"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/file": {
         parameters: {
             query?: never;
@@ -4923,6 +5086,50 @@ export interface components {
         BelongsTo: {
             series?: null | components["schemas"]["SeriesInfo"];
         };
+        /** @description Structured author information */
+        BookAuthorDto: {
+            /**
+             * @description Author's name
+             * @example Andy Weir
+             */
+            name: string;
+            /** @description Role of this author */
+            role: components["schemas"]["BookAuthorRole"];
+            /**
+             * @description Sort name for ordering (e.g., "Weir, Andy")
+             * @example Weir, Andy
+             */
+            sortName?: string | null;
+        };
+        /**
+         * @description Role of an author in a book
+         * @enum {string}
+         */
+        BookAuthorRole: "author" | "co_author" | "editor" | "translator" | "illustrator" | "contributor";
+        /** @description Award information for a book */
+        BookAwardDto: {
+            /**
+             * @description Award category
+             * @example Best Novel
+             */
+            category?: string | null;
+            /**
+             * @description Name of the award
+             * @example Hugo Award
+             */
+            name: string;
+            /**
+             * @description Whether the book won (true) or was just nominated (false)
+             * @example true
+             */
+            won: boolean;
+            /**
+             * Format: int32
+             * @description Year the award was given/nominated
+             * @example 2015
+             */
+            year?: number | null;
+        };
         /** @description Book-level search conditions */
         BookCondition: {
             allOf: components["schemas"]["BookCondition"][];
@@ -4942,6 +5149,67 @@ export interface components {
             readStatus: components["schemas"]["FieldOperator"];
         } | {
             hasError: components["schemas"]["BoolOperator"];
+        } | {
+            bookType: components["schemas"]["FieldOperator"];
+        };
+        /** @description Book cover data transfer object */
+        BookCoverDto: {
+            /**
+             * Format: uuid
+             * @description Book ID
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            bookId: string;
+            /**
+             * Format: date-time
+             * @description When the cover was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: int32
+             * @description Image height in pixels (if known)
+             * @example 450
+             */
+            height?: number | null;
+            /**
+             * Format: uuid
+             * @description Cover ID
+             * @example 550e8400-e29b-41d4-a716-446655440080
+             */
+            id: string;
+            /**
+             * @description Whether this cover is currently selected as the primary cover
+             * @example true
+             */
+            isSelected: boolean;
+            /**
+             * @description Path to the cover image
+             * @example uploads/covers/books/550e8400-e29b-41d4-a716-446655440001/cover.jpg
+             */
+            path: string;
+            /**
+             * @description Cover source (e.g., "extracted", "plugin:openlibrary", "custom", "url")
+             * @example extracted
+             */
+            source: string;
+            /**
+             * Format: date-time
+             * @description When the cover was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Image width in pixels (if known)
+             * @example 300
+             */
+            width?: number | null;
+        };
+        /** @description Response containing a list of book covers */
+        BookCoverListResponse: {
+            /** @description List of covers for the book */
+            covers: components["schemas"]["BookCoverDto"][];
         };
         /** @description Detailed book response with metadata */
         BookDetailResponse: {
@@ -5075,6 +5343,108 @@ export interface components {
          * @enum {string}
          */
         BookErrorTypeDto: "format_detection" | "parser" | "metadata" | "thumbnail" | "page_extraction" | "pdf_rendering" | "zero_pages" | "other";
+        /** @description External ID from a metadata provider (plugin, epub, pdf, manual) */
+        BookExternalIdDto: {
+            /**
+             * Format: uuid
+             * @description Book ID
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            bookId: string;
+            /**
+             * Format: date-time
+             * @description When the external ID was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description External ID value from the source (ISBN, OLID, etc.)
+             * @example OL123456W
+             */
+            externalId: string;
+            /**
+             * @description URL to the external source (if available)
+             * @example https://openlibrary.org/works/OL123456W
+             */
+            externalUrl?: string | null;
+            /**
+             * Format: uuid
+             * @description External ID record ID
+             * @example 550e8400-e29b-41d4-a716-446655440070
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the metadata was last synced from this source
+             * @example 2024-01-15T10:30:00Z
+             */
+            lastSyncedAt?: string | null;
+            /** @description Hash of the last fetched metadata (for change detection) */
+            metadataHash?: string | null;
+            /**
+             * @description Source identifier (e.g., "plugin:openlibrary", "epub", "pdf", "manual")
+             * @example plugin:openlibrary
+             */
+            source: string;
+            /**
+             * Format: date-time
+             * @description When the external ID was last updated
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+        };
+        /** @description Response containing a list of book external IDs */
+        BookExternalIdListResponse: {
+            /** @description List of external IDs for the book */
+            externalIds: components["schemas"]["BookExternalIdDto"][];
+        };
+        /** @description External link to an external site for a book */
+        BookExternalLinkDto: {
+            /**
+             * Format: uuid
+             * @description Book ID this link belongs to
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            bookId: string;
+            /**
+             * Format: date-time
+             * @description When the link was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description ID on the external source (if available)
+             * @example OL123W
+             */
+            externalId?: string | null;
+            /**
+             * Format: uuid
+             * @description External link ID
+             * @example 550e8400-e29b-41d4-a716-446655440060
+             */
+            id: string;
+            /**
+             * @description Source name (e.g., "openlibrary", "goodreads", "amazon")
+             * @example openlibrary
+             */
+            sourceName: string;
+            /**
+             * Format: date-time
+             * @description When the link was last updated
+             * @example 2024-01-01T00:00:00Z
+             */
+            updatedAt: string;
+            /**
+             * @description URL to the external site
+             * @example https://openlibrary.org/works/OL123W
+             */
+            url: string;
+        };
+        /** @description Response containing a list of book external links */
+        BookExternalLinkListResponse: {
+            /** @description List of external links for the book */
+            links: components["schemas"]["BookExternalLinkDto"][];
+        };
         /** @description Full book metadata including all fields and their lock states */
         BookFullMetadata: {
             /**
@@ -5206,11 +5576,6 @@ export interface components {
              */
             volume?: number | null;
             /**
-             * @description Web URL
-             * @example https://dc.com/batman-year-one
-             */
-            web?: string | null;
-            /**
              * @description Writer(s)
              * @example Frank Miller
              */
@@ -5239,11 +5604,40 @@ export interface components {
         /** @description Book metadata DTO */
         BookMetadataDto: {
             /**
+             * @description Structured author information as JSON array
+             * @example [
+             *       {
+             *         "name": "Andy Weir",
+             *         "role": "author",
+             *         "sortName": "Weir, Andy"
+             *       }
+             *     ]
+             */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
+            /**
+             * @description Awards information
+             * @example [
+             *       {
+             *         "category": "Best Novel",
+             *         "name": "Hugo Award",
+             *         "won": true,
+             *         "year": 2015
+             *       }
+             *     ]
+             */
+            awards?: components["schemas"]["BookAwardDto"][] | null;
+            /**
+             * @description Whether the book is black and white
+             * @example false
+             */
+            blackAndWhite?: boolean | null;
+            /**
              * Format: uuid
              * @description Associated book ID
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             bookId: string;
+            bookType?: null | components["schemas"]["BookTypeDto"];
             /**
              * @description Colorists
              * @example [
@@ -5252,12 +5646,31 @@ export interface components {
              */
             colorists: string[];
             /**
+             * Format: int32
+             * @description Total count in series
+             * @example 4
+             */
+            count?: number | null;
+            /**
              * @description Cover artists
              * @example [
              *       "David Mazzucchelli"
              *     ]
              */
             coverArtists: string[];
+            /** @description Custom metadata JSON escape hatch */
+            customMetadata?: Record<string, never> | null;
+            /**
+             * Format: int32
+             * @description Publication day (1-31)
+             * @example 1
+             */
+            day?: number | null;
+            /**
+             * @description Edition information (e.g., "First Edition", "Revised Edition")
+             * @example First Edition
+             */
+            edition?: string | null;
             /**
              * @description Editors
              * @example [
@@ -5265,6 +5678,11 @@ export interface components {
              *     ]
              */
             editors: string[];
+            /**
+             * @description Format details
+             * @example Trade Paperback
+             */
+            formatDetail?: string | null;
             /**
              * @description Genre
              * @example Superhero
@@ -5289,6 +5707,11 @@ export interface components {
              */
             inkers: string[];
             /**
+             * @description ISBN(s)
+             * @example 978-1401207526
+             */
+            isbns?: string | null;
+            /**
              * @description ISO language code
              * @example en
              */
@@ -5301,10 +5724,32 @@ export interface components {
              */
             letterers: string[];
             /**
+             * @description Whether the book is manga format
+             * @example false
+             */
+            manga?: boolean | null;
+            /**
+             * Format: int32
+             * @description Publication month (1-12)
+             * @example 2
+             */
+            month?: number | null;
+            /**
              * @description Issue/chapter number from metadata
              * @example 1
              */
             number?: string | null;
+            /**
+             * @description Original title (for translated works)
+             * @example 火星の人
+             */
+            originalTitle?: string | null;
+            /**
+             * Format: int32
+             * @description Original publication year (for re-releases or translations)
+             * @example 2011
+             */
+            originalYear?: number | null;
             /**
              * Format: int32
              * @description Page count from metadata
@@ -5335,6 +5780,32 @@ export interface components {
              */
             series?: string | null;
             /**
+             * Format: double
+             * @description Position in a series (e.g., 1.0, 2.5 for .5 volumes)
+             * @example 1
+             */
+            seriesPosition?: number | null;
+            /**
+             * Format: int32
+             * @description Total number of books in the series
+             * @example 3
+             */
+            seriesTotal?: number | null;
+            /**
+             * @description Subject/topic tags
+             * @example [
+             *       "Science Fiction",
+             *       "Space Exploration",
+             *       "Survival"
+             *     ]
+             */
+            subjects?: string[] | null;
+            /**
+             * @description Book subtitle
+             * @example A Novel
+             */
+            subtitle?: string | null;
+            /**
              * @description Book summary/description
              * @example Bruce Wayne returns to Gotham City after years abroad to begin his war on crime.
              */
@@ -5345,12 +5816,29 @@ export interface components {
              */
             title?: string | null;
             /**
+             * @description Translator name
+             * @example John Smith
+             */
+            translator?: string | null;
+            /**
+             * Format: int32
+             * @description Volume number
+             * @example 1
+             */
+            volume?: number | null;
+            /**
              * @description Writers/authors
              * @example [
              *       "Frank Miller"
              *     ]
              */
             writers: string[];
+            /**
+             * Format: int32
+             * @description Publication year
+             * @example 1987
+             */
+            year?: number | null;
         };
         /**
          * @description Book metadata lock states
@@ -5360,10 +5848,25 @@ export interface components {
          */
         BookMetadataLocks: {
             /**
+             * @description Whether authors_json is locked
+             * @example false
+             */
+            authorsJsonLock: boolean;
+            /**
+             * @description Whether awards_json is locked
+             * @example false
+             */
+            awardsJsonLock: boolean;
+            /**
              * @description Whether black_and_white is locked
              * @example false
              */
             blackAndWhiteLock: boolean;
+            /**
+             * @description Whether book_type is locked
+             * @example false
+             */
+            bookTypeLock: boolean;
             /**
              * @description Whether colorist is locked
              * @example false
@@ -5380,10 +5883,25 @@ export interface components {
              */
             coverArtistLock: boolean;
             /**
+             * @description Whether cover is locked (prevents auto-updates)
+             * @example false
+             */
+            coverLock: boolean;
+            /**
+             * @description Whether custom_metadata is locked
+             * @example false
+             */
+            customMetadataLock: boolean;
+            /**
              * @description Whether day is locked
              * @example false
              */
             dayLock: boolean;
+            /**
+             * @description Whether edition is locked
+             * @example false
+             */
+            editionLock: boolean;
             /**
              * @description Whether editor is locked
              * @example false
@@ -5435,6 +5953,16 @@ export interface components {
              */
             monthLock: boolean;
             /**
+             * @description Whether original_title is locked
+             * @example false
+             */
+            originalTitleLock: boolean;
+            /**
+             * @description Whether original_year is locked
+             * @example false
+             */
+            originalYearLock: boolean;
+            /**
              * @description Whether penciller is locked
              * @example false
              */
@@ -5445,20 +5973,40 @@ export interface components {
              */
             publisherLock: boolean;
             /**
+             * @description Whether series_position is locked
+             * @example false
+             */
+            seriesPositionLock: boolean;
+            /**
+             * @description Whether series_total is locked
+             * @example false
+             */
+            seriesTotalLock: boolean;
+            /**
+             * @description Whether subjects is locked
+             * @example false
+             */
+            subjectsLock: boolean;
+            /**
+             * @description Whether subtitle is locked
+             * @example false
+             */
+            subtitleLock: boolean;
+            /**
              * @description Whether summary is locked
              * @example false
              */
             summaryLock: boolean;
             /**
+             * @description Whether translator is locked
+             * @example false
+             */
+            translatorLock: boolean;
+            /**
              * @description Whether volume is locked
              * @example false
              */
             volumeLock: boolean;
-            /**
-             * @description Whether web URL is locked
-             * @example false
-             */
-            webLock: boolean;
             /**
              * @description Whether writer is locked
              * @example false
@@ -5472,6 +6020,10 @@ export interface components {
         };
         /** @description Response containing book metadata */
         BookMetadataResponse: {
+            /** @description Structured author information as JSON array */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
+            /** @description Awards information */
+            awards?: components["schemas"]["BookAwardDto"][] | null;
             /**
              * @description Whether the book is black and white
              * @example false
@@ -5483,6 +6035,7 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             bookId: string;
+            bookType?: null | components["schemas"]["BookTypeDto"];
             /**
              * @description Colorist(s)
              * @example Richmond Lewis
@@ -5499,12 +6052,19 @@ export interface components {
              * @example David Mazzucchelli
              */
             coverArtist?: string | null;
+            /** @description Custom metadata JSON escape hatch */
+            customMetadata?: Record<string, never> | null;
             /**
              * Format: int32
              * @description Publication day (1-31)
              * @example 1
              */
             day?: number | null;
+            /**
+             * @description Edition information (e.g., "First Edition", "Revised Edition")
+             * @example First Edition
+             */
+            edition?: string | null;
             /**
              * @description Editor(s)
              * @example Dennis O'Neil
@@ -5557,6 +6117,17 @@ export interface components {
              */
             month?: number | null;
             /**
+             * @description Original title (for translated works)
+             * @example 火星の人
+             */
+            originalTitle?: string | null;
+            /**
+             * Format: int32
+             * @description Original publication year (for re-releases or translations)
+             * @example 2011
+             */
+            originalYear?: number | null;
+            /**
              * @description Penciller(s)
              * @example David Mazzucchelli
              */
@@ -5567,10 +6138,34 @@ export interface components {
              */
             publisher?: string | null;
             /**
+             * Format: double
+             * @description Position in a series (e.g., 1.0, 2.5 for .5 volumes)
+             * @example 1
+             */
+            seriesPosition?: number | null;
+            /**
+             * Format: int32
+             * @description Total number of books in the series
+             * @example 3
+             */
+            seriesTotal?: number | null;
+            /** @description Subject/topic tags */
+            subjects?: string[] | null;
+            /**
+             * @description Book subtitle
+             * @example A Novel
+             */
+            subtitle?: string | null;
+            /**
              * @description Book summary/description
              * @example Bruce Wayne returns to Gotham City.
              */
             summary?: string | null;
+            /**
+             * @description Translator name
+             * @example John Smith
+             */
+            translator?: string | null;
             /**
              * Format: date-time
              * @description Last update timestamp
@@ -5583,11 +6178,6 @@ export interface components {
              * @example 1
              */
             volume?: number | null;
-            /**
-             * @description Web URL
-             * @example https://dc.com/batman-year-one
-             */
-            web?: string | null;
             /**
              * @description Writer(s)
              * @example Frank Miller
@@ -5607,6 +6197,13 @@ export interface components {
          * @enum {string}
          */
         BookStrategy: "filename" | "metadata_first" | "smart" | "series_name" | "custom";
+        /**
+         * @description Book type enum for API responses
+         *
+         *     This mirrors the database BookType enum for use in DTOs.
+         * @enum {string}
+         */
+        BookTypeDto: "comic" | "manga" | "novel" | "novella" | "anthology" | "artbook" | "oneshot" | "omnibus" | "graphic_novel" | "magazine";
         /** @description Response for book update */
         BookUpdateResponse: {
             /**
@@ -6056,6 +6653,43 @@ export interface components {
              */
             key: string;
         };
+        /** @description Request to create or update a book external ID */
+        CreateBookExternalIdRequest: {
+            /**
+             * @description External ID value (ISBN, OLID, etc.)
+             * @example 978-0553418026
+             */
+            externalId: string;
+            /**
+             * @description URL to the external source (optional)
+             * @example https://openlibrary.org/works/OL123456W
+             */
+            externalUrl?: string | null;
+            /**
+             * @description Source identifier (e.g., "plugin:openlibrary", "epub", "pdf", "manual")
+             * @example manual
+             */
+            source: string;
+        };
+        /** @description Request to create or update a book external link */
+        CreateBookExternalLinkRequest: {
+            /**
+             * @description ID on the external source (if available)
+             * @example OL123W
+             */
+            externalId?: string | null;
+            /**
+             * @description Source name (e.g., "openlibrary", "goodreads", "amazon")
+             *     Will be normalized to lowercase
+             * @example openlibrary
+             */
+            sourceName: string;
+            /**
+             * @description URL to the external site
+             * @example https://openlibrary.org/works/OL123W
+             */
+            url: string;
+        };
         /** @description Request to create or update an external link for a series */
         CreateExternalLinkRequest: {
             /**
@@ -6211,6 +6845,14 @@ export interface components {
              * @example []
              */
             libraryIds?: string[];
+            /**
+             * @description Metadata targets: which resource types this plugin auto-matches against
+             *     null = auto-detect from plugin capabilities
+             * @example [
+             *       "book"
+             *     ]
+             */
+            metadataTargets?: string[] | null;
             /**
              * @description Unique identifier (alphanumeric with underscores)
              * @example mangabaka
@@ -7336,8 +7978,6 @@ export interface components {
              * @description Book number in series
              */
             number: number;
-            /** @description Whether this is a oneshot */
-            oneshot?: boolean;
             readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
             /** @description Series ID */
             seriesId: string;
@@ -7500,8 +8140,6 @@ export interface components {
             importMylarSeries?: boolean;
             /** @description Library display name */
             name: string;
-            /** @description Directory path for oneshots (optional) */
-            oneshotsDirectory?: string | null;
             /** @description Whether to repair file extensions */
             repairExtensions?: boolean;
             /** @description Root filesystem path */
@@ -7616,8 +8254,6 @@ export interface components {
                  * @description Book number in series
                  */
                 number: number;
-                /** @description Whether this is a oneshot */
-                oneshot?: boolean;
                 readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
                 /** @description Series ID */
                 seriesId: string;
@@ -7715,8 +8351,6 @@ export interface components {
                 metadata: components["schemas"]["KomgaSeriesMetadataDto"];
                 /** @description Series name */
                 name: string;
-                /** @description Whether this is a oneshot (single book) */
-                oneshot?: boolean;
                 /** @description File URL/path */
                 url: string;
             }[];
@@ -7862,8 +8496,6 @@ export interface components {
             metadata: components["schemas"]["KomgaSeriesMetadataDto"];
             /** @description Series name */
             name: string;
-            /** @description Whether this is a oneshot (single book) */
-            oneshot?: boolean;
             /** @description File URL/path */
             url: string;
         };
@@ -8253,7 +8885,7 @@ export interface components {
          * @description Content types that a metadata provider can support
          * @enum {string}
          */
-        MetadataContentType: "series";
+        MetadataContentType: "series" | "book";
         /**
          * @description Metadata context for template evaluation.
          *
@@ -9486,11 +10118,16 @@ export interface components {
          *     Explicitly null fields will be cleared.
          */
         PatchBookMetadataRequest: {
+            /** @description Structured author information as JSON array */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
+            /** @description Awards information */
+            awards?: components["schemas"]["BookAwardDto"][] | null;
             /**
              * @description Whether the book is black and white
              * @example false
              */
             blackAndWhite?: boolean | null;
+            bookType?: null | components["schemas"]["BookTypeDto"];
             /**
              * @description Colorist(s) - comma-separated if multiple
              * @example Richmond Lewis
@@ -9507,12 +10144,19 @@ export interface components {
              * @example David Mazzucchelli
              */
             coverArtist?: string | null;
+            /** @description Custom metadata JSON escape hatch */
+            customMetadata?: Record<string, never> | null;
             /**
              * Format: int32
              * @description Publication day (1-31)
              * @example 1
              */
             day?: number | null;
+            /**
+             * @description Edition information (e.g., "First Edition", "Revised Edition")
+             * @example First Edition
+             */
+            edition?: string | null;
             /**
              * @description Editor(s) - comma-separated if multiple
              * @example Dennis O'Neil
@@ -9565,6 +10209,17 @@ export interface components {
              */
             month?: number | null;
             /**
+             * @description Original title (for translated works)
+             * @example 火星の人
+             */
+            originalTitle?: string | null;
+            /**
+             * Format: int32
+             * @description Original publication year (for re-releases or translations)
+             * @example 2011
+             */
+            originalYear?: number | null;
+            /**
              * @description Penciller(s) - comma-separated if multiple
              * @example David Mazzucchelli
              */
@@ -9575,21 +10230,40 @@ export interface components {
              */
             publisher?: string | null;
             /**
+             * Format: double
+             * @description Position in a series (e.g., 1.0, 2.5 for .5 volumes)
+             * @example 1
+             */
+            seriesPosition?: number | null;
+            /**
+             * Format: int32
+             * @description Total number of books in the series
+             * @example 3
+             */
+            seriesTotal?: number | null;
+            /** @description Subject/topic tags */
+            subjects?: string[] | null;
+            /**
+             * @description Book subtitle
+             * @example A Novel
+             */
+            subtitle?: string | null;
+            /**
              * @description Book summary/description
              * @example Bruce Wayne returns to Gotham City.
              */
             summary?: string | null;
+            /**
+             * @description Translator name
+             * @example John Smith
+             */
+            translator?: string | null;
             /**
              * Format: int32
              * @description Volume number
              * @example 1
              */
             volume?: number | null;
-            /**
-             * @description Web URL for more information
-             * @example https://dc.com/batman-year-one
-             */
-            web?: string | null;
             /**
              * @description Writer(s) - comma-separated if multiple
              * @example Frank Miller
@@ -9905,6 +10579,15 @@ export interface components {
              */
             libraryIds: string[];
             manifest?: null | components["schemas"]["PluginManifestDto"];
+            /**
+             * @description Metadata targets: which resource types this plugin auto-matches against
+             *     null = auto-detect from plugin capabilities
+             * @example [
+             *       "series",
+             *       "book"
+             *     ]
+             */
+            metadataTargets?: string[] | null;
             /**
              * @description Unique identifier (e.g., "mangabaka")
              * @example mangabaka
@@ -10638,10 +11321,34 @@ export interface components {
          */
         ReplaceBookMetadataRequest: {
             /**
+             * @description Structured author information as JSON array
+             * @example [
+             *       {
+             *         "name": "Andy Weir",
+             *         "role": "author",
+             *         "sortName": "Weir, Andy"
+             *       }
+             *     ]
+             */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
+            /**
+             * @description Awards information
+             * @example [
+             *       {
+             *         "category": "Best Novel",
+             *         "name": "Hugo Award",
+             *         "won": true,
+             *         "year": 2015
+             *       }
+             *     ]
+             */
+            awards?: components["schemas"]["BookAwardDto"][] | null;
+            /**
              * @description Whether the book is black and white
              * @example false
              */
             blackAndWhite?: boolean | null;
+            bookType?: null | components["schemas"]["BookTypeDto"];
             /**
              * @description Colorist(s) - comma-separated if multiple
              * @example Richmond Lewis
@@ -10658,12 +11365,19 @@ export interface components {
              * @example David Mazzucchelli
              */
             coverArtist?: string | null;
+            /** @description Custom metadata JSON escape hatch */
+            customMetadata?: Record<string, never> | null;
             /**
              * Format: int32
              * @description Publication day (1-31)
              * @example 1
              */
             day?: number | null;
+            /**
+             * @description Edition information (e.g., "First Edition", "Revised Edition")
+             * @example First Edition
+             */
+            edition?: string | null;
             /**
              * @description Editor(s) - comma-separated if multiple
              * @example Dennis O'Neil
@@ -10716,6 +11430,17 @@ export interface components {
              */
             month?: number | null;
             /**
+             * @description Original title (for translated works)
+             * @example 火星の人
+             */
+            originalTitle?: string | null;
+            /**
+             * Format: int32
+             * @description Original publication year (for re-releases or translations)
+             * @example 2011
+             */
+            originalYear?: number | null;
+            /**
              * @description Penciller(s) - comma-separated if multiple
              * @example David Mazzucchelli
              */
@@ -10726,21 +11451,47 @@ export interface components {
              */
             publisher?: string | null;
             /**
+             * Format: double
+             * @description Position in a series (e.g., 1.0, 2.5 for .5 volumes)
+             * @example 1
+             */
+            seriesPosition?: number | null;
+            /**
+             * Format: int32
+             * @description Total number of books in the series
+             * @example 3
+             */
+            seriesTotal?: number | null;
+            /**
+             * @description Subject/topic tags
+             * @example [
+             *       "Science Fiction",
+             *       "Space Exploration",
+             *       "Survival"
+             *     ]
+             */
+            subjects?: string[] | null;
+            /**
+             * @description Book subtitle
+             * @example A Novel
+             */
+            subtitle?: string | null;
+            /**
              * @description Book summary/description
              * @example Bruce Wayne returns to Gotham City after years abroad.
              */
             summary?: string | null;
+            /**
+             * @description Translator name
+             * @example John Smith
+             */
+            translator?: string | null;
             /**
              * Format: int32
              * @description Volume number
              * @example 1
              */
             volume?: number | null;
-            /**
-             * @description Web URL for more information
-             * @example https://dc.com/batman-year-one
-             */
-            web?: string | null;
             /**
              * @description Writer(s) - comma-separated if multiple
              * @example Frank Miller
@@ -11045,6 +11796,8 @@ export interface components {
         };
         /** @description Preview data for search results */
         SearchResultPreviewDto: {
+            /** @description Author names (book search results) */
+            authors?: string[];
             /**
              * Format: int32
              * @description Number of books in the series (if known by the provider)
@@ -11059,7 +11812,7 @@ export interface components {
              * @description Rating
              */
             rating?: number | null;
-            /** @description Status string */
+            /** @description Status string (series search results) */
             status?: string | null;
         };
         /** @description Search series request */
@@ -12623,16 +13376,28 @@ export interface components {
          *     All fields are optional. Only provided fields will be updated.
          */
         UpdateBookMetadataLocksRequest: {
+            /** @description Whether to lock authors_json */
+            authorsJsonLock?: boolean | null;
+            /** @description Whether to lock awards_json */
+            awardsJsonLock?: boolean | null;
             /** @description Whether to lock black_and_white */
             blackAndWhiteLock?: boolean | null;
+            /** @description Whether to lock book_type */
+            bookTypeLock?: boolean | null;
             /** @description Whether to lock colorist */
             coloristLock?: boolean | null;
             /** @description Whether to lock count */
             countLock?: boolean | null;
             /** @description Whether to lock cover artist */
             coverArtistLock?: boolean | null;
+            /** @description Whether to lock cover (prevents auto-updates) */
+            coverLock?: boolean | null;
+            /** @description Whether to lock custom_metadata */
+            customMetadataLock?: boolean | null;
             /** @description Whether to lock day */
             dayLock?: boolean | null;
+            /** @description Whether to lock edition */
+            editionLock?: boolean | null;
             /** @description Whether to lock editor */
             editorLock?: boolean | null;
             /** @description Whether to lock format_detail */
@@ -12653,19 +13418,31 @@ export interface components {
             mangaLock?: boolean | null;
             /** @description Whether to lock month */
             monthLock?: boolean | null;
+            /** @description Whether to lock original_title */
+            originalTitleLock?: boolean | null;
+            /** @description Whether to lock original_year */
+            originalYearLock?: boolean | null;
             /** @description Whether to lock penciller */
             pencillerLock?: boolean | null;
             /** @description Whether to lock publisher */
             publisherLock?: boolean | null;
+            /** @description Whether to lock series_position */
+            seriesPositionLock?: boolean | null;
+            /** @description Whether to lock series_total */
+            seriesTotalLock?: boolean | null;
+            /** @description Whether to lock subjects */
+            subjectsLock?: boolean | null;
+            /** @description Whether to lock subtitle */
+            subtitleLock?: boolean | null;
             /**
              * @description Whether to lock summary
              * @example true
              */
             summaryLock?: boolean | null;
+            /** @description Whether to lock translator */
+            translatorLock?: boolean | null;
             /** @description Whether to lock volume */
             volumeLock?: boolean | null;
-            /** @description Whether to lock web URL */
-            webLock?: boolean | null;
             /** @description Whether to lock writer */
             writerLock?: boolean | null;
             /** @description Whether to lock year */
@@ -12844,6 +13621,11 @@ export interface components {
             env?: components["schemas"]["EnvVarDto"][] | null;
             /** @description Updated library IDs (empty = all libraries) */
             libraryIds?: string[] | null;
+            /**
+             * @description Metadata targets: which resource types this plugin auto-matches against
+             *     null = clear to auto-detect from plugin capabilities
+             */
+            metadataTargets?: unknown;
             /** @description Updated permissions */
             permissions?: string[] | null;
             /**
@@ -15456,6 +16238,430 @@ export interface operations {
                 content?: never;
             };
             /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_book_covers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of book covers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookCoverListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_book_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover reset to default */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_book_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description Cover ID to delete */
+                cover_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or cover not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_book_cover_image: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description Cover ID */
+                cover_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Not modified */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or cover not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    select_book_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description Cover ID to select */
+                cover_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cover selected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookCoverDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or cover not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_book_external_ids: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of external IDs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookExternalIdListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_book_external_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBookExternalIdRequest"];
+            };
+        };
+        responses: {
+            /** @description External ID created or updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookExternalIdDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_book_external_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description External ID record ID */
+                external_id_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description External ID deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or external ID not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_book_external_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of external links for the book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookExternalLinkListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_book_external_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBookExternalLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description External link created or updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookExternalLinkDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_book_external_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+                /** @description Source name (e.g., 'openlibrary', 'goodreads') */
+                source: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description External link deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book or external link not found */
             404: {
                 headers: {
                     [name: string]: unknown;

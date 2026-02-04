@@ -21,16 +21,20 @@ use super::super::dto::{
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
 use crate::db::entities::plugins::PluginPermission;
 use crate::db::repositories::{
-    AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
-    LibraryRepository, PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
-    SeriesRepository, TagRepository, TaskRepository,
+    AlternateTitleRepository, BookExternalIdRepository, BookMetadataRepository, BookRepository,
+    ExternalLinkRepository, ExternalRatingRepository, GenreRepository, LibraryRepository,
+    PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+    TagRepository, TaskRepository,
 };
 use crate::services::metadata::preprocessing::{
     apply_rules, render_template, PreprocessingRule, SeriesContextBuilder,
 };
-use crate::services::metadata::{ApplyOptions, MetadataApplier};
+use crate::services::metadata::{
+    ApplyOptions, BookApplyOptions, BookMetadataApplier, MetadataApplier,
+};
 use crate::services::plugin::protocol::{
-    MetadataContentType, MetadataGetParams, MetadataMatchParams, MetadataSearchParams,
+    BookMatchParams, BookSearchParams, MetadataContentType, MetadataGetParams, MetadataMatchParams,
+    MetadataSearchParams, PluginScope,
 };
 use crate::services::plugin::PluginManagerError;
 use crate::tasks::types::TaskType;
@@ -57,6 +61,8 @@ use uuid::Uuid;
         enqueue_auto_match_task,
         enqueue_bulk_auto_match_tasks,
         enqueue_library_auto_match_tasks,
+        preview_book_metadata,
+        apply_book_metadata,
     ),
     components(schemas(
         PluginActionDto,
@@ -137,7 +143,7 @@ pub async fn get_plugin_actions(
     // Parse and validate scope
     let scope = parse_scope(&query.scope).ok_or_else(|| {
         ApiError::BadRequest(format!(
-            "Invalid scope '{}'. Valid scopes: series:detail, series:bulk, library:detail, library:scan",
+            "Invalid scope '{}'. Valid scopes: series:detail, series:bulk, book:detail, book:bulk, library:detail, library:scan",
             query.scope
         ))
     })?;
@@ -189,8 +195,22 @@ pub async fn get_plugin_actions(
             continue;
         }
 
-        // Check if plugin can provide series metadata
-        if manifest.capabilities.can_provide_series_metadata() {
+        // Check if the plugin can provide metadata for the requested scope's content type
+        let can_provide = match scope {
+            PluginScope::SeriesDetail | PluginScope::SeriesBulk => {
+                manifest.capabilities.can_provide_series_metadata()
+            }
+            PluginScope::BookDetail | PluginScope::BookBulk => {
+                manifest.capabilities.can_provide_book_metadata()
+            }
+            PluginScope::LibraryDetail | PluginScope::LibraryScan => {
+                // Library-level scopes: include plugin if it provides either content type
+                manifest.capabilities.can_provide_series_metadata()
+                    || manifest.capabilities.can_provide_book_metadata()
+            }
+        };
+
+        if can_provide {
             // Add metadata search action
             actions.push(PluginActionDto {
                 plugin_id: plugin.id,
@@ -382,11 +402,91 @@ async fn execute_metadata_action(
                     latency_ms: start.elapsed().as_millis() as u64,
                 })),
             }
-        } // Book metadata actions - not yet implemented
-          // When MetadataContentType::Book is added, these arms will be needed:
-          // (MetadataAction::Search, MetadataContentType::Book) => { ... }
-          // (MetadataAction::Get, MetadataContentType::Book) => { ... }
-          // (MetadataAction::Match, MetadataContentType::Book) => { ... }
+        }
+        // Book metadata actions
+        (MetadataAction::Search, MetadataContentType::Book) => {
+            let params: BookSearchParams = serde_json::from_value(params)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid book search params: {}", e)))?;
+
+            // Validate that at least one of isbn or query is provided
+            if !params.is_valid() {
+                return Err(ApiError::BadRequest(
+                    "Either 'isbn' or 'query' must be provided for book search".to_string(),
+                ));
+            }
+
+            match state.plugin_manager.search_book(plugin_id, params).await {
+                Ok(response) => {
+                    let result = serde_json::to_value(&response)
+                        .map_err(|e| ApiError::Internal(format!("Failed to serialize: {}", e)))?;
+
+                    Ok(Json(ExecutePluginResponse {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        latency_ms: start.elapsed().as_millis() as u64,
+                    }))
+                }
+                Err(e) => Ok(Json(ExecutePluginResponse {
+                    success: false,
+                    result: None,
+                    error: Some(sanitize_plugin_error(&e)),
+                    latency_ms: start.elapsed().as_millis() as u64,
+                })),
+            }
+        }
+        (MetadataAction::Get, MetadataContentType::Book) => {
+            let params: MetadataGetParams = serde_json::from_value(params)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid get params: {}", e)))?;
+
+            match state
+                .plugin_manager
+                .get_book_metadata(plugin_id, params)
+                .await
+            {
+                Ok(metadata) => {
+                    let result = serde_json::to_value(&metadata)
+                        .map_err(|e| ApiError::Internal(format!("Failed to serialize: {}", e)))?;
+
+                    Ok(Json(ExecutePluginResponse {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        latency_ms: start.elapsed().as_millis() as u64,
+                    }))
+                }
+                Err(e) => Ok(Json(ExecutePluginResponse {
+                    success: false,
+                    result: None,
+                    error: Some(sanitize_plugin_error(&e)),
+                    latency_ms: start.elapsed().as_millis() as u64,
+                })),
+            }
+        }
+        (MetadataAction::Match, MetadataContentType::Book) => {
+            let params: BookMatchParams = serde_json::from_value(params)
+                .map_err(|e| ApiError::BadRequest(format!("Invalid book match params: {}", e)))?;
+
+            match state.plugin_manager.match_book(plugin_id, params).await {
+                Ok(result) => {
+                    let result = serde_json::to_value(&result)
+                        .map_err(|e| ApiError::Internal(format!("Failed to serialize: {}", e)))?;
+
+                    Ok(Json(ExecutePluginResponse {
+                        success: true,
+                        result: Some(result),
+                        error: None,
+                        latency_ms: start.elapsed().as_millis() as u64,
+                    }))
+                }
+                Err(e) => Ok(Json(ExecutePluginResponse {
+                    success: false,
+                    result: None,
+                    error: Some(sanitize_plugin_error(&e)),
+                    latency_ms: start.elapsed().as_millis() as u64,
+                })),
+            }
+        }
     }
 }
 
@@ -1369,6 +1469,640 @@ pub async fn auto_match_series_metadata(
 }
 
 // =============================================================================
+// Book Metadata Preview and Apply Endpoints
+// =============================================================================
+
+/// Preview metadata from a plugin for a book
+///
+/// Fetches metadata from a plugin and computes a field-by-field diff with the current
+/// book metadata, showing which fields will be applied, locked, or denied by RBAC.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{id}/metadata/preview",
+    params(
+        ("id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = MetadataPreviewRequest,
+    responses(
+        (status = 200, description = "Preview computed", body = MetadataPreviewResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit books"),
+        (status = 404, description = "Book or plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn preview_book_metadata(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<MetadataPreviewRequest>,
+) -> Result<Json<MetadataPreviewResponse>, ApiError> {
+    // Check permission to edit book metadata
+    auth.require_permission(&Permission::BooksWrite)?;
+
+    // Get the book (verify it exists and get library_id)
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get the plugin
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Check if plugin applies to this book's library
+    if !plugin.applies_to_library(book.library_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Plugin '{}' is not configured to apply to this book's library",
+            plugin.display_name
+        )));
+    }
+
+    // Fetch metadata from plugin
+    let params = MetadataGetParams {
+        external_id: request.external_id.clone(),
+    };
+
+    let plugin_metadata = state
+        .plugin_manager
+        .get_book_metadata(request.plugin_id, params)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata from plugin: {}", e)))?;
+
+    // Get current book metadata
+    let current_metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
+
+    // Helper to check permission
+    let has_permission = |perm: PluginPermission| -> bool { plugin.has_permission(&perm) };
+
+    // Build field-by-field preview
+    let mut fields = Vec::new();
+    let mut will_apply = 0;
+    let mut locked = 0;
+    let mut no_permission = 0;
+    let mut unchanged = 0;
+    let mut not_provided = 0;
+
+    // Title
+    fields.push(build_field_preview(
+        "title",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.title.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata.title.as_ref().map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.title_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteTitle),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Summary
+    fields.push(build_field_preview(
+        "summary",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.summary.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .summary
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.summary_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteSummary),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Book Type
+    fields.push(build_field_preview(
+        "bookType",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.book_type.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .book_type
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.book_type_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteBookType),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Subtitle
+    fields.push(build_field_preview(
+        "subtitle",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.subtitle.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .subtitle
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.subtitle_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteSubtitle),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Publisher
+    fields.push(build_field_preview(
+        "publisher",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.publisher.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .publisher
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.publisher_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWritePublisher),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Year
+    fields.push(build_field_preview(
+        "year",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.year.map(|v| serde_json::json!(v))),
+        plugin_metadata.year.map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.year_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteYear),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Authors
+    fields.push(build_field_preview(
+        "authors",
+        current_metadata.as_ref().and_then(|m| {
+            m.authors_json
+                .as_ref()
+                .and_then(|v| serde_json::from_str(v).ok())
+        }),
+        if plugin_metadata.authors.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(plugin_metadata.authors))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.authors_json_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteAuthors),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Translator
+    fields.push(build_field_preview(
+        "translator",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.translator.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .translator
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.translator_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteTranslator),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Edition
+    fields.push(build_field_preview(
+        "edition",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.edition.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .edition
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.edition_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteEdition),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Original Title
+    fields.push(build_field_preview(
+        "originalTitle",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.original_title.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .original_title
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.original_title_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteOriginalTitle),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Original Year
+    fields.push(build_field_preview(
+        "originalYear",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.original_year.map(|v| serde_json::json!(v))),
+        plugin_metadata.original_year.map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.original_year_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteOriginalYear),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Language
+    fields.push(build_field_preview(
+        "language",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.language_iso.as_ref().map(|v| serde_json::json!(v))),
+        plugin_metadata
+            .language
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.language_iso_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteLanguage),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // ISBNs - normalize current value from comma-separated string to array for comparison
+    let current_isbns: Option<serde_json::Value> = current_metadata.as_ref().and_then(|m| {
+        m.isbns.as_ref().map(|v| {
+            let isbn_vec: Vec<&str> = v
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .collect();
+            serde_json::json!(isbn_vec)
+        })
+    });
+    fields.push(build_field_preview(
+        "isbns",
+        current_isbns,
+        if plugin_metadata.isbns.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(plugin_metadata.isbns))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.isbns_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteIsbn),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Series Position
+    fields.push(build_field_preview(
+        "seriesPosition",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.series_position.map(|v| serde_json::json!(v.to_string()))),
+        plugin_metadata
+            .series_position
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.series_position_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteSeriesPosition),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Series Total
+    fields.push(build_field_preview(
+        "seriesTotal",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.series_total.map(|v| serde_json::json!(v))),
+        plugin_metadata.series_total.map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.series_total_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteSeriesPosition),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Subjects
+    fields.push(build_field_preview(
+        "subjects",
+        current_metadata.as_ref().and_then(|m| {
+            m.subjects
+                .as_ref()
+                .and_then(|v| serde_json::from_str(v).ok())
+        }),
+        if plugin_metadata.subjects.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(plugin_metadata.subjects))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.subjects_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteSubjects),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Awards
+    fields.push(build_field_preview(
+        "awards",
+        current_metadata.as_ref().and_then(|m| {
+            m.awards_json
+                .as_ref()
+                .and_then(|v| serde_json::from_str(v).ok())
+        }),
+        if plugin_metadata.awards.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(plugin_metadata.awards))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.awards_json_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteAwards),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Cover URL
+    fields.push(build_field_preview(
+        "coverUrl",
+        None,
+        plugin_metadata
+            .cover_url
+            .as_ref()
+            .map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.cover_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteCovers),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    Ok(Json(MetadataPreviewResponse {
+        fields,
+        summary: PreviewSummary {
+            will_apply,
+            locked,
+            no_permission,
+            unchanged,
+            not_provided,
+        },
+        plugin_id: plugin.id,
+        plugin_name: plugin.display_name,
+        external_id: request.external_id,
+        external_url: Some(plugin_metadata.external_url),
+    }))
+}
+
+/// Apply metadata from a plugin to a book
+///
+/// Fetches metadata from a plugin and applies it to the book, respecting
+/// RBAC permissions and field locks.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{id}/metadata/apply",
+    params(
+        ("id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = MetadataApplyRequest,
+    responses(
+        (status = 200, description = "Metadata applied", body = MetadataApplyResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "No permission to edit books"),
+        (status = 404, description = "Book or plugin not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Plugin Actions"
+)]
+pub async fn apply_book_metadata(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<MetadataApplyRequest>,
+) -> Result<Json<MetadataApplyResponse>, ApiError> {
+    // Check permission to edit book metadata
+    auth.require_permission(&Permission::BooksWrite)?;
+
+    // Get the book (verify it exists)
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get the plugin
+    let plugin = PluginsRepository::get_by_id(&state.db, request.plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not found".to_string()))?;
+
+    if !plugin.enabled {
+        return Err(ApiError::BadRequest("Plugin is disabled".to_string()));
+    }
+
+    // Check if plugin applies to this book's library
+    if !plugin.applies_to_library(book.library_id) {
+        return Err(ApiError::BadRequest(format!(
+            "Plugin '{}' is not configured to apply to this book's library",
+            plugin.display_name
+        )));
+    }
+
+    // Fetch metadata from plugin
+    let params = MetadataGetParams {
+        external_id: request.external_id.clone(),
+    };
+
+    let plugin_metadata = state
+        .plugin_manager
+        .get_book_metadata(request.plugin_id, params)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch metadata from plugin: {}", e)))?;
+
+    // Get current book metadata
+    let current_metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
+
+    // Build apply options
+    let options = BookApplyOptions {
+        fields_filter: request.fields.map(|f| f.into_iter().collect()),
+        thumbnail_service: Some(state.thumbnail_service.clone()),
+        event_broadcaster: Some(state.event_broadcaster.clone()),
+        library_id: Some(book.library_id),
+    };
+
+    // Apply metadata using the book metadata applier
+    let result = BookMetadataApplier::apply(
+        &state.db,
+        book_id,
+        &plugin,
+        &plugin_metadata,
+        current_metadata.as_ref(),
+        &options,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to apply metadata: {}", e)))?;
+
+    // Store/update external ID for future lookups
+    if let Err(e) = BookExternalIdRepository::upsert_for_plugin(
+        &state.db,
+        book_id,
+        &plugin.name,
+        &plugin_metadata.external_id,
+        Some(&plugin_metadata.external_url),
+        None, // metadata_hash
+    )
+    .await
+    {
+        tracing::warn!("Failed to store external ID for book {}: {}", book_id, e);
+    }
+
+    // Convert SkippedField types
+    let skipped_fields: Vec<SkippedField> = result
+        .skipped_fields
+        .into_iter()
+        .map(|sf| SkippedField {
+            field: sf.field,
+            reason: sf.reason,
+        })
+        .collect();
+
+    let message = if result.applied_fields.is_empty() {
+        "No fields were applied".to_string()
+    } else {
+        format!("Applied {} field(s)", result.applied_fields.len())
+    };
+
+    Ok(Json(MetadataApplyResponse {
+        success: !result.applied_fields.is_empty(),
+        applied_fields: result.applied_fields,
+        skipped_fields,
+        message,
+    }))
+}
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 
@@ -1437,9 +2171,7 @@ fn build_field_preview(
 fn permission_for_content_type(content_type: &MetadataContentType) -> Permission {
     match content_type {
         MetadataContentType::Series => Permission::SeriesWrite,
-        // When Book and Library are added:
-        // MetadataContentType::Book => Permission::BooksWrite,
-        // MetadataContentType::Library => Permission::LibrariesWrite,
+        MetadataContentType::Book => Permission::BooksWrite,
     }
 }
 

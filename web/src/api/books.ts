@@ -26,6 +26,22 @@ export type BookMetadata = components["schemas"]["BookMetadataDto"];
 export type AdjacentBooksResponse =
   components["schemas"]["AdjacentBooksResponse"];
 
+// Book cover and external ID types
+export type BookCoverDto = components["schemas"]["BookCoverDto"];
+export type BookExternalIdDto = components["schemas"]["BookExternalIdDto"];
+
+// Book external link type (matches BookExternalLinkDto from backend)
+// Will be replaced with generated type after OpenAPI regeneration
+export interface BookExternalLinkDto {
+  id: string;
+  bookId: string;
+  sourceName: string;
+  url: string;
+  externalId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Book metadata lock types (re-export from generated types)
 export type BookMetadataLocks = components["schemas"]["BookMetadataLocks"];
 export type UpdateBookMetadataLocksRequest = Partial<BookMetadataLocks>;
@@ -400,6 +416,92 @@ export const booksApi = {
       body,
     );
     return response.data;
+  },
+
+  // ==================== Cover Management API ====================
+
+  /** List all covers for a book */
+  listCovers: async (bookId: string): Promise<BookCoverDto[]> => {
+    const response = await api.get<
+      components["schemas"]["BookCoverListResponse"]
+    >(`/books/${bookId}/covers`);
+    return response.data.covers;
+  },
+
+  /** Select a specific cover as the active cover */
+  selectCover: async (bookId: string, coverId: string): Promise<void> => {
+    await api.put(`/books/${bookId}/covers/${coverId}/select`);
+  },
+
+  /** Reset to default cover (extracted from the book file) */
+  resetCover: async (bookId: string): Promise<void> => {
+    await api.delete(`/books/${bookId}/covers/selected`);
+  },
+
+  /** Delete a cover */
+  deleteCover: async (bookId: string, coverId: string): Promise<void> => {
+    await api.delete(`/books/${bookId}/covers/${coverId}`);
+  },
+
+  /** Get cover image URL */
+  getCoverImageUrl: (bookId: string, coverId: string): string =>
+    `/api/v1/books/${bookId}/covers/${coverId}/image`,
+
+  // ==================== External IDs API ====================
+
+  /** List all external IDs for a book */
+  listExternalIds: async (bookId: string): Promise<BookExternalIdDto[]> => {
+    const response = await api.get<
+      components["schemas"]["BookExternalIdListResponse"]
+    >(`/books/${bookId}/external-ids`);
+    return response.data.externalIds;
+  },
+
+  /** Create or upsert an external ID for a book */
+  createExternalId: async (
+    bookId: string,
+    data: components["schemas"]["CreateBookExternalIdRequest"],
+  ): Promise<BookExternalIdDto> => {
+    const response = await api.post<BookExternalIdDto>(
+      `/books/${bookId}/external-ids`,
+      data,
+    );
+    return response.data;
+  },
+
+  /** Delete an external ID */
+  deleteExternalId: async (
+    bookId: string,
+    externalIdId: string,
+  ): Promise<void> => {
+    await api.delete(`/books/${bookId}/external-ids/${externalIdId}`);
+  },
+
+  // ==================== External Links API ====================
+
+  /** List all external links for a book */
+  listExternalLinks: async (bookId: string): Promise<BookExternalLinkDto[]> => {
+    const response = await api.get<{ links: BookExternalLinkDto[] }>(
+      `/books/${bookId}/external-links`,
+    );
+    return response.data.links;
+  },
+
+  /** Create or upsert an external link for a book */
+  createExternalLink: async (
+    bookId: string,
+    data: { sourceName: string; url: string; externalId?: string },
+  ): Promise<BookExternalLinkDto> => {
+    const response = await api.post<BookExternalLinkDto>(
+      `/books/${bookId}/external-links`,
+      data,
+    );
+    return response.data;
+  },
+
+  /** Delete an external link by source */
+  deleteExternalLink: async (bookId: string, source: string): Promise<void> => {
+    await api.delete(`/books/${bookId}/external-links/${source}`);
   },
 
   // ==================== Bulk Operations API ====================

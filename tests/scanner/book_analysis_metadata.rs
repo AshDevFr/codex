@@ -3,8 +3,8 @@ use anyhow::Result;
 use chrono::Utc;
 use codex::db::entities::{books, series};
 use codex::db::repositories::{
-    library::CreateLibraryParams, BookMetadataRepository, BookRepository, LibraryRepository,
-    PageRepository, SeriesMetadataRepository, SeriesRepository,
+    library::CreateLibraryParams, BookExternalLinkRepository, BookMetadataRepository,
+    BookRepository, LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::models::BookStrategy;
@@ -170,7 +170,15 @@ async fn test_analyze_book_saves_metadata() -> Result<()> {
     assert_eq!(metadata.publisher, Some("Test Publisher".to_string()));
     assert_eq!(metadata.imprint, Some("Test Imprint".to_string()));
     assert_eq!(metadata.genre, Some("Action, Adventure".to_string()));
-    assert_eq!(metadata.web, Some("https://example.com/comic".to_string()));
+    // web is now stored as an external link instead of a metadata field
+    let external_links =
+        BookExternalLinkRepository::get_for_book(db.sea_orm_connection(), book.id).await?;
+    let comicinfo_link = external_links.iter().find(|l| l.source_name == "comicinfo");
+    assert!(
+        comicinfo_link.is_some(),
+        "Expected a comicinfo external link"
+    );
+    assert_eq!(comicinfo_link.unwrap().url, "https://example.com/comic");
     assert_eq!(metadata.language_iso, Some("en".to_string()));
     assert_eq!(metadata.format_detail, Some("Comic".to_string()));
     assert_eq!(metadata.black_and_white, Some(false));

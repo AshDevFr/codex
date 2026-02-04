@@ -103,6 +103,8 @@ export type CredentialDelivery = "env" | "init_message" | "both";
 export type PluginScope =
   | "series:detail"
   | "series:bulk"
+  | "book:detail"
+  | "book:bulk"
   | "library:detail"
   | "library:scan";
 
@@ -130,6 +132,8 @@ export type PluginPermission =
 export const AVAILABLE_SCOPES: { value: PluginScope; label: string }[] = [
   { value: "series:detail", label: "Series Detail" },
   { value: "series:bulk", label: "Series Bulk Actions" },
+  { value: "book:detail", label: "Book Detail" },
+  { value: "book:bulk", label: "Book Bulk Actions" },
   { value: "library:detail", label: "Library Detail" },
   { value: "library:scan", label: "Post-Library Scan" },
 ];
@@ -331,13 +335,18 @@ export const pluginsApi = {
     pluginId: string,
     query: string,
     contentType: MetadataContentType = "series",
+    author?: string,
   ): Promise<ExecutePluginResponse> => {
+    const params: Record<string, string> = { query };
+    if (author) {
+      params.author = author;
+    }
     return pluginsApi.execute(pluginId, {
       action: {
         metadata: {
           action: "search",
           contentType: contentType,
-          params: { query },
+          params,
         },
       },
     });
@@ -427,6 +436,43 @@ export const pluginActionsApi = {
     const response = await api.post<MetadataAutoMatchResponse>(
       `/series/${seriesId}/metadata/auto-match`,
       { pluginId, query },
+    );
+    return response.data;
+  },
+
+  // ==========================================================================
+  // Book Metadata Preview/Apply API
+  // ==========================================================================
+
+  /**
+   * Preview metadata from a plugin for a book (dry run)
+   * Returns field-by-field diff with status icons
+   */
+  previewBookMetadata: async (
+    bookId: string,
+    pluginId: string,
+    externalId: string,
+  ): Promise<MetadataPreviewResponse> => {
+    const response = await api.post<MetadataPreviewResponse>(
+      `/books/${bookId}/metadata/preview`,
+      { pluginId, externalId },
+    );
+    return response.data;
+  },
+
+  /**
+   * Apply metadata from a plugin to a book
+   * Respects RBAC permissions and field locks
+   */
+  applyBookMetadata: async (
+    bookId: string,
+    pluginId: string,
+    externalId: string,
+    fields?: string[],
+  ): Promise<MetadataApplyResponse> => {
+    const response = await api.post<MetadataApplyResponse>(
+      `/books/${bookId}/metadata/apply`,
+      { pluginId, externalId, fields },
     );
     return response.data;
   },

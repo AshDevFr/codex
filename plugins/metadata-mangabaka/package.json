@@ -42,7 +42,7 @@
     "@ashdev/codex-plugin-sdk": "file:../sdk-typescript"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.11",
+    "@biomejs/biome": "^2.3.13",
     "@types/node": "^22.0.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.7.0",

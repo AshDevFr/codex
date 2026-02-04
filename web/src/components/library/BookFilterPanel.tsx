@@ -31,6 +31,20 @@ const READ_STATUS_OPTIONS = [
   { value: "read", label: "Read" },
 ];
 
+// Book type options (classification of the book)
+const BOOK_TYPE_OPTIONS = [
+  { value: "comic", label: "Comic" },
+  { value: "manga", label: "Manga" },
+  { value: "novel", label: "Novel" },
+  { value: "novella", label: "Novella" },
+  { value: "anthology", label: "Anthology" },
+  { value: "artbook", label: "Artbook" },
+  { value: "oneshot", label: "Oneshot" },
+  { value: "omnibus", label: "Omnibus" },
+  { value: "graphic_novel", label: "Graphic Novel" },
+  { value: "magazine", label: "Magazine" },
+];
+
 /**
  * Filter panel component for books that displays filter groups in a drawer.
  *
@@ -230,6 +244,22 @@ export function BookFilterPanel() {
                     color="red"
                   />
                 </Group>
+
+                <Divider my="xs" />
+
+                {/* Book Type Section */}
+                <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+                  Book Type
+                </Text>
+
+                <FilterGroup
+                  title="Book Type"
+                  options={BOOK_TYPE_OPTIONS}
+                  state={draftState.draftFilters.bookType}
+                  onValueChange={draftState.setBookTypeState}
+                  onModeChange={draftState.setBookTypeMode}
+                  onClear={() => draftState.clearGroupDraft("bookType")}
+                />
 
                 {/* Metadata Section - Only show if there's data */}
                 {hasMetadataFilters && (

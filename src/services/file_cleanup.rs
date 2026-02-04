@@ -70,8 +70,15 @@ impl FileCleanupService {
         PathBuf::from(&self.config.thumbnail_dir).join("books")
     }
 
-    /// Get the covers directory path
+    /// Get the covers directory path for series covers
     pub fn get_covers_dir(&self) -> PathBuf {
+        PathBuf::from(&self.config.uploads_dir)
+            .join("covers")
+            .join("series")
+    }
+
+    /// Get the legacy covers directory path (before series covers moved to covers/series/)
+    fn get_legacy_covers_dir(&self) -> PathBuf {
         PathBuf::from(&self.config.uploads_dir).join("covers")
     }
 
@@ -170,35 +177,74 @@ impl FileCleanupService {
 
     /// Scan the covers directory for all cover files
     ///
-    /// Returns a list of (path, series_id) tuples for all found covers
+    /// Returns a list of (path, series_id) tuples for all found covers.
+    /// Also scans the legacy covers directory (covers/ root) for old series covers
+    /// that were stored before the move to covers/series/.
     pub async fn scan_covers(&self) -> Result<Vec<(PathBuf, Uuid)>> {
-        let covers_dir = self.get_covers_dir();
         let mut results = Vec::new();
 
-        if !covers_dir.exists() {
-            return Ok(results);
-        }
+        // Scan current series covers directory
+        self.scan_directory_for_covers(&self.get_covers_dir(), &mut results)
+            .await?;
 
-        let mut entries = fs::read_dir(&covers_dir)
-            .await
-            .with_context(|| format!("Failed to read covers directory: {:?}", covers_dir))?;
+        // Scan legacy covers directory (files directly in covers/, not in subdirectories)
+        let legacy_dir = self.get_legacy_covers_dir();
+        if legacy_dir.exists() {
+            let mut entries = fs::read_dir(&legacy_dir).await.with_context(|| {
+                format!("Failed to read legacy covers directory: {:?}", legacy_dir)
+            })?;
 
-        while let Some(entry) = entries.next_entry().await? {
-            let file_path = entry.path();
-
-            // Extract UUID from filename (format: {uuid}.jpg)
-            if let Some(uuid) = self.extract_uuid_from_filename(&file_path) {
-                results.push((file_path, uuid));
+            while let Some(entry) = entries.next_entry().await? {
+                let file_path = entry.path();
+                // Only include files, skip subdirectories (books/, series/)
+                if file_path.is_file() {
+                    if let Some(uuid) = self.extract_uuid_from_filename(&file_path) {
+                        results.push((file_path, uuid));
+                    }
+                }
             }
         }
 
         Ok(results)
     }
 
-    /// Extract UUID from a filename like "{uuid}.jpg"
+    /// Scan a single directory for cover files and append results
+    async fn scan_directory_for_covers(
+        &self,
+        dir: &Path,
+        results: &mut Vec<(PathBuf, Uuid)>,
+    ) -> Result<()> {
+        if !dir.exists() {
+            return Ok(());
+        }
+
+        let mut entries = fs::read_dir(dir)
+            .await
+            .with_context(|| format!("Failed to read covers directory: {:?}", dir))?;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let file_path = entry.path();
+            if let Some(uuid) = self.extract_uuid_from_filename(&file_path) {
+                results.push((file_path, uuid));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Extract UUID from a filename like "{uuid}.jpg" or "{uuid}-{hash}.jpg"
     fn extract_uuid_from_filename(&self, path: &Path) -> Option<Uuid> {
         let stem = path.file_stem()?.to_str()?;
-        Uuid::parse_str(stem).ok()
+        // Try parsing the full stem as a UUID first (e.g. "{uuid}.jpg")
+        if let Ok(uuid) = Uuid::parse_str(stem) {
+            return Some(uuid);
+        }
+        // Try extracting UUID from "{uuid}-{hash}" format
+        // UUIDs are 36 chars (8-4-4-4-12 with dashes)
+        if stem.len() > 36 && stem.as_bytes()[36] == b'-' {
+            return Uuid::parse_str(&stem[..36]).ok();
+        }
+        None
     }
 
     /// Delete multiple files and return stats
@@ -286,7 +332,7 @@ mod tests {
         let series_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
         let path = service.get_series_cover_path(series_id);
 
-        assert!(path.to_string_lossy().contains("uploads/covers"));
+        assert!(path.to_string_lossy().contains("uploads/covers/series"));
         assert!(path
             .to_string_lossy()
             .ends_with("550e8400-e29b-41d4-a716-446655440000.jpg"));
@@ -300,6 +346,16 @@ mod tests {
         let path = PathBuf::from("/some/path/550e8400-e29b-41d4-a716-446655440000.jpg");
         let uuid = service.extract_uuid_from_filename(&path);
 
+        assert!(uuid.is_some());
+        assert_eq!(
+            uuid.unwrap(),
+            Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()
+        );
+
+        // UUID with hash suffix (format: {uuid}-{hash}.jpg)
+        let path =
+            PathBuf::from("/some/path/550e8400-e29b-41d4-a716-446655440000-abc123def456.jpg");
+        let uuid = service.extract_uuid_from_filename(&path);
         assert!(uuid.is_some());
         assert_eq!(
             uuid.unwrap(),
@@ -424,6 +480,61 @@ mod tests {
         let ids: Vec<Uuid> = covers.iter().map(|(_, id)| *id).collect();
         assert!(ids.contains(&series_id1));
         assert!(ids.contains(&series_id2));
+    }
+
+    #[tokio::test]
+    async fn test_scan_covers_includes_legacy_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let service = FileCleanupService::new(test_config(&temp_dir));
+
+        // Create current series covers directory and a cover
+        let covers_dir = service.get_covers_dir();
+        fs::create_dir_all(&covers_dir).await.unwrap();
+
+        let series_id1 = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let path1 = covers_dir.join(format!("{}.jpg", series_id1));
+        fs::write(&path1, b"new_cover").await.unwrap();
+
+        // Create a legacy cover file directly in covers/ (old location)
+        let legacy_dir = service.get_legacy_covers_dir();
+        let series_id2 = Uuid::parse_str("660e8400-e29b-41d4-a716-446655440000").unwrap();
+        let legacy_path = legacy_dir.join(format!("{}-abcdef1234567890.jpg", series_id2));
+        fs::write(&legacy_path, b"old_cover").await.unwrap();
+
+        // Scan should find both
+        let covers = service.scan_covers().await.unwrap();
+        assert_eq!(covers.len(), 2);
+
+        let ids: Vec<Uuid> = covers.iter().map(|(_, id)| *id).collect();
+        assert!(ids.contains(&series_id1));
+        assert!(ids.contains(&series_id2));
+    }
+
+    #[tokio::test]
+    async fn test_scan_covers_ignores_subdirectories_in_legacy() {
+        let temp_dir = TempDir::new().unwrap();
+        let service = FileCleanupService::new(test_config(&temp_dir));
+
+        // Create legacy covers dir with a subdirectory (e.g. books/)
+        let legacy_dir = service.get_legacy_covers_dir();
+        let books_subdir = legacy_dir.join("books");
+        fs::create_dir_all(&books_subdir).await.unwrap();
+
+        // Put a file in the books subdirectory (should not be picked up as legacy)
+        let book_cover = books_subdir.join("770e8400-e29b-41d4-a716-446655440000-hash123.jpg");
+        fs::write(&book_cover, b"book_cover").await.unwrap();
+
+        // Put a legacy series cover file directly in covers/
+        let series_id = Uuid::parse_str("880e8400-e29b-41d4-a716-446655440000").unwrap();
+        let legacy_cover = legacy_dir.join(format!("{}-somehash12345678.jpg", series_id));
+        fs::write(&legacy_cover, b"legacy_series_cover")
+            .await
+            .unwrap();
+
+        // Scan should only find the legacy file, not the one inside books/
+        let covers = service.scan_covers().await.unwrap();
+        assert_eq!(covers.len(), 1);
+        assert_eq!(covers[0].1, series_id);
     }
 
     #[tokio::test]

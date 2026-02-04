@@ -289,6 +289,7 @@ impl PluginsRepository {
             search_preprocessing_rules: Set(None),
             auto_match_conditions: Set(None),
             use_existing_external_id: Set(true),
+            metadata_targets: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
             created_by: Set(created_by),
@@ -395,6 +396,7 @@ impl PluginsRepository {
     ///
     /// Updates the search-related fields: search_query_template, search_preprocessing_rules,
     /// auto_match_conditions, and use_existing_external_id.
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_search_config(
         db: &DatabaseConnection,
         id: Uuid,
@@ -402,6 +404,7 @@ impl PluginsRepository {
         search_preprocessing_rules: Option<Option<String>>,
         auto_match_conditions: Option<Option<String>>,
         use_existing_external_id: Option<bool>,
+        metadata_targets: Option<Option<String>>,
         updated_by: Option<Uuid>,
     ) -> Result<plugins::Model> {
         let existing = Self::get_by_id(db, id)
@@ -426,6 +429,10 @@ impl PluginsRepository {
 
         if let Some(use_existing) = use_existing_external_id {
             active_model.use_existing_external_id = Set(use_existing);
+        }
+
+        if let Some(targets) = metadata_targets {
+            active_model.metadata_targets = Set(targets);
         }
 
         let result = active_model.update(db).await?;
@@ -699,6 +706,25 @@ impl PluginsRepository {
     /// Check if plugin should use existing external ID for direct metadata lookup
     pub fn use_existing_external_id(plugin: &plugins::Model) -> bool {
         plugin.use_existing_external_id
+    }
+
+    /// Get the configured metadata targets for a plugin.
+    ///
+    /// Parses the JSON `metadata_targets` column into a vector of target strings.
+    /// Returns `vec!["series", "book"]` if NULL (auto mode - both targets enabled,
+    /// actual capability checking happens at runtime).
+    pub fn get_metadata_targets(plugin: &plugins::Model) -> Vec<String> {
+        match plugin.metadata_targets.as_deref() {
+            Some(json_str) => serde_json::from_str(json_str).unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Failed to parse metadata_targets for plugin {}: {}",
+                    plugin.id,
+                    e
+                );
+                vec!["series".to_string(), "book".to_string()]
+            }),
+            None => vec!["series".to_string(), "book".to_string()],
+        }
     }
 }
 

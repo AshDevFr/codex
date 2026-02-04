@@ -3,12 +3,17 @@
 pub mod prelude;
 
 // Re-export common enums
+#[allow(unused_imports)]
+pub use book_metadata::BookType;
 pub use series_metadata::SeriesStatus;
 
 // Core entities
 pub mod api_keys;
+pub mod book_covers;
 pub mod book_duplicates;
 pub mod book_error;
+pub mod book_external_ids;
+pub mod book_external_links;
 pub mod book_metadata;
 pub mod books;
 pub mod email_verification_tokens;

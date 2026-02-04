@@ -55,6 +55,7 @@ import {
   LockableSelect,
   LockableTextarea,
 } from "@/components/forms/lockable";
+import { extractSourceFromUrl } from "@/components/series/ExternalLinks";
 import { usePermissions } from "@/hooks/usePermissions";
 
 export interface SeriesMetadataEditModalProps {
@@ -777,6 +778,13 @@ export function SeriesMetadataEditModal({
         originalItems={originalFormState?.externalLinks}
         addButtonLabel="Add Link"
         generateId={() => `new-${crypto.randomUUID()}`}
+        deriveValues={(fieldKey, value, currentValues) => {
+          if (fieldKey === "url" && !currentValues.label) {
+            const source = extractSourceFromUrl(value);
+            if (source) return { label: source };
+          }
+          return undefined;
+        }}
       />
     </Stack>
   );

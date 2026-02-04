@@ -58,8 +58,9 @@ use crate::services::PluginMetricsService;
 use super::handle::{PluginConfig, PluginError, PluginHandle};
 use super::process::PluginProcessConfig;
 use super::protocol::{
-    MetadataGetParams, MetadataMatchParams, MetadataSearchParams, MetadataSearchResponse,
-    PluginScope, PluginSeriesMetadata, SearchResult,
+    BookMatchParams, BookSearchParams, MetadataGetParams, MetadataMatchParams,
+    MetadataSearchParams, MetadataSearchResponse, PluginBookMetadata, PluginScope,
+    PluginSeriesMetadata, SearchResult,
 };
 use super::secrets::SecretValue;
 
@@ -885,6 +886,176 @@ impl PluginManager {
         Ok(result?)
     }
 
+    // =========================================================================
+    // Book Metadata Methods
+    // =========================================================================
+
+    /// Search for book metadata using a specific plugin
+    pub async fn search_book(
+        &self,
+        plugin_id: Uuid,
+        params: BookSearchParams,
+    ) -> Result<MetadataSearchResponse, PluginManagerError> {
+        // Check rate limit before making the request
+        let plugin_name = self.check_rate_limit(plugin_id).await?;
+
+        let start = Instant::now();
+        let handle = self.get_or_spawn(plugin_id).await?;
+        let result = handle.search_book(params.clone()).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        match &result {
+            Ok(response) => {
+                debug!(
+                    plugin_id = %plugin_id,
+                    isbn = ?params.isbn,
+                    query = ?params.query,
+                    result_count = response.results.len(),
+                    duration_ms = duration_ms,
+                    "Book search completed"
+                );
+
+                // Update health status on success
+                if self.config.auto_sync_health {
+                    let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+                }
+
+                // Record success in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    metrics
+                        .record_success(plugin_id, &plugin_name, "book_search", duration_ms)
+                        .await;
+                }
+            }
+            Err(e) => {
+                warn!(
+                    plugin_id = %plugin_id,
+                    isbn = ?params.isbn,
+                    query = ?params.query,
+                    error = %e,
+                    duration_ms = duration_ms,
+                    "Book search failed"
+                );
+
+                // Record failure in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    let error_code = self.error_to_code(e);
+                    metrics
+                        .record_failure(
+                            plugin_id,
+                            &plugin_name,
+                            "book_search",
+                            duration_ms,
+                            Some(error_code),
+                        )
+                        .await;
+                }
+            }
+        }
+
+        Ok(result?)
+    }
+
+    /// Get full book metadata using a specific plugin
+    pub async fn get_book_metadata(
+        &self,
+        plugin_id: Uuid,
+        params: MetadataGetParams,
+    ) -> Result<PluginBookMetadata, PluginManagerError> {
+        // Check rate limit before making the request
+        let plugin_name = self.check_rate_limit(plugin_id).await?;
+
+        let start = Instant::now();
+        let handle = self.get_or_spawn(plugin_id).await?;
+        let result = handle.get_book_metadata(params).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        match &result {
+            Ok(_) => {
+                // Update health status on success
+                if self.config.auto_sync_health {
+                    let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+                }
+
+                // Record success in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    metrics
+                        .record_success(plugin_id, &plugin_name, "book_get", duration_ms)
+                        .await;
+                }
+            }
+            Err(e) => {
+                // Record failure in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    let error_code = self.error_to_code(e);
+                    metrics
+                        .record_failure(
+                            plugin_id,
+                            &plugin_name,
+                            "book_get",
+                            duration_ms,
+                            Some(error_code),
+                        )
+                        .await;
+                }
+            }
+        }
+
+        Ok(result?)
+    }
+
+    /// Find best book match using a specific plugin
+    pub async fn match_book(
+        &self,
+        plugin_id: Uuid,
+        params: BookMatchParams,
+    ) -> Result<Option<SearchResult>, PluginManagerError> {
+        // Check rate limit before making the request
+        let plugin_name = self.check_rate_limit(plugin_id).await?;
+
+        let start = Instant::now();
+        let handle = self.get_or_spawn(plugin_id).await?;
+        let result = handle.match_book(params).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        match &result {
+            Ok(_) => {
+                // Update health status on success
+                if self.config.auto_sync_health {
+                    let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
+                }
+
+                // Record success in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    metrics
+                        .record_success(plugin_id, &plugin_name, "book_match", duration_ms)
+                        .await;
+                }
+            }
+            Err(e) => {
+                // Record failure in metrics
+                if let Some(ref metrics) = self.metrics_service {
+                    let error_code = self.error_to_code(e);
+                    metrics
+                        .record_failure(
+                            plugin_id,
+                            &plugin_name,
+                            "book_match",
+                            duration_ms,
+                            Some(error_code),
+                        )
+                        .await;
+                }
+            }
+        }
+
+        Ok(result?)
+    }
+
+    // =========================================================================
+    // Health Check Methods
+    // =========================================================================
+
     /// Ping a plugin to check health
     pub async fn ping(&self, plugin_id: Uuid) -> Result<(), PluginManagerError> {
         let handle = self.get_or_spawn(plugin_id).await?;
@@ -1330,6 +1501,7 @@ mod tests {
             search_preprocessing_rules: None,
             auto_match_conditions: None,
             use_existing_external_id: true,
+            metadata_targets: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1376,6 +1548,7 @@ mod tests {
             search_preprocessing_rules: None,
             auto_match_conditions: None,
             use_existing_external_id: true,
+            metadata_targets: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1422,6 +1595,7 @@ mod tests {
             search_preprocessing_rules: None,
             auto_match_conditions: None,
             use_existing_external_id: true,
+            metadata_targets: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,

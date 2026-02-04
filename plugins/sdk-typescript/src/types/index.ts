@@ -5,8 +5,10 @@
 // From capabilities - interface contracts
 export type {
   // Primary types
+  BookMetadataProvider,
   MetadataContentType,
   MetadataProvider,
+  PartialBookMetadataProvider,
   PartialMetadataProvider,
   PartialSeriesMetadataProvider,
   RecommendationProvider,
@@ -27,15 +29,26 @@ export { hasBookMetadataProvider, hasSeriesMetadataProvider } from "./manifest.j
 
 // From protocol - JSON-RPC protocol types (these match Rust exactly)
 export type {
+  // Common types
   AlternateTitle,
+  // Book metadata types
+  BookAuthor,
+  BookAuthorRole,
+  BookAward,
+  BookCover,
+  BookCoverSize,
+  BookMatchParams,
+  BookSearchParams,
   ExternalLink,
   ExternalLinkType,
   ExternalRating,
+  // Series metadata types
   MetadataGetParams,
   MetadataMatchParams,
   MetadataMatchResponse,
   MetadataSearchParams,
   MetadataSearchResponse,
+  PluginBookMetadata,
   PluginSeriesMetadata,
   ReadingDirection,
   SearchResult,

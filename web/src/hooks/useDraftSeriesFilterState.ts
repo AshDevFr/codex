@@ -107,7 +107,6 @@ function filterStatesEqual(
   // Compare simple TriState fields first
   if (a.completion !== b.completion) return false;
   if (a.hasExternalSourceId !== b.hasExternalSourceId) return false;
-
   // Compare FilterGroupState fields
   const groups: (keyof Omit<
     SeriesFilterState,
@@ -404,7 +403,6 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     newParams.delete("stf");
     newParams.delete("cf");
     newParams.delete("esf");
-
     // Add new filter params (will be empty for cleared filters)
     for (const [key, value] of filterParams) {
       newParams.set(key, value);
@@ -461,7 +459,6 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     newParams.delete("stf");
     newParams.delete("cf");
     newParams.delete("esf");
-
     // Add new filter params
     for (const [key, value] of filterParams) {
       newParams.set(key, value);

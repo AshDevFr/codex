@@ -30,7 +30,7 @@ import type {
 import { pluginActionsApi } from "@/api/plugins";
 
 export interface MetadataPreviewProps {
-  /** Series ID */
+  /** Series or Book ID */
   seriesId: string;
   /** Plugin ID */
   pluginId: string;
@@ -38,8 +38,8 @@ export interface MetadataPreviewProps {
   externalId: string;
   /** Plugin display name */
   pluginName: string;
-  /** Content type (only "series" is currently supported) */
-  contentType?: "series";
+  /** Content type */
+  contentType?: "series" | "book";
   /** Callback when apply is complete */
   onApplyComplete?: (success: boolean, appliedFields: string[]) => void;
   /** Callback to go back to search */
@@ -81,6 +81,7 @@ const STATUS_CONFIG: Record<FieldApplyStatus, StatusConfig> = {
 };
 
 const FIELD_LABELS: Record<string, string> = {
+  // Series fields
   title: "Title",
   alternateTitles: "Alternate Titles",
   summary: "Summary",
@@ -97,6 +98,19 @@ const FIELD_LABELS: Record<string, string> = {
   rating: "Rating",
   externalRatings: "External Ratings",
   coverUrl: "Cover",
+  // Book-specific fields
+  bookType: "Book Type",
+  subtitle: "Subtitle",
+  authors: "Authors",
+  translator: "Translator",
+  edition: "Edition",
+  originalTitle: "Original Title",
+  originalYear: "Original Year",
+  isbns: "ISBNs",
+  seriesPosition: "Series Position",
+  seriesTotal: "Series Total",
+  subjects: "Subjects",
+  awards: "Awards",
 };
 
 /**
@@ -127,15 +141,13 @@ export function MetadataPreview({
   // Fetch preview data
   const previewMutation = useMutation({
     mutationFn: async () => {
-      if (contentType === "series") {
-        return pluginActionsApi.previewSeriesMetadata(
+      if (contentType === "book") {
+        return pluginActionsApi.previewBookMetadata(
           seriesId,
           pluginId,
           externalId,
         );
       }
-      // For books, use bookId as seriesId (naming is confusing but intentional)
-      // TODO: Add previewBookMetadata when book support is added
       return pluginActionsApi.previewSeriesMetadata(
         seriesId,
         pluginId,
@@ -173,15 +185,14 @@ export function MetadataPreview({
     mutationFn: async () => {
       const fieldsArray =
         selectedFields.size > 0 ? Array.from(selectedFields) : undefined;
-      if (contentType === "series") {
-        return pluginActionsApi.applySeriesMetadata(
+      if (contentType === "book") {
+        return pluginActionsApi.applyBookMetadata(
           seriesId,
           pluginId,
           externalId,
           fieldsArray,
         );
       }
-      // TODO: Add applyBookMetadata when book support is added
       return pluginActionsApi.applySeriesMetadata(
         seriesId,
         pluginId,
@@ -287,6 +298,7 @@ export function MetadataPreview({
                 isSelected={selectedFields.has(field.field)}
                 onToggle={() => toggleField(field.field)}
                 seriesId={seriesId}
+                contentType={contentType}
               />
             ))}
           </Table.Tbody>
@@ -345,11 +357,19 @@ interface FieldRowProps {
   field: MetadataFieldPreview;
   isSelected: boolean;
   onToggle: () => void;
-  /** Series ID for building cover thumbnail URL */
+  /** Entity ID for building cover thumbnail URL */
   seriesId: string;
+  /** Content type to determine the correct thumbnail URL */
+  contentType?: "series" | "book";
 }
 
-function FieldRow({ field, isSelected, onToggle, seriesId }: FieldRowProps) {
+function FieldRow({
+  field,
+  isSelected,
+  onToggle,
+  seriesId,
+  contentType = "series",
+}: FieldRowProps) {
   const config = STATUS_CONFIG[field.status];
   const isApplyable = field.status === "will_apply";
   const isActive = isApplyable && isSelected;
@@ -397,7 +417,8 @@ function FieldRow({ field, isSelected, onToggle, seriesId }: FieldRowProps) {
         <ValueDisplay
           value={field.currentValue}
           fieldName={field.field}
-          seriesId={seriesId}
+          entityId={seriesId}
+          contentType={contentType}
           isCurrent
         />
       </Table.Td>
@@ -413,6 +434,7 @@ function FieldRow({ field, isSelected, onToggle, seriesId }: FieldRowProps) {
           value={field.proposedValue}
           highlight={isActive}
           fieldName={field.field}
+          contentType={contentType}
         />
       </Table.Td>
     </Table.Tr>
@@ -424,9 +446,11 @@ interface ValueDisplayProps {
   highlight?: boolean;
   /** Field name to enable special rendering (e.g., coverUrl shows image) */
   fieldName?: string;
-  /** Series ID for building cover thumbnail URL (used for current cover) */
-  seriesId?: string;
-  /** Whether this is the current value (uses series thumbnail) or proposed (uses external URL) */
+  /** Entity ID for building cover thumbnail URL (used for current cover) */
+  entityId?: string;
+  /** Content type to determine the correct thumbnail URL */
+  contentType?: "series" | "book";
+  /** Whether this is the current value (uses entity thumbnail) or proposed (uses external URL) */
   isCurrent?: boolean;
 }
 
@@ -434,16 +458,18 @@ function ValueDisplay({
   value,
   highlight,
   fieldName,
-  seriesId,
+  entityId,
+  contentType = "series",
   isCurrent,
 }: ValueDisplayProps) {
   // Handle cover URL - display as thumbnail image
   if (fieldName === "coverUrl") {
-    // For current value, use the series thumbnail from the server
+    // For current value, use the entity thumbnail from the server
     // For proposed value, use the external URL from the plugin
+    const thumbnailPath = contentType === "book" ? "books" : "series";
     const coverSrc = isCurrent
-      ? seriesId
-        ? `/api/v1/series/${seriesId}/thumbnail`
+      ? entityId
+        ? `/api/v1/${thumbnailPath}/${entityId}/thumbnail`
         : undefined
       : typeof value === "string"
         ? value

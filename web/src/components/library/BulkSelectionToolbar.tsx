@@ -63,16 +63,13 @@ export function BulkSelectionToolbar() {
     enabled: selectionType === "series" && count > 0,
   });
 
-  // Placeholder for future book:bulk plugin actions
-  // Currently disabled as the backend doesn't support this scope yet
-  // When book:bulk plugins are added to the backend, enable this query:
-  // const { data: bookPluginActions } = useQuery({
-  // 	queryKey: ["plugin-actions", "book:bulk"],
-  // 	queryFn: () => pluginsApi.getActions("book:bulk"),
-  // 	staleTime: 5 * 60 * 1000,
-  // 	enabled: selectionType === "book" && count > 0,
-  // });
-  const bookPluginActions = { actions: [] }; // Empty until backend supports book:bulk
+  // Fetch plugin actions for book:bulk scope (only when books are selected)
+  const { data: bookPluginActions } = useQuery({
+    queryKey: ["plugin-actions", "book:bulk"],
+    queryFn: () => pluginsApi.getActions("book:bulk"),
+    staleTime: 5 * 60 * 1000,
+    enabled: selectionType === "book" && count > 0,
+  });
 
   // Helper to refetch all related queries
   const refetchAll = () => {

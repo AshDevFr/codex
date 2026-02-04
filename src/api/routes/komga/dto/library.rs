@@ -67,9 +67,6 @@ pub struct KomgaLibraryDto {
     /// Whether to import Mylar series data
     #[serde(default)]
     pub import_mylar_series: bool,
-    /// Directory path for oneshots (optional)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub oneshots_directory: Option<String>,
     /// Whether to repair file extensions
     #[serde(default)]
     pub repair_extensions: bool,
@@ -132,7 +129,6 @@ impl Default for KomgaLibraryDto {
             import_epub_series: true,
             import_local_artwork: true,
             import_mylar_series: false,
-            oneshots_directory: None,
             repair_extensions: false,
             scan_cbx: true,
             scan_directory_exclusions: Vec::new(),

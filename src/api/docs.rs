@@ -270,6 +270,22 @@ The following paths are exempt from rate limiting:
         v1::handlers::update_book_metadata_locks,
         v1::handlers::upload_book_cover,
 
+        // Book external IDs endpoints
+        v1::handlers::list_book_external_ids,
+        v1::handlers::create_book_external_id,
+        v1::handlers::delete_book_external_id,
+        // Book external links endpoints
+        v1::handlers::list_book_external_links,
+        v1::handlers::create_book_external_link,
+        v1::handlers::delete_book_external_link,
+
+        // Book cover management endpoints
+        v1::handlers::list_book_covers,
+        v1::handlers::select_book_cover,
+        v1::handlers::reset_book_cover,
+        v1::handlers::get_book_cover_image,
+        v1::handlers::delete_book_cover,
+
         // Page endpoints
         v1::handlers::get_page_image,
 
@@ -586,6 +602,18 @@ The following paths are exempt from rate limiting:
             // Cover DTOs
             v1::dto::SeriesCoverDto,
             v1::dto::SeriesCoverListResponse,
+            v1::dto::BookCoverDto,
+            v1::dto::BookCoverListResponse,
+
+            // Book External ID DTOs
+            v1::dto::BookExternalIdDto,
+            v1::dto::BookExternalIdListResponse,
+            v1::dto::CreateBookExternalIdRequest,
+
+            // Book External Link DTOs
+            v1::dto::BookExternalLinkDto,
+            v1::dto::BookExternalLinkListResponse,
+            v1::dto::CreateBookExternalLinkRequest,
 
             // Sharing Tag DTOs
             v1::dto::SharingTagDto,

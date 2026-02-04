@@ -5,9 +5,15 @@
 import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
 import { createLogger, type Logger } from "./logger.js";
-import type { MetadataContentType, MetadataProvider } from "./types/capabilities.js";
+import type {
+  BookMetadataProvider,
+  MetadataContentType,
+  MetadataProvider,
+} from "./types/capabilities.js";
 import type { PluginManifest } from "./types/manifest.js";
 import type {
+  BookMatchParams,
+  BookSearchParams,
   MetadataGetParams,
   MetadataMatchParams,
   MetadataSearchParams,
@@ -78,6 +84,35 @@ function validateMatchParams(params: unknown): ValidationError | null {
 }
 
 /**
+ * Validate BookSearchParams - requires either isbn or query
+ */
+function validateBookSearchParams(params: unknown): ValidationError | null {
+  if (params === null || params === undefined) {
+    return { field: "params", message: "params is required" };
+  }
+  if (typeof params !== "object") {
+    return { field: "params", message: "params must be an object" };
+  }
+
+  const obj = params as Record<string, unknown>;
+  const hasIsbn = obj.isbn !== undefined && obj.isbn !== null && obj.isbn !== "";
+  const hasQuery = obj.query !== undefined && obj.query !== null && obj.query !== "";
+
+  if (!hasIsbn && !hasQuery) {
+    return { field: "isbn/query", message: "either isbn or query is required" };
+  }
+
+  return null;
+}
+
+/**
+ * Validate BookMatchParams
+ */
+function validateBookMatchParams(params: unknown): ValidationError | null {
+  return validateStringFields(params, ["title"]);
+}
+
+/**
  * Create an INVALID_PARAMS error response
  */
 function invalidParamsError(id: string | number | null, error: ValidationError): JsonRpcResponse {
@@ -110,8 +145,10 @@ export interface MetadataPluginOptions {
   manifest: PluginManifest & {
     capabilities: { metadataProvider: MetadataContentType[] };
   };
-  /** MetadataProvider implementation */
-  provider: MetadataProvider;
+  /** Series MetadataProvider implementation (required if "series" in metadataProvider) */
+  provider?: MetadataProvider;
+  /** Book MetadataProvider implementation (required if "book" in metadataProvider) */
+  bookProvider?: BookMetadataProvider;
   /** Called when plugin receives initialize with credentials/config */
   onInitialize?: (params: InitializeParams) => void | Promise<void>;
   /** Log level (default: "info") */
@@ -168,8 +205,21 @@ export interface MetadataPluginOptions {
  * ```
  */
 export function createMetadataPlugin(options: MetadataPluginOptions): void {
-  const { manifest, provider, onInitialize, logLevel = "info" } = options;
+  const { manifest, provider, bookProvider, onInitialize, logLevel = "info" } = options;
   const logger = createLogger({ name: manifest.name, level: logLevel });
+
+  // Validate that required providers are present based on manifest
+  const contentTypes = manifest.capabilities.metadataProvider;
+  if (contentTypes.includes("series") && !provider) {
+    throw new Error(
+      "Series metadata provider is required when 'series' is in metadataProvider capabilities",
+    );
+  }
+  if (contentTypes.includes("book") && !bookProvider) {
+    throw new Error(
+      "Book metadata provider is required when 'book' is in metadataProvider capabilities",
+    );
+  }
 
   logger.info(`Starting plugin: ${manifest.displayName} v${manifest.version}`);
 
@@ -179,7 +229,7 @@ export function createMetadataPlugin(options: MetadataPluginOptions): void {
   });
 
   rl.on("line", (line) => {
-    void handleLine(line, manifest, provider, onInitialize, logger);
+    void handleLine(line, manifest, provider, bookProvider, onInitialize, logger);
   });
 
   rl.on("close", () => {
@@ -243,7 +293,8 @@ export interface SeriesMetadataPluginOptions {
 async function handleLine(
   line: string,
   manifest: PluginManifest,
-  provider: MetadataProvider,
+  provider: MetadataProvider | undefined,
+  bookProvider: BookMetadataProvider | undefined,
   onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
   logger: Logger,
 ): Promise<void> {
@@ -258,7 +309,14 @@ async function handleLine(
 
     logger.debug(`Received request: ${request.method}`, { id: request.id });
 
-    const response = await handleRequest(request, manifest, provider, onInitialize, logger);
+    const response = await handleRequest(
+      request,
+      manifest,
+      provider,
+      bookProvider,
+      onInitialize,
+      logger,
+    );
     // Shutdown handler writes response directly and returns null
     if (response !== null) {
       writeResponse(response);
@@ -298,7 +356,8 @@ async function handleLine(
 async function handleRequest(
   request: JsonRpcRequest,
   manifest: PluginManifest,
-  provider: MetadataProvider,
+  provider: MetadataProvider | undefined,
+  bookProvider: BookMetadataProvider | undefined,
   onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
   logger: Logger,
 ): Promise<JsonRpcResponse> {
@@ -339,8 +398,20 @@ async function handleRequest(
       return null as unknown as JsonRpcResponse;
     }
 
-    // Series metadata methods (scoped by content type)
+    // =========================================================================
+    // Series metadata methods
+    // =========================================================================
     case "metadata/series/search": {
+      if (!provider) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support series metadata",
+          },
+        };
+      }
       const validationError = validateSearchParams(params);
       if (validationError) {
         return invalidParamsError(id, validationError);
@@ -353,6 +424,16 @@ async function handleRequest(
     }
 
     case "metadata/series/get": {
+      if (!provider) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support series metadata",
+          },
+        };
+      }
       const validationError = validateGetParams(params);
       if (validationError) {
         return invalidParamsError(id, validationError);
@@ -365,13 +446,23 @@ async function handleRequest(
     }
 
     case "metadata/series/match": {
+      if (!provider) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support series metadata",
+          },
+        };
+      }
       if (!provider.match) {
         return {
           jsonrpc: "2.0",
           id,
           error: {
             code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support match",
+            message: "This plugin does not support series match",
           },
         };
       }
@@ -386,10 +477,84 @@ async function handleRequest(
       };
     }
 
-    // Future: book metadata methods
-    // case "metadata/book/search":
-    // case "metadata/book/get":
-    // case "metadata/book/match":
+    // =========================================================================
+    // Book metadata methods
+    // =========================================================================
+    case "metadata/book/search": {
+      if (!bookProvider) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support book metadata",
+          },
+        };
+      }
+      const validationError = validateBookSearchParams(params);
+      if (validationError) {
+        return invalidParamsError(id, validationError);
+      }
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await bookProvider.search(params as BookSearchParams),
+      };
+    }
+
+    case "metadata/book/get": {
+      if (!bookProvider) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support book metadata",
+          },
+        };
+      }
+      const validationError = validateGetParams(params);
+      if (validationError) {
+        return invalidParamsError(id, validationError);
+      }
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await bookProvider.get(params as MetadataGetParams),
+      };
+    }
+
+    case "metadata/book/match": {
+      if (!bookProvider) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support book metadata",
+          },
+        };
+      }
+      if (!bookProvider.match) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support book match",
+          },
+        };
+      }
+      const validationError = validateBookMatchParams(params);
+      if (validationError) {
+        return invalidParamsError(id, validationError);
+      }
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await bookProvider.match(params as BookMatchParams),
+      };
+    }
 
     default:
       return {

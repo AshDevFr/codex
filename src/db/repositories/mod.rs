@@ -1,7 +1,10 @@
 pub mod alternate_title;
 pub mod api_key;
 pub mod book;
+pub mod book_covers;
 pub mod book_duplicates;
+pub mod book_external_id;
+pub mod book_external_links;
 pub mod email_verification_token;
 pub mod external_link;
 pub mod external_rating;
@@ -35,7 +38,10 @@ pub use book::{
     BookQueryOptions, BookQuerySort, BookRepository, BookSortField, ReadStatusFilter,
     ReleaseDateFilter, ReleaseDateOperator,
 };
+pub use book_covers::BookCoversRepository;
 pub use book_duplicates::BookDuplicatesRepository;
+pub use book_external_id::BookExternalIdRepository;
+pub use book_external_links::BookExternalLinkRepository;
 pub use email_verification_token::EmailVerificationTokenRepository;
 pub use external_link::ExternalLinkRepository;
 pub use external_rating::ExternalRatingRepository;

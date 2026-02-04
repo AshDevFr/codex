@@ -1,5 +1,5 @@
 use super::super::dto::{
-    book::BookSortParam,
+    book::{BookAuthorDto, BookAwardDto, BookSortParam, BookType, BookTypeDto},
     common::{
         ListPaginationParams, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
     },
@@ -339,7 +339,6 @@ pub async fn books_to_full_dtos_batched(
                 publisher: meta.publisher.clone(),
                 imprint: meta.imprint.clone(),
                 genre: meta.genre.clone(),
-                web: meta.web.clone(),
                 language_iso: meta.language_iso.clone(),
                 format_detail: meta.format_detail.clone(),
                 black_and_white: meta.black_and_white,
@@ -362,7 +361,6 @@ pub async fn books_to_full_dtos_batched(
                     publisher_lock: meta.publisher_lock,
                     imprint_lock: meta.imprint_lock,
                     genre_lock: meta.genre_lock,
-                    web_lock: meta.web_lock,
                     language_iso_lock: meta.language_iso_lock,
                     format_detail_lock: meta.format_detail_lock,
                     black_and_white_lock: meta.black_and_white_lock,
@@ -373,6 +371,20 @@ pub async fn books_to_full_dtos_batched(
                     volume_lock: meta.volume_lock,
                     count_lock: meta.count_lock,
                     isbns_lock: meta.isbns_lock,
+                    // New lock fields for Phase 6
+                    book_type_lock: meta.book_type_lock,
+                    subtitle_lock: meta.subtitle_lock,
+                    authors_json_lock: meta.authors_json_lock,
+                    translator_lock: meta.translator_lock,
+                    edition_lock: meta.edition_lock,
+                    original_title_lock: meta.original_title_lock,
+                    original_year_lock: meta.original_year_lock,
+                    series_position_lock: meta.series_position_lock,
+                    series_total_lock: meta.series_total_lock,
+                    subjects_lock: meta.subjects_lock,
+                    awards_json_lock: meta.awards_json_lock,
+                    custom_metadata_lock: meta.custom_metadata_lock,
+                    cover_lock: meta.cover_lock,
                 },
                 created_at: meta.created_at,
                 updated_at: meta.updated_at,
@@ -394,7 +406,6 @@ pub async fn books_to_full_dtos_batched(
                 publisher: None,
                 imprint: None,
                 genre: None,
-                web: None,
                 language_iso: None,
                 format_detail: None,
                 black_and_white: None,
@@ -417,7 +428,6 @@ pub async fn books_to_full_dtos_batched(
                     publisher_lock: false,
                     imprint_lock: false,
                     genre_lock: false,
-                    web_lock: false,
                     language_iso_lock: false,
                     format_detail_lock: false,
                     black_and_white_lock: false,
@@ -428,6 +438,20 @@ pub async fn books_to_full_dtos_batched(
                     volume_lock: false,
                     count_lock: false,
                     isbns_lock: false,
+                    // New lock fields for Phase 6
+                    book_type_lock: false,
+                    subtitle_lock: false,
+                    authors_json_lock: false,
+                    translator_lock: false,
+                    edition_lock: false,
+                    original_title_lock: false,
+                    original_year_lock: false,
+                    series_position_lock: false,
+                    series_total_lock: false,
+                    subjects_lock: false,
+                    awards_json_lock: false,
+                    custom_metadata_lock: false,
+                    cover_lock: false,
                 },
                 created_at: now,
                 updated_at: now,
@@ -780,26 +804,84 @@ pub async fn get_book(
             .await
             .ok()
             .flatten()
-            .map(|meta| BookMetadataDto {
-                id: meta.id,
-                book_id: meta.book_id,
-                title: meta.title,
-                series: None, // Series name is fetched separately via series_metadata
-                number: meta.number.map(|d| d.to_string()),
-                summary: meta.summary,
-                publisher: meta.publisher,
-                imprint: meta.imprint,
-                genre: meta.genre,
-                page_count: None, // Page count is in books table, not metadata
-                language_iso: meta.language_iso,
-                release_date: None, // Release date is computed from year/month/day
-                writers: meta.writer.map(|s| vec![s]).unwrap_or_default(),
-                pencillers: meta.penciller.map(|s| vec![s]).unwrap_or_default(),
-                inkers: meta.inker.map(|s| vec![s]).unwrap_or_default(),
-                colorists: meta.colorist.map(|s| vec![s]).unwrap_or_default(),
-                letterers: meta.letterer.map(|s| vec![s]).unwrap_or_default(),
-                cover_artists: meta.cover_artist.map(|s| vec![s]).unwrap_or_default(),
-                editors: meta.editor.map(|s| vec![s]).unwrap_or_default(),
+            .map(|meta| {
+                // Parse authors JSON
+                let authors = meta
+                    .authors_json
+                    .as_ref()
+                    .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok());
+                // Parse awards JSON
+                let awards = meta
+                    .awards_json
+                    .as_ref()
+                    .and_then(|json| serde_json::from_str::<Vec<BookAwardDto>>(json).ok());
+                // Parse subjects (either JSON array or comma-separated)
+                let subjects = meta.subjects.as_ref().map(|s| {
+                    if s.starts_with('[') {
+                        serde_json::from_str::<Vec<String>>(s).unwrap_or_else(|_| vec![s.clone()])
+                    } else {
+                        s.split(',')
+                            .map(|t| t.trim().to_string())
+                            .filter(|t| !t.is_empty())
+                            .collect()
+                    }
+                });
+                // Parse custom metadata
+                let custom_metadata = meta
+                    .custom_metadata
+                    .as_ref()
+                    .and_then(|json| serde_json::from_str(json).ok());
+
+                BookMetadataDto {
+                    id: meta.id,
+                    book_id: meta.book_id,
+                    title: meta.title,
+                    series: None, // Series name is fetched separately via series_metadata
+                    number: meta.number.map(|d| d.to_string()),
+                    summary: meta.summary,
+                    publisher: meta.publisher,
+                    imprint: meta.imprint,
+                    genre: meta.genre,
+                    page_count: None, // Page count is in books table, not metadata
+                    language_iso: meta.language_iso,
+                    release_date: None, // Release date is computed from year/month/day
+                    writers: meta.writer.map(|s| vec![s]).unwrap_or_default(),
+                    pencillers: meta.penciller.map(|s| vec![s]).unwrap_or_default(),
+                    inkers: meta.inker.map(|s| vec![s]).unwrap_or_default(),
+                    colorists: meta.colorist.map(|s| vec![s]).unwrap_or_default(),
+                    letterers: meta.letterer.map(|s| vec![s]).unwrap_or_default(),
+                    cover_artists: meta.cover_artist.map(|s| vec![s]).unwrap_or_default(),
+                    editors: meta.editor.map(|s| vec![s]).unwrap_or_default(),
+                    // New Phase 6 fields
+                    book_type: meta
+                        .book_type
+                        .as_ref()
+                        .and_then(|s| s.parse::<BookType>().ok())
+                        .map(BookTypeDto::from),
+                    subtitle: meta.subtitle,
+                    authors,
+                    translator: meta.translator,
+                    edition: meta.edition,
+                    original_title: meta.original_title,
+                    original_year: meta.original_year,
+                    series_position: meta
+                        .series_position
+                        .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
+                    series_total: meta.series_total,
+                    subjects,
+                    awards,
+                    custom_metadata,
+                    // Raw metadata fields (for edit form)
+                    format_detail: meta.format_detail,
+                    black_and_white: meta.black_and_white,
+                    manga: meta.manga,
+                    year: meta.year,
+                    month: meta.month,
+                    day: meta.day,
+                    volume: meta.volume,
+                    count: meta.count,
+                    isbns: meta.isbns,
+                }
             });
 
         let mut dtos = books_to_dtos(&state.db, auth.user_id, vec![book]).await?;
@@ -916,7 +998,6 @@ pub async fn patch_book(
             publisher: Set(None),
             imprint: Set(None),
             genre: Set(None),
-            web: Set(None),
             language_iso: Set(None),
             format_detail: Set(None),
             black_and_white: Set(None),
@@ -927,6 +1008,19 @@ pub async fn patch_book(
             volume: Set(None),
             count: Set(None),
             isbns: Set(None),
+            // New Phase 1 fields
+            book_type: Set(None),
+            subtitle: Set(None),
+            authors_json: Set(None),
+            translator: Set(None),
+            edition: Set(None),
+            original_title: Set(None),
+            original_year: Set(None),
+            series_position: Set(None),
+            series_total: Set(None),
+            subjects: Set(None),
+            awards_json: Set(None),
+            custom_metadata: Set(None),
             // Auto-lock fields that are set
             title_lock: Set(title_opt.is_some()),
             title_sort_lock: Set(false),
@@ -942,7 +1036,6 @@ pub async fn patch_book(
             publisher_lock: Set(false),
             imprint_lock: Set(false),
             genre_lock: Set(false),
-            web_lock: Set(false),
             language_iso_lock: Set(false),
             format_detail_lock: Set(false),
             black_and_white_lock: Set(false),
@@ -953,6 +1046,20 @@ pub async fn patch_book(
             volume_lock: Set(false),
             count_lock: Set(false),
             isbns_lock: Set(false),
+            // New Phase 1 lock fields
+            book_type_lock: Set(false),
+            subtitle_lock: Set(false),
+            authors_json_lock: Set(false),
+            translator_lock: Set(false),
+            edition_lock: Set(false),
+            original_title_lock: Set(false),
+            original_year_lock: Set(false),
+            series_position_lock: Set(false),
+            series_total_lock: Set(false),
+            subjects_lock: Set(false),
+            awards_json_lock: Set(false),
+            custom_metadata_lock: Set(false),
+            cover_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -1763,7 +1870,6 @@ pub async fn replace_book_metadata(
         active.publisher = Set(request.publisher.clone());
         active.imprint = Set(request.imprint.clone());
         active.genre = Set(request.genre.clone());
-        active.web = Set(request.web.clone());
         active.language_iso = Set(request.language_iso.clone());
         active.format_detail = Set(request.format_detail.clone());
         active.black_and_white = Set(request.black_and_white);
@@ -1808,9 +1914,6 @@ pub async fn replace_book_metadata(
         }
         if request.genre.is_some() {
             active.genre_lock = Set(true);
-        }
-        if request.web.is_some() {
-            active.web_lock = Set(true);
         }
         if request.language_iso.is_some() {
             active.language_iso_lock = Set(true);
@@ -1868,7 +1971,6 @@ pub async fn replace_book_metadata(
             publisher: Set(request.publisher.clone()),
             imprint: Set(request.imprint.clone()),
             genre: Set(request.genre.clone()),
-            web: Set(request.web.clone()),
             language_iso: Set(request.language_iso.clone()),
             format_detail: Set(request.format_detail.clone()),
             black_and_white: Set(request.black_and_white),
@@ -1879,6 +1981,19 @@ pub async fn replace_book_metadata(
             volume: Set(request.volume),
             count: Set(request.count),
             isbns: Set(request.isbns.clone()),
+            // New Phase 1 fields
+            book_type: Set(None),
+            subtitle: Set(None),
+            authors_json: Set(None),
+            translator: Set(None),
+            edition: Set(None),
+            original_title: Set(None),
+            original_year: Set(None),
+            series_position: Set(None),
+            series_total: Set(None),
+            subjects: Set(None),
+            awards_json: Set(None),
+            custom_metadata: Set(None),
             // Set locks for non-null fields
             title_lock: Set(false),
             title_sort_lock: Set(false),
@@ -1894,7 +2009,6 @@ pub async fn replace_book_metadata(
             publisher_lock: Set(request.publisher.is_some()),
             imprint_lock: Set(request.imprint.is_some()),
             genre_lock: Set(request.genre.is_some()),
-            web_lock: Set(request.web.is_some()),
             language_iso_lock: Set(request.language_iso.is_some()),
             format_detail_lock: Set(request.format_detail.is_some()),
             black_and_white_lock: Set(request.black_and_white.is_some()),
@@ -1905,6 +2019,20 @@ pub async fn replace_book_metadata(
             volume_lock: Set(request.volume.is_some()),
             count_lock: Set(request.count.is_some()),
             isbns_lock: Set(request.isbns.is_some()),
+            // New Phase 1 lock fields
+            book_type_lock: Set(false),
+            subtitle_lock: Set(false),
+            authors_json_lock: Set(false),
+            translator_lock: Set(false),
+            edition_lock: Set(false),
+            original_title_lock: Set(false),
+            original_year_lock: Set(false),
+            series_position_lock: Set(false),
+            series_total_lock: Set(false),
+            subjects_lock: Set(false),
+            awards_json_lock: Set(false),
+            custom_metadata_lock: Set(false),
+            cover_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -1928,6 +2056,30 @@ pub async fn replace_book_metadata(
     };
     let _ = state.event_broadcaster.emit(event);
 
+    // Parse new fields from the updated record
+    let authors = updated
+        .authors_json
+        .as_ref()
+        .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok());
+    let awards = updated
+        .awards_json
+        .as_ref()
+        .and_then(|json| serde_json::from_str::<Vec<BookAwardDto>>(json).ok());
+    let subjects = updated.subjects.as_ref().map(|s| {
+        if s.starts_with('[') {
+            serde_json::from_str::<Vec<String>>(s).unwrap_or_else(|_| vec![s.clone()])
+        } else {
+            s.split(',')
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .collect()
+        }
+    });
+    let custom_metadata = updated
+        .custom_metadata
+        .as_ref()
+        .and_then(|json| serde_json::from_str(json).ok());
+
     Ok(Json(BookMetadataResponse {
         book_id: updated.book_id,
         summary: updated.summary,
@@ -1941,7 +2093,6 @@ pub async fn replace_book_metadata(
         publisher: updated.publisher,
         imprint: updated.imprint,
         genre: updated.genre,
-        web: updated.web,
         language_iso: updated.language_iso,
         format_detail: updated.format_detail,
         black_and_white: updated.black_and_white,
@@ -1952,6 +2103,25 @@ pub async fn replace_book_metadata(
         volume: updated.volume,
         count: updated.count,
         isbns: updated.isbns,
+        // New Phase 6 fields
+        book_type: updated
+            .book_type
+            .as_ref()
+            .and_then(|s| s.parse::<BookType>().ok())
+            .map(BookTypeDto::from),
+        subtitle: updated.subtitle,
+        authors,
+        translator: updated.translator,
+        edition: updated.edition,
+        original_title: updated.original_title,
+        original_year: updated.original_year,
+        series_position: updated
+            .series_position
+            .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
+        series_total: updated.series_total,
+        subjects,
+        awards,
+        custom_metadata,
         updated_at: updated.updated_at,
     }))
 }
@@ -2082,13 +2252,6 @@ pub async fn patch_book_metadata(
             }
             has_changes = true;
         }
-        if let Some(opt) = request.web.into_nested_option() {
-            active.web = Set(opt.clone());
-            if opt.is_some() {
-                active.web_lock = Set(true);
-            }
-            has_changes = true;
-        }
         if let Some(opt) = request.language_iso.into_nested_option() {
             active.language_iso = Set(opt.clone());
             if opt.is_some() {
@@ -2159,6 +2322,104 @@ pub async fn patch_book_metadata(
             }
             has_changes = true;
         }
+        // New Phase 6 fields
+        if let Some(opt) = request.book_type.into_nested_option() {
+            let book_type_str = opt.as_ref().map(|bt| bt.to_string());
+            active.book_type = Set(book_type_str);
+            if opt.is_some() {
+                active.book_type_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.subtitle.into_nested_option() {
+            active.subtitle = Set(opt.clone());
+            if opt.is_some() {
+                active.subtitle_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.authors.into_nested_option() {
+            let authors_json = opt
+                .as_ref()
+                .map(|v| serde_json::to_string(v).unwrap_or_default());
+            active.authors_json = Set(authors_json);
+            if opt.is_some() {
+                active.authors_json_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.translator.into_nested_option() {
+            active.translator = Set(opt.clone());
+            if opt.is_some() {
+                active.translator_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.edition.into_nested_option() {
+            active.edition = Set(opt.clone());
+            if opt.is_some() {
+                active.edition_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.original_title.into_nested_option() {
+            active.original_title = Set(opt.clone());
+            if opt.is_some() {
+                active.original_title_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.original_year.into_nested_option() {
+            active.original_year = Set(opt);
+            if opt.is_some() {
+                active.original_year_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.series_position.into_nested_option() {
+            active.series_position = Set(opt.and_then(sea_orm::prelude::Decimal::from_f64_retain));
+            if opt.is_some() {
+                active.series_position_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.series_total.into_nested_option() {
+            active.series_total = Set(opt);
+            if opt.is_some() {
+                active.series_total_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.subjects.into_nested_option() {
+            let subjects_str = opt
+                .as_ref()
+                .map(|v| serde_json::to_string(v).unwrap_or_default());
+            active.subjects = Set(subjects_str);
+            if opt.is_some() {
+                active.subjects_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.awards.into_nested_option() {
+            let awards_json = opt
+                .as_ref()
+                .map(|v| serde_json::to_string(v).unwrap_or_default());
+            active.awards_json = Set(awards_json);
+            if opt.is_some() {
+                active.awards_json_lock = Set(true);
+            }
+            has_changes = true;
+        }
+        if let Some(opt) = request.custom_metadata.into_nested_option() {
+            let custom_str = opt
+                .as_ref()
+                .map(|v| serde_json::to_string(v).unwrap_or_default());
+            active.custom_metadata = Set(custom_str);
+            if opt.is_some() {
+                active.custom_metadata_lock = Set(true);
+            }
+            has_changes = true;
+        }
 
         if has_changes {
             active.updated_at = Set(now);
@@ -2182,7 +2443,6 @@ pub async fn patch_book_metadata(
         let publisher_opt = request.publisher.into_option();
         let imprint_opt = request.imprint.into_option();
         let genre_opt = request.genre.into_option();
-        let web_opt = request.web.into_option();
         let language_iso_opt = request.language_iso.into_option();
         let format_detail_opt = request.format_detail.into_option();
         let black_and_white_opt = request.black_and_white.into_option();
@@ -2193,6 +2453,32 @@ pub async fn patch_book_metadata(
         let volume_opt = request.volume.into_option();
         let count_opt = request.count.into_option();
         let isbns_opt = request.isbns.into_option();
+        // New Phase 6 fields
+        let book_type_opt = request.book_type.into_option();
+        let book_type_str = book_type_opt.as_ref().map(|bt| bt.to_string());
+        let subtitle_opt = request.subtitle.into_option();
+        let authors_opt = request.authors.into_option();
+        let authors_json_opt = authors_opt
+            .as_ref()
+            .map(|v| serde_json::to_string(v).unwrap_or_default());
+        let translator_opt = request.translator.into_option();
+        let edition_opt = request.edition.into_option();
+        let original_title_opt = request.original_title.into_option();
+        let original_year_opt = request.original_year.into_option();
+        let series_position_opt = request.series_position.into_option();
+        let series_total_opt = request.series_total.into_option();
+        let subjects_opt = request.subjects.into_option();
+        let subjects_str = subjects_opt
+            .as_ref()
+            .map(|v| serde_json::to_string(v).unwrap_or_default());
+        let awards_opt = request.awards.into_option();
+        let awards_json_opt = awards_opt
+            .as_ref()
+            .map(|v| serde_json::to_string(v).unwrap_or_default());
+        let custom_metadata_opt = request.custom_metadata.into_option();
+        let custom_metadata_str = custom_metadata_opt
+            .as_ref()
+            .map(|v| serde_json::to_string(v).unwrap_or_default());
 
         let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
@@ -2211,7 +2497,6 @@ pub async fn patch_book_metadata(
             publisher: Set(publisher_opt.clone()),
             imprint: Set(imprint_opt.clone()),
             genre: Set(genre_opt.clone()),
-            web: Set(web_opt.clone()),
             language_iso: Set(language_iso_opt.clone()),
             format_detail: Set(format_detail_opt.clone()),
             black_and_white: Set(black_and_white_opt),
@@ -2222,6 +2507,21 @@ pub async fn patch_book_metadata(
             volume: Set(volume_opt),
             count: Set(count_opt),
             isbns: Set(isbns_opt.clone()),
+            // New Phase 6 fields
+            book_type: Set(book_type_str.clone()),
+            subtitle: Set(subtitle_opt.clone()),
+            authors_json: Set(authors_json_opt.clone()),
+            translator: Set(translator_opt.clone()),
+            edition: Set(edition_opt.clone()),
+            original_title: Set(original_title_opt.clone()),
+            original_year: Set(original_year_opt),
+            series_position: Set(
+                series_position_opt.and_then(sea_orm::prelude::Decimal::from_f64_retain)
+            ),
+            series_total: Set(series_total_opt),
+            subjects: Set(subjects_str.clone()),
+            awards_json: Set(awards_json_opt.clone()),
+            custom_metadata: Set(custom_metadata_str.clone()),
             // Set locks for non-null fields
             title_lock: Set(false),
             title_sort_lock: Set(false),
@@ -2237,7 +2537,6 @@ pub async fn patch_book_metadata(
             publisher_lock: Set(publisher_opt.is_some()),
             imprint_lock: Set(imprint_opt.is_some()),
             genre_lock: Set(genre_opt.is_some()),
-            web_lock: Set(web_opt.is_some()),
             language_iso_lock: Set(language_iso_opt.is_some()),
             format_detail_lock: Set(format_detail_opt.is_some()),
             black_and_white_lock: Set(black_and_white_opt.is_some()),
@@ -2248,6 +2547,20 @@ pub async fn patch_book_metadata(
             volume_lock: Set(volume_opt.is_some()),
             count_lock: Set(count_opt.is_some()),
             isbns_lock: Set(isbns_opt.is_some()),
+            // New Phase 6 lock fields
+            book_type_lock: Set(book_type_str.is_some()),
+            subtitle_lock: Set(subtitle_opt.is_some()),
+            authors_json_lock: Set(authors_json_opt.is_some()),
+            translator_lock: Set(translator_opt.is_some()),
+            edition_lock: Set(edition_opt.is_some()),
+            original_title_lock: Set(original_title_opt.is_some()),
+            original_year_lock: Set(original_year_opt.is_some()),
+            series_position_lock: Set(series_position_opt.is_some()),
+            series_total_lock: Set(series_total_opt.is_some()),
+            subjects_lock: Set(subjects_str.is_some()),
+            awards_json_lock: Set(awards_json_opt.is_some()),
+            custom_metadata_lock: Set(custom_metadata_str.is_some()),
+            cover_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -2273,6 +2586,30 @@ pub async fn patch_book_metadata(
         let _ = state.event_broadcaster.emit(event);
     }
 
+    // Parse new fields from the updated record
+    let authors = updated
+        .authors_json
+        .as_ref()
+        .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok());
+    let awards = updated
+        .awards_json
+        .as_ref()
+        .and_then(|json| serde_json::from_str::<Vec<BookAwardDto>>(json).ok());
+    let subjects = updated.subjects.as_ref().map(|s| {
+        if s.starts_with('[') {
+            serde_json::from_str::<Vec<String>>(s).unwrap_or_else(|_| vec![s.clone()])
+        } else {
+            s.split(',')
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .collect()
+        }
+    });
+    let custom_metadata = updated
+        .custom_metadata
+        .as_ref()
+        .and_then(|json| serde_json::from_str(json).ok());
+
     Ok(Json(BookMetadataResponse {
         book_id: updated.book_id,
         summary: updated.summary,
@@ -2286,7 +2623,6 @@ pub async fn patch_book_metadata(
         publisher: updated.publisher,
         imprint: updated.imprint,
         genre: updated.genre,
-        web: updated.web,
         language_iso: updated.language_iso,
         format_detail: updated.format_detail,
         black_and_white: updated.black_and_white,
@@ -2297,6 +2633,25 @@ pub async fn patch_book_metadata(
         volume: updated.volume,
         count: updated.count,
         isbns: updated.isbns,
+        // New Phase 6 fields
+        book_type: updated
+            .book_type
+            .as_ref()
+            .and_then(|s| s.parse::<BookType>().ok())
+            .map(BookTypeDto::from),
+        subtitle: updated.subtitle,
+        authors,
+        translator: updated.translator,
+        edition: updated.edition,
+        original_title: updated.original_title,
+        original_year: updated.original_year,
+        series_position: updated
+            .series_position
+            .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
+        series_total: updated.series_total,
+        subjects,
+        awards,
+        custom_metadata,
         updated_at: updated.updated_at,
     }))
 }
@@ -2360,7 +2715,6 @@ pub async fn get_book_metadata_locks(
         publisher_lock: metadata.publisher_lock,
         imprint_lock: metadata.imprint_lock,
         genre_lock: metadata.genre_lock,
-        web_lock: metadata.web_lock,
         language_iso_lock: metadata.language_iso_lock,
         format_detail_lock: metadata.format_detail_lock,
         black_and_white_lock: metadata.black_and_white_lock,
@@ -2371,6 +2725,20 @@ pub async fn get_book_metadata_locks(
         volume_lock: metadata.volume_lock,
         count_lock: metadata.count_lock,
         isbns_lock: metadata.isbns_lock,
+        // New Phase 6 lock fields
+        book_type_lock: metadata.book_type_lock,
+        subtitle_lock: metadata.subtitle_lock,
+        authors_json_lock: metadata.authors_json_lock,
+        translator_lock: metadata.translator_lock,
+        edition_lock: metadata.edition_lock,
+        original_title_lock: metadata.original_title_lock,
+        original_year_lock: metadata.original_year_lock,
+        series_position_lock: metadata.series_position_lock,
+        series_total_lock: metadata.series_total_lock,
+        subjects_lock: metadata.subjects_lock,
+        awards_json_lock: metadata.awards_json_lock,
+        custom_metadata_lock: metadata.custom_metadata_lock,
+        cover_lock: metadata.cover_lock,
     }))
 }
 
@@ -2452,9 +2820,6 @@ pub async fn update_book_metadata_locks(
     if let Some(v) = request.genre_lock {
         active.genre_lock = Set(v);
     }
-    if let Some(v) = request.web_lock {
-        active.web_lock = Set(v);
-    }
     if let Some(v) = request.language_iso_lock {
         active.language_iso_lock = Set(v);
     }
@@ -2484,6 +2849,46 @@ pub async fn update_book_metadata_locks(
     }
     if let Some(v) = request.isbns_lock {
         active.isbns_lock = Set(v);
+    }
+    // New Phase 6 lock fields
+    if let Some(v) = request.book_type_lock {
+        active.book_type_lock = Set(v);
+    }
+    if let Some(v) = request.subtitle_lock {
+        active.subtitle_lock = Set(v);
+    }
+    if let Some(v) = request.authors_json_lock {
+        active.authors_json_lock = Set(v);
+    }
+    if let Some(v) = request.translator_lock {
+        active.translator_lock = Set(v);
+    }
+    if let Some(v) = request.edition_lock {
+        active.edition_lock = Set(v);
+    }
+    if let Some(v) = request.original_title_lock {
+        active.original_title_lock = Set(v);
+    }
+    if let Some(v) = request.original_year_lock {
+        active.original_year_lock = Set(v);
+    }
+    if let Some(v) = request.series_position_lock {
+        active.series_position_lock = Set(v);
+    }
+    if let Some(v) = request.series_total_lock {
+        active.series_total_lock = Set(v);
+    }
+    if let Some(v) = request.subjects_lock {
+        active.subjects_lock = Set(v);
+    }
+    if let Some(v) = request.awards_json_lock {
+        active.awards_json_lock = Set(v);
+    }
+    if let Some(v) = request.custom_metadata_lock {
+        active.custom_metadata_lock = Set(v);
+    }
+    if let Some(v) = request.cover_lock {
+        active.cover_lock = Set(v);
     }
 
     active.updated_at = Set(now);
@@ -2518,7 +2923,6 @@ pub async fn update_book_metadata_locks(
         publisher_lock: updated.publisher_lock,
         imprint_lock: updated.imprint_lock,
         genre_lock: updated.genre_lock,
-        web_lock: updated.web_lock,
         language_iso_lock: updated.language_iso_lock,
         format_detail_lock: updated.format_detail_lock,
         black_and_white_lock: updated.black_and_white_lock,
@@ -2529,6 +2933,20 @@ pub async fn update_book_metadata_locks(
         volume_lock: updated.volume_lock,
         count_lock: updated.count_lock,
         isbns_lock: updated.isbns_lock,
+        // New Phase 6 lock fields
+        book_type_lock: updated.book_type_lock,
+        subtitle_lock: updated.subtitle_lock,
+        authors_json_lock: updated.authors_json_lock,
+        translator_lock: updated.translator_lock,
+        edition_lock: updated.edition_lock,
+        original_title_lock: updated.original_title_lock,
+        original_year_lock: updated.original_year_lock,
+        series_position_lock: updated.series_position_lock,
+        series_total_lock: updated.series_total_lock,
+        subjects_lock: updated.subjects_lock,
+        awards_json_lock: updated.awards_json_lock,
+        custom_metadata_lock: updated.custom_metadata_lock,
+        cover_lock: updated.cover_lock,
     }))
 }
 
@@ -2605,6 +3023,10 @@ pub async fn upload_book_cover(
     image::load_from_memory(&image_data)
         .map_err(|e| ApiError::BadRequest(format!("Invalid image file: {}", e)))?;
 
+    // Compute hash of image data for deduplication
+    let image_hash = crate::utils::hasher::hash_bytes(&image_data);
+    let short_hash = &image_hash[..16];
+
     // Create covers directory within uploads dir if it doesn't exist
     let covers_dir = state
         .thumbnail_service
@@ -2615,9 +3037,16 @@ pub async fn upload_book_cover(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create covers directory: {}", e)))?;
 
-    // Save the image with a unique filename
-    let filename = format!("{}.jpg", book_id);
+    // Use book_id and image hash for filename to avoid duplicates
+    let filename = format!("{}-{}.jpg", book_id, short_hash);
     let filepath = covers_dir.join(&filename);
+
+    // Check if this exact image already exists for this book
+    if filepath.exists() {
+        return Err(ApiError::BadRequest(
+            "This image has already been uploaded for this book".to_string(),
+        ));
+    }
 
     let mut file = fs::File::create(&filepath)
         .await
@@ -2626,6 +3055,31 @@ pub async fn upload_book_cover(
     file.write_all(&image_data)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to write cover file: {}", e)))?;
+
+    // Create a new custom cover record (auto-selects as primary)
+    BookCoversRepository::create(
+        &state.db,
+        book_id,
+        "custom",
+        &filepath.to_string_lossy(),
+        true, // is_selected
+        None,
+        None,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to create cover record: {}", e)))?;
+
+    // Auto-lock cover to prevent plugins from overwriting user's custom upload
+    if let Some(meta) = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .ok()
+        .flatten()
+    {
+        let mut active: crate::db::entities::book_metadata::ActiveModel = meta.into();
+        active.cover_lock = sea_orm::Set(true);
+        active.updated_at = sea_orm::Set(Utc::now());
+        let _ = active.update(&state.db).await;
+    }
 
     // Emit cover updated event
     let event = EntityChangeEvent {
@@ -2640,6 +3094,712 @@ pub async fn upload_book_cover(
     let _ = state.event_broadcaster.emit(event);
 
     Ok(StatusCode::OK)
+}
+
+// ============================================================================
+// Book External IDs Endpoints
+// ============================================================================
+
+use super::super::dto::{
+    BookCoverListResponse, BookExternalIdListResponse, CreateBookExternalIdRequest,
+};
+use crate::db::repositories::{BookCoversRepository, BookExternalIdRepository};
+
+/// List all external IDs for a book
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/external-ids",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "List of external IDs", body = BookExternalIdListResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn list_book_external_ids(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<BookExternalIdListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let external_ids = BookExternalIdRepository::get_for_book(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external IDs: {}", e)))?;
+
+    let dtos: Vec<super::super::dto::BookExternalIdDto> =
+        external_ids.into_iter().map(|e| e.into()).collect();
+
+    Ok(Json(BookExternalIdListResponse { external_ids: dtos }))
+}
+
+/// Create or update an external ID for a book
+///
+/// Upserts by book_id + source: if an external ID with the same source already exists,
+/// it will be updated instead of creating a duplicate.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/external-ids",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = CreateBookExternalIdRequest,
+    responses(
+        (status = 200, description = "External ID created or updated", body = super::super::dto::BookExternalIdDto),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn create_book_external_id(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<CreateBookExternalIdRequest>,
+) -> Result<Json<super::super::dto::BookExternalIdDto>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let external_id = BookExternalIdRepository::upsert(
+        &state.db,
+        book_id,
+        &request.source,
+        &request.external_id,
+        request.external_url.as_deref(),
+        None, // metadata_hash
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to create external ID: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["external_ids".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(external_id.into()))
+}
+
+/// Delete an external ID by ID
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/external-ids/{external_id_id}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("external_id_id" = Uuid, Path, description = "External ID record ID")
+    ),
+    responses(
+        (status = 204, description = "External ID deleted"),
+        (status = 404, description = "Book or external ID not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn delete_book_external_id(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path((book_id, external_id_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Verify the external ID exists and belongs to this book
+    let ext_id = BookExternalIdRepository::get_by_id(&state.db, external_id_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external ID: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("External ID not found".to_string()))?;
+
+    if ext_id.book_id != book_id {
+        return Err(ApiError::NotFound("External ID not found".to_string()));
+    }
+
+    let deleted = BookExternalIdRepository::delete(&state.db, external_id_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to delete external ID: {}", e)))?;
+
+    if !deleted {
+        return Err(ApiError::NotFound("External ID not found".to_string()));
+    }
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["external_ids".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Book External Links Management Endpoints
+// ============================================================================
+
+use super::super::dto::{
+    BookExternalLinkDto, BookExternalLinkListResponse, CreateBookExternalLinkRequest,
+};
+use crate::db::repositories::BookExternalLinkRepository;
+
+/// List all external links for a book
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/external-links",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "List of external links for the book", body = BookExternalLinkListResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn list_book_external_links(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<BookExternalLinkListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let links = BookExternalLinkRepository::get_for_book(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external links: {}", e)))?;
+
+    let dtos: Vec<BookExternalLinkDto> = links.into_iter().map(|l| l.into()).collect();
+
+    Ok(Json(BookExternalLinkListResponse { links: dtos }))
+}
+
+/// Create or update an external link for a book
+///
+/// Upserts by book_id + source_name: if a link with the same source already exists,
+/// it will be updated instead of creating a duplicate.
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/external-links",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = CreateBookExternalLinkRequest,
+    responses(
+        (status = 200, description = "External link created or updated", body = BookExternalLinkDto),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn create_book_external_link(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<CreateBookExternalLinkRequest>,
+) -> Result<Json<BookExternalLinkDto>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let link = BookExternalLinkRepository::upsert(
+        &state.db,
+        book_id,
+        &request.source_name,
+        &request.url,
+        request.external_id.as_deref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to create external link: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["external_links".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(link.into()))
+}
+
+/// Delete an external link by source name
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/external-links/{source}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("source" = String, Path, description = "Source name (e.g., 'openlibrary', 'goodreads')")
+    ),
+    responses(
+        (status = 204, description = "External link deleted"),
+        (status = 404, description = "Book or external link not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn delete_book_external_link(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path((book_id, source)): Path<(Uuid, String)>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let deleted = BookExternalLinkRepository::delete_by_source(&state.db, book_id, &source)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to delete external link: {}", e)))?;
+
+    if !deleted {
+        return Err(ApiError::NotFound("External link not found".to_string()));
+    }
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["external_links".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Book Covers Management Endpoints
+// ============================================================================
+
+/// List all covers for a book
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/covers",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "List of book covers", body = BookCoverListResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn list_book_covers(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<BookCoverListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let covers = BookCoversRepository::list_by_book(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch covers: {}", e)))?;
+
+    let cover_dtos: Vec<super::super::dto::BookCoverDto> =
+        covers.into_iter().map(|c| c.into()).collect();
+
+    Ok(Json(BookCoverListResponse { covers: cover_dtos }))
+}
+
+/// Select a cover as the primary cover for a book
+#[utoipa::path(
+    put,
+    path = "/api/v1/books/{book_id}/covers/{cover_id}/select",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("cover_id" = Uuid, Path, description = "Cover ID to select")
+    ),
+    responses(
+        (status = 200, description = "Cover selected", body = super::super::dto::BookCoverDto),
+        (status = 404, description = "Book or cover not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn select_book_cover(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path((book_id, cover_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<super::super::dto::BookCoverDto>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Select the cover (validates the cover belongs to the book)
+    let cover = BookCoversRepository::select_cover(&state.db, book_id, cover_id)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("not found") || e.to_string().contains("does not belong") {
+                ApiError::NotFound(format!("Cover not found: {}", cover_id))
+            } else {
+                ApiError::Internal(format!("Failed to select cover: {}", e))
+            }
+        })?;
+
+    // Auto-lock cover to prevent plugins from overwriting user's manual selection
+    if let Some(meta) = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .ok()
+        .flatten()
+    {
+        let mut active: crate::db::entities::book_metadata::ActiveModel = meta.into();
+        active.cover_lock = sea_orm::Set(true);
+        active.updated_at = sea_orm::Set(Utc::now());
+        let _ = active.update(&state.db).await;
+    }
+
+    // Emit cover updated event
+    let event = EntityChangeEvent {
+        event: EntityEvent::CoverUpdated {
+            entity_type: EntityType::Book,
+            entity_id: book_id,
+            library_id: Some(book.library_id),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(cover.into()))
+}
+
+/// Reset book cover to default (deselect all custom covers)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/covers/selected",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 204, description = "Cover reset to default"),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn reset_book_cover(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Deselect all covers
+    BookCoversRepository::deselect_all(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to reset cover: {}", e)))?;
+
+    // Emit cover updated event
+    let event = EntityChangeEvent {
+        event: EntityEvent::CoverUpdated {
+            entity_type: EntityType::Book,
+            entity_id: book_id,
+            library_id: Some(book.library_id),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get a specific cover image for a book
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/covers/{cover_id}/image",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("cover_id" = Uuid, Path, description = "Cover ID")
+    ),
+    responses(
+        (status = 200, description = "Cover image", content_type = "image/jpeg"),
+        (status = 304, description = "Not modified"),
+        (status = 404, description = "Book or cover not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn get_book_cover_image(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    headers: axum::http::HeaderMap,
+    Path((book_id, cover_id)): Path<(Uuid, Uuid)>,
+) -> Result<Response, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get the cover
+    let cover = BookCoversRepository::get_by_id(&state.db, cover_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Cover not found".to_string()))?;
+
+    // Verify cover belongs to this book
+    if cover.book_id != book_id {
+        return Err(ApiError::NotFound("Cover not found".to_string()));
+    }
+
+    // Get file metadata for conditional caching
+    let metadata = fs::metadata(&cover.path).await.map_err(|e| {
+        ApiError::Internal(format!(
+            "Failed to read cover metadata from {}: {}",
+            cover.path, e
+        ))
+    })?;
+
+    let size = metadata.len();
+    let modified_unix = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    // Generate ETag from cover_id + size + modified time
+    let etag = format!(
+        "\"{:x}-{:x}-{:x}\"",
+        cover_id.as_u128(),
+        size,
+        modified_unix
+    );
+
+    // Check If-None-Match header for ETag validation
+    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+        if let Ok(client_etag) = if_none_match.to_str() {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == etag || client_etag.trim_matches('"') == etag.trim_matches('"') {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
+            }
+        }
+    }
+
+    // Stream the cover file
+    let file = tokio::fs::File::open(&cover.path).await.map_err(|e| {
+        ApiError::Internal(format!("Failed to open cover from {}: {}", cover.path, e))
+    })?;
+    let stream = ReaderStream::new(file);
+
+    let last_modified = std::time::UNIX_EPOCH + std::time::Duration::from_secs(modified_unix);
+    let last_modified_str = httpdate::fmt_http_date(last_modified);
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "image/jpeg")
+        .header(header::CONTENT_LENGTH, size)
+        .header(header::ETAG, &etag)
+        .header(header::LAST_MODIFIED, last_modified_str)
+        .header(header::CACHE_CONTROL, "public, max-age=31536000")
+        .body(Body::from_stream(stream))
+        .unwrap())
+}
+
+/// Delete a specific cover for a book
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/covers/{cover_id}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("cover_id" = Uuid, Path, description = "Cover ID to delete")
+    ),
+    responses(
+        (status = 204, description = "Cover deleted"),
+        (status = 404, description = "Book or cover not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn delete_book_cover(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path((book_id, cover_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get the cover to verify it exists and belongs to this book
+    let cover = BookCoversRepository::get_by_id(&state.db, cover_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Cover not found".to_string()))?;
+
+    if cover.book_id != book_id {
+        return Err(ApiError::NotFound("Cover not found".to_string()));
+    }
+
+    let was_selected = cover.is_selected;
+
+    // If this is the selected cover, select another one (if available)
+    if was_selected {
+        let all_covers = BookCoversRepository::list_by_book(&state.db, book_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to list covers: {}", e)))?;
+
+        let alternate = all_covers.iter().find(|c| c.id != cover_id);
+        if let Some(alt_cover) = alternate {
+            BookCoversRepository::select_cover(&state.db, book_id, alt_cover.id)
+                .await
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to select alternate cover: {}", e))
+                })?;
+        }
+    }
+
+    // If this is a custom cover, delete the file
+    if cover.source == "custom" {
+        let path = std::path::Path::new(&cover.path);
+        if path.exists() {
+            let _ = fs::remove_file(path).await;
+        }
+    }
+
+    // Delete the cover record
+    BookCoversRepository::delete(&state.db, cover_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to delete cover: {}", e)))?;
+
+    // Emit cover updated event
+    if was_selected {
+        let event = EntityChangeEvent {
+            event: EntityEvent::CoverUpdated {
+                entity_type: EntityType::Book,
+                entity_id: book_id,
+                library_id: Some(book.library_id),
+            },
+            timestamp: Utc::now(),
+            user_id: Some(auth.user_id),
+        };
+        let _ = state.event_broadcaster.emit(event);
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ============================================================================

@@ -2,9 +2,12 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
-use codex::api::routes::v1::dto::book::{BookDto, BookListResponse};
+use codex::api::routes::v1::dto::book::{
+    BookDto, BookExternalLinkDto, BookExternalLinkListResponse, BookListResponse,
+    CreateBookExternalLinkRequest,
+};
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+    BookExternalLinkRepository, BookRepository, LibraryRepository, SeriesRepository, UserRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::utils::password;
@@ -1536,7 +1539,6 @@ async fn test_replace_book_metadata_creates_record() {
         publisher: Some("DC Comics".to_string()),
         imprint: None,
         genre: Some("Superhero".to_string()),
-        web: None,
         language_iso: Some("en".to_string()),
         format_detail: None,
         black_and_white: Some(false),
@@ -1547,6 +1549,18 @@ async fn test_replace_book_metadata_creates_record() {
         volume: None,
         count: None,
         isbns: None,
+        book_type: None,
+        subtitle: None,
+        authors: None,
+        translator: None,
+        edition: None,
+        original_title: None,
+        original_year: None,
+        series_position: None,
+        series_total: None,
+        subjects: None,
+        awards: None,
+        custom_metadata: None,
     };
 
     let request = put_json_request_with_auth(
@@ -1609,7 +1623,6 @@ async fn test_replace_book_metadata_clears_omitted_fields() {
         publisher: Some("Original publisher".to_string()),
         imprint: None,
         genre: None,
-        web: None,
         language_iso: None,
         format_detail: None,
         black_and_white: None,
@@ -1620,6 +1633,18 @@ async fn test_replace_book_metadata_clears_omitted_fields() {
         volume: None,
         count: None,
         isbns: None,
+        book_type: None,
+        subtitle: None,
+        authors: None,
+        translator: None,
+        edition: None,
+        original_title: None,
+        original_year: None,
+        series_position: None,
+        series_total: None,
+        subjects: None,
+        awards: None,
+        custom_metadata: None,
     };
 
     let request = put_json_request_with_auth(
@@ -1645,7 +1670,6 @@ async fn test_replace_book_metadata_clears_omitted_fields() {
         publisher: None, // Was set, should be cleared
         imprint: None,
         genre: None,
-        web: None,
         language_iso: None,
         format_detail: None,
         black_and_white: None,
@@ -1656,6 +1680,18 @@ async fn test_replace_book_metadata_clears_omitted_fields() {
         volume: None,
         count: None,
         isbns: None,
+        book_type: None,
+        subtitle: None,
+        authors: None,
+        translator: None,
+        edition: None,
+        original_title: None,
+        original_year: None,
+        series_position: None,
+        series_total: None,
+        subjects: None,
+        awards: None,
+        custom_metadata: None,
     };
 
     let request = put_json_request_with_auth(
@@ -1694,7 +1730,6 @@ async fn test_replace_book_metadata_not_found() {
         publisher: None,
         imprint: None,
         genre: None,
-        web: None,
         language_iso: None,
         format_detail: None,
         black_and_white: None,
@@ -1705,6 +1740,18 @@ async fn test_replace_book_metadata_not_found() {
         volume: None,
         count: None,
         isbns: None,
+        book_type: None,
+        subtitle: None,
+        authors: None,
+        translator: None,
+        edition: None,
+        original_title: None,
+        original_year: None,
+        series_position: None,
+        series_total: None,
+        subjects: None,
+        awards: None,
+        custom_metadata: None,
     };
 
     let request = put_json_request_with_auth(
@@ -3978,4 +4025,451 @@ async fn test_filter_books_with_full() {
     let full_response = response.unwrap();
     assert_eq!(full_response.data.len(), 1);
     assert_eq!(full_response.data[0].library_id, library1.id);
+}
+
+// ============================================================================
+// Book External Links Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_book_external_links_empty() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/external-links", book.id), &token);
+    let (status, response): (StatusCode, Option<BookExternalLinkListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let link_response = response.unwrap();
+    assert_eq!(link_response.links.len(), 0);
+}
+
+#[tokio::test]
+async fn test_list_book_external_links_with_data() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    BookExternalLinkRepository::create(
+        &db,
+        book.id,
+        "openlibrary",
+        "https://openlibrary.org/works/OL1W",
+        Some("OL1W"),
+    )
+    .await
+    .unwrap();
+    BookExternalLinkRepository::create(
+        &db,
+        book.id,
+        "goodreads",
+        "https://goodreads.com/book/show/123",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/external-links", book.id), &token);
+    let (status, response): (StatusCode, Option<BookExternalLinkListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let link_response = response.unwrap();
+    assert_eq!(link_response.links.len(), 2);
+}
+
+#[tokio::test]
+async fn test_list_book_external_links_book_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/external-links", fake_id), &token);
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_list_book_external_links_unauthorized() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request(&format!("/api/v1/books/{}/external-links", book.id));
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_create_book_external_link() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = CreateBookExternalLinkRequest {
+        source_name: "openlibrary".to_string(),
+        url: "https://openlibrary.org/works/OL123W".to_string(),
+        external_id: Some("OL123W".to_string()),
+    };
+
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/external-links", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookExternalLinkDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let link = response.unwrap();
+    assert_eq!(link.source_name, "openlibrary");
+    assert_eq!(link.url, "https://openlibrary.org/works/OL123W");
+    assert_eq!(link.external_id, Some("OL123W".to_string()));
+    assert_eq!(link.book_id, book.id);
+}
+
+#[tokio::test]
+async fn test_create_book_external_link_normalizes_source_name() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = CreateBookExternalLinkRequest {
+        source_name: "  OpenLibrary  ".to_string(),
+        url: "https://openlibrary.org/1".to_string(),
+        external_id: None,
+    };
+
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/external-links", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookExternalLinkDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let link = response.unwrap();
+    assert_eq!(link.source_name, "openlibrary");
+}
+
+#[tokio::test]
+async fn test_create_book_external_link_trims_url() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = CreateBookExternalLinkRequest {
+        source_name: "goodreads".to_string(),
+        url: "  https://goodreads.com/1  ".to_string(),
+        external_id: Some("  123  ".to_string()),
+    };
+
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/external-links", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookExternalLinkDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let link = response.unwrap();
+    assert_eq!(link.url, "https://goodreads.com/1");
+    assert_eq!(link.external_id, Some("123".to_string()));
+}
+
+#[tokio::test]
+async fn test_create_book_external_link_upsert() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    // Create initial link
+    let body = CreateBookExternalLinkRequest {
+        source_name: "openlibrary".to_string(),
+        url: "https://openlibrary.org/old".to_string(),
+        external_id: Some("old-id".to_string()),
+    };
+
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/external-links", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookExternalLinkDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let first_link = response.unwrap();
+
+    // Upsert with same source
+    let app = create_test_router(state).await;
+    let body = CreateBookExternalLinkRequest {
+        source_name: "openlibrary".to_string(),
+        url: "https://openlibrary.org/new".to_string(),
+        external_id: Some("new-id".to_string()),
+    };
+
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/external-links", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookExternalLinkDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let second_link = response.unwrap();
+
+    assert_eq!(first_link.id, second_link.id);
+    assert_eq!(second_link.url, "https://openlibrary.org/new");
+    assert_eq!(second_link.external_id, Some("new-id".to_string()));
+}
+
+#[tokio::test]
+async fn test_create_book_external_link_book_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let body = CreateBookExternalLinkRequest {
+        source_name: "openlibrary".to_string(),
+        url: "https://openlibrary.org/1".to_string(),
+        external_id: None,
+    };
+
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/external-links", fake_id),
+        &body,
+        &token,
+    );
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_delete_book_external_link() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    BookExternalLinkRepository::create(
+        &db,
+        book.id,
+        "openlibrary",
+        "https://openlibrary.org/1",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = delete_request_with_auth(
+        &format!("/api/v1/books/{}/external-links/openlibrary", book.id),
+        &token,
+    );
+    let (status, _response): (StatusCode, Option<()>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let remaining = BookExternalLinkRepository::get_for_book(&db, book.id)
+        .await
+        .unwrap();
+    assert!(remaining.is_empty());
+}
+
+#[tokio::test]
+async fn test_delete_book_external_link_case_insensitive() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    BookExternalLinkRepository::create(
+        &db,
+        book.id,
+        "openlibrary",
+        "https://openlibrary.org/1",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = delete_request_with_auth(
+        &format!("/api/v1/books/{}/external-links/OpenLibrary", book.id),
+        &token,
+    );
+    let (status, _response): (StatusCode, Option<()>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn test_delete_book_external_link_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(series.id, library.id, "/test/b.cbz", "b.cbz", None);
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = delete_request_with_auth(
+        &format!("/api/v1/books/{}/external-links/nonexistent", book.id),
+        &token,
+    );
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_delete_book_external_link_book_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request = delete_request_with_auth(
+        &format!("/api/v1/books/{}/external-links/openlibrary", fake_id),
+        &token,
+    );
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

@@ -2,7 +2,7 @@ export { AlternateTitles } from "./AlternateTitles";
 export { CommunityRating } from "./CommunityRating";
 export { CustomMetadataDisplay } from "./CustomMetadataDisplay";
 export { ExternalIds } from "./ExternalIds";
-export { ExternalLinks } from "./ExternalLinks";
+export { ExternalLinks, extractSourceFromUrl } from "./ExternalLinks";
 export { ExternalRatings } from "./ExternalRatings";
 export { GenreTagChips } from "./GenreTagChips";
 export { SeriesBookList } from "./SeriesBookList";

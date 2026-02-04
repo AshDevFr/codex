@@ -195,10 +195,13 @@ pub mod methods {
     /// Find best match for a series
     pub const METADATA_SERIES_MATCH: &str = "metadata/series/match";
 
-    // Book metadata methods (future)
-    // pub const METADATA_BOOK_SEARCH: &str = "metadata/book/search";
-    // pub const METADATA_BOOK_GET: &str = "metadata/book/get";
-    // pub const METADATA_BOOK_MATCH: &str = "metadata/book/match";
+    // Book metadata methods
+    /// Search for book metadata (supports ISBN or title/author query)
+    pub const METADATA_BOOK_SEARCH: &str = "metadata/book/search";
+    /// Get full book metadata by external ID
+    pub const METADATA_BOOK_GET: &str = "metadata/book/get";
+    /// Find best match for a book (ISBN first, then title fallback)
+    pub const METADATA_BOOK_MATCH: &str = "metadata/book/match";
 }
 
 // =============================================================================
@@ -246,9 +249,8 @@ pub struct PluginManifest {
 pub enum MetadataContentType {
     /// Series metadata (manga, comics, etc.)
     Series,
-    // TODO: Add Book variant when book metadata is implemented
-    // /// Book metadata (individual books, ebooks)
-    // Book,
+    /// Book metadata (individual books, ebooks, novels)
+    Book,
 }
 
 /// Plugin capabilities
@@ -271,11 +273,10 @@ impl PluginCapabilities {
             .contains(&MetadataContentType::Series)
     }
 
-    // TODO: Uncomment when book metadata is implemented
-    // /// Check if the plugin can provide book metadata
-    // pub fn can_provide_book_metadata(&self) -> bool {
-    //     self.metadata_provider.contains(&MetadataContentType::Book)
-    // }
+    /// Check if the plugin can provide book metadata
+    pub fn can_provide_book_metadata(&self) -> bool {
+        self.metadata_provider.contains(&MetadataContentType::Book)
+    }
 }
 
 /// Credential field definition
@@ -322,13 +323,30 @@ pub enum CredentialType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PluginScope {
+    // =========================================================================
+    // Series Scopes
+    // =========================================================================
     /// Series detail page dropdown (search + auto-match)
     #[serde(rename = "series:detail")]
     SeriesDetail,
     /// Series list bulk actions (auto-match only)
     #[serde(rename = "series:bulk")]
     SeriesBulk,
-    /// Library dropdown action (auto-match all series)
+
+    // =========================================================================
+    // Book Scopes
+    // =========================================================================
+    /// Book detail page dropdown (search + auto-match)
+    #[serde(rename = "book:detail")]
+    BookDetail,
+    /// Book list bulk actions (auto-match only)
+    #[serde(rename = "book:bulk")]
+    BookBulk,
+
+    // =========================================================================
+    // Library Scopes
+    // =========================================================================
+    /// Library dropdown action (auto-match all series/books)
     #[serde(rename = "library:detail")]
     LibraryDetail,
     /// Post-analysis hook (auto-match if forced/changed)
@@ -342,6 +360,28 @@ impl PluginScope {
         vec![
             Self::SeriesDetail,
             Self::SeriesBulk,
+            Self::LibraryDetail,
+            Self::LibraryScan,
+        ]
+    }
+
+    /// Get scopes available for book metadata providers
+    pub fn book_scopes() -> Vec<Self> {
+        vec![
+            Self::BookDetail,
+            Self::BookBulk,
+            Self::LibraryDetail,
+            Self::LibraryScan,
+        ]
+    }
+
+    /// Get all scopes (series + book + library)
+    pub fn all_scopes() -> Vec<Self> {
+        vec![
+            Self::SeriesDetail,
+            Self::SeriesBulk,
+            Self::BookDetail,
+            Self::BookBulk,
             Self::LibraryDetail,
             Self::LibraryScan,
         ]
@@ -417,6 +457,9 @@ pub struct SearchResultPreview {
     /// Number of books in the series (if known by the provider)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub book_count: Option<i32>,
+    /// Author names (for book search results)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
 }
 
 /// Parameters for metadata/get
@@ -427,7 +470,7 @@ pub struct MetadataGetParams {
     pub external_id: String,
 }
 
-/// Parameters for metadata/match
+/// Parameters for metadata/match (series)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataMatchParams {
@@ -439,6 +482,76 @@ pub struct MetadataMatchParams {
     /// Author hint for matching
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
+}
+
+// =============================================================================
+// Book Metadata Types
+// =============================================================================
+
+/// Parameters for metadata/book/search
+///
+/// Supports both ISBN lookup and title/author search:
+/// - If `isbn` is provided, direct ISBN lookup is attempted first (faster, more accurate)
+/// - If only `query` is provided, title/author search is used
+/// - If both are provided, ISBN is tried first with query as fallback
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookSearchParams {
+    /// ISBN-10 or ISBN-13 (if provided, takes priority over query)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub isbn: Option<String>,
+    /// Search query (title, author, or combined) - used if no ISBN
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+    /// Optional: filter by author name
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    /// Optional: filter by publication year
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<i32>,
+    /// Maximum number of results
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    /// Pagination cursor
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+}
+
+impl BookSearchParams {
+    /// Check if this is an ISBN search
+    pub fn is_isbn_search(&self) -> bool {
+        self.isbn.is_some()
+    }
+
+    /// Check if this is a query-based search
+    pub fn is_query_search(&self) -> bool {
+        self.query.is_some()
+    }
+
+    /// Check if the params are valid (at least one of isbn or query must be present)
+    pub fn is_valid(&self) -> bool {
+        self.isbn.is_some() || self.query.is_some()
+    }
+}
+
+/// Parameters for metadata/book/match (auto-matching)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookMatchParams {
+    /// Book title
+    pub title: String,
+    /// Authors (if known)
+    #[serde(default)]
+    pub authors: Vec<String>,
+    /// ISBN (if available - will be tried first)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub isbn: Option<String>,
+    /// Publication year (if known)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<i32>,
+    /// Publisher (if known)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
 }
 
 /// Full series metadata from a provider
@@ -508,7 +621,10 @@ pub struct PluginSeriesMetadata {
     pub external_links: Vec<ExternalLink>,
 }
 
-/// Full book metadata from a provider (for future use)
+/// Full book metadata from a provider
+///
+/// This structure contains all metadata fields that plugins can provide for books.
+/// It supports both traditional books (novels, ebooks) and comics/manga volumes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginBookMetadata {
@@ -517,54 +633,212 @@ pub struct PluginBookMetadata {
     /// URL to the book on the provider's website
     pub external_url: String,
 
-    // Core fields (all optional)
+    // =========================================================================
+    // Core Fields (all optional)
+    // =========================================================================
+    /// Primary title
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Subtitle (e.g., "A Novel")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    /// Alternative titles with language info
     #[serde(default)]
     pub alternate_titles: Vec<AlternateTitle>,
+    /// Full description/summary
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+    /// Book type (comic, manga, novel, etc.)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub book_type: Option<String>,
 
-    // Book-specific
+    // =========================================================================
+    // Book-Specific Fields
+    // =========================================================================
+    /// Volume number in series
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub volume: Option<f64>,
+    /// Chapter number (for single-chapter releases)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapter: Option<f64>,
+    /// Page count
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_count: Option<i32>,
+    /// Release date (ISO 8601 format)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_date: Option<String>,
+    /// Publication year
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<i32>,
+
+    // =========================================================================
+    // ISBN and Identifiers
+    // =========================================================================
+    /// Primary ISBN (ISBN-13 preferred)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub isbn: Option<String>,
+    /// All ISBNs (ISBN-10 and ISBN-13)
+    #[serde(default)]
+    pub isbns: Vec<String>,
 
+    // =========================================================================
+    // Translation/Edition Info
+    // =========================================================================
+    /// Edition information (e.g., "First Edition", "Revised")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edition: Option<String>,
+    /// Original title (for translations)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_title: Option<String>,
+    /// Original publication year
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_year: Option<i32>,
+    /// Translator name
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub translator: Option<String>,
+    /// BCP47 language code (e.g., "en", "ja", "ko")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+
+    // =========================================================================
+    // Series Position
+    // =========================================================================
+    /// Position in series (e.g., 1.0, 1.5 for specials)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub series_position: Option<f64>,
+    /// Total number of books in series (if known)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub series_total: Option<i32>,
+
+    // =========================================================================
     // Taxonomy
+    // =========================================================================
+    /// Genres (e.g., "Science Fiction", "Romance")
     #[serde(default)]
     pub genres: Vec<String>,
+    /// Tags/themes (e.g., "Time Travel", "Space Exploration")
     #[serde(default)]
     pub tags: Vec<String>,
-
-    // Credits
+    /// Subjects/topics (library classification)
     #[serde(default)]
-    pub authors: Vec<String>,
+    pub subjects: Vec<String>,
+
+    // =========================================================================
+    // Credits
+    // =========================================================================
+    /// Structured authors with roles
+    #[serde(default)]
+    pub authors: Vec<BookAuthor>,
+    /// Artists (for comics/manga)
     #[serde(default)]
     pub artists: Vec<String>,
+    /// Publisher name
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub publisher: Option<String>,
 
+    // =========================================================================
     // Media
+    // =========================================================================
+    /// Primary cover URL (for backwards compatibility)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cover_url: Option<String>,
+    /// Multiple covers with different sizes/sources
+    #[serde(default)]
+    pub covers: Vec<BookCover>,
 
+    // =========================================================================
     // Rating
+    // =========================================================================
+    /// Primary external rating
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rating: Option<ExternalRating>,
     /// Multiple external ratings from different sources
     #[serde(default)]
     pub external_ratings: Vec<ExternalRating>,
 
-    // External links
+    // =========================================================================
+    // Awards
+    // =========================================================================
+    /// Awards received
+    #[serde(default)]
+    pub awards: Vec<BookAward>,
+
+    // =========================================================================
+    // External Links
+    // =========================================================================
+    /// Links to other sites
     #[serde(default)]
     pub external_links: Vec<ExternalLink>,
+}
+
+/// Structured author with role information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookAuthor {
+    /// Author's display name
+    pub name: String,
+    /// Author's role
+    #[serde(default)]
+    pub role: BookAuthorRole,
+    /// Author's name in sort order (e.g., "Doe, Jane")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort_name: Option<String>,
+}
+
+/// Author role in a book
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BookAuthorRole {
+    #[default]
+    Author,
+    CoAuthor,
+    Editor,
+    Translator,
+    Illustrator,
+    Contributor,
+}
+
+/// Book cover with size and source information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookCover {
+    /// URL to download the cover image
+    pub url: String,
+    /// Image width in pixels (if known)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<i32>,
+    /// Image height in pixels (if known)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<i32>,
+    /// Size hint for cover
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<BookCoverSize>,
+}
+
+/// Cover size hint
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BookCoverSize {
+    Small,
+    Medium,
+    Large,
+}
+
+/// Book award information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookAward {
+    /// Award name (e.g., "Hugo Award")
+    pub name: String,
+    /// Year the award was given
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<i32>,
+    /// Award category (e.g., "Best Novel")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    /// Whether the book won (true) or was nominated (false)
+    #[serde(default)]
+    pub won: bool,
 }
 
 /// Alternate title with language info
@@ -723,23 +997,39 @@ mod tests {
         assert!(manifest.capabilities.can_provide_series_metadata());
     }
 
-    // TODO: Re-enable when book metadata is implemented
-    // #[test]
-    // fn test_plugin_manifest_with_multiple_content_types() {
-    //     let json = json!({
-    //         "name": "multi-provider",
-    //         "displayName": "Multi Provider",
-    //         "version": "1.0.0",
-    //         "protocolVersion": "1.0",
-    //         "capabilities": {
-    //             "metadataProvider": ["series", "book"]
-    //         }
-    //     });
-    //
-    //     let manifest: PluginManifest = serde_json::from_value(json).unwrap();
-    //     assert!(manifest.capabilities.can_provide_series_metadata());
-    //     assert!(manifest.capabilities.can_provide_book_metadata());
-    // }
+    #[test]
+    fn test_plugin_manifest_with_multiple_content_types() {
+        let json = json!({
+            "name": "multi-provider",
+            "displayName": "Multi Provider",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "metadataProvider": ["series", "book"]
+            }
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        assert!(manifest.capabilities.can_provide_series_metadata());
+        assert!(manifest.capabilities.can_provide_book_metadata());
+    }
+
+    #[test]
+    fn test_plugin_manifest_book_only() {
+        let json = json!({
+            "name": "book-provider",
+            "displayName": "Book Provider",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "metadataProvider": ["book"]
+            }
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        assert!(!manifest.capabilities.can_provide_series_metadata());
+        assert!(manifest.capabilities.can_provide_book_metadata());
+    }
 
     #[test]
     fn test_plugin_manifest_empty_capabilities() {
@@ -866,5 +1156,211 @@ mod tests {
         assert_eq!(error.code, -32001);
         assert_eq!(error.message, "Rate limited");
         assert!(error.data.is_some());
+    }
+
+    // =========================================================================
+    // Book Metadata Tests
+    // =========================================================================
+
+    #[test]
+    fn test_book_search_params_isbn() {
+        let params = BookSearchParams {
+            isbn: Some("978-0-306-40615-7".to_string()),
+            query: None,
+            author: None,
+            year: None,
+            limit: Some(10),
+            cursor: None,
+        };
+        assert!(params.is_isbn_search());
+        assert!(!params.is_query_search());
+        assert!(params.is_valid());
+    }
+
+    #[test]
+    fn test_book_search_params_query() {
+        let params = BookSearchParams {
+            isbn: None,
+            query: Some("The Hobbit".to_string()),
+            author: Some("Tolkien".to_string()),
+            year: Some(1937),
+            limit: None,
+            cursor: None,
+        };
+        assert!(!params.is_isbn_search());
+        assert!(params.is_query_search());
+        assert!(params.is_valid());
+    }
+
+    #[test]
+    fn test_book_search_params_invalid() {
+        let params = BookSearchParams {
+            isbn: None,
+            query: None,
+            author: None,
+            year: None,
+            limit: None,
+            cursor: None,
+        };
+        assert!(!params.is_valid());
+    }
+
+    #[test]
+    fn test_book_match_params() {
+        let params = BookMatchParams {
+            title: "The Hobbit".to_string(),
+            authors: vec!["J.R.R. Tolkien".to_string()],
+            isbn: Some("978-0-547-92822-7".to_string()),
+            year: Some(1937),
+            publisher: Some("Houghton Mifflin".to_string()),
+        };
+
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["title"], "The Hobbit");
+        assert_eq!(json["authors"][0], "J.R.R. Tolkien");
+        assert_eq!(json["isbn"], "978-0-547-92822-7");
+    }
+
+    #[test]
+    fn test_book_author_serialization() {
+        let author = BookAuthor {
+            name: "Jane Doe".to_string(),
+            role: BookAuthorRole::Author,
+            sort_name: Some("Doe, Jane".to_string()),
+        };
+
+        let json = serde_json::to_value(&author).unwrap();
+        assert_eq!(json["name"], "Jane Doe");
+        assert_eq!(json["role"], "author");
+        assert_eq!(json["sortName"], "Doe, Jane");
+    }
+
+    #[test]
+    fn test_book_author_role_default() {
+        let author: BookAuthor = serde_json::from_value(json!({
+            "name": "John Smith"
+        }))
+        .unwrap();
+
+        assert_eq!(author.name, "John Smith");
+        assert_eq!(author.role, BookAuthorRole::Author);
+        assert!(author.sort_name.is_none());
+    }
+
+    #[test]
+    fn test_book_cover_serialization() {
+        let cover = BookCover {
+            url: "https://example.com/cover.jpg".to_string(),
+            width: Some(300),
+            height: Some(450),
+            size: Some(BookCoverSize::Medium),
+        };
+
+        let json = serde_json::to_value(&cover).unwrap();
+        assert_eq!(json["url"], "https://example.com/cover.jpg");
+        assert_eq!(json["width"], 300);
+        assert_eq!(json["height"], 450);
+        assert_eq!(json["size"], "medium");
+    }
+
+    #[test]
+    fn test_book_award_serialization() {
+        let award = BookAward {
+            name: "Hugo Award".to_string(),
+            year: Some(2024),
+            category: Some("Best Novel".to_string()),
+            won: true,
+        };
+
+        let json = serde_json::to_value(&award).unwrap();
+        assert_eq!(json["name"], "Hugo Award");
+        assert_eq!(json["year"], 2024);
+        assert_eq!(json["category"], "Best Novel");
+        assert!(json["won"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn test_book_metadata_full() {
+        let metadata = PluginBookMetadata {
+            external_id: "12345".to_string(),
+            external_url: "https://example.com/book/12345".to_string(),
+            title: Some("The Hobbit".to_string()),
+            subtitle: Some("or There and Back Again".to_string()),
+            alternate_titles: vec![],
+            summary: Some("A fantasy novel about a hobbit's journey".to_string()),
+            book_type: Some("novel".to_string()),
+            volume: None,
+            chapter: None,
+            page_count: Some(310),
+            release_date: Some("1937-09-21".to_string()),
+            year: Some(1937),
+            isbn: Some("978-0-547-92822-7".to_string()),
+            isbns: vec!["978-0-547-92822-7".to_string()],
+            edition: Some("75th Anniversary Edition".to_string()),
+            original_title: None,
+            original_year: None,
+            translator: None,
+            language: Some("en".to_string()),
+            series_position: Some(0.0),
+            series_total: Some(4),
+            genres: vec!["Fantasy".to_string()],
+            tags: vec!["adventure".to_string(), "dragons".to_string()],
+            subjects: vec!["Middle-earth (Imaginary place)".to_string()],
+            authors: vec![BookAuthor {
+                name: "J.R.R. Tolkien".to_string(),
+                role: BookAuthorRole::Author,
+                sort_name: Some("Tolkien, J.R.R.".to_string()),
+            }],
+            artists: vec![],
+            publisher: Some("Houghton Mifflin Harcourt".to_string()),
+            cover_url: Some("https://example.com/cover.jpg".to_string()),
+            covers: vec![],
+            rating: Some(ExternalRating {
+                score: 92.0,
+                vote_count: Some(100000),
+                source: "goodreads".to_string(),
+            }),
+            external_ratings: vec![],
+            awards: vec![],
+            external_links: vec![],
+        };
+
+        let json = serde_json::to_value(&metadata).unwrap();
+        assert_eq!(json["externalId"], "12345");
+        assert_eq!(json["title"], "The Hobbit");
+        assert_eq!(json["subtitle"], "or There and Back Again");
+        assert_eq!(json["bookType"], "novel");
+        assert_eq!(json["year"], 1937);
+        assert_eq!(json["isbn"], "978-0-547-92822-7");
+        assert_eq!(json["authors"][0]["name"], "J.R.R. Tolkien");
+    }
+
+    #[test]
+    fn test_book_scope_serialization() {
+        let scope = PluginScope::BookDetail;
+        let json = serde_json::to_value(&scope).unwrap();
+        assert_eq!(json, "book:detail");
+
+        let scope: PluginScope = serde_json::from_value(json!("book:bulk")).unwrap();
+        assert_eq!(scope, PluginScope::BookBulk);
+    }
+
+    #[test]
+    fn test_book_scopes() {
+        let scopes = PluginScope::book_scopes();
+        assert!(scopes.contains(&PluginScope::BookDetail));
+        assert!(scopes.contains(&PluginScope::BookBulk));
+        assert!(scopes.contains(&PluginScope::LibraryDetail));
+        assert!(scopes.contains(&PluginScope::LibraryScan));
+        assert!(!scopes.contains(&PluginScope::SeriesDetail));
+        assert_eq!(scopes.len(), 4);
+    }
+
+    #[test]
+    fn test_all_scopes() {
+        let scopes = PluginScope::all_scopes();
+        assert!(scopes.contains(&PluginScope::SeriesDetail));
+        assert!(scopes.contains(&PluginScope::BookDetail));
+        assert_eq!(scopes.len(), 6);
     }
 }

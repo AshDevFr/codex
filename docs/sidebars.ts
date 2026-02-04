@@ -35,7 +35,14 @@ const sidebars: SidebarsConfig = {
         },
         "formats",
         "filtering",
+        "book-metadata",
         "custom-metadata",
+        {
+          type: "category",
+          label: "Plugins",
+          link: { type: "doc", id: "plugins/index" },
+          items: ["plugins/open-library"],
+        },
         {
           type: "category",
           label: "Users & Permissions",

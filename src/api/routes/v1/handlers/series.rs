@@ -1305,7 +1305,11 @@ pub async fn upload_series_cover(
     let short_hash = &image_hash[..16];
 
     // Create covers directory within uploads dir if it doesn't exist
-    let covers_dir = state.thumbnail_service.get_uploads_dir().join("covers");
+    let covers_dir = state
+        .thumbnail_service
+        .get_uploads_dir()
+        .join("covers")
+        .join("series");
     fs::create_dir_all(&covers_dir)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create covers directory: {}", e)))?;

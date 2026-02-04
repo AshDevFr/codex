@@ -91,6 +91,7 @@ services:
       # Plugin dist directories (built by plugins-builder service)
       - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
       - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
+      - ./plugins/metadata-openlibrary/dist:/opt/codex/plugins/metadata-openlibrary/dist:ro
     environment:
       RUST_BACKTRACE: 1
       # Email configuration for Mailhog
@@ -146,6 +147,7 @@ services:
       # Plugin dist directories (built by plugins-builder service)
       - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
       - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
+      - ./plugins/metadata-openlibrary/dist:/opt/codex/plugins/metadata-openlibrary/dist:ro
     command:
       [
         "cargo",
@@ -204,6 +206,7 @@ services:
       - /plugins/sdk-typescript/node_modules
       - /plugins/metadata-echo/node_modules
       - /plugins/metadata-mangabaka/node_modules
+      - /plugins/metadata-openlibrary/node_modules
     command:
       - sh
       - -c
@@ -212,12 +215,14 @@ services:
         cd /plugins/sdk-typescript && npm install && npm run build &&
         cd /plugins/metadata-echo && npm install && npm run build &&
         cd /plugins/metadata-mangabaka && npm install && npm run build &&
+        cd /plugins/metadata-openlibrary && npm install && npm run build &&
         echo 'Initial build complete. Watching for changes...' &&
         npm install -g concurrently &&
         concurrently --names 'sdk,metadata-echo,metadata-mangabaka' --prefix-colors 'blue,green,yellow' \
           "cd /plugins/sdk-typescript && npm run dev" \
           "cd /plugins/metadata-echo && npm run dev" \
-          "cd /plugins/metadata-mangabaka && npm run dev"
+          "cd /plugins/metadata-mangabaka && npm run dev" \
+          "cd /plugins/metadata-openlibrary && npm run dev"
     networks:
       - codex-network
     profiles:

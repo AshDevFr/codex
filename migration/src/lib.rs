@@ -8,7 +8,7 @@ mod m20260103_000004_create_books;
 mod m20260103_000005_create_pages;
 
 // Series metadata enhancement tables
-mod m20260103_000006_create_series_metadata;
+pub mod m20260103_000006_create_series_metadata;
 mod m20260103_000007_create_genres;
 mod m20260103_000008_create_tags;
 mod m20260103_000009_create_series_alternate_titles;
@@ -18,7 +18,7 @@ mod m20260103_000012_create_series_covers;
 mod m20260103_000013_create_user_series_ratings;
 
 // Book metadata and metadata sources
-mod m20260103_000014_create_book_metadata;
+pub mod m20260103_000014_create_book_metadata;
 mod m20260103_000015_create_metadata_sources;
 
 // User-related tables
@@ -78,6 +78,20 @@ mod m20260201_000042_add_cover_lock;
 
 // Rate-limited task reschedule support
 mod m20260202_000043_add_task_reschedule_count;
+
+// Book metadata expansion (Phase 1)
+mod m20260202_000044_book_metadata_expansion;
+mod m20260202_000046_create_book_external_ids;
+mod m20260202_000047_create_book_covers;
+
+// Book external links (mirrors series_external_links)
+mod m20260203_000048_create_book_external_links;
+
+// Remove web field from book_metadata (now uses book_external_links)
+mod m20260203_000049_remove_book_metadata_web;
+
+// Plugin metadata targets configuration
+mod m20260203_000050_add_plugin_metadata_targets;
 
 pub struct Migrator;
 
@@ -145,6 +159,16 @@ impl MigratorTrait for Migrator {
             Box::new(m20260201_000042_add_cover_lock::Migration),
             // Rate-limited task reschedule support
             Box::new(m20260202_000043_add_task_reschedule_count::Migration),
+            // Book metadata expansion (Phase 1)
+            Box::new(m20260202_000044_book_metadata_expansion::Migration),
+            Box::new(m20260202_000046_create_book_external_ids::Migration),
+            Box::new(m20260202_000047_create_book_covers::Migration),
+            // Book external links
+            Box::new(m20260203_000048_create_book_external_links::Migration),
+            // Remove web field from book_metadata
+            Box::new(m20260203_000049_remove_book_metadata_web::Migration),
+            // Plugin metadata targets configuration
+            Box::new(m20260203_000050_add_plugin_metadata_targets::Migration),
         ]
     }
 }

@@ -44,6 +44,16 @@ export interface LockableListEditorProps {
   addButtonLabel?: string;
   /** Generate a new unique ID for items */
   generateId?: () => string;
+  /**
+   * Optional callback to derive values for other fields when one field changes.
+   * Returns a partial values object to merge into the item, or undefined to skip.
+   * Example: auto-fill site name from a URL.
+   */
+  deriveValues?: (
+    fieldKey: string,
+    value: string,
+    currentValues: Record<string, string>,
+  ) => Record<string, string> | undefined;
 }
 
 /**
@@ -61,6 +71,7 @@ export function LockableListEditor({
   autoLock = true,
   addButtonLabel = "Add",
   generateId = () => crypto.randomUUID(),
+  deriveValues,
 }: LockableListEditorProps) {
   const findOriginalItem = useCallback(
     (id: string): ListItem | undefined => {
@@ -90,6 +101,14 @@ export function LockableListEditor({
     const newItems = [...items];
     const item = { ...newItems[index] };
     item.values = { ...item.values, [fieldKey]: value };
+
+    // Derive other field values if callback provided
+    if (deriveValues) {
+      const derived = deriveValues(fieldKey, value, item.values);
+      if (derived) {
+        item.values = { ...item.values, ...derived };
+      }
+    }
 
     // Auto-lock when value differs from original
     if (autoLock && !item.locked && originalItems) {

@@ -31,6 +31,10 @@ interface UseBookFilterStateReturn {
   setReadStatusState: (value: string, state: TriState) => void;
   setReadStatusMode: (mode: FilterMode) => void;
 
+  // Actions for book type filters
+  setBookTypeState: (value: string, state: TriState) => void;
+  setBookTypeMode: (mode: FilterMode) => void;
+
   // Actions for hasError filter
   setHasErrorState: (state: TriState) => void;
 
@@ -45,6 +49,7 @@ interface UseBookFilterStateReturn {
     genres: number;
     tags: number;
     readStatus: number;
+    bookType: number;
     hasError: number;
   };
 
@@ -82,6 +87,7 @@ export function useBookFilterState(): UseBookFilterStateReturn {
       newParams.delete(BOOK_FILTER_PARAM_KEYS.genres);
       newParams.delete(BOOK_FILTER_PARAM_KEYS.tags);
       newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
+      newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
       newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
 
       // Add new filter params
@@ -179,6 +185,29 @@ export function useBookFilterState(): UseBookFilterStateReturn {
     [updateGroup],
   );
 
+  // Book type actions
+  const setBookTypeState = useCallback(
+    (value: string, state: TriState) => {
+      updateGroup("bookType", (current) => {
+        const newValues = new Map(current.values);
+        if (state === "neutral") {
+          newValues.delete(value);
+        } else {
+          newValues.set(value, state);
+        }
+        return { ...current, values: newValues };
+      });
+    },
+    [updateGroup],
+  );
+
+  const setBookTypeMode = useCallback(
+    (mode: FilterMode) => {
+      updateGroup("bookType", (current) => ({ ...current, mode }));
+    },
+    [updateGroup],
+  );
+
   // HasError action
   const setHasErrorState = useCallback(
     (state: TriState) => {
@@ -209,6 +238,7 @@ export function useBookFilterState(): UseBookFilterStateReturn {
       genres: countActiveFilters(filters.genres),
       tags: countActiveFilters(filters.tags),
       readStatus: countActiveFilters(filters.readStatus),
+      bookType: countActiveFilters(filters.bookType),
       hasError: filters.hasError !== "neutral" ? 1 : 0,
     }),
     [filters],
@@ -229,6 +259,8 @@ export function useBookFilterState(): UseBookFilterStateReturn {
     setTagMode,
     setReadStatusState,
     setReadStatusMode,
+    setBookTypeState,
+    setBookTypeMode,
     setHasErrorState,
     clearAll,
     clearGroup,

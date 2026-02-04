@@ -62,7 +62,6 @@ const mockLocks = {
   publisherLock: false,
   imprintLock: false,
   genreLock: false,
-  webLock: false,
   languageIsoLock: false,
   formatDetailLock: false,
   blackAndWhiteLock: false,

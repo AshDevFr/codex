@@ -103,7 +103,6 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       newParams.delete("stf");
       newParams.delete("cf");
       newParams.delete("esf");
-
       // Add new filter params
       for (const [key, value] of filterParams) {
         newParams.set(key, value);

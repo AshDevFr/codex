@@ -13,7 +13,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconSearch, IconX } from "@tabler/icons-react";
+import { IconSearch, IconUser, IconX } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -31,8 +31,10 @@ export interface MetadataSearchModalProps {
   plugin: PluginActionDto;
   /** Initial search query (e.g., series title) */
   initialQuery?: string;
-  /** Content type to search for (only "series" is currently supported) */
-  contentType?: "series";
+  /** Author name to refine search results (for book searches) */
+  author?: string;
+  /** Content type to search for */
+  contentType?: "series" | "book";
   /** Callback when a result is selected */
   onSelect: (result: PluginSearchResultDto) => void;
 }
@@ -50,11 +52,14 @@ export function MetadataSearchModal({
   onClose,
   plugin,
   initialQuery = "",
+  author: initialAuthor,
   contentType = "series",
   onSelect,
 }: MetadataSearchModalProps) {
   const [query, setQuery] = useState(initialQuery);
+  const [authorQuery, setAuthorQuery] = useState(initialAuthor ?? "");
   const [debouncedQuery] = useDebouncedValue(query, 400);
+  const [debouncedAuthor] = useDebouncedValue(authorQuery, 400);
   const [results, setResults] = useState<PluginSearchResultDto[]>([]);
 
   // Track request ID to prevent race conditions in debounced search.
@@ -62,10 +67,11 @@ export function MetadataSearchModal({
   // matches the latest request ID.
   const requestIdRef = useRef(0);
   const lastSearchedQueryRef = useRef<string | null>(null);
+  const lastSearchedAuthorRef = useRef<string | null>(null);
 
   // Perform search with race condition protection
   const performSearch = useCallback(
-    async (searchQuery: string) => {
+    async (searchQuery: string, searchAuthor?: string) => {
       // Increment request ID for this search
       const currentRequestId = ++requestIdRef.current;
       lastSearchedQueryRef.current = searchQuery;
@@ -75,6 +81,7 @@ export function MetadataSearchModal({
           plugin.pluginId,
           searchQuery,
           contentType,
+          searchAuthor || undefined,
         );
 
         // Only update results if this is still the latest request
@@ -101,7 +108,8 @@ export function MetadataSearchModal({
 
   // Search mutation with race condition protection
   const searchMutation = useMutation({
-    mutationFn: performSearch,
+    mutationFn: (params: { query: string; author?: string }) =>
+      performSearch(params.query, params.author),
   });
 
   // Reset state and trigger search when modal opens
@@ -109,33 +117,45 @@ export function MetadataSearchModal({
   useEffect(() => {
     if (opened) {
       setQuery(initialQuery);
+      setAuthorQuery(initialAuthor ?? "");
       setResults([]);
       // Reset request tracking
       lastSearchedQueryRef.current = null;
+      lastSearchedAuthorRef.current = null;
       // Trigger search immediately if we have a valid initial query
       if (initialQuery.trim().length >= 2) {
-        searchMutation.mutate(initialQuery);
+        searchMutation.mutate({
+          query: initialQuery,
+          author: initialAuthor,
+        });
       }
     }
-  }, [opened, initialQuery]);
+  }, [opened, initialQuery, initialAuthor]);
 
-  // Auto-search when debounced query changes (for user typing)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on query change
+  // Auto-search when debounced query or author changes (for user typing)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on query/author change
   useEffect(() => {
     // Skip if modal just opened (handled by the effect above)
     if (!opened) return;
 
     const trimmedQuery = debouncedQuery.trim();
     if (trimmedQuery.length >= 2) {
-      // Only search if the query is different from what we last searched.
+      // Only search if the query or author is different from what we last searched.
       // This prevents duplicate searches when debounced value catches up.
-      if (trimmedQuery !== lastSearchedQueryRef.current) {
-        searchMutation.mutate(debouncedQuery);
+      if (
+        trimmedQuery !== lastSearchedQueryRef.current ||
+        debouncedAuthor !== lastSearchedAuthorRef.current
+      ) {
+        lastSearchedAuthorRef.current = debouncedAuthor;
+        searchMutation.mutate({
+          query: debouncedQuery,
+          author: debouncedAuthor || undefined,
+        });
       }
     } else {
       setResults([]);
     }
-  }, [debouncedQuery]);
+  }, [debouncedQuery, debouncedAuthor]);
 
   const handleSelect = (result: PluginSearchResultDto) => {
     onSelect(result);
@@ -155,23 +175,46 @@ export function MetadataSearchModal({
       scrollAreaComponent={ScrollArea.Autosize}
     >
       <Stack gap="md">
-        {/* Search input */}
-        <TextInput
-          placeholder={`Search for ${contentType}...`}
-          value={query}
-          onChange={(e) => setQuery(e.currentTarget.value)}
-          leftSection={<IconSearch size={16} />}
-          rightSection={
-            query && (
-              <IconX
-                size={16}
-                style={{ cursor: "pointer" }}
-                onClick={() => setQuery("")}
-              />
-            )
-          }
-          autoFocus
-        />
+        {/* Search inputs */}
+        <Stack gap="xs">
+          <TextInput
+            label="Title"
+            placeholder={`Search for ${contentType}...`}
+            value={query}
+            onChange={(e) => setQuery(e.currentTarget.value)}
+            leftSection={<IconSearch size={16} />}
+            rightSection={
+              query && (
+                <IconX
+                  size={16}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setQuery("")}
+                />
+              )
+            }
+            autoFocus
+          />
+
+          {/* Author filter (for book searches) */}
+          {contentType === "book" && (
+            <TextInput
+              label="Author"
+              placeholder="Filter by author..."
+              value={authorQuery}
+              onChange={(e) => setAuthorQuery(e.currentTarget.value)}
+              leftSection={<IconUser size={16} />}
+              rightSection={
+                authorQuery && (
+                  <IconX
+                    size={16}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setAuthorQuery("")}
+                  />
+                )
+              }
+            />
+          )}
+        </Stack>
 
         {/* Loading state */}
         {searchMutation.isPending && (
@@ -190,7 +233,12 @@ export function MetadataSearchModal({
               <Button
                 size="xs"
                 variant="light"
-                onClick={() => searchMutation.mutate(debouncedQuery)}
+                onClick={() =>
+                  searchMutation.mutate({
+                    query: debouncedQuery,
+                    author: debouncedAuthor || undefined,
+                  })
+                }
               >
                 Retry
               </Button>
@@ -279,6 +327,12 @@ function SearchResultCard({ result, onSelect }: SearchResultCardProps) {
           <Text fw={500} lineClamp={1}>
             {result.title}
           </Text>
+
+          {result.preview?.authors && result.preview.authors.length > 0 && (
+            <Text size="xs" c="dimmed" lineClamp={1}>
+              {result.preview.authors.join(", ")}
+            </Text>
+          )}
 
           {result.year && (
             <Text size="xs" c="dimmed">

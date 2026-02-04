@@ -1,6 +1,12 @@
 // Core entities
+#[allow(unused_imports)]
+pub use super::book_covers::Entity as BookCovers;
 pub use super::book_duplicates::Entity as BookDuplicates;
 pub use super::book_error::{BookError, BookErrorType, BookErrors};
+#[allow(unused_imports)]
+pub use super::book_external_ids::Entity as BookExternalIds;
+#[allow(unused_imports)]
+pub use super::book_external_links::Entity as BookExternalLinks;
 pub use super::book_metadata::Entity as BookMetadata;
 pub use super::books::Entity as Books;
 pub use super::libraries::Entity as Libraries;

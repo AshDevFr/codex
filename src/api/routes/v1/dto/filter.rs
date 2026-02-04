@@ -146,6 +146,11 @@ pub enum BookCondition {
         #[serde(rename = "hasError")]
         has_error: BoolOperator,
     },
+    /// Filter by book type (comic, manga, novel, etc.)
+    BookType {
+        #[serde(rename = "bookType")]
+        book_type: FieldOperator,
+    },
 }
 
 /// Request body for POST /series/list

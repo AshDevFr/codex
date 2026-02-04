@@ -407,7 +407,7 @@ You can change the URL prefix to avoid conflicts or for preference. For example,
 - **Read-only**: Metadata editing through the Komga API is not supported
 - **No collections/read lists**: These Komga features are not implemented
 - **Basic search only**: Full Komga search syntax is not supported
-- **No oneshot detection**: All items return `oneshot: false`
+- **No oneshot detection**: The `oneshot` field is always omitted from responses
 
 For more details, see the [Third-Party Apps documentation](./third-party-apps).
 

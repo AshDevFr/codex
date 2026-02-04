@@ -20,6 +20,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAnalyze,
+  IconBarcode,
   IconBook,
   IconBookOff,
   IconCheck,
@@ -33,14 +34,29 @@ import {
   IconEyeOff,
   IconInfoCircle,
   IconPhoto,
+  IconSearch,
   IconTrash,
+  IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
-import { BookInfoModal } from "@/components/book";
+import {
+  type PluginActionDto,
+  pluginActionsApi,
+  pluginsApi,
+} from "@/api/plugins";
+import {
+  BookExternalIds,
+  BookInfoModal,
+  BookTypeBadge,
+} from "@/components/book";
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
+import { MetadataApplyFlow } from "@/components/metadata";
+import { ExternalLinks } from "@/components/series";
 import { usePermissions } from "@/hooks/usePermissions";
+import type { ExtendedBookMetadata } from "@/types/book-metadata";
 import { PERMISSIONS } from "@/types/permissions";
 
 // Language code mapping
@@ -85,6 +101,15 @@ export function BookDetail() {
   const { hasPermission } = usePermissions();
   const canEditBook = hasPermission(PERMISSIONS.BOOKS_WRITE);
 
+  // Plugin metadata flow state
+  const [selectedPlugin, setSelectedPlugin] = useState<PluginActionDto | null>(
+    null,
+  );
+  const [
+    metadataFlowOpened,
+    { open: openMetadataFlow, close: closeMetadataFlow },
+  ] = useDisclosure(false);
+
   // Fetch book details
   const {
     data: bookDetail,
@@ -103,10 +128,84 @@ export function BookDetail() {
     enabled: !!bookId,
   });
 
+  // Fetch external IDs for this book
+  const { data: externalIds } = useQuery({
+    queryKey: ["books", bookId, "external-ids"],
+    queryFn: () => booksApi.listExternalIds(bookId!),
+    enabled: !!bookId,
+  });
+
+  // Fetch external links for this book
+  const { data: externalLinks } = useQuery({
+    queryKey: ["books", bookId, "external-links"],
+    queryFn: () => booksApi.listExternalLinks(bookId!),
+    enabled: !!bookId,
+  });
+
   const book = bookDetail?.book;
   const metadata = bookDetail?.metadata;
+  // Extended metadata fields (will be populated when Phase 6 API updates are complete)
+  // For now, cast metadata to access potential future fields
+  const extendedMetadata = metadata as
+    | (typeof metadata & ExtendedBookMetadata)
+    | undefined;
   const prevBook = adjacentBooks?.prev;
   const nextBook = adjacentBooks?.next;
+
+  // Fetch available plugin actions for book:detail scope, filtered by library
+  const { data: pluginActions } = useQuery({
+    queryKey: ["plugin-actions", "book:detail", book?.libraryId],
+    queryFn: () => pluginsApi.getActions("book:detail", book?.libraryId),
+    staleTime: 5 * 60 * 1000,
+    enabled: canEditBook && !!book,
+  });
+
+  // Handler for plugin action click
+  const handlePluginAction = (plugin: PluginActionDto) => {
+    setSelectedPlugin(plugin);
+    openMetadataFlow();
+  };
+
+  // Handler for metadata apply success
+  const handleMetadataApplySuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["book-detail", bookId] });
+    queryClient.invalidateQueries({
+      queryKey: ["books", bookId, "external-ids"],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["books", bookId, "external-links"],
+    });
+  };
+
+  // Auto-match mutation - enqueues a task for the book's parent series
+  const autoMatchMutation = useMutation({
+    mutationFn: (pluginId: string) => {
+      if (!book?.seriesId) throw new Error("Series ID is required");
+      return pluginActionsApi.enqueueAutoMatchTask(book.seriesId, pluginId);
+    },
+    onSuccess: (data) => {
+      const taskId = data.taskIds[0];
+      notifications.show({
+        title: "Auto-match Started",
+        message: taskId
+          ? `Task queued (ID: ${taskId.slice(0, 8)}...)`
+          : data.message,
+        color: "blue",
+      });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Auto-match Failed",
+        message: error.message,
+        color: "red",
+      });
+    },
+  });
+
+  // Handler for auto-match action
+  const handleAutoMatch = (plugin: PluginActionDto) => {
+    autoMatchMutation.mutate(plugin.pluginId);
+  };
 
   // Mark as read mutation
   const markAsReadMutation = useMutation({
@@ -365,6 +464,15 @@ export function BookDetail() {
                     <Badge size="sm" variant="filled">
                       {book.fileFormat.toUpperCase()}
                     </Badge>
+                    {/* Book type badge - will show when API provides bookType */}
+                    <BookTypeBadge
+                      bookType={
+                        (extendedMetadata as ExtendedBookMetadata | undefined)
+                          ?.bookType
+                      }
+                      size="sm"
+                      variant="light"
+                    />
                     {isCompleted && (
                       <Badge size="sm" variant="filled" color="green">
                         Completed
@@ -427,11 +535,46 @@ export function BookDetail() {
                         >
                           Edit Metadata
                         </Menu.Item>
+                        {/* Plugin actions for metadata fetching */}
+                        {pluginActions && pluginActions.actions.length > 0 && (
+                          <>
+                            <Menu.Divider />
+                            <Menu.Label>Fetch Metadata</Menu.Label>
+                            {pluginActions.actions.map((action) => (
+                              <Menu.Item
+                                key={`search-${action.pluginId}`}
+                                leftSection={<IconSearch size={14} />}
+                                onClick={() => handlePluginAction(action)}
+                              >
+                                {action.label}
+                              </Menu.Item>
+                            ))}
+                            <Menu.Divider />
+                            <Menu.Label>Auto-Apply Metadata</Menu.Label>
+                            {pluginActions.actions.map((action) => (
+                              <Menu.Item
+                                key={`auto-${action.pluginId}`}
+                                leftSection={<IconWand size={14} />}
+                                onClick={() => handleAutoMatch(action)}
+                                disabled={autoMatchMutation.isPending}
+                              >
+                                {action.pluginDisplayName}
+                              </Menu.Item>
+                            ))}
+                          </>
+                        )}
                       </>
                     )}
                   </Menu.Dropdown>
                 </Menu>
               </Group>
+
+              {/* Subtitle (if available from extended metadata) */}
+              {extendedMetadata?.subtitle && (
+                <Text size="md" c="dimmed" fs="italic">
+                  {extendedMetadata.subtitle}
+                </Text>
+              )}
 
               {/* Series link */}
               <Text
@@ -635,6 +778,66 @@ export function BookDetail() {
             </Group>
           )}
 
+          {/* ISBN(s) */}
+          {extendedMetadata?.isbns && (
+            <Group gap="md" align="center">
+              <Text size="sm" c="dimmed" w={100}>
+                ISBN
+              </Text>
+              <Group gap="xs">
+                {extendedMetadata.isbns.split(",").map((isbn: string) => (
+                  <Badge
+                    key={isbn.trim()}
+                    variant="outline"
+                    size="sm"
+                    leftSection={<IconBarcode size={10} />}
+                  >
+                    {isbn.trim()}
+                  </Badge>
+                ))}
+              </Group>
+            </Group>
+          )}
+
+          {/* Edition (from extended metadata) */}
+          {extendedMetadata?.edition && (
+            <Group gap="md" align="center">
+              <Text size="sm" c="dimmed" w={100}>
+                EDITION
+              </Text>
+              <Text size="sm">{extendedMetadata.edition}</Text>
+            </Group>
+          )}
+
+          {/* Original Title (from extended metadata) */}
+          {extendedMetadata?.originalTitle && (
+            <Group gap="md" align="center">
+              <Text size="sm" c="dimmed" w={100}>
+                ORIGINAL
+              </Text>
+              <Group gap="xs">
+                <Text size="sm">{extendedMetadata.originalTitle}</Text>
+                {extendedMetadata.originalYear && (
+                  <Text size="sm" c="dimmed">
+                    ({extendedMetadata.originalYear})
+                  </Text>
+                )}
+              </Group>
+            </Group>
+          )}
+
+          {/* Translator (from extended metadata) */}
+          {extendedMetadata?.translator && (
+            <Group gap="md" align="center">
+              <Text size="sm" c="dimmed" w={100}>
+                TRANSLATOR
+              </Text>
+              <Badge variant="light" size="sm" color="orange">
+                {extendedMetadata.translator}
+              </Badge>
+            </Group>
+          )}
+
           {/* Creators */}
           {creators.map(({ role, names }) => (
             <Group key={role} gap="md" align="flex-start">
@@ -650,6 +853,26 @@ export function BookDetail() {
               </Group>
             </Group>
           ))}
+
+          {/* External Links */}
+          {externalLinks && externalLinks.length > 0 && (
+            <Group gap="md" align="flex-start">
+              <Text size="sm" c="dimmed" w={100}>
+                LINKS
+              </Text>
+              <ExternalLinks links={externalLinks} />
+            </Group>
+          )}
+
+          {/* External IDs */}
+          {externalIds && externalIds.length > 0 && (
+            <Group gap="md" align="flex-start">
+              <Text size="sm" c="dimmed" w={100}>
+                EXTERNAL IDS
+              </Text>
+              <BookExternalIds externalIds={externalIds} />
+            </Group>
+          )}
 
           {/* File Path */}
           <Group gap="md" align="center">
@@ -736,6 +959,20 @@ export function BookDetail() {
         onClose={closeInfoModal}
         book={book}
       />
+
+      {/* Plugin Metadata Apply Flow */}
+      {selectedPlugin && (
+        <MetadataApplyFlow
+          opened={metadataFlowOpened}
+          onClose={closeMetadataFlow}
+          plugin={selectedPlugin}
+          entityId={book.id}
+          entityTitle={book.title}
+          entityAuthor={metadata?.authors?.[0]?.name}
+          contentType="book"
+          onApplySuccess={handleMetadataApplySuccess}
+        />
+      )}
     </Box>
   );
 }

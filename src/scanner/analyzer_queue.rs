@@ -11,8 +11,8 @@ use uuid::Uuid;
 use crate::db::entities::book_error::{BookError, BookErrorType};
 use crate::db::entities::{book_metadata, books, pages};
 use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
-    SeriesMetadataRepository, SeriesRepository, TaskRepository,
+    BookExternalLinkRepository, BookMetadataRepository, BookRepository, LibraryRepository,
+    PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
 use crate::events::EventBroadcaster;
 use crate::models::{BookStrategy, NumberStrategy};
@@ -423,11 +423,6 @@ async fn analyze_single_book(
                 } else {
                     comic_info.genre.clone()
                 },
-                web: if existing.web_lock {
-                    existing.web.clone()
-                } else {
-                    comic_info.web.clone()
-                },
                 language_iso: if existing.language_iso_lock {
                     existing.language_iso.clone()
                 } else {
@@ -478,6 +473,19 @@ async fn analyze_single_book(
                 } else {
                     isbns_json.clone()
                 },
+                // New Phase 1 fields - preserve existing values (not populated from ComicInfo)
+                book_type: existing.book_type.clone(),
+                subtitle: existing.subtitle.clone(),
+                authors_json: existing.authors_json.clone(),
+                translator: existing.translator.clone(),
+                edition: existing.edition.clone(),
+                original_title: existing.original_title.clone(),
+                original_year: existing.original_year,
+                series_position: existing.series_position,
+                series_total: existing.series_total,
+                subjects: existing.subjects.clone(),
+                awards_json: existing.awards_json.clone(),
+                custom_metadata: existing.custom_metadata.clone(),
                 // Preserve existing lock states
                 title_lock: existing.title_lock,
                 title_sort_lock: existing.title_sort_lock,
@@ -493,7 +501,6 @@ async fn analyze_single_book(
                 publisher_lock: existing.publisher_lock,
                 imprint_lock: existing.imprint_lock,
                 genre_lock: existing.genre_lock,
-                web_lock: existing.web_lock,
                 language_iso_lock: existing.language_iso_lock,
                 format_detail_lock: existing.format_detail_lock,
                 black_and_white_lock: existing.black_and_white_lock,
@@ -504,6 +511,20 @@ async fn analyze_single_book(
                 volume_lock: existing.volume_lock,
                 count_lock: existing.count_lock,
                 isbns_lock: existing.isbns_lock,
+                // New Phase 1 lock fields - preserve existing
+                book_type_lock: existing.book_type_lock,
+                subtitle_lock: existing.subtitle_lock,
+                authors_json_lock: existing.authors_json_lock,
+                translator_lock: existing.translator_lock,
+                edition_lock: existing.edition_lock,
+                original_title_lock: existing.original_title_lock,
+                original_year_lock: existing.original_year_lock,
+                series_position_lock: existing.series_position_lock,
+                series_total_lock: existing.series_total_lock,
+                subjects_lock: existing.subjects_lock,
+                awards_json_lock: existing.awards_json_lock,
+                custom_metadata_lock: existing.custom_metadata_lock,
+                cover_lock: existing.cover_lock,
                 created_at: existing.created_at,
                 updated_at: now,
             }
@@ -527,7 +548,6 @@ async fn analyze_single_book(
                 publisher: comic_info.publisher.clone(),
                 imprint: comic_info.imprint.clone(),
                 genre: comic_info.genre.clone(),
-                web: comic_info.web.clone(),
                 language_iso: comic_info.language_iso.clone(),
                 format_detail: comic_info.format.clone(),
                 black_and_white,
@@ -538,6 +558,19 @@ async fn analyze_single_book(
                 volume: comic_info.volume,
                 count: comic_info.count,
                 isbns: isbns_json,
+                // New Phase 1 fields - not populated from ComicInfo
+                book_type: None,
+                subtitle: None,
+                authors_json: None,
+                translator: None,
+                edition: None,
+                original_title: None,
+                original_year: None,
+                series_position: None,
+                series_total: None,
+                subjects: None,
+                awards_json: None,
+                custom_metadata: None,
                 // All locks default to false for new records
                 title_lock: false,
                 title_sort_lock: false,
@@ -553,7 +586,6 @@ async fn analyze_single_book(
                 publisher_lock: false,
                 imprint_lock: false,
                 genre_lock: false,
-                web_lock: false,
                 language_iso_lock: false,
                 format_detail_lock: false,
                 black_and_white_lock: false,
@@ -564,6 +596,20 @@ async fn analyze_single_book(
                 volume_lock: false,
                 count_lock: false,
                 isbns_lock: false,
+                // New Phase 1 lock fields
+                book_type_lock: false,
+                subtitle_lock: false,
+                authors_json_lock: false,
+                translator_lock: false,
+                edition_lock: false,
+                original_title_lock: false,
+                original_year_lock: false,
+                series_position_lock: false,
+                series_total_lock: false,
+                subjects_lock: false,
+                awards_json_lock: false,
+                custom_metadata_lock: false,
+                cover_lock: false,
                 created_at: now,
                 updated_at: now,
             }
@@ -575,6 +621,15 @@ async fn analyze_single_book(
             book.file_path,
             count_non_null_fields(&metadata_record)
         );
+
+        // Upsert external link from ComicInfo web field
+        if let Some(ref web_url) = comic_info.web {
+            if let Err(e) =
+                BookExternalLinkRepository::upsert(db, book.id, "comicinfo", web_url, None).await
+            {
+                warn!("Failed to upsert external link for book {}: {}", book.id, e);
+            }
+        }
 
         // Populate series metadata from the first book if not already populated
         if let Ok(Some(series_metadata_model)) =
@@ -668,7 +723,6 @@ async fn analyze_single_book(
                 publisher: existing.publisher.clone(),
                 imprint: existing.imprint.clone(),
                 genre: existing.genre.clone(),
-                web: existing.web.clone(),
                 language_iso: existing.language_iso.clone(),
                 format_detail: existing.format_detail.clone(),
                 black_and_white: existing.black_and_white,
@@ -679,6 +733,19 @@ async fn analyze_single_book(
                 volume: existing.volume,
                 count: existing.count,
                 isbns: existing.isbns.clone(),
+                // New Phase 1 fields - preserve existing values
+                book_type: existing.book_type.clone(),
+                subtitle: existing.subtitle.clone(),
+                authors_json: existing.authors_json.clone(),
+                translator: existing.translator.clone(),
+                edition: existing.edition.clone(),
+                original_title: existing.original_title.clone(),
+                original_year: existing.original_year,
+                series_position: existing.series_position,
+                series_total: existing.series_total,
+                subjects: existing.subjects.clone(),
+                awards_json: existing.awards_json.clone(),
+                custom_metadata: existing.custom_metadata.clone(),
                 // Keep all lock states
                 title_lock: existing.title_lock,
                 title_sort_lock: existing.title_sort_lock,
@@ -694,7 +761,6 @@ async fn analyze_single_book(
                 publisher_lock: existing.publisher_lock,
                 imprint_lock: existing.imprint_lock,
                 genre_lock: existing.genre_lock,
-                web_lock: existing.web_lock,
                 language_iso_lock: existing.language_iso_lock,
                 format_detail_lock: existing.format_detail_lock,
                 black_and_white_lock: existing.black_and_white_lock,
@@ -705,6 +771,20 @@ async fn analyze_single_book(
                 volume_lock: existing.volume_lock,
                 count_lock: existing.count_lock,
                 isbns_lock: existing.isbns_lock,
+                // New Phase 1 lock fields - preserve existing
+                book_type_lock: existing.book_type_lock,
+                subtitle_lock: existing.subtitle_lock,
+                authors_json_lock: existing.authors_json_lock,
+                translator_lock: existing.translator_lock,
+                edition_lock: existing.edition_lock,
+                original_title_lock: existing.original_title_lock,
+                original_year_lock: existing.original_year_lock,
+                series_position_lock: existing.series_position_lock,
+                series_total_lock: existing.series_total_lock,
+                subjects_lock: existing.subjects_lock,
+                awards_json_lock: existing.awards_json_lock,
+                custom_metadata_lock: existing.custom_metadata_lock,
+                cover_lock: existing.cover_lock,
                 created_at: existing.created_at,
                 updated_at: now,
             }
@@ -727,7 +807,6 @@ async fn analyze_single_book(
                 publisher: None,
                 imprint: None,
                 genre: None,
-                web: None,
                 language_iso: None,
                 format_detail: None,
                 black_and_white: None,
@@ -738,6 +817,19 @@ async fn analyze_single_book(
                 volume: None,
                 count: None,
                 isbns: None,
+                // New Phase 1 fields
+                book_type: None,
+                subtitle: None,
+                authors_json: None,
+                translator: None,
+                edition: None,
+                original_title: None,
+                original_year: None,
+                series_position: None,
+                series_total: None,
+                subjects: None,
+                awards_json: None,
+                custom_metadata: None,
                 title_lock: false,
                 title_sort_lock: false,
                 number_lock: false,
@@ -752,7 +844,6 @@ async fn analyze_single_book(
                 publisher_lock: false,
                 imprint_lock: false,
                 genre_lock: false,
-                web_lock: false,
                 language_iso_lock: false,
                 format_detail_lock: false,
                 black_and_white_lock: false,
@@ -763,6 +854,20 @@ async fn analyze_single_book(
                 volume_lock: false,
                 count_lock: false,
                 isbns_lock: false,
+                // New Phase 1 lock fields
+                book_type_lock: false,
+                subtitle_lock: false,
+                authors_json_lock: false,
+                translator_lock: false,
+                edition_lock: false,
+                original_title_lock: false,
+                original_year_lock: false,
+                series_position_lock: false,
+                series_total_lock: false,
+                subjects_lock: false,
+                awards_json_lock: false,
+                custom_metadata_lock: false,
+                cover_lock: false,
                 created_at: now,
                 updated_at: now,
             }
@@ -1043,9 +1148,6 @@ fn count_non_null_fields(metadata: &book_metadata::Model) -> usize {
     if metadata.genre.is_some() {
         count += 1;
     }
-    if metadata.web.is_some() {
-        count += 1;
-    }
     if metadata.language_iso.is_some() {
         count += 1;
     }
@@ -1173,7 +1275,6 @@ mod tests {
             publisher: Some("Test Publisher".to_string()),
             imprint: None,
             genre: Some("Action".to_string()),
-            web: None,
             language_iso: Some("en".to_string()),
             format_detail: None,
             black_and_white: None,
@@ -1184,6 +1285,19 @@ mod tests {
             volume: None,
             count: None,
             isbns: None,
+            // New Phase 1 fields
+            book_type: None,
+            subtitle: None,
+            authors_json: None,
+            translator: None,
+            edition: None,
+            original_title: None,
+            original_year: None,
+            series_position: None,
+            series_total: None,
+            subjects: None,
+            awards_json: None,
+            custom_metadata: None,
             // All locks default to false
             title_lock: false,
             title_sort_lock: false,
@@ -1199,7 +1313,6 @@ mod tests {
             publisher_lock: false,
             imprint_lock: false,
             genre_lock: false,
-            web_lock: false,
             language_iso_lock: false,
             format_detail_lock: false,
             black_and_white_lock: false,
@@ -1210,6 +1323,20 @@ mod tests {
             volume_lock: false,
             count_lock: false,
             isbns_lock: false,
+            // New Phase 1 lock fields
+            book_type_lock: false,
+            subtitle_lock: false,
+            authors_json_lock: false,
+            translator_lock: false,
+            edition_lock: false,
+            original_title_lock: false,
+            original_year_lock: false,
+            series_position_lock: false,
+            series_total_lock: false,
+            subjects_lock: false,
+            awards_json_lock: false,
+            custom_metadata_lock: false,
+            cover_lock: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };

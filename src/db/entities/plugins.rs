@@ -107,6 +107,10 @@ pub struct Model {
     pub auto_match_conditions: Option<String>,
     /// Whether to skip search when external ID exists for this plugin
     pub use_existing_external_id: bool,
+    /// Metadata targets as JSON array (e.g., ["series"], ["book"], or ["series", "book"])
+    /// NULL means auto-detect from plugin capabilities
+    #[sea_orm(column_type = "Text")]
+    pub metadata_targets: Option<String>,
 
     // Timestamps
     pub created_at: DateTime<Utc>,
@@ -295,9 +299,17 @@ impl std::fmt::Display for PluginType {
 ///
 /// These permissions control what metadata fields a plugin can write.
 /// Configured by admin when setting up the plugin.
+///
+/// ## Permission Categories
+///
+/// - **Common permissions**: Apply to both series and books (title, summary, genres, etc.)
+/// - **Book-specific permissions**: Only apply to books (book_type, subtitle, authors_json, etc.)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PluginPermission {
+    // =========================================================================
+    // Read Permissions
+    // =========================================================================
     /// Read series/book metadata
     ///
     /// Includes: title, summary, genres, tags, year, status, authors, artists,
@@ -306,6 +318,10 @@ pub enum PluginPermission {
     /// require user-level permissions (`user:ratings:read`, `user:notes:read`).
     #[serde(rename = "metadata:read")]
     MetadataRead,
+
+    // =========================================================================
+    // Common Write Permissions (Series + Books)
+    // =========================================================================
     /// Update series/book titles
     #[serde(rename = "metadata:write:title")]
     MetadataWriteTitle,
@@ -348,9 +364,57 @@ pub enum PluginPermission {
     /// Update total book count
     #[serde(rename = "metadata:write:total_book_count")]
     MetadataWriteTotalBookCount,
-    /// All metadata write permissions
+
+    // =========================================================================
+    // Book-Specific Write Permissions
+    // =========================================================================
+    /// Update book type (comic, manga, novel, etc.)
+    #[serde(rename = "metadata:write:book_type")]
+    MetadataWriteBookType,
+    /// Update book subtitle
+    #[serde(rename = "metadata:write:subtitle")]
+    MetadataWriteSubtitle,
+    /// Update structured authors (JSON array with roles)
+    #[serde(rename = "metadata:write:authors")]
+    MetadataWriteAuthors,
+    /// Update translator name
+    #[serde(rename = "metadata:write:translator")]
+    MetadataWriteTranslator,
+    /// Update edition information
+    #[serde(rename = "metadata:write:edition")]
+    MetadataWriteEdition,
+    /// Update original title (for translations)
+    #[serde(rename = "metadata:write:original_title")]
+    MetadataWriteOriginalTitle,
+    /// Update original publication year
+    #[serde(rename = "metadata:write:original_year")]
+    MetadataWriteOriginalYear,
+    /// Update series position (book number in series)
+    #[serde(rename = "metadata:write:series_position")]
+    MetadataWriteSeriesPosition,
+    /// Update subjects/topics
+    #[serde(rename = "metadata:write:subjects")]
+    MetadataWriteSubjects,
+    /// Update awards (JSON array)
+    #[serde(rename = "metadata:write:awards")]
+    MetadataWriteAwards,
+    /// Update custom metadata (JSON)
+    #[serde(rename = "metadata:write:custom_metadata")]
+    MetadataWriteCustomMetadata,
+    /// Update ISBN identifiers
+    #[serde(rename = "metadata:write:isbn")]
+    MetadataWriteIsbn,
+
+    // =========================================================================
+    // Wildcard Permissions
+    // =========================================================================
+    /// All metadata write permissions (series + books)
     #[serde(rename = "metadata:write:*")]
     MetadataWriteAll,
+
+    // =========================================================================
+    // Library Permissions
+    // =========================================================================
     /// Read library structure
     #[serde(rename = "library:read")]
     LibraryRead,
@@ -359,7 +423,9 @@ pub enum PluginPermission {
 impl PluginPermission {
     pub fn as_str(&self) -> &'static str {
         match self {
+            // Read permissions
             PluginPermission::MetadataRead => "metadata:read",
+            // Common write permissions
             PluginPermission::MetadataWriteTitle => "metadata:write:title",
             PluginPermission::MetadataWriteSummary => "metadata:write:summary",
             PluginPermission::MetadataWriteGenres => "metadata:write:genres",
@@ -374,13 +440,64 @@ impl PluginPermission {
             PluginPermission::MetadataWriteLanguage => "metadata:write:language",
             PluginPermission::MetadataWriteReadingDirection => "metadata:write:reading_direction",
             PluginPermission::MetadataWriteTotalBookCount => "metadata:write:total_book_count",
+            // Book-specific write permissions
+            PluginPermission::MetadataWriteBookType => "metadata:write:book_type",
+            PluginPermission::MetadataWriteSubtitle => "metadata:write:subtitle",
+            PluginPermission::MetadataWriteAuthors => "metadata:write:authors",
+            PluginPermission::MetadataWriteTranslator => "metadata:write:translator",
+            PluginPermission::MetadataWriteEdition => "metadata:write:edition",
+            PluginPermission::MetadataWriteOriginalTitle => "metadata:write:original_title",
+            PluginPermission::MetadataWriteOriginalYear => "metadata:write:original_year",
+            PluginPermission::MetadataWriteSeriesPosition => "metadata:write:series_position",
+            PluginPermission::MetadataWriteSubjects => "metadata:write:subjects",
+            PluginPermission::MetadataWriteAwards => "metadata:write:awards",
+            PluginPermission::MetadataWriteCustomMetadata => "metadata:write:custom_metadata",
+            PluginPermission::MetadataWriteIsbn => "metadata:write:isbn",
+            // Wildcard
             PluginPermission::MetadataWriteAll => "metadata:write:*",
+            // Library
             PluginPermission::LibraryRead => "library:read",
         }
     }
 
     /// Get all individual write permissions that "metadata:write:*" expands to
+    ///
+    /// Includes both common permissions (series + books) and book-specific permissions.
     pub fn all_write_permissions() -> Vec<PluginPermission> {
+        vec![
+            // Common write permissions (series + books)
+            PluginPermission::MetadataWriteTitle,
+            PluginPermission::MetadataWriteSummary,
+            PluginPermission::MetadataWriteGenres,
+            PluginPermission::MetadataWriteTags,
+            PluginPermission::MetadataWriteCovers,
+            PluginPermission::MetadataWriteRatings,
+            PluginPermission::MetadataWriteLinks,
+            PluginPermission::MetadataWriteYear,
+            PluginPermission::MetadataWriteStatus,
+            PluginPermission::MetadataWritePublisher,
+            PluginPermission::MetadataWriteAgeRating,
+            PluginPermission::MetadataWriteLanguage,
+            PluginPermission::MetadataWriteReadingDirection,
+            PluginPermission::MetadataWriteTotalBookCount,
+            // Book-specific write permissions
+            PluginPermission::MetadataWriteBookType,
+            PluginPermission::MetadataWriteSubtitle,
+            PluginPermission::MetadataWriteAuthors,
+            PluginPermission::MetadataWriteTranslator,
+            PluginPermission::MetadataWriteEdition,
+            PluginPermission::MetadataWriteOriginalTitle,
+            PluginPermission::MetadataWriteOriginalYear,
+            PluginPermission::MetadataWriteSeriesPosition,
+            PluginPermission::MetadataWriteSubjects,
+            PluginPermission::MetadataWriteAwards,
+            PluginPermission::MetadataWriteCustomMetadata,
+            PluginPermission::MetadataWriteIsbn,
+        ]
+    }
+
+    /// Get common write permissions that apply to both series and books
+    pub fn common_write_permissions() -> Vec<PluginPermission> {
         vec![
             PluginPermission::MetadataWriteTitle,
             PluginPermission::MetadataWriteSummary,
@@ -398,6 +515,24 @@ impl PluginPermission {
             PluginPermission::MetadataWriteTotalBookCount,
         ]
     }
+
+    /// Get book-specific write permissions
+    pub fn book_write_permissions() -> Vec<PluginPermission> {
+        vec![
+            PluginPermission::MetadataWriteBookType,
+            PluginPermission::MetadataWriteSubtitle,
+            PluginPermission::MetadataWriteAuthors,
+            PluginPermission::MetadataWriteTranslator,
+            PluginPermission::MetadataWriteEdition,
+            PluginPermission::MetadataWriteOriginalTitle,
+            PluginPermission::MetadataWriteOriginalYear,
+            PluginPermission::MetadataWriteSeriesPosition,
+            PluginPermission::MetadataWriteSubjects,
+            PluginPermission::MetadataWriteAwards,
+            PluginPermission::MetadataWriteCustomMetadata,
+            PluginPermission::MetadataWriteIsbn,
+        ]
+    }
 }
 
 impl FromStr for PluginPermission {
@@ -405,7 +540,9 @@ impl FromStr for PluginPermission {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            // Read permissions
             "metadata:read" => Ok(PluginPermission::MetadataRead),
+            // Common write permissions
             "metadata:write:title" => Ok(PluginPermission::MetadataWriteTitle),
             "metadata:write:summary" => Ok(PluginPermission::MetadataWriteSummary),
             "metadata:write:genres" => Ok(PluginPermission::MetadataWriteGenres),
@@ -422,7 +559,22 @@ impl FromStr for PluginPermission {
                 Ok(PluginPermission::MetadataWriteReadingDirection)
             }
             "metadata:write:total_book_count" => Ok(PluginPermission::MetadataWriteTotalBookCount),
+            // Book-specific write permissions
+            "metadata:write:book_type" => Ok(PluginPermission::MetadataWriteBookType),
+            "metadata:write:subtitle" => Ok(PluginPermission::MetadataWriteSubtitle),
+            "metadata:write:authors" => Ok(PluginPermission::MetadataWriteAuthors),
+            "metadata:write:translator" => Ok(PluginPermission::MetadataWriteTranslator),
+            "metadata:write:edition" => Ok(PluginPermission::MetadataWriteEdition),
+            "metadata:write:original_title" => Ok(PluginPermission::MetadataWriteOriginalTitle),
+            "metadata:write:original_year" => Ok(PluginPermission::MetadataWriteOriginalYear),
+            "metadata:write:series_position" => Ok(PluginPermission::MetadataWriteSeriesPosition),
+            "metadata:write:subjects" => Ok(PluginPermission::MetadataWriteSubjects),
+            "metadata:write:awards" => Ok(PluginPermission::MetadataWriteAwards),
+            "metadata:write:custom_metadata" => Ok(PluginPermission::MetadataWriteCustomMetadata),
+            "metadata:write:isbn" => Ok(PluginPermission::MetadataWriteIsbn),
+            // Wildcard
             "metadata:write:*" => Ok(PluginPermission::MetadataWriteAll),
+            // Library
             "library:read" => Ok(PluginPermission::LibraryRead),
             _ => Err(format!("Unknown plugin permission: {}", s)),
         }
@@ -482,9 +634,10 @@ impl Model {
 
         // Check for wildcard permission
         if permissions.contains(&PluginPermission::MetadataWriteAll) {
-            // Wildcard grants all write permissions
+            // Wildcard grants all write permissions (common + book-specific)
             if matches!(
                 permission,
+                // Common write permissions
                 PluginPermission::MetadataWriteTitle
                     | PluginPermission::MetadataWriteSummary
                     | PluginPermission::MetadataWriteGenres
@@ -499,6 +652,19 @@ impl Model {
                     | PluginPermission::MetadataWriteLanguage
                     | PluginPermission::MetadataWriteReadingDirection
                     | PluginPermission::MetadataWriteTotalBookCount
+                    // Book-specific write permissions
+                    | PluginPermission::MetadataWriteBookType
+                    | PluginPermission::MetadataWriteSubtitle
+                    | PluginPermission::MetadataWriteAuthors
+                    | PluginPermission::MetadataWriteTranslator
+                    | PluginPermission::MetadataWriteEdition
+                    | PluginPermission::MetadataWriteOriginalTitle
+                    | PluginPermission::MetadataWriteOriginalYear
+                    | PluginPermission::MetadataWriteSeriesPosition
+                    | PluginPermission::MetadataWriteSubjects
+                    | PluginPermission::MetadataWriteAwards
+                    | PluginPermission::MetadataWriteCustomMetadata
+                    | PluginPermission::MetadataWriteIsbn
             ) {
                 return true;
             }
@@ -706,10 +872,108 @@ mod tests {
     #[test]
     fn test_all_write_permissions() {
         let perms = PluginPermission::all_write_permissions();
+        // Common permissions
         assert!(perms.contains(&PluginPermission::MetadataWriteTitle));
         assert!(perms.contains(&PluginPermission::MetadataWriteSummary));
+        // Book-specific permissions
+        assert!(perms.contains(&PluginPermission::MetadataWriteBookType));
+        assert!(perms.contains(&PluginPermission::MetadataWriteSubtitle));
+        assert!(perms.contains(&PluginPermission::MetadataWriteAuthors));
+        assert!(perms.contains(&PluginPermission::MetadataWriteIsbn));
+        // Excluded permissions
         assert!(!perms.contains(&PluginPermission::MetadataWriteAll));
         assert!(!perms.contains(&PluginPermission::MetadataRead));
+        // Should have 26 write permissions (14 common + 12 book-specific)
+        assert_eq!(perms.len(), 26);
+    }
+
+    #[test]
+    fn test_common_write_permissions() {
+        let perms = PluginPermission::common_write_permissions();
+        assert!(perms.contains(&PluginPermission::MetadataWriteTitle));
+        assert!(perms.contains(&PluginPermission::MetadataWriteSummary));
+        assert!(perms.contains(&PluginPermission::MetadataWriteTotalBookCount));
+        // Book-specific should NOT be in common
+        assert!(!perms.contains(&PluginPermission::MetadataWriteBookType));
+        assert!(!perms.contains(&PluginPermission::MetadataWriteIsbn));
+        // Should have 14 common permissions
+        assert_eq!(perms.len(), 14);
+    }
+
+    #[test]
+    fn test_book_write_permissions() {
+        let perms = PluginPermission::book_write_permissions();
+        // Book-specific permissions
+        assert!(perms.contains(&PluginPermission::MetadataWriteBookType));
+        assert!(perms.contains(&PluginPermission::MetadataWriteSubtitle));
+        assert!(perms.contains(&PluginPermission::MetadataWriteAuthors));
+        assert!(perms.contains(&PluginPermission::MetadataWriteTranslator));
+        assert!(perms.contains(&PluginPermission::MetadataWriteEdition));
+        assert!(perms.contains(&PluginPermission::MetadataWriteOriginalTitle));
+        assert!(perms.contains(&PluginPermission::MetadataWriteOriginalYear));
+        assert!(perms.contains(&PluginPermission::MetadataWriteSeriesPosition));
+        assert!(perms.contains(&PluginPermission::MetadataWriteSubjects));
+        assert!(perms.contains(&PluginPermission::MetadataWriteAwards));
+        assert!(perms.contains(&PluginPermission::MetadataWriteCustomMetadata));
+        assert!(perms.contains(&PluginPermission::MetadataWriteIsbn));
+        // Common permissions should NOT be in book-specific
+        assert!(!perms.contains(&PluginPermission::MetadataWriteTitle));
+        // Should have 12 book-specific permissions
+        assert_eq!(perms.len(), 12);
+    }
+
+    #[test]
+    fn test_book_permission_as_str() {
+        assert_eq!(
+            PluginPermission::MetadataWriteBookType.as_str(),
+            "metadata:write:book_type"
+        );
+        assert_eq!(
+            PluginPermission::MetadataWriteSubtitle.as_str(),
+            "metadata:write:subtitle"
+        );
+        assert_eq!(
+            PluginPermission::MetadataWriteAuthors.as_str(),
+            "metadata:write:authors"
+        );
+        assert_eq!(
+            PluginPermission::MetadataWriteIsbn.as_str(),
+            "metadata:write:isbn"
+        );
+    }
+
+    #[test]
+    fn test_book_permission_from_str() {
+        assert_eq!(
+            PluginPermission::from_str("metadata:write:book_type").unwrap(),
+            PluginPermission::MetadataWriteBookType
+        );
+        assert_eq!(
+            PluginPermission::from_str("metadata:write:subtitle").unwrap(),
+            PluginPermission::MetadataWriteSubtitle
+        );
+        assert_eq!(
+            PluginPermission::from_str("metadata:write:authors").unwrap(),
+            PluginPermission::MetadataWriteAuthors
+        );
+        assert_eq!(
+            PluginPermission::from_str("metadata:write:translator").unwrap(),
+            PluginPermission::MetadataWriteTranslator
+        );
+        assert_eq!(
+            PluginPermission::from_str("metadata:write:isbn").unwrap(),
+            PluginPermission::MetadataWriteIsbn
+        );
+    }
+
+    #[test]
+    fn test_book_permission_serialization() {
+        let perm = PluginPermission::MetadataWriteBookType;
+        let json = serde_json::to_string(&perm).unwrap();
+        assert_eq!(json, "\"metadata:write:book_type\"");
+
+        let perm: PluginPermission = serde_json::from_str("\"metadata:write:isbn\"").unwrap();
+        assert_eq!(perm, PluginPermission::MetadataWriteIsbn);
     }
 
     #[test]
@@ -743,6 +1007,7 @@ mod tests {
             search_preprocessing_rules: None,
             auto_match_conditions: None,
             use_existing_external_id: true,
+            metadata_targets: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -790,6 +1055,7 @@ mod tests {
             search_preprocessing_rules: None,
             auto_match_conditions: None,
             use_existing_external_id: true,
+            metadata_targets: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,

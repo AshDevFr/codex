@@ -1,4 +1,4 @@
-//! Shared metadata services for applying plugin metadata to series.
+//! Shared metadata services for applying plugin metadata to series and books.
 //!
 //! This module provides:
 //! - A unified implementation for applying metadata from plugins
@@ -8,8 +8,10 @@
 //! Used by both synchronous API endpoints and background task handlers.
 
 mod apply;
+mod book_apply;
 mod cover;
 pub mod preprocessing;
 
 pub use apply::{ApplyOptions, MetadataApplier, SkippedField};
+pub use book_apply::{BookApplyOptions, BookMetadataApplier};
 pub use cover::CoverService;

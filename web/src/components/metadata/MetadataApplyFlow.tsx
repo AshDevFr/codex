@@ -17,8 +17,10 @@ export interface MetadataApplyFlowProps {
   entityId: string;
   /** Entity title for search */
   entityTitle: string;
-  /** Content type (only "series" is currently supported) */
-  contentType?: "series";
+  /** Author name to refine search results (for book searches) */
+  entityAuthor?: string;
+  /** Content type */
+  contentType?: "series" | "book";
   /** Callback when metadata is successfully applied */
   onApplySuccess?: () => void;
 }
@@ -39,6 +41,7 @@ export function MetadataApplyFlow({
   plugin,
   entityId,
   entityTitle,
+  entityAuthor,
   contentType = "series",
   onApplySuccess,
 }: MetadataApplyFlowProps) {
@@ -108,6 +111,7 @@ export function MetadataApplyFlow({
         onClose={handleClose}
         plugin={plugin}
         initialQuery={entityTitle}
+        author={entityAuthor}
         contentType={contentType}
         onSelect={handleSearchSelect}
       />

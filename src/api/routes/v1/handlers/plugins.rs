@@ -235,7 +235,8 @@ pub async fn create_plugin(
     let has_search_config = request.search_query_template.is_some()
         || request.search_preprocessing_rules.is_some()
         || request.auto_match_conditions.is_some()
-        || !request.use_existing_external_id; // Default is true, so only update if set to false
+        || !request.use_existing_external_id // Default is true, so only update if set to false
+        || request.metadata_targets.is_some();
 
     if has_search_config {
         // Convert JSON values to strings for storage
@@ -255,6 +256,9 @@ pub async fn create_plugin(
                 serde_json::to_string(&v).ok()
             }
         });
+        let metadata_targets = request
+            .metadata_targets
+            .map(|targets| serde_json::to_string(&targets).ok());
 
         PluginsRepository::update_search_config(
             &state.db,
@@ -263,6 +267,7 @@ pub async fn create_plugin(
             search_preprocessing_rules,
             auto_match_conditions,
             Some(request.use_existing_external_id),
+            metadata_targets,
             Some(auth.user_id),
         )
         .await
@@ -516,7 +521,8 @@ pub async fn update_plugin(
     let has_search_config_updates = request.search_query_template.is_some()
         || request.search_preprocessing_rules.is_some()
         || request.auto_match_conditions.is_some()
-        || request.use_existing_external_id.is_some();
+        || request.use_existing_external_id.is_some()
+        || request.metadata_targets.is_some();
 
     if has_search_config_updates {
         // Convert JSON values to strings for storage
@@ -530,6 +536,14 @@ pub async fn update_plugin(
             }
         });
         let auto_match_conditions = request.auto_match_conditions.map(|v| {
+            if v.is_null() {
+                None
+            } else {
+                serde_json::to_string(&v).ok()
+            }
+        });
+        // Handle metadata_targets: None = don't update, Some(null) = clear to auto, Some(array) = set
+        let metadata_targets = request.metadata_targets.map(|v| {
             if v.is_null() {
                 None
             } else {
@@ -561,6 +575,7 @@ pub async fn update_plugin(
             search_preprocessing_rules,
             auto_match_conditions,
             request.use_existing_external_id,
+            metadata_targets,
             Some(auth.user_id),
         )
         .await

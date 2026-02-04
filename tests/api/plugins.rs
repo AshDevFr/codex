@@ -1135,6 +1135,78 @@ async fn test_maintainer_can_use_plugin_actions() {
 }
 
 // =============================================================================
+// Book & Library Scope Plugin Actions Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_get_plugin_actions_book_detail_scope() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let request = get_request_with_auth("/api/v1/plugins/actions?scope=book:detail", &token);
+    let (status, response): (StatusCode, Option<PluginActionsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert!(response.actions.is_empty());
+    assert_eq!(response.scope, "book:detail");
+}
+
+#[tokio::test]
+async fn test_get_plugin_actions_book_bulk_scope() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let request = get_request_with_auth("/api/v1/plugins/actions?scope=book:bulk", &token);
+    let (status, response): (StatusCode, Option<PluginActionsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert!(response.actions.is_empty());
+    assert_eq!(response.scope, "book:bulk");
+}
+
+#[tokio::test]
+async fn test_get_plugin_actions_library_detail_scope() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let request = get_request_with_auth("/api/v1/plugins/actions?scope=library:detail", &token);
+    let (status, response): (StatusCode, Option<PluginActionsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert!(response.actions.is_empty());
+    assert_eq!(response.scope, "library:detail");
+}
+
+#[tokio::test]
+async fn test_get_plugin_actions_library_scan_scope() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let request = get_request_with_auth("/api/v1/plugins/actions?scope=library:scan", &token);
+    let (status, response): (StatusCode, Option<PluginActionsResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Expected response body");
+    assert!(response.actions.is_empty());
+    assert_eq!(response.scope, "library:scan");
+}
+
+// =============================================================================
 // Search Title Endpoint Tests
 // =============================================================================
 
@@ -1627,4 +1699,98 @@ async fn test_series_context_field_access_dual_path_support() {
     assert!(matches!(genres, Some(FieldValue::Array(ref arr)) if arr.len() == 2));
     let tags = context.get_field("metadata.tags");
     assert!(matches!(tags, Some(FieldValue::Array(ref arr)) if arr.len() == 1));
+}
+
+// =============================================================================
+// Book Metadata Preview/Apply Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_preview_book_metadata_book_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let fake_book_id = uuid::Uuid::new_v4();
+    let fake_plugin_id = uuid::Uuid::new_v4();
+    let body = json!({
+        "pluginId": fake_plugin_id.to_string(),
+        "externalId": "12345"
+    });
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata/preview", fake_book_id),
+        &body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_apply_book_metadata_book_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let fake_book_id = uuid::Uuid::new_v4();
+    let fake_plugin_id = uuid::Uuid::new_v4();
+    let body = json!({
+        "pluginId": fake_plugin_id.to_string(),
+        "externalId": "12345"
+    });
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata/apply", fake_book_id),
+        &body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_preview_book_metadata_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let fake_book_id = uuid::Uuid::new_v4();
+    let body = json!({
+        "pluginId": uuid::Uuid::new_v4().to_string(),
+        "externalId": "12345"
+    });
+    let request = common::http::post_json_request(
+        &format!("/api/v1/books/{}/metadata/preview", fake_book_id),
+        &body,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_apply_book_metadata_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db).await;
+    let app = create_test_router(state).await;
+
+    let fake_book_id = uuid::Uuid::new_v4();
+    let body = json!({
+        "pluginId": uuid::Uuid::new_v4().to_string(),
+        "externalId": "12345"
+    });
+    let request = common::http::post_json_request(
+        &format!("/api/v1/books/{}/metadata/apply", fake_book_id),
+        &body,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

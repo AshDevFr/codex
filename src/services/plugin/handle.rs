@@ -390,18 +390,71 @@ impl PluginHandle {
         }
     }
 
-    /// Get book metadata by external ID (future use)
-    #[allow(dead_code)]
+    /// Get book metadata by external ID
     pub async fn get_book_metadata(
         &self,
         params: MetadataGetParams,
     ) -> Result<PluginBookMetadata, PluginError> {
         self.ensure_running().await?;
 
-        // TODO: Change to METADATA_BOOK_GET when book metadata is implemented
         let client_guard = self.client.read().await;
         let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
-        match client.call(methods::METADATA_SERIES_GET, params).await {
+        match client.call(methods::METADATA_BOOK_GET, params).await {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
+    /// Search for book metadata
+    pub async fn search_book(
+        &self,
+        params: super::protocol::BookSearchParams,
+    ) -> Result<MetadataSearchResponse, PluginError> {
+        self.ensure_running().await?;
+
+        let timeout_ms = self.config.request_timeout.as_millis();
+        debug!(
+            isbn = ?params.isbn,
+            query = ?params.query,
+            timeout_ms = timeout_ms,
+            "Plugin handle: sending book search request"
+        );
+
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        match client
+            .call::<_, MetadataSearchResponse>(methods::METADATA_BOOK_SEARCH, params)
+            .await
+        {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
+    /// Find best match for a book (ISBN first, then title fallback)
+    pub async fn match_book(
+        &self,
+        params: super::protocol::BookMatchParams,
+    ) -> Result<Option<SearchResult>, PluginError> {
+        self.ensure_running().await?;
+
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        match client.call(methods::METADATA_BOOK_MATCH, params).await {
             Ok(response) => {
                 self.health.record_success().await;
                 Ok(response)

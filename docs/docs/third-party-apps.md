@@ -198,7 +198,7 @@ The Komga-compatible API has some limitations compared to the native Komga serve
 - **Collections** - Komga collections are not implemented
 - **Read lists** - Komga read lists are not implemented
 - **Full search syntax** - Only basic search is supported
-- **Oneshot detection** - All items return `oneshot: false`
+- **Oneshot detection** - The `oneshot` field is not included in responses
 - **WebPub manifests** - Not implemented
 
 ### Differences from Komga

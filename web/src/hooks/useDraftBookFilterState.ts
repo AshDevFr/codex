@@ -29,6 +29,10 @@ interface UseDraftBookFilterStateReturn {
   setReadStatusState: (value: string, state: TriState) => void;
   setReadStatusMode: (mode: FilterMode) => void;
 
+  // Actions for book type filters
+  setBookTypeState: (value: string, state: TriState) => void;
+  setBookTypeMode: (mode: FilterMode) => void;
+
   // Actions for hasError filter
   setHasErrorState: (state: TriState) => void;
 
@@ -48,6 +52,7 @@ interface UseDraftBookFilterStateReturn {
     genres: number;
     tags: number;
     readStatus: number;
+    bookType: number;
     hasError: number;
   };
 
@@ -66,6 +71,10 @@ function cloneBookFilterState(state: BookFilterState): BookFilterState {
       mode: state.readStatus.mode,
       values: new Map(state.readStatus.values),
     },
+    bookType: {
+      mode: state.bookType.mode,
+      values: new Map(state.bookType.values),
+    },
     hasError: state.hasError,
   };
 }
@@ -81,6 +90,7 @@ function bookFilterStatesEqual(
     "genres",
     "tags",
     "readStatus",
+    "bookType",
   ];
 
   for (const group of groups) {
@@ -227,6 +237,29 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     [updateGroup],
   );
 
+  // Book type actions
+  const setBookTypeState = useCallback(
+    (value: string, state: TriState) => {
+      updateGroup("bookType", (current) => {
+        const newValues = new Map(current.values);
+        if (state === "neutral") {
+          newValues.delete(value);
+        } else {
+          newValues.set(value, state);
+        }
+        return { ...current, values: newValues };
+      });
+    },
+    [updateGroup],
+  );
+
+  const setBookTypeMode = useCallback(
+    (mode: FilterMode) => {
+      updateGroup("bookType", (current) => ({ ...current, mode }));
+    },
+    [updateGroup],
+  );
+
   // HasError action
   const setHasErrorState = useCallback(
     (state: TriState) => {
@@ -255,6 +288,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     newParams.delete(BOOK_FILTER_PARAM_KEYS.genres);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.tags);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
 
     // Add new filter params (will be empty for cleared filters)
@@ -298,6 +332,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     newParams.delete(BOOK_FILTER_PARAM_KEYS.genres);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.tags);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
     newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
 
     // Add new filter params
@@ -322,6 +357,7 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
       genres: countActiveFilters(draftFilters.genres),
       tags: countActiveFilters(draftFilters.tags),
       readStatus: countActiveFilters(draftFilters.readStatus),
+      bookType: countActiveFilters(draftFilters.bookType),
       hasError: draftFilters.hasError !== "neutral" ? 1 : 0,
     }),
     [draftFilters],
@@ -346,6 +382,8 @@ export function useDraftBookFilterState(): UseDraftBookFilterStateReturn {
     setTagMode,
     setReadStatusState,
     setReadStatusMode,
+    setBookTypeState,
+    setBookTypeMode,
     setHasErrorState,
     clearAllDraft,
     clearGroupDraft,

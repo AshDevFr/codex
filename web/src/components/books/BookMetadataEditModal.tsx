@@ -1,22 +1,37 @@
 import {
+  ActionIcon,
+  Box,
   Button,
+  Card,
   Center,
   Group,
+  Image,
   Loader,
   Modal,
+  SimpleGrid,
   Stack,
   Switch,
   Tabs,
   Text,
+  Tooltip,
 } from "@mantine/core";
+import { Dropzone, IMAGE_MIME_TYPE } from "@mantine/dropzone";
 import { notifications } from "@mantine/notifications";
 import {
+  IconBook,
+  IconCheck,
   IconEdit,
   IconLink,
   IconList,
+  IconLock,
+  IconLockOpen,
   IconPhoto,
+  IconRefresh,
   IconTag,
+  IconTrash,
+  IconUpload,
   IconUsers,
+  IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
@@ -26,11 +41,29 @@ import {
   booksApi,
 } from "@/api/books";
 import {
-  type ImageInfo,
-  ImageUploader,
+  type ListItem,
   LockableInput,
+  LockableListEditor,
+  LockableSelect,
   LockableTextarea,
 } from "@/components/forms/lockable";
+import { extractSourceFromUrl } from "@/components/series/ExternalLinks";
+import type { components } from "@/types";
+
+type BookTypeDto = components["schemas"]["BookTypeDto"];
+
+const BOOK_TYPE_OPTIONS = [
+  { value: "comic", label: "Comic" },
+  { value: "manga", label: "Manga" },
+  { value: "novel", label: "Novel" },
+  { value: "novella", label: "Novella" },
+  { value: "anthology", label: "Anthology" },
+  { value: "artbook", label: "Artbook" },
+  { value: "oneshot", label: "Oneshot" },
+  { value: "omnibus", label: "Omnibus" },
+  { value: "graphic_novel", label: "Graphic Novel" },
+  { value: "magazine", label: "Magazine" },
+];
 
 export interface BookMetadataEditModalProps {
   opened: boolean;
@@ -43,14 +76,23 @@ interface FormState {
   // General
   title: string;
   number: string;
-  sortNumber: string;
   summary: string;
+  bookType: string | null;
+  subtitle: string;
   releaseYear: string;
   releaseMonth: string;
   releaseDay: string;
   isbn: string;
   volume: string;
   count: string;
+  // Publication
+  edition: string;
+  originalTitle: string;
+  originalYear: string;
+  seriesPosition: string;
+  seriesTotal: string;
+  translator: string;
+  subjects: string;
   // Authors
   writer: string;
   penciller: string;
@@ -68,12 +110,14 @@ interface FormState {
   // Flags
   blackAndWhite: boolean | null;
   manga: boolean | null;
-  // Link
-  web: string;
+  // Links
+  externalLinks: ListItem[];
 }
 
 interface LocksState {
   summary: boolean;
+  bookType: boolean;
+  subtitle: boolean;
   writer: boolean;
   penciller: boolean;
   inker: boolean;
@@ -84,7 +128,6 @@ interface LocksState {
   publisher: boolean;
   imprint: boolean;
   genre: boolean;
-  web: boolean;
   languageIso: boolean;
   formatDetail: boolean;
   blackAndWhite: boolean;
@@ -95,6 +138,17 @@ interface LocksState {
   volume: boolean;
   count: boolean;
   isbns: boolean;
+  edition: boolean;
+  originalTitle: boolean;
+  originalYear: boolean;
+  seriesPosition: boolean;
+  seriesTotal: boolean;
+  translator: boolean;
+  subjects: boolean;
+  authorsJson: boolean;
+  awardsJson: boolean;
+  customMetadata: boolean;
+  cover: boolean;
 }
 
 function initializeFormState(
@@ -104,14 +158,22 @@ function initializeFormState(
   return {
     title: detail?.book.title || "",
     number: detail?.book.number?.toString() || "",
-    sortNumber: "", // sortNumber is a form-only field, not from API
     summary: metadata?.summary || "",
-    releaseYear: "",
-    releaseMonth: "",
-    releaseDay: "",
-    isbn: "",
-    volume: "",
-    count: "",
+    bookType: metadata?.bookType || null,
+    subtitle: metadata?.subtitle || "",
+    releaseYear: metadata?.year?.toString() || "",
+    releaseMonth: metadata?.month?.toString() || "",
+    releaseDay: metadata?.day?.toString() || "",
+    isbn: metadata?.isbns || "",
+    volume: metadata?.volume?.toString() || "",
+    count: metadata?.count?.toString() || "",
+    edition: metadata?.edition || "",
+    originalTitle: metadata?.originalTitle || "",
+    originalYear: metadata?.originalYear?.toString() || "",
+    seriesPosition: metadata?.seriesPosition?.toString() || "",
+    seriesTotal: metadata?.seriesTotal?.toString() || "",
+    translator: metadata?.translator || "",
+    subjects: metadata?.subjects?.join(", ") || "",
     writer: metadata?.writers?.join(", ") || "",
     penciller: metadata?.pencillers?.join(", ") || "",
     inker: metadata?.inkers?.join(", ") || "",
@@ -123,10 +185,10 @@ function initializeFormState(
     imprint: metadata?.imprint || "",
     genre: metadata?.genre || "",
     languageIso: metadata?.languageIso || "",
-    formatDetail: "",
-    blackAndWhite: null,
-    manga: null,
-    web: "",
+    formatDetail: metadata?.formatDetail || "",
+    blackAndWhite: metadata?.blackAndWhite ?? null,
+    manga: metadata?.manga ?? null,
+    externalLinks: [],
   };
 }
 
@@ -135,6 +197,8 @@ function initializeLocksState(
 ): LocksState {
   return {
     summary: locks?.summaryLock || false,
+    bookType: locks?.bookTypeLock || false,
+    subtitle: locks?.subtitleLock || false,
     writer: locks?.writerLock || false,
     penciller: locks?.pencillerLock || false,
     inker: locks?.inkerLock || false,
@@ -145,7 +209,6 @@ function initializeLocksState(
     publisher: locks?.publisherLock || false,
     imprint: locks?.imprintLock || false,
     genre: locks?.genreLock || false,
-    web: locks?.webLock || false,
     languageIso: locks?.languageIsoLock || false,
     formatDetail: locks?.formatDetailLock || false,
     blackAndWhite: locks?.blackAndWhiteLock || false,
@@ -156,6 +219,17 @@ function initializeLocksState(
     volume: locks?.volumeLock || false,
     count: locks?.countLock || false,
     isbns: locks?.isbnsLock || false,
+    edition: locks?.editionLock || false,
+    originalTitle: locks?.originalTitleLock || false,
+    originalYear: locks?.originalYearLock || false,
+    seriesPosition: locks?.seriesPositionLock || false,
+    seriesTotal: locks?.seriesTotalLock || false,
+    translator: locks?.translatorLock || false,
+    subjects: locks?.subjectsLock || false,
+    authorsJson: locks?.authorsJsonLock || false,
+    awardsJson: locks?.awardsJsonLock || false,
+    customMetadata: locks?.customMetadataLock || false,
+    cover: locks?.coverLock || false,
   };
 }
 
@@ -176,7 +250,8 @@ export function BookMetadataEditModal({
   const [originalFormState, setOriginalFormState] = useState<FormState | null>(
     null,
   );
-  const [posterImage, setPosterImage] = useState<ImageInfo | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
 
   // Fetch book detail
   const { data: bookDetail, isLoading: isLoadingBook } = useQuery({
@@ -192,16 +267,38 @@ export function BookMetadataEditModal({
     enabled: opened,
   });
 
+  // Fetch external links
+  const { data: externalLinks } = useQuery({
+    queryKey: ["books", bookId, "external-links"],
+    queryFn: () => booksApi.listExternalLinks(bookId),
+    enabled: opened,
+  });
+
+  // Fetch existing covers
+  const { data: existingCovers, refetch: refetchCovers } = useQuery({
+    queryKey: ["books", bookId, "covers"],
+    queryFn: () => booksApi.listCovers(bookId),
+    enabled: opened,
+  });
+
   const isLoading = isLoadingBook || isLoadingLocks;
 
   // Initialize form state when data loads
   useEffect(() => {
     if (bookDetail) {
       const newFormState = initializeFormState(bookDetail);
+      // Populate external links if available
+      if (externalLinks) {
+        newFormState.externalLinks = externalLinks.map((l) => ({
+          id: l.id,
+          values: { label: l.sourceName, url: l.url },
+          locked: false,
+        }));
+      }
       setFormState(newFormState);
       setOriginalFormState(newFormState);
     }
-  }, [bookDetail]);
+  }, [bookDetail, externalLinks]);
 
   useEffect(() => {
     if (locks) {
@@ -224,6 +321,127 @@ export function BookMetadataEditModal({
     },
     [],
   );
+
+  // Upload cover mutation
+  const uploadCoverMutation = useMutation({
+    mutationFn: (file: File) => booksApi.uploadCover(bookId, file),
+    onSuccess: () => {
+      notifications.show({
+        title: "Success",
+        message: "Cover uploaded successfully",
+        color: "green",
+      });
+      refetchCovers();
+      if (uploadPreviewUrl) {
+        URL.revokeObjectURL(uploadPreviewUrl);
+        setUploadPreviewUrl(null);
+      }
+      setPendingUpload(null);
+    },
+    onError: (error: { message?: string }) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to upload cover",
+        color: "red",
+      });
+    },
+  });
+
+  // Select cover mutation
+  const selectCoverMutation = useMutation({
+    mutationFn: (coverId: string) => booksApi.selectCover(bookId, coverId),
+    onSuccess: () => {
+      notifications.show({
+        title: "Success",
+        message: "Cover selected",
+        color: "green",
+      });
+      refetchCovers();
+      queryClient.invalidateQueries({ queryKey: ["books", bookId] });
+    },
+    onError: (error: { message?: string }) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to select cover",
+        color: "red",
+      });
+    },
+  });
+
+  // Reset to default cover mutation
+  const resetCoverMutation = useMutation({
+    mutationFn: () => booksApi.resetCover(bookId),
+    onSuccess: () => {
+      notifications.show({
+        title: "Success",
+        message: "Reset to default cover",
+        color: "green",
+      });
+      refetchCovers();
+      queryClient.invalidateQueries({ queryKey: ["books", bookId] });
+    },
+    onError: (error: { message?: string }) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to reset cover",
+        color: "red",
+      });
+    },
+  });
+
+  // Delete cover mutation
+  const deleteCoverMutation = useMutation({
+    mutationFn: (coverId: string) => booksApi.deleteCover(bookId, coverId),
+    onSuccess: () => {
+      notifications.show({
+        title: "Success",
+        message: "Cover deleted",
+        color: "green",
+      });
+      refetchCovers();
+      queryClient.invalidateQueries({ queryKey: ["books", bookId] });
+    },
+    onError: (error: { message?: string }) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to delete cover",
+        color: "red",
+      });
+    },
+  });
+
+  // Cover upload handlers
+  const handleFileDrop = (files: File[]) => {
+    const file = files[0];
+    if (file) {
+      if (uploadPreviewUrl) {
+        URL.revokeObjectURL(uploadPreviewUrl);
+      }
+      setPendingUpload(file);
+      setUploadPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleUploadConfirm = () => {
+    if (pendingUpload) {
+      uploadCoverMutation.mutate(pendingUpload);
+    }
+  };
+
+  const handleUploadCancel = () => {
+    if (uploadPreviewUrl) {
+      URL.revokeObjectURL(uploadPreviewUrl);
+      setUploadPreviewUrl(null);
+    }
+    setPendingUpload(null);
+  };
+
+  const getCoverSourceLabel = (source: string): string => {
+    if (source === "upload") return "Custom Upload";
+    if (source.startsWith("plugin:")) return source.replace("plugin:", "");
+    if (source === "embedded") return "Embedded";
+    return source;
+  };
 
   // Save mutation
   const saveMutation = useMutation({
@@ -248,6 +466,8 @@ export function BookMetadataEditModal({
       // Update metadata
       await booksApi.patchMetadata(bookId, {
         summary: formState.summary || null,
+        bookType: (formState.bookType as BookTypeDto) || null,
+        subtitle: formState.subtitle || null,
         writer: formState.writer || null,
         penciller: formState.penciller || null,
         inker: formState.inker || null,
@@ -274,11 +494,56 @@ export function BookMetadataEditModal({
         volume: formState.volume ? Number.parseInt(formState.volume, 10) : null,
         count: formState.count ? Number.parseInt(formState.count, 10) : null,
         isbns: formState.isbn || null,
+        edition: formState.edition || null,
+        originalTitle: formState.originalTitle || null,
+        originalYear: formState.originalYear
+          ? Number.parseInt(formState.originalYear, 10)
+          : null,
+        seriesPosition: formState.seriesPosition
+          ? Number.parseFloat(formState.seriesPosition)
+          : null,
+        seriesTotal: formState.seriesTotal
+          ? Number.parseInt(formState.seriesTotal, 10)
+          : null,
+        translator: formState.translator || null,
+        subjects: formState.subjects
+          ? formState.subjects
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : null,
       });
+
+      // Handle external links changes
+      const currentSourceNames = new Set(
+        formState.externalLinks.map((l) => l.values.label.toLowerCase().trim()),
+      );
+
+      // Delete removed links (by source name from original)
+      for (const link of originalFormState?.externalLinks || []) {
+        const originalSource = link.values.label.toLowerCase().trim();
+        if (!currentSourceNames.has(originalSource)) {
+          await booksApi.deleteExternalLink(bookId, originalSource);
+        }
+      }
+
+      // Create/upsert new and modified links
+      for (const link of formState.externalLinks) {
+        const sourceName = link.values.label.trim();
+        const url = link.values.url.trim();
+        if (sourceName && url) {
+          await booksApi.createExternalLink(bookId, {
+            sourceName,
+            url,
+          });
+        }
+      }
 
       // Update locks
       await booksApi.updateMetadataLocks(bookId, {
         summaryLock: locksState.summary,
+        bookTypeLock: locksState.bookType,
+        subtitleLock: locksState.subtitle,
         writerLock: locksState.writer,
         pencillerLock: locksState.penciller,
         inkerLock: locksState.inker,
@@ -289,7 +554,6 @@ export function BookMetadataEditModal({
         publisherLock: locksState.publisher,
         imprintLock: locksState.imprint,
         genreLock: locksState.genre,
-        webLock: locksState.web,
         languageIsoLock: locksState.languageIso,
         formatDetailLock: locksState.formatDetail,
         blackAndWhiteLock: locksState.blackAndWhite,
@@ -300,12 +564,18 @@ export function BookMetadataEditModal({
         volumeLock: locksState.volume,
         countLock: locksState.count,
         isbnsLock: locksState.isbns,
+        editionLock: locksState.edition,
+        originalTitleLock: locksState.originalTitle,
+        originalYearLock: locksState.originalYear,
+        seriesPositionLock: locksState.seriesPosition,
+        seriesTotalLock: locksState.seriesTotal,
+        translatorLock: locksState.translator,
+        subjectsLock: locksState.subjects,
+        authorsJsonLock: locksState.authorsJson,
+        awardsJsonLock: locksState.awardsJson,
+        customMetadataLock: locksState.customMetadata,
+        coverLock: locksState.cover,
       });
-
-      // Upload cover image if selected
-      if (posterImage?.file) {
-        await booksApi.uploadCover(bookId, posterImage.file);
-      }
     },
     onSuccess: () => {
       notifications.show({
@@ -314,6 +584,9 @@ export function BookMetadataEditModal({
         color: "green",
       });
       queryClient.invalidateQueries({ queryKey: ["books", bookId] });
+      queryClient.invalidateQueries({
+        queryKey: ["books", bookId, "external-links"],
+      });
       onClose();
     },
     onError: (error: Error) => {
@@ -341,6 +614,28 @@ export function BookMetadataEditModal({
         originalValue={originalFormState?.title}
         placeholder="Book title"
         description="Display name for this book"
+      />
+
+      <LockableInput
+        label="Subtitle"
+        value={formState.subtitle}
+        onChange={(v) => updateField("subtitle", v)}
+        locked={locksState.subtitle}
+        onLockChange={(v) => updateLock("subtitle", v)}
+        originalValue={originalFormState?.subtitle}
+        placeholder="e.g., A Novel"
+      />
+
+      <LockableSelect
+        label="Book Type"
+        value={formState.bookType}
+        onChange={(v) => updateField("bookType", v)}
+        locked={locksState.bookType}
+        onLockChange={(v) => updateLock("bookType", v)}
+        originalValue={originalFormState?.bookType}
+        data={BOOK_TYPE_OPTIONS}
+        placeholder="Select book type"
+        clearable
       />
 
       <LockableInput
@@ -399,6 +694,75 @@ export function BookMetadataEditModal({
         />
       </Group>
 
+      <LockableInput
+        label="ISBN"
+        value={formState.isbn}
+        onChange={(v) => updateField("isbn", v)}
+        locked={locksState.isbns}
+        onLockChange={(v) => updateLock("isbns", v)}
+        originalValue={originalFormState?.isbn}
+        placeholder="978-..."
+      />
+    </Stack>
+  );
+
+  // Publication tab
+  const renderPublicationTab = () => (
+    <Stack gap="md">
+      <LockableInput
+        label="Edition"
+        value={formState.edition}
+        onChange={(v) => updateField("edition", v)}
+        locked={locksState.edition}
+        onLockChange={(v) => updateLock("edition", v)}
+        originalValue={originalFormState?.edition}
+        placeholder="e.g., First Edition, Revised"
+      />
+
+      <LockableInput
+        label="Original Title"
+        value={formState.originalTitle}
+        onChange={(v) => updateField("originalTitle", v)}
+        locked={locksState.originalTitle}
+        onLockChange={(v) => updateLock("originalTitle", v)}
+        originalValue={originalFormState?.originalTitle}
+        placeholder="Original title (for translated works)"
+      />
+
+      <LockableInput
+        label="Original Year"
+        value={formState.originalYear}
+        onChange={(v) => updateField("originalYear", v)}
+        locked={locksState.originalYear}
+        onLockChange={(v) => updateLock("originalYear", v)}
+        originalValue={originalFormState?.originalYear}
+        placeholder="YYYY"
+        type="number"
+      />
+
+      <Group grow>
+        <LockableInput
+          label="Series Position"
+          value={formState.seriesPosition}
+          onChange={(v) => updateField("seriesPosition", v)}
+          locked={locksState.seriesPosition}
+          onLockChange={(v) => updateLock("seriesPosition", v)}
+          originalValue={originalFormState?.seriesPosition}
+          placeholder="e.g., 1, 2.5"
+          description="Position in a series (decimals allowed)"
+        />
+        <LockableInput
+          label="Series Total"
+          value={formState.seriesTotal}
+          onChange={(v) => updateField("seriesTotal", v)}
+          locked={locksState.seriesTotal}
+          onLockChange={(v) => updateLock("seriesTotal", v)}
+          originalValue={originalFormState?.seriesTotal}
+          placeholder="Total books in series"
+          type="number"
+        />
+      </Group>
+
       <Group grow>
         <LockableInput
           label="Volume"
@@ -423,13 +787,13 @@ export function BookMetadataEditModal({
       </Group>
 
       <LockableInput
-        label="ISBN"
-        value={formState.isbn}
-        onChange={(v) => updateField("isbn", v)}
-        locked={locksState.isbns}
-        onLockChange={(v) => updateLock("isbns", v)}
-        originalValue={originalFormState?.isbn}
-        placeholder="978-..."
+        label="Translator"
+        value={formState.translator}
+        onChange={(v) => updateField("translator", v)}
+        locked={locksState.translator}
+        onLockChange={(v) => updateLock("translator", v)}
+        originalValue={originalFormState?.translator}
+        placeholder="Translator name"
       />
     </Stack>
   );
@@ -523,6 +887,17 @@ export function BookMetadataEditModal({
       />
 
       <LockableInput
+        label="Subjects"
+        value={formState.subjects}
+        onChange={(v) => updateField("subjects", v)}
+        locked={locksState.subjects}
+        onLockChange={(v) => updateLock("subjects", v)}
+        originalValue={originalFormState?.subjects}
+        placeholder="Comma-separated (e.g., Science Fiction, Space)"
+        description="Topic tags for classification"
+      />
+
+      <LockableInput
         label="Publisher"
         value={formState.publisher}
         onChange={(v) => updateField("publisher", v)}
@@ -582,14 +957,39 @@ export function BookMetadataEditModal({
   // Links tab
   const renderLinksTab = () => (
     <Stack gap="md">
-      <LockableInput
-        label="Web URL"
-        value={formState.web}
-        onChange={(v) => updateField("web", v)}
-        locked={locksState.web}
-        onLockChange={(v) => updateLock("web", v)}
-        originalValue={originalFormState?.web}
-        placeholder="https://..."
+      <Text size="sm" c="dimmed">
+        Add external links to other sites (e.g., Open Library, Goodreads,
+        Amazon).
+      </Text>
+
+      <LockableListEditor
+        items={formState.externalLinks}
+        onChange={(items) => updateField("externalLinks", items)}
+        fields={[
+          {
+            key: "label",
+            label: "Site Name",
+            placeholder: "e.g., openlibrary",
+            flex: 1,
+          },
+          {
+            key: "url",
+            label: "URL",
+            placeholder: "https://...",
+            flex: 2,
+          },
+        ]}
+        originalItems={originalFormState?.externalLinks}
+        addButtonLabel="Add Link"
+        generateId={() => `new-${crypto.randomUUID()}`}
+        deriveValues={(fieldKey, value, currentValues) => {
+          // Auto-fill site name when a URL is pasted/typed and label is empty
+          if (fieldKey === "url" && !currentValues.label) {
+            const source = extractSourceFromUrl(value);
+            if (source) return { label: source };
+          }
+          return undefined;
+        }}
       />
     </Stack>
   );
@@ -598,15 +998,219 @@ export function BookMetadataEditModal({
   const renderPosterTab = () => (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Upload a custom cover image for this book.
+        Upload custom cover images or select from existing covers.
       </Text>
 
-      <ImageUploader
-        value={posterImage}
-        onChange={setPosterImage}
-        label="Upload cover image - drag and drop"
+      {/* Cover lock toggle */}
+      <Group gap="xs">
+        <Tooltip
+          label={
+            locksState.cover
+              ? "Locked: Cover selection protected from automatic updates"
+              : "Unlocked: Cover can be changed by plugins"
+          }
+          position="right"
+        >
+          <ActionIcon
+            variant="subtle"
+            color={locksState.cover ? "orange" : "gray"}
+            onClick={() => updateLock("cover", !locksState.cover)}
+            aria-label={locksState.cover ? "Unlock cover" : "Lock cover"}
+          >
+            {locksState.cover ? (
+              <IconLock size={18} />
+            ) : (
+              <IconLockOpen size={18} />
+            )}
+          </ActionIcon>
+        </Tooltip>
+        <Text size="sm" c={locksState.cover ? "orange" : "dimmed"}>
+          {locksState.cover
+            ? "Cover selection locked"
+            : "Cover selection unlocked"}
+        </Text>
+      </Group>
+
+      {/* Upload dropzone */}
+      <Dropzone
+        onDrop={handleFileDrop}
+        onReject={() =>
+          notifications.show({
+            title: "Error",
+            message: "Invalid file type. Please upload an image.",
+            color: "red",
+          })
+        }
         maxSize={10 * 1024 * 1024}
-      />
+        accept={IMAGE_MIME_TYPE}
+        multiple={false}
+        disabled={uploadCoverMutation.isPending}
+      >
+        <Group
+          justify="center"
+          gap="xl"
+          mih={100}
+          style={{ pointerEvents: "none" }}
+        >
+          <Dropzone.Accept>
+            <IconUpload size={40} stroke={1.5} />
+          </Dropzone.Accept>
+          <Dropzone.Reject>
+            <IconX size={40} stroke={1.5} />
+          </Dropzone.Reject>
+          <Dropzone.Idle>
+            <IconPhoto size={40} stroke={1.5} />
+          </Dropzone.Idle>
+
+          <Box>
+            <Text size="md" inline>
+              Drop image here or click to upload
+            </Text>
+            <Text size="sm" c="dimmed" inline mt={7}>
+              Max file size: 10MB
+            </Text>
+          </Box>
+        </Group>
+      </Dropzone>
+
+      {/* Pending upload preview */}
+      {pendingUpload && uploadPreviewUrl && (
+        <Card withBorder p="md">
+          <Group wrap="nowrap" align="flex-start">
+            <Image
+              src={uploadPreviewUrl}
+              alt="Upload preview"
+              w={80}
+              h={120}
+              fit="contain"
+              radius="sm"
+            />
+            <Stack gap="xs" style={{ flex: 1 }}>
+              <Text size="sm" fw={500}>
+                Ready to upload
+              </Text>
+              <Text size="sm" c="dimmed">
+                {pendingUpload.name}
+              </Text>
+            </Stack>
+            <Group gap="xs">
+              <Tooltip label="Upload">
+                <ActionIcon
+                  variant="filled"
+                  color="green"
+                  onClick={handleUploadConfirm}
+                  loading={uploadCoverMutation.isPending}
+                  aria-label="Confirm upload"
+                >
+                  <IconCheck size={18} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Cancel">
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  onClick={handleUploadCancel}
+                  aria-label="Cancel upload"
+                >
+                  <IconX size={18} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          </Group>
+        </Card>
+      )}
+
+      {/* Reset to default button */}
+      {existingCovers?.some((c) => c.isSelected) && (
+        <Button
+          variant="light"
+          color="gray"
+          leftSection={<IconRefresh size={16} />}
+          onClick={() => resetCoverMutation.mutate()}
+          loading={resetCoverMutation.isPending}
+        >
+          Reset to Default Cover
+        </Button>
+      )}
+
+      {/* Existing covers grid */}
+      {existingCovers && existingCovers.length > 0 && (
+        <>
+          <Group justify="space-between" mt="md">
+            <Text size="sm" fw={500}>
+              Available Covers
+            </Text>
+            {!existingCovers?.some((c) => c.isSelected) && (
+              <Text size="xs" c="dimmed">
+                Using default (embedded cover)
+              </Text>
+            )}
+          </Group>
+          <SimpleGrid cols={4} spacing="md">
+            {existingCovers.map((cover) => (
+              <Card
+                key={cover.id}
+                withBorder
+                p="xs"
+                style={{
+                  cursor: "pointer",
+                  borderColor: cover.isSelected
+                    ? "var(--mantine-color-blue-6)"
+                    : undefined,
+                  borderWidth: cover.isSelected ? 2 : 1,
+                }}
+                onClick={() => {
+                  if (!cover.isSelected) {
+                    selectCoverMutation.mutate(cover.id);
+                  }
+                }}
+              >
+                <Card.Section>
+                  <Image
+                    src={booksApi.getCoverImageUrl(bookId, cover.id)}
+                    alt="Cover"
+                    h={150}
+                    fit="contain"
+                  />
+                </Card.Section>
+                <Group justify="space-between" mt="xs" wrap="nowrap">
+                  <Stack gap={2}>
+                    <Text size="xs" c="dimmed" truncate>
+                      {getCoverSourceLabel(cover.source)}
+                    </Text>
+                    {cover.isSelected && (
+                      <Text size="xs" c="blue" fw={500}>
+                        Selected
+                      </Text>
+                    )}
+                  </Stack>
+                  <Tooltip label="Delete cover">
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        deleteCoverMutation.mutate(cover.id);
+                      }}
+                      loading={deleteCoverMutation.isPending}
+                      aria-label="Delete cover"
+                    >
+                      <IconTrash size={14} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              </Card>
+            ))}
+          </SimpleGrid>
+        </>
+      )}
+
+      {existingCovers && existingCovers.length === 0 && (
+        <Text size="sm" c="dimmed" ta="center" py="xl">
+          No covers uploaded yet. Upload an image above.
+        </Text>
+      )}
     </Stack>
   );
 
@@ -620,7 +1224,8 @@ export function BookMetadataEditModal({
           <Text fw={500}>Edit {bookTitle || "Book"}</Text>
         </Group>
       }
-      size="lg"
+      size={800}
+      styles={{ content: { width: 800 } }}
       centered
       zIndex={1000}
       overlayProps={{
@@ -639,6 +1244,12 @@ export function BookMetadataEditModal({
               <Tabs.Tab value="general" leftSection={<IconList size={16} />}>
                 General
               </Tabs.Tab>
+              <Tabs.Tab
+                value="publication"
+                leftSection={<IconBook size={16} />}
+              >
+                Publication
+              </Tabs.Tab>
               <Tabs.Tab value="authors" leftSection={<IconUsers size={16} />}>
                 Authors
               </Tabs.Tab>
@@ -655,6 +1266,10 @@ export function BookMetadataEditModal({
 
             <Tabs.Panel value="general" pt="md">
               {renderGeneralTab()}
+            </Tabs.Panel>
+
+            <Tabs.Panel value="publication" pt="md">
+              {renderPublicationTab()}
             </Tabs.Panel>
 
             <Tabs.Panel value="authors" pt="md">

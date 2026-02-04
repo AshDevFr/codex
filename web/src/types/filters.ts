@@ -78,7 +78,8 @@ export type BookCondition =
   | { tag: FieldOperator }
   | { title: FieldOperator }
   | { readStatus: FieldOperator }
-  | { hasError: BoolOperator };
+  | { hasError: BoolOperator }
+  | { bookType: FieldOperator };
 
 // =============================================================================
 // Request types (matches backend SeriesListRequest/BookListRequest)
@@ -142,6 +143,7 @@ export interface BookFilterState {
   genres: FilterGroupState;
   tags: FilterGroupState;
   readStatus: FilterGroupState;
+  bookType: FilterGroupState;
   hasError: TriState;
 }
 
@@ -184,6 +186,7 @@ export function createEmptyBookFilterState(): BookFilterState {
     genres: createEmptyFilterGroup(),
     tags: createEmptyFilterGroup(),
     readStatus: createEmptyFilterGroup(),
+    bookType: createEmptyFilterGroup(),
     hasError: "neutral",
   };
 }
@@ -345,7 +348,7 @@ export function seriesFilterStateToCondition(
  * Convert a book filter group to API conditions
  */
 export function bookFilterGroupToConditions<
-  T extends "genre" | "tag" | "readStatus",
+  T extends "genre" | "tag" | "readStatus" | "bookType",
 >(group: FilterGroupState, field: T): BookCondition[] {
   const includes = getIncludedValues(group);
   const excludes = getExcludedValues(group);
@@ -398,6 +401,11 @@ export function bookFilterStateToCondition(
     ...bookFilterGroupToConditions(state.readStatus, "readStatus"),
   );
 
+  // Add book type conditions
+  allConditions.push(
+    ...bookFilterGroupToConditions(state.bookType, "bookType"),
+  );
+
   // Add hasError condition
   if (state.hasError === "include") {
     allConditions.push({ hasError: { operator: "isTrue" } });
@@ -423,6 +431,7 @@ export function countBookActiveFilters(state: BookFilterState): number {
   count += countActiveFilters(state.genres);
   count += countActiveFilters(state.tags);
   count += countActiveFilters(state.readStatus);
+  count += countActiveFilters(state.bookType);
   if (state.hasError !== "neutral") count++;
   return count;
 }
@@ -600,6 +609,7 @@ export const BOOK_FILTER_PARAM_KEYS = {
   genres: "bgf",
   tags: "btf",
   readStatus: "brf",
+  bookType: "bbt",
   hasError: "bef",
 } as const;
 
@@ -619,6 +629,9 @@ export function serializeBookFilters(state: BookFilterState): URLSearchParams {
   if (readStatusParam)
     params.set(BOOK_FILTER_PARAM_KEYS.readStatus, readStatusParam);
 
+  const bookTypeParam = serializeFilterGroup(state.bookType);
+  if (bookTypeParam) params.set(BOOK_FILTER_PARAM_KEYS.bookType, bookTypeParam);
+
   if (state.hasError !== "neutral") {
     params.set(BOOK_FILTER_PARAM_KEYS.hasError, state.hasError);
   }
@@ -635,6 +648,7 @@ export function parseBookFilters(params: URLSearchParams): BookFilterState {
     genres: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.genres)),
     tags: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.tags)),
     readStatus: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.readStatus)),
+    bookType: parseFilterGroup(params.get(BOOK_FILTER_PARAM_KEYS.bookType)),
     hasError:
       hasErrorParam === "include" || hasErrorParam === "exclude"
         ? hasErrorParam

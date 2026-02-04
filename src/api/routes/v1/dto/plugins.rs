@@ -140,6 +140,12 @@ pub struct PluginDto {
     /// Whether to skip search when external ID exists for this plugin
     #[schema(example = true)]
     pub use_existing_external_id: bool,
+
+    /// Metadata targets: which resource types this plugin auto-matches against
+    /// null = auto-detect from plugin capabilities
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = json!(["series", "book"]))]
+    pub metadata_targets: Option<Vec<String>>,
 }
 
 impl From<plugins::Model> for PluginDto {
@@ -195,6 +201,9 @@ impl From<plugins::Model> for PluginDto {
                 .auto_match_conditions
                 .and_then(|s| serde_json::from_str(&s).ok()),
             use_existing_external_id: model.use_existing_external_id,
+            metadata_targets: model
+                .metadata_targets
+                .and_then(|s| serde_json::from_str(&s).ok()),
         }
     }
 }
@@ -491,6 +500,12 @@ pub struct CreatePluginRequest {
     #[serde(default = "default_use_existing_external_id")]
     #[schema(example = true)]
     pub use_existing_external_id: bool,
+
+    /// Metadata targets: which resource types this plugin auto-matches against
+    /// null = auto-detect from plugin capabilities
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(example = json!(["book"]))]
+    pub metadata_targets: Option<Vec<String>>,
 }
 
 fn default_use_existing_external_id() -> bool {
@@ -593,6 +608,15 @@ pub struct UpdatePluginRequest {
     /// Whether to skip search when external ID exists for this plugin
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_existing_external_id: Option<bool>,
+
+    /// Metadata targets: which resource types this plugin auto-matches against
+    /// null = clear to auto-detect from plugin capabilities
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_nullable"
+    )]
+    pub metadata_targets: Option<serde_json::Value>,
 }
 
 // =============================================================================
@@ -790,6 +814,8 @@ fn scope_to_string(scope: &PluginScope) -> String {
     match scope {
         PluginScope::SeriesDetail => "series:detail".to_string(),
         PluginScope::SeriesBulk => "series:bulk".to_string(),
+        PluginScope::BookDetail => "book:detail".to_string(),
+        PluginScope::BookBulk => "book:bulk".to_string(),
         PluginScope::LibraryDetail => "library:detail".to_string(),
         PluginScope::LibraryScan => "library:scan".to_string(),
     }
@@ -799,8 +825,7 @@ fn scope_to_string(scope: &PluginScope) -> String {
 fn content_type_to_string(ct: &MetadataContentType) -> String {
     match ct {
         MetadataContentType::Series => "series".to_string(),
-        // TODO: Add Book case when book metadata is implemented
-        // MetadataContentType::Book => "book".to_string(),
+        MetadataContentType::Book => "book".to_string(),
     }
 }
 
@@ -809,6 +834,8 @@ pub fn parse_scope(s: &str) -> Option<PluginScope> {
     match s {
         "series:detail" => Some(PluginScope::SeriesDetail),
         "series:bulk" => Some(PluginScope::SeriesBulk),
+        "book:detail" => Some(PluginScope::BookDetail),
+        "book:bulk" => Some(PluginScope::BookBulk),
         "library:detail" => Some(PluginScope::LibraryDetail),
         "library:scan" => Some(PluginScope::LibraryScan),
         _ => None,
@@ -823,7 +850,9 @@ pub fn parse_permission(s: &str) -> Option<PluginPermission> {
 /// Available plugin permissions for documentation/validation
 pub fn available_permissions() -> Vec<&'static str> {
     vec![
+        // Read permissions
         "metadata:read",
+        // Common write permissions (series + books)
         "metadata:write:title",
         "metadata:write:summary",
         "metadata:write:genres",
@@ -837,7 +866,23 @@ pub fn available_permissions() -> Vec<&'static str> {
         "metadata:write:age_rating",
         "metadata:write:language",
         "metadata:write:reading_direction",
+        "metadata:write:total_book_count",
+        // Book-specific write permissions
+        "metadata:write:book_type",
+        "metadata:write:subtitle",
+        "metadata:write:authors",
+        "metadata:write:translator",
+        "metadata:write:edition",
+        "metadata:write:original_title",
+        "metadata:write:original_year",
+        "metadata:write:series_position",
+        "metadata:write:subjects",
+        "metadata:write:awards",
+        "metadata:write:custom_metadata",
+        "metadata:write:isbn",
+        // Wildcard
         "metadata:write:*",
+        // Library
         "library:read",
     ]
 }
@@ -847,6 +892,8 @@ pub fn available_scopes() -> Vec<&'static str> {
     vec![
         "series:detail",
         "series:bulk",
+        "book:detail",
+        "book:bulk",
         "library:detail",
         "library:scan",
     ]
@@ -1002,7 +1049,7 @@ pub struct PluginSearchResultDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResultPreviewDto {
-    /// Status string
+    /// Status string (series search results)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
 
@@ -1021,6 +1068,10 @@ pub struct SearchResultPreviewDto {
     /// Number of books in the series (if known by the provider)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub book_count: Option<i32>,
+
+    /// Author names (book search results)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
 }
 
 /// Response containing search results from a plugin
@@ -1303,6 +1354,7 @@ impl From<crate::services::plugin::protocol::SearchResultPreview> for SearchResu
             rating: p.rating,
             description: p.description,
             book_count: p.book_count,
+            authors: p.authors,
         }
     }
 }

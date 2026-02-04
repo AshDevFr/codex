@@ -22,6 +22,9 @@ use std::sync::Arc;
 /// - Pages: /books/:id/pages/:page_number
 /// - Progress: /books/:id/progress, /books/:id/read, /books/:id/unread
 /// - Files: /books/:id/file, /books/:id/thumbnail
+/// - External IDs: /books/:id/external-ids
+/// - External Links: /books/:id/external-links
+/// - Covers: /books/:id/covers, /books/:id/covers/:cover_id
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // Book CRUD routes
@@ -39,6 +42,50 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::get_book_thumbnail),
         )
         .route("/books/:book_id/cover", post(handlers::upload_book_cover))
+        // Book external IDs routes
+        .route(
+            "/books/:book_id/external-ids",
+            get(handlers::list_book_external_ids),
+        )
+        .route(
+            "/books/:book_id/external-ids",
+            post(handlers::create_book_external_id),
+        )
+        .route(
+            "/books/:book_id/external-ids/:external_id_id",
+            delete(handlers::delete_book_external_id),
+        )
+        // Book external links routes
+        .route(
+            "/books/:book_id/external-links",
+            get(handlers::list_book_external_links),
+        )
+        .route(
+            "/books/:book_id/external-links",
+            post(handlers::create_book_external_link),
+        )
+        .route(
+            "/books/:book_id/external-links/:source",
+            delete(handlers::delete_book_external_link),
+        )
+        // Book covers management routes
+        .route("/books/:book_id/covers", get(handlers::list_book_covers))
+        .route(
+            "/books/:book_id/covers/selected",
+            delete(handlers::reset_book_cover),
+        )
+        .route(
+            "/books/:book_id/covers/:cover_id/select",
+            put(handlers::select_book_cover),
+        )
+        .route(
+            "/books/:book_id/covers/:cover_id/image",
+            get(handlers::get_book_cover_image),
+        )
+        .route(
+            "/books/:book_id/covers/:cover_id",
+            delete(handlers::delete_book_cover),
+        )
         // Book analysis routes
         .route(
             "/books/:book_id/analyze",
@@ -65,6 +112,15 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/books/:book_id/metadata/locks",
             put(handlers::update_book_metadata_locks),
+        )
+        // Book metadata plugin routes
+        .route(
+            "/books/:book_id/metadata/preview",
+            post(handlers::plugin_actions::preview_book_metadata),
+        )
+        .route(
+            "/books/:book_id/metadata/apply",
+            post(handlers::plugin_actions::apply_book_metadata),
         )
         // Book collection routes
         .route("/books/in-progress", get(handlers::list_in_progress_books))

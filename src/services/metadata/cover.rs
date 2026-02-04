@@ -9,7 +9,9 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::db::repositories::{SeriesCoversRepository, SeriesRepository, TaskRepository};
+use crate::db::repositories::{
+    BookCoversRepository, SeriesCoversRepository, SeriesRepository, TaskRepository,
+};
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 use crate::services::ThumbnailService;
 use crate::tasks::types::TaskType;
@@ -77,7 +79,10 @@ impl CoverService {
         let short_hash = &image_hash[..16];
 
         // Create covers directory within uploads dir if it doesn't exist
-        let covers_dir = thumbnail_service.get_uploads_dir().join("covers");
+        let covers_dir = thumbnail_service
+            .get_uploads_dir()
+            .join("covers")
+            .join("series");
         fs::create_dir_all(&covers_dir)
             .await
             .context("Failed to create covers directory")?;
@@ -127,6 +132,115 @@ impl CoverService {
         Ok(())
     }
 
+    /// Download a cover from URL and apply it to a book.
+    ///
+    /// Mirrors the series cover flow but uses `BookCoversRepository`.
+    /// If a cover from this plugin already exists, it will be replaced.
+    /// If `cover_locked` is true, the cover is saved but not auto-selected.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn download_and_apply_book_cover(
+        db: &DatabaseConnection,
+        thumbnail_service: &ThumbnailService,
+        book_id: Uuid,
+        library_id: Uuid,
+        cover_url: &str,
+        plugin_name: &str,
+        cover_locked: bool,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<()> {
+        use tokio::fs;
+        use tokio::io::AsyncWriteExt;
+
+        // Check if a cover from this plugin already exists for this book
+        let source = format!("plugin:{}", plugin_name);
+        let existing_cover = BookCoversRepository::get_by_source(db, book_id, &source).await?;
+
+        // Delete existing cover from this plugin if present
+        if let Some(existing) = existing_cover {
+            if let Err(e) = fs::remove_file(&existing.path).await {
+                warn!(
+                    "Failed to delete old book cover file {}: {}",
+                    existing.path, e
+                );
+            }
+            BookCoversRepository::delete(db, existing.id).await?;
+        }
+
+        // Download the image using reqwest
+        let response = reqwest::get(cover_url)
+            .await
+            .context("Failed to download book cover")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to download book cover: HTTP {}", response.status());
+        }
+
+        let image_data = response
+            .bytes()
+            .await
+            .context("Failed to read book cover data")?
+            .to_vec();
+
+        // Validate that it's a valid image
+        image::load_from_memory(&image_data).context("Invalid image file")?;
+
+        // Compute hash of image data for deduplication
+        let image_hash = crate::utils::hasher::hash_bytes(&image_data);
+        let short_hash = &image_hash[..16];
+
+        // Create covers directory within uploads dir if it doesn't exist
+        let covers_dir = thumbnail_service
+            .get_uploads_dir()
+            .join("covers")
+            .join("books");
+        fs::create_dir_all(&covers_dir)
+            .await
+            .context("Failed to create book covers directory")?;
+
+        // Use book_id and image hash for filename
+        let filename = format!("{}-{}.jpg", book_id, short_hash);
+        let filepath = covers_dir.join(&filename);
+
+        // Write the image file
+        let mut file = fs::File::create(&filepath)
+            .await
+            .context("Failed to create book cover file")?;
+
+        file.write_all(&image_data)
+            .await
+            .context("Failed to write book cover file")?;
+
+        // Create a new cover with source = "plugin:{plugin_name}"
+        let should_select = !cover_locked;
+        BookCoversRepository::create(
+            db,
+            book_id,
+            &source,
+            &filepath.to_string_lossy(),
+            should_select,
+            None,
+            None,
+        )
+        .await
+        .context("Failed to create book cover record")?;
+
+        // Only regenerate thumbnail and emit event if the cover was actually selected
+        if should_select {
+            // Queue book thumbnail regeneration task
+            Self::queue_book_thumbnail_regeneration(db, thumbnail_service, book_id).await;
+
+            // Emit CoverUpdated event for real-time UI updates
+            Self::emit_cover_updated_event_for_entity(
+                event_broadcaster,
+                EntityType::Book,
+                book_id,
+                library_id,
+            );
+        }
+
+        Ok(())
+    }
+
     /// Queue a task to regenerate the series thumbnail.
     async fn queue_thumbnail_regeneration(
         db: &DatabaseConnection,
@@ -154,17 +268,51 @@ impl CoverService {
         }
     }
 
+    /// Queue a task to regenerate a book thumbnail.
+    async fn queue_book_thumbnail_regeneration(
+        db: &DatabaseConnection,
+        _thumbnail_service: &ThumbnailService,
+        book_id: Uuid,
+    ) {
+        // Queue regeneration task for the book
+        let task_type = TaskType::GenerateThumbnail {
+            book_id,
+            force: true,
+        };
+        if let Err(e) = TaskRepository::enqueue(db, task_type, 0, None).await {
+            warn!(
+                "Failed to queue book thumbnail regeneration task for {}: {}",
+                book_id, e
+            );
+        }
+    }
+
     /// Emit a CoverUpdated event for real-time UI updates.
     fn emit_cover_updated_event(
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
         series_id: Uuid,
         library_id: Uuid,
     ) {
+        Self::emit_cover_updated_event_for_entity(
+            event_broadcaster,
+            EntityType::Series,
+            series_id,
+            library_id,
+        );
+    }
+
+    /// Emit a CoverUpdated event for any entity type.
+    fn emit_cover_updated_event_for_entity(
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+        entity_type: EntityType,
+        entity_id: Uuid,
+        library_id: Uuid,
+    ) {
         if let Some(broadcaster) = event_broadcaster {
             let event = EntityChangeEvent {
                 event: EntityEvent::CoverUpdated {
-                    entity_type: EntityType::Series,
-                    entity_id: series_id,
+                    entity_type,
+                    entity_id,
                     library_id: Some(library_id),
                 },
                 timestamp: Utc::now(),

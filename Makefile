@@ -241,7 +241,7 @@ frontend-lint-fix: ## Run frontend lint with auto-fix
 # Plugin Development
 # =============================================================================
 
-PLUGIN_DIRS := sdk-typescript metadata-echo metadata-mangabaka
+PLUGIN_DIRS := sdk-typescript metadata-echo metadata-mangabaka metadata-openlibrary
 
 plugins-install: ## Install dependencies for all plugins
 	@echo "$(BLUE)Installing plugin dependencies...$(NC)"
@@ -253,12 +253,10 @@ plugins-install: ## Install dependencies for all plugins
 
 plugins-build: ## Build all plugins
 	@echo "$(BLUE)Building plugins...$(NC)"
-	@echo "$(YELLOW)Building sdk-typescript...$(NC)"
-	@cd plugins/sdk-typescript && npm run build
-	@echo "$(YELLOW)Building metadata-echo...$(NC)"
-	@cd plugins/metadata-echo && npm run build
-	@echo "$(YELLOW)Building metadata-mangabaka...$(NC)"
-	@cd plugins/metadata-mangabaka && npm run build
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Building $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm run build); \
+	done
 	@echo "$(GREEN)All plugins built!$(NC)"
 
 plugins-lint: ## Run lint on all plugins
@@ -530,17 +528,11 @@ release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0
 	@cd web && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
 	@echo "$(GREEN)✓$(NC) web/package.json version set to $(VERSION)"
 
-	@# Update plugins/sdk-typescript/package.json version
-	@cd plugins/sdk-typescript && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
-	@echo "$(GREEN)✓$(NC) plugins/sdk-typescript/package.json version set to $(VERSION)"
-
-	@# Update plugins/metadata-echo/package.json version
-	@cd plugins/metadata-echo && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
-	@echo "$(GREEN)✓$(NC) plugins/metadata-echo/package.json version set to $(VERSION)"
-
-	@# Update plugins/metadata-mangabaka/package.json version
-	@cd plugins/metadata-mangabaka && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
-	@echo "$(GREEN)✓$(NC) plugins/metadata-mangabaka/package.json version set to $(VERSION)"
+	@for dir in $(PLUGIN_DIRS); do \
+		@echo "$(YELLOW)Building $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1); \
+		echo "$(GREEN)✓$(NC) plugins/$$dir/package.json version set to $(VERSION)"; \
+	done
 
 	@# Update docs/package.json version
 	@cd docs && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1

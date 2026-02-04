@@ -37,6 +37,23 @@ Filter by series publication status:
 | **Ended** | Series is complete |
 | **Hiatus** | Series is on hold |
 
+#### Book Type (Books)
+
+Filter books by their type classification:
+
+| Type | Description |
+|------|-------------|
+| **Comic** | Western comic books |
+| **Manga** | Japanese manga |
+| **Novel** | Full-length novels |
+| **Novella** | Short novels |
+| **Anthology** | Story collections |
+| **Artbook** | Art collections |
+| **Oneshot** | Single standalone issues |
+| **Omnibus** | Combined volumes |
+| **Graphic Novel** | Graphic novels |
+| **Magazine** | Magazines and periodicals |
+
 #### Genres & Tags
 
 Filter by genres and tags extracted from your media metadata (ComicInfo.xml, EPUB metadata).
@@ -75,6 +92,7 @@ Parameters:
 - `tf`: Tag filter
 - `sf`: Status filter
 - `rf`: Read status filter
+- `bbt`: Book type filter (books only)
 
 ## Advanced Filtering (API)
 
@@ -137,6 +155,7 @@ Filters use a tree structure with combinators:
 | `title` | Book title | `is`, `isNot`, `contains` |
 | `readStatus` | Reading status | `is`, `isNot` |
 | `hasError` | Has parsing error | `isTrue`, `isFalse` |
+| `bookType` | Book type classification | `is`, `isNot`, `isNull`, `isNotNull` |
 
 ## Example Queries
 
@@ -229,6 +248,28 @@ Ongoing Action series with Favorite tag:
       { "genre": { "operator": "is", "value": "Action" } },
       { "tag": { "operator": "is", "value": "Favorite" } }
     ]
+  }
+}
+```
+
+### Book Type Filter
+
+Find all manga books:
+
+```json
+{
+  "condition": {
+    "bookType": { "operator": "is", "value": "manga" }
+  }
+}
+```
+
+Find books without a type classification:
+
+```json
+{
+  "condition": {
+    "bookType": { "operator": "isNull" }
   }
 }
 ```

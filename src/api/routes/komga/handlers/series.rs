@@ -844,7 +844,6 @@ async fn build_series_dto(
         metadata: series_metadata,
         books_metadata,
         deleted: false,
-        oneshot: book_count == 1,
     })
 }
 

@@ -1427,6 +1427,10 @@ impl FilterService {
                 BookCondition::HasError { has_error } => {
                     Self::filter_books_by_error(db, has_error, candidate_ids).await
                 }
+
+                BookCondition::BookType { book_type } => {
+                    Self::filter_books_by_book_type(db, book_type, candidate_ids).await
+                }
             }
         })
     }
@@ -1822,6 +1826,59 @@ impl FilterService {
         } else {
             book_ids.into_iter().collect()
         };
+
+        Ok(result)
+    }
+
+    async fn filter_books_by_book_type(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = book_metadata::Entity::find();
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => {
+                query.filter(book_metadata::Column::BookType.eq(value.clone()))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(book_metadata::Column::BookType.ne(value.clone()))
+            }
+            FieldOperator::IsNull => query.filter(book_metadata::Column::BookType.is_null()),
+            FieldOperator::IsNotNull => query.filter(book_metadata::Column::BookType.is_not_null()),
+            FieldOperator::Contains { value } => {
+                query.filter(book_metadata::Column::BookType.contains(value.as_str()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(book_metadata::Column::BookType.not_like(format!("%{value}%")))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(book_metadata::Column::BookType.starts_with(value.as_str()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(book_metadata::Column::BookType.ends_with(value.as_str()))
+            }
+        };
+
+        let mut book_ids_query = filtered_query
+            .select_only()
+            .column(book_metadata::Column::BookId);
+
+        if let Some(candidates) = candidate_ids {
+            let candidate_vec: Vec<Uuid> = candidates.iter().cloned().collect();
+            book_ids_query =
+                book_ids_query.filter(book_metadata::Column::BookId.is_in(candidate_vec));
+        }
+
+        let result: HashSet<Uuid> = book_ids_query
+            .into_tuple()
+            .all(db)
+            .await?
+            .into_iter()
+            .collect();
 
         Ok(result)
     }

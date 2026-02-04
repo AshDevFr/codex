@@ -18,11 +18,14 @@
  */
 
 import type {
+  BookMatchParams,
+  BookSearchParams,
   MetadataGetParams,
   MetadataMatchParams,
   MetadataMatchResponse,
   MetadataSearchParams,
   MetadataSearchResponse,
+  PluginBookMetadata,
   PluginSeriesMetadata,
 } from "./protocol.js";
 
@@ -41,21 +44,16 @@ export type MetadataContentType = "series" | "book";
 // =============================================================================
 
 /**
- * Interface for plugins that provide metadata.
+ * Interface for plugins that provide series metadata.
  *
  * Plugins implementing this capability can:
- * - Search for content by query
+ * - Search for series by query
  * - Get full metadata by external ID
- * - Optionally match existing content to provider entries
- *
- * The same interface is used for both series and book metadata.
- * The content type is determined by the method being called:
- * - metadata/series/search -> provider.search()
- * - metadata/book/search -> provider.search() (when book support is added)
+ * - Optionally match existing series to provider entries
  */
 export interface MetadataProvider {
   /**
-   * Search for content matching a query
+   * Search for series matching a query
    *
    * @param params - Search parameters
    * @returns Search results with relevance scores
@@ -66,7 +64,7 @@ export interface MetadataProvider {
    * Get full metadata for a specific external ID
    *
    * @param params - Get parameters including external ID
-   * @returns Full metadata
+   * @returns Full series metadata
    */
   get(params: MetadataGetParams): Promise<PluginSeriesMetadata>;
 
@@ -80,6 +78,44 @@ export interface MetadataProvider {
    * @returns Best match with confidence score
    */
   match?(params: MetadataMatchParams): Promise<MetadataMatchResponse>;
+}
+
+/**
+ * Interface for plugins that provide book metadata.
+ *
+ * Plugins implementing this capability can:
+ * - Search for books by ISBN or title/author
+ * - Get full metadata by external ID
+ * - Optionally match existing books to provider entries
+ */
+export interface BookMetadataProvider {
+  /**
+   * Search for books matching a query or ISBN
+   *
+   * @param params - Search parameters (isbn, query, author, year)
+   * @returns Search results with relevance scores
+   */
+  search(params: BookSearchParams): Promise<MetadataSearchResponse>;
+
+  /**
+   * Get full book metadata for a specific external ID
+   *
+   * @param params - Get parameters including external ID
+   * @returns Full book metadata
+   */
+  get(params: MetadataGetParams): Promise<PluginBookMetadata>;
+
+  /**
+   * Find the best match for an existing book (optional)
+   *
+   * This is used for auto-matching during library scans.
+   * ISBN matching is tried first if provided, then title/author fallback.
+   * If not implemented, Codex will use search() and pick the top result.
+   *
+   * @param params - Match parameters including title, authors, ISBN
+   * @returns Best match with confidence score
+   */
+  match?(params: BookMatchParams): Promise<MetadataMatchResponse>;
 }
 
 // =============================================================================
@@ -105,10 +141,16 @@ export interface RecommendationProvider {}
 // =============================================================================
 
 /**
- * Partial metadata provider - allows implementing only some methods
+ * Partial series metadata provider - allows implementing only some methods
  * Use this for testing or gradual implementation
  */
 export type PartialMetadataProvider = Partial<MetadataProvider>;
+
+/**
+ * Partial book metadata provider - allows implementing only some methods
+ * Use this for testing or gradual implementation
+ */
+export type PartialBookMetadataProvider = Partial<BookMetadataProvider>;
 
 // =============================================================================
 // Backwards Compatibility (deprecated)
