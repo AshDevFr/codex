@@ -308,7 +308,93 @@ describe("BookStrategySelector", () => {
       expect(screen.getByText("Metadata First")).toBeInTheDocument();
       expect(screen.getByText("Smart Detection")).toBeInTheDocument();
       expect(screen.getByText("Generated Name")).toBeInTheDocument();
+      expect(screen.getByText("Custom (Regex)")).toBeInTheDocument();
     });
+  });
+
+  it("shows config editor when custom strategy is selected", () => {
+    const onChange = vi.fn();
+    const onConfigChange = vi.fn();
+
+    renderWithProviders(
+      <BookStrategySelector
+        value="custom"
+        onChange={onChange}
+        config={{}}
+        onConfigChange={onConfigChange}
+      />,
+    );
+
+    expect(screen.getByText("Regex Pattern")).toBeInTheDocument();
+    expect(screen.getByText("Title Template")).toBeInTheDocument();
+    expect(screen.getByText("Fallback Strategy")).toBeInTheDocument();
+  });
+
+  it("does not show config editor for non-custom strategies", () => {
+    const onChange = vi.fn();
+    const onConfigChange = vi.fn();
+
+    renderWithProviders(
+      <BookStrategySelector
+        value="filename"
+        onChange={onChange}
+        config={{}}
+        onConfigChange={onConfigChange}
+      />,
+    );
+
+    expect(screen.queryByText("Regex Pattern")).not.toBeInTheDocument();
+    expect(screen.queryByText("Title Template")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fallback Strategy")).not.toBeInTheDocument();
+  });
+
+  it("updates config when regex pattern changes", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onConfigChange = vi.fn();
+
+    renderWithProviders(
+      <BookStrategySelector
+        value="custom"
+        onChange={onChange}
+        config={{}}
+        onConfigChange={onConfigChange}
+      />,
+    );
+
+    const patternInput = screen.getByPlaceholderText(/\(\?P<series>/);
+    await user.type(patternInput, "test");
+
+    expect(onConfigChange).toHaveBeenCalled();
+  });
+
+  it("resets config when strategy changes", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onConfigChange = vi.fn();
+
+    renderWithProviders(
+      <BookStrategySelector
+        value="custom"
+        onChange={onChange}
+        config={{ pattern: "test" }}
+        onConfigChange={onConfigChange}
+      />,
+    );
+
+    // Open the select dropdown - target the strategy select by its label
+    const select = screen.getByRole("textbox", {
+      name: /book naming strategy/i,
+    });
+    await user.click(select.parentElement!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Filename (Recommended)")).toBeInTheDocument();
+    });
+    await user.click(screen.getByText("Filename (Recommended)"));
+
+    expect(onChange).toHaveBeenCalledWith("filename");
+    expect(onConfigChange).toHaveBeenCalledWith({});
   });
 });
 
@@ -464,7 +550,8 @@ describe("Strategy data constants", () => {
     expect(strategyValues).toContain("metadata_first");
     expect(strategyValues).toContain("smart");
     expect(strategyValues).toContain("series_name");
-    expect(BOOK_STRATEGIES).toHaveLength(4);
+    expect(strategyValues).toContain("custom");
+    expect(BOOK_STRATEGIES).toHaveLength(5);
   });
 
   it("NUMBER_STRATEGIES contains all expected strategies", () => {

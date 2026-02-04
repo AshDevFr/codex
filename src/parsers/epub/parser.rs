@@ -1,5 +1,6 @@
 use crate::parsers::image_utils::{get_image_format, get_svg_dimensions, is_image_file};
 use crate::parsers::isbn_utils::extract_isbns;
+use crate::parsers::opf;
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use crate::utils::{hash_file, CodexError, Result};
@@ -215,7 +216,7 @@ impl FormatParser for EpubParser {
         // Find the OPF file from container.xml
         let opf_path = Self::find_root_file(&mut archive)?;
 
-        // Read OPF content for ISBN extraction
+        // Read OPF content for metadata extraction
         let opf_content = {
             let mut opf_file = archive
                 .by_name(&opf_path)
@@ -225,8 +226,23 @@ impl FormatParser for EpubParser {
             content
         };
 
-        // Extract ISBNs from OPF metadata
-        let isbns = Self::extract_isbns_from_opf(&opf_content);
+        // Extract metadata from OPF, falling back to ISBN-only extraction on failure
+        let (comic_info, isbns) = match opf::parse_opf_metadata(&opf_content) {
+            Ok(opf_meta) => {
+                let ci = opf::opf_to_comic_info(&opf_meta);
+                let isbns = opf_meta.isbns;
+                (Some(ci), isbns)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    opf_path = %opf_path,
+                    "Failed to parse OPF metadata, falling back to ISBN-only extraction"
+                );
+                let isbns = Self::extract_isbns_from_opf(&opf_content);
+                (None, isbns)
+            }
+        };
 
         // Parse the OPF to get manifest and spine
         let (_manifest, spine_order) = Self::parse_opf(&mut archive, &opf_path)?;
@@ -308,7 +324,7 @@ impl FormatParser for EpubParser {
             modified_at,
             page_count,
             pages,
-            comic_info: None, // EPUB doesn't use ComicInfo.xml
+            comic_info,
             isbns,
         })
     }

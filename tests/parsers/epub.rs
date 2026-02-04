@@ -33,7 +33,12 @@ fn test_epub_parser_parse_basic() {
     assert!(metadata.page_count >= 2);
     assert_eq!(metadata.pages.len(), 2); // We have 2 images
     assert!(metadata.file_hash.len() == 64); // SHA-256 hash length
-    assert!(metadata.comic_info.is_none()); // EPUB doesn't have ComicInfo.xml
+
+    // EPUB now extracts metadata from embedded OPF
+    let ci = metadata.comic_info.as_ref().unwrap();
+    assert_eq!(ci.title.as_deref(), Some("Test EPUB Book"));
+    assert_eq!(ci.writer.as_deref(), Some("Test Author"));
+    assert_eq!(ci.language_iso.as_deref(), Some("en"));
 }
 
 #[test]
@@ -201,4 +206,59 @@ fn test_extract_page_from_epub_invalid_page_number() {
 fn test_extract_page_from_epub_nonexistent_file() {
     let result = extract_page_from_epub("/nonexistent/file.epub", 1);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_epub_parser_extracts_opf_metadata() {
+    let temp_dir = TempDir::new().unwrap();
+    let epub_path = common::create_test_epub_with_metadata(&temp_dir);
+
+    let parser = EpubParser::new();
+    let metadata = parser.parse(&epub_path).unwrap();
+
+    assert_eq!(metadata.format, FileFormat::EPUB);
+
+    // Verify rich metadata is extracted from OPF
+    let ci = metadata.comic_info.as_ref().unwrap();
+    assert_eq!(ci.title.as_deref(), Some("The Great Adventure"));
+    assert_eq!(ci.writer.as_deref(), Some("Jane Doe"));
+    assert_eq!(ci.publisher.as_deref(), Some("Acme Publishing"));
+    assert_eq!(ci.language_iso.as_deref(), Some("en"));
+    assert_eq!(
+        ci.summary.as_deref(),
+        Some("An epic tale of adventure and discovery.")
+    );
+    assert_eq!(ci.genre.as_deref(), Some("Fiction, Adventure"));
+    assert_eq!(ci.year, Some(2023));
+    assert_eq!(ci.month, Some(6));
+    assert_eq!(ci.day, Some(15));
+
+    // Calibre series metadata
+    assert_eq!(ci.series.as_deref(), Some("Adventure Chronicles"));
+    assert_eq!(ci.number.as_deref(), Some("2"));
+
+    // ISBN from OPF identifiers
+    assert!(!metadata.isbns.is_empty());
+    assert!(metadata.isbns.iter().any(|isbn| isbn == "9781234567890"));
+}
+
+#[test]
+fn test_epub_parser_basic_epub_has_metadata() {
+    // Even the basic test EPUB (with minimal OPF) should have comic_info populated
+    let temp_dir = TempDir::new().unwrap();
+    let epub_path = common::create_test_epub(&temp_dir, 2, 1);
+
+    let parser = EpubParser::new();
+    let metadata = parser.parse(&epub_path).unwrap();
+
+    let ci = metadata.comic_info.as_ref().unwrap();
+    assert_eq!(ci.title.as_deref(), Some("Test EPUB Book"));
+    assert_eq!(ci.writer.as_deref(), Some("Test Author"));
+    assert_eq!(ci.language_iso.as_deref(), Some("en"));
+
+    // These fields aren't in the basic test EPUB
+    assert!(ci.publisher.is_none());
+    assert!(ci.summary.is_none());
+    assert!(ci.genre.is_none());
+    assert!(ci.series.is_none());
 }

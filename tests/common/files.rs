@@ -195,6 +195,84 @@ pub fn create_test_epub(temp_dir: &TempDir, num_chapters: usize, num_images: usi
     epub_path
 }
 
+/// Create a test EPUB file with rich OPF metadata for testing metadata extraction
+pub fn create_test_epub_with_metadata(temp_dir: &TempDir) -> PathBuf {
+    let epub_path = temp_dir.path().join("test_book_with_metadata.epub");
+    let file = File::create(&epub_path).unwrap();
+    let mut zip = ZipWriter::new(file);
+
+    let options: FileOptions<'_, ()> =
+        FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    // Add mimetype file (must be first and uncompressed)
+    zip.start_file("mimetype", options).unwrap();
+    zip.write_all(b"application/epub+zip").unwrap();
+
+    // Add META-INF/container.xml
+    let container_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#;
+
+    zip.start_file("META-INF/container.xml", options).unwrap();
+    zip.write_all(container_xml.as_bytes()).unwrap();
+
+    // Add content.opf with rich metadata
+    let content_opf = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>The Great Adventure</dc:title>
+    <dc:creator opf:role="aut">Jane Doe</dc:creator>
+    <dc:publisher>Acme Publishing</dc:publisher>
+    <dc:date>2023-06-15</dc:date>
+    <dc:language>en</dc:language>
+    <dc:description>An epic tale of adventure and discovery.</dc:description>
+    <dc:subject>Fiction</dc:subject>
+    <dc:subject>Adventure</dc:subject>
+    <dc:identifier id="bookid">urn:isbn:978-1-23456-789-0</dc:identifier>
+    <dc:identifier opf:scheme="ISBN">978-1-23456-789-0</dc:identifier>
+    <meta name="calibre:series" content="Adventure Chronicles"/>
+    <meta name="calibre:series_index" content="2.0"/>
+  </metadata>
+  <manifest>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="img1" href="images/image1.png" media-type="image/png"/>
+  </manifest>
+  <spine>
+    <itemref idref="chapter1"/>
+  </spine>
+</package>"#;
+
+    zip.start_file("OEBPS/content.opf", options).unwrap();
+    zip.write_all(content_opf.as_bytes()).unwrap();
+
+    // Add a chapter file
+    let chapter_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Chapter 1</title>
+</head>
+<body>
+  <h1>Chapter 1</h1>
+  <p>This is the content of chapter 1.</p>
+</body>
+</html>"#;
+
+    zip.start_file("OEBPS/chapter1.xhtml", options).unwrap();
+    zip.write_all(chapter_content.as_bytes()).unwrap();
+
+    // Add an image
+    let image_data = create_test_png(10, 10);
+    zip.start_file("OEBPS/images/image1.png", options).unwrap();
+    zip.write_all(&image_data).unwrap();
+
+    zip.finish().unwrap();
+    epub_path
+}
+
 /// Create a test PDF file with the specified number of pages and images
 pub fn create_test_pdf(
     temp_dir: &TempDir,

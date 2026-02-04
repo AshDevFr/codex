@@ -85,6 +85,7 @@ export interface BookStrategyData {
   value: BookStrategy;
   label: string;
   description: string;
+  hasConfig?: boolean;
 }
 
 export const BOOK_STRATEGIES: BookStrategyData[] = [
@@ -111,6 +112,13 @@ export const BOOK_STRATEGIES: BookStrategyData[] = [
     label: "Generated Name",
     description:
       "Generate title from series name + position (e.g., 'One Piece v.01').",
+  },
+  {
+    value: "custom",
+    label: "Custom (Regex)",
+    description:
+      "User-defined regex pattern to extract title from filename. For unique naming conventions.",
+    hasConfig: true,
   },
 ];
 
@@ -460,18 +468,128 @@ export function SeriesStrategySelector({
 }
 
 // =============================================================================
+// Custom Book Strategy Config
+// =============================================================================
+
+export interface CustomBookConfig {
+  pattern?: string;
+  titleTemplate?: string;
+  fallback?: string;
+}
+
+interface CustomBookConfigEditorProps {
+  config: CustomBookConfig;
+  onChange: (config: CustomBookConfig) => void;
+  disabled?: boolean;
+}
+
+function CustomBookConfigEditor({
+  config,
+  onChange,
+  disabled = false,
+}: CustomBookConfigEditorProps) {
+  return (
+    <Stack gap="sm">
+      <TextInput
+        label="Regex Pattern"
+        description="Regex with named capture groups matched against the filename (without extension)."
+        placeholder="(?P<series>.+?)_v(?P<volume>\d+)_c(?P<chapter>\d+)"
+        value={config.pattern || ""}
+        onChange={(e) =>
+          onChange({
+            ...config,
+            pattern: e.currentTarget.value || undefined,
+          })
+        }
+        styles={{ input: { fontFamily: "monospace" } }}
+        disabled={disabled}
+      />
+      <TextInput
+        label="Title Template"
+        description="Template for constructing the display title from captured groups (optional)."
+        placeholder="{series} v.{volume} c.{chapter}"
+        value={config.titleTemplate || ""}
+        onChange={(e) =>
+          onChange({
+            ...config,
+            titleTemplate: e.currentTarget.value || undefined,
+          })
+        }
+        styles={{ input: { fontFamily: "monospace" } }}
+        disabled={disabled}
+      />
+      <Select
+        label="Fallback Strategy"
+        description="Strategy to use when the regex pattern does not match"
+        data={[
+          { value: "filename", label: "Filename" },
+          { value: "metadata_first", label: "Metadata First" },
+          { value: "smart", label: "Smart Detection" },
+          { value: "series_name", label: "Generated Name" },
+        ]}
+        value={config.fallback || "filename"}
+        onChange={(value) =>
+          onChange({
+            ...config,
+            fallback: value || "filename",
+          })
+        }
+        comboboxProps={{ zIndex: 1001 }}
+        disabled={disabled}
+      />
+      <Accordion variant="separated">
+        <Accordion.Item value="help">
+          <Accordion.Control>Capture Groups & Placeholders</Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>
+                Named Capture Groups
+              </Text>
+              <Text size="sm">
+                <Code>(?P&lt;title&gt;...)</Code> - Book title
+              </Text>
+              <Text size="sm">
+                <Code>(?P&lt;series&gt;...)</Code> - Series name
+              </Text>
+              <Text size="sm">
+                <Code>(?P&lt;volume&gt;...)</Code> - Volume number
+              </Text>
+              <Text size="sm">
+                <Code>(?P&lt;chapter&gt;...)</Code> - Chapter number
+              </Text>
+              <Text size="sm" fw={500} mt="xs">
+                Template Placeholders
+              </Text>
+              <Text size="sm">
+                <Code>{"{title}"}</Code>, <Code>{"{series}"}</Code>,{" "}
+                <Code>{"{volume}"}</Code>, <Code>{"{chapter}"}</Code>,{" "}
+                <Code>{"{filename}"}</Code>
+              </Text>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+    </Stack>
+  );
+}
+
+// =============================================================================
 // Book Strategy Selector Component
 // =============================================================================
 
 export interface BookStrategySelectorProps {
   value: BookStrategy;
   onChange: (value: BookStrategy) => void;
+  config?: CustomBookConfig;
+  onConfigChange?: (config: CustomBookConfig) => void;
   disabled?: boolean;
 }
 
 export function BookStrategySelector({
   value,
   onChange,
+  config,
+  onConfigChange,
   disabled = false,
 }: BookStrategySelectorProps) {
   const selectedStrategy = BOOK_STRATEGIES.find((s) => s.value === value);
@@ -489,6 +607,9 @@ export function BookStrategySelector({
         onChange={(v) => {
           if (v) {
             onChange(v as BookStrategy);
+            if (onConfigChange) {
+              onConfigChange({});
+            }
           }
         }}
         disabled={disabled}
@@ -499,6 +620,14 @@ export function BookStrategySelector({
         <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
           <Text size="sm">{selectedStrategy.description}</Text>
         </Alert>
+      )}
+
+      {value === "custom" && onConfigChange && (
+        <CustomBookConfigEditor
+          config={config || {}}
+          onChange={onConfigChange}
+          disabled={disabled}
+        />
       )}
     </Stack>
   );

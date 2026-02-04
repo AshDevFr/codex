@@ -11,11 +11,12 @@ use uuid::Uuid;
 use crate::db::entities::book_error::{BookError, BookErrorType};
 use crate::db::entities::{book_metadata, books, pages};
 use crate::db::repositories::{
-    BookExternalLinkRepository, BookMetadataRepository, BookRepository, LibraryRepository,
-    PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
+    BookExternalLinkRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
+    LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
 use crate::events::EventBroadcaster;
-use crate::models::{BookStrategy, NumberStrategy};
+use crate::models::{BookStrategy, CalibreStrategyConfig, NumberStrategy, SeriesStrategy};
+use crate::parsers::opf;
 use crate::scanner::analyze_file;
 use crate::scanner::strategies::{
     create_book_strategy, create_number_strategy, BookMetadata, BookNamingContext, NumberContext,
@@ -186,10 +187,66 @@ async fn analyze_single_book(
 
     // Analyze the file (blocking I/O operation)
     let file_path_clone = file_path.clone();
-    let metadata = tokio::task::spawn_blocking(move || analyze_file(&file_path_clone))
+    let mut metadata = tokio::task::spawn_blocking(move || analyze_file(&file_path_clone))
         .await
         .map_err(|e| anyhow::anyhow!("Failed to spawn file analysis task: {}", e))?
         .with_context(|| format!("Failed to analyze file: {}", book.file_path))?;
+
+    // Read Calibre sidecar metadata.opf if applicable
+    // This enriches/overrides embedded metadata with user-curated Calibre data
+    let library = LibraryRepository::get_by_id(db, book.library_id).await?;
+    if let Some(ref lib) = library {
+        if let Ok(SeriesStrategy::Calibre) = lib.series_strategy.parse::<SeriesStrategy>() {
+            let cal_config: CalibreStrategyConfig = lib
+                .series_config
+                .as_ref()
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+
+            if cal_config.read_opf_metadata {
+                let opf_path = file_path.parent().map(|p| p.join("metadata.opf"));
+                if let Some(opf_path) = opf_path {
+                    let opf_result =
+                        tokio::task::spawn_blocking(move || opf::parse_opf_file(&opf_path))
+                            .await
+                            .map_err(|e| {
+                                anyhow::anyhow!("Failed to spawn OPF parse task: {}", e)
+                            })?;
+
+                    match opf_result {
+                        Ok(opf_meta) => {
+                            let sidecar_ci = opf::opf_to_comic_info(&opf_meta);
+
+                            // Merge: sidecar wins over embedded metadata
+                            let merged_ci = if let Some(ref embedded_ci) = metadata.comic_info {
+                                opf::merge_comic_info(embedded_ci, &sidecar_ci)
+                            } else {
+                                sidecar_ci
+                            };
+                            metadata.comic_info = Some(merged_ci);
+
+                            // Merge ISBNs (deduplicate)
+                            if !opf_meta.isbns.is_empty() {
+                                let mut all_isbns = metadata.isbns.clone();
+                                for isbn in &opf_meta.isbns {
+                                    if !all_isbns.contains(isbn) {
+                                        all_isbns.push(isbn.clone());
+                                    }
+                                }
+                                metadata.isbns = all_isbns;
+                            }
+
+                            debug!("Merged sidecar OPF metadata for: {}", book.file_path);
+                        }
+                        Err(_) => {
+                            // No sidecar OPF or parse error — continue with embedded metadata
+                            debug!("No sidecar metadata.opf for: {}", book.file_path);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let analyze_duration = analyze_start.elapsed();
 
@@ -898,6 +955,115 @@ async fn analyze_single_book(
                     "Setting title_sort to '{}' for series (no ComicInfo)",
                     series_title
                 );
+            }
+        }
+    }
+
+    // Read Mylar series.json sidecar if present in the book's parent directory
+    // This populates series-level metadata (publisher, year, description, status)
+    {
+        let series_json_path = file_path.parent().map(|p| p.join("series.json"));
+        if let Some(sjp) = series_json_path {
+            let sj_result = tokio::task::spawn_blocking(move || {
+                crate::parsers::series_json::parse_series_json_file(&sjp)
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to spawn series.json parse task: {}", e))?;
+
+            match sj_result {
+                Ok(sj_meta) => {
+                    if let Ok(Some(series_metadata_model)) =
+                        SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
+                    {
+                        use crate::db::entities::series_metadata;
+                        use sea_orm::{ActiveModelTrait, Set};
+
+                        let series_title = series_metadata_model.title.clone();
+                        let mut needs_update = false;
+                        let mut metadata_active: series_metadata::ActiveModel =
+                            series_metadata_model.clone().into();
+
+                        // Populate publisher if not set and not locked
+                        if series_metadata_model.publisher.is_none()
+                            && !series_metadata_model.publisher_lock
+                        {
+                            if let Some(ref publisher) = sj_meta.publisher {
+                                metadata_active.publisher = Set(Some(publisher.clone()));
+                                needs_update = true;
+                            }
+                        }
+
+                        // Populate year if not set and not locked
+                        if series_metadata_model.year.is_none() && !series_metadata_model.year_lock
+                        {
+                            if let Some(year) = sj_meta.year {
+                                metadata_active.year = Set(Some(year));
+                                needs_update = true;
+                            }
+                        }
+
+                        // Populate summary if not set and not locked
+                        if series_metadata_model.summary.is_none()
+                            && !series_metadata_model.summary_lock
+                        {
+                            if let Some(ref desc) = sj_meta.description_text {
+                                metadata_active.summary = Set(Some(desc.clone()));
+                                needs_update = true;
+                            }
+                        }
+
+                        // Populate status if not set and not locked
+                        if series_metadata_model.status.is_none()
+                            && !series_metadata_model.status_lock
+                        {
+                            if let Some(ref status) = sj_meta.status {
+                                // Map Mylar status to Codex SeriesStatus
+                                use crate::db::entities::series_metadata::SeriesStatus;
+                                let codex_status = match status.to_lowercase().as_str() {
+                                    "continuing" => "ongoing".to_string(),
+                                    "ended" => "ended".to_string(),
+                                    other => other.to_string(),
+                                };
+                                if let Ok(parsed) = codex_status.parse::<SeriesStatus>() {
+                                    metadata_active.status = Set(Some(parsed.as_str().to_string()));
+                                    needs_update = true;
+                                }
+                            }
+                        }
+
+                        if needs_update {
+                            metadata_active.updated_at = Set(Utc::now());
+                            metadata_active.update(db).await?;
+                            info!(
+                                "Updated series '{}' metadata from series.json: {}",
+                                series_title, book.file_path
+                            );
+                        }
+                    }
+
+                    // Store comicid as series external link (source: "comicvine")
+                    if let Some(comicid) = sj_meta.comicid {
+                        let cv_url =
+                            format!("https://comicvine.gamespot.com/volume/4050-{}/", comicid);
+                        let external_id = comicid.to_string();
+                        if let Err(e) = ExternalLinkRepository::upsert(
+                            db,
+                            book.series_id,
+                            "comicvine",
+                            &cv_url,
+                            Some(&external_id),
+                        )
+                        .await
+                        {
+                            warn!("Failed to upsert comicvine external link for series: {}", e);
+                        }
+                    }
+
+                    debug!("Applied series.json metadata for: {}", book.file_path);
+                }
+                Err(_) => {
+                    // No series.json or parse error — continue silently
+                }
             }
         }
     }

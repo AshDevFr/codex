@@ -8,8 +8,10 @@ use anyhow::Result;
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use tracing::debug;
 
 use crate::models::{CalibreSeriesMode, CalibreStrategyConfig, SeriesStrategy};
+use crate::parsers::opf;
 
 use super::super::common::{DetectedBook, DetectedSeries, SeriesMetadata};
 use super::ScanningStrategyImpl;
@@ -78,7 +80,7 @@ impl CalibreStrategy {
         &self,
         author: Option<&str>,
         book_title: Option<&str>,
-        _file_path: &Path,
+        file_path: &Path,
     ) -> String {
         match self.config.series_mode {
             CalibreSeriesMode::Standalone => {
@@ -90,10 +92,41 @@ impl CalibreStrategy {
                 author.unwrap_or("Unknown Author").to_string()
             }
             CalibreSeriesMode::FromMetadata => {
-                // In a real implementation, we'd read metadata.opf here
-                // For now, fall back to standalone behavior
-                // TODO: Implement OPF metadata reading
+                // Read calibre:series from metadata.opf in the book's parent directory
+                if self.config.read_opf_metadata {
+                    if let Some(series_name) = self.read_series_from_opf(file_path) {
+                        return series_name;
+                    }
+                }
+                // Fall back to book title (standalone behavior) if OPF unavailable
                 book_title.unwrap_or("Unknown").to_string()
+            }
+        }
+    }
+
+    /// Read the `calibre:series` field from a sidecar `metadata.opf` file
+    /// in the same directory as the given book file.
+    fn read_series_from_opf(&self, file_path: &Path) -> Option<String> {
+        let parent = file_path.parent()?;
+        let opf_path = parent.join("metadata.opf");
+
+        match opf::parse_opf_file(&opf_path) {
+            Ok(meta) => {
+                if let Some(ref series) = meta.calibre_series {
+                    debug!(
+                        "FromMetadata: found calibre:series '{}' in {}",
+                        series,
+                        opf_path.display()
+                    );
+                }
+                meta.calibre_series
+            }
+            Err(_) => {
+                debug!(
+                    "FromMetadata: no metadata.opf found at {}",
+                    opf_path.display()
+                );
+                None
             }
         }
     }
@@ -354,5 +387,126 @@ mod tests {
     #[test]
     fn test_strategy_type() {
         assert_eq!(strategy().strategy_type(), SeriesStrategy::Calibre);
+    }
+
+    #[test]
+    fn test_from_metadata_mode_with_opf() {
+        // Create a temp dir simulating Calibre structure with metadata.opf
+        let temp_dir = tempfile::tempdir().unwrap();
+        let library_path = temp_dir.path();
+
+        // Create: library/Author/Book (1)/Book.epub + metadata.opf
+        let book_dir = library_path.join("Brandon Sanderson").join("Mistborn (45)");
+        std::fs::create_dir_all(&book_dir).unwrap();
+
+        let book_file = book_dir.join("Mistborn.epub");
+        std::fs::write(&book_file, "fake epub content").unwrap();
+
+        let opf_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Mistborn: The Final Empire</dc:title>
+    <dc:creator>Brandon Sanderson</dc:creator>
+    <meta name="calibre:series" content="Mistborn Era 1"/>
+    <meta name="calibre:series_index" content="1.0"/>
+  </metadata>
+</package>"#;
+        std::fs::write(book_dir.join("metadata.opf"), opf_content).unwrap();
+
+        // Second book in same series
+        let book_dir2 = library_path
+            .join("Brandon Sanderson")
+            .join("The Well of Ascension (46)");
+        std::fs::create_dir_all(&book_dir2).unwrap();
+
+        let book_file2 = book_dir2.join("The Well of Ascension.epub");
+        std::fs::write(&book_file2, "fake epub content").unwrap();
+
+        let opf_content2 = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>The Well of Ascension</dc:title>
+    <dc:creator>Brandon Sanderson</dc:creator>
+    <meta name="calibre:series" content="Mistborn Era 1"/>
+    <meta name="calibre:series_index" content="2.0"/>
+  </metadata>
+</package>"#;
+        std::fs::write(book_dir2.join("metadata.opf"), opf_content2).unwrap();
+
+        let strategy = strategy_with_mode(CalibreSeriesMode::FromMetadata);
+        let files = vec![book_file, book_file2];
+        let result = strategy.organize_files(&files, library_path).unwrap();
+
+        // Both books should be grouped under "Mistborn Era 1" from OPF
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("Mistborn Era 1"));
+        assert_eq!(result["Mistborn Era 1"].books.len(), 2);
+    }
+
+    #[test]
+    fn test_from_metadata_mode_fallback_no_opf() {
+        // When no metadata.opf exists, fall back to book title (standalone behavior)
+        let strategy = strategy_with_mode(CalibreSeriesMode::FromMetadata);
+
+        // Use non-existent paths — no metadata.opf will be found
+        let file_path = Path::new("/nonexistent/Author/Book Title (1)/Book.epub");
+        let series_name =
+            strategy.determine_series_name(Some("Author"), Some("Book Title"), file_path);
+
+        assert_eq!(series_name, "Book Title");
+    }
+
+    #[test]
+    fn test_from_metadata_mode_no_series_in_opf() {
+        // OPF exists but has no calibre:series field — fall back to book title
+        let temp_dir = tempfile::tempdir().unwrap();
+        let book_dir = temp_dir.path().join("Author").join("Book (1)");
+        std::fs::create_dir_all(&book_dir).unwrap();
+
+        let book_file = book_dir.join("Book.epub");
+        std::fs::write(&book_file, "fake epub content").unwrap();
+
+        let opf_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>A Standalone Book</dc:title>
+    <dc:creator>Some Author</dc:creator>
+  </metadata>
+</package>"#;
+        std::fs::write(book_dir.join("metadata.opf"), opf_content).unwrap();
+
+        let strategy = strategy_with_mode(CalibreSeriesMode::FromMetadata);
+        let series_name = strategy.determine_series_name(Some("Author"), Some("Book"), &book_file);
+
+        // No calibre:series in OPF, falls back to book title
+        assert_eq!(series_name, "Book");
+    }
+
+    #[test]
+    fn test_from_metadata_mode_read_opf_disabled() {
+        // When read_opf_metadata is false, FromMetadata falls back to standalone
+        let temp_dir = tempfile::tempdir().unwrap();
+        let book_dir = temp_dir.path().join("Author").join("Book (1)");
+        std::fs::create_dir_all(&book_dir).unwrap();
+
+        let book_file = book_dir.join("Book.epub");
+        std::fs::write(&book_file, "fake epub content").unwrap();
+
+        let opf_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<package><metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <meta name="calibre:series" content="Should Not Be Used"/>
+</metadata></package>"#;
+        std::fs::write(book_dir.join("metadata.opf"), opf_content).unwrap();
+
+        let strategy = CalibreStrategy::new(CalibreStrategyConfig {
+            series_mode: CalibreSeriesMode::FromMetadata,
+            read_opf_metadata: false,
+            ..Default::default()
+        });
+
+        let series_name = strategy.determine_series_name(Some("Author"), Some("Book"), &book_file);
+
+        // read_opf_metadata is false, so it should NOT read the OPF
+        assert_eq!(series_name, "Book");
     }
 }

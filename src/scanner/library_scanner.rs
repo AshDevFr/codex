@@ -686,56 +686,53 @@ async fn scan_batched(
     // Wait for all series to complete
     join_all(series_futures).await;
 
-    // Handle deleted/restored files (Normal mode only)
-    if mode == ScanMode::Normal {
-        let cleanup_start = Instant::now();
-        let mut deleted_count = 0;
-        let mut restored_count = 0;
+    // Handle deleted/restored files
+    let cleanup_start = Instant::now();
+    let mut deleted_count = 0;
+    let mut restored_count = 0;
 
-        for (path, (_, book)) in &existing_books_with_hash {
-            if !seen_paths.contains(path) {
-                // File is missing from filesystem
-                if !book.deleted {
-                    // Mark as deleted
-                    debug!("Marking missing book as deleted: {}", path);
-                    match BookRepository::mark_deleted(db, book.id, true, event_broadcaster).await {
-                        Ok(_) => {
-                            deleted_count += 1;
-                        }
-                        Err(e) => {
-                            let error_msg =
-                                format!("Failed to mark book as deleted {}: {}", path, e);
-                            warn!("{}", error_msg);
-                            shared_state.add_error(error_msg).await;
-                        }
-                    }
-                }
-            } else if book.deleted {
-                // File reappeared on filesystem, restore it
-                debug!("Restoring deleted book: {}", path);
-                match BookRepository::mark_deleted(db, book.id, false, event_broadcaster).await {
+    for (path, (_, book)) in &existing_books_with_hash {
+        if !seen_paths.contains(path) {
+            // File is missing from filesystem
+            if !book.deleted {
+                // Mark as deleted
+                debug!("Marking missing book as deleted: {}", path);
+                match BookRepository::mark_deleted(db, book.id, true, event_broadcaster).await {
                     Ok(_) => {
-                        restored_count += 1;
+                        deleted_count += 1;
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to restore book {}: {}", path, e);
+                        let error_msg = format!("Failed to mark book as deleted {}: {}", path, e);
                         warn!("{}", error_msg);
                         shared_state.add_error(error_msg).await;
                     }
                 }
             }
+        } else if book.deleted {
+            // File reappeared on filesystem, restore it
+            debug!("Restoring deleted book: {}", path);
+            match BookRepository::mark_deleted(db, book.id, false, event_broadcaster).await {
+                Ok(_) => {
+                    restored_count += 1;
+                }
+                Err(e) => {
+                    let error_msg = format!("Failed to restore book {}: {}", path, e);
+                    warn!("{}", error_msg);
+                    shared_state.add_error(error_msg).await;
+                }
+            }
         }
+    }
 
-        if deleted_count > 0 || restored_count > 0 {
-            info!(
-                "Cleanup completed in {:?}: {} books marked as deleted, {} books restored",
-                cleanup_start.elapsed(),
-                deleted_count,
-                restored_count
-            );
-            shared_state.add_deleted(deleted_count).await;
-            shared_state.add_restored(restored_count).await;
-        }
+    if deleted_count > 0 || restored_count > 0 {
+        info!(
+            "Cleanup completed in {:?}: {} books marked as deleted, {} books restored",
+            cleanup_start.elapsed(),
+            deleted_count,
+            restored_count
+        );
+        shared_state.add_deleted(deleted_count).await;
+        shared_state.add_restored(restored_count).await;
     }
 
     // Extract final results
@@ -2014,5 +2011,45 @@ mod tests {
             "Should find only 1 file with multiple exclusions"
         );
         assert!(result[0].ends_with("book1.cbz"));
+    }
+
+    #[test]
+    fn test_discover_files_caltrash_dot_prefix_exclusion() {
+        use std::fs::{self, File};
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let library_path = temp_dir.path();
+
+        // Reproduce Calibre library structure with .caltrash and .calnotes
+        fs::create_dir_all(library_path.join(".caltrash/b/1")).unwrap();
+        fs::create_dir_all(library_path.join(".caltrash/b/2")).unwrap();
+        fs::create_dir_all(library_path.join(".calnotes")).unwrap();
+        fs::create_dir_all(library_path.join("Author Name/Book Title")).unwrap();
+
+        // Create files in .caltrash (should be excluded)
+        File::create(library_path.join(".caltrash/b/1/book.epub")).unwrap();
+        File::create(library_path.join(".caltrash/b/2/book.epub")).unwrap();
+        // Create files in .calnotes (should be excluded)
+        File::create(library_path.join(".calnotes/notes.db")).unwrap();
+        // Create legitimate book (should be found)
+        File::create(library_path.join("Author Name/Book Title/book.epub")).unwrap();
+
+        let library = create_test_library(Some(".caltrash\n.calnotes".to_string()));
+        let excluded = parse_excluded_patterns(&library);
+
+        let result =
+            discover_files(library_path.to_str().unwrap(), None, excluded.as_ref()).unwrap();
+
+        assert_eq!(
+            result.len(),
+            1,
+            "Should find only 1 file (excluding .caltrash and .calnotes directories). Found: {:?}",
+            result
+        );
+        assert!(
+            result[0].to_string_lossy().contains("Author Name"),
+            "Should only find the legitimate book"
+        );
     }
 }

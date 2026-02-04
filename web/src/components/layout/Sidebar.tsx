@@ -359,13 +359,21 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
                       <Menu.Dropdown>
                         <Menu.Item
                           leftSection={<IconScan size={16} />}
-                          onClick={() => handleScanAll("normal")}
+                          onClick={(e: React.MouseEvent) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleScanAll("normal");
+                          }}
                         >
                           Scan All Libraries
                         </Menu.Item>
                         <Menu.Item
                           leftSection={<IconRadar size={16} />}
-                          onClick={() => handleScanAll("deep")}
+                          onClick={(e: React.MouseEvent) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleScanAll("deep");
+                          }}
                         >
                           Scan All Libraries (Deep)
                         </Menu.Item>
@@ -375,7 +383,11 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
                             <Menu.Label>Book Thumbnails</Menu.Label>
                             <Menu.Item
                               leftSection={<IconPhoto size={16} />}
-                              onClick={handleGenerateAllMissingThumbnails}
+                              onClick={(e: React.MouseEvent) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleGenerateAllMissingThumbnails();
+                              }}
                               disabled={
                                 generateMissingThumbnailsAllMutation.isPending
                               }
@@ -384,7 +396,11 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
                             </Menu.Item>
                             <Menu.Item
                               leftSection={<IconPhoto size={16} />}
-                              onClick={handleRegenerateAllThumbnails}
+                              onClick={(e: React.MouseEvent) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRegenerateAllThumbnails();
+                              }}
                               disabled={
                                 regenerateAllThumbnailsAllMutation.isPending
                               }
@@ -395,7 +411,11 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
                             <Menu.Label>Series Thumbnails</Menu.Label>
                             <Menu.Item
                               leftSection={<IconPhoto size={16} />}
-                              onClick={handleGenerateAllMissingSeriesThumbnails}
+                              onClick={(e: React.MouseEvent) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleGenerateAllMissingSeriesThumbnails();
+                              }}
                               disabled={
                                 generateMissingSeriesThumbnailsAllMutation.isPending
                               }
@@ -404,7 +424,11 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
                             </Menu.Item>
                             <Menu.Item
                               leftSection={<IconPhoto size={16} />}
-                              onClick={handleRegenerateAllSeriesThumbnails}
+                              onClick={(e: React.MouseEvent) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRegenerateAllSeriesThumbnails();
+                              }}
                               disabled={
                                 regenerateAllSeriesThumbnailsAllMutation.isPending
                               }
@@ -415,7 +439,11 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
                             <Menu.Item
                               leftSection={<IconTrashX size={16} />}
                               color="orange"
-                              onClick={handlePurgeAllDeleted}
+                              onClick={(e: React.MouseEvent) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handlePurgeAllDeleted();
+                              }}
                             >
                               Purge All Deleted Books
                             </Menu.Item>

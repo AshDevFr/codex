@@ -6,7 +6,9 @@ pub mod epub;
 pub mod image_utils;
 pub mod isbn_utils;
 pub mod metadata;
+pub mod opf;
 pub mod pdf;
+pub mod series_json;
 pub mod traits;
 
 pub use comic_info::parse_comic_info;

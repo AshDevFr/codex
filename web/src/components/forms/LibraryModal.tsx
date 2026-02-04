@@ -58,6 +58,7 @@ import {
 import { PreviewScanPanel } from "./PreviewScanPanel";
 import {
   BookStrategySelector,
+  type CustomBookConfig,
   NumberStrategySelector,
   SeriesStrategySelector,
 } from "./StrategySelector";
@@ -108,6 +109,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
     useState<SeriesStrategy>("series_volume");
   const [seriesConfig, setSeriesConfig] = useState<Record<string, unknown>>({});
   const [bookStrategy, setBookStrategy] = useState<BookStrategy>("filename");
+  const [bookConfig, setBookConfig] = useState<CustomBookConfig>({});
   const [numberStrategy, setNumberStrategy] =
     useState<NumberStrategy>("file_order");
 
@@ -172,6 +174,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       setSeriesStrategy(library.seriesStrategy || "series_volume");
       setSeriesConfig((library.seriesConfig as Record<string, unknown>) || {});
       setBookStrategy(library.bookStrategy || "filename");
+      setBookConfig((library.bookConfig as CustomBookConfig) || {});
       setNumberStrategy(library.numberStrategy || "file_order");
 
       // Initialize preprocessing state from library
@@ -202,6 +205,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       setSeriesStrategy("series_volume");
       setSeriesConfig({});
       setBookStrategy("filename");
+      setBookConfig({});
       setNumberStrategy("file_order");
       // Reset preprocessing state
       setPreprocessingRules([]);
@@ -342,6 +346,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
             defaultReadingDirection: readingDirection,
             // Book naming and number strategies can be changed in edit mode
             bookStrategy,
+            bookConfig:
+              bookStrategy === "custom" && Object.keys(bookConfig).length > 0
+                ? bookConfig
+                : undefined,
             numberStrategy,
             // Preprocessing fields - always send the value to allow clearing
             // Empty array clears the rules, array with items sets them
@@ -397,6 +405,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
         seriesConfig:
           Object.keys(seriesConfig).length > 0 ? seriesConfig : undefined,
         bookStrategy,
+        bookConfig:
+          bookStrategy === "custom" && Object.keys(bookConfig).length > 0
+            ? bookConfig
+            : undefined,
         numberStrategy,
         // Preprocessing fields
         titlePreprocessingRules:
@@ -802,7 +814,12 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 
         <Divider my="sm" />
 
-        <BookStrategySelector value={bookStrategy} onChange={setBookStrategy} />
+        <BookStrategySelector
+          value={bookStrategy}
+          onChange={setBookStrategy}
+          config={bookConfig}
+          onConfigChange={setBookConfig}
+        />
 
         <Divider my="sm" />
 

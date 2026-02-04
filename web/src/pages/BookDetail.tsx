@@ -968,7 +968,7 @@ export function BookDetail() {
           plugin={selectedPlugin}
           entityId={book.id}
           entityTitle={book.title}
-          entityAuthor={metadata?.authors?.[0]?.name}
+          entityAuthor={metadata?.authors?.[0]?.name ?? metadata?.writers?.[0]}
           contentType="book"
           onApplySuccess={handleMetadataApplySuccess}
         />
