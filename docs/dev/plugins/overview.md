@@ -13,38 +13,39 @@ Plugins are external processes that Codex spawns and communicates with. They can
 ## Architecture
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                          CODEX SERVER                             │
-├───────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │                      Plugin Manager                         │  │
-│  │                                                             │  │
-│  │  • Spawns plugin processes (command + args)                 │  │
-│  │  • Communicates via stdio/JSON-RPC                          │  │
-│  │  • Enforces RBAC permissions on writes                      │  │
-│  │  • Monitors health, auto-disables on failures               │  │
-│  └──────────────────────────┬──────────────────────────────────┘  │
-│                             │                                     │
-│             ┌───────────────┼───────────────┐                     │
-│             ▼               ▼               ▼                     │
-│     ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│     │  MangaBaka  │  │   AniList   │  │   Custom    │             │
-│     │   Plugin    │  │   Plugin    │  │   Plugin    │             │
-│     │             │  │             │  │             │             │
-│     │ stdin/stdout│  │ stdin/stdout│  │ stdin/stdout│             │
-│     └─────────────┘  └─────────────┘  └─────────────┘             │
-└───────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                                  CODEX SERVER                                    │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐   │
+│  │                            Plugin Manager                                 │   │
+│  │                                                                           │   │
+│  │  • Spawns plugin processes (command + args)                               │   │
+│  │  • Communicates via stdio/JSON-RPC                                        │   │
+│  │  • Enforces RBAC permissions on writes                                    │   │
+│  │  • Monitors health, auto-disables on failures                             │   │
+│  └─────────────────────────────────┬─────────────────────────────────────────┘   │
+│                                    │                                             │
+│             ┌──────────────────────┼──────────────────────┐                      │
+│             ▼                      ▼                      ▼                      │
+│     ┌──────────────┐  ┌────────────────────┐  ┌─────────────────┐                │
+│     │  MangaBaka   │  │   Open Library     │  │     Custom      │                │
+│     │   Plugin     │  │     Plugin         │  │     Plugin      │                │
+│     │  (series)    │  │  (books, no key)   │  │                 │                │
+│     │ stdin/stdout │  │   stdin/stdout     │  │  stdin/stdout   │                │
+│     └──────────────┘  └────────────────────┘  └─────────────────┘                │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Available Plugins
 
 ### Official Plugins
 
-| Plugin | Package | Description | Status |
-|--------|---------|-------------|--------|
-| MangaBaka Metadata | `@ashdev/codex-plugin-metadata-mangabaka` | Aggregated manga metadata from multiple sources | Available |
-| Echo Metadata | `@ashdev/codex-plugin-metadata-echo` | Test plugin for development | Available |
+| Plugin                | Package                                     | Description                                              | Status    |
+| --------------------- | ------------------------------------------- | -------------------------------------------------------- | --------- |
+| MangaBaka Metadata    | `@ashdev/codex-plugin-metadata-mangabaka`   | Aggregated manga metadata from multiple sources          | Available |
+| Open Library Metadata | `@ashdev/codex-plugin-metadata-openlibrary` | Book metadata from Open Library via ISBN or title search | Available |
+| Echo Metadata         | `@ashdev/codex-plugin-metadata-echo`        | Test plugin for development                              | Available |
 
 ### Community Plugins
 
@@ -65,34 +66,43 @@ The easiest way to run plugins is via `npx`, which downloads and runs the plugin
      -y
      @ashdev/codex-plugin-metadata-mangabaka@1.0.0
      ```
-4. Add your credentials (API keys, etc.)
+     Or for the Open Library plugin (no API key required):
+     ```
+     -y
+     @ashdev/codex-plugin-metadata-openlibrary@1.0.0
+     ```
+4. Add your credentials (API keys, etc.) — not required for Open Library
 5. Click **Save** and **Enable**
 
 :::warning Arguments Format
 **Each argument must be on its own line.** Do NOT combine arguments like `-y @package@1.0.0` on one line.
 
 ✅ Correct:
+
 ```
 -y
 @ashdev/codex-plugin-metadata-mangabaka@1.0.0
 ```
 
 ❌ Wrong:
+
 ```
 -y @ashdev/codex-plugin-metadata-mangabaka@1.0.0
 ```
+
 :::
 
 ### npx Options
 
-| Option | Arguments (one per line) | Description |
-|--------|---------|-------------|
-| Latest version | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka` | Always uses latest |
-| Specific version | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Pins to exact version |
-| Version range | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka@^1.0.0` | Allows compatible updates |
-| Faster startup | `-y`<br/>`--prefer-offline`<br/>`@ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
+| Option           | Arguments (one per line)                                                        | Description                   |
+| ---------------- | ------------------------------------------------------------------------------- | ----------------------------- |
+| Latest version   | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka`                              | Always uses latest            |
+| Specific version | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka@1.0.0`                        | Pins to exact version         |
+| Version range    | `-y`<br/>`@ashdev/codex-plugin-metadata-mangabaka@^1.0.0`                       | Allows compatible updates     |
+| Faster startup   | `-y`<br/>`--prefer-offline`<br/>`@ashdev/codex-plugin-metadata-mangabaka@1.0.0` | Skips version check if cached |
 
 **Flags explained:**
+
 - `-y` (or `--yes`): Auto-confirms installation, required for non-interactive environments like containers
 - `--prefer-offline`: Uses cached version without checking npm registry, faster startup
 
@@ -124,6 +134,7 @@ npm install -g @ashdev/codex-plugin-metadata-mangabaka
 ```
 
 Then configure:
+
 - **Command**: `codex-plugin-metadata-mangabaka`
 - **Arguments**: (none needed)
 
@@ -148,6 +159,7 @@ Plugins can use Handlebars templates to customize the search query. Configure a 
 ```
 
 Available template fields:
+
 - `metadata.title` - Series title (cleaned by preprocessing)
 - `metadata.year` - Publication year
 - `metadata.publisher` - Publisher name
@@ -171,6 +183,7 @@ Apply regex-based rules to clean search queries before sending to the plugin:
 ```
 
 Preprocessing can be configured at both library and plugin levels:
+
 - **Library rules**: Applied first, affect all plugins
 - **Plugin rules**: Applied after library rules, plugin-specific
 
