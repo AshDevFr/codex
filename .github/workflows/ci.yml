@@ -30,13 +30,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Run Rust tests
-  test:
-    name: Test
+  # Build test binaries and create nextest archive
+  build-tests:
+    name: Build Tests
     # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
     runs-on: arc-runner-codex
     container: ubuntu:22.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     env:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_GHA_VERSION: test
@@ -53,8 +53,43 @@ jobs:
         uses: taiki-e/install-action@nextest
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Run tests
-        run: cargo nextest run --features rar
+      - name: Build and archive tests
+        run: cargo nextest archive --features rar --archive-file nextest-archive.tar.zst
+      - name: Upload test archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+          retention-days: 1
+
+  # Run tests in parallel partitions
+  test:
+    name: Test (${{ matrix.partition }}/3)
+    needs: build-tests
+    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
+    runs-on: arc-runner-codex
+    container: ubuntu:22.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3]
+    steps:
+      - name: Install base dependencies
+        run: |
+          apt-get update
+          apt-get install -y git curl
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - name: Download test archive
+        uses: actions/download-artifact@v4
+        with:
+          name: nextest-archive
+      - name: Run tests (partition ${{ matrix.partition }}/3)
+        run: cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/3
 
   # Run linting checks
   lint:
