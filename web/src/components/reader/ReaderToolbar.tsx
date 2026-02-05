@@ -332,12 +332,21 @@ export function ReaderToolbar({
           {/* Bottom row: Progress slider (only for page-based readers) */}
           {showPageNavigation && (
             <Box px="md">
-              <Group gap="xs" align="center">
+              <Group
+                gap="xs"
+                align="center"
+                style={{
+                  flexDirection:
+                    readingDirection === "rtl" ? "row-reverse" : "row",
+                }}
+              >
                 <Text
                   size="xs"
                   c="dimmed"
                   w={40}
-                  style={{ textAlign: "right" }}
+                  style={{
+                    textAlign: readingDirection === "rtl" ? "left" : "right",
+                  }}
                 >
                   {progressPercent}%
                 </Text>
@@ -347,13 +356,23 @@ export function ReaderToolbar({
                   max={totalPages}
                   onChange={setPage}
                   size="xs"
-                  style={{ flex: 1 }}
+                  style={{
+                    flex: 1,
+                    transform:
+                      readingDirection === "rtl" ? "scaleX(-1)" : "none",
+                  }}
                   label={(value) => `Page ${value}`}
                   styles={{
+                    track: { backgroundColor: "var(--mantine-color-dark-4)" },
                     bar: { backgroundColor: "var(--mantine-color-blue-6)" },
                     thumb: {
                       backgroundColor: "var(--mantine-color-blue-6)",
                       borderColor: "var(--mantine-color-blue-6)",
+                    },
+                    label: {
+                      // Counter-flip the label so text isn't mirrored
+                      transform:
+                        readingDirection === "rtl" ? "scaleX(-1)" : "none",
                     },
                   }}
                 />

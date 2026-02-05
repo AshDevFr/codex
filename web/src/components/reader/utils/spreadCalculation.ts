@@ -27,6 +27,14 @@ export interface SpreadResult {
 }
 
 /**
+ * A spread entry used for building the spread map
+ */
+interface SpreadEntry {
+  pages: number[];
+  startPage: number;
+}
+
+/**
  * Detect page orientation from image dimensions.
  * Returns 'landscape' if width > height, 'portrait' otherwise.
  */
@@ -49,14 +57,96 @@ export function isWidePage(
 }
 
 /**
+ * Build all spreads for a book by walking through pages sequentially.
+ * This properly handles landscape pages that shift the pairing for subsequent pages.
+ *
+ * @param config - Spread configuration
+ * @returns Array of spread entries, each containing the pages in that spread
+ */
+export function buildAllSpreads(config: SpreadConfig): SpreadEntry[] {
+  const { totalPages, pageOrientations, showWideAlone, startOnOdd } = config;
+
+  if (totalPages === 0) {
+    return [];
+  }
+
+  const spreads: SpreadEntry[] = [];
+  let currentPage = 1;
+
+  // Handle first page separately if startOnOdd
+  if (startOnOdd && totalPages >= 1) {
+    // Page 1 is always shown alone when startOnOdd is true (cover page)
+    spreads.push({ pages: [1], startPage: 1 });
+    currentPage = 2;
+  }
+
+  // Process remaining pages sequentially
+  while (currentPage <= totalPages) {
+    const isLandscape =
+      showWideAlone && isWidePage(currentPage, pageOrientations);
+
+    if (isLandscape) {
+      // Landscape page is shown alone
+      spreads.push({ pages: [currentPage], startPage: currentPage });
+      currentPage++;
+    } else {
+      // Portrait page - try to pair with next page
+      const nextPage = currentPage + 1;
+
+      if (nextPage > totalPages) {
+        // Last page, show alone
+        spreads.push({ pages: [currentPage], startPage: currentPage });
+        currentPage++;
+      } else {
+        const nextIsLandscape =
+          showWideAlone && isWidePage(nextPage, pageOrientations);
+
+        if (nextIsLandscape) {
+          // Next page is landscape, show current alone
+          spreads.push({ pages: [currentPage], startPage: currentPage });
+          currentPage++;
+        } else {
+          // Both pages are portrait, pair them
+          spreads.push({
+            pages: [currentPage, nextPage],
+            startPage: currentPage,
+          });
+          currentPage += 2;
+        }
+      }
+    }
+  }
+
+  return spreads;
+}
+
+/**
+ * Find which spread contains the given page.
+ *
+ * @param page - The page number to find
+ * @param spreads - Array of spread entries
+ * @returns The spread entry containing the page, or undefined if not found
+ */
+function findSpreadForPage(
+  page: number,
+  spreads: SpreadEntry[],
+): SpreadEntry | undefined {
+  return spreads.find((spread) => spread.pages.includes(page));
+}
+
+/**
  * Calculate which pages to display for a given current page in double-page mode.
  *
- * The algorithm:
- * 1. If startOnOdd is true, page 1 is displayed alone, then 2-3, 4-5, etc.
- *    This ensures manga covers (typically page 1) are shown alone.
- * 2. If a page is landscape (wide), it's displayed alone.
- * 3. If the next page in a potential pair is landscape, current page is shown alone.
- * 4. If we're at the last page and it's odd-positioned, show it alone.
+ * This algorithm walks through pages sequentially from the beginning, properly
+ * handling landscape pages that shift the pairing for subsequent pages.
+ *
+ * Example with startOnOdd=true and page 6 being landscape:
+ * - Page 1: alone (cover)
+ * - Pages 2-3: spread
+ * - Pages 4-5: spread
+ * - Page 6: alone (landscape)
+ * - Pages 7-8: spread (pairing shifts because of landscape page)
+ * - Pages 9-10: spread
  *
  * @param currentPage - The current page number (1-indexed)
  * @param config - Spread configuration options
@@ -66,60 +156,26 @@ export function getSpreadPages(
   currentPage: number,
   config: SpreadConfig,
 ): SpreadResult {
-  const { totalPages, pageOrientations, showWideAlone, startOnOdd } = config;
+  const { totalPages } = config;
 
   // Boundary check
   if (currentPage < 1 || currentPage > totalPages || totalPages === 0) {
     return { pages: [], isSinglePage: true };
   }
 
-  // Check if current page is landscape (show alone)
-  if (showWideAlone && isWidePage(currentPage, pageOrientations)) {
+  // Build all spreads and find the one containing the current page
+  const spreads = buildAllSpreads(config);
+  const spread = findSpreadForPage(currentPage, spreads);
+
+  if (!spread) {
+    // Should not happen, but handle gracefully
     return { pages: [currentPage], isSinglePage: true };
   }
 
-  // Determine if this page should be the left side of a spread
-  // If startOnOdd: page 1 alone, then evens are left (2, 4, 6, ...)
-  // If !startOnOdd: odds are left (1, 3, 5, ...)
-  const isLeftPage = startOnOdd
-    ? currentPage % 2 === 0 // 2, 4, 6, ... are left pages
-    : currentPage % 2 === 1; // 1, 3, 5, ... are left pages
-
-  // Page 1 is always shown alone if startOnOdd is true
-  if (startOnOdd && currentPage === 1) {
-    return { pages: [currentPage], isSinglePage: true };
-  }
-
-  // Calculate the spread based on position
-  let leftPage: number;
-  let rightPage: number;
-
-  if (isLeftPage) {
-    leftPage = currentPage;
-    rightPage = currentPage + 1;
-  } else {
-    // We're on a right page, back up to show the spread
-    leftPage = currentPage - 1;
-    rightPage = currentPage;
-  }
-
-  // Handle edge case: if leftPage is 0 (shouldn't happen with above logic)
-  if (leftPage < 1) {
-    return { pages: [currentPage], isSinglePage: true };
-  }
-
-  // Check if right page exists
-  if (rightPage > totalPages) {
-    return { pages: [leftPage], isSinglePage: true };
-  }
-
-  // Check if right page is landscape (show left alone)
-  if (showWideAlone && isWidePage(rightPage, pageOrientations)) {
-    return { pages: [leftPage], isSinglePage: true };
-  }
-
-  // Return the spread
-  return { pages: [leftPage, rightPage], isSinglePage: false };
+  return {
+    pages: spread.pages,
+    isSinglePage: spread.pages.length === 1,
+  };
 }
 
 /**
@@ -155,23 +211,16 @@ export function getNextSpreadPage(
   currentPage: number,
   config: SpreadConfig,
 ): number | null {
-  const currentSpread = getSpreadPages(currentPage, config);
+  const spreads = buildAllSpreads(config);
+  const currentSpreadIndex = spreads.findIndex((spread) =>
+    spread.pages.includes(currentPage),
+  );
 
-  if (currentSpread.pages.length === 0) {
+  if (currentSpreadIndex === -1 || currentSpreadIndex >= spreads.length - 1) {
     return null;
   }
 
-  // Get the last page of the current spread
-  const lastPageOfSpread = Math.max(...currentSpread.pages);
-
-  // Next spread starts at the page after the last page of current spread
-  const nextPage = lastPageOfSpread + 1;
-
-  if (nextPage > config.totalPages) {
-    return null;
-  }
-
-  return nextPage;
+  return spreads[currentSpreadIndex + 1].startPage;
 }
 
 /**
@@ -186,31 +235,16 @@ export function getPrevSpreadPage(
   currentPage: number,
   config: SpreadConfig,
 ): number | null {
-  const currentSpread = getSpreadPages(currentPage, config);
+  const spreads = buildAllSpreads(config);
+  const currentSpreadIndex = spreads.findIndex((spread) =>
+    spread.pages.includes(currentPage),
+  );
 
-  if (currentSpread.pages.length === 0) {
+  if (currentSpreadIndex <= 0) {
     return null;
   }
 
-  // Get the first page of the current spread
-  const firstPageOfSpread = Math.min(...currentSpread.pages);
-
-  if (firstPageOfSpread <= 1) {
-    return null;
-  }
-
-  // Previous spread ends at the page before the first page of current spread
-  const prevLastPage = firstPageOfSpread - 1;
-
-  // Get the spread that contains this page
-  const prevSpread = getSpreadPages(prevLastPage, config);
-
-  if (prevSpread.pages.length === 0) {
-    return null;
-  }
-
-  // Return the first page of the previous spread
-  return Math.min(...prevSpread.pages);
+  return spreads[currentSpreadIndex - 1].startPage;
 }
 
 /**
@@ -226,38 +260,29 @@ export function getPreloadPages(
   config: SpreadConfig,
   preloadCount: number,
 ): number[] {
+  const spreads = buildAllSpreads(config);
+  const currentSpreadIndex = spreads.findIndex((spread) =>
+    spread.pages.includes(currentPage),
+  );
+
+  if (currentSpreadIndex === -1) {
+    return [];
+  }
+
   const pagesToPreload = new Set<number>();
-  const currentSpread = getSpreadPages(currentPage, config);
 
-  // Add current spread pages
-  for (const page of currentSpread.pages) {
-    pagesToPreload.add(page);
-  }
+  // Calculate range of spreads to preload
+  const startIndex = Math.max(0, currentSpreadIndex - preloadCount);
+  const endIndex = Math.min(
+    spreads.length - 1,
+    currentSpreadIndex + preloadCount,
+  );
 
-  // Preload ahead
-  let nextPage = currentPage;
-  for (let i = 0; i < preloadCount; i++) {
-    const next = getNextSpreadPage(nextPage, config);
-    if (next === null) break;
-
-    const nextSpread = getSpreadPages(next, config);
-    for (const page of nextSpread.pages) {
+  // Add all pages from spreads in range
+  for (let i = startIndex; i <= endIndex; i++) {
+    for (const page of spreads[i].pages) {
       pagesToPreload.add(page);
     }
-    nextPage = next;
-  }
-
-  // Preload behind
-  let prevPage = currentPage;
-  for (let i = 0; i < preloadCount; i++) {
-    const prev = getPrevSpreadPage(prevPage, config);
-    if (prev === null) break;
-
-    const prevSpread = getSpreadPages(prev, config);
-    for (const page of prevSpread.pages) {
-      pagesToPreload.add(page);
-    }
-    prevPage = prev;
   }
 
   return Array.from(pagesToPreload).sort((a, b) => a - b);

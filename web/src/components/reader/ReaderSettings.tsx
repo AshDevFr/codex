@@ -436,18 +436,25 @@ export function ReaderSettings({
                       }}
                     >
                       <Stack gap="xs">
-                        <Group justify="space-between">
-                          <Text size="sm">Wide pages alone</Text>
-                          <Switch
-                            size="sm"
-                            checked={displaySettings.doublePageShowWideAlone}
-                            onChange={(e) =>
-                              handleDoublePageWideAloneChange(
-                                e.currentTarget.checked,
-                              )
-                            }
-                          />
-                        </Group>
+                        <Box>
+                          <Group justify="space-between">
+                            <Text size="sm">Wide pages alone</Text>
+                            <Switch
+                              size="sm"
+                              checked={displaySettings.doublePageShowWideAlone}
+                              onChange={(e) =>
+                                handleDoublePageWideAloneChange(
+                                  e.currentTarget.checked,
+                                )
+                              }
+                            />
+                          </Group>
+                          {displaySettings.doublePageShowWideAlone && (
+                            <Text size="xs" c="dimmed" mt={4}>
+                              Wide pages will shift pairing for subsequent pages
+                            </Text>
+                          )}
+                        </Box>
                         <Group justify="space-between">
                           <Text size="sm">Start on odd page</Text>
                           <Switch

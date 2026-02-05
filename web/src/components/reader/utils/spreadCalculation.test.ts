@@ -259,6 +259,30 @@ describe("spreadCalculation", () => {
       });
     });
 
+    it("should shift pairing after landscape page", () => {
+      const config: SpreadConfig = {
+        totalPages: 10,
+        pageOrientations: { 2: "landscape" },
+        showWideAlone: true,
+        startOnOdd: true,
+        readingDirection: "ltr",
+      };
+      // With sequential algorithm:
+      // Page 1: alone (cover)
+      // Page 2: alone (landscape)
+      // Pages 3-4: spread (pairing shifts after landscape)
+      // Pages 5-6: spread
+      // etc.
+      expect(getSpreadPages(3, config)).toEqual({
+        pages: [3, 4],
+        isSinglePage: false,
+      });
+      expect(getSpreadPages(4, config)).toEqual({
+        pages: [3, 4],
+        isSinglePage: false,
+      });
+    });
+
     it("should not affect portrait pages", () => {
       const config: SpreadConfig = {
         totalPages: 10,
@@ -342,10 +366,16 @@ describe("spreadCalculation", () => {
         ...config,
         pageOrientations: { 3: "landscape" },
       };
-      // Page 2 alone (because 3 is landscape), next is 3
+      // With sequential algorithm:
+      // Page 1: alone (cover)
+      // Page 2: alone (because 3 is landscape)
+      // Page 3: alone (landscape)
+      // Pages 4-5: spread
+      // etc.
+      expect(getNextSpreadPage(1, configWithLandscape)).toBe(2);
       expect(getNextSpreadPage(2, configWithLandscape)).toBe(3);
-      // Page 3 alone (landscape), next is 4
       expect(getNextSpreadPage(3, configWithLandscape)).toBe(4);
+      expect(getNextSpreadPage(4, configWithLandscape)).toBe(6);
     });
   });
 
@@ -387,10 +417,62 @@ describe("spreadCalculation", () => {
         ...config,
         pageOrientations: { 3: "landscape" },
       };
-      // Page 4 shows 4-5, prev is 3 (landscape, alone)
+      // With sequential algorithm:
+      // Page 1: alone (cover)
+      // Page 2: alone (because 3 is landscape)
+      // Page 3: alone (landscape)
+      // Pages 4-5: spread
+      // Pages 6-7: spread
+      // etc.
       expect(getPrevSpreadPage(4, configWithLandscape)).toBe(3);
-      // Page 3 alone (landscape), prev is 2 (alone because 3 is landscape)
       expect(getPrevSpreadPage(3, configWithLandscape)).toBe(2);
+      expect(getPrevSpreadPage(2, configWithLandscape)).toBe(1);
+    });
+
+    it("should navigate correctly when landscape page shifts pairing", () => {
+      // Simulates the bug scenario: page 6 is landscape
+      // With sequential algorithm:
+      // Page 1: alone (cover)
+      // Pages 2-3: spread
+      // Pages 4-5: spread
+      // Page 6: alone (landscape)
+      // Pages 7-8: spread (pairing shifts)
+      // Pages 9-10: spread
+      const configWithLandscape: SpreadConfig = {
+        ...config,
+        totalPages: 20,
+        pageOrientations: { 6: "landscape" },
+      };
+      // Page 6 is landscape, shown alone
+      expect(getSpreadPages(6, configWithLandscape)).toEqual({
+        pages: [6],
+        isSinglePage: true,
+      });
+      // Page 7 pairs with 8 (pairing shifts after landscape)
+      expect(getSpreadPages(7, configWithLandscape)).toEqual({
+        pages: [7, 8],
+        isSinglePage: false,
+      });
+      // Page 8 is part of spread with 7
+      expect(getSpreadPages(8, configWithLandscape)).toEqual({
+        pages: [7, 8],
+        isSinglePage: false,
+      });
+      // Pages 9-10 continue the pattern
+      expect(getSpreadPages(9, configWithLandscape)).toEqual({
+        pages: [9, 10],
+        isSinglePage: false,
+      });
+
+      // Navigation forward: 6 -> 7 -> 9
+      expect(getNextSpreadPage(6, configWithLandscape)).toBe(7);
+      expect(getNextSpreadPage(7, configWithLandscape)).toBe(9);
+      expect(getNextSpreadPage(8, configWithLandscape)).toBe(9);
+
+      // Navigation backward: 9 -> 7 -> 6
+      expect(getPrevSpreadPage(9, configWithLandscape)).toBe(7);
+      expect(getPrevSpreadPage(7, configWithLandscape)).toBe(6);
+      expect(getPrevSpreadPage(6, configWithLandscape)).toBe(4);
     });
   });
 
