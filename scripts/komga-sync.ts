@@ -309,8 +309,9 @@ function analyzeSync(komgaBooks: KomgaBook[], codexIndex: Map<string, CodexBook>
       } else if (komgaProgress.completed && !codexProgress.completed) {
         // Komga says completed, Codex doesn't
         needsSync = true;
-      } else if (komgaProgress.page > codexProgress.page) {
-        // Komga is further ahead
+      } else if (komgaProgress.page > codexProgress.page && !codexProgress.completed) {
+        // Komga is further ahead (but skip if Codex already completed — page
+        // counts differ between systems, especially for EPUBs)
         needsSync = true;
       }
     }

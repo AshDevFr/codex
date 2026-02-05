@@ -6,8 +6,8 @@ use super::super::dto::book::{extract_library_id_from_condition, KomgaBookDto};
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::series::{
     codex_to_komga_reading_direction, codex_to_komga_status, extract_read_status_from_condition,
-    KomgaBooksMetadataAggregationDto, KomgaSeriesDto, KomgaSeriesMetadataDto,
-    KomgaSeriesSearchRequestDto,
+    KomgaAlternateTitleDto, KomgaAuthorDto, KomgaBooksMetadataAggregationDto, KomgaSeriesDto,
+    KomgaSeriesMetadataDto, KomgaSeriesSearchRequestDto, KomgaWebLinkDto,
 };
 use super::libraries::{extract_page_image, generate_thumbnail};
 use crate::api::{
@@ -16,9 +16,10 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::db::repositories::{
-    BookQueryOptions, BookQuerySort, BookRepository, BookSortField, ReadProgressRepository,
+    AlternateTitleRepository, BookMetadataRepository, BookQueryOptions, BookQuerySort,
+    BookRepository, BookSortField, ExternalLinkRepository, GenreRepository, ReadProgressRepository,
     SeriesCoversRepository, SeriesMetadataRepository, SeriesQueryOptions, SeriesQuerySort,
-    SeriesRepository, SeriesSortFieldRepo,
+    SeriesRepository, SeriesSortFieldRepo, TagRepository,
 };
 use crate::require_permission;
 use axum::{
@@ -769,6 +770,41 @@ async fn build_series_dto(
 
     let books_unread_count = (book_count - books_read_count - books_in_progress_count).max(0);
 
+    // Fetch related metadata: genres, tags, links, alternate titles
+    let genres = GenreRepository::get_genres_for_series(&state.db, series.id)
+        .await
+        .unwrap_or_default();
+    let tags = TagRepository::get_tags_for_series(&state.db, series.id)
+        .await
+        .unwrap_or_default();
+    let external_links = ExternalLinkRepository::get_for_series(&state.db, series.id)
+        .await
+        .unwrap_or_default();
+    let alternate_titles = AlternateTitleRepository::get_for_series(&state.db, series.id)
+        .await
+        .unwrap_or_default();
+
+    let genre_names: Vec<String> = genres.into_iter().map(|g| g.name).collect();
+    let tag_names: Vec<String> = tags.into_iter().map(|t| t.name).collect();
+    let links: Vec<KomgaWebLinkDto> = external_links
+        .into_iter()
+        .map(|l| KomgaWebLinkDto {
+            label: l.source_name,
+            url: l.url,
+        })
+        .collect();
+    let alt_titles: Vec<KomgaAlternateTitleDto> = alternate_titles
+        .into_iter()
+        .map(|at| KomgaAlternateTitleDto {
+            label: at.label,
+            title: at.title,
+        })
+        .collect();
+
+    // Aggregate book authors from book metadata
+    let (aggregated_authors, aggregated_tags) =
+        aggregate_books_metadata(&state.db, series.id).await;
+
     // Build metadata DTO
     let now = chrono::Utc::now().to_rfc3339();
     let series_metadata = if let Some(ref m) = metadata {
@@ -789,17 +825,17 @@ async fn build_series_dto(
             age_rating_lock: m.age_rating_lock,
             language: m.language.clone().unwrap_or_default(),
             language_lock: m.language_lock,
-            genres: Vec::new(), // TODO: Add genres from series_genres
+            genres: genre_names,
             genres_lock: m.genres_lock,
-            tags: Vec::new(), // TODO: Add tags from series_tags
+            tags: tag_names,
             tags_lock: m.tags_lock,
             total_book_count: m.total_book_count,
             total_book_count_lock: m.total_book_count_lock,
             sharing_labels: Vec::new(),
             sharing_labels_lock: false,
-            links: Vec::new(),
+            links,
             links_lock: false,
-            alternate_titles: Vec::new(),
+            alternate_titles: alt_titles,
             alternate_titles_lock: false,
             created: m.created_at.to_rfc3339(),
             last_modified: m.updated_at.to_rfc3339(),
@@ -811,14 +847,18 @@ async fn build_series_dto(
             title_sort: series.name.clone(),
             created: now.clone(),
             last_modified: now.clone(),
+            genres: genre_names,
+            tags: tag_names,
+            links,
+            alternate_titles: alt_titles,
             ..Default::default()
         }
     };
 
-    // Build aggregation DTO (simplified)
+    // Build aggregation DTO
     let books_metadata = KomgaBooksMetadataAggregationDto {
-        authors: Vec::new(), // TODO: Aggregate from book metadata
-        tags: Vec::new(),
+        authors: aggregated_authors,
+        tags: aggregated_tags,
         release_date: None,
         summary: series_metadata.summary.clone(),
         summary_number: String::new(),
@@ -879,6 +919,77 @@ async fn get_series_read_stats(
     }
 
     Ok((read_count, in_progress_count))
+}
+
+/// Aggregate authors and tags from all book metadata in a series
+///
+/// Collects authors from individual role fields (writer, penciller, etc.)
+/// and deduplicates them. Also collects tags from book metadata genre fields.
+async fn aggregate_books_metadata(
+    db: &sea_orm::DatabaseConnection,
+    series_id: Uuid,
+) -> (Vec<KomgaAuthorDto>, Vec<String>) {
+    let books = BookRepository::list_by_series(db, series_id, false)
+        .await
+        .unwrap_or_default();
+
+    if books.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+    let metadata_map = BookMetadataRepository::get_by_book_ids(db, &book_ids)
+        .await
+        .unwrap_or_default();
+
+    let mut authors: Vec<KomgaAuthorDto> = Vec::new();
+    let mut seen_authors: std::collections::HashSet<(String, String)> =
+        std::collections::HashSet::new();
+    let mut tags_set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+    for meta in metadata_map.values() {
+        // Collect authors from role-based fields
+        let role_fields: &[(&str, &Option<String>)] = &[
+            ("writer", &meta.writer),
+            ("penciller", &meta.penciller),
+            ("inker", &meta.inker),
+            ("colorist", &meta.colorist),
+            ("letterer", &meta.letterer),
+            ("cover", &meta.cover_artist),
+            ("editor", &meta.editor),
+        ];
+
+        for (role, value) in role_fields {
+            if let Some(name) = value {
+                let name = name.trim().to_string();
+                if !name.is_empty() {
+                    let key = (name.clone(), role.to_string());
+                    if seen_authors.insert(key) {
+                        authors.push(KomgaAuthorDto {
+                            name,
+                            role: role.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Collect tags from book metadata genre field
+        if let Some(ref genre) = meta.genre {
+            for g in genre.split(',') {
+                let g = g.trim().to_string();
+                if !g.is_empty() {
+                    tags_set.insert(g);
+                }
+            }
+        }
+    }
+
+    // Sort authors by name then role for stable output
+    authors.sort_by(|a, b| a.name.cmp(&b.name).then(a.role.cmp(&b.role)));
+
+    let tags: Vec<String> = tags_set.into_iter().collect();
+    (authors, tags)
 }
 
 /// Get default series cover from first book's first page
