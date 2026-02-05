@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.8.3] - 2026-02-05
+
+### 🐛 Bug Fixes
+
+- *(reader)* Improve double-page spread handling and RTL progress bar
+- *(reader)* Fix double-page spread initialization and page jump on load
+
+### 📚 Documentation
+
+- *(screenshots)* Update documentation screenshots and add expanded plugin details view
+
 ## [1.8.2] - 2026-02-04
 
 ### 🚀 Features

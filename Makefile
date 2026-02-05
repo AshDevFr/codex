@@ -529,7 +529,7 @@ release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0
 	@echo "$(GREEN)✓$(NC) web/package.json version set to $(VERSION)"
 
 	@for dir in $(PLUGIN_DIRS); do \
-		@echo "$(YELLOW)Building $$dir...$(NC)"; \
+		echo "$(YELLOW)Building $$dir...$(NC)"; \
 		(cd plugins/$$dir && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1); \
 		echo "$(GREEN)✓$(NC) plugins/$$dir/package.json version set to $(VERSION)"; \
 	done
