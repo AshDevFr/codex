@@ -451,22 +451,34 @@ export function ReaderSettings({
                           </Group>
                           {displaySettings.doublePageShowWideAlone && (
                             <Text size="xs" c="dimmed" mt={4}>
-                              Wide pages will shift pairing for subsequent pages
+                              Wide pages define spread boundaries
                             </Text>
                           )}
                         </Box>
-                        <Group justify="space-between">
-                          <Text size="sm">Start on odd page</Text>
-                          <Switch
-                            size="sm"
-                            checked={displaySettings.doublePageStartOnOdd}
-                            onChange={(e) =>
-                              handleDoublePageStartOnOddChange(
-                                e.currentTarget.checked,
-                              )
-                            }
-                          />
-                        </Group>
+                        <Box>
+                          <Group justify="space-between">
+                            <Text size="sm">
+                              {displaySettings.doublePageShowWideAlone
+                                ? "Cover page alone"
+                                : "Start on odd page"}
+                            </Text>
+                            <Switch
+                              size="sm"
+                              checked={displaySettings.doublePageStartOnOdd}
+                              onChange={(e) =>
+                                handleDoublePageStartOnOddChange(
+                                  e.currentTarget.checked,
+                                )
+                              }
+                            />
+                          </Group>
+                          {displaySettings.doublePageStartOnOdd &&
+                            !displaySettings.doublePageShowWideAlone && (
+                              <Text size="xs" c="dimmed" mt={4}>
+                                Page 1 alone, then 2-3, 4-5, etc.
+                              </Text>
+                            )}
+                        </Box>
                       </Stack>
                     </Box>
                   )}

@@ -86,6 +86,7 @@ export function Reader() {
       format={book.fileFormat}
       fileSize={book.fileSize}
       readingDirection={book.readingDirection ?? null}
+      analyzed={book.analyzed}
       startPage={startPage}
       startPercent={startPercent}
       incognito={incognito}

@@ -287,6 +287,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::delete_book_cover,
 
         // Page endpoints
+        v1::handlers::list_book_pages,
         v1::handlers::get_page_image,
 
         // Reading progress endpoints

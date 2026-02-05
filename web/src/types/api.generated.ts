@@ -1192,6 +1192,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pages for a book
+         * @description Returns page metadata including dimensions for analyzed books.
+         *     Returns an empty array for books that haven't been analyzed yet.
+         *     The frontend should use the `analyzed` field from BookDto to determine
+         *     whether to use dynamic spread calculation (when true) or simple static
+         *     spreads (when false).
+         */
+        get: operations["list_book_pages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/pages/{page_number}": {
         parameters: {
             query?: never;
@@ -5225,6 +5249,11 @@ export interface components {
              */
             analysisError?: string | null;
             /**
+             * @description Whether the book has been analyzed (page dimensions available)
+             * @example true
+             */
+            analyzed: boolean;
+            /**
              * Format: date-time
              * @description When the book was added to the library
              * @example 2024-01-01T00:00:00Z
@@ -7532,6 +7561,11 @@ export interface components {
              */
             analysisError?: string | null;
             /**
+             * @description Whether the book has been analyzed (page dimensions available)
+             * @example true
+             */
+            analyzed: boolean;
+            /**
              * Format: date-time
              * @description When the book was added to the library
              * @example 2024-01-01T00:00:00Z
@@ -9337,8 +9371,8 @@ export interface components {
             id: string;
             /**
              * Format: int32
-             * @description Page number within the book (0-indexed)
-             * @example 0
+             * @description Page number within the book (1-indexed)
+             * @example 1
              */
             pageNumber: number;
             /**
@@ -9473,6 +9507,11 @@ export interface components {
                  * @example Failed to parse CBZ: invalid archive
                  */
                 analysisError?: string | null;
+                /**
+                 * @description Whether the book has been analyzed (page dimensions available)
+                 * @example true
+                 */
+                analyzed: boolean;
                 /**
                  * Format: date-time
                  * @description When the book was added to the library
@@ -16859,6 +16898,43 @@ export interface operations {
                 content?: never;
             };
             /** @description Book or metadata not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_book_pages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book ID */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of pages with dimensions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageDto"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Book not found */
             404: {
                 headers: {
                     [name: string]: unknown;

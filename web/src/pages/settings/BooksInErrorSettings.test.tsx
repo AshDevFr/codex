@@ -32,6 +32,7 @@ const createMockBook = (overrides: {
   pageCount: number;
 }) => ({
   ...overrides,
+  analyzed: false,
   deleted: false,
   fileHash: `hash-${overrides.id}`,
   filePath: `/path/to/${overrides.title}.${overrides.fileFormat}`,

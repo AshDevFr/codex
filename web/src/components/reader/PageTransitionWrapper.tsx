@@ -102,6 +102,7 @@ export function PageTransitionWrapper({
   const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
   const previousKeyRef = useRef<string>(pageKey);
+  const isInitialMountRef = useRef<boolean>(true);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -143,6 +144,21 @@ export function PageTransitionWrapper({
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    }
+
+    // Skip transition on initial mount (when first loading the book or reloading the page)
+    // Also skip when navigationDirection is null - this means no user navigation has happened yet
+    // (e.g., loading saved progress, URL navigation, or programmatic page changes during init)
+    if (isInitialMountRef.current || navigationDirection === null) {
+      isInitialMountRef.current = false;
+      setState({
+        currentContent: children,
+        previousContent: null,
+        currentKey: pageKey,
+        phase: "idle",
+        slideDirection: "right",
+      });
+      return;
     }
 
     if (transition === "none") {

@@ -658,6 +658,7 @@ export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
     updatedAt: faker.date.recent().toISOString(),
     readProgress: null,
     readingDirection: "ltr",
+    analyzed: true,
     deleted: false,
     ...overrides,
   };

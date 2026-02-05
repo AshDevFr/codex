@@ -46,6 +46,9 @@ export interface BookExternalLinkDto {
 export type BookMetadataLocks = components["schemas"]["BookMetadataLocks"];
 export type UpdateBookMetadataLocksRequest = Partial<BookMetadataLocks>;
 
+// Page type
+export type PageDto = components["schemas"]["PageDto"];
+
 export interface BookFilters {
   page?: number;
   pageSize?: number;
@@ -563,6 +566,17 @@ export const booksApi = {
       "/books/bulk/thumbnails/generate",
       { bookIds, force },
     );
+    return response.data;
+  },
+
+  /**
+   * Get all pages for a book with their dimensions.
+   * Returns an empty array if the book hasn't been analyzed yet.
+   * Use the book's `analyzed` field to determine whether to use
+   * dynamic spread calculation (when true) or simple static spreads (when false).
+   */
+  getPages: async (bookId: string): Promise<PageDto[]> => {
+    const response = await api.get<PageDto[]>(`/books/${bookId}/pages`);
     return response.data;
   },
 };

@@ -141,6 +141,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::retry_all_book_errors),
         )
         // Page routes
+        .route("/books/:book_id/pages", get(handlers::list_book_pages))
         .route(
             "/books/:book_id/pages/:page_number",
             get(handlers::get_page_image),

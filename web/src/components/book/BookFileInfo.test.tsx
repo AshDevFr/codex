@@ -19,6 +19,7 @@ const createMockBook = (overrides?: Partial<Book>): Book => ({
   createdAt: "2024-06-15T12:00:00Z",
   updatedAt: "2024-06-15T12:00:00Z",
   analysisError: null,
+  analyzed: true,
   number: 1,
   readProgress: null,
   deleted: false,

@@ -423,6 +423,50 @@ describe("ComicReader", () => {
       const container = document.querySelector('[style*="100vw"]');
       expect(container).toBeInTheDocument();
     });
+
+    it("should not snap to spread start on initial load with saved progress", async () => {
+      // Regression test: When loading a book with saved progress (e.g., page 7),
+      // the reader should NOT snap to a different page during initial load.
+      // This was happening because the snap-to-spread effect was firing before
+      // orientations loaded from the backend.
+
+      // Set initial page to 7 (simulating saved reading progress)
+      mockUseReadProgress = vi.fn(() => ({
+        initialPage: 7,
+        isLoading: false,
+      }));
+
+      // Double page mode with startOnOdd (spreads: 1, 2-3, 4-5, 6-7, 8-9...)
+      mockUseSeriesReaderSettings = vi.fn(() => ({
+        hasSeriesOverride: false,
+        effectiveSettings: {
+          fitMode: "screen" as const,
+          pageLayout: "double" as const,
+          readingDirection: "ltr" as const,
+          backgroundColor: "black" as const,
+          doublePageShowWideAlone: true,
+          doublePageStartOnOdd: true,
+        },
+        forkToSeries: vi.fn(),
+        resetToGlobal: vi.fn(),
+        updateSetting: vi.fn(),
+        isLoaded: true,
+        seriesOverride: null,
+      }));
+
+      renderWithProviders(<ComicReader {...defaultProps} totalPages={20} />);
+
+      // Wait for initialization
+      await waitFor(() => {
+        expect(useReaderStore.getState().currentBookId).toBe("book-123");
+      });
+
+      // The current page should stay at 7 (or snap to 6 which is the spread start),
+      // but NOT jump to an unrelated page like 5
+      const currentPage = useReaderStore.getState().currentPage;
+      // With startOnOdd=true, page 7 is in spread [6-7], so valid values are 6 or 7
+      expect([6, 7]).toContain(currentPage);
+    });
   });
 
   describe("per-series settings integration", () => {

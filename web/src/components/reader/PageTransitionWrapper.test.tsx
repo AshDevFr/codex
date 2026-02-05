@@ -143,6 +143,7 @@ describe("PageTransitionWrapper", () => {
         </Wrapper>,
       );
 
+      // First page change is skipped (initial mount behavior)
       rerender(
         <Wrapper>
           <PageTransitionWrapper
@@ -157,12 +158,27 @@ describe("PageTransitionWrapper", () => {
         </Wrapper>,
       );
 
+      // Second page change should trigger transition
+      rerender(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-3"
+            transition="fade"
+            duration={200}
+            navigationDirection="next"
+            readingDirection="ltr"
+          >
+            <div>Page 3</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
       // Advance past the initial frame delay
       vi.advanceTimersByTime(20);
 
       // Both pages should be visible during transition
-      expect(screen.getByText("Page 1")).toBeInTheDocument();
       expect(screen.getByText("Page 2")).toBeInTheDocument();
+      expect(screen.getByText("Page 3")).toBeInTheDocument();
     });
 
     it("should remove old content after transition completes", async () => {
@@ -238,6 +254,7 @@ describe("PageTransitionWrapper", () => {
         </Wrapper>,
       );
 
+      // First page change is skipped (initial mount behavior)
       rerender(
         <Wrapper>
           <PageTransitionWrapper
@@ -252,12 +269,27 @@ describe("PageTransitionWrapper", () => {
         </Wrapper>,
       );
 
+      // Second page change should trigger transition
+      rerender(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-3"
+            transition="slide"
+            duration={200}
+            navigationDirection="next"
+            readingDirection="ltr"
+          >
+            <div>Page 3</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
       // Advance past the initial frame delay
       vi.advanceTimersByTime(20);
 
       // Both pages should be visible during transition
-      expect(screen.getByText("Page 1")).toBeInTheDocument();
       expect(screen.getByText("Page 2")).toBeInTheDocument();
+      expect(screen.getByText("Page 3")).toBeInTheDocument();
     });
 
     it("should remove old content after transition completes", async () => {
@@ -424,6 +456,7 @@ describe("PageTransitionWrapper", () => {
         </Wrapper>,
       );
 
+      // First page change is skipped (initial mount behavior)
       rerender(
         <Wrapper>
           <PageTransitionWrapper
@@ -438,19 +471,137 @@ describe("PageTransitionWrapper", () => {
         </Wrapper>,
       );
 
+      // Second page change should trigger transition with custom duration
+      rerender(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-3"
+            transition="fade"
+            duration={500}
+            navigationDirection="next"
+            readingDirection="ltr"
+          >
+            <div>Page 3</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
       // At 300ms, transition should still be in progress
       await act(async () => {
         vi.advanceTimersByTime(300);
       });
-      expect(screen.getByText("Page 1")).toBeInTheDocument();
       expect(screen.getByText("Page 2")).toBeInTheDocument();
+      expect(screen.getByText("Page 3")).toBeInTheDocument();
 
       // At 560ms (500ms duration + 50ms buffer + margin), transition should be complete
       await act(async () => {
         vi.advanceTimersByTime(260);
       });
-      expect(screen.queryByText("Page 1")).not.toBeInTheDocument();
+      expect(screen.queryByText("Page 2")).not.toBeInTheDocument();
+      expect(screen.getByText("Page 3")).toBeInTheDocument();
+    });
+  });
+
+  describe("initial mount behavior", () => {
+    it("should skip transition on first page key change (initial load)", async () => {
+      const { rerender } = render(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-1"
+            transition="fade"
+            duration={200}
+            navigationDirection={null}
+            readingDirection="ltr"
+          >
+            <div>Page 1</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
+      expect(screen.getByText("Page 1")).toBeInTheDocument();
+
+      // First page change should be instant (no transition)
+      rerender(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-2"
+            transition="fade"
+            duration={200}
+            navigationDirection="next"
+            readingDirection="ltr"
+          >
+            <div>Page 2</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
+      // Should immediately show only new content (no transition, so no both pages visible)
       expect(screen.getByText("Page 2")).toBeInTheDocument();
+      expect(screen.queryByText("Page 1")).not.toBeInTheDocument();
+    });
+
+    it("should play transition on subsequent page changes", async () => {
+      const { rerender } = render(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-1"
+            transition="slide"
+            duration={200}
+            navigationDirection={null}
+            readingDirection="ltr"
+          >
+            <div>Page 1</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
+      // First page change - skipped (initial mount)
+      rerender(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-2"
+            transition="slide"
+            duration={200}
+            navigationDirection="next"
+            readingDirection="ltr"
+          >
+            <div>Page 2</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
+      // Verify first change was instant
+      expect(screen.getByText("Page 2")).toBeInTheDocument();
+      expect(screen.queryByText("Page 1")).not.toBeInTheDocument();
+
+      // Second page change - should transition
+      rerender(
+        <Wrapper>
+          <PageTransitionWrapper
+            pageKey="page-3"
+            transition="slide"
+            duration={200}
+            navigationDirection="next"
+            readingDirection="ltr"
+          >
+            <div>Page 3</div>
+          </PageTransitionWrapper>
+        </Wrapper>,
+      );
+
+      vi.advanceTimersByTime(20);
+
+      // Both pages should be visible during transition
+      expect(screen.getByText("Page 2")).toBeInTheDocument();
+      expect(screen.getByText("Page 3")).toBeInTheDocument();
+
+      // Complete transition
+      await act(async () => {
+        vi.advanceTimersByTime(260);
+      });
+
+      expect(screen.queryByText("Page 2")).not.toBeInTheDocument();
+      expect(screen.getByText("Page 3")).toBeInTheDocument();
     });
   });
 });

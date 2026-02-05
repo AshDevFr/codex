@@ -22,6 +22,8 @@ interface ReaderRouterProps {
   fileSize?: number;
   /** Reading direction from series/library metadata */
   readingDirection?: string | null;
+  /** Whether the book has been analyzed (page dimensions available) */
+  analyzed?: boolean;
   /** Starting page from URL parameter (overrides saved progress) - for comics/PDFs */
   startPage?: number;
   /** Starting percentage from URL parameter (0.0-1.0) - for EPUBs */
@@ -48,6 +50,7 @@ export function ReaderRouter({
   format,
   fileSize,
   readingDirection,
+  analyzed,
   startPage,
   startPercent,
   incognito,
@@ -81,6 +84,7 @@ export function ReaderRouter({
           totalPages={totalPages}
           format={normalizedFormat}
           readingDirectionOverride={readingDirectionOverride}
+          analyzed={analyzed}
           startPage={startPage}
           incognito={incognito}
           onClose={onClose}
@@ -124,6 +128,7 @@ export function ReaderRouter({
           totalPages={totalPages}
           format={normalizedFormat}
           readingDirectionOverride={readingDirectionOverride}
+          analyzed={analyzed}
           startPage={startPage}
           incognito={incognito}
           onClose={onClose}

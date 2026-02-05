@@ -414,3 +414,149 @@ async fn test_get_page_image_detects_content_type_without_metadata() {
         content_type
     );
 }
+
+// ============================================================================
+// GET /api/v1/books/{book_id}/pages (List Pages) Tests
+// ============================================================================
+
+/// Page DTO for deserializing list_book_pages response
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct PageDto {
+    id: uuid::Uuid,
+    book_id: uuid::Uuid,
+    page_number: i32,
+    file_name: String,
+    file_format: String,
+    file_size: i64,
+    width: Option<i32>,
+    height: Option<i32>,
+}
+
+#[tokio::test]
+async fn test_list_book_pages_returns_pages_for_analyzed_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/fake/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create an analyzed book
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/fake/path/test_comic.cbz",
+        "test_comic.cbz",
+        "cbz",
+        true, // analyzed
+        3,    // page_count
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    // Create page metadata for the analyzed book
+    for i in 1..=3 {
+        let page = create_test_page_model(book.id, i, &format!("page{:03}.png", i), "png");
+        PageRepository::create(&db, &page).await.unwrap();
+    }
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/pages", book.id), &token);
+    let (status, response): (StatusCode, Option<Vec<PageDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let pages = response.expect("Expected pages response");
+    assert_eq!(pages.len(), 3);
+
+    // Verify page data
+    assert_eq!(pages[0].page_number, 1);
+    assert_eq!(pages[0].book_id, book.id);
+    assert_eq!(pages[0].file_format, "png");
+    // Width/height come from create_test_page_model (800x1200)
+    assert_eq!(pages[0].width, Some(800));
+    assert_eq!(pages[0].height, Some(1200));
+
+    // Verify pages are sorted by page_number
+    assert!(pages[0].page_number < pages[1].page_number);
+    assert!(pages[1].page_number < pages[2].page_number);
+}
+
+#[tokio::test]
+async fn test_list_book_pages_returns_empty_for_unanalyzed_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/fake/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create an unanalyzed book
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/fake/path/test_comic.cbz",
+        "test_comic.cbz",
+        "cbz",
+        false, // NOT analyzed
+        0,     // page_count unknown
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/pages", book.id), &token);
+    let (status, response): (StatusCode, Option<Vec<PageDto>>) =
+        make_json_request(app, request).await;
+
+    // Should return 200 with empty array for unanalyzed books
+    assert_eq!(status, StatusCode::OK);
+    let pages = response.expect("Expected pages response");
+    assert!(pages.is_empty(), "Expected empty array for unanalyzed book");
+}
+
+#[tokio::test]
+async fn test_list_book_pages_returns_not_found_for_nonexistent_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let fake_book_id = uuid::Uuid::new_v4();
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/pages", fake_book_id), &token);
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert!(error.message.contains("Book not found"));
+}
+
+#[tokio::test]
+async fn test_list_book_pages_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state);
+
+    let fake_book_id = uuid::Uuid::new_v4();
+    let request = get_request(&format!("/api/v1/books/{}/pages", fake_book_id));
+    let (status, _body) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}

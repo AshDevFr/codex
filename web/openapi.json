@@ -3841,6 +3841,57 @@
         ]
       }
     },
+    "/api/v1/books/{book_id}/pages": {
+      "get": {
+        "tags": [
+          "Books"
+        ],
+        "summary": "List pages for a book",
+        "description": "Returns page metadata including dimensions for analyzed books.\nReturns an empty array for books that haven't been analyzed yet.\nThe frontend should use the `analyzed` field from BookDto to determine\nwhether to use dynamic spread calculation (when true) or simple static\nspreads (when false).",
+        "operationId": "list_book_pages",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pages with dimensions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PageDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{book_id}/pages/{page_number}": {
       "get": {
         "tags": [
@@ -14736,7 +14787,8 @@
           "pageCount",
           "createdAt",
           "updatedAt",
-          "deleted"
+          "deleted",
+          "analyzed"
         ],
         "properties": {
           "analysisError": {
@@ -14746,6 +14798,11 @@
             ],
             "description": "Error message if book analysis failed",
             "example": "Failed to parse CBZ: invalid archive"
+          },
+          "analyzed": {
+            "type": "boolean",
+            "description": "Whether the book has been analyzed (page dimensions available)",
+            "example": true
           },
           "createdAt": {
             "type": "string",
@@ -18926,6 +18983,7 @@
           "fileHash",
           "pageCount",
           "deleted",
+          "analyzed",
           "metadata",
           "createdAt",
           "updatedAt"
@@ -18938,6 +18996,11 @@
             ],
             "description": "Error message if book analysis failed",
             "example": "Failed to parse CBZ: invalid archive"
+          },
+          "analyzed": {
+            "type": "boolean",
+            "description": "Whether the book has been analyzed (page dimensions available)",
+            "example": true
           },
           "createdAt": {
             "type": "string",
@@ -22300,8 +22363,8 @@
           "pageNumber": {
             "type": "integer",
             "format": "int32",
-            "description": "Page number within the book (0-indexed)",
-            "example": 0
+            "description": "Page number within the book (1-indexed)",
+            "example": 1
           },
           "width": {
             "type": [
@@ -22524,7 +22587,8 @@
                 "pageCount",
                 "createdAt",
                 "updatedAt",
-                "deleted"
+                "deleted",
+                "analyzed"
               ],
               "properties": {
                 "analysisError": {
@@ -22534,6 +22598,11 @@
                   ],
                   "description": "Error message if book analysis failed",
                   "example": "Failed to parse CBZ: invalid archive"
+                },
+                "analyzed": {
+                  "type": "boolean",
+                  "description": "Whether the book has been analyzed (page dimensions available)",
+                  "example": true
                 },
                 "createdAt": {
                   "type": "string",

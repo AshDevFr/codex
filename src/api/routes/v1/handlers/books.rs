@@ -3,6 +3,7 @@ use super::super::dto::{
     common::{
         ListPaginationParams, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
     },
+    page::PageDto,
     AdjacentBooksResponse, BookDetailResponse, BookDto, BookFullMetadata, BookListRequest,
     BookListResponse, BookMetadataDto, BookMetadataLocks, FullBookListResponse, FullBookResponse,
     PaginationParams,
@@ -14,8 +15,8 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesMetadataRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
+    ReadProgressRepository, SeriesMetadataRepository,
 };
 use crate::require_permission;
 use crate::services::FilterService;
@@ -208,6 +209,7 @@ pub async fn books_to_dtos(
                 read_progress,
                 analysis_error: book.analysis_error,
                 deleted: book.deleted,
+                analyzed: book.analyzed,
                 reading_direction,
             }
         })
@@ -473,6 +475,7 @@ pub async fn books_to_full_dtos_batched(
             page_count: book.page_count,
             number,
             deleted: book.deleted,
+            analyzed: book.analyzed,
             analysis_error: book.analysis_error,
             reading_direction,
             read_progress,
@@ -4239,4 +4242,79 @@ pub async fn retry_all_book_errors(
         tasks_enqueued,
         message,
     }))
+}
+
+/// List pages for a book
+///
+/// Returns page metadata including dimensions for analyzed books.
+/// Returns an empty array for books that haven't been analyzed yet.
+/// The frontend should use the `analyzed` field from BookDto to determine
+/// whether to use dynamic spread calculation (when true) or simple static
+/// spreads (when false).
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/pages",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+    ),
+    responses(
+        (status = 200, description = "List of pages with dimensions", body = Vec<PageDto>),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn list_book_pages(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<Vec<PageDto>>, ApiError> {
+    require_permission!(auth, Permission::PagesRead)?;
+
+    // Fetch book to verify it exists and check if analyzed
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check sharing tag access for the book's series
+    let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
+
+    if !content_filter.is_book_visible(book.series_id) {
+        return Err(ApiError::NotFound("Book not found".to_string()));
+    }
+
+    // If book is not analyzed, return empty array
+    // Frontend will use simple static spreads in this case
+    if !book.analyzed {
+        return Ok(Json(vec![]));
+    }
+
+    // Fetch all pages for the book
+    let pages = PageRepository::list_by_book(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch pages: {}", e)))?;
+
+    // Convert to DTOs
+    let page_dtos: Vec<PageDto> = pages
+        .into_iter()
+        .map(|page| PageDto {
+            id: page.id,
+            book_id: page.book_id,
+            page_number: page.page_number,
+            file_name: page.file_name,
+            file_format: page.format,
+            file_size: page.file_size,
+            width: Some(page.width),
+            height: Some(page.height),
+        })
+        .collect();
+
+    Ok(Json(page_dtos))
 }

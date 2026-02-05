@@ -1,5 +1,7 @@
 import { Box, Center, Loader, Text } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { booksApi } from "@/api/books";
 import {
   type FitMode,
   type PageOrientation,
@@ -22,6 +24,7 @@ import { PageTransitionWrapper } from "./PageTransitionWrapper";
 import { ReaderSettings } from "./ReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
 import {
+  detectPageOrientation,
   getDisplayOrder,
   getNextSpreadPage,
   getPreloadPages,
@@ -43,6 +46,8 @@ interface ComicReaderProps {
   format: string;
   /** Reading direction from series/library metadata (optional) */
   readingDirectionOverride?: "ltr" | "rtl" | "ttb" | "webtoon" | null;
+  /** Whether the book has been analyzed (page dimensions available) */
+  analyzed?: boolean;
   /** Starting page from URL parameter (overrides saved progress) */
   startPage?: number;
   /** Incognito mode - when true, progress tracking is disabled */
@@ -69,6 +74,7 @@ export function ComicReader({
   totalPages,
   format,
   readingDirectionOverride,
+  analyzed = false,
   startPage,
   incognito,
   onClose,
@@ -100,6 +106,7 @@ export function ComicReader({
 
   // Reader store state (global/non-forkable settings)
   const currentPage = useReaderStore((state) => state.currentPage);
+  const currentBookId = useReaderStore((state) => state.currentBookId);
   const toolbarVisible = useReaderStore((state) => state.toolbarVisible);
   const isFullscreen = useReaderStore((state) => state.isFullscreen);
   const autoHideToolbar = useReaderStore(
@@ -174,41 +181,71 @@ export function ComicReader({
     enabled: !incognito,
   });
 
-  // Initialize reader when progress loads and we haven't initialized this book yet
-  // Track by bookId to handle navigation between different books
+  // Fetch page dimensions when book is analyzed
+  // This allows us to pre-populate orientations for smart spread calculation
+  const { data: pages, isLoading: pagesLoading } = useQuery({
+    queryKey: ["book-pages", bookId],
+    queryFn: () => booksApi.getPages(bookId),
+    enabled: analyzed,
+    staleTime: Number.POSITIVE_INFINITY, // Page dimensions don't change
+  });
+
+  // Are we still waiting for data needed before initialization?
+  // For analyzed books, we wait for pages to load so we can compute final spreads.
+  // For non-analyzed books, pages query is disabled so pagesLoading is false.
+  const dataReady = !progressLoading && (!analyzed || !pagesLoading);
+
+  // Initialize reader once all data is ready.
+  // This runs once per bookId and does everything atomically:
+  // 1. Populates all orientations from backend pages (if available)
+  // 2. Computes the spread-adjusted start page
+  // 3. Initializes the reader store with the correct page
   useEffect(() => {
     if (
-      !progressLoading &&
-      totalPages > 0 &&
-      initializedBookIdRef.current !== bookId
+      !dataReady ||
+      totalPages <= 0 ||
+      initializedBookIdRef.current === bookId
     ) {
-      initializedBookIdRef.current = bookId;
+      return;
+    }
+    initializedBookIdRef.current = bookId;
 
-      // Determine the effective starting page:
-      // 1. URL parameter (startPage) takes priority if valid
-      // 2. Otherwise use saved progress (initialPage)
-      let effectiveStartPage: number;
-      if (startPage && startPage >= 1 && startPage <= totalPages) {
-        effectiveStartPage = startPage;
-      } else {
-        effectiveStartPage = initialPage;
-      }
-
-      initializeReader(bookId, totalPages, effectiveStartPage);
-
-      // Set reading direction override from series/library
-      if (readingDirectionOverride) {
-        setReadingDirectionOverrideAction(readingDirectionOverride);
+    // Populate all orientations from backend data before computing spreads
+    if (pages && pages.length > 0) {
+      for (const page of pages) {
+        if (page.width != null && page.height != null) {
+          const orientation = detectPageOrientation(page.width, page.height);
+          setPageOrientation(page.pageNumber, orientation);
+        }
       }
     }
+
+    // Determine the effective starting page:
+    // 1. URL parameter (startPage) takes priority if valid
+    // 2. Otherwise use saved progress (initialPage)
+    let effectiveStartPage: number;
+    if (startPage && startPage >= 1 && startPage <= totalPages) {
+      effectiveStartPage = startPage;
+    } else {
+      effectiveStartPage = initialPage;
+    }
+
+    initializeReader(bookId, totalPages, effectiveStartPage);
+
+    // Set reading direction override from series/library
+    if (readingDirectionOverride) {
+      setReadingDirectionOverrideAction(readingDirectionOverride);
+    }
   }, [
+    dataReady,
     bookId,
     totalPages,
     startPage,
     initialPage,
-    progressLoading,
+    pages,
     readingDirectionOverride,
     initializeReader,
+    setPageOrientation,
     setReadingDirectionOverrideAction,
   ]);
 
@@ -353,18 +390,32 @@ export function ComicReader({
     [bookId],
   );
 
+  // Determine if we have orientation data loaded from backend
+  // Only enable showWideAlone when we have pre-populated orientations from backend pages
+  const hasOrientationsLoaded = useMemo(() => {
+    // If not analyzed, orientations come from preloading (not reliable for spreads)
+    if (!analyzed) return false;
+    // If pages haven't loaded yet, we don't have orientations
+    if (!pages || pages.length === 0) return false;
+    // Check if we have at least some orientations populated
+    return Object.keys(pageOrientations).length > 0;
+  }, [analyzed, pages, pageOrientations]);
+
   // Spread configuration for double-page mode
+  // When book is not analyzed OR orientations haven't loaded yet, we disable showWideAlone
+  // to use simple static spreads (1-2, 3-4, ... or 1, 2-3, 4-5, ... depending on startOnOdd)
   const spreadConfig: SpreadConfig = useMemo(
     () => ({
       totalPages,
       pageOrientations,
-      showWideAlone: doublePageShowWideAlone,
+      showWideAlone: hasOrientationsLoaded ? doublePageShowWideAlone : false,
       startOnOdd: doublePageStartOnOdd,
       readingDirection,
     }),
     [
       totalPages,
       pageOrientations,
+      hasOrientationsLoaded,
       doublePageShowWideAlone,
       doublePageStartOnOdd,
       readingDirection,
@@ -501,35 +552,50 @@ export function ComicReader({
     onTap: toggleToolbar,
   });
 
-  // Preload adjacent pages (spread-aware) and track in store
+  // Preload adjacent pages and track in store
+  // Also detect orientation for preloaded images
+  // In double-page mode, we always preload a few pages ahead to detect orientations
+  // before they're needed for spread calculation
   useEffect(() => {
     // Build list of pages to preload (current page + adjacent pages)
-    let pagesToPreload: number[] = [currentPage];
+    const pagesToPreload = new Set<number>([currentPage]);
 
-    if (preloadPages > 0) {
-      if (pageLayout === "double") {
-        // Use spread-aware preloading - double the count since each "page" in settings
-        // should mean one spread (2 pages) in double-page mode
-        pagesToPreload = [
-          ...pagesToPreload,
-          ...getPreloadPages(currentPage, spreadConfig, preloadPages * 2),
-        ];
-      } else {
-        // Single page preloading
-        for (let i = 1; i <= preloadPages; i++) {
-          pagesToPreload.push(currentPage - i, currentPage + i);
-        }
+    // Always preload pages around current position
+    const basePreloadCount = Math.max(preloadPages, 2); // At least 2 pages ahead
+    for (let i = 1; i <= basePreloadCount; i++) {
+      pagesToPreload.add(currentPage + i);
+      pagesToPreload.add(currentPage - i);
+    }
+
+    // In double-page mode, also use spread-aware preloading
+    if (pageLayout === "double" && preloadPages > 0) {
+      const spreadPreloadPages = getPreloadPages(
+        currentPage,
+        spreadConfig,
+        preloadPages * 2,
+      );
+      for (const p of spreadPreloadPages) {
+        pagesToPreload.add(p);
       }
     }
 
-    const validPages = pagesToPreload.filter((p) => p >= 1 && p <= totalPages);
+    const validPages = Array.from(pagesToPreload).filter(
+      (p) => p >= 1 && p <= totalPages,
+    );
 
-    // Preload and track each image
+    // Preload and track each image, also detect orientation if not already known
     for (const pageNum of validPages) {
       const url = getPageUrl(pageNum);
       const img = new Image();
       img.onload = () => {
         addPreloadedImage(url);
+        // Only detect orientation from preloaded image if we don't already have it from backend
+        // When hasOrientationsLoaded is true, we already have all page dimensions from the API
+        if (!hasOrientationsLoaded) {
+          const orientation =
+            img.naturalWidth > img.naturalHeight ? "landscape" : "portrait";
+          setPageOrientation(pageNum, orientation);
+        }
       };
       img.src = url;
     }
@@ -541,6 +607,8 @@ export function ComicReader({
     spreadConfig,
     getPageUrl,
     addPreloadedImage,
+    setPageOrientation,
+    hasOrientationsLoaded,
   ]);
 
   // Sync URL query parameter with current page
@@ -553,8 +621,15 @@ export function ComicReader({
     }
   }, [currentPage]);
 
-  // Loading state - wait for both progress and series settings to load
-  if (progressLoading || !seriesSettingsLoaded) {
+  // Loading state - wait for progress, series settings, and initialization
+  // We check currentBookId === bookId to ensure the store has been updated
+  // with the correct book and page before rendering
+  // Exception: if totalPages is 0, we don't need to wait for initialization
+  if (
+    progressLoading ||
+    !seriesSettingsLoaded ||
+    (totalPages > 0 && currentBookId !== bookId)
+  ) {
     return (
       <Center
         style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}

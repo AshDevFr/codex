@@ -573,6 +573,10 @@ pub struct BookDto {
     #[schema(example = false)]
     pub deleted: bool,
 
+    /// Whether the book has been analyzed (page dimensions available)
+    #[schema(example = true)]
+    pub analyzed: bool,
+
     /// Effective reading direction (from series metadata, or library default if not set)
     /// Values: ltr, rtl, ttb or webtoon
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1959,6 +1963,10 @@ pub struct FullBookResponse {
     /// Whether the book has been soft-deleted
     #[schema(example = false)]
     pub deleted: bool,
+
+    /// Whether the book has been analyzed (page dimensions available)
+    #[schema(example = true)]
+    pub analyzed: bool,
 
     /// Error message if book analysis failed
     #[serde(skip_serializing_if = "Option::is_none")]
