@@ -14,8 +14,9 @@ use codex::api::routes::komga::dto::library::KomgaLibraryDto;
 use codex::api::routes::komga::dto::pagination::KomgaPage;
 use codex::api::routes::komga::dto::series::KomgaSeriesDto;
 use codex::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, ReadProgressRepository,
-    SeriesRepository, UserRepository,
+    AlternateTitleRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
+    GenreRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, TagRepository,
+    UserRepository,
 };
 use codex::db::ScanningStrategy;
 use codex::utils::password;
@@ -2797,4 +2798,738 @@ async fn test_komga_series_read_progress_reflected_in_response() {
         assert_eq!(series_dto.books_unread_count, 0);
         assert_eq!(series_dto.books_in_progress_count, 0);
     }
+}
+
+// ============================================================================
+// Series Metadata Fields Tests (genres, tags, links, alternate titles, authors)
+// ============================================================================
+
+/// Test that GET /series/{id} returns genres from the database
+#[tokio::test]
+async fn test_komga_series_returns_genres() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Black Clover", None)
+        .await
+        .unwrap();
+
+    // Add genres to the series
+    GenreRepository::set_genres_for_series(
+        &db,
+        series.id,
+        vec![
+            "action".to_string(),
+            "fantasy".to_string(),
+            "comedy".to_string(),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    // Genres should be populated and sorted alphabetically
+    assert_eq!(dto.metadata.genres.len(), 3);
+    assert_eq!(dto.metadata.genres[0], "action");
+    assert_eq!(dto.metadata.genres[1], "comedy");
+    assert_eq!(dto.metadata.genres[2], "fantasy");
+}
+
+/// Test that GET /series/{id} returns tags from the database
+#[tokio::test]
+async fn test_komga_series_returns_tags() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Black Clover", None)
+        .await
+        .unwrap();
+
+    // Add tags to the series
+    TagRepository::set_tags_for_series(
+        &db,
+        series.id,
+        vec![
+            "magic".to_string(),
+            "shounen".to_string(),
+            "demons".to_string(),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    // Tags should be populated and sorted alphabetically
+    assert_eq!(dto.metadata.tags.len(), 3);
+    assert_eq!(dto.metadata.tags[0], "demons");
+    assert_eq!(dto.metadata.tags[1], "magic");
+    assert_eq!(dto.metadata.tags[2], "shounen");
+}
+
+/// Test that GET /series/{id} returns external links from the database
+#[tokio::test]
+async fn test_komga_series_returns_links() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Black Clover", None)
+        .await
+        .unwrap();
+
+    // Add external links
+    ExternalLinkRepository::create(
+        &db,
+        series.id,
+        "anilist",
+        "https://anilist.co/manga/86123",
+        Some("86123"),
+    )
+    .await
+    .unwrap();
+    ExternalLinkRepository::create(
+        &db,
+        series.id,
+        "myanimelist",
+        "https://myanimelist.net/manga/86337",
+        Some("86337"),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    // Links should be populated
+    assert_eq!(dto.metadata.links.len(), 2);
+
+    let urls: Vec<&str> = dto.metadata.links.iter().map(|l| l.url.as_str()).collect();
+    assert!(urls.contains(&"https://anilist.co/manga/86123"));
+    assert!(urls.contains(&"https://myanimelist.net/manga/86337"));
+}
+
+/// Test that GET /series/{id} returns alternate titles from the database
+#[tokio::test]
+async fn test_komga_series_returns_alternate_titles() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Black Clover", None)
+        .await
+        .unwrap();
+
+    // Add alternate titles
+    AlternateTitleRepository::create(&db, series.id, "Native", "ブラッククローバー")
+        .await
+        .unwrap();
+    AlternateTitleRepository::create(&db, series.id, "Roman", "Black Clover")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    // Alternate titles should be populated
+    assert_eq!(dto.metadata.alternate_titles.len(), 2);
+
+    let labels: Vec<&str> = dto
+        .metadata
+        .alternate_titles
+        .iter()
+        .map(|at| at.label.as_str())
+        .collect();
+    assert!(labels.contains(&"Native"));
+    assert!(labels.contains(&"Roman"));
+
+    // Verify the Japanese title is present
+    let native = dto
+        .metadata
+        .alternate_titles
+        .iter()
+        .find(|at| at.label == "Native")
+        .unwrap();
+    assert_eq!(native.title, "ブラッククローバー");
+}
+
+/// Test that GET /series/{id} returns aggregated book authors in booksMetadata
+#[tokio::test]
+async fn test_komga_series_returns_books_metadata_authors() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Black Clover", None)
+        .await
+        .unwrap();
+
+    // Create a book with author metadata
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/manga/Black Clover/v01.cbz",
+        "v01.cbz",
+        "hash_author_1",
+        "cbz",
+        200,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    // Create book metadata with author fields populated
+    create_book_metadata_with_authors(
+        &db,
+        created_book.id,
+        Some("Yuuki Tabata"), // writer
+        Some("Yuuki Tabata"), // penciller
+        Some("Yuuki Tabata"), // colorist
+        None,                 // letterer
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    // Authors should be aggregated from book metadata
+    assert!(!dto.books_metadata.authors.is_empty());
+
+    let author_roles: Vec<(&str, &str)> = dto
+        .books_metadata
+        .authors
+        .iter()
+        .map(|a| (a.name.as_str(), a.role.as_str()))
+        .collect();
+
+    assert!(author_roles.contains(&("Yuuki Tabata", "writer")));
+    assert!(author_roles.contains(&("Yuuki Tabata", "penciller")));
+    assert!(author_roles.contains(&("Yuuki Tabata", "colorist")));
+}
+
+/// Test that GET /series/{id} returns all metadata fields together
+#[tokio::test]
+async fn test_komga_series_returns_all_metadata_fields() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Set up all metadata types
+    GenreRepository::set_genres_for_series(
+        &db,
+        series.id,
+        vec!["action".to_string(), "drama".to_string()],
+    )
+    .await
+    .unwrap();
+
+    TagRepository::set_tags_for_series(
+        &db,
+        series.id,
+        vec!["magic".to_string(), "fantasy".to_string()],
+    )
+    .await
+    .unwrap();
+
+    ExternalLinkRepository::create(
+        &db,
+        series.id,
+        "anilist",
+        "https://anilist.co/manga/1",
+        None,
+    )
+    .await
+    .unwrap();
+
+    AlternateTitleRepository::create(&db, series.id, "Japanese", "テスト")
+        .await
+        .unwrap();
+
+    // Create a book with author metadata
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/manga/Test/v01.cbz",
+        "v01.cbz",
+        "hash_all_1",
+        "cbz",
+        100,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+    create_book_metadata_with_authors(&db, created_book.id, Some("Author A"), None, None, None)
+        .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaSeriesDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    // All fields should be populated
+    assert_eq!(dto.metadata.genres.len(), 2);
+    assert_eq!(dto.metadata.tags.len(), 2);
+    assert_eq!(dto.metadata.links.len(), 1);
+    assert_eq!(dto.metadata.alternate_titles.len(), 1);
+    assert_eq!(dto.books_metadata.authors.len(), 1);
+    assert_eq!(dto.books_metadata.authors[0].name, "Author A");
+    assert_eq!(dto.books_metadata.authors[0].role, "writer");
+}
+
+/// Test that series list endpoint also returns populated metadata fields
+#[tokio::test]
+async fn test_komga_list_series_returns_metadata_fields() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Black Clover", None)
+        .await
+        .unwrap();
+
+    // Add genres and tags
+    GenreRepository::set_genres_for_series(
+        &db,
+        series.id,
+        vec!["action".to_string(), "fantasy".to_string()],
+    )
+    .await
+    .unwrap();
+
+    TagRepository::set_tags_for_series(&db, series.id, vec!["shounen".to_string()])
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let request = get_request_with_auth("/komga/api/v1/series", &token);
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 1);
+
+    let dto = &page.content[0];
+    assert_eq!(dto.metadata.genres.len(), 2);
+    assert!(dto.metadata.genres.contains(&"action".to_string()));
+    assert!(dto.metadata.genres.contains(&"fantasy".to_string()));
+    assert_eq!(dto.metadata.tags.len(), 1);
+    assert_eq!(dto.metadata.tags[0], "shounen");
+}
+
+// ============================================================================
+// Book Metadata Fields Tests (authors, summary, release_date, tags)
+// ============================================================================
+
+/// Test that GET /books/{id} returns authors from book metadata
+#[tokio::test]
+async fn test_komga_book_returns_metadata_authors() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/manga/Test/v01.cbz",
+        "v01.cbz",
+        "hash_bm_auth_1",
+        "cbz",
+        200,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    create_book_metadata_with_authors(
+        &db,
+        created_book.id,
+        Some("Author A"),
+        Some("Artist B"),
+        Some("Colorist C"),
+        Some("Letterer D"),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/books/{}", created_book.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaBookDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    assert_eq!(dto.metadata.authors.len(), 4);
+    let author_roles: Vec<(&str, &str)> = dto
+        .metadata
+        .authors
+        .iter()
+        .map(|a| (a.name.as_str(), a.role.as_str()))
+        .collect();
+    assert!(author_roles.contains(&("Author A", "writer")));
+    assert!(author_roles.contains(&("Artist B", "penciller")));
+    assert!(author_roles.contains(&("Colorist C", "colorist")));
+    assert!(author_roles.contains(&("Letterer D", "letterer")));
+}
+
+/// Test that GET /books/{id} returns summary, release_date, and tags
+#[tokio::test]
+async fn test_komga_book_returns_metadata_fields() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/manga/Test/v01.cbz",
+        "v01.cbz",
+        "hash_bm_fields_1",
+        "cbz",
+        200,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    // Create metadata with summary, release date, genre, and title
+    create_book_metadata_full(
+        &db,
+        created_book.id,
+        Some("Chapter 1: The Beginning"),
+        Some("The adventure begins here."),
+        Some(2024),
+        Some(6),
+        Some(15),
+        Some("action, fantasy, comedy"),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/books/{}", created_book.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<KomgaBookDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+
+    assert_eq!(dto.metadata.title, "Chapter 1: The Beginning");
+    assert_eq!(dto.metadata.summary, "The adventure begins here.");
+    assert_eq!(dto.metadata.release_date, Some("2024-06-15".to_string()));
+    assert_eq!(dto.metadata.tags.len(), 3);
+    assert!(dto.metadata.tags.contains(&"action".to_string()));
+    assert!(dto.metadata.tags.contains(&"fantasy".to_string()));
+    assert!(dto.metadata.tags.contains(&"comedy".to_string()));
+}
+
+/// Test that POST /books/list returns metadata for all books in results
+#[tokio::test]
+async fn test_komga_search_books_returns_metadata() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/manga/Test/v01.cbz",
+        "v01.cbz",
+        "hash_bm_search_1",
+        "cbz",
+        100,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    create_book_metadata_with_authors(&db, created_book.id, Some("Writer X"), None, None, None)
+        .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let request = post_request_with_auth_json("/komga/api/v1/books/list", &token, "{}");
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 1);
+
+    let dto = &page.content[0];
+    assert_eq!(dto.metadata.authors.len(), 1);
+    assert_eq!(dto.metadata.authors[0].name, "Writer X");
+    assert_eq!(dto.metadata.authors[0].role, "writer");
+}
+
+// Helper to create book metadata with full fields
+#[allow(clippy::too_many_arguments)]
+async fn create_book_metadata_full(
+    db: &sea_orm::DatabaseConnection,
+    book_id: uuid::Uuid,
+    title: Option<&str>,
+    summary: Option<&str>,
+    year: Option<i32>,
+    month: Option<i32>,
+    day: Option<i32>,
+    genre: Option<&str>,
+) {
+    use codex::db::entities::book_metadata;
+    let metadata = book_metadata::Model {
+        id: uuid::Uuid::new_v4(),
+        book_id,
+        title: title.map(|s| s.to_string()),
+        title_sort: title.map(|s| s.to_string()),
+        number: None,
+        summary: summary.map(|s| s.to_string()),
+        writer: None,
+        penciller: None,
+        inker: None,
+        colorist: None,
+        letterer: None,
+        cover_artist: None,
+        editor: None,
+        publisher: None,
+        imprint: None,
+        genre: genre.map(|s| s.to_string()),
+        language_iso: None,
+        format_detail: None,
+        black_and_white: None,
+        manga: None,
+        year,
+        month,
+        day,
+        volume: None,
+        count: None,
+        isbns: None,
+        title_lock: false,
+        title_sort_lock: false,
+        number_lock: false,
+        summary_lock: false,
+        writer_lock: false,
+        penciller_lock: false,
+        inker_lock: false,
+        colorist_lock: false,
+        letterer_lock: false,
+        cover_artist_lock: false,
+        editor_lock: false,
+        publisher_lock: false,
+        imprint_lock: false,
+        genre_lock: false,
+        language_iso_lock: false,
+        format_detail_lock: false,
+        black_and_white_lock: false,
+        manga_lock: false,
+        year_lock: false,
+        month_lock: false,
+        day_lock: false,
+        volume_lock: false,
+        count_lock: false,
+        isbns_lock: false,
+        book_type: None,
+        subtitle: None,
+        authors_json: None,
+        translator: None,
+        edition: None,
+        original_title: None,
+        original_year: None,
+        series_position: None,
+        series_total: None,
+        subjects: None,
+        awards_json: None,
+        custom_metadata: None,
+        book_type_lock: false,
+        subtitle_lock: false,
+        authors_json_lock: false,
+        translator_lock: false,
+        edition_lock: false,
+        original_title_lock: false,
+        original_year_lock: false,
+        series_position_lock: false,
+        series_total_lock: false,
+        subjects_lock: false,
+        awards_json_lock: false,
+        custom_metadata_lock: false,
+        cover_lock: false,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    BookMetadataRepository::upsert(db, &metadata).await.unwrap();
+}
+
+// Helper to create book metadata with author role fields
+async fn create_book_metadata_with_authors(
+    db: &sea_orm::DatabaseConnection,
+    book_id: uuid::Uuid,
+    writer: Option<&str>,
+    penciller: Option<&str>,
+    colorist: Option<&str>,
+    letterer: Option<&str>,
+) {
+    use codex::db::entities::book_metadata;
+    let metadata = book_metadata::Model {
+        id: uuid::Uuid::new_v4(),
+        book_id,
+        title: None,
+        title_sort: None,
+        number: None,
+        summary: None,
+        writer: writer.map(|s| s.to_string()),
+        penciller: penciller.map(|s| s.to_string()),
+        inker: None,
+        colorist: colorist.map(|s| s.to_string()),
+        letterer: letterer.map(|s| s.to_string()),
+        cover_artist: None,
+        editor: None,
+        publisher: None,
+        imprint: None,
+        genre: None,
+        language_iso: None,
+        format_detail: None,
+        black_and_white: None,
+        manga: None,
+        year: None,
+        month: None,
+        day: None,
+        volume: None,
+        count: None,
+        isbns: None,
+        title_lock: false,
+        title_sort_lock: false,
+        number_lock: false,
+        summary_lock: false,
+        writer_lock: false,
+        penciller_lock: false,
+        inker_lock: false,
+        colorist_lock: false,
+        letterer_lock: false,
+        cover_artist_lock: false,
+        editor_lock: false,
+        publisher_lock: false,
+        imprint_lock: false,
+        genre_lock: false,
+        language_iso_lock: false,
+        format_detail_lock: false,
+        black_and_white_lock: false,
+        manga_lock: false,
+        year_lock: false,
+        month_lock: false,
+        day_lock: false,
+        volume_lock: false,
+        count_lock: false,
+        isbns_lock: false,
+        book_type: None,
+        subtitle: None,
+        authors_json: None,
+        translator: None,
+        edition: None,
+        original_title: None,
+        original_year: None,
+        series_position: None,
+        series_total: None,
+        subjects: None,
+        awards_json: None,
+        custom_metadata: None,
+        book_type_lock: false,
+        subtitle_lock: false,
+        authors_json_lock: false,
+        translator_lock: false,
+        edition_lock: false,
+        original_title_lock: false,
+        original_year_lock: false,
+        series_position_lock: false,
+        series_total_lock: false,
+        subjects_lock: false,
+        awards_json_lock: false,
+        custom_metadata_lock: false,
+        cover_lock: false,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    BookMetadataRepository::upsert(db, &metadata).await.unwrap();
 }

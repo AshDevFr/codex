@@ -300,20 +300,24 @@ impl KomgaBookDto {
         number: i32,
         read_progress: Option<&crate::db::entities::read_progress::Model>,
     ) -> Self {
+        Self::from_codex_with_metadata(book, series_title, number, read_progress, None)
+    }
+
+    /// Create a KomgaBookDto from Codex book data with optional book metadata
+    pub fn from_codex_with_metadata(
+        book: &crate::db::entities::books::Model,
+        series_title: &str,
+        number: i32,
+        read_progress: Option<&crate::db::entities::read_progress::Model>,
+        book_metadata: Option<&crate::db::entities::book_metadata::Model>,
+    ) -> Self {
         let media = KomgaMediaDto::from_codex(
             &book.format,
             book.page_count,
             book.analysis_error.as_deref(),
         );
 
-        let metadata = KomgaBookMetadataDto {
-            title: book.file_name.clone(),
-            number: number.to_string(),
-            number_sort: number as f64,
-            created: book.created_at.to_rfc3339(),
-            last_modified: book.updated_at.to_rfc3339(),
-            ..Default::default()
-        };
+        let metadata = build_book_metadata(book, number, book_metadata);
 
         let progress = read_progress.map(|p| KomgaReadProgressDto {
             page: p.current_page,
@@ -345,6 +349,100 @@ impl KomgaBookDto {
             file_hash: book.file_hash.clone(),
             oneshot: false,
         }
+    }
+}
+
+/// Build KomgaBookMetadataDto from book and optional book_metadata
+fn build_book_metadata(
+    book: &crate::db::entities::books::Model,
+    number: i32,
+    book_metadata: Option<&crate::db::entities::book_metadata::Model>,
+) -> KomgaBookMetadataDto {
+    let Some(meta) = book_metadata else {
+        return KomgaBookMetadataDto {
+            title: book.file_name.clone(),
+            number: number.to_string(),
+            number_sort: number as f64,
+            created: book.created_at.to_rfc3339(),
+            last_modified: book.updated_at.to_rfc3339(),
+            ..Default::default()
+        };
+    };
+
+    // Collect authors from role-based fields
+    let mut authors = Vec::new();
+    let role_fields: &[(&str, &Option<String>)] = &[
+        ("writer", &meta.writer),
+        ("penciller", &meta.penciller),
+        ("inker", &meta.inker),
+        ("colorist", &meta.colorist),
+        ("letterer", &meta.letterer),
+        ("cover", &meta.cover_artist),
+        ("editor", &meta.editor),
+    ];
+    for (role, value) in role_fields {
+        if let Some(name) = value {
+            let name = name.trim();
+            if !name.is_empty() {
+                authors.push(KomgaAuthorDto {
+                    name: name.to_string(),
+                    role: role.to_string(),
+                });
+            }
+        }
+    }
+
+    // Build release date from year/month/day
+    let release_date = match (meta.year, meta.month, meta.day) {
+        (Some(y), Some(m), Some(d)) => Some(format!("{:04}-{:02}-{:02}", y, m, d)),
+        (Some(y), Some(m), None) => Some(format!("{:04}-{:02}-01", y, m)),
+        (Some(y), None, None) => Some(format!("{:04}-01-01", y)),
+        _ => None,
+    };
+
+    // Collect tags from genre field (comma-separated)
+    let tags: Vec<String> = meta
+        .genre
+        .as_deref()
+        .map(|g| {
+            g.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let title = meta.title.clone().unwrap_or_else(|| book.file_name.clone());
+
+    let number_sort = meta
+        .number
+        .map(|n| n.to_string().parse::<f64>().unwrap_or(number as f64))
+        .unwrap_or(number as f64);
+
+    KomgaBookMetadataDto {
+        title,
+        title_lock: meta.title_lock,
+        summary: meta.summary.clone().unwrap_or_default(),
+        summary_lock: meta.summary_lock,
+        number: meta
+            .number
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| number.to_string()),
+        number_lock: meta.number_lock,
+        number_sort,
+        number_sort_lock: meta.number_lock,
+        release_date,
+        release_date_lock: meta.year_lock,
+        authors,
+        authors_lock: meta.writer_lock,
+        tags,
+        tags_lock: meta.genre_lock,
+        isbn: meta.isbns.clone().unwrap_or_default(),
+        isbn_lock: meta.isbns_lock,
+        links: Vec::new(),
+        links_lock: false,
+        created: meta.created_at.to_rfc3339(),
+        last_modified: meta.updated_at.to_rfc3339(),
     }
 }
 

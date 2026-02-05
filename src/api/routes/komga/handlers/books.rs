@@ -136,8 +136,18 @@ pub async fn get_book(
     // Get series title
     let series_title = get_series_title(&state, book.series_id).await?;
 
+    // Get book metadata
+    let metadata = BookMetadataRepository::get_by_book_id(&state.db, book_id)
+        .await
+        .ok()
+        .flatten();
+
     // Get book number from metadata
-    let book_number = get_book_number(&state, book_id).await.unwrap_or(1);
+    let book_number = metadata
+        .as_ref()
+        .and_then(|m| m.number)
+        .map(|d| d.to_string().parse::<i32>().unwrap_or(1))
+        .unwrap_or(1);
 
     // Get read progress for this book and user
     let read_progress = if let Some(uid) = user_id {
@@ -149,7 +159,13 @@ pub async fn get_book(
         None
     };
 
-    let dto = KomgaBookDto::from_codex(&book, &series_title, book_number, read_progress.as_ref());
+    let dto = KomgaBookDto::from_codex_with_metadata(
+        &book,
+        &series_title,
+        book_number,
+        read_progress.as_ref(),
+        metadata.as_ref(),
+    );
     Ok(Json(dto))
 }
 
@@ -270,13 +286,24 @@ pub async fn get_books_ondeck(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to fetch on-deck books: {}", e)))?;
 
+    // Batch-fetch book metadata for all books
+    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+    let metadata_map = BookMetadataRepository::get_by_book_ids(&state.db, &book_ids)
+        .await
+        .unwrap_or_default();
+
     // Convert to DTOs - on-deck books have no read progress by definition
     let mut dtos = Vec::with_capacity(books.len());
     for book in books {
         let series_title = get_series_title(&state, book.series_id).await?;
-        let book_number = get_book_number(&state, book.id).await.unwrap_or(1);
+        let meta = metadata_map.get(&book.id);
+        let book_number = meta
+            .and_then(|m| m.number)
+            .map(|d| d.to_string().parse::<i32>().unwrap_or(1))
+            .unwrap_or(1);
 
-        let dto = KomgaBookDto::from_codex(&book, &series_title, book_number, None);
+        let dto =
+            KomgaBookDto::from_codex_with_metadata(&book, &series_title, book_number, None, meta);
         dtos.push(dto);
     }
 
@@ -427,11 +454,21 @@ pub async fn search_books(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to query books: {}", e)))?;
 
+    // Batch-fetch book metadata for all books
+    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+    let metadata_map = BookMetadataRepository::get_by_book_ids(&state.db, &book_ids)
+        .await
+        .unwrap_or_default();
+
     // Convert to DTOs (no in-memory sorting needed - already sorted by database)
     let mut dtos = Vec::with_capacity(books.len());
     for book in books {
         let series_title = get_series_title(&state, book.series_id).await?;
-        let book_number = get_book_number(&state, book.id).await.unwrap_or(1);
+        let meta = metadata_map.get(&book.id);
+        let book_number = meta
+            .and_then(|m| m.number)
+            .map(|d| d.to_string().parse::<i32>().unwrap_or(1))
+            .unwrap_or(1);
 
         let read_progress =
             ReadProgressRepository::get_by_user_and_book(&state.db, user_id, book.id)
@@ -439,8 +476,13 @@ pub async fn search_books(
                 .ok()
                 .flatten();
 
-        let dto =
-            KomgaBookDto::from_codex(&book, &series_title, book_number, read_progress.as_ref());
+        let dto = KomgaBookDto::from_codex_with_metadata(
+            &book,
+            &series_title,
+            book_number,
+            read_progress.as_ref(),
+            meta,
+        );
         dtos.push(dto);
     }
 
@@ -509,7 +551,15 @@ pub async fn get_next_book(
 
     // Get series title and metadata
     let series_title = get_series_title(&state, next_book.series_id).await?;
-    let book_number = get_book_number(&state, next_book.id).await.unwrap_or(1);
+    let metadata = BookMetadataRepository::get_by_book_id(&state.db, next_book.id)
+        .await
+        .ok()
+        .flatten();
+    let book_number = metadata
+        .as_ref()
+        .and_then(|m| m.number)
+        .map(|d| d.to_string().parse::<i32>().unwrap_or(1))
+        .unwrap_or(1);
 
     let read_progress = if let Some(uid) = user_id {
         ReadProgressRepository::get_by_user_and_book(&state.db, uid, next_book.id)
@@ -520,11 +570,12 @@ pub async fn get_next_book(
         None
     };
 
-    let dto = KomgaBookDto::from_codex(
+    let dto = KomgaBookDto::from_codex_with_metadata(
         &next_book,
         &series_title,
         book_number,
         read_progress.as_ref(),
+        metadata.as_ref(),
     );
     Ok(Json(dto))
 }
@@ -586,7 +637,15 @@ pub async fn get_previous_book(
 
     // Get series title and metadata
     let series_title = get_series_title(&state, prev_book.series_id).await?;
-    let book_number = get_book_number(&state, prev_book.id).await.unwrap_or(1);
+    let metadata = BookMetadataRepository::get_by_book_id(&state.db, prev_book.id)
+        .await
+        .ok()
+        .flatten();
+    let book_number = metadata
+        .as_ref()
+        .and_then(|m| m.number)
+        .map(|d| d.to_string().parse::<i32>().unwrap_or(1))
+        .unwrap_or(1);
 
     let read_progress = if let Some(uid) = user_id {
         ReadProgressRepository::get_by_user_and_book(&state.db, uid, prev_book.id)
@@ -597,11 +656,12 @@ pub async fn get_previous_book(
         None
     };
 
-    let dto = KomgaBookDto::from_codex(
+    let dto = KomgaBookDto::from_codex_with_metadata(
         &prev_book,
         &series_title,
         book_number,
         read_progress.as_ref(),
+        metadata.as_ref(),
     );
     Ok(Json(dto))
 }
@@ -722,16 +782,6 @@ async fn get_series_title(state: &Arc<AuthState>, series_id: Uuid) -> Result<Str
             Ok("Unknown Series".to_string())
         }
     }
-}
-
-/// Get book number from book metadata
-async fn get_book_number(state: &Arc<AuthState>, book_id: Uuid) -> Option<i32> {
-    BookMetadataRepository::get_by_book_id(&state.db, book_id)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|m| m.number)
-        .map(|d| d.to_string().parse::<i32>().unwrap_or(1))
 }
 
 /// Percent-encode a filename for use in Content-Disposition header (RFC 5987)
