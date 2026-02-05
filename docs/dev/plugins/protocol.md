@@ -63,6 +63,7 @@ Plugins communicate with Codex via JSON-RPC 2.0 over stdio:
 Called when Codex first connects to the plugin. Returns the plugin manifest and optionally receives credentials and configuration.
 
 **Request:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -81,13 +82,14 @@ Called when Codex first connects to the plugin. Returns the plugin manifest and 
 
 The `params` object is optional and depends on the plugin's **credential delivery** setting:
 
-| Delivery Method | Value | Behavior |
-|-----------------|-------|----------|
-| Environment Variables | `env` | Credentials passed as env vars (e.g., `API_KEY`). No `credentials` in params. |
-| Initialize Message | `init_message` | Credentials passed in `params.credentials`. |
-| Both | `both` | Credentials passed both as env vars and in `params.credentials`. |
+| Delivery Method       | Value          | Behavior                                                                      |
+| --------------------- | -------------- | ----------------------------------------------------------------------------- |
+| Environment Variables | `env`          | Credentials passed as env vars (e.g., `API_KEY`). No `credentials` in params. |
+| Initialize Message    | `init_message` | Credentials passed in `params.credentials`.                                   |
+| Both                  | `both`         | Credentials passed both as env vars and in `params.credentials`.              |
 
 **Response:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -111,6 +113,7 @@ The `params` object is optional and depends on the plugin's **credential deliver
 Health check method. Used by Codex to verify the plugin is responsive.
 
 **Request:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -120,6 +123,7 @@ Health check method. Used by Codex to verify the plugin is responsive.
 ```
 
 **Response:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -133,6 +137,7 @@ Health check method. Used by Codex to verify the plugin is responsive.
 Called when Codex is shutting down or disabling the plugin. Plugins should clean up resources and exit.
 
 **Request:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -142,6 +147,7 @@ Called when Codex is shutting down or disabling the plugin. Plugins should clean
 ```
 
 **Response:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -155,6 +161,7 @@ Called when Codex is shutting down or disabling the plugin. Plugins should clean
 Search for metadata by query string.
 
 **Request:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -168,6 +175,7 @@ Search for metadata by query string.
 ```
 
 **Response:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -199,6 +207,7 @@ Search for metadata by query string.
 Get full metadata for an external ID.
 
 **Request:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -211,6 +220,7 @@ Get full metadata for an external ID.
 ```
 
 **Response:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -227,9 +237,7 @@ Get full metadata for an external ID.
     "coverUrl": "https://example.com/cover.jpg",
     "genres": ["Action", "Adventure", "Comedy"],
     "tags": ["Pirates", "Superpowers", "Long Running"],
-    "authors": [
-      { "name": "Eiichiro Oda", "role": "author" }
-    ],
+    "authors": [{ "name": "Eiichiro Oda", "role": "author" }],
     "publisher": "Shueisha",
     "rating": 9.5,
     "ratingCount": 100000,
@@ -245,6 +253,7 @@ Get full metadata for an external ID.
 Find best match for existing content (auto-matching).
 
 **Request:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -259,6 +268,7 @@ Find best match for existing content (auto-matching).
 ```
 
 **Response:**
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -288,15 +298,15 @@ Find best match for existing content (auto-matching).
 
 ```typescript
 interface SearchResult {
-  externalId: string;      // Provider's ID for this item
-  title: string;           // Primary display title
+  externalId: string; // Provider's ID for this item
+  title: string; // Primary display title
   alternateTitles?: Title[];
   year?: number;
   coverUrl?: string;
   summary?: string;
   status?: "ongoing" | "completed" | "hiatus" | "cancelled" | "unknown";
-  score?: number;          // Relevance score (0-100)
-  providerData?: object;   // Passed to metadata/get
+  score?: number; // Relevance score (0-100)
+  providerData?: object; // Passed to metadata/get
 }
 ```
 
@@ -320,7 +330,7 @@ interface SeriesMetadata {
   publisher?: string;
   originalLanguage?: string;
   country?: string;
-  rating?: number;         // 0-10 scale
+  rating?: number; // 0-10 scale
   ratingCount?: number;
   externalLinks?: ExternalLink[];
   providerData?: object;
@@ -328,7 +338,7 @@ interface SeriesMetadata {
 
 interface Title {
   value: string;
-  language?: string;       // ISO 639-1 code
+  language?: string; // ISO 639-1 code
   primary?: boolean;
 }
 
@@ -347,22 +357,22 @@ interface ExternalLink {
 
 ### Standard JSON-RPC Errors
 
-| Code | Message | Description |
-|------|---------|-------------|
-| -32700 | Parse error | Invalid JSON |
-| -32600 | Invalid Request | Not a valid JSON-RPC request |
-| -32601 | Method not found | Method doesn't exist |
-| -32602 | Invalid params | Invalid method parameters |
-| -32603 | Internal error | Internal plugin error |
+| Code   | Message          | Description                  |
+| ------ | ---------------- | ---------------------------- |
+| -32700 | Parse error      | Invalid JSON                 |
+| -32600 | Invalid Request  | Not a valid JSON-RPC request |
+| -32601 | Method not found | Method doesn't exist         |
+| -32602 | Invalid params   | Invalid method parameters    |
+| -32603 | Internal error   | Internal plugin error        |
 
 ### Plugin-Specific Errors
 
-| Code | Message | Description |
-|------|---------|-------------|
-| -32001 | Rate limited | API rate limit exceeded |
-| -32002 | Not found | Resource not found |
-| -32003 | Auth failed | Authentication failed |
-| -32004 | API error | External API error |
+| Code   | Message      | Description                |
+| ------ | ------------ | -------------------------- |
+| -32001 | Rate limited | API rate limit exceeded    |
+| -32002 | Not found    | Resource not found         |
+| -32003 | Auth failed  | Authentication failed      |
+| -32004 | API error    | External API error         |
 | -32005 | Config error | Plugin configuration error |
 
 ## Lifecycle
@@ -372,21 +382,21 @@ Codex                                              Plugin Process
   │                                                      │
   │─── spawn(command, args, env) ───────────────────────▶│
   │                                                      │
-  │◀─────────────────── process starts ─────────────────│
+  │◀─────────────────── process starts ──────────────────│
   │                                                      │
   │─── {"method":"initialize"} ─────────────────────────▶│
-  │◀─── {"result": manifest} ───────────────────────────│
+  │◀─── {"result": manifest} ────────────────────────────│
   │                                                      │
   │─── {"method":"ping"} ───────────────────────────────▶│
-  │◀─── {"result": "pong"} ─────────────────────────────│
+  │◀─── {"result": "pong"} ──────────────────────────────│
   │                                                      │
   │─── {"method":"metadata/search",...} ────────────────▶│
-  │◀─── {"result": [...]} ──────────────────────────────│
+  │◀─── {"result": [...]} ───────────────────────────────│
   │                                                      │
   │     ... more requests ...                            │
   │                                                      │
-  │─── {"method":"shutdown"} ────────────────────────────▶│
-  │◀─── {"result": null} ───────────────────────────────│
+  │─── {"method":"shutdown"} ───────────────────────────▶│
+  │◀─── {"result": null} ────────────────────────────────│
   │                                                      │
   │                                          process exits
 ```

@@ -14,11 +14,11 @@ When Codex auto-matches series with metadata plugins, it follows this flow:
 ┌────────────────────────────────────────────────────────────────┐
 │  Directory Name: "One Piece (Digital)"                         │
 │       ↓                                                        │
-│  series.name = "One Piece (Digital)" (preserved for files)    │
+│  series.name = "One Piece (Digital)" (preserved for files)     │
 │       ↓                                                        │
 │  Library title_preprocessing_rules applied                     │
 │       ↓                                                        │
-│  series_metadata.title = "One Piece" (cleaned for display)    │
+│  series_metadata.title = "One Piece" (cleaned for display)     │
 └────────────────────────────────────────────────────────────────┘
                            ↓
                     AUTO-MATCH TIME
@@ -58,12 +58,12 @@ Preprocessing rules use regex patterns to clean up series titles. They're applie
 ]
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `pattern` | string | Yes | Regex pattern (Rust regex syntax) |
-| `replacement` | string | Yes | Replacement text (supports `$1`, `$2` for capture groups) |
-| `description` | string | No | Human-readable description |
-| `enabled` | boolean | No | Whether rule is active (default: true) |
+| Field         | Type    | Required | Description                                               |
+| ------------- | ------- | -------- | --------------------------------------------------------- |
+| `pattern`     | string  | Yes      | Regex pattern (Rust regex syntax)                         |
+| `replacement` | string  | Yes      | Replacement text (supports `$1`, `$2` for capture groups) |
+| `description` | string  | No       | Human-readable description                                |
+| `enabled`     | boolean | No       | Whether rule is active (default: true)                    |
 
 ### Common Patterns
 
@@ -206,48 +206,48 @@ Uses the preprocessed series title as-is.
 
 Both templates and conditions have access to the same unified series context. Fields use camelCase format.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `metadata.title` | string | Series title (after preprocessing) |
-| `metadata.titleSort` | string | Sort title |
-| `metadata.year` | number | Publication year |
-| `metadata.publisher` | string | Publisher name |
-| `metadata.language` | string | Language code |
-| `metadata.status` | string | Publication status |
-| `metadata.genres` | array | Genre names |
-| `metadata.tags` | array | Tag names |
-| `bookCount` | number | Number of books in series |
-| `externalIds.<source>` | object | External ID info for a source |
-| `customMetadata.<field>` | any | Custom metadata field |
+| Field                    | Type   | Description                        |
+| ------------------------ | ------ | ---------------------------------- |
+| `metadata.title`         | string | Series title (after preprocessing) |
+| `metadata.titleSort`     | string | Sort title                         |
+| `metadata.year`          | number | Publication year                   |
+| `metadata.publisher`     | string | Publisher name                     |
+| `metadata.language`      | string | Language code                      |
+| `metadata.status`        | string | Publication status                 |
+| `metadata.genres`        | array  | Genre names                        |
+| `metadata.tags`          | array  | Tag names                          |
+| `bookCount`              | number | Number of books in series          |
+| `externalIds.<source>`   | object | External ID info for a source      |
+| `customMetadata.<field>` | any    | Custom metadata field              |
 
 ### Available Helpers
 
 Codex provides these Handlebars helpers (matching the [frontend helpers](./custom-metadata.md#available-helpers)):
 
-| Helper | Description | Example |
-|--------|-------------|---------|
-| `lowercase` | Convert to lowercase | `{{lowercase metadata.title}}` |
-| `uppercase` | Convert to uppercase | `{{uppercase metadata.title}}` |
-| `trim` | Remove leading/trailing whitespace | `{{trim value}}` |
-| `truncate` | Limit string length | `{{truncate value 50 "..."}}` |
-| `replace` | Replace substring | `{{replace value "old" "new"}}` |
-| `split` | Split string to array | `{{split value ","}}` |
-| `join` | Join array with separator | `{{join array ", "}}` |
-| `default` | Provide fallback value | `{{default value "Unknown"}}` |
-| `urlencode` | URL-encode string | `{{urlencode value}}` |
-| `padStart` | Pad string start | `{{padStart value 3 "0"}}` |
-| `length` | Get string/array length | `{{length value}}` |
-| `lookup` | Dynamic property access | `{{lookup object key}}` |
-| `exists` | Check if value exists | `{{#exists value}}...{{/exists}}` |
-| `ifEquals` | Conditional equality | `{{#ifEquals a b}}...{{/ifEquals}}` |
-| `ifNotEquals` | Conditional inequality | `{{#ifNotEquals a b}}...{{/ifNotEquals}}` |
-| `gt` | Greater than | `{{#gt a b}}...{{/gt}}` |
-| `lt` | Less than | `{{#lt a b}}...{{/lt}}` |
-| `and` | Logical AND | `{{#and a b}}...{{/and}}` |
-| `or` | Logical OR | `{{#or a b}}...{{/or}}` |
-| `math` | Arithmetic | `{{math a "+" b}}` |
-| `includes` | Array contains | `{{#includes array value}}...{{/includes}}` |
-| `capitalize` | Capitalize first letter | `{{capitalize value}}` |
+| Helper        | Description                        | Example                                     |
+| ------------- | ---------------------------------- | ------------------------------------------- |
+| `lowercase`   | Convert to lowercase               | `{{lowercase metadata.title}}`              |
+| `uppercase`   | Convert to uppercase               | `{{uppercase metadata.title}}`              |
+| `trim`        | Remove leading/trailing whitespace | `{{trim value}}`                            |
+| `truncate`    | Limit string length                | `{{truncate value 50 "..."}}`               |
+| `replace`     | Replace substring                  | `{{replace value "old" "new"}}`             |
+| `split`       | Split string to array              | `{{split value ","}}`                       |
+| `join`        | Join array with separator          | `{{join array ", "}}`                       |
+| `default`     | Provide fallback value             | `{{default value "Unknown"}}`               |
+| `urlencode`   | URL-encode string                  | `{{urlencode value}}`                       |
+| `padStart`    | Pad string start                   | `{{padStart value 3 "0"}}`                  |
+| `length`      | Get string/array length            | `{{length value}}`                          |
+| `lookup`      | Dynamic property access            | `{{lookup object key}}`                     |
+| `exists`      | Check if value exists              | `{{#exists value}}...{{/exists}}`           |
+| `ifEquals`    | Conditional equality               | `{{#ifEquals a b}}...{{/ifEquals}}`         |
+| `ifNotEquals` | Conditional inequality             | `{{#ifNotEquals a b}}...{{/ifNotEquals}}`   |
+| `gt`          | Greater than                       | `{{#gt a b}}...{{/gt}}`                     |
+| `lt`          | Less than                          | `{{#lt a b}}...{{/lt}}`                     |
+| `and`         | Logical AND                        | `{{#and a b}}...{{/and}}`                   |
+| `or`          | Logical OR                         | `{{#or a b}}...{{/or}}`                     |
+| `math`        | Arithmetic                         | `{{math a "+" b}}`                          |
+| `includes`    | Array contains                     | `{{#includes array value}}...{{/includes}}` |
+| `capitalize`  | Capitalize first letter            | `{{capitalize value}}`                      |
 
 ### Template Examples
 
@@ -335,9 +335,9 @@ Condition field paths use **camelCase** format (e.g., `bookCount`, `externalIds`
 
 ### Condition Modes
 
-| Mode | Behavior |
-|------|----------|
-| `all` | All rules must pass (AND logic) |
+| Mode  | Behavior                               |
+| ----- | -------------------------------------- |
+| `all` | All rules must pass (AND logic)        |
 | `any` | At least one rule must pass (OR logic) |
 
 ### Available Fields
@@ -346,94 +346,94 @@ The series context provides access to all series data for condition evaluation. 
 
 #### Basic Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field       | Type   | Description               |
+| ----------- | ------ | ------------------------- |
 | `bookCount` | number | Number of books in series |
 
 #### External ID Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `externalIds.count` | number | Total number of external IDs |
+| Field                  | Type        | Description                     |
+| ---------------------- | ----------- | ------------------------------- |
+| `externalIds.count`    | number      | Total number of external IDs    |
 | `externalIds.<source>` | string/null | External ID for specific source |
 
 External ID sources use the format `plugin:<name>` (e.g., `plugin:mangabaka`).
 
 #### Metadata Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `metadata.title` | string | Series title |
-| `metadata.titleSort` | string | Sort title |
-| `metadata.summary` | string | Series summary/description |
-| `metadata.year` | number | Publication year |
-| `metadata.language` | string | Language code |
-| `metadata.status` | string | Publication status |
-| `metadata.publisher` | string | Publisher name |
-| `metadata.imprint` | string | Publisher imprint |
-| `metadata.ageRating` | number | Age rating |
+| Field                       | Type   | Description                 |
+| --------------------------- | ------ | --------------------------- |
+| `metadata.title`            | string | Series title                |
+| `metadata.titleSort`        | string | Sort title                  |
+| `metadata.summary`          | string | Series summary/description  |
+| `metadata.year`             | number | Publication year            |
+| `metadata.language`         | string | Language code               |
+| `metadata.status`           | string | Publication status          |
+| `metadata.publisher`        | string | Publisher name              |
+| `metadata.imprint`          | string | Publisher imprint           |
+| `metadata.ageRating`        | number | Age rating                  |
 | `metadata.readingDirection` | string | Reading direction (ltr/rtl) |
-| `metadata.totalBookCount` | number | Expected total book count |
-| `metadata.genres` | array | Genre names |
-| `metadata.tags` | array | Tag names |
+| `metadata.totalBookCount`   | number | Expected total book count   |
+| `metadata.genres`           | array  | Genre names                 |
+| `metadata.tags`             | array  | Tag names                   |
 
 #### Lock Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `metadata.titleLock` | boolean | Title is locked |
-| `metadata.summaryLock` | boolean | Summary is locked |
-| `metadata.genresLock` | boolean | Genres are locked |
-| `metadata.tagsLock` | boolean | Tags are locked |
-| `metadata.*Lock` | boolean | Any metadata field lock |
+| Field                  | Type    | Description             |
+| ---------------------- | ------- | ----------------------- |
+| `metadata.titleLock`   | boolean | Title is locked         |
+| `metadata.summaryLock` | boolean | Summary is locked       |
+| `metadata.genresLock`  | boolean | Genres are locked       |
+| `metadata.tagsLock`    | boolean | Tags are locked         |
+| `metadata.*Lock`       | boolean | Any metadata field lock |
 
 #### Custom Metadata Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `customMetadata.<field>` | any | Custom metadata field |
-| `customMetadata.<nested>.<field>` | any | Nested custom field |
+| Field                             | Type | Description           |
+| --------------------------------- | ---- | --------------------- |
+| `customMetadata.<field>`          | any  | Custom metadata field |
+| `customMetadata.<nested>.<field>` | any  | Nested custom field   |
 
 ### Available Operators
 
 #### Null Checks
 
-| Operator | Value | Description |
-|----------|-------|-------------|
-| `is_null` | - | Field is null, empty, or missing |
-| `is_not_null` | - | Field has a value |
+| Operator      | Value | Description                      |
+| ------------- | ----- | -------------------------------- |
+| `is_null`     | -     | Field is null, empty, or missing |
+| `is_not_null` | -     | Field has a value                |
 
 #### Equality
 
-| Operator | Value | Description |
-|----------|-------|-------------|
-| `equals` | any | Exact match |
-| `not_equals` | any | Not equal |
+| Operator     | Value | Description |
+| ------------ | ----- | ----------- |
+| `equals`     | any   | Exact match |
+| `not_equals` | any   | Not equal   |
 
 #### Numeric Comparisons
 
-| Operator | Value | Description |
-|----------|-------|-------------|
-| `gt` | number | Greater than |
-| `gte` | number | Greater than or equal |
-| `lt` | number | Less than |
-| `lte` | number | Less than or equal |
+| Operator | Value  | Description           |
+| -------- | ------ | --------------------- |
+| `gt`     | number | Greater than          |
+| `gte`    | number | Greater than or equal |
+| `lt`     | number | Less than             |
+| `lte`    | number | Less than or equal    |
 
 #### String Comparisons
 
-| Operator | Value | Description |
-|----------|-------|-------------|
-| `contains` | string | Contains substring |
+| Operator       | Value  | Description                |
+| -------------- | ------ | -------------------------- |
+| `contains`     | string | Contains substring         |
 | `not_contains` | string | Does not contain substring |
-| `starts_with` | string | Starts with prefix |
-| `ends_with` | string | Ends with suffix |
-| `matches` | string | Matches regex pattern |
+| `starts_with`  | string | Starts with prefix         |
+| `ends_with`    | string | Ends with suffix           |
+| `matches`      | string | Matches regex pattern      |
 
 #### Array Operators
 
-| Operator | Value | Description |
-|----------|-------|-------------|
-| `in` | array | Value is in the list |
+| Operator | Value | Description              |
+| -------- | ----- | ------------------------ |
+| `in`     | array | Value is in the list     |
 | `not_in` | array | Value is not in the list |
 
 ### Condition Examples
@@ -564,12 +564,12 @@ External IDs are displayed on the series detail page in the metadata section.
 
 ### External ID Sources
 
-| Source Pattern | Description |
-|----------------|-------------|
-| `plugin:<name>` | From a metadata plugin |
-| `comicinfo` | From ComicInfo.xml in files |
-| `epub` | From EPUB metadata |
-| `manual` | Manually added by user |
+| Source Pattern  | Description                 |
+| --------------- | --------------------------- |
+| `plugin:<name>` | From a metadata plugin      |
+| `comicinfo`     | From ComicInfo.xml in files |
+| `epub`          | From EPUB metadata          |
+| `manual`        | Manually added by user      |
 
 ### Use Existing External ID
 
@@ -578,6 +578,7 @@ Enable this option on a plugin to skip searching when an external ID already exi
 **Admin Settings** → **Plugins** → Edit plugin → **Use Existing External ID**
 
 When enabled:
+
 - If series has an external ID for this plugin, use it directly
 - Call `plugin.get(external_id)` instead of searching
 - Useful for refreshing metadata without re-matching

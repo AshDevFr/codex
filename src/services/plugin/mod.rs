@@ -7,25 +7,25 @@
 //! ## Architecture
 //!
 //! ```text
-//! ┌─────────────────────────────────────────────────────────────────────┐
-//! │                           CODEX SERVER                              │
-//! ├─────────────────────────────────────────────────────────────────────┤
-//! │  ┌──────────────────────────────────────────────────────────────┐   │
-//! │  │                    Plugin Manager                            │   │
-//! │  │  • Spawns plugin processes (command + args)                  │   │
-//! │  │  • Communicates via stdio/JSON-RPC                           │   │
-//! │  │  • Enforces RBAC permissions on writes                       │   │
-//! │  │  • Monitors health, restarts on failure                      │   │
-//! │  │  • Rate limits requests per plugin (token bucket)            │   │
-//! │  └───────────────────────────┬──────────────────────────────────┘   │
-//! │              ┌───────────────┼───────────────┐                      │
-//! │              ▼               ▼               ▼                      │
-//! │     ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
-//! │     │   Plugin    │  │   Plugin    │  │   Plugin    │               │
-//! │     │  Process 1  │  │  Process 2  │  │  Process N  │               │
-//! │     │ stdin/stdout│  │ stdin/stdout│  │ stdin/stdout│               │
-//! │     └─────────────┘  └─────────────┘  └─────────────┘               │
-//! └─────────────────────────────────────────────────────────────────────┘
+//! ┌───────────────────────────────────────────────────────────────────┐
+//! │                          CODEX SERVER                             │
+//! ├───────────────────────────────────────────────────────────────────┤
+//! │  ┌─────────────────────────────────────────────────────────────┐  │
+//! │  │                     Plugin Manager                          │  │
+//! │  │  • Spawns plugin processes (command + args)                 │  │
+//! │  │  • Communicates via stdio/JSON-RPC                          │  │
+//! │  │  • Enforces RBAC permissions on writes                      │  │
+//! │  │  • Monitors health, restarts on failure                     │  │
+//! │  │  • Rate limits requests per plugin (token bucket)           │  │
+//! │  └──────────────────────────┬──────────────────────────────────┘  │
+//! │             ┌───────────────┼───────────────┐                     │
+//! │             ▼               ▼               ▼                     │
+//! │    ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+//! │    │   Plugin    │  │   Plugin    │  │   Plugin    │              │
+//! │    │  Process 1  │  │  Process 2  │  │  Process N  │              │
+//! │    │ stdin/stdout│  │ stdin/stdout│  │ stdin/stdout│              │
+//! │    └─────────────┘  └─────────────┘  └─────────────┘              │
+//! └───────────────────────────────────────────────────────────────────┘
 //! ```
 //!
 //! ## Plugin Process Ownership

@@ -81,28 +81,28 @@ Full-featured REST API for integration:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Web Browser / Apps                       │
-│            (React Frontend, OPDS Readers, API Clients)       │
+│                     Web Browser / Apps                      │
+│            (React Frontend, OPDS Readers, API Clients)      │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      Codex Server                            │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │  REST API   │  │     OPDS     │  │   SSE Streams     │  │
-│  │  /api/v1/*  │  │   /opds/*    │  │ (Real-time events)│  │
-│  └─────────────┘  └──────────────┘  └───────────────────┘  │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │           Background Task Processing                  │   │
-│  │  (Scanning, Thumbnails, Analysis, Duplicate Detection)│   │
-│  └─────────────────────────────────────────────────────┘   │
+│                      Codex Server                           │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
+│  │  REST API   │  │     OPDS     │  │   SSE Streams     │   │
+│  │  /api/v1/*  │  │   /opds/*    │  │ (Real-time events)│   │
+│  └─────────────┘  └──────────────┘  └───────────────────┘   │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │           Background Task Processing                  │  │
+│  │ (Scanning, Thumbnails, Analysis, Duplicate Detection) │  │
+│  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                               │
             ┌─────────────────┴─────────────────┐
             ▼                                   ▼
 ┌───────────────────────────┐     ┌───────────────────────────┐
-│     SQLite/PostgreSQL     │     │       File System          │
-│        Database           │     │   (Media + Thumbnails)     │
+│     SQLite/PostgreSQL     │     │       File System         │
+│        Database           │     │   (Media + Thumbnails)    │
 └───────────────────────────┘     └───────────────────────────┘
 ```
 
@@ -152,6 +152,7 @@ Codex is released under the MIT License.
 Ready to get started? Head to the [Getting Started guide](./getting-started) to have Codex running in minutes.
 
 For more details, see:
+
 - [Configuration](./configuration) - All configuration options
 - [Deployment](./deployment) - Docker Compose, systemd, Kubernetes
 - [API Reference](/docs/api/codex-api) - REST API documentation

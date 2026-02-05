@@ -26,14 +26,14 @@ Plugins are external processes that Codex spawns and communicates with. They can
 │  │  • Monitors health, auto-disables on failures                             │   │
 │  └─────────────────────────────────┬─────────────────────────────────────────┘   │
 │                                    │                                             │
-│             ┌──────────────────────┼──────────────────────┐                      │
-│             ▼                      ▼                      ▼                      │
-│     ┌──────────────┐  ┌────────────────────┐  ┌─────────────────┐                │
-│     │  MangaBaka   │  │   Open Library     │  │     Custom      │                │
-│     │   Plugin     │  │     Plugin         │  │     Plugin      │                │
-│     │  (series)    │  │  (books, no key)   │  │                 │                │
-│     │ stdin/stdout │  │   stdin/stdout     │  │  stdin/stdout   │                │
-│     └──────────────┘  └────────────────────┘  └─────────────────┘                │
+│             ┌──────────────────────┼─────────────────────────┐                   │
+│             ▼                      ▼                         ▼                   │
+│     ┌──────────────┐     ┌────────────────────┐     ┌─────────────────┐          │
+│     │  MangaBaka   │     │   Open Library     │     │     Custom      │          │
+│     │   Plugin     │     │     Plugin         │     │     Plugin      │          │
+│     │  (series)    │     │  (books, no key)   │     │                 │          │
+│     │ stdin/stdout │     │   stdin/stdout     │     │  stdin/stdout   │          │
+│     └──────────────┘     └────────────────────┘     └─────────────────┘          │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -166,7 +166,7 @@ Available template fields:
 - `metadata.language` - Language code
 - `book_count` - Number of books in the series
 
-See [Handlebars Helpers](#handlebars-helpers) for available template functions.
+See [Available Helpers](/docs/preprocessing-rules#available-helpers) for available template functions.
 
 ### Search Preprocessing Rules
 

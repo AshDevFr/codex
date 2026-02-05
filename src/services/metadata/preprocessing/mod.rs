@@ -10,30 +10,30 @@
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────┐
-//! │                        SCAN TIME                                 │
+//! │                        SCAN TIME                                │
 //! ├─────────────────────────────────────────────────────────────────┤
-//! │  Directory Name                                                  │
-//! │       ↓                                                          │
+//! │  Directory Name                                                 │
+//! │       ↓                                                         │
 //! │  series.name = original (preserved for file recognition)        │
-//! │       ↓                                                          │
-//! │  [Library title_preprocessing_rules]                             │
-//! │       ↓                                                          │
+//! │       ↓                                                         │
+//! │  [Library title_preprocessing_rules]                            │
+//! │       ↓                                                         │
 //! │  series_metadata.title = cleaned (display & default search)     │
 //! └─────────────────────────────────────────────────────────────────┘
 //!                               ↓
 //! ┌─────────────────────────────────────────────────────────────────┐
-//! │                      AUTO-MATCH TIME                             │
+//! │                      AUTO-MATCH TIME                            │
 //! ├─────────────────────────────────────────────────────────────────┤
-//! │  1. Check library auto_match_conditions → skip if fails          │
-//! │  2. Check plugin auto_match_conditions → skip if fails           │
-//! │  3. If use_existing_external_id && external ID exists:           │
+//! │  1. Check library auto_match_conditions → skip if fails         │
+//! │  2. Check plugin auto_match_conditions → skip if fails          │
+//! │  3. If use_existing_external_id && external ID exists:          │
 //! │     → Call plugin.get(external_id) directly, skip to step 7     │
-//! │  4. Apply plugin search_query_template (Handlebars)              │
-//! │  5. Apply plugin search_preprocessing_rules                      │
-//! │  6. Call plugin.search(query) → get best match                   │
-//! │  7. Call plugin.get(external_id) for full metadata               │
-//! │  8. Apply metadata (respecting locks/permissions)                │
-//! │  9. Upsert series_external_ids record                            │
+//! │  4. Apply plugin search_query_template (Handlebars)             │
+//! │  5. Apply plugin search_preprocessing_rules                     │
+//! │  6. Call plugin.search(query) → get best match                  │
+//! │  7. Call plugin.get(external_id) for full metadata              │
+//! │  8. Apply metadata (respecting locks/permissions)               │
+//! │  9. Upsert series_external_ids record                           │
 //! └─────────────────────────────────────────────────────────────────┘
 //! ```
 //!
