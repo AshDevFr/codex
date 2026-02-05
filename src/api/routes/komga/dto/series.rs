@@ -226,6 +226,9 @@ pub struct KomgaSeriesDto {
     /// Whether series is deleted (soft delete)
     #[serde(default)]
     pub deleted: bool,
+    /// Whether this is a oneshot (single book)
+    #[serde(default)]
+    pub oneshot: bool,
 }
 
 impl Default for KomgaSeriesDto {
@@ -246,6 +249,7 @@ impl Default for KomgaSeriesDto {
             metadata: KomgaSeriesMetadataDto::default(),
             books_metadata: KomgaBooksMetadataAggregationDto::default(),
             deleted: false,
+            oneshot: false,
         }
     }
 }
@@ -349,6 +353,9 @@ pub struct KomgaSeriesSearchRequestDto {
     /// Whether to include deleted series
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted: Option<bool>,
+    /// Whether to include only oneshots
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oneshot: Option<bool>,
 }
 
 #[cfg(test)]

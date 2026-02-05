@@ -19806,6 +19806,10 @@
             "format": "int32",
             "description": "Book number in series"
           },
+          "oneshot": {
+            "type": "boolean",
+            "description": "Whether this is a oneshot"
+          },
           "readProgress": {
             "oneOf": [
               {
@@ -20213,6 +20217,13 @@
             "type": "string",
             "description": "Library display name"
           },
+          "oneshotsDirectory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Directory path for oneshots (optional)"
+          },
           "repairExtensions": {
             "type": "boolean",
             "description": "Whether to repair file extensions"
@@ -20434,6 +20445,10 @@
                   "format": "int32",
                   "description": "Book number in series"
                 },
+                "oneshot": {
+                  "type": "boolean",
+                  "description": "Whether this is a oneshot"
+                },
                 "readProgress": {
                   "oneOf": [
                     {
@@ -20610,6 +20625,10 @@
                 "name": {
                   "type": "string",
                   "description": "Series name"
+                },
+                "oneshot": {
+                  "type": "boolean",
+                  "description": "Whether this is a oneshot (single book)"
                 },
                 "url": {
                   "type": "string",
@@ -20860,6 +20879,10 @@
           "name": {
             "type": "string",
             "description": "Series name"
+          },
+          "oneshot": {
+            "type": "boolean",
+            "description": "Whether this is a oneshot (single book)"
           },
           "url": {
             "type": "string",

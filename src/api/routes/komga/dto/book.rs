@@ -261,6 +261,9 @@ pub struct KomgaBookDto {
     /// File hash
     #[serde(default)]
     pub file_hash: String,
+    /// Whether this is a oneshot
+    #[serde(default)]
+    pub oneshot: bool,
 }
 
 impl Default for KomgaBookDto {
@@ -284,6 +287,7 @@ impl Default for KomgaBookDto {
             read_progress: None,
             deleted: false,
             file_hash: String::new(),
+            oneshot: false,
         }
     }
 }
@@ -339,6 +343,7 @@ impl KomgaBookDto {
             read_progress: progress,
             deleted: book.deleted,
             file_hash: book.file_hash.clone(),
+            oneshot: false,
         }
     }
 }

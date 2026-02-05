@@ -844,6 +844,11 @@ async fn build_series_dto(
         metadata: series_metadata,
         books_metadata,
         deleted: false,
+        oneshot: metadata
+            .as_ref()
+            .and_then(|m| m.total_book_count)
+            .map(|count| count == 1)
+            .unwrap_or(book_count == 1),
     })
 }
 

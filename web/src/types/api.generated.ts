@@ -8012,6 +8012,8 @@ export interface components {
              * @description Book number in series
              */
             number: number;
+            /** @description Whether this is a oneshot */
+            oneshot?: boolean;
             readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
             /** @description Series ID */
             seriesId: string;
@@ -8174,6 +8176,8 @@ export interface components {
             importMylarSeries?: boolean;
             /** @description Library display name */
             name: string;
+            /** @description Directory path for oneshots (optional) */
+            oneshotsDirectory?: string | null;
             /** @description Whether to repair file extensions */
             repairExtensions?: boolean;
             /** @description Root filesystem path */
@@ -8288,6 +8292,8 @@ export interface components {
                  * @description Book number in series
                  */
                 number: number;
+                /** @description Whether this is a oneshot */
+                oneshot?: boolean;
                 readProgress?: null | components["schemas"]["KomgaReadProgressDto"];
                 /** @description Series ID */
                 seriesId: string;
@@ -8385,6 +8391,8 @@ export interface components {
                 metadata: components["schemas"]["KomgaSeriesMetadataDto"];
                 /** @description Series name */
                 name: string;
+                /** @description Whether this is a oneshot (single book) */
+                oneshot?: boolean;
                 /** @description File URL/path */
                 url: string;
             }[];
@@ -8530,6 +8538,8 @@ export interface components {
             metadata: components["schemas"]["KomgaSeriesMetadataDto"];
             /** @description Series name */
             name: string;
+            /** @description Whether this is a oneshot (single book) */
+            oneshot?: boolean;
             /** @description File URL/path */
             url: string;
         };
