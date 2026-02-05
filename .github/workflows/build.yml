@@ -596,7 +596,6 @@ jobs:
           ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
           ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
           RELEASE_COMMIT: "${{ github.sha }}"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Fix $HOME mismatch in containers / self-hosted runners
           export HOME=/github/home
@@ -604,8 +603,7 @@ jobs:
           # Mark directory as safe to avoid "dubious ownership" error in containers
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-          # Explicitly authenticate gh CLI with the workflow token
-          echo "$GH_TOKEN" | gh auth login --with-token
+          # gh uses GH_TOKEN from the environment automatically; no explicit login needed
 
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
