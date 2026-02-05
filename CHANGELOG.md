@@ -2,6 +2,20 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.8.4] - 2026-02-05
+
+### 🐛 Bug Fixes
+
+- *(komga)* Restore oneshot fields removed in book-metadata commit
+
+### 📚 Documentation
+
+- *(plugins)* Add Open Library plugin and update architecture diagram
+
+### 🎨 Styling
+
+- Fix formatting in docs, ASCII diagrams, and markdown tables
+
 ## [1.8.3] - 2026-02-05
 
 ### 🐛 Bug Fixes
