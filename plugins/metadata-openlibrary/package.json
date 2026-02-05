@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-metadata-openlibrary",
-  "version": "1.8.4",
+  "version": "1.8.5",
   "description": "Open Library metadata plugin for Codex - fetches book metadata by ISBN or title search",
   "main": "dist/index.js",
   "bin": "dist/index.js",

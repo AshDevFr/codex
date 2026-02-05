@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.8.5] - 2026-02-05
+
+### 🐛 Bug Fixes
+
+- *(komga)* Populate genres, tags, links, authors, and alternate titles in series endpoint
+- *(komga)* Populate book metadata fields (authors, tags, summary, dates)
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix gh CLI auth failure in release job
+
 ## [1.8.4] - 2026-02-05
 
 ### 🐛 Bug Fixes
