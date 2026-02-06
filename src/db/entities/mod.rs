@@ -33,6 +33,10 @@ pub mod users;
 // OIDC authentication
 pub mod oidc_connections;
 
+// User plugin system (per-user plugin instances and data storage)
+pub mod user_plugin_data;
+pub mod user_plugins;
+
 // Series metadata enhancement entities
 pub mod genres;
 pub mod series_alternate_titles;

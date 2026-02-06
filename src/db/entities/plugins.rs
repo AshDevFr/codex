@@ -139,11 +139,19 @@ pub enum Relation {
     UpdatedByUser,
     #[sea_orm(has_many = "super::plugin_failures::Entity")]
     Failures,
+    #[sea_orm(has_many = "super::user_plugins::Entity")]
+    UserPlugins,
 }
 
 impl Related<super::plugin_failures::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Failures.def()
+    }
+}
+
+impl Related<super::user_plugins::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserPlugins.def()
     }
 }
 

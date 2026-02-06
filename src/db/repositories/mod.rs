@@ -34,6 +34,10 @@ pub mod sharing_tag;
 // OIDC authentication
 pub mod oidc_connection;
 
+// User plugin system
+pub mod user_plugin_data;
+pub mod user_plugins;
+
 // Re-export repositories
 pub use alternate_title::AlternateTitleRepository;
 pub use api_key::ApiKeyRepository;
@@ -72,3 +76,8 @@ pub use sharing_tag::SharingTagRepository;
 
 // OIDC authentication
 pub use oidc_connection::OidcConnectionRepository;
+
+// User plugin system
+#[allow(unused_imports)]
+pub use user_plugin_data::UserPluginDataRepository;
+pub use user_plugins::UserPluginsRepository;

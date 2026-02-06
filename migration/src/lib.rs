@@ -96,6 +96,9 @@ mod m20260203_000050_add_plugin_metadata_targets;
 // OIDC authentication
 pub mod m20260205_000051_create_oidc_connections;
 
+// User plugin system (per-user plugin instances and data storage)
+mod m20260205_000052_create_user_plugins;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -174,6 +177,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260203_000050_add_plugin_metadata_targets::Migration),
             // OIDC authentication
             Box::new(m20260205_000051_create_oidc_connections::Migration),
+            // User plugin system
+            Box::new(m20260205_000052_create_user_plugins::Migration),
         ]
     }
 }

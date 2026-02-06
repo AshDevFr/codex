@@ -31,6 +31,12 @@ pub use super::plugins::Entity as Plugins;
 pub use super::series_external_ids::Entity as SeriesExternalIds;
 pub use super::series_metadata::Entity as SeriesMetadata;
 
+// User plugin system
+#[allow(unused_imports)]
+pub use super::user_plugin_data::Entity as UserPluginData;
+#[allow(unused_imports)]
+pub use super::user_plugins::Entity as UserPlugins;
+
 // Sharing tags for content access control (WIP feature)
 #[allow(unused_imports)]
 pub use super::series_sharing_tags::Entity as SeriesSharingTags;

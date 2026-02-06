@@ -52,7 +52,10 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::plugins;
-use crate::db::repositories::{FailureContext, PluginFailuresRepository, PluginsRepository};
+use crate::db::entities::user_plugins;
+use crate::db::repositories::{
+    FailureContext, PluginFailuresRepository, PluginsRepository, UserPluginsRepository,
+};
 use crate::services::PluginMetricsService;
 
 use super::handle::{PluginConfig, PluginError, PluginHandle};
@@ -90,6 +93,26 @@ pub enum PluginManagerError {
         plugin_id: Uuid,
         requests_per_minute: i32,
     },
+
+    #[error("User plugin not found for user {user_id} and plugin {plugin_id}")]
+    UserPluginNotFound { user_id: Uuid, plugin_id: Uuid },
+
+    #[error("User plugin not authenticated: {0}")]
+    UserPluginNotAuthenticated(Uuid),
+}
+
+/// Context for a user plugin operation
+///
+/// Tracks the user and their plugin instance, used for scoping
+/// storage operations and credential injection.
+#[derive(Debug, Clone)]
+pub struct UserPluginContext {
+    /// The user plugin instance ID (from `user_plugins` table)
+    pub user_plugin_id: Uuid,
+    /// The plugin definition ID (from `plugins` table)
+    pub plugin_id: Uuid,
+    /// The user ID
+    pub user_id: Uuid,
 }
 
 /// Configuration for the plugin manager
@@ -650,6 +673,163 @@ impl PluginManager {
     pub async fn all_plugins(&self) -> Vec<plugins::Model> {
         let plugins = self.plugins.read().await;
         plugins.values().map(|e| e.db_config.clone()).collect()
+    }
+
+    // =========================================================================
+    // User Plugin Methods
+    // =========================================================================
+
+    /// Get or spawn a plugin handle for a specific user
+    ///
+    /// This method looks up the user's plugin instance from the database,
+    /// decrypts their credentials, and spawns a plugin handle with per-user
+    /// credential injection.
+    ///
+    /// Returns the plugin handle and user plugin context (for storage scoping).
+    pub async fn get_user_plugin_handle(
+        &self,
+        plugin_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(Arc<PluginHandle>, UserPluginContext), PluginManagerError> {
+        // Look up the user's plugin instance
+        let user_plugin =
+            UserPluginsRepository::get_by_user_and_plugin(&self.db, user_id, plugin_id)
+                .await?
+                .ok_or(PluginManagerError::UserPluginNotFound { user_id, plugin_id })?;
+
+        if !user_plugin.enabled {
+            return Err(PluginManagerError::PluginNotEnabled(plugin_id));
+        }
+
+        let context = UserPluginContext {
+            user_plugin_id: user_plugin.id,
+            plugin_id,
+            user_id,
+        };
+
+        // Create a plugin config with user-specific credentials
+        let handle_config = self
+            .create_user_plugin_config(plugin_id, &user_plugin)
+            .await?;
+        let handle = PluginHandle::new(handle_config);
+
+        // Start the plugin
+        match handle.start().await {
+            Ok(_manifest) => {
+                // Record success for the user's instance
+                let _ = UserPluginsRepository::record_success(&self.db, user_plugin.id).await;
+
+                Ok((Arc::new(handle), context))
+            }
+            Err(e) => {
+                // Record failure for the user's instance
+                let _ = UserPluginsRepository::record_failure(&self.db, user_plugin.id).await;
+                Err(PluginManagerError::Plugin(e))
+            }
+        }
+    }
+
+    /// Create a PluginConfig for a user plugin instance
+    ///
+    /// Uses the base plugin definition (command, args, etc.) but injects
+    /// per-user credentials from the user_plugins table.
+    async fn create_user_plugin_config(
+        &self,
+        plugin_id: Uuid,
+        user_plugin: &user_plugins::Model,
+    ) -> Result<PluginConfig, PluginManagerError> {
+        // Get the base plugin definition
+        let plugin = PluginsRepository::get_by_id(&self.db, plugin_id)
+            .await?
+            .ok_or(PluginManagerError::PluginNotFound(plugin_id))?;
+
+        // Build process config from the base plugin
+        let mut process_config = PluginProcessConfig::new(&plugin.command);
+        process_config = process_config
+            .plugin_name(&plugin.name)
+            .args(plugin.args_vec());
+
+        // Add environment variables from the base plugin config
+        for (key, value) in plugin.env_vec() {
+            process_config = process_config.env(&key, &value);
+        }
+
+        if let Some(wd) = &plugin.working_directory {
+            process_config = process_config.working_directory(wd);
+        }
+
+        // Inject per-user credentials
+        let mut credentials: Option<SecretValue> = None;
+
+        // Try OAuth tokens first, then fall back to simple credentials
+        if user_plugin.has_oauth_tokens() {
+            // Decrypt OAuth access token for the user
+            if let Ok(Some(access_token)) =
+                UserPluginsRepository::get_oauth_access_token(&self.db, user_plugin.id).await
+            {
+                let cred_value = serde_json::json!({
+                    "access_token": access_token,
+                });
+
+                match plugin.credential_delivery.as_str() {
+                    "env" | "both" => {
+                        process_config = process_config.env("ACCESS_TOKEN", &access_token);
+                    }
+                    _ => {}
+                }
+
+                match plugin.credential_delivery.as_str() {
+                    "init_message" | "both" => {
+                        credentials = Some(SecretValue::new(cred_value));
+                    }
+                    _ => {}
+                }
+            }
+        } else if user_plugin.has_credentials() {
+            // Decrypt simple credentials for the user
+            if let Ok(Some(decrypted)) =
+                UserPluginsRepository::get_credentials(&self.db, user_plugin.id).await
+            {
+                match plugin.credential_delivery.as_str() {
+                    "env" | "both" => {
+                        if let Some(obj) = decrypted.as_object() {
+                            for (key, value) in obj {
+                                if let Some(v) = value.as_str() {
+                                    process_config = process_config.env(key.to_uppercase(), v);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+
+                match plugin.credential_delivery.as_str() {
+                    "init_message" | "both" => {
+                        credentials = Some(SecretValue::new(decrypted));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Merge user config with base plugin config
+        let mut config = plugin.config.clone();
+        if let (Some(base_obj), Some(user_obj)) =
+            (config.as_object_mut(), user_plugin.config.as_object())
+        {
+            for (key, value) in user_obj {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+
+        Ok(PluginConfig {
+            process: process_config,
+            request_timeout: self.config.default_request_timeout,
+            shutdown_timeout: self.config.default_shutdown_timeout,
+            max_failures: self.config.failure_threshold,
+            config: Some(config),
+            credentials,
+        })
     }
 
     /// Check rate limit for a plugin. Returns Ok(plugin_name) if allowed, Err if rate limited.
