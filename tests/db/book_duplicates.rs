@@ -479,6 +479,83 @@ async fn test_rebuild_is_idempotent() {
     assert_eq!(duplicates.len(), 1);
 }
 
+/// Test that books with empty file_hash are excluded from duplicate detection
+/// This is important because unanalyzed or failed books have empty file_hash,
+/// and grouping them would create false "duplicates"
+#[tokio::test]
+async fn test_rebuild_excludes_empty_file_hash() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = create_test_library(&db, "Test Library", "/test/library").await;
+    let series = create_test_series(&db, &library, "Test Series").await;
+
+    // Create books with empty file_hash (simulating unanalyzed/failed books)
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Failed Book 1",
+        "/test/failed1.epub",
+        "", // Empty hash - unanalyzed
+    )
+    .await;
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Failed Book 2",
+        "/test/failed2.epub",
+        "", // Empty hash - unanalyzed
+    )
+    .await;
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Failed Book 3",
+        "/test/failed3.pdf",
+        "", // Empty hash - unanalyzed
+    )
+    .await;
+
+    // Create books with actual hashes (real duplicates)
+    let real_hash = "abc123def456";
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Real Book 1",
+        "/test/real1.cbz",
+        real_hash,
+    )
+    .await;
+    create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "Real Book 2",
+        "/test/real2.cbz",
+        real_hash,
+    )
+    .await;
+
+    // Rebuild duplicates
+    let count = BookDuplicatesRepository::rebuild_from_books(&db)
+        .await
+        .unwrap();
+
+    // Should only find 1 duplicate group (the real duplicates with hash "abc123def456")
+    // The 3 books with empty hash should NOT be grouped as duplicates
+    assert_eq!(count, 1);
+
+    let duplicates = BookDuplicatesRepository::find_all(&db).await.unwrap();
+    assert_eq!(duplicates.len(), 1);
+
+    // Verify the duplicate group is for the real hash, not empty string
+    assert_eq!(duplicates[0].file_hash, real_hash);
+    assert_eq!(duplicates[0].duplicate_count, 2);
+}
+
 /// PostgreSQL-specific test for rebuild_from_books
 /// This tests the correct handling of PostgreSQL's COUNT(*) returning BIGINT (i64)
 /// and json_agg() returning JSON type instead of TEXT

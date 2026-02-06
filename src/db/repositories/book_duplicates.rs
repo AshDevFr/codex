@@ -80,6 +80,8 @@ impl BookDuplicatesRepository {
 
         // Step 2: Query for duplicate file_hashes
         // This query finds all file_hashes that appear more than once in non-deleted books
+        // IMPORTANT: Exclude books with empty file_hash - these are unanalyzed or failed books
+        // that haven't been hashed yet, grouping them would create false "duplicates"
         let duplicates_query = match db.get_database_backend() {
             DatabaseBackend::Postgres => {
                 r#"
@@ -89,6 +91,7 @@ impl BookDuplicatesRepository {
                     COUNT(*) as duplicate_count
                 FROM books
                 WHERE deleted = false
+                  AND file_hash != ''
                 GROUP BY file_hash
                 HAVING COUNT(*) > 1
                 ORDER BY COUNT(*) DESC
@@ -102,6 +105,7 @@ impl BookDuplicatesRepository {
                     COUNT(*) as duplicate_count
                 FROM books
                 WHERE deleted = 0
+                  AND file_hash != ''
                 GROUP BY file_hash
                 HAVING COUNT(*) > 1
                 ORDER BY COUNT(*) DESC
