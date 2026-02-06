@@ -4,7 +4,7 @@ use super::super::dto::{
 };
 use crate::api::{
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::UserRole, // Used for creating users with default role
 };
 use crate::db::{
@@ -170,6 +170,45 @@ pub async fn logout(_auth: AuthContext) -> Result<Json<serde_json::Value>, ApiEr
     Ok(Json(serde_json::json!({
         "message": "Logged out successfully"
     })))
+}
+
+/// Get current authenticated user
+///
+/// Returns the current user's basic profile information.
+/// Supports all auth methods including cookie-based auth (used by OIDC callback flow).
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/me",
+    responses(
+        (status = 200, description = "Current user info", body = UserInfo),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Auth"
+)]
+pub async fn get_me(
+    State(state): State<Arc<AuthState>>,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
+) -> Result<Json<UserInfo>, ApiError> {
+    let user = UserRepository::get_by_id(&state.db, auth.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch user: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
+
+    let role = user.get_role().to_string();
+    let permissions = parse_permissions_json(&user.permissions);
+
+    Ok(Json(UserInfo {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role,
+        email_verified: user.email_verified,
+        permissions,
+    }))
 }
 
 /// Register handler

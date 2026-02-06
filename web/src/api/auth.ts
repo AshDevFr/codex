@@ -1,6 +1,8 @@
 import type {
   LoginRequest,
   LoginResponse,
+  OidcLoginResponse,
+  OidcProvidersResponse,
   RegisterRequest,
   RegisterResponse,
   User,
@@ -30,5 +32,21 @@ export const authApi = {
   logout: () => {
     localStorage.removeItem("jwt_token");
     localStorage.removeItem("user");
+  },
+
+  // Get available OIDC providers
+  getOidcProviders: async (): Promise<OidcProvidersResponse> => {
+    const response = await api.get<OidcProvidersResponse>(
+      "/auth/oidc/providers",
+    );
+    return response.data;
+  },
+
+  // Initiate OIDC login flow (returns redirect URL)
+  initiateOidcLogin: async (provider: string): Promise<OidcLoginResponse> => {
+    const response = await api.post<OidcLoginResponse>(
+      `/auth/oidc/${provider}/login`,
+    );
+    return response.data;
   },
 };

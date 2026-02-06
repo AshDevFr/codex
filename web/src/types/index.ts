@@ -99,6 +99,34 @@ export type PaginatedResponse<T> = Omit<
 };
 
 // =============================================================================
+// OIDC types
+// =============================================================================
+
+/** Information about an available OIDC provider */
+export interface OidcProviderInfo {
+  /** Internal name of the provider (used in URLs) */
+  name: string;
+  /** Display name shown to users */
+  displayName: string;
+  /** URL to initiate login with this provider */
+  loginUrl: string;
+}
+
+/** Response listing available OIDC providers */
+export interface OidcProvidersResponse {
+  /** Whether OIDC authentication is enabled */
+  enabled: boolean;
+  /** List of available OIDC providers */
+  providers: OidcProviderInfo[];
+}
+
+/** Response from initiating OIDC login */
+export interface OidcLoginResponse {
+  /** URL to redirect the user to for authentication */
+  redirectUrl: string;
+}
+
+// =============================================================================
 // Error types
 // =============================================================================
 export type ApiError = Schemas["ErrorResponse"];

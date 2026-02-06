@@ -35,6 +35,33 @@ auth:
   # argon2_memory_cost: 19456
   # argon2_time_cost: 2
   # argon2_parallelism: 1
+  # OIDC / SSO Authentication (disabled by default)
+  # oidc:
+  #   enabled: true
+  #   auto_create_users: true       # Auto-create local users on first OIDC login
+  #   default_role: reader           # Default role when no group mapping matches (admin, maintainer, reader)
+  #   providers:
+  #     authentik:                   # Provider key (used in URLs: /auth/oidc/authentik/login)
+  #       display_name: "Authentik SSO"
+  #       issuer_url: "https://authentik.example.com/application/o/codex/"
+  #       client_id: "codex-client-id"
+  #       client_secret: "codex-client-secret"     # Or use client_secret_env below
+  #       # client_secret_env: "OIDC_AUTHENTIK_SECRET"  # Read secret from env var instead
+  #       scopes:
+  #         - profile
+  #         - email
+  #       # Claim mappings (defaults shown)
+  #       # groups_claim: groups
+  #       # username_claim: preferred_username
+  #       # email_claim: email
+  #       # Group-to-role mapping (optional)
+  #       # role_mapping:
+  #       #   admin:
+  #       #     - codex-admins
+  #       #   maintainer:
+  #       #     - codex-editors
+  #       #   reader:
+  #       #     - codex-users
 
 # API config - enabled for easier API testing in Docker
 api:

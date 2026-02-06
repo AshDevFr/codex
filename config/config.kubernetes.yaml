@@ -40,6 +40,20 @@
 #   CODEX_KOMGA_API_ENABLED=false
 #   CODEX_KOMGA_API_PREFIX=komga
 #
+# OIDC / SSO Authentication:
+#   CODEX_AUTH_OIDC_ENABLED=true
+#   CODEX_AUTH_OIDC_AUTO_CREATE_USERS=true
+#   CODEX_AUTH_OIDC_DEFAULT_ROLE=reader                           # admin, maintainer, reader
+#   # Per-provider settings (replace AUTHENTIK with your provider name):
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_DISPLAY_NAME=Authentik SSO
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ISSUER_URL=https://authentik.example.com/application/o/codex/
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID=<from secret>
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET=<from secret>
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES=profile,email
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM=groups
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_USERNAME_CLAIM=preferred_username
+#   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_EMAIL_CLAIM=email
+#
 # Rate Limiting:
 #   CODEX_RATE_LIMIT_ENABLED=true
 #   CODEX_RATE_LIMIT_ANONYMOUS_RPS=10
@@ -90,6 +104,27 @@ files:
 # komga_api:
 #   enabled: false
 #   prefix: komga
+
+# OIDC / SSO Authentication (disabled by default):
+# auth:
+#   oidc:
+#     enabled: true
+#     auto_create_users: true
+#     default_role: reader
+#     providers:
+#       authentik:
+#         display_name: "Authentik SSO"
+#         issuer_url: "https://authentik.example.com/application/o/codex/"
+#         client_id: "codex-client-id"
+#         client_secret_env: "OIDC_AUTHENTIK_SECRET"  # Read secret from K8s Secret env var
+#         scopes:
+#           - profile
+#           - email
+#         # role_mapping:
+#         #   admin:
+#         #     - codex-admins
+#         #   reader:
+#         #     - codex-users
 
 # Rate Limiting (enabled by default):
 # rate_limit:

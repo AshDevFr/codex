@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Container,
+  Divider,
   Paper,
   PasswordInput,
   Stack,
@@ -11,23 +12,33 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { IconAlertCircle } from "@tabler/icons-react";
+import { IconAlertCircle, IconLogin } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { authApi } from "@/api/auth";
 import { setupApi } from "@/api/setup";
 import { useAppName } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/authStore";
-import type { ApiError, LoginRequest, LoginResponse } from "@/types";
+import type {
+  ApiError,
+  LoginRequest,
+  LoginResponse,
+  OidcLoginResponse,
+} from "@/types";
 
 export function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const appName = useAppName();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const { setAuth } = useAuthStore();
+
+  // OIDC error from callback redirect (e.g., user denied access at IdP)
+  const oidcError =
+    searchParams.get("error_description") || searchParams.get("error");
 
   useDocumentTitle("Login");
 
@@ -35,6 +46,12 @@ export function Login() {
     queryKey: ["setup-status"],
     queryFn: setupApi.checkStatus,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  const { data: oidcProviders } = useQuery({
+    queryKey: ["oidc-providers"],
+    queryFn: authApi.getOidcProviders,
+    staleTime: 5 * 60 * 1000,
   });
 
   const loginMutation = useMutation<LoginResponse, ApiError, LoginRequest>({
@@ -45,10 +62,30 @@ export function Login() {
     },
   });
 
+  const oidcLoginMutation = useMutation<OidcLoginResponse, ApiError, string>({
+    mutationFn: authApi.initiateOidcLogin,
+    onSuccess: (data) => {
+      // Redirect to the identity provider
+      window.location.href = data.redirectUrl;
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     loginMutation.mutate({ username, password });
   };
+
+  const hasOidcProviders =
+    oidcProviders?.enabled && oidcProviders.providers.length > 0;
+
+  const errorMessage =
+    oidcError ||
+    (loginMutation.isError
+      ? loginMutation.error?.error || "Login failed"
+      : null) ||
+    (oidcLoginMutation.isError
+      ? oidcLoginMutation.error?.error || "Failed to start SSO login"
+      : null);
 
   return (
     <Box bg="dark.7" mih="100vh">
@@ -58,6 +95,35 @@ export function Login() {
         </Title>
 
         <Paper shadow="md" p={30} radius="md" bg="dark.6">
+          {hasOidcProviders && (
+            <>
+              <Stack>
+                {oidcProviders.providers.map((provider) => (
+                  <Button
+                    key={provider.name}
+                    fullWidth
+                    variant="default"
+                    leftSection={<IconLogin size={18} />}
+                    loading={
+                      oidcLoginMutation.isPending &&
+                      oidcLoginMutation.variables === provider.name
+                    }
+                    disabled={oidcLoginMutation.isPending}
+                    onClick={() => oidcLoginMutation.mutate(provider.name)}
+                  >
+                    Sign in with {provider.displayName}
+                  </Button>
+                ))}
+              </Stack>
+
+              <Divider
+                label="Or continue with"
+                labelPosition="center"
+                my="lg"
+              />
+            </>
+          )}
+
           <form onSubmit={handleSubmit}>
             <Stack>
               <TextInput
@@ -76,9 +142,9 @@ export function Login() {
                 onChange={(e) => setPassword(e.currentTarget.value)}
               />
 
-              {loginMutation.isError && (
+              {errorMessage && (
                 <Alert icon={<IconAlertCircle size={16} />} color="red">
-                  {loginMutation.error?.error || "Login failed"}
+                  {errorMessage}
                 </Alert>
               )}
 

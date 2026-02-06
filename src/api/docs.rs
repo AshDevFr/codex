@@ -146,6 +146,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::register,
         v1::handlers::verify_email,
         v1::handlers::resend_verification,
+        v1::handlers::get_me,
 
         // Library endpoints
         v1::handlers::list_libraries,

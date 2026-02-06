@@ -19,6 +19,7 @@ use axum::{
     http::{HeaderMap, header},
     response::{IntoResponse, Redirect, Response},
 };
+use base64::{Engine as _, engine::general_purpose};
 use chrono::Utc;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -356,10 +357,10 @@ pub async fn callback(
         .generate_token(user.id, user.username.clone(), user.get_role())
         .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
 
-    // Build response
+    // Build response data for frontend
     let role = user.get_role().to_string();
     let permissions = parse_permissions_json(&user.permissions);
-    let _response = OidcCallbackResponse {
+    let response = OidcCallbackResponse {
         access_token: access_token.clone(),
         token_type: "Bearer".to_string(),
         expires_in: state.auth_config.jwt_expiry_hours as u64 * 3600,
@@ -375,7 +376,7 @@ pub async fn callback(
         provider: provider.clone(),
     };
 
-    // Create HTTP-only auth cookie
+    // Create HTTP-only auth cookie (for image/resource requests)
     let cookie = build_auth_cookie(
         &access_token,
         state.auth_config.jwt_expiry_hours as u64 * 3600,
@@ -389,9 +390,15 @@ pub async fn callback(
             .map_err(|_| ApiError::Internal("Failed to create cookie header".to_string()))?,
     );
 
-    // Redirect to frontend
-    // The frontend will detect the auth cookie and load user info
-    Ok((headers, Redirect::to("/")).into_response())
+    // Encode auth data as URL-safe base64 in a URL fragment.
+    // Fragments are never sent to the server, preventing token leakage via referrer headers.
+    let response_json = serde_json::to_string(&response)
+        .map_err(|e| ApiError::Internal(format!("Failed to serialize response: {}", e)))?;
+    let encoded = general_purpose::URL_SAFE_NO_PAD.encode(response_json.as_bytes());
+
+    // Redirect to frontend callback page with auth data in URL fragment
+    let redirect_url = format!("/login/oidc/complete#{}", encoded);
+    Ok((headers, Redirect::to(&redirect_url)).into_response())
 }
 
 /// Generate a unique username for a new OIDC user

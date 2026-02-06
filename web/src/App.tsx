@@ -17,6 +17,7 @@ import { BookDetail } from "@/pages/BookDetail";
 import { Home } from "@/pages/Home";
 import { LibraryPage } from "@/pages/Library";
 import { Login } from "@/pages/Login";
+import { OidcComplete } from "@/pages/OidcComplete";
 import { Reader } from "@/pages/Reader";
 import { Register } from "@/pages/Register";
 import { SearchResults } from "@/pages/SearchResults";
@@ -131,6 +132,9 @@ function App() {
           path="/login"
           element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}
         />
+
+        {/* OIDC callback completion - processes auth data from URL fragment */}
+        <Route path="/login/oidc/complete" element={<OidcComplete />} />
 
         <Route
           path="/register"

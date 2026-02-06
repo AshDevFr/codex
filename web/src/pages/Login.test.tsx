@@ -3,18 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { authApi } from "@/api/auth";
 import { setupApi } from "@/api/setup";
 import { renderWithProviders, userEvent } from "@/test/utils";
-import type { LoginResponse, SetupStatusResponse } from "@/types";
+import type {
+  LoginResponse,
+  OidcLoginResponse,
+  OidcProvidersResponse,
+  SetupStatusResponse,
+} from "@/types";
 import { Login } from "./Login";
 
 vi.mock("@/api/auth");
 vi.mock("@/api/setup");
 
 const mockNavigate = vi.fn();
+let mockSearchParams = new URLSearchParams();
+
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
   return {
     ...actual,
     useNavigate: () => mockNavigate,
+    useSearchParams: () => [mockSearchParams],
   };
 });
 
@@ -26,17 +34,51 @@ const mockSetupStatus = (
   registrationEnabled,
 });
 
+const mockOidcDisabled: OidcProvidersResponse = {
+  enabled: false,
+  providers: [],
+};
+
+const mockOidcEnabled: OidcProvidersResponse = {
+  enabled: true,
+  providers: [
+    {
+      name: "authentik",
+      displayName: "Authentik SSO",
+      loginUrl: "/api/v1/auth/oidc/authentik/login",
+    },
+  ],
+};
+
+const mockOidcMultipleProviders: OidcProvidersResponse = {
+  enabled: true,
+  providers: [
+    {
+      name: "authentik",
+      displayName: "Authentik SSO",
+      loginUrl: "/api/v1/auth/oidc/authentik/login",
+    },
+    {
+      name: "keycloak",
+      displayName: "Keycloak",
+      loginUrl: "/api/v1/auth/oidc/keycloak/login",
+    },
+  ],
+};
+
 describe("Login Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    mockSearchParams = new URLSearchParams();
 
     // Mock window.location
     delete (window as any).location;
     window.location = { href: "" } as any;
 
-    // Default: registration enabled
+    // Default: registration enabled, OIDC disabled
     vi.mocked(setupApi.checkStatus).mockResolvedValue(mockSetupStatus(true));
+    vi.mocked(authApi.getOidcProviders).mockResolvedValue(mockOidcDisabled);
   });
 
   it("should render login form", async () => {
@@ -162,5 +204,130 @@ describe("Login Component", () => {
     // Button should show loading state
     const button = screen.getByRole("button", { name: /sign in/i });
     expect(button).toHaveAttribute("data-loading", "true");
+  });
+
+  // OIDC tests
+
+  it("should not show OIDC buttons when OIDC is disabled", async () => {
+    vi.mocked(authApi.getOidcProviders).mockResolvedValue(mockOidcDisabled);
+
+    renderWithProviders(<Login />);
+
+    await waitFor(() => {
+      expect(authApi.getOidcProviders).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByText(/sign in with/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/or continue with/i)).not.toBeInTheDocument();
+  });
+
+  it("should show OIDC provider button when OIDC is enabled", async () => {
+    vi.mocked(authApi.getOidcProviders).mockResolvedValue(mockOidcEnabled);
+
+    renderWithProviders(<Login />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /sign in with authentik sso/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Should show divider between OIDC and local login
+    expect(screen.getByText(/or continue with/i)).toBeInTheDocument();
+  });
+
+  it("should show multiple OIDC provider buttons", async () => {
+    vi.mocked(authApi.getOidcProviders).mockResolvedValue(
+      mockOidcMultipleProviders,
+    );
+
+    renderWithProviders(<Login />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /sign in with authentik sso/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /sign in with keycloak/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("should initiate OIDC login and redirect to IdP", async () => {
+    const user = userEvent.setup();
+    const mockOidcResponse: OidcLoginResponse = {
+      redirectUrl: "https://auth.example.com/authorize?client_id=abc",
+    };
+
+    vi.mocked(authApi.getOidcProviders).mockResolvedValue(mockOidcEnabled);
+    vi.mocked(authApi.initiateOidcLogin).mockResolvedValueOnce(
+      mockOidcResponse,
+    );
+
+    renderWithProviders(<Login />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /sign in with authentik sso/i }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /sign in with authentik sso/i }),
+    );
+
+    await waitFor(() => {
+      expect(authApi.initiateOidcLogin).toHaveBeenCalledWith("authentik");
+      expect(window.location.href).toBe(
+        "https://auth.example.com/authorize?client_id=abc",
+      );
+    });
+  });
+
+  it("should show OIDC error from URL search params", async () => {
+    mockSearchParams = new URLSearchParams(
+      "error=access_denied&error_description=User cancelled authentication",
+    );
+
+    renderWithProviders(<Login />);
+
+    expect(
+      screen.getByText(/user cancelled authentication/i),
+    ).toBeInTheDocument();
+  });
+
+  it("should show OIDC error code when no description is provided", async () => {
+    mockSearchParams = new URLSearchParams("error=access_denied");
+
+    renderWithProviders(<Login />);
+
+    expect(screen.getByText(/access_denied/i)).toBeInTheDocument();
+  });
+
+  it("should show error when OIDC login initiation fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(authApi.getOidcProviders).mockResolvedValue(mockOidcEnabled);
+    vi.mocked(authApi.initiateOidcLogin).mockRejectedValueOnce({
+      error: "Failed to start SSO login",
+      message: "Provider unavailable",
+    });
+
+    renderWithProviders(<Login />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /sign in with authentik sso/i }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /sign in with authentik sso/i }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/failed to start sso login/i),
+      ).toBeInTheDocument();
+    });
   });
 });
