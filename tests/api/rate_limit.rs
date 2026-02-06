@@ -118,6 +118,7 @@ async fn create_rate_limited_app_state(
         plugin_manager,
         plugin_metrics_service,
         oidc_service: None,
+        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
     })
 }
 

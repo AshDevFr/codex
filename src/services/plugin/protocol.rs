@@ -241,6 +241,22 @@ pub struct PluginManifest {
     /// JSON Schema for plugin-specific configuration
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_schema: Option<Value>,
+
+    /// Plugin type: "system" (admin-only metadata) or "user" (per-user integrations)
+    #[serde(default)]
+    pub plugin_type: PluginManifestType,
+
+    /// OAuth 2.0 configuration for user plugins that require external service authentication
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<OAuthConfig>,
+
+    /// User-facing description shown when enabling the plugin
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_description: Option<String>,
+
+    /// Setup instructions/help text for the OAuth flow
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setup_instructions: Option<String>,
 }
 
 /// Content types that a metadata provider can support
@@ -264,6 +280,9 @@ pub struct PluginCapabilities {
     /// Can sync user reading progress (v2)
     #[serde(default)]
     pub user_sync_provider: bool,
+    /// Can provide personalized recommendations (v2)
+    #[serde(default)]
+    pub recommendation_provider: bool,
 }
 
 impl PluginCapabilities {
@@ -276,6 +295,85 @@ impl PluginCapabilities {
     /// Check if the plugin can provide book metadata
     pub fn can_provide_book_metadata(&self) -> bool {
         self.metadata_provider.contains(&MetadataContentType::Book)
+    }
+}
+
+/// Plugin manifest type (declared by the plugin in its manifest)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginManifestType {
+    /// System plugin: admin-configured, operates on shared library metadata
+    #[default]
+    System,
+    /// User plugin: per-user integrations (sync, recommendations)
+    User,
+}
+
+/// OAuth 2.0 configuration for user plugins
+///
+/// Plugins declare their OAuth requirements in the manifest. Codex handles
+/// the OAuth flow (authorization URL generation, code exchange, token storage)
+/// so plugins never directly interact with the OAuth provider.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthConfig {
+    /// OAuth 2.0 authorization endpoint URL
+    pub authorization_url: String,
+    /// OAuth 2.0 token endpoint URL
+    pub token_url: String,
+    /// Required OAuth scopes
+    #[serde(default)]
+    pub scopes: Vec<String>,
+    /// Whether to use PKCE (Proof Key for Code Exchange)
+    /// Recommended for public clients; defaults to true
+    #[serde(default = "default_true")]
+    pub pkce: bool,
+    /// Optional user info endpoint URL (to fetch external identity after auth)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_info_url: Option<String>,
+    /// OAuth client ID (can be overridden by admin in plugin config)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl OAuthConfig {
+    /// Validate that the OAuth config has all required fields
+    pub fn validate(&self) -> Result<(), String> {
+        if self.authorization_url.is_empty() {
+            return Err("OAuth authorization_url is required".to_string());
+        }
+        if self.token_url.is_empty() {
+            return Err("OAuth token_url is required".to_string());
+        }
+        // Validate URLs start with https:// (or http:// for local dev)
+        if !self.authorization_url.starts_with("https://")
+            && !self.authorization_url.starts_with("http://")
+        {
+            return Err(format!(
+                "Invalid OAuth authorization_url (must start with http:// or https://): {}",
+                self.authorization_url
+            ));
+        }
+        if !self.token_url.starts_with("https://") && !self.token_url.starts_with("http://") {
+            return Err(format!(
+                "Invalid OAuth token_url (must start with http:// or https://): {}",
+                self.token_url
+            ));
+        }
+        if let Some(ref user_info_url) = self.user_info_url
+            && !user_info_url.starts_with("https://")
+            && !user_info_url.starts_with("http://")
+        {
+            return Err(format!(
+                "Invalid OAuth user_info_url (must start with http:// or https://): {}",
+                user_info_url
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -1362,5 +1460,227 @@ mod tests {
         assert!(scopes.contains(&PluginScope::SeriesDetail));
         assert!(scopes.contains(&PluginScope::BookDetail));
         assert_eq!(scopes.len(), 6);
+    }
+
+    // =========================================================================
+    // OAuth Config & User Plugin Tests
+    // =========================================================================
+
+    #[test]
+    fn test_plugin_manifest_type_default() {
+        let manifest_type: PluginManifestType = Default::default();
+        assert_eq!(manifest_type, PluginManifestType::System);
+    }
+
+    #[test]
+    fn test_plugin_manifest_type_serialization() {
+        let system = PluginManifestType::System;
+        let user = PluginManifestType::User;
+        assert_eq!(serde_json::to_value(&system).unwrap(), json!("system"));
+        assert_eq!(serde_json::to_value(&user).unwrap(), json!("user"));
+    }
+
+    #[test]
+    fn test_plugin_manifest_type_deserialization() {
+        let system: PluginManifestType = serde_json::from_value(json!("system")).unwrap();
+        let user: PluginManifestType = serde_json::from_value(json!("user")).unwrap();
+        assert_eq!(system, PluginManifestType::System);
+        assert_eq!(user, PluginManifestType::User);
+    }
+
+    #[test]
+    fn test_oauth_config_serialization() {
+        let config = OAuthConfig {
+            authorization_url: "https://anilist.co/api/v2/oauth/authorize".to_string(),
+            token_url: "https://anilist.co/api/v2/oauth/token".to_string(),
+            scopes: vec!["read".to_string(), "write".to_string()],
+            pkce: true,
+            user_info_url: Some("https://graphql.anilist.co".to_string()),
+            client_id: None,
+        };
+
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(
+            json["authorizationUrl"],
+            "https://anilist.co/api/v2/oauth/authorize"
+        );
+        assert_eq!(json["tokenUrl"], "https://anilist.co/api/v2/oauth/token");
+        assert_eq!(json["scopes"], json!(["read", "write"]));
+        assert!(json["pkce"].as_bool().unwrap());
+        assert_eq!(json["userInfoUrl"], "https://graphql.anilist.co");
+    }
+
+    #[test]
+    fn test_oauth_config_deserialization() {
+        let json = json!({
+            "authorizationUrl": "https://myanimelist.net/v1/oauth2/authorize",
+            "tokenUrl": "https://myanimelist.net/v1/oauth2/token",
+            "scopes": ["read"],
+            "pkce": true
+        });
+
+        let config: OAuthConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            config.authorization_url,
+            "https://myanimelist.net/v1/oauth2/authorize"
+        );
+        assert_eq!(config.token_url, "https://myanimelist.net/v1/oauth2/token");
+        assert_eq!(config.scopes, vec!["read"]);
+        assert!(config.pkce);
+        assert!(config.user_info_url.is_none());
+    }
+
+    #[test]
+    fn test_oauth_config_pkce_defaults_to_true() {
+        let json = json!({
+            "authorizationUrl": "https://example.com/auth",
+            "tokenUrl": "https://example.com/token"
+        });
+
+        let config: OAuthConfig = serde_json::from_value(json).unwrap();
+        assert!(config.pkce);
+    }
+
+    #[test]
+    fn test_oauth_config_validate_valid() {
+        let config = OAuthConfig {
+            authorization_url: "https://example.com/auth".to_string(),
+            token_url: "https://example.com/token".to_string(),
+            scopes: vec![],
+            pkce: true,
+            user_info_url: None,
+            client_id: None,
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_oauth_config_validate_empty_auth_url() {
+        let config = OAuthConfig {
+            authorization_url: "".to_string(),
+            token_url: "https://example.com/token".to_string(),
+            scopes: vec![],
+            pkce: true,
+            user_info_url: None,
+            client_id: None,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_oauth_config_validate_invalid_url() {
+        let config = OAuthConfig {
+            authorization_url: "not-a-url".to_string(),
+            token_url: "https://example.com/token".to_string(),
+            scopes: vec![],
+            pkce: true,
+            user_info_url: None,
+            client_id: None,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_oauth_config_validate_with_user_info_url() {
+        let config = OAuthConfig {
+            authorization_url: "https://example.com/auth".to_string(),
+            token_url: "https://example.com/token".to_string(),
+            scopes: vec![],
+            pkce: true,
+            user_info_url: Some("https://example.com/userinfo".to_string()),
+            client_id: None,
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_oauth_config_validate_invalid_user_info_url() {
+        let config = OAuthConfig {
+            authorization_url: "https://example.com/auth".to_string(),
+            token_url: "https://example.com/token".to_string(),
+            scopes: vec![],
+            pkce: true,
+            user_info_url: Some("not-a-url".to_string()),
+            client_id: None,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_plugin_manifest_with_oauth_config() {
+        let json = json!({
+            "name": "anilist-sync",
+            "displayName": "AniList Sync",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "pluginType": "user",
+            "capabilities": {
+                "userSyncProvider": true
+            },
+            "oauth": {
+                "authorizationUrl": "https://anilist.co/api/v2/oauth/authorize",
+                "tokenUrl": "https://anilist.co/api/v2/oauth/token",
+                "scopes": [],
+                "pkce": false
+            },
+            "userDescription": "Sync reading progress with AniList",
+            "setupInstructions": "Click Connect to link your AniList account"
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        assert_eq!(manifest.name, "anilist-sync");
+        assert_eq!(manifest.plugin_type, PluginManifestType::User);
+        assert!(manifest.capabilities.user_sync_provider);
+        assert!(!manifest.capabilities.recommendation_provider);
+
+        let oauth = manifest.oauth.unwrap();
+        assert_eq!(
+            oauth.authorization_url,
+            "https://anilist.co/api/v2/oauth/authorize"
+        );
+        assert!(!oauth.pkce);
+
+        assert_eq!(
+            manifest.user_description.unwrap(),
+            "Sync reading progress with AniList"
+        );
+        assert!(manifest.setup_instructions.is_some());
+    }
+
+    #[test]
+    fn test_plugin_manifest_defaults_to_system_type() {
+        let json = json!({
+            "name": "metadata-plugin",
+            "displayName": "Metadata Plugin",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "metadataProvider": ["series"]
+            }
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        assert_eq!(manifest.plugin_type, PluginManifestType::System);
+        assert!(manifest.oauth.is_none());
+        assert!(manifest.user_description.is_none());
+    }
+
+    #[test]
+    fn test_plugin_capabilities_recommendation_provider() {
+        let json = json!({
+            "name": "rec-engine",
+            "displayName": "Recommendation Engine",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "pluginType": "user",
+            "capabilities": {
+                "recommendationProvider": true
+            }
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        assert!(manifest.capabilities.recommendation_provider);
+        assert!(!manifest.capabilities.user_sync_provider);
+        assert!(manifest.capabilities.metadata_provider.is_empty());
     }
 }

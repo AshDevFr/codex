@@ -285,6 +285,25 @@ impl UserPluginsRepository {
         }
     }
 
+    /// Decrypt and return OAuth refresh token
+    pub async fn get_oauth_refresh_token(
+        db: &DatabaseConnection,
+        id: Uuid,
+    ) -> Result<Option<String>> {
+        let instance = Self::get_by_id(db, id)
+            .await?
+            .ok_or_else(|| anyhow!("User plugin not found: {}", id))?;
+
+        match instance.oauth_refresh_token {
+            Some(encrypted) => {
+                let encryption = CredentialEncryption::global()?;
+                let decrypted = encryption.decrypt_string(&encrypted)?;
+                Ok(Some(decrypted))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Clear all OAuth tokens (disconnect)
     pub async fn clear_oauth_tokens(
         db: &DatabaseConnection,
