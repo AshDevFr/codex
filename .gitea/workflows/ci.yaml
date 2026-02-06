@@ -1,17 +1,5 @@
-# CI workflow for Pull Requests
+# CI workflow for Pull Requests (Gitea)
 # Runs tests, linting, frontend checks, and Docker build with PR tag
-#
-# =============================================================================
-# SELF-HOSTED RUNNER MODIFICATIONS
-# =============================================================================
-# This workflow uses self-hosted runners (arc-runner-codex) with ubuntu:22.04
-# containers. To revert to paid GitHub runners:
-#
-# 1. Replace all `runs-on: arc-runner-codex` with `runs-on: ubuntu-latest`
-# 2. Remove all `container: ubuntu:22.04` lines
-# 3. Remove all "Install base dependencies" steps
-# 4. Remove all "Install Rust" steps (GitHub runners have Rust pre-installed)
-# =============================================================================
 
 name: CI
 
@@ -29,38 +17,43 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Shared cache directory on PVC mounted by ARC runners
-# Each workflow run gets its own isolated directory under /ci-cache
+# Shared cache directory on mount available to runners
+# Each workflow run gets its own isolated directory under /cache/ci
 env:
-  CI_CACHE: /ci-cache/${{ github.run_id }}
+  CI_CACHE: /cache/ci/${{ github.run_id }}
 
 jobs:
   # Build test binaries and create nextest archive
   build-tests:
     name: Build Tests
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
+    runs-on: ubuntu-latest
     container:
-      image: ubuntu:22.04
+      image: catthehacker/ubuntu:act-latest
       volumes:
-        - /ci-cache:/ci-cache
+        - /cache:/cache
     timeout-minutes: 60
     env:
-      SCCACHE_GHA_ENABLED: "true"
-      SCCACHE_GHA_VERSION: test
-      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+      # Limit parallel rustc jobs to reduce peak memory (OOMKill prevention)
+      CARGO_BUILD_JOBS: "1"
+      # Strip debug info to reduce memory usage during compilation and linking
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - name: Install base dependencies
         run: |
           apt-get update
-          apt-get install -y git curl build-essential pkg-config clang mold
+          apt-get install -y build-essential pkg-config clang mold
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Show memory info
+        run: |
+          echo "=== Memory Info ==="
+          free -h || cat /proc/meminfo || echo "Cannot determine memory"
+          echo "=== CPU Info ==="
+          nproc || echo "Cannot determine CPU count"
       - name: Prepare cache directory
         run: |
           mkdir -p $CI_CACHE
@@ -74,10 +67,13 @@ jobs:
       - name: Build and archive tests
         run: |
           cargo nextest archive --features rar --archive-file $CI_CACHE/nextest-archive.tar.zst
+          echo "=== Post-build memory ==="
+          free -h || cat /proc/meminfo || true
+          echo "=== Verifying archive ==="
           ls -lh $CI_CACHE/nextest-archive.tar.zst || { echo "::error::Failed to write nextest archive to cache"; exit 1; }
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
       # - name: Upload test archive
-      #   uses: actions/upload-artifact@v4
+      #   uses: actions/upload-artifact@v3
       #   with:
       #     name: nextest-archive
       #     path: nextest-archive.tar.zst
@@ -87,30 +83,25 @@ jobs:
   test:
     name: Test (${{ matrix.partition }}/5)
     needs: build-tests
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
+    runs-on: ubuntu-latest
     container:
-      image: ubuntu:22.04
+      image: catthehacker/ubuntu:act-latest
       volumes:
-        - /ci-cache:/ci-cache
+        - /cache:/cache
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5]
     steps:
-      - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
       # - name: Download test archive
-      #   uses: actions/download-artifact@v4
+      #   uses: actions/download-artifact@v3
       #   with:
       #     name: nextest-archive
       - name: Run tests (partition ${{ matrix.partition }}/5)
@@ -119,26 +110,20 @@ jobs:
   # Run linting checks
   lint:
     name: Lint
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
     timeout-minutes: 30
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      SCCACHE_GHA_VERSION: lint
-      RUSTC_WRAPPER: sccache
     steps:
       - name: Install base dependencies
         run: |
           apt-get update
-          apt-get install -y git curl build-essential pkg-config clang mold
+          apt-get install -y build-essential pkg-config clang mold
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Format check
         run: cargo fmt -- --check
       - name: Clippy check
@@ -147,15 +132,11 @@ jobs:
   # Run frontend tests and build
   frontend:
     name: Frontend
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
     timeout-minutes: 30
     steps:
-      - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -179,9 +160,9 @@ jobs:
   # Run plugin checks (lint, typecheck, tests)
   plugins:
     name: Plugins (${{ matrix.plugin }})
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -192,10 +173,6 @@ jobs:
           - metadata-mangabaka
           - metadata-openlibrary
     steps:
-      - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -231,27 +208,30 @@ jobs:
   docker:
     name: Docker
     needs: [test, lint, frontend, plugins]
-    runs-on: arc-runner-codex
+    runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Determine build info
-        id: info
+      - name: Registry FQDN Setup
+        id: registry
         run: |
-          echo "DOCKER_REGISTRY=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-      - name: Login to GitHub Container Registry
+          registry=${{ github.server_url }}
+          echo "registry=${registry##http*://}" >> "$GITHUB_OUTPUT"
+      - name: Login to Docker Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ steps.registry.outputs.registry }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ steps.registry.outputs.registry }}/${{ github.repository }}
           tags: |
             type=ref,event=pr
             type=sha,prefix=pr-${{ github.event.pull_request.number }}-sha-
@@ -264,21 +244,21 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest
-          cache-to: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest,mode=max
+          cache-from: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache
+          cache-to: type=registry,ref=${{ steps.registry.outputs.registry }}/${{ github.repository }}:buildcache,mode=max
 
-  # Clean up intermediate cache and artifacts that are no longer needed
+  # Clean up intermediate cache that is no longer needed
   cleanup:
     name: Cleanup
     needs:
       - test
       - docker
     if: always()
-    runs-on: arc-runner-codex
+    runs-on: ubuntu-latest
     container:
-      image: ubuntu:22.04
+      image: catthehacker/ubuntu:act-latest
       volumes:
-        - /ci-cache:/ci-cache
+        - /cache:/cache
     steps:
       - name: Clean up CI cache
         run: |
@@ -286,9 +266,4 @@ jobs:
           rm -rf $CI_CACHE
           # Remove orphaned cache directories older than 24 hours (from cancelled/crashed runs)
           echo "Cleaning orphaned cache directories older than 24h..."
-          find /ci-cache -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec echo "Removing stale: {}" \; -exec rm -rf {} \;
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Delete intermediate artifacts
-      #   uses: geekyeggo/delete-artifact@v5
-      #   with:
-      #     name: nextest-archive
+          find /cache/ci -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec echo "Removing stale: {}" \; -exec rm -rf {} \;

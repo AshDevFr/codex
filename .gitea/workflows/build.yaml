@@ -6,17 +6,15 @@
 # - Push to main: test, lint, build artifacts, push Docker with 'main' tag
 # - Push version tag: test, lint, build artifacts, push Docker with version tags, create release
 #
-# Note: PRs are handled by this workflow as well (test, lint, frontend only)
+# Note: PRs are handled by ci.yaml (test, lint, frontend, Docker build validation)
 
 name: Build
+
 permissions:
   contents: write
   packages: write
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
@@ -28,76 +26,135 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Shared cache directory on mount available to runners
+# Each workflow run gets its own isolated directory under /cache/ci
+env:
+  CI_CACHE: /cache/ci/${{ github.run_id }}
+
 jobs:
-  # Run Rust tests
-  test:
-    name: Test
+  # Build test binaries and create nextest archive
+  build-tests:
+    name: Build Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     container:
       image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /cache:/cache
+    timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: "0"
+      # Limit parallel rustc jobs to reduce peak memory (OOMKill prevention)
+      CARGO_BUILD_JOBS: "1"
+      # Strip debug info to reduce memory usage during compilation and linking
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - name: Install base dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential pkg-config clang mold
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      - name: Show memory info
+        run: |
+          echo "=== Memory Info ==="
+          free -h || cat /proc/meminfo || echo "Cannot determine memory"
+          echo "=== CPU Info ==="
+          nproc || echo "Cannot determine CPU count"
+      - name: Prepare cache directory
+        run: |
+          mkdir -p $CI_CACHE
+          if test -d $CI_CACHE; then
+            echo "CI_CACHE directory ready: $CI_CACHE"
+            ls -la $(dirname $CI_CACHE)
+          else
+            echo "::error::CI_CACHE directory $CI_CACHE is not available. Is the PVC mounted?"
+            exit 1
+          fi
+      - name: Build and archive tests
+        run: |
+          cargo nextest archive --features rar --archive-file $CI_CACHE/nextest-archive.tar.zst
+          echo "=== Post-build memory ==="
+          free -h || cat /proc/meminfo || true
+          echo "=== Verifying archive ==="
+          ls -lh $CI_CACHE/nextest-archive.tar.zst || { echo "::error::Failed to write nextest archive to cache"; exit 1; }
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Upload test archive
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: nextest-archive
+      #     path: nextest-archive.tar.zst
+      #     retention-days: 1
+
+  # Run tests in parallel partitions
+  test:
+    name: Test (${{ matrix.partition }}/5)
+    needs: build-tests
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /cache:/cache
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-test-
-      - name: Run tests
-        run: cargo test --features rar
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Download test archive
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: nextest-archive
+      - name: Run tests (partition ${{ matrix.partition }}/5)
+        run: cargo nextest run --archive-file $CI_CACHE/nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
 
   # Run linting checks
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     container:
       image: catthehacker/ubuntu:act-latest
+    timeout-minutes: 30
     steps:
+      - name: Install base dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential pkg-config clang mold
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-lint-
       - name: Format check
         run: cargo fmt -- --check
       - name: Clippy check
         run: cargo clippy --features rar -- -D warnings
 
-  # Build frontend
+  # Run frontend tests and build
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     container:
       image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /cache:/cache
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # Note: We remove package-lock.json and use npm install instead of npm ci
+      # because Biome updates frequently and we want to use the latest compatible version
       - name: Install dependencies
         working-directory: web
         run: |
@@ -112,20 +169,84 @@ jobs:
       - name: Build frontend
         working-directory: web
         run: npm run build
-      - name: Upload frontend build
-        uses: actions/upload-artifact@v3
+      - name: Prepare cache directory
+        run: |
+          mkdir -p $CI_CACHE
+          if test -d $CI_CACHE; then
+            echo "CI_CACHE directory ready: $CI_CACHE"
+            ls -la $(dirname $CI_CACHE)
+          else
+            echo "::error::CI_CACHE directory $CI_CACHE is not available. Is the PVC mounted?"
+            exit 1
+          fi
+      - name: Cache frontend build
+        run: |
+          cp -r web/dist $CI_CACHE/frontend-dist
+          ls -lh $CI_CACHE/frontend-dist/ || { echo "::error::Failed to cache frontend build"; exit 1; }
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Upload frontend build
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: frontend-dist
+      #     path: web/dist
+      #     retention-days: 1
+
+  # Run plugin checks (lint, typecheck, tests)
+  plugins:
+    name: Plugins (${{ matrix.plugin }})
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - sdk-typescript
+          - metadata-echo
+          - metadata-mangabaka
+          - metadata-openlibrary
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          name: frontend-dist
-          path: web/dist
-          retention-days: 1
+          node-version: "22"
+      # SDK must be built first for other plugins to use
+      - name: Build SDK (dependency)
+        if: matrix.plugin != 'sdk-typescript'
+        working-directory: plugins/sdk-typescript
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+          npm run build
+      - name: Install dependencies
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+      - name: Lint
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run lint
+      - name: Typecheck
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npx tsc --noEmit
+      - name: Test
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run test
+      - name: Build
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run build
 
   # Run 'dist plan' (or host) to determine what tasks we need to do
   plan:
     name: Plan
-    needs: [test, lint, frontend]
+    needs: [test, lint, frontend, plugins]
     runs-on: ubuntu-latest
     container:
       image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /cache:/cache
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
       tag: ${{ steps.info.outputs.tag }}
@@ -171,11 +292,26 @@ jobs:
       - name: Install dist
         shell: bash
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.30.3/cargo-dist-installer.sh | sh"
-      - name: Cache dist
-        uses: actions/upload-artifact@v3
-        with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/dist
+      - name: Prepare cache directory
+        run: |
+          mkdir -p $CI_CACHE
+          if test -d $CI_CACHE; then
+            echo "CI_CACHE directory ready: $CI_CACHE"
+            ls -la $(dirname $CI_CACHE)
+          else
+            echo "::error::CI_CACHE directory $CI_CACHE is not available. Is the PVC mounted?"
+            exit 1
+          fi
+      - name: Cache dist binary
+        run: |
+          cp ~/.cargo/bin/dist $CI_CACHE/dist
+          ls -lh $CI_CACHE/dist || { echo "::error::Failed to cache dist binary"; exit 1; }
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Cache dist
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: cargo-dist-cache
+      #     path: ~/.cargo/bin/dist
       - name: Run dist plan
         id: plan
         shell: bash
@@ -188,11 +324,16 @@ jobs:
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
-      - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@v3
-        with:
-          name: artifacts-plan-dist-manifest
-          path: plan-dist-manifest.json
+      - name: Cache dist-manifest.json
+        run: |
+          cp plan-dist-manifest.json $CI_CACHE/plan-dist-manifest.json
+          ls -lh $CI_CACHE/plan-dist-manifest.json || { echo "::error::Failed to cache dist manifest"; exit 1; }
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: "Upload dist-manifest.json"
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: artifacts-plan-dist-manifest
+      #     path: plan-dist-manifest.json
 
   # Build and packages all the platform-specific things
   build-local-artifacts:
@@ -215,7 +356,10 @@ jobs:
       # - N "local" tasks that build each platform's binaries and platform-specific installers
       matrix: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}
     runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container && matrix.container.image || null }}
+    container:
+      image: ${{ matrix.container && matrix.container.image || 'catthehacker/ubuntu:act-latest' }}
+      volumes:
+        - /cache:/cache
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
@@ -235,21 +379,30 @@ jobs:
           fi
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
-      # Get the dist-manifest
-      - name: Fetch local artifacts
-        uses: actions/download-artifact@v3
-        with:
-          pattern: artifacts-*
-          path: target/distrib/
-          merge-multiple: true
+      # Restore cached artifacts from /cache PVC
+      - name: Restore plan manifest from cache
+        run: |
+          mkdir -p target/distrib/
+          cp $CI_CACHE/plan-dist-manifest.json target/distrib/
+      - name: Restore frontend dist from cache
+        run: |
+          mkdir -p web/dist/
+          cp -r $CI_CACHE/frontend-dist/* web/dist/
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Fetch local artifacts
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     pattern: artifacts-*
+      #     path: target/distrib/
+      #     merge-multiple: true
+      # - name: Download frontend dist
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: frontend-dist
+      #     path: web/dist/
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
-      - name: Download frontend dist
-        uses: actions/download-artifact@v3
-        with:
-          name: frontend-dist
-          path: web/dist/
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
@@ -268,13 +421,32 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-      - name: "Upload artifacts"
-        uses: actions/upload-artifact@v3
-        with:
-          name: artifacts-build-local-${{ join(matrix.targets, '_') }}
-          path: |
-            ${{ steps.cargo-dist.outputs.paths }}
-            ${{ env.BUILD_MANIFEST_NAME }}
+      - name: Cache build artifacts
+        shell: bash
+        run: |
+          CACHE_DIR=$CI_CACHE/artifacts-build-local-${{ join(matrix.targets, '_') }}
+          mkdir -p "$CACHE_DIR"
+          if test -d "$CACHE_DIR"; then
+            echo "Cache directory ready: $CACHE_DIR"
+          else
+            echo "::error::Cache directory $CACHE_DIR is not available. Is the PVC mounted?"
+            exit 1
+          fi
+          # Copy upload files listed by dist
+          while IFS= read -r f; do
+            cp "$f" "$CACHE_DIR/"
+          done <<< "${{ steps.cargo-dist.outputs.paths }}"
+          cp "$BUILD_MANIFEST_NAME" "$CACHE_DIR/"
+          echo "Cached build artifacts:"
+          ls -lh "$CACHE_DIR/"
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: "Upload artifacts"
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: artifacts-build-local-${{ join(matrix.targets, '_') }}
+      #     path: |
+      #       ${{ steps.cargo-dist.outputs.paths }}
+      #       ${{ env.BUILD_MANIFEST_NAME }}
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
@@ -284,6 +456,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /cache:/cache
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
@@ -291,19 +465,35 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install cached dist
-        uses: actions/download-artifact@v3
-        with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/
-      - run: chmod +x ~/.cargo/bin/dist
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      # Restore dist binary from cache
+      - name: Restore cached dist
+        run: |
+          mkdir -p ~/.cargo/bin
+          cp $CI_CACHE/dist ~/.cargo/bin/dist
+          chmod +x ~/.cargo/bin/dist
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Install cached dist
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: cargo-dist-cache
+      #     path: ~/.cargo/bin/
+      # - run: chmod +x ~/.cargo/bin/dist
       # Get all the local artifacts for the global tasks to use (for e.g. checksums)
-      - name: Fetch local artifacts
-        uses: actions/download-artifact@v3
-        with:
-          pattern: artifacts-*
-          path: target/distrib/
-          merge-multiple: true
+      - name: Restore local artifacts from cache
+        run: |
+          mkdir -p target/distrib/
+          for dir in $CI_CACHE/artifacts-build-local-*; do
+            [ -d "$dir" ] && cp -r "$dir"/* target/distrib/
+          done
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Fetch local artifacts
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     pattern: artifacts-*
+      #     path: target/distrib/
+      #     merge-multiple: true
       - id: cargo-dist
         shell: bash
         run: |
@@ -316,26 +506,40 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-      - name: "Upload artifacts"
-        uses: actions/upload-artifact@v3
-        with:
-          name: artifacts-build-global
-          path: |
-            ${{ steps.cargo-dist.outputs.paths }}
-            ${{ env.BUILD_MANIFEST_NAME }}
+      - name: Cache global artifacts
+        shell: bash
+        run: |
+          CACHE_DIR=$CI_CACHE/artifacts-build-global
+          mkdir -p "$CACHE_DIR"
+          if test -d "$CACHE_DIR"; then
+            echo "Cache directory ready: $CACHE_DIR"
+          else
+            echo "::error::Cache directory $CACHE_DIR is not available. Is the PVC mounted?"
+            exit 1
+          fi
+          while IFS= read -r f; do
+            cp "$f" "$CACHE_DIR/"
+          done < <(jq --raw-output ".upload_files[]" dist-manifest.json)
+          cp "$BUILD_MANIFEST_NAME" "$CACHE_DIR/"
+          echo "Cached global artifacts:"
+          ls -lh "$CACHE_DIR/"
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: "Upload artifacts"
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: artifacts-build-global
+      #     path: |
+      #       ${{ steps.cargo-dist.outputs.paths }}
+      #       ${{ env.BUILD_MANIFEST_NAME }}
 
-  # Build and push Docker images (multi-arch) from source
-  # Uses multi-stage Dockerfile with cargo-chef for dependency caching
+  # Build and push Docker images (multi-arch)
   docker:
     name: Docker
-    needs:
-      - test
-      - lint
-      - frontend
-    # Only build Docker on main branch or release tags (not PRs)
+    needs: [test, lint, frontend, plugins]
+    # Only build Docker on main branch or release tags
     if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU
@@ -381,12 +585,13 @@ jobs:
           images: ${{ steps.registry.outputs.registry }}/${{ github.repository }}
           tags: |
             type=raw,value=main
+            type=raw,value=latest
             type=sha,prefix=sha-
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
+          file: Dockerfile.cross
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.info.outputs.is-release == 'true' && steps.meta-release.outputs.tags || steps.meta-main.outputs.tags }}
@@ -401,6 +606,7 @@ jobs:
       - plan
       - build-local-artifacts
       - build-global-artifacts
+      - docker
     # Only run if we're "publishing" a release, and only if plan, local, global didn't fail (skipped is fine)
     if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.is-release == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
     env:
@@ -408,25 +614,43 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /cache:/cache
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install cached dist
-        uses: actions/download-artifact@v3
-        with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/
-      - run: chmod +x ~/.cargo/bin/dist
-      # Fetch artifacts from scratch-storage
-      - name: Fetch artifacts
-        uses: actions/download-artifact@v3
-        with:
-          pattern: artifacts-*
-          path: target/distrib/
-          merge-multiple: true
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      # Restore dist binary from cache
+      - name: Restore cached dist
+        run: |
+          mkdir -p ~/.cargo/bin
+          cp $CI_CACHE/dist ~/.cargo/bin/dist
+          chmod +x ~/.cargo/bin/dist
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Install cached dist
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: cargo-dist-cache
+      #     path: ~/.cargo/bin/
+      # - run: chmod +x ~/.cargo/bin/dist
+      # Fetch artifacts from cache
+      - name: Restore artifacts from cache
+        run: |
+          mkdir -p target/distrib/
+          for dir in $CI_CACHE/artifacts-build-*; do
+            [ -d "$dir" ] && cp -r "$dir"/* target/distrib/
+          done
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: Fetch artifacts
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     pattern: artifacts-*
+      #     path: target/distrib/
+      #     merge-multiple: true
       - id: host
         shell: bash
         run: |
@@ -434,28 +658,32 @@ jobs:
           echo "artifacts uploaded and released successfully"
           cat dist-manifest.json
           echo "manifest=$(jq -c "." dist-manifest.json)" >> "$GITHUB_OUTPUT"
-      - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@v3
-        with:
-          # Overwrite the previous copy
-          name: artifacts-dist-manifest
-          path: dist-manifest.json
-      # Create a Release while uploading all files to it
-      - name: "Download Artifacts"
-        uses: actions/download-artifact@v3
-        with:
-          pattern: artifacts-*
-          path: artifacts
-          merge-multiple: true
-      - name: Cleanup
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: "Upload dist-manifest.json"
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: artifacts-dist-manifest
+      #     path: dist-manifest.json
+      # Create a Release while uploading all files from cache
+      - name: Restore release artifacts from cache
         run: |
+          mkdir -p artifacts/
+          for dir in $CI_CACHE/artifacts-build-*; do
+            [ -d "$dir" ] && cp -r "$dir"/* artifacts/
+          done
           # Remove the granular manifests
           rm -f artifacts/*-dist-manifest.json
-      - name: Registry FQDN Setup
-        id: registry
-        run: |
-          registry=${{ github.server_url }}
-          echo "registry=${registry##http*://}" >> "$GITHUB_OUTPUT"
+      # Replaced by /cache PVC - uncomment to revert to artifact storage
+      # - name: "Download Artifacts"
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     pattern: artifacts-*
+      #     path: artifacts
+      #     merge-multiple: true
+      # - name: Cleanup
+      #   run: |
+      #     # Remove the granular manifests
+      #     rm -f artifacts/*-dist-manifest.json
       - name: Publish packages to Gitea registry
         env:
           GITHUB_TOKEN: ${{ secrets.PACKAGE_TOKEN || secrets.GITHUB_TOKEN }}
@@ -503,10 +731,90 @@ jobs:
 
           gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
+  # Publish SDK to npm (only for releases)
+  publish-sdk:
+    name: Publish SDK
+    needs:
+      - plan
+      - host
+    if: ${{ always() && needs.host.result == 'success' }}
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      # Note: We remove package-lock.json and use npm install instead of npm ci
+      # because Biome updates frequently and we want to use the latest compatible version
+      - name: Install dependencies and build
+        working-directory: plugins/sdk-typescript
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+          npm run build
+      - name: Publish to npm
+        working-directory: plugins/sdk-typescript
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Publish plugins to npm (only for releases, after SDK is published)
+  publish-plugins:
+    name: Publish Plugins
+    needs:
+      - plan
+      - publish-sdk
+    if: ${{ always() && needs.publish-sdk.result == 'success' }}
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - metadata-echo
+          - metadata-mangabaka
+          - metadata-openlibrary
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      # Update SDK dependency from file: to published npm version before install
+      - name: Update SDK dependency for publish
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          SDK_VERSION=$(jq -r .version ../sdk-typescript/package.json)
+          echo "Updating @ashdev/codex-plugin-sdk dependency to ^$SDK_VERSION"
+          jq --arg v "^$SDK_VERSION" '.dependencies["@ashdev/codex-plugin-sdk"] = $v' package.json > tmp.json
+          mv tmp.json package.json
+          cat package.json | grep -A2 '"dependencies"'
+      - name: Install plugin dependencies
+        working-directory: plugins/${{ matrix.plugin }}
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
+      - name: Build plugin
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm run build
+      - name: Publish to npm
+        working-directory: plugins/${{ matrix.plugin }}
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   announce:
     needs:
       - plan
       - host
+      - publish-sdk
+      - publish-plugins
     # use "always() && ..." to allow us to wait for all publish jobs while
     # still allowing individual publish jobs to skip themselves (for prereleases).
     # "host" however must run to completion, no skipping allowed!
@@ -520,3 +828,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+  # Clean up intermediate cache that is no longer needed
+  cleanup:
+    name: Cleanup
+    needs:
+      - plan
+      - build-local-artifacts
+      - build-global-artifacts
+      - host
+      - docker
+      - announce
+    if: always()
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-latest
+      volumes:
+        - /cache:/cache
+    steps:
+      - name: Clean up CI cache
+        run: |
+          echo "Removing current run cache: $CI_CACHE"
+          rm -rf $CI_CACHE
+          # Remove orphaned cache directories older than 24 hours (from cancelled/crashed runs)
+          echo "Cleaning orphaned cache directories older than 24h..."
+          find /cache/ci -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec echo "Removing stale: {}" \; -exec rm -rf {} \;
