@@ -9,11 +9,11 @@ use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::duplicates::{
     ListDuplicatesResponse, TriggerDuplicateScanResponse,
 };
+use codex::db::ScanningStrategy;
 use codex::db::entities::{books, series, series_metadata};
 use codex::db::repositories::{
     BookDuplicatesRepository, BookRepository, LibraryRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

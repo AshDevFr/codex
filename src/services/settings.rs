@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{interval, Duration};
+use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 

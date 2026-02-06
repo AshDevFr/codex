@@ -629,30 +629,30 @@ pub fn extract_release_date_from_condition(
     if let Some(all_of) = condition.get("allOf").and_then(|v| v.as_array()) {
         for item in all_of {
             // Check for direct releaseDate
-            if let Some(rd) = item.get("releaseDate") {
-                if let (Some(operator), Some(date_time)) = (
+            if let Some(rd) = item.get("releaseDate")
+                && let (Some(operator), Some(date_time)) = (
                     rd.get("operator").and_then(|v| v.as_str()),
                     rd.get("dateTime").and_then(|v| v.as_str()),
-                ) {
-                    return Some(ReleaseDateCondition {
-                        operator: operator.to_string(),
-                        date_time: date_time.to_string(),
-                    });
-                }
+                )
+            {
+                return Some(ReleaseDateCondition {
+                    operator: operator.to_string(),
+                    date_time: date_time.to_string(),
+                });
             }
             // Check for anyOf containing releaseDate (nested condition)
             if let Some(any_of) = item.get("anyOf").and_then(|v| v.as_array()) {
                 for inner_item in any_of {
-                    if let Some(rd) = inner_item.get("releaseDate") {
-                        if let (Some(operator), Some(date_time)) = (
+                    if let Some(rd) = inner_item.get("releaseDate")
+                        && let (Some(operator), Some(date_time)) = (
                             rd.get("operator").and_then(|v| v.as_str()),
                             rd.get("dateTime").and_then(|v| v.as_str()),
-                        ) {
-                            return Some(ReleaseDateCondition {
-                                operator: operator.to_string(),
-                                date_time: date_time.to_string(),
-                            });
-                        }
+                        )
+                    {
+                        return Some(ReleaseDateCondition {
+                            operator: operator.to_string(),
+                            date_time: date_time.to_string(),
+                        });
                     }
                 }
             }

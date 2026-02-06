@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{mpsc, Mutex, Semaphore};
+use tokio::sync::{Mutex, Semaphore, mpsc};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -22,7 +22,7 @@ use crate::events::EventBroadcaster;
 use crate::models::SeriesStrategy;
 use crate::tasks::types::TaskType;
 
-use super::strategies::{create_strategy, DetectedSeries};
+use super::strategies::{DetectedSeries, create_strategy};
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus, ScannerConfig};
 
 const SUPPORTED_EXTENSIONS: &[&str] = &["cbz", "cbr", "epub", "pdf"];
@@ -104,17 +104,17 @@ fn parse_excluded_patterns(library: &crate::db::entities::libraries::Model) -> O
 /// like `subdir/*` only match relative paths.
 fn should_exclude(path: &Path, library_path: &Path, excluded: &GlobSet) -> bool {
     // Check filename (for patterns like `.DS_Store`, `Thumbs.db`)
-    if let Some(name) = path.file_name() {
-        if excluded.is_match(name) {
-            return true;
-        }
+    if let Some(name) = path.file_name()
+        && excluded.is_match(name)
+    {
+        return true;
     }
 
     // Check relative path from library root (for patterns like `subdir/*`)
-    if let Ok(relative) = path.strip_prefix(library_path) {
-        if excluded.is_match(relative) {
-            return true;
-        }
+    if let Ok(relative) = path.strip_prefix(library_path)
+        && excluded.is_match(relative)
+    {
+        return true;
     }
 
     false
@@ -429,10 +429,10 @@ pub async fn scan_library(
     send_progress(&progress_tx, &final_progress).await;
 
     // Update last_scanned_at timestamp
-    if result.is_ok() {
-        if let Err(e) = LibraryRepository::update_last_scanned(db, library_id).await {
-            warn!("Failed to update last_scanned_at: {}", e);
-        }
+    if result.is_ok()
+        && let Err(e) = LibraryRepository::update_last_scanned(db, library_id).await
+    {
+        warn!("Failed to update last_scanned_at: {}", e);
     }
 
     let scan_duration = scan_start.elapsed();
@@ -917,18 +917,14 @@ async fn process_series_batched(
                     result.files_scanned += 1;
 
                     // Check if we should skip this file (normal mode only)
-                    if mode == ScanMode::Normal {
-                        if let Some(existing_book) = existing_books_map.get(&file_hash.path_str) {
-                            if existing_book.partial_hash == file_hash.partial_hash {
-                                // Partial hash hasn't changed - file is likely unchanged
-                                if existing_book.analyzed {
-                                    debug!(
-                                        "Skipping unchanged analyzed file: {}",
-                                        file_hash.path_str
-                                    );
-                                    continue;
-                                }
-                            }
+                    if mode == ScanMode::Normal
+                        && let Some(existing_book) = existing_books_map.get(&file_hash.path_str)
+                        && existing_book.partial_hash == file_hash.partial_hash
+                    {
+                        // Partial hash hasn't changed - file is likely unchanged
+                        if existing_book.analyzed {
+                            debug!("Skipping unchanged analyzed file: {}", file_hash.path_str);
+                            continue;
                         }
                     }
 
@@ -1068,16 +1064,16 @@ fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
     // Create hash from normalized filenames
     let mut hasher = Sha256::new();
     for path in sample {
-        if let Some(filename) = path.file_name() {
-            if let Some(name_str) = filename.to_str() {
-                // Normalize: lowercase, alphanumeric only
-                let normalized: String = name_str
-                    .to_lowercase()
-                    .chars()
-                    .filter(|c| c.is_alphanumeric() || c.is_whitespace())
-                    .collect();
-                hasher.update(normalized.as_bytes());
-            }
+        if let Some(filename) = path.file_name()
+            && let Some(name_str) = filename.to_str()
+        {
+            // Normalize: lowercase, alphanumeric only
+            let normalized: String = name_str
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+                .collect();
+            hasher.update(normalized.as_bytes());
         }
     }
 
@@ -1151,32 +1147,29 @@ async fn find_or_create_series(
         );
 
         // Update fingerprint and name if files changed (fingerprint may have changed)
-        if let Some(fp) = fingerprint {
-            if existing.fingerprint.as_ref() != Some(&fp.to_string())
-                || existing.name != series_name
-            {
-                debug!(
-                    "Updating series fingerprint/name after path match: {} (old fingerprint: {:?}, new: {})",
-                    series_name,
-                    existing.fingerprint,
-                    fp
-                );
-                SeriesRepository::update_fingerprint_and_name(
-                    db,
-                    existing.id,
-                    Some(fp.to_string()),
-                    series_name,
-                )
-                .await?;
+        if let Some(fp) = fingerprint
+            && (existing.fingerprint.as_ref() != Some(&fp.to_string())
+                || existing.name != series_name)
+        {
+            debug!(
+                "Updating series fingerprint/name after path match: {} (old fingerprint: {:?}, new: {})",
+                series_name, existing.fingerprint, fp
+            );
+            SeriesRepository::update_fingerprint_and_name(
+                db,
+                existing.id,
+                Some(fp.to_string()),
+                series_name,
+            )
+            .await?;
 
-                // Also update series_metadata title if not locked
-                if let Ok(Some(metadata)) =
-                    SeriesMetadataRepository::get_by_series_id(db, existing.id).await
-                {
-                    if metadata.title != series_name && !metadata.title_lock {
-                        SeriesRepository::update_name(db, existing.id, series_name).await?;
-                    }
-                }
+            // Also update series_metadata title if not locked
+            if let Ok(Some(metadata)) =
+                SeriesMetadataRepository::get_by_series_id(db, existing.id).await
+                && metadata.title != series_name
+                && !metadata.title_lock
+            {
+                SeriesRepository::update_name(db, existing.id, series_name).await?;
             }
         }
 
@@ -1217,14 +1210,14 @@ async fn find_or_create_series(
                 // Also update series_metadata title if not locked
                 if let Ok(Some(metadata)) =
                     SeriesMetadataRepository::get_by_series_id(db, existing.id).await
+                    && metadata.title != series_name
+                    && !metadata.title_lock
                 {
-                    if metadata.title != series_name && !metadata.title_lock {
-                        info!(
-                            "Detected series rename: {} -> {}",
-                            metadata.title, series_name
-                        );
-                        SeriesRepository::update_name(db, existing.id, series_name).await?;
-                    }
+                    info!(
+                        "Detected series rename: {} -> {}",
+                        metadata.title, series_name
+                    );
+                    SeriesRepository::update_name(db, existing.id, series_name).await?;
                 }
 
                 return Ok(existing);
@@ -1271,10 +1264,9 @@ async fn find_or_create_series(
 
             if let Ok(Some(metadata)) =
                 SeriesMetadataRepository::get_by_series_id(db, existing.id).await
+                && !metadata.title_lock
             {
-                if !metadata.title_lock {
-                    SeriesRepository::update_name(db, existing.id, series_name).await?;
-                }
+                SeriesRepository::update_name(db, existing.id, series_name).await?;
             }
         }
 
@@ -1434,10 +1426,10 @@ fn discover_files(
 
 /// Send progress update through channel
 async fn send_progress(progress_tx: &Option<mpsc::Sender<ScanProgress>>, progress: &ScanProgress) {
-    if let Some(tx) = progress_tx {
-        if let Err(e) = tx.send(progress.clone()).await {
-            warn!("Failed to send progress update: {}", e);
-        }
+    if let Some(tx) = progress_tx
+        && let Err(e) = tx.send(progress.clone()).await
+    {
+        warn!("Failed to send progress update: {}", e);
     }
 }
 

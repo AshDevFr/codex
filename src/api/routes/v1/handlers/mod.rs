@@ -3,9 +3,9 @@
 //! This module contains all request handlers for API v1.
 
 use axum::{
-    http::{header, HeaderValue, StatusCode},
-    response::{IntoResponse, Response},
     Json,
+    http::{HeaderValue, StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use serde::Serialize;
 

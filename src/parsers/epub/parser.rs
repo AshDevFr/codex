@@ -3,7 +3,7 @@ use crate::parsers::isbn_utils::extract_isbns;
 use crate::parsers::opf;
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
-use crate::utils::{hash_file, CodexError, Result};
+use crate::utils::{CodexError, Result, hash_file};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
 use std::collections::HashMap;
@@ -445,15 +445,15 @@ fn find_cover_image_from_opf(archive: &mut ZipArchive<File>) -> Option<String> {
                         let value_start = content_start + 9;
                         if let Some(value_end) = meta_tag[value_start..].find('"') {
                             let cover_id = &meta_tag[value_start..value_start + value_end];
-                            if let Some(cover_path) = manifest_items.get(cover_id) {
-                                if is_image_file(cover_path) {
-                                    tracing::debug!(
-                                        cover_id = %cover_id,
-                                        cover_path = %cover_path,
-                                        "Found cover image via meta name=\"cover\""
-                                    );
-                                    return Some(cover_path.clone());
-                                }
+                            if let Some(cover_path) = manifest_items.get(cover_id)
+                                && is_image_file(cover_path)
+                            {
+                                tracing::debug!(
+                                    cover_id = %cover_id,
+                                    cover_path = %cover_path,
+                                    "Found cover image via meta name=\"cover\""
+                                );
+                                return Some(cover_path.clone());
                             }
                         }
                     }
@@ -467,41 +467,40 @@ fn find_cover_image_from_opf(archive: &mut ZipArchive<File>) -> Option<String> {
     }
 
     // Method 2: Look for <reference type="cover" href="..."/> in guide section
-    if let Some(guide_start) = opf_content.find("<guide") {
-        if let Some(guide_end) = opf_content[guide_start..].find("</guide>") {
-            let guide_section = &opf_content[guide_start..guide_start + guide_end];
+    if let Some(guide_start) = opf_content.find("<guide")
+        && let Some(guide_end) = opf_content[guide_start..].find("</guide>")
+    {
+        let guide_section = &opf_content[guide_start..guide_start + guide_end];
 
-            let mut ref_remaining = guide_section;
-            while let Some(ref_start) = ref_remaining.find("<reference") {
-                let ref_section = &ref_remaining[ref_start..];
-                if let Some(ref_end) = ref_section.find('>') {
-                    let ref_tag = &ref_section[..ref_end];
+        let mut ref_remaining = guide_section;
+        while let Some(ref_start) = ref_remaining.find("<reference") {
+            let ref_section = &ref_remaining[ref_start..];
+            if let Some(ref_end) = ref_section.find('>') {
+                let ref_tag = &ref_section[..ref_end];
 
-                    // Check for type="cover" or type containing "cover"
-                    if ref_tag.contains("type=\"cover\"")
-                        || ref_tag.contains("type='cover'")
-                        || ref_tag.contains("coverimage")
-                    {
-                        if let Some(href_start) = ref_tag.find("href=\"") {
-                            let value_start = href_start + 6;
-                            if let Some(value_end) = ref_tag[value_start..].find('"') {
-                                let href = &ref_tag[value_start..value_start + value_end];
-                                let full_path = format!("{}{}", base_path, href);
-                                if is_image_file(&full_path) {
-                                    tracing::debug!(
-                                        cover_path = %full_path,
-                                        "Found cover image via guide reference"
-                                    );
-                                    return Some(full_path);
-                                }
-                            }
+                // Check for type="cover" or type containing "cover"
+                if (ref_tag.contains("type=\"cover\"")
+                    || ref_tag.contains("type='cover'")
+                    || ref_tag.contains("coverimage"))
+                    && let Some(href_start) = ref_tag.find("href=\"")
+                {
+                    let value_start = href_start + 6;
+                    if let Some(value_end) = ref_tag[value_start..].find('"') {
+                        let href = &ref_tag[value_start..value_start + value_end];
+                        let full_path = format!("{}{}", base_path, href);
+                        if is_image_file(&full_path) {
+                            tracing::debug!(
+                                cover_path = %full_path,
+                                "Found cover image via guide reference"
+                            );
+                            return Some(full_path);
                         }
                     }
-
-                    ref_remaining = &ref_section[ref_end..];
-                } else {
-                    break;
                 }
+
+                ref_remaining = &ref_section[ref_end..];
+            } else {
+                break;
             }
         }
     }

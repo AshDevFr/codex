@@ -14,10 +14,10 @@ use crate::db::repositories::{
 };
 use crate::require_permission;
 use axum::{
-    extract::{Path, Query, State},
-    http::{header, StatusCode},
-    response::{IntoResponse, Response},
     Json,
+    extract::{Path, Query, State},
+    http::{StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use std::sync::Arc;
 use uuid::Uuid;

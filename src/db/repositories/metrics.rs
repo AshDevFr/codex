@@ -69,9 +69,9 @@ impl MetricsRepository {
     /// Get total size of all books in bytes
     pub async fn total_book_size(db: &DatabaseConnection) -> Result<i64> {
         use crate::db::entities::books;
+        use sea_orm::DbBackend;
         use sea_orm::prelude::Decimal;
         use sea_orm::sea_query::{Expr, Func};
-        use sea_orm::DbBackend;
 
         // PostgreSQL returns SUM() as NUMERIC (Decimal)
         // SQLite returns SUM() as INTEGER (i64)
@@ -205,9 +205,9 @@ impl MetricsRepository {
             // Count books and total size for this library
             // We need to join books with series to filter by library
             use crate::db::entities::books;
+            use sea_orm::DbBackend;
             use sea_orm::prelude::Decimal;
             use sea_orm::sea_query::{Alias, Expr, Func};
-            use sea_orm::DbBackend;
 
             let backend = db.get_database_backend();
             let (book_count, total_size) = match backend {
@@ -294,10 +294,10 @@ impl MetricsRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::entities::books;
     use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
     use chrono::Utc;
     use uuid::Uuid;
 

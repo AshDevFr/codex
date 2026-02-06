@@ -3,7 +3,7 @@
 //! Generates a thumbnail for a series using the selected cover from series_covers,
 //! or falls back to the first book's cover if no cover is selected.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -56,21 +56,20 @@ impl TaskHandler for GenerateSeriesThumbnailHandler {
                 .ok_or_else(|| anyhow!("Series not found: {}", series_id))?;
 
             // Check if series thumbnail already exists (unless force=true)
-            if !force {
-                if let Some(_meta) = self
+            if !force
+                && let Some(_meta) = self
                     .thumbnail_service
                     .get_series_thumbnail_metadata(series_id)
                     .await
-                {
-                    debug!(
-                        "Series thumbnail already exists for series {}, skipping",
-                        series_id
-                    );
-                    return Ok(TaskResult::success(format!(
-                        "Thumbnail already exists for series {}",
-                        series_id
-                    )));
-                }
+            {
+                debug!(
+                    "Series thumbnail already exists for series {}, skipping",
+                    series_id
+                );
+                return Ok(TaskResult::success(format!(
+                    "Thumbnail already exists for series {}",
+                    series_id
+                )));
             }
 
             // If force=true and thumbnail exists, delete it first

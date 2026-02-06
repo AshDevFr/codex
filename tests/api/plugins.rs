@@ -383,12 +383,16 @@ async fn test_update_plugin_permissions() {
     assert_eq!(status, StatusCode::OK);
     let response = response.expect("Expected response body");
     assert_eq!(response.permissions.len(), 2);
-    assert!(response
-        .permissions
-        .contains(&"metadata:write:summary".to_string()));
-    assert!(response
-        .permissions
-        .contains(&"metadata:write:genres".to_string()));
+    assert!(
+        response
+            .permissions
+            .contains(&"metadata:write:summary".to_string())
+    );
+    assert!(
+        response
+            .permissions
+            .contains(&"metadata:write:genres".to_string())
+    );
 }
 
 #[tokio::test]
@@ -1211,8 +1215,8 @@ async fn test_get_plugin_actions_library_scan_scope() {
 // =============================================================================
 
 use codex::api::routes::v1::dto::SearchTitleResponse;
-use codex::db::repositories::{LibraryRepository, SeriesRepository};
 use codex::db::ScanningStrategy;
+use codex::db::repositories::{LibraryRepository, SeriesRepository};
 
 #[tokio::test]
 async fn test_get_search_title_requires_auth() {

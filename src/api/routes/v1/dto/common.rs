@@ -457,7 +457,7 @@ impl PaginationCursor {
 
     /// Encode the cursor as a base64 string for use in URLs
     pub fn encode(&self) -> String {
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
         let json = serde_json::to_string(self).unwrap_or_default();
         URL_SAFE_NO_PAD.encode(json.as_bytes())
     }
@@ -466,7 +466,7 @@ impl PaginationCursor {
     ///
     /// Returns `None` if the string is invalid base64 or invalid JSON
     pub fn decode(s: &str) -> Option<Self> {
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
         let bytes = URL_SAFE_NO_PAD.decode(s).ok()?;
         let json = String::from_utf8(bytes).ok()?;
         serde_json::from_str(&json).ok()
@@ -875,7 +875,7 @@ mod tests {
         assert!(PaginationCursor::decode("not-valid-base64!@#").is_none());
 
         // Valid base64 but invalid JSON
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
         let invalid_json = URL_SAFE_NO_PAD.encode(b"not valid json");
         assert!(PaginationCursor::decode(&invalid_json).is_none());
     }
@@ -974,11 +974,13 @@ mod tests {
         assert!(response.links.self_link.contains("library_id=lib-123"));
         assert!(response.links.self_link.contains("sort=name%2Casc"));
         assert!(response.links.first.contains("library_id=lib-123"));
-        assert!(response
-            .links
-            .next
-            .as_ref()
-            .unwrap()
-            .contains("cursor=next123"));
+        assert!(
+            response
+                .links
+                .next
+                .as_ref()
+                .unwrap()
+                .contains("cursor=next123")
+        );
     }
 }

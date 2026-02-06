@@ -7,9 +7,9 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Alias, Expr, ExprTrait, Func, IntoCondition},
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, JoinType, Order,
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::{Alias, Expr, ExprTrait, Func, IntoCondition},
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -156,20 +156,20 @@ impl BookRepository {
         }
 
         // Handle text search
-        if let Some(search) = options.search {
-            if !search.is_empty() {
-                let pattern = format!("%{}%", search.to_lowercase());
-                // Join with book_metadata for title search
-                query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
-                metadata_joined = true;
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            // Join with book_metadata for title search
+            query = query.join(JoinType::LeftJoin, books::Relation::BookMetadata.def());
+            metadata_joined = true;
 
-                // Search in title (case-insensitive)
-                let lower_title = Func::lower(Expr::col((
-                    book_metadata::Entity,
-                    book_metadata::Column::Title,
-                )));
-                query = query.filter(Expr::expr(lower_title).like(&pattern));
-            }
+            // Search in title (case-insensitive)
+            let lower_title = Func::lower(Expr::col((
+                book_metadata::Entity,
+                book_metadata::Column::Title,
+            )));
+            query = query.filter(Expr::expr(lower_title).like(&pattern));
         }
 
         // Handle read status filter (requires user_id)
@@ -1317,10 +1317,10 @@ impl BookRepository {
         use sea_orm::JoinType;
 
         // Short-circuit if candidate_ids is explicitly empty
-        if let Some(ids) = candidate_ids {
-            if ids.is_empty() {
-                return Ok((vec![], 0));
-            }
+        if let Some(ids) = candidate_ids
+            && ids.is_empty()
+        {
+            return Ok((vec![], 0));
         }
 
         let pattern = format!("%{}%", query.to_lowercase());
@@ -1754,7 +1754,7 @@ impl BookRepository {
         user_id: Uuid,
     ) -> Result<std::collections::HashMap<Uuid, i64>> {
         use crate::db::entities::read_progress;
-        use sea_orm::{sea_query::Expr, FromQueryResult, JoinType, QuerySelect};
+        use sea_orm::{FromQueryResult, JoinType, QuerySelect, sea_query::Expr};
 
         if series_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
@@ -2025,10 +2025,10 @@ impl BookRepository {
                 if errors.is_empty() {
                     return None;
                 }
-                if let Some(et) = &error_type {
-                    if !errors.contains_key(et) {
-                        return None;
-                    }
+                if let Some(et) = &error_type
+                    && !errors.contains_key(et)
+                {
+                    return None;
                 }
                 Some((book, errors))
             })
@@ -2378,9 +2378,9 @@ impl BookRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::repositories::{LibraryRepository, SeriesRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
 
     /// Helper to create a test book model
     fn create_book_model(

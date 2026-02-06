@@ -130,9 +130,11 @@ mod tests {
         assert!(fs::metadata(&cover_path).await.is_ok());
 
         // Verify path is correct
-        assert!(cover_path
-            .to_string_lossy()
-            .contains(&series_id.to_string()));
+        assert!(
+            cover_path
+                .to_string_lossy()
+                .contains(&series_id.to_string())
+        );
     }
 
     #[test]

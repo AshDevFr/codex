@@ -517,9 +517,11 @@ mod tests {
     fn test_parse_preprocessing_rules_invalid() {
         let result = parse_preprocessing_rules(Some("not json"));
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("Failed to parse preprocessing rules"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Failed to parse preprocessing rules")
+        );
     }
 
     #[test]
@@ -549,8 +551,10 @@ mod tests {
     fn test_parse_auto_match_conditions_invalid() {
         let result = parse_auto_match_conditions(Some("not json"));
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("Failed to parse auto-match conditions"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Failed to parse auto-match conditions")
+        );
     }
 }

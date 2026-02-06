@@ -1,7 +1,7 @@
 [package]
 name = "codex"
 version = "1.8.5"
-edition = "2021"
+edition = "2024"
 description = "A next-generation digital library server for comics, manga, and ebooks"
 license = "MIT"
 repository = "https://github.com/AshDevFr/codex"
@@ -102,7 +102,7 @@ tower-http = { version = "0.5", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
-log = "0.4"  # For sqlx logging level configuration
+log = "0.4"                                                         # For sqlx logging level configuration
 async-stream = "0.3"
 futures = "0.3"
 tokio-stream = "0.1"
@@ -126,7 +126,9 @@ lettre = { version = "0.11", default-features = false, features = [
 ] }
 
 # HTTP Client (for plugin cover downloads)
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+] }
 
 # API Documentation
 utoipa = { version = "5.0", features = [
@@ -160,10 +162,10 @@ serial_test = "3.2"
 # =============================================================================
 [profile.dev]
 incremental = true
-debug = 1  # Reduced from default 2, still allows backtraces
+debug = 1          # Reduced from default 2, still allows backtraces
 
 [profile.dev.package."*"]
-opt-level = 0  # Keep dependencies unoptimized for fast builds
+opt-level = 0 # Keep dependencies unoptimized for fast builds
 
 # =============================================================================
 # Distribution Profile - Optimized for release binaries

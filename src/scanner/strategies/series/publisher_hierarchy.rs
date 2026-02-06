@@ -59,32 +59,32 @@ impl ScanningStrategyImpl for PublisherHierarchyStrategy {
                 let mut s = DetectedSeries::new(&series_name);
 
                 // Store skipped levels as metadata
-                if let Some(field_name) = &self.config.store_skipped_as {
-                    if !skipped_levels.is_empty() {
-                        s.metadata = SeriesMetadata {
-                            publisher: if field_name == "publisher" {
-                                Some(skipped_levels.join("/"))
-                            } else {
-                                None
-                            },
-                            extra: [(field_name.clone(), skipped_levels.join("/"))]
-                                .into_iter()
-                                .collect(),
-                            ..Default::default()
-                        };
-                    }
+                if let Some(field_name) = &self.config.store_skipped_as
+                    && !skipped_levels.is_empty()
+                {
+                    s.metadata = SeriesMetadata {
+                        publisher: if field_name == "publisher" {
+                            Some(skipped_levels.join("/"))
+                        } else {
+                            None
+                        },
+                        extra: [(field_name.clone(), skipped_levels.join("/"))]
+                            .into_iter()
+                            .collect(),
+                        ..Default::default()
+                    };
                 }
 
                 s
             });
 
             // Set series path if not already set (use parent folder's relative path)
-            if series.path.is_none() && series_name != "Unsorted" {
-                if let Some(parent) = file_path.parent() {
-                    if let Ok(rel_parent) = parent.strip_prefix(library_path) {
-                        series.path = Some(rel_parent.to_string_lossy().to_string());
-                    }
-                }
+            if series.path.is_none()
+                && series_name != "Unsorted"
+                && let Some(parent) = file_path.parent()
+                && let Ok(rel_parent) = parent.strip_prefix(library_path)
+            {
+                series.path = Some(rel_parent.to_string_lossy().to_string());
             }
 
             series.add_book(DetectedBook::new(file_path.clone()));

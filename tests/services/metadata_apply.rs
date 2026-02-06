@@ -7,10 +7,10 @@
 mod common;
 
 use chrono::Utc;
+use codex::db::ScanningStrategy;
 use codex::db::entities::plugins;
 use codex::db::entities::series_metadata;
 use codex::db::repositories::{LibraryRepository, SeriesMetadataRepository, SeriesRepository};
-use codex::db::ScanningStrategy;
 use codex::services::metadata::{ApplyOptions, MetadataApplier};
 use codex::services::plugin::PluginSeriesMetadata;
 use common::db::setup_test_db;

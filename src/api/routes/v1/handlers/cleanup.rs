@@ -4,8 +4,8 @@
 //! (thumbnails and covers that no longer have corresponding database entries).
 
 use axum::{
-    extract::{Query, State},
     Json,
+    extract::{Query, State},
 };
 use std::sync::Arc;
 

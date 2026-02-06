@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use image::imageops::FilterType;
 use image::{DynamicImage, RgbaImage};
@@ -189,11 +189,11 @@ fn wrap_text(text: &str, max_chars: u32) -> Vec<String> {
     // Limit to 4 lines max
     if lines.len() > 4 {
         lines.truncate(3);
-        if let Some(last) = lines.last_mut() {
-            if last.len() > 3 {
-                last.truncate(last.len() - 3);
-                last.push_str("...");
-            }
+        if let Some(last) = lines.last_mut()
+            && last.len() > 3
+        {
+            last.truncate(last.len() - 3);
+            last.push_str("...");
         }
     }
 
@@ -1293,9 +1293,10 @@ mod tests {
         let path = service.get_thumbnail_path(book_id);
 
         assert!(path.to_string_lossy().contains("data/thumbnails/books/55"));
-        assert!(path
-            .to_string_lossy()
-            .ends_with("550e8400-e29b-41d4-a716-446655440000.jpg"));
+        assert!(
+            path.to_string_lossy()
+                .ends_with("550e8400-e29b-41d4-a716-446655440000.jpg")
+        );
     }
 
     #[test]

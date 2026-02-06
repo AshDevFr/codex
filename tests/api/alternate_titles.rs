@@ -8,8 +8,8 @@ use codex::api::routes::v1::dto::series::{
     AlternateTitleDto, AlternateTitleListResponse, CreateAlternateTitleRequest,
     UpdateAlternateTitleRequest,
 };
-use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::db::ScanningStrategy;
+use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

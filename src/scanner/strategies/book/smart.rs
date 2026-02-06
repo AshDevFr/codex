@@ -8,7 +8,7 @@ use regex::Regex;
 
 use crate::models::{BookStrategy, SmartBookConfig};
 
-use super::{filename_without_extension, BookMetadata, BookNamingContext, BookNamingStrategy};
+use super::{BookMetadata, BookNamingContext, BookNamingStrategy, filename_without_extension};
 
 lazy_static! {
     /// Default patterns for generic titles that should be skipped

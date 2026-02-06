@@ -7,9 +7,9 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    sea_query::{Alias, Expr, Func, IntoCondition},
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
+    sea_query::{Alias, Expr, Func, IntoCondition},
 };
 use uuid::Uuid;
 
@@ -108,10 +108,10 @@ impl SeriesRepository {
         let sort_field = options.sort.map(|s| s.field);
 
         // Handle DateRead sort separately as it requires special aggregation
-        if matches!(sort_field, Some(SeriesSortFieldRepo::DateRead)) {
-            if let Some(user_id) = options.user_id {
-                return Self::query_with_date_read_sort(db, options, user_id, order).await;
-            }
+        if matches!(sort_field, Some(SeriesSortFieldRepo::DateRead))
+            && let Some(user_id) = options.user_id
+        {
+            return Self::query_with_date_read_sort(db, options, user_id, order).await;
         }
 
         let mut query =
@@ -123,15 +123,15 @@ impl SeriesRepository {
         }
 
         // Handle text search
-        if let Some(search) = options.search {
-            if !search.is_empty() {
-                let pattern = format!("%{}%", search.to_lowercase());
-                let lower_title = Func::lower(Expr::col((
-                    series_metadata::Entity,
-                    series_metadata::Column::Title,
-                )));
-                query = query.filter(Expr::expr(lower_title).like(&pattern));
-            }
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            let lower_title = Func::lower(Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::Title,
+            )));
+            query = query.filter(Expr::expr(lower_title).like(&pattern));
         }
 
         // Get total count before pagination
@@ -202,15 +202,15 @@ impl SeriesRepository {
         }
 
         // Handle text search
-        if let Some(search) = options.search {
-            if !search.is_empty() {
-                let pattern = format!("%{}%", search.to_lowercase());
-                let lower_title = Func::lower(Expr::col((
-                    series_metadata::Entity,
-                    series_metadata::Column::Title,
-                )));
-                query = query.filter(Expr::expr(lower_title).like(&pattern));
-            }
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            let lower_title = Func::lower(Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::Title,
+            )));
+            query = query.filter(Expr::expr(lower_title).like(&pattern));
         }
 
         // Get total count (before aggregation)
@@ -223,15 +223,15 @@ impl SeriesRepository {
             count_query
         };
 
-        if let Some(search) = options.search {
-            if !search.is_empty() {
-                let pattern = format!("%{}%", search.to_lowercase());
-                let lower_title = Func::lower(Expr::col((
-                    series_metadata::Entity,
-                    series_metadata::Column::Title,
-                )));
-                count_query = count_query.filter(Expr::expr(lower_title).like(&pattern));
-            }
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            let lower_title = Func::lower(Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::Title,
+            )));
+            count_query = count_query.filter(Expr::expr(lower_title).like(&pattern));
         }
 
         let total = count_query
@@ -887,10 +887,10 @@ impl SeriesRepository {
         pagination: Option<(u64, u64)>,
     ) -> Result<(Vec<series::Model>, u64)> {
         // Short-circuit if candidate_ids is explicitly empty
-        if let Some(ids) = candidate_ids {
-            if ids.is_empty() {
-                return Ok((vec![], 0));
-            }
+        if let Some(ids) = candidate_ids
+            && ids.is_empty()
+        {
+            return Ok((vec![], 0));
         }
 
         let pattern = format!("%{}%", query.to_lowercase());
@@ -1223,7 +1223,7 @@ impl SeriesRepository {
         db: &DatabaseConnection,
         series_ids: &[Uuid],
     ) -> Result<std::collections::HashMap<Uuid, i64>> {
-        use sea_orm::{sea_query::Expr, FromQueryResult, QuerySelect};
+        use sea_orm::{FromQueryResult, QuerySelect, sea_query::Expr};
 
         if series_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
@@ -1526,10 +1526,10 @@ impl SeriesRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::entities::books;
     use crate::db::repositories::{BookRepository, LibraryRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
 
     #[tokio::test]
     async fn test_create_series() {

@@ -57,12 +57,11 @@ impl FilenameStrategy {
 
         // Try each pattern in priority order
         for pattern in NUMBER_PATTERNS.iter() {
-            if let Some(captures) = pattern.captures(name_without_ext) {
-                if let Some(num_match) = captures.get(1) {
-                    if let Ok(num) = num_match.as_str().parse::<f32>() {
-                        return Some(num);
-                    }
-                }
+            if let Some(captures) = pattern.captures(name_without_ext)
+                && let Some(num_match) = captures.get(1)
+                && let Ok(num) = num_match.as_str().parse::<f32>()
+            {
+                return Some(num);
             }
         }
 

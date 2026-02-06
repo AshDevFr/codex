@@ -4,11 +4,11 @@
 //! using AES-256-GCM with a 96-bit nonce prepended to the ciphertext.
 
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
+    aead::{Aead, KeyInit},
 };
-use anyhow::{anyhow, Result};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use anyhow::{Result, anyhow};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use rand::RngCore;
 use std::env;
 use std::sync::OnceLock;

@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::cbz::{extract_page_from_cbz, CbzParser};
+use codex::parsers::cbz::{CbzParser, extract_page_from_cbz};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::{FileFormat, ImageFormat};
 use tempfile::TempDir;
@@ -169,8 +169,8 @@ fn test_extract_page_from_cbz_nonexistent_file() {
 fn test_cbz_parser_skips_macos_resource_forks() {
     use std::fs::File;
     use std::io::Write;
-    use zip::write::FileOptions;
     use zip::ZipWriter;
+    use zip::write::FileOptions;
 
     let temp_dir = TempDir::new().unwrap();
     let cbz_path = temp_dir.path().join("macos_test.cbz");
@@ -226,8 +226,8 @@ fn test_cbz_parser_skips_macos_resource_forks() {
 fn test_cbz_parser_skips_non_image_files_with_image_extensions() {
     use std::fs::File;
     use std::io::Write;
-    use zip::write::FileOptions;
     use zip::ZipWriter;
+    use zip::write::FileOptions;
 
     let temp_dir = TempDir::new().unwrap();
     let cbz_path = temp_dir.path().join("fake_images.cbz");
@@ -277,8 +277,8 @@ fn test_extract_page_with_fallback_skips_corrupted_first_image() {
     use codex::parsers::cbz::extract_page_from_cbz_with_fallback;
     use std::fs::File;
     use std::io::Write;
-    use zip::write::FileOptions;
     use zip::ZipWriter;
+    use zip::write::FileOptions;
 
     let temp_dir = TempDir::new().unwrap();
     let cbz_path = temp_dir.path().join("corrupted_first.cbz");
@@ -325,8 +325,8 @@ fn test_extract_page_with_fallback_fails_when_all_images_corrupted() {
     use codex::parsers::cbz::extract_page_from_cbz_with_fallback;
     use std::fs::File;
     use std::io::Write;
-    use zip::write::FileOptions;
     use zip::ZipWriter;
+    use zip::write::FileOptions;
 
     let temp_dir = TempDir::new().unwrap();
     let cbz_path = temp_dir.path().join("all_corrupted.cbz");

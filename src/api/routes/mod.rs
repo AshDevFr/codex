@@ -5,10 +5,10 @@ pub mod v1;
 
 use crate::api::docs::ApiDoc;
 use crate::api::extractors::AppState;
-use crate::api::middleware::{create_trace_layer, RateLimitLayer};
+use crate::api::middleware::{RateLimitLayer, create_trace_layer};
 use crate::config::Config;
 use crate::web;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use utoipa::OpenApi;

@@ -13,11 +13,11 @@ use crate::api::{
 use crate::db::repositories::{BookRepository, PageRepository};
 use crate::require_permission;
 use axum::{
+    Json,
     body::Body,
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::Response,
-    Json,
 };
 use std::sync::Arc;
 use uuid::Uuid;

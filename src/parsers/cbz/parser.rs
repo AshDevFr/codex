@@ -1,7 +1,7 @@
 use crate::parsers::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::parsers::traits::FormatParser;
-use crate::parsers::{parse_comic_info, BookMetadata, FileFormat};
-use crate::utils::{hash_file, Result};
+use crate::parsers::{BookMetadata, FileFormat, parse_comic_info};
+use crate::utils::{Result, hash_file};
 use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::io::Read;

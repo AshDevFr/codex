@@ -3,8 +3,8 @@
 //! Parses Dublin Core metadata and Calibre extensions from OPF XML files.
 //! Used for both embedded EPUB OPF content and Calibre sidecar `metadata.opf` files.
 
-use crate::parsers::isbn_utils::extract_isbns;
 use crate::parsers::ComicInfo;
+use crate::parsers::isbn_utils::extract_isbns;
 use crate::utils::{CodexError, Result};
 use std::path::Path;
 
@@ -296,25 +296,21 @@ fn parse_calibre_meta_tags(xml: &str, meta: &mut OpfMetadata) {
         let meta_tag = &section[..tag_end];
 
         // Check for calibre:series
-        if meta_tag.contains("name=\"calibre:series\"")
-            || meta_tag.contains("name='calibre:series'")
+        if (meta_tag.contains("name=\"calibre:series\"")
+            || meta_tag.contains("name='calibre:series'"))
+            && let Some(value) = extract_meta_content(meta_tag)
+            && !value.is_empty()
         {
-            if let Some(value) = extract_meta_content(meta_tag) {
-                if !value.is_empty() {
-                    meta.calibre_series = Some(value);
-                }
-            }
+            meta.calibre_series = Some(value);
         }
 
         // Check for calibre:series_index
-        if meta_tag.contains("name=\"calibre:series_index\"")
-            || meta_tag.contains("name='calibre:series_index'")
+        if (meta_tag.contains("name=\"calibre:series_index\"")
+            || meta_tag.contains("name='calibre:series_index'"))
+            && let Some(value) = extract_meta_content(meta_tag)
+            && let Ok(idx) = value.parse::<f64>()
         {
-            if let Some(value) = extract_meta_content(meta_tag) {
-                if let Ok(idx) = value.parse::<f64>() {
-                    meta.calibre_series_index = Some(idx);
-                }
-            }
+            meta.calibre_series_index = Some(idx);
         }
 
         remaining = &section[tag_end..];
@@ -349,20 +345,20 @@ fn parse_date_into_comic_info(date_str: &str, ci: &mut ComicInfo) {
 
     let parts: Vec<&str> = date_part.split('-').collect();
 
-    if let Some(year_str) = parts.first() {
-        if let Ok(year) = year_str.parse::<i32>() {
-            ci.year = Some(year);
-        }
+    if let Some(year_str) = parts.first()
+        && let Ok(year) = year_str.parse::<i32>()
+    {
+        ci.year = Some(year);
     }
-    if let Some(month_str) = parts.get(1) {
-        if let Ok(month) = month_str.parse::<i32>() {
-            ci.month = Some(month);
-        }
+    if let Some(month_str) = parts.get(1)
+        && let Ok(month) = month_str.parse::<i32>()
+    {
+        ci.month = Some(month);
     }
-    if let Some(day_str) = parts.get(2) {
-        if let Ok(day) = day_str.parse::<i32>() {
-            ci.day = Some(day);
-        }
+    if let Some(day_str) = parts.get(2)
+        && let Ok(day) = day_str.parse::<i32>()
+    {
+        ci.day = Some(day);
     }
 }
 

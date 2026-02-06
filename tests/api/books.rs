@@ -6,10 +6,10 @@ use codex::api::routes::v1::dto::book::{
     BookDto, BookExternalLinkDto, BookExternalLinkListResponse, BookListResponse,
     CreateBookExternalLinkRequest,
 };
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookExternalLinkRepository, BookRepository, LibraryRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
@@ -3679,9 +3679,11 @@ async fn test_list_books_with_errors_v2_all_error_types() {
 
     // Should have 7 error types in counts
     assert_eq!(errors_response.error_counts.len(), 7);
-    assert!(errors_response
-        .error_counts
-        .contains_key("format_detection"));
+    assert!(
+        errors_response
+            .error_counts
+            .contains_key("format_detection")
+    );
     assert!(errors_response.error_counts.contains_key("parser"));
     assert!(errors_response.error_counts.contains_key("metadata"));
     assert!(errors_response.error_counts.contains_key("thumbnail"));

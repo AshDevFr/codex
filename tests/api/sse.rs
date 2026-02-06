@@ -4,8 +4,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::db::ScanningStrategy;
+use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::events::{EntityChangeEvent, EntityEvent, TaskProgressEvent};
 use codex::utils::password;
 use common::*;
@@ -37,10 +37,10 @@ async fn create_admin_and_token(
 #[allow(dead_code)]
 fn parse_sse_event(data: &str) -> Option<String> {
     for line in data.lines() {
-        if let Some(json) = line.strip_prefix("data: ") {
-            if json != "keep-alive" {
-                return Some(json.to_string());
-            }
+        if let Some(json) = line.strip_prefix("data: ")
+            && json != "keep-alive"
+        {
+            return Some(json.to_string());
         }
     }
     None

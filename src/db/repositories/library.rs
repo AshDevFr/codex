@@ -331,8 +331,8 @@ impl LibraryRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::test_helpers::create_test_db;
     use crate::db::ScanningStrategy;
+    use crate::db::test_helpers::create_test_db;
 
     #[tokio::test]
     async fn test_create_library() {

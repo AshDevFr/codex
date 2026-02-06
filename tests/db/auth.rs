@@ -3,7 +3,7 @@ mod common;
 
 use chrono::Utc;
 use codex::api::permissions::{
-    parse_permissions, serialize_permissions, Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS,
+    ADMIN_PERMISSIONS, Permission, READONLY_PERMISSIONS, parse_permissions, serialize_permissions,
 };
 use codex::db::repositories::{ApiKeyRepository, UserRepository};
 use codex::utils::{jwt::JwtService, password};

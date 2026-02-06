@@ -9,10 +9,10 @@ use codex::api::routes::v1::dto::{
     BulkAnalyzeBooksRequest, BulkAnalyzeResponse, BulkAnalyzeSeriesRequest, BulkBooksRequest,
     BulkSeriesRequest, MarkReadResponse,
 };
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
@@ -379,9 +379,11 @@ async fn test_bulk_mark_series_as_read() {
     assert_eq!(status, StatusCode::OK);
     let mark_response = response.unwrap();
     assert_eq!(mark_response.count, total_books);
-    assert!(mark_response
-        .message
-        .contains(&format!("{} books", total_books)));
+    assert!(
+        mark_response
+            .message
+            .contains(&format!("{} books", total_books))
+    );
 }
 
 #[tokio::test]
@@ -528,9 +530,11 @@ async fn test_bulk_analyze_series() {
     assert_eq!(status, StatusCode::OK);
     let analyze_response = response.unwrap();
     assert_eq!(analyze_response.tasks_enqueued, total_books);
-    assert!(analyze_response
-        .message
-        .contains(&format!("{} analysis tasks", total_books)));
+    assert!(
+        analyze_response
+            .message
+            .contains(&format!("{} analysis tasks", total_books))
+    );
 }
 
 #[tokio::test]

@@ -97,14 +97,14 @@ impl EventBroadcaster {
         event: EntityChangeEvent,
     ) -> Result<usize, broadcast::error::SendError<EntityChangeEvent>> {
         // Record event if recording is enabled
-        if let Some(ref recorded) = self.recorded_events {
-            if let Ok(mut events) = recorded.write() {
-                events.push(RecordedEvent {
-                    event: event.event.clone(),
-                    timestamp: event.timestamp,
-                    user_id: event.user_id,
-                });
-            }
+        if let Some(ref recorded) = self.recorded_events
+            && let Ok(mut events) = recorded.write()
+        {
+            events.push(RecordedEvent {
+                event: event.event.clone(),
+                timestamp: event.timestamp,
+                user_id: event.user_id,
+            });
         }
 
         // Broadcast to local subscribers

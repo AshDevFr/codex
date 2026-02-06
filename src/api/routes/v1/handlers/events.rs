@@ -1,4 +1,4 @@
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use axum::{
     extract::State,
     response::sse::{Event, KeepAlive, Sse},

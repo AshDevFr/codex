@@ -100,8 +100,8 @@ impl<B> tower_http::trace::OnRequest<B> for RequestLogger {
 /// - Logs incoming requests at debug level
 /// - Logs responses with status code and latency
 /// - Uses appropriate log levels based on response status
-pub fn create_trace_layer(
-) -> TraceLayer<SharedClassifier<ServerErrorsAsFailures>, RequestSpan, RequestLogger, ResponseLogger>
+pub fn create_trace_layer()
+-> TraceLayer<SharedClassifier<ServerErrorsAsFailures>, RequestSpan, RequestLogger, ResponseLogger>
 {
     TraceLayer::new_for_http()
         .make_span_with(RequestSpan)

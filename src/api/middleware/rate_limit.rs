@@ -23,11 +23,11 @@
 //! ```
 
 use axum::{
+    Json,
     body::Body,
     extract::ConnectInfo,
-    http::{header::AUTHORIZATION, HeaderMap, HeaderValue, Request, Response, StatusCode},
+    http::{HeaderMap, HeaderValue, Request, Response, StatusCode, header::AUTHORIZATION},
     response::IntoResponse,
-    Json,
 };
 use futures::future::BoxFuture;
 use serde::Serialize;
@@ -112,26 +112,25 @@ impl<S> RateLimitMiddleware<S> {
     /// 3. Connection socket address
     fn extract_ip_from_request(headers: &HeaderMap, connect_info: Option<&SocketAddr>) -> IpAddr {
         // Try X-Forwarded-For first (proxy chain, take first IP)
-        if let Some(xff) = headers.get("x-forwarded-for") {
-            if let Ok(xff_str) = xff.to_str() {
-                // X-Forwarded-For can be "client, proxy1, proxy2" - take first
-                if let Some(first_ip) = xff_str.split(',').next() {
-                    if let Ok(ip) = first_ip.trim().parse::<IpAddr>() {
-                        trace!(ip = %ip, "Extracted IP from X-Forwarded-For");
-                        return ip;
-                    }
-                }
+        if let Some(xff) = headers.get("x-forwarded-for")
+            && let Ok(xff_str) = xff.to_str()
+        {
+            // X-Forwarded-For can be "client, proxy1, proxy2" - take first
+            if let Some(first_ip) = xff_str.split(',').next()
+                && let Ok(ip) = first_ip.trim().parse::<IpAddr>()
+            {
+                trace!(ip = %ip, "Extracted IP from X-Forwarded-For");
+                return ip;
             }
         }
 
         // Try X-Real-IP
-        if let Some(xri) = headers.get("x-real-ip") {
-            if let Ok(xri_str) = xri.to_str() {
-                if let Ok(ip) = xri_str.trim().parse::<IpAddr>() {
-                    trace!(ip = %ip, "Extracted IP from X-Real-IP");
-                    return ip;
-                }
-            }
+        if let Some(xri) = headers.get("x-real-ip")
+            && let Ok(xri_str) = xri.to_str()
+            && let Ok(ip) = xri_str.trim().parse::<IpAddr>()
+        {
+            trace!(ip = %ip, "Extracted IP from X-Real-IP");
+            return ip;
         }
 
         // Fall back to connection socket address
@@ -163,7 +162,7 @@ impl<S> RateLimitMiddleware<S> {
         }
 
         // Decode the payload (base64url)
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
         let payload_bytes = URL_SAFE_NO_PAD.decode(parts[1]).ok()?;
         let payload_str = String::from_utf8(payload_bytes).ok()?;
 
@@ -382,7 +381,7 @@ mod tests {
     // ===================
 
     fn create_jwt_token(sub: &str) -> String {
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
         // Create a minimal JWT with just the 'sub' claim
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);

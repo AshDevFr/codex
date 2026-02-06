@@ -102,16 +102,16 @@ impl ScanningStrategyImpl for SeriesVolumeChapterStrategy {
             // Extract volume info from the second-to-last folder (grandparent of file)
             // e.g., /library/part1/part2/volume_folder/series_folder/file.cbz
             // -> volume_folder is grandparent, series_folder is parent
-            if let Some(parent) = file_path.parent() {
-                if let Some(grandparent) = parent.parent() {
-                    // Only extract volume if grandparent is not the library root
-                    if grandparent != library_path {
-                        if let Some(volume_folder_name) = grandparent.file_name() {
-                            let volume_str = volume_folder_name.to_string_lossy();
-                            book.volume = self.extract_volume(&volume_str);
-                            book.relative_path = Some(volume_str.to_string());
-                        }
-                    }
+            if let Some(parent) = file_path.parent()
+                && let Some(grandparent) = parent.parent()
+            {
+                // Only extract volume if grandparent is not the library root
+                if grandparent != library_path
+                    && let Some(volume_folder_name) = grandparent.file_name()
+                {
+                    let volume_str = volume_folder_name.to_string_lossy();
+                    book.volume = self.extract_volume(&volume_str);
+                    book.relative_path = Some(volume_str.to_string());
                 }
             }
 

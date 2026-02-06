@@ -469,9 +469,9 @@ impl GenreRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::repositories::{LibraryRepository, SeriesRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
 
     #[tokio::test]
     async fn test_create_and_get_genre() {

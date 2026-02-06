@@ -1,9 +1,9 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
 use codex::db::ScanningStrategy;
-use codex::scanner::{scan_library, ScanMode};
+use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
+use codex::scanner::{ScanMode, scan_library};
 use common::*;
 use std::fs;
 use tempfile::TempDir;

@@ -7,8 +7,8 @@
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
-    prelude::Decimal, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
+    prelude::Decimal,
 };
 use uuid::Uuid;
 
@@ -208,9 +208,9 @@ impl ExternalRatingRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::repositories::{LibraryRepository, SeriesRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
 
     fn dec(value: f64) -> Decimal {
         Decimal::from_f64_retain(value).unwrap()

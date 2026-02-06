@@ -1,9 +1,9 @@
 use super::super::dto::{
-    common::{
-        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
-    },
     CreateLibraryRequest, DetectedSeriesDto, DetectedSeriesMetadataDto, LibraryDto,
     PreviewScanRequest, PreviewScanResponse, UpdateLibraryRequest,
+    common::{
+        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PaginatedResponse, PaginationLinkBuilder,
+    },
 };
 use super::paginated_response;
 use crate::api::{
@@ -17,9 +17,9 @@ use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use crate::require_permission;
 use crate::scanner::strategies::create_strategy;
 use axum::{
+    Json,
     extract::{Path, Query, State},
     response::Response,
-    Json,
 };
 use chrono::Utc;
 use sea_orm::DatabaseConnection;
@@ -312,11 +312,11 @@ pub async fn create_library(
     }
 
     // Reload scheduler to pick up new library's scanning schedule
-    if let Some(scheduler) = &state.scheduler {
-        if let Err(e) = scheduler.lock().await.reload_schedules().await {
-            tracing::warn!("Failed to reload scheduler after library creation: {}", e);
-            // Don't fail the request - library was created successfully
-        }
+    if let Some(scheduler) = &state.scheduler
+        && let Err(e) = scheduler.lock().await.reload_schedules().await
+    {
+        tracing::warn!("Failed to reload scheduler after library creation: {}", e);
+        // Don't fail the request - library was created successfully
     }
 
     Ok(Json(library_to_dto(&state.db, library).await))
@@ -474,11 +474,11 @@ pub async fn update_library(
         .ok_or_else(|| ApiError::NotFound("Library not found after update".to_string()))?;
 
     // Reload scheduler to pick up updated library's scanning schedule
-    if let Some(scheduler) = &state.scheduler {
-        if let Err(e) = scheduler.lock().await.reload_schedules().await {
-            tracing::warn!("Failed to reload scheduler after library update: {}", e);
-            // Don't fail the request - library was updated successfully
-        }
+    if let Some(scheduler) = &state.scheduler
+        && let Err(e) = scheduler.lock().await.reload_schedules().await
+    {
+        tracing::warn!("Failed to reload scheduler after library update: {}", e);
+        // Don't fail the request - library was updated successfully
     }
 
     Ok(Json(library_to_dto(&state.db, updated).await))
@@ -533,11 +533,11 @@ pub async fn delete_library(
     }
 
     // Reload scheduler to remove deleted library's scanning schedule
-    if let Some(scheduler) = &state.scheduler {
-        if let Err(e) = scheduler.lock().await.reload_schedules().await {
-            tracing::warn!("Failed to reload scheduler after library deletion: {}", e);
-            // Don't fail the request - library was deleted successfully
-        }
+    if let Some(scheduler) = &state.scheduler
+        && let Err(e) = scheduler.lock().await.reload_schedules().await
+    {
+        tracing::warn!("Failed to reload scheduler after library deletion: {}", e);
+        // Don't fail the request - library was deleted successfully
     }
 
     Ok(())

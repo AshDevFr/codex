@@ -1,4 +1,4 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use chrono::Utc;
 use std::sync::Arc;
 
@@ -6,7 +6,7 @@ use super::super::dto::{
     LibraryMetricsDto, MetricsDto, PluginMethodMetricsDto, PluginMetricsDto, PluginMetricsResponse,
     PluginMetricsSummaryDto,
 };
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::MetricsRepository;
 
 /// Get inventory metrics (library/book counts)

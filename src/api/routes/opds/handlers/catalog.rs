@@ -11,7 +11,7 @@ use crate::db::repositories::{
 use crate::require_permission;
 use axum::{
     extract::{Path, Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use chrono::Utc;

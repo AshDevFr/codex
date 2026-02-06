@@ -3,7 +3,7 @@
 //! Reprocesses series titles using library preprocessing rules. This is useful when
 //! preprocessing rules are added or changed after series have already been created.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use std::sync::Arc;

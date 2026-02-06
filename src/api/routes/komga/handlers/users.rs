@@ -11,7 +11,7 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::require_permission;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use std::sync::Arc;
 
 /// Get current user information

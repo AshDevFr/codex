@@ -4,12 +4,12 @@
 //! and grant users access to content via these tags.
 
 use super::super::dto::{
-    common::{
-        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
-    },
     CreateSharingTagRequest, ModifySeriesSharingTagRequest, SetSeriesSharingTagsRequest,
     SetUserSharingTagGrantRequest, SharingTagDto, SharingTagSummaryDto, UpdateSharingTagRequest,
     UserSharingTagGrantDto, UserSharingTagGrantsResponse,
+    common::{
+        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PaginatedResponse, PaginationLinkBuilder,
+    },
 };
 use super::paginated_response;
 use crate::api::{
@@ -19,10 +19,10 @@ use crate::api::{
 };
 use crate::db::repositories::SharingTagRepository;
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::Response,
-    Json,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -238,18 +238,16 @@ pub async fn update_sharing_tag(
     auth.require_permission(&Permission::SystemAdmin)?;
 
     // If renaming, check that new name doesn't conflict
-    if let Some(ref new_name) = request.name {
-        if let Some(existing) = SharingTagRepository::get_by_name(&state.db, new_name)
+    if let Some(ref new_name) = request.name
+        && let Some(existing) = SharingTagRepository::get_by_name(&state.db, new_name)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to check tag name: {}", e)))?
-        {
-            if existing.id != tag_id {
-                return Err(ApiError::BadRequest(format!(
-                    "Sharing tag with name '{}' already exists",
-                    new_name
-                )));
-            }
-        }
+        && existing.id != tag_id
+    {
+        return Err(ApiError::BadRequest(format!(
+            "Sharing tag with name '{}' already exists",
+            new_name
+        )));
     }
 
     let tag = SharingTagRepository::update(&state.db, tag_id, request.name, request.description)

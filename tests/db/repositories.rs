@@ -3,11 +3,11 @@ mod common;
 
 use chrono::Utc;
 use codex::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
+use codex::db::Database;
 use codex::db::entities::{books, libraries, read_progress, series, users};
 use codex::db::repositories::{
     BookRepository, LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository,
 };
-use codex::db::Database;
 use codex::models::ScanningStrategy;
 use common::*;
 use sea_orm::{
@@ -1205,21 +1205,21 @@ async fn test_purge_deleted_in_library_purges_empty_series_when_enabled() {
     let setting = SettingsRepository::get(conn, "purge.purge_empty_series")
         .await
         .unwrap();
-    if let Some(s) = setting {
-        if s.value != "true" {
-            // Set it to true for this test
-            let user_id = Uuid::new_v4();
-            SettingsRepository::set(
-                conn,
-                "purge.purge_empty_series",
-                "true".to_string(),
-                user_id,
-                None,
-                None,
-            )
-            .await
-            .unwrap();
-        }
+    if let Some(s) = setting
+        && s.value != "true"
+    {
+        // Set it to true for this test
+        let user_id = Uuid::new_v4();
+        SettingsRepository::set(
+            conn,
+            "purge.purge_empty_series",
+            "true".to_string(),
+            user_id,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
     }
 
     // Purge deleted books - should also delete series1 since it's now empty

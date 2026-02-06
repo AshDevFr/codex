@@ -4,24 +4,24 @@
 //! used by both synchronous API endpoints and background task handlers.
 
 use anyhow::{Context, Result};
-use sea_orm::prelude::Decimal;
 use sea_orm::DatabaseConnection;
+use sea_orm::prelude::Decimal;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::db::entities::SeriesStatus;
 use crate::db::entities::plugins::{Model as Plugin, PluginPermission};
 use crate::db::entities::series_metadata::Model as SeriesMetadata;
-use crate::db::entities::SeriesStatus;
 use crate::db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
     SeriesMetadataRepository, TagRepository,
 };
 use crate::events::EventBroadcaster;
-use crate::services::plugin::PluginSeriesMetadata;
 use crate::services::ThumbnailService;
+use crate::services::plugin::PluginSeriesMetadata;
 
 use super::CoverService;
 
@@ -104,34 +104,34 @@ impl MetadataApplier {
         };
 
         // Title
-        if should_apply_field("title") {
-            if let Some(title) = &metadata.title {
-                let is_locked = current_metadata.map(|m| m.title_lock).unwrap_or(false);
-                match check_field("title", is_locked, PluginPermission::MetadataWriteTitle) {
-                    Ok(_) => {
-                        // Update title_sort to match new title unless it's locked or filtered out
-                        let title_sort_locked =
-                            current_metadata.map(|m| m.title_sort_lock).unwrap_or(false);
-                        let title_sort = if title_sort_locked || !should_apply_field("titleSort") {
-                            current_metadata.and_then(|m| m.title_sort.clone())
-                        } else {
-                            Some(title.clone())
-                        };
-                        SeriesMetadataRepository::update_title(
-                            db,
-                            series_id,
-                            title.clone(),
-                            title_sort,
-                        )
-                        .await
-                        .context("Failed to update title")?;
-                        applied_fields.push("title".to_string());
-                        if !title_sort_locked && should_apply_field("titleSort") {
-                            applied_fields.push("titleSort".to_string());
-                        }
+        if should_apply_field("title")
+            && let Some(title) = &metadata.title
+        {
+            let is_locked = current_metadata.map(|m| m.title_lock).unwrap_or(false);
+            match check_field("title", is_locked, PluginPermission::MetadataWriteTitle) {
+                Ok(_) => {
+                    // Update title_sort to match new title unless it's locked or filtered out
+                    let title_sort_locked =
+                        current_metadata.map(|m| m.title_sort_lock).unwrap_or(false);
+                    let title_sort = if title_sort_locked || !should_apply_field("titleSort") {
+                        current_metadata.and_then(|m| m.title_sort.clone())
+                    } else {
+                        Some(title.clone())
+                    };
+                    SeriesMetadataRepository::update_title(
+                        db,
+                        series_id,
+                        title.clone(),
+                        title_sort,
+                    )
+                    .await
+                    .context("Failed to update title")?;
+                    applied_fields.push("title".to_string());
+                    if !title_sort_locked && should_apply_field("titleSort") {
+                        applied_fields.push("titleSort".to_string());
                     }
-                    Err(skip) => skipped_fields.push(skip),
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
@@ -181,190 +181,182 @@ impl MetadataApplier {
         }
 
         // Summary
-        if should_apply_field("summary") {
-            if let Some(summary) = &metadata.summary {
-                let is_locked = current_metadata.map(|m| m.summary_lock).unwrap_or(false);
-                match check_field("summary", is_locked, PluginPermission::MetadataWriteSummary) {
-                    Ok(_) => {
-                        SeriesMetadataRepository::update_summary(
-                            db,
-                            series_id,
-                            Some(summary.clone()),
-                        )
+        if should_apply_field("summary")
+            && let Some(summary) = &metadata.summary
+        {
+            let is_locked = current_metadata.map(|m| m.summary_lock).unwrap_or(false);
+            match check_field("summary", is_locked, PluginPermission::MetadataWriteSummary) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_summary(db, series_id, Some(summary.clone()))
                         .await
                         .context("Failed to update summary")?;
-                        applied_fields.push("summary".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+                    applied_fields.push("summary".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
         // Year
-        if should_apply_field("year") {
-            if let Some(year) = metadata.year {
-                let is_locked = current_metadata.map(|m| m.year_lock).unwrap_or(false);
-                match check_field("year", is_locked, PluginPermission::MetadataWriteYear) {
-                    Ok(_) => {
-                        SeriesMetadataRepository::update_year(db, series_id, Some(year))
-                            .await
-                            .context("Failed to update year")?;
-                        applied_fields.push("year".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+        if should_apply_field("year")
+            && let Some(year) = metadata.year
+        {
+            let is_locked = current_metadata.map(|m| m.year_lock).unwrap_or(false);
+            match check_field("year", is_locked, PluginPermission::MetadataWriteYear) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_year(db, series_id, Some(year))
+                        .await
+                        .context("Failed to update year")?;
+                    applied_fields.push("year".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
         // Status
-        if should_apply_field("status") {
-            if let Some(status) = &metadata.status {
-                let is_locked = current_metadata.map(|m| m.status_lock).unwrap_or(false);
-                match check_field("status", is_locked, PluginPermission::MetadataWriteStatus) {
-                    Ok(_) => {
-                        let status_str = match status {
-                            SeriesStatus::Ongoing => "ongoing",
-                            SeriesStatus::Ended => "ended",
-                            SeriesStatus::Hiatus => "hiatus",
-                            SeriesStatus::Abandoned => "abandoned",
-                            SeriesStatus::Unknown => "unknown",
-                        };
-                        SeriesMetadataRepository::update_status(
-                            db,
-                            series_id,
-                            Some(status_str.to_string()),
-                        )
-                        .await
-                        .context("Failed to update status")?;
-                        applied_fields.push("status".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+        if should_apply_field("status")
+            && let Some(status) = &metadata.status
+        {
+            let is_locked = current_metadata.map(|m| m.status_lock).unwrap_or(false);
+            match check_field("status", is_locked, PluginPermission::MetadataWriteStatus) {
+                Ok(_) => {
+                    let status_str = match status {
+                        SeriesStatus::Ongoing => "ongoing",
+                        SeriesStatus::Ended => "ended",
+                        SeriesStatus::Hiatus => "hiatus",
+                        SeriesStatus::Abandoned => "abandoned",
+                        SeriesStatus::Unknown => "unknown",
+                    };
+                    SeriesMetadataRepository::update_status(
+                        db,
+                        series_id,
+                        Some(status_str.to_string()),
+                    )
+                    .await
+                    .context("Failed to update status")?;
+                    applied_fields.push("status".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
         // Publisher
-        if should_apply_field("publisher") {
-            if let Some(publisher) = &metadata.publisher {
-                let is_locked = current_metadata.map(|m| m.publisher_lock).unwrap_or(false);
-                match check_field(
-                    "publisher",
-                    is_locked,
-                    PluginPermission::MetadataWritePublisher,
-                ) {
-                    Ok(_) => {
-                        SeriesMetadataRepository::update_publisher(
-                            db,
-                            series_id,
-                            Some(publisher.clone()),
-                            None,
-                        )
-                        .await
-                        .context("Failed to update publisher")?;
-                        applied_fields.push("publisher".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+        if should_apply_field("publisher")
+            && let Some(publisher) = &metadata.publisher
+        {
+            let is_locked = current_metadata.map(|m| m.publisher_lock).unwrap_or(false);
+            match check_field(
+                "publisher",
+                is_locked,
+                PluginPermission::MetadataWritePublisher,
+            ) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_publisher(
+                        db,
+                        series_id,
+                        Some(publisher.clone()),
+                        None,
+                    )
+                    .await
+                    .context("Failed to update publisher")?;
+                    applied_fields.push("publisher".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
         // Age Rating
-        if should_apply_field("ageRating") {
-            if let Some(age_rating) = metadata.age_rating {
-                let is_locked = current_metadata.map(|m| m.age_rating_lock).unwrap_or(false);
-                match check_field(
-                    "ageRating",
-                    is_locked,
-                    PluginPermission::MetadataWriteAgeRating,
-                ) {
-                    Ok(_) => {
-                        SeriesMetadataRepository::update_age_rating(
-                            db,
-                            series_id,
-                            Some(age_rating),
-                        )
+        if should_apply_field("ageRating")
+            && let Some(age_rating) = metadata.age_rating
+        {
+            let is_locked = current_metadata.map(|m| m.age_rating_lock).unwrap_or(false);
+            match check_field(
+                "ageRating",
+                is_locked,
+                PluginPermission::MetadataWriteAgeRating,
+            ) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_age_rating(db, series_id, Some(age_rating))
                         .await
                         .context("Failed to update age rating")?;
-                        applied_fields.push("ageRating".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+                    applied_fields.push("ageRating".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
         // Language
-        if should_apply_field("language") {
-            if let Some(language) = &metadata.language {
-                let is_locked = current_metadata.map(|m| m.language_lock).unwrap_or(false);
-                match check_field(
-                    "language",
-                    is_locked,
-                    PluginPermission::MetadataWriteLanguage,
-                ) {
-                    Ok(_) => {
-                        SeriesMetadataRepository::update_language(
-                            db,
-                            series_id,
-                            Some(language.clone()),
-                        )
-                        .await
-                        .context("Failed to update language")?;
-                        applied_fields.push("language".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+        if should_apply_field("language")
+            && let Some(language) = &metadata.language
+        {
+            let is_locked = current_metadata.map(|m| m.language_lock).unwrap_or(false);
+            match check_field(
+                "language",
+                is_locked,
+                PluginPermission::MetadataWriteLanguage,
+            ) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_language(
+                        db,
+                        series_id,
+                        Some(language.clone()),
+                    )
+                    .await
+                    .context("Failed to update language")?;
+                    applied_fields.push("language".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
         // Reading Direction
-        if should_apply_field("readingDirection") {
-            if let Some(reading_direction) = &metadata.reading_direction {
-                let is_locked = current_metadata
-                    .map(|m| m.reading_direction_lock)
-                    .unwrap_or(false);
-                match check_field(
-                    "readingDirection",
-                    is_locked,
-                    PluginPermission::MetadataWriteReadingDirection,
-                ) {
-                    Ok(_) => {
-                        SeriesMetadataRepository::update_reading_direction(
-                            db,
-                            series_id,
-                            Some(reading_direction.clone()),
-                        )
-                        .await
-                        .context("Failed to update reading direction")?;
-                        applied_fields.push("readingDirection".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+        if should_apply_field("readingDirection")
+            && let Some(reading_direction) = &metadata.reading_direction
+        {
+            let is_locked = current_metadata
+                .map(|m| m.reading_direction_lock)
+                .unwrap_or(false);
+            match check_field(
+                "readingDirection",
+                is_locked,
+                PluginPermission::MetadataWriteReadingDirection,
+            ) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_reading_direction(
+                        db,
+                        series_id,
+                        Some(reading_direction.clone()),
+                    )
+                    .await
+                    .context("Failed to update reading direction")?;
+                    applied_fields.push("readingDirection".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
         // Total Book Count
-        if should_apply_field("totalBookCount") {
-            if let Some(total_book_count) = metadata.total_book_count {
-                let is_locked = current_metadata
-                    .map(|m| m.total_book_count_lock)
-                    .unwrap_or(false);
-                match check_field(
-                    "totalBookCount",
-                    is_locked,
-                    PluginPermission::MetadataWriteTotalBookCount,
-                ) {
-                    Ok(_) => {
-                        SeriesMetadataRepository::update_total_book_count(
-                            db,
-                            series_id,
-                            Some(total_book_count),
-                        )
-                        .await
-                        .context("Failed to update total book count")?;
-                        applied_fields.push("totalBookCount".to_string());
-                    }
-                    Err(skip) => skipped_fields.push(skip),
+        if should_apply_field("totalBookCount")
+            && let Some(total_book_count) = metadata.total_book_count
+        {
+            let is_locked = current_metadata
+                .map(|m| m.total_book_count_lock)
+                .unwrap_or(false);
+            match check_field(
+                "totalBookCount",
+                is_locked,
+                PluginPermission::MetadataWriteTotalBookCount,
+            ) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_total_book_count(
+                        db,
+                        series_id,
+                        Some(total_book_count),
+                    )
+                    .await
+                    .context("Failed to update total book count")?;
+                    applied_fields.push("totalBookCount".to_string());
                 }
+                Err(skip) => skipped_fields.push(skip),
             }
         }
 
@@ -444,27 +436,27 @@ impl MetadataApplier {
         }
 
         // External Ratings (primary rating from plugin)
-        if should_apply_field("rating") {
-            if let Some(rating) = &metadata.rating {
-                if !plugin.has_permission(&PluginPermission::MetadataWriteRatings) {
-                    skipped_fields.push(SkippedField {
-                        field: "rating".to_string(),
-                        reason: "Plugin does not have permission".to_string(),
-                    });
-                } else {
-                    let score = Decimal::from_f64_retain(rating.score)
-                        .unwrap_or_else(|| Decimal::new(0, 0));
-                    ExternalRatingRepository::upsert(
-                        db,
-                        series_id,
-                        &rating.source,
-                        score,
-                        rating.vote_count,
-                    )
-                    .await
-                    .context("Failed to upsert external rating")?;
-                    applied_fields.push("rating".to_string());
-                }
+        if should_apply_field("rating")
+            && let Some(rating) = &metadata.rating
+        {
+            if !plugin.has_permission(&PluginPermission::MetadataWriteRatings) {
+                skipped_fields.push(SkippedField {
+                    field: "rating".to_string(),
+                    reason: "Plugin does not have permission".to_string(),
+                });
+            } else {
+                let score =
+                    Decimal::from_f64_retain(rating.score).unwrap_or_else(|| Decimal::new(0, 0));
+                ExternalRatingRepository::upsert(
+                    db,
+                    series_id,
+                    &rating.source,
+                    score,
+                    rating.vote_count,
+                )
+                .await
+                .context("Failed to upsert external rating")?;
+                applied_fields.push("rating".to_string());
             }
         }
 
@@ -498,44 +490,44 @@ impl MetadataApplier {
         }
 
         // Cover URL - download and apply cover from plugin
-        if should_apply_field("coverUrl") {
-            if let Some(cover_url) = &metadata.cover_url {
-                let cover_locked = current_metadata.map(|m| m.cover_lock).unwrap_or(false);
-                if !plugin.has_permission(&PluginPermission::MetadataWriteCovers) {
-                    skipped_fields.push(SkippedField {
-                        field: "coverUrl".to_string(),
-                        reason: "Plugin does not have permission".to_string(),
-                    });
-                } else if let Some(thumbnail_service) = &options.thumbnail_service {
-                    match CoverService::download_and_apply(
-                        db,
-                        thumbnail_service,
-                        series_id,
-                        library_id,
-                        cover_url,
-                        &plugin.name,
-                        cover_locked,
-                        options.event_broadcaster.as_ref(),
-                    )
-                    .await
-                    {
-                        Ok(_) => {
-                            applied_fields.push("coverUrl".to_string());
-                        }
-                        Err(e) => {
-                            warn!("Failed to download cover: {}", e);
-                            skipped_fields.push(SkippedField {
-                                field: "coverUrl".to_string(),
-                                reason: format!("Failed to download cover: {}", e),
-                            });
-                        }
+        if should_apply_field("coverUrl")
+            && let Some(cover_url) = &metadata.cover_url
+        {
+            let cover_locked = current_metadata.map(|m| m.cover_lock).unwrap_or(false);
+            if !plugin.has_permission(&PluginPermission::MetadataWriteCovers) {
+                skipped_fields.push(SkippedField {
+                    field: "coverUrl".to_string(),
+                    reason: "Plugin does not have permission".to_string(),
+                });
+            } else if let Some(thumbnail_service) = &options.thumbnail_service {
+                match CoverService::download_and_apply(
+                    db,
+                    thumbnail_service,
+                    series_id,
+                    library_id,
+                    cover_url,
+                    &plugin.name,
+                    cover_locked,
+                    options.event_broadcaster.as_ref(),
+                )
+                .await
+                {
+                    Ok(_) => {
+                        applied_fields.push("coverUrl".to_string());
                     }
-                } else {
-                    skipped_fields.push(SkippedField {
-                        field: "coverUrl".to_string(),
-                        reason: "ThumbnailService not available".to_string(),
-                    });
+                    Err(e) => {
+                        warn!("Failed to download cover: {}", e);
+                        skipped_fields.push(SkippedField {
+                            field: "coverUrl".to_string(),
+                            reason: format!("Failed to download cover: {}", e),
+                        });
+                    }
                 }
+            } else {
+                skipped_fields.push(SkippedField {
+                    field: "coverUrl".to_string(),
+                    reason: "ThumbnailService not available".to_string(),
+                });
             }
         }
 

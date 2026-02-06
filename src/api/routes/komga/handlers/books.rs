@@ -3,9 +3,9 @@
 //! Handlers for book-related endpoints in the Komga-compatible API.
 
 use super::super::dto::book::{
-    extract_library_id_from_condition, extract_read_status_from_condition,
-    extract_release_date_from_condition, extract_series_id_from_condition, KomgaBookDto,
-    KomgaBooksSearchRequestDto,
+    KomgaBookDto, KomgaBooksSearchRequestDto, extract_library_id_from_condition,
+    extract_read_status_from_condition, extract_release_date_from_condition,
+    extract_series_id_from_condition,
 };
 use super::super::dto::pagination::KomgaPage;
 use super::libraries::{extract_page_image, generate_thumbnail};
@@ -21,11 +21,11 @@ use crate::db::repositories::{
 };
 use crate::require_permission;
 use axum::{
+    Json,
     body::Body,
     extract::{Path, Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::Response,
-    Json,
 };
 use chrono::Datelike;
 use serde::Deserialize;

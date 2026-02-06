@@ -7,8 +7,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Timelike, Utc};
 use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait,
-    QueryFilter, QueryOrder, Set, Statement,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait, QueryFilter,
+    QueryOrder, Set, Statement, entity::prelude::*,
 };
 use std::str::FromStr;
 use tracing::{debug, info, warn};
@@ -579,14 +579,13 @@ impl TaskMetricsRepository {
             }
 
             // Keep the most recent error
-            if let Some(ref error_at) = r.last_error_at {
-                if result
+            if let Some(ref error_at) = r.last_error_at
+                && result
                     .last_error_at
                     .is_none_or(|existing| error_at > &existing)
-                {
-                    result.last_error = r.last_error.clone();
-                    result.last_error_at = Some(*error_at);
-                }
+            {
+                result.last_error = r.last_error.clone();
+                result.last_error_at = Some(*error_at);
             }
         }
 
@@ -888,8 +887,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_by_library_id() {
-        use crate::db::repositories::LibraryRepository;
         use crate::db::ScanningStrategy;
+        use crate::db::repositories::LibraryRepository;
 
         let (db, _temp_dir) = create_test_db().await;
         let conn = db.sea_orm_connection();

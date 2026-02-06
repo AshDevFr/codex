@@ -1,10 +1,10 @@
 use crate::api::permissions::{
-    serialize_permissions, ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS,
+    ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS, serialize_permissions,
 };
 use crate::config::{Config, EnvOverride};
+use crate::db::Database;
 use crate::db::entities::{api_keys, users};
 use crate::db::repositories::{api_key::ApiKeyRepository, user::UserRepository};
-use crate::db::Database;
 use crate::utils::password::hash_password;
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -159,10 +159,10 @@ fn generate_api_key(
 
     // Generate random components
     let prefix_random: String = (0..16)
-        .map(|_| format!("{:x}", rng.gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
         .collect();
     let suffix_random: String = (0..32)
-        .map(|_| format!("{:x}", rng.gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
         .collect();
 
     // Construct full key

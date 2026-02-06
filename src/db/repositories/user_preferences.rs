@@ -7,11 +7,11 @@
 #![allow(dead_code)]
 
 use crate::db::entities::{user_preferences, user_preferences::Entity as UserPreferences};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 pub struct UserPreferencesRepository;

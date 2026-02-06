@@ -2,7 +2,7 @@ use crate::db::entities::{
     settings, settings::Entity as Setting, settings_history,
     settings_history::Entity as SettingHistory,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
 use serde::de::DeserializeOwned;
@@ -227,16 +227,16 @@ impl SettingsRepository {
                     .parse()
                     .map_err(|_| anyhow!("Invalid integer value: {}", value))?;
 
-                if let Some(min) = setting.min_value {
-                    if int_value < min {
-                        return Err(anyhow!("Value {} is below minimum {}", int_value, min));
-                    }
+                if let Some(min) = setting.min_value
+                    && int_value < min
+                {
+                    return Err(anyhow!("Value {} is below minimum {}", int_value, min));
                 }
 
-                if let Some(max) = setting.max_value {
-                    if int_value > max {
-                        return Err(anyhow!("Value {} is above maximum {}", int_value, max));
-                    }
+                if let Some(max) = setting.max_value
+                    && int_value > max
+                {
+                    return Err(anyhow!("Value {} is above maximum {}", int_value, max));
                 }
             }
             "Float" => {

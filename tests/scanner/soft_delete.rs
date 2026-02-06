@@ -3,7 +3,7 @@ mod common;
 
 use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
 use codex::models::ScanningStrategy;
-use codex::scanner::{scan_library, ScanMode};
+use codex::scanner::{ScanMode, scan_library};
 use common::*;
 use std::fs;
 use tempfile::TempDir;
@@ -361,8 +361,8 @@ async fn test_purge_deleted_on_scan_config() {
     // Now test that the task handler purges deleted books when purge_deleted_on_scan is enabled
     // We need to trigger a scan via the task queue to test the handler
     use codex::db::repositories::TaskRepository;
-    use codex::tasks::types::TaskType;
     use codex::tasks::TaskWorker;
+    use codex::tasks::types::TaskType;
 
     // Trigger scan via task queue
     let task_type = TaskType::ScanLibrary {

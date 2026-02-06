@@ -8,8 +8,8 @@ use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::api::routes::v1::dto::series::{
     AddSeriesTagRequest, SetSeriesTagsRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
 };
-use codex::db::repositories::{LibraryRepository, SeriesRepository, TagRepository, UserRepository};
 use codex::db::ScanningStrategy;
+use codex::db::repositories::{LibraryRepository, SeriesRepository, TagRepository, UserRepository};
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

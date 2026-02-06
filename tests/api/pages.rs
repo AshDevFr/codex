@@ -2,10 +2,10 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, PageRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

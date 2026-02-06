@@ -14,8 +14,8 @@ mod web;
 
 use clap::{Parser, Subcommand};
 use commands::{
-    migrate_command, openapi_command, scan_command, seed_command, serve_command, tasks_command,
-    wait_for_migrations_command, worker_command, OpenApiFormat, TasksSubcommand,
+    OpenApiFormat, TasksSubcommand, migrate_command, openapi_command, scan_command, seed_command,
+    serve_command, tasks_command, wait_for_migrations_command, worker_command,
 };
 use std::path::PathBuf;
 

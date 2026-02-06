@@ -358,10 +358,12 @@ mod tests {
         if !is_initialized() {
             let result = get_pdfium();
             assert!(result.is_err());
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("PDFium not initialized"));
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("PDFium not initialized")
+            );
         }
     }
 

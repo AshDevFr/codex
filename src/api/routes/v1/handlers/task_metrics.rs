@@ -1,4 +1,4 @@
-use axum::{extract::Query, extract::State, Json};
+use axum::{Json, extract::Query, extract::State};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -7,7 +7,7 @@ use super::super::dto::{
     TaskMetricsHistoryQuery, TaskMetricsHistoryResponse, TaskMetricsResponse,
     TaskMetricsSummaryDto, TaskTypeMetricsDto,
 };
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::TaskRepository;
 
 /// Get current task metrics

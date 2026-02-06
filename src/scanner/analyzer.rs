@@ -1,10 +1,10 @@
+use crate::parsers::BookMetadata;
 #[cfg(feature = "rar")]
 use crate::parsers::cbr::CbrParser;
 use crate::parsers::cbz::CbzParser;
 use crate::parsers::epub::EpubParser;
 use crate::parsers::pdf::PdfParser;
 use crate::parsers::traits::FormatParser;
-use crate::parsers::BookMetadata;
 use crate::scanner::detect_format;
 use crate::utils::{CodexError, Result};
 use std::path::Path;
@@ -32,7 +32,7 @@ pub fn analyze_file<P: AsRef<Path>>(path: P) -> Result<BookMetadata> {
         crate::parsers::FileFormat::CBR => {
             return Err(CodexError::UnsupportedFormat(
                 "CBR support requires the 'rar' feature to be enabled".to_string(),
-            ))
+            ));
         }
         crate::parsers::FileFormat::EPUB => {
             let parser = EpubParser::new();

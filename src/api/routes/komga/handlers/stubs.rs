@@ -14,8 +14,8 @@ use crate::api::{
 use crate::db::repositories::{GenreRepository, TagRepository};
 use crate::require_permission;
 use axum::{
-    extract::{Query, State},
     Json,
+    extract::{Query, State},
 };
 use std::sync::Arc;
 

@@ -1,9 +1,9 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::pdf::{extract_page_from_pdf, PdfParser};
-use codex::parsers::traits::FormatParser;
 use codex::parsers::FileFormat;
+use codex::parsers::pdf::{PdfParser, extract_page_from_pdf};
+use codex::parsers::traits::FormatParser;
 use tempfile::TempDir;
 
 #[test]

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set, Statement, TransactionTrait, entity::prelude::*,
 };
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -195,10 +195,10 @@ impl TaskRepository {
             let params = task_type.params();
 
             // Skip if task already exists for this book
-            if let Some(bk_id) = book_id {
-                if existing_book_ids.contains(&bk_id) {
-                    continue;
-                }
+            if let Some(bk_id) = book_id
+                && existing_book_ids.contains(&bk_id)
+            {
+                continue;
             }
 
             let task_id = Uuid::new_v4();

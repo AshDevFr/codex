@@ -1,12 +1,12 @@
 use super::super::dto::{
-    book::{BookAuthorDto, BookAwardDto, BookSortParam, BookType, BookTypeDto},
-    common::{
-        ListPaginationParams, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
-    },
-    page::PageDto,
     AdjacentBooksResponse, BookDetailResponse, BookDto, BookFullMetadata, BookListRequest,
     BookListResponse, BookMetadataDto, BookMetadataLocks, FullBookListResponse, FullBookResponse,
     PaginationParams,
+    book::{BookAuthorDto, BookAwardDto, BookSortParam, BookType, BookTypeDto},
+    common::{
+        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE, PaginationLinkBuilder,
+    },
+    page::PageDto,
 };
 use super::paginated_response;
 use crate::api::{
@@ -21,11 +21,11 @@ use crate::db::repositories::{
 use crate::require_permission;
 use crate::services::FilterService;
 use axum::{
+    Json,
     body::Body,
     extract::{Path, Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -3681,17 +3681,17 @@ pub async fn get_book_cover_image(
     );
 
     // Check If-None-Match header for ETag validation
-    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
-        if let Ok(client_etag) = if_none_match.to_str() {
-            let client_etag = client_etag.trim().trim_start_matches("W/");
-            if client_etag == etag || client_etag.trim_matches('"') == etag.trim_matches('"') {
-                return Ok(Response::builder()
-                    .status(StatusCode::NOT_MODIFIED)
-                    .header(header::ETAG, &etag)
-                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                    .body(Body::empty())
-                    .unwrap());
-            }
+    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+        && let Ok(client_etag) = if_none_match.to_str()
+    {
+        let client_etag = client_etag.trim().trim_start_matches("W/");
+        if client_etag == etag || client_etag.trim_matches('"') == etag.trim_matches('"') {
+            return Ok(Response::builder()
+                .status(StatusCode::NOT_MODIFIED)
+                .header(header::ETAG, &etag)
+                .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                .body(Body::empty())
+                .unwrap());
         }
     }
 
@@ -3813,7 +3813,7 @@ use super::super::dto::{
     BookErrorDto, BookErrorTypeDto, BookWithErrorsDto, BooksWithErrorsResponse, ErrorGroupDto,
     RetryAllErrorsRequest, RetryBookErrorsRequest, RetryErrorsResponse,
 };
-use crate::db::entities::book_error::{parse_analysis_errors, BookErrorType};
+use crate::db::entities::book_error::{BookErrorType, parse_analysis_errors};
 use crate::db::repositories::TaskRepository;
 use crate::tasks::types::TaskType;
 

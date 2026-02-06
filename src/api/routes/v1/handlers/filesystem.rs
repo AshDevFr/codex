@@ -3,8 +3,8 @@ use crate::api::extractors::{AppState, AuthContext};
 use crate::api::permissions::Permission;
 use crate::require_permission;
 use axum::{
-    extract::{Query, State},
     Json,
+    extract::{Query, State},
 };
 use serde::{Deserialize, Serialize};
 use std::fs;

@@ -108,6 +108,6 @@ pub use rules::apply_rules;
 pub use templates::render_template;
 #[allow(unused_imports)]
 pub use types::{
-    parse_auto_match_conditions, parse_preprocessing_rules, AutoMatchConditions, ConditionMode,
-    ConditionOperator, ConditionRule, PreprocessingRule,
+    AutoMatchConditions, ConditionMode, ConditionOperator, ConditionRule, PreprocessingRule,
+    parse_auto_match_conditions, parse_preprocessing_rules,
 };

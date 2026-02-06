@@ -42,8 +42,8 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use sea_orm::DatabaseConnection;
@@ -443,10 +443,10 @@ impl PluginManager {
         } else {
             // Plugin is disabled, remove it from managed plugins
             debug!("Plugin {} is disabled, removing from memory", plugin_id);
-            if let Some(entry) = plugins.remove(&plugin_id) {
-                if let Some(handle) = entry.handle {
-                    let _ = handle.stop().await;
-                }
+            if let Some(entry) = plugins.remove(&plugin_id)
+                && let Some(handle) = entry.handle
+            {
+                let _ = handle.stop().await;
             }
         }
 
@@ -491,10 +491,10 @@ impl PluginManager {
                 return Err(PluginManagerError::PluginNotEnabled(plugin_id));
             }
 
-            if let Some(ref handle) = entry.handle {
-                if handle.is_running().await {
-                    return Ok(Arc::clone(handle));
-                }
+            if let Some(ref handle) = entry.handle
+                && handle.is_running().await
+            {
+                return Ok(Arc::clone(handle));
             }
         }
 
@@ -526,10 +526,10 @@ impl PluginManager {
                 return Err(PluginManagerError::PluginNotEnabled(plugin_id));
             }
 
-            if let Some(ref handle) = entry.handle {
-                if handle.is_running().await {
-                    return Ok(Arc::clone(handle));
-                }
+            if let Some(ref handle) = entry.handle
+                && handle.is_running().await
+            {
+                return Ok(Arc::clone(handle));
             }
         }
 
@@ -1094,10 +1094,10 @@ impl PluginManager {
     pub async fn stop_plugin(&self, plugin_id: Uuid) -> Result<(), PluginManagerError> {
         let mut plugins = self.plugins.write().await;
 
-        if let Some(entry) = plugins.get_mut(&plugin_id) {
-            if let Some(handle) = entry.handle.take() {
-                handle.stop().await?;
-            }
+        if let Some(entry) = plugins.get_mut(&plugin_id)
+            && let Some(handle) = entry.handle.take()
+        {
+            handle.stop().await?;
         }
 
         Ok(())

@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::api::permissions::{Permission, ADMIN_PERMISSIONS, READONLY_PERMISSIONS};
+use codex::api::permissions::{ADMIN_PERMISSIONS, Permission, READONLY_PERMISSIONS};
 use codex::api::routes::v1::dto::api_key::{
     ApiKeyDto, CreateApiKeyRequest, CreateApiKeyResponse, UpdateApiKeyRequest,
 };
@@ -767,8 +767,10 @@ async fn test_created_api_key_can_authenticate() {
         "API key should authenticate successfully"
     );
     let paginated = auth_response.expect("Expected API keys response");
-    assert!(paginated
-        .data
-        .iter()
-        .any(|k| k.id == response_data.api_key.id));
+    assert!(
+        paginated
+            .data
+            .iter()
+            .any(|k| k.id == response_data.api_key.id)
+    );
 }

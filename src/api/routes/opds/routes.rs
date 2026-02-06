@@ -7,7 +7,7 @@ use super::handlers::{
     series_books,
 };
 use crate::api::extractors::AppState;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 
 /// Create OPDS router with all OPDS endpoints

@@ -13,8 +13,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
@@ -22,8 +22,9 @@ use tracing::{debug, error, info, warn};
 use super::health::{HealthState, HealthTracker};
 use super::process::{PluginProcess, PluginProcessConfig, ProcessError};
 use super::protocol::{
-    methods, InitializeParams, MetadataGetParams, MetadataMatchParams, MetadataSearchParams,
+    InitializeParams, MetadataGetParams, MetadataMatchParams, MetadataSearchParams,
     MetadataSearchResponse, PluginBookMetadata, PluginManifest, PluginSeriesMetadata, SearchResult,
+    methods,
 };
 use super::rpc::{RpcClient, RpcError};
 use super::secrets::SecretValue;

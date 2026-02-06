@@ -4,7 +4,7 @@
 
 use crate::models::BookStrategy;
 
-use super::{filename_without_extension, BookMetadata, BookNamingContext, BookNamingStrategy};
+use super::{BookMetadata, BookNamingContext, BookNamingStrategy, filename_without_extension};
 
 /// Use metadata title if present, fallback to filename
 pub struct MetadataFirstStrategy;

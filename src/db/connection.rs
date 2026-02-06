@@ -67,12 +67,12 @@ impl Database {
 
                 // Create parent directories if they don't exist
                 let path = Path::new(&sqlite_config.path);
-                if let Some(parent) = path.parent() {
-                    if !parent.exists() {
-                        fs::create_dir_all(parent)
-                            .await
-                            .context("Failed to create database directory")?;
-                    }
+                if let Some(parent) = path.parent()
+                    && !parent.exists()
+                {
+                    fs::create_dir_all(parent)
+                        .await
+                        .context("Failed to create database directory")?;
                 }
 
                 // Build SeaORM connection URL

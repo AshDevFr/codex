@@ -1,8 +1,8 @@
 #![cfg(feature = "rar")]
 
+use codex::parsers::FileFormat;
 use codex::parsers::cbr::CbrParser;
 use codex::parsers::traits::FormatParser;
-use codex::parsers::FileFormat;
 use std::path::Path;
 
 #[test]

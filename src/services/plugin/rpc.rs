@@ -11,20 +11,20 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 use tokio::time::timeout;
 use tracing::{debug, error, trace, warn};
 
 use super::process::{PluginProcess, ProcessError};
 use super::protocol::{
-    error_codes, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId, JSONRPC_VERSION,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId, error_codes,
 };
 
 /// Error type for RPC operations

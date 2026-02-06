@@ -1,8 +1,8 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::sse::{Event, Sse},
-    Json,
 };
 use futures::stream::Stream;
 use std::convert::Infallible;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::super::dto::{ScanStatusDto, TriggerScanQuery};
 use super::task_queue::CreateTaskResponse;
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
 };
@@ -315,8 +315,8 @@ pub async fn scan_progress_stream(
             match receiver.recv().await {
                 Ok(event) => {
                     // Only emit scan_library task events
-                    if event.task_type == "scan_library" {
-                        if let Some(library_id) = event.library_id {
+                    if event.task_type == "scan_library"
+                        && let Some(library_id) = event.library_id {
                             let (files_processed, files_total) = if let Some(ref prog) = event.progress {
                                 (prog.current, prog.total)
                             } else {
@@ -368,7 +368,6 @@ pub async fn scan_progress_stream(
                                 yield Ok(Event::default().data(json));
                             }
                         }
-                    }
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
                     // Client is too slow, skip lagged messages

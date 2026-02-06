@@ -6,7 +6,7 @@
 #[cfg(feature = "embed-frontend")]
 use axum::{
     body::Body,
-    http::{header, HeaderValue, Response},
+    http::{HeaderValue, Response, header},
 };
 use axum::{
     http::{StatusCode, Uri},

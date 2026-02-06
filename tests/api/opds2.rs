@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use codex::api::error::ErrorResponse;
 use codex::api::routes::opds2::dto::Opds2Feed;
 use codex::db::repositories::{

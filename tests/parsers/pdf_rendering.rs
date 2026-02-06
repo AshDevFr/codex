@@ -18,12 +18,12 @@
 mod common;
 
 use codex::parsers::pdf::{
-    extract_page_from_pdf, extract_page_from_pdf_with_dpi, renderer, PdfParser,
+    PdfParser, extract_page_from_pdf, extract_page_from_pdf_with_dpi, renderer,
 };
 use codex::parsers::traits::FormatParser;
 use codex::services::PdfPageCache;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tempfile::TempDir;
 use uuid::Uuid;
 

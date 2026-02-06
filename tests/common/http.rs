@@ -1,5 +1,5 @@
 use axum::Router;
-use codex::api::extractors::{auth::UserAuthCache, AppState, AuthState};
+use codex::api::extractors::{AppState, AuthState, auth::UserAuthCache};
 use codex::api::permissions::UserRole;
 use codex::api::routes::create_router;
 use codex::config::{AuthConfig, Config, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
@@ -7,12 +7,13 @@ use codex::db::entities::users;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
-    plugin::PluginManager, AuthTrackingService, FileCleanupService, InflightThumbnailTracker,
-    PdfPageCache, PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
+    AuthTrackingService, FileCleanupService, InflightThumbnailTracker, PdfPageCache,
+    PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
+    plugin::PluginManager,
 };
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
-use hyper::{body::Bytes, Request, StatusCode};
+use hyper::{Request, StatusCode, body::Bytes};
 use sea_orm::DatabaseConnection;
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
@@ -224,7 +225,7 @@ pub async fn setup_test_app_with_komga(db: DatabaseConnection) -> (Arc<AppState>
 
 /// Helper to create a GET request with Basic Auth header
 pub fn get_request_with_basic_auth(uri: &str, username: &str, password: &str) -> Request<String> {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     let credentials = format!("{}:{}", username, password);
     let encoded = STANDARD.encode(&credentials);
     Request::builder()

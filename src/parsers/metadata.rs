@@ -50,10 +50,10 @@ impl FileFormat {
         let path = path.as_ref();
 
         // Try to read magic bytes first
-        if let Ok(data) = std::fs::read(path) {
-            if let FileFormatDetection::Supported(format) = Self::detect_from_bytes(&data) {
-                return Some(format);
-            }
+        if let Ok(data) = std::fs::read(path)
+            && let FileFormatDetection::Supported(format) = Self::detect_from_bytes(&data)
+        {
+            return Some(format);
         }
 
         // Fall back to extension

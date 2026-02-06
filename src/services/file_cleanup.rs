@@ -197,10 +197,10 @@ impl FileCleanupService {
             while let Some(entry) = entries.next_entry().await? {
                 let file_path = entry.path();
                 // Only include files, skip subdirectories (books/, series/)
-                if file_path.is_file() {
-                    if let Some(uuid) = self.extract_uuid_from_filename(&file_path) {
-                        results.push((file_path, uuid));
-                    }
+                if file_path.is_file()
+                    && let Some(uuid) = self.extract_uuid_from_filename(&file_path)
+                {
+                    results.push((file_path, uuid));
                 }
             }
         }
@@ -319,9 +319,10 @@ mod tests {
         let path = service.get_thumbnail_path(book_id);
 
         assert!(path.to_string_lossy().contains("thumbnails/books/55"));
-        assert!(path
-            .to_string_lossy()
-            .ends_with("550e8400-e29b-41d4-a716-446655440000.jpg"));
+        assert!(
+            path.to_string_lossy()
+                .ends_with("550e8400-e29b-41d4-a716-446655440000.jpg")
+        );
     }
 
     #[test]
@@ -333,9 +334,10 @@ mod tests {
         let path = service.get_series_cover_path(series_id);
 
         assert!(path.to_string_lossy().contains("uploads/covers/series"));
-        assert!(path
-            .to_string_lossy()
-            .ends_with("550e8400-e29b-41d4-a716-446655440000.jpg"));
+        assert!(
+            path.to_string_lossy()
+                .ends_with("550e8400-e29b-41d4-a716-446655440000.jpg")
+        );
     }
 
     #[test]

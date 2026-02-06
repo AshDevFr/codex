@@ -3,10 +3,10 @@ mod common;
 
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::{MarkReadResponse, ReadProgressResponse};
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

@@ -631,7 +631,7 @@ mod tests {
         assert_eq!(lib_id, None);
         assert_eq!(extracted_series_id, None);
         assert_eq!(extracted_book_id, None); // Not using FK column
-                                             // params should contain book_id, thumbnail_path, and series_id
+        // params should contain book_id, thumbnail_path, and series_id
         assert!(params.is_some());
         let params = params.unwrap();
         assert_eq!(params["book_id"], book_id.to_string());

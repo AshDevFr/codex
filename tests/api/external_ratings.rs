@@ -7,8 +7,8 @@ use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::series::{
     CreateExternalRatingRequest, ExternalRatingDto, ExternalRatingListResponse,
 };
-use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::db::ScanningStrategy;
+use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

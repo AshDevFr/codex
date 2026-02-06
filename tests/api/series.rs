@@ -4,10 +4,10 @@ mod common;
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::book::BookDto;
 use codex::api::routes::v1::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookRepository, LibraryRepository, SeriesMetadataRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
@@ -1734,8 +1734,8 @@ async fn test_download_series_skips_missing_files() {
 fn create_test_cbz(path: &std::path::Path, num_pages: usize) {
     use std::fs::File;
     use std::io::Write;
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     let file = File::create(path).unwrap();
     let mut zip = ZipWriter::new(file);
@@ -4375,10 +4375,12 @@ async fn test_library_series_with_full() {
     let full_response = response.unwrap();
     assert_eq!(full_response.data.len(), 2);
     // Verify metadata is included
-    assert!(full_response
-        .data
-        .iter()
-        .all(|s| !s.metadata.title.is_empty()));
+    assert!(
+        full_response
+            .data
+            .iter()
+            .all(|s| !s.metadata.title.is_empty())
+    );
 }
 
 #[tokio::test]

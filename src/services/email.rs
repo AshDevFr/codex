@@ -1,6 +1,6 @@
 use crate::config::EmailConfig;
 use anyhow::{Context, Result};
-use lettre::message::{header::ContentType, Mailbox};
+use lettre::message::{Mailbox, header::ContentType};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use std::sync::Arc;

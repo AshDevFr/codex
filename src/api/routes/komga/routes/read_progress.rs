@@ -5,8 +5,8 @@
 use super::super::handlers;
 use crate::api::extractors::AppState;
 use axum::{
-    routing::{patch, post},
     Router,
+    routing::{patch, post},
 };
 use std::sync::Arc;
 

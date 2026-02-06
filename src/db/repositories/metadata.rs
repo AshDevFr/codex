@@ -381,9 +381,9 @@ impl BookMetadataRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
     use chrono::Utc;
 
     /// Helper to create a test book

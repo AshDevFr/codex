@@ -4,7 +4,7 @@
 
 use super::super::handlers;
 use crate::api::extractors::AppState;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 
 /// Create library routes for the Komga-compatible API

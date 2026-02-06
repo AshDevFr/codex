@@ -7,8 +7,8 @@
 use super::super::handlers;
 use crate::api::extractors::AppState;
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 use std::sync::Arc;
 

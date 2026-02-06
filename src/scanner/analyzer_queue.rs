@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use sea_orm::{prelude::Decimal, DatabaseConnection};
+use sea_orm::{DatabaseConnection, prelude::Decimal};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -19,8 +19,8 @@ use crate::models::{BookStrategy, CalibreStrategyConfig, NumberStrategy, SeriesS
 use crate::parsers::opf;
 use crate::scanner::analyze_file;
 use crate::scanner::strategies::{
-    create_book_strategy, create_number_strategy, BookMetadata, BookNamingContext, NumberContext,
-    NumberMetadata,
+    BookMetadata, BookNamingContext, NumberContext, NumberMetadata, create_book_strategy,
+    create_number_strategy,
 };
 use crate::tasks::types::TaskType;
 
@@ -195,53 +195,51 @@ async fn analyze_single_book(
     // Read Calibre sidecar metadata.opf if applicable
     // This enriches/overrides embedded metadata with user-curated Calibre data
     let library = LibraryRepository::get_by_id(db, book.library_id).await?;
-    if let Some(ref lib) = library {
-        if let Ok(SeriesStrategy::Calibre) = lib.series_strategy.parse::<SeriesStrategy>() {
-            let cal_config: CalibreStrategyConfig = lib
-                .series_config
-                .as_ref()
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or_default();
+    if let Some(ref lib) = library
+        && let Ok(SeriesStrategy::Calibre) = lib.series_strategy.parse::<SeriesStrategy>()
+    {
+        let cal_config: CalibreStrategyConfig = lib
+            .series_config
+            .as_ref()
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
 
-            if cal_config.read_opf_metadata {
-                let opf_path = file_path.parent().map(|p| p.join("metadata.opf"));
-                if let Some(opf_path) = opf_path {
-                    let opf_result =
-                        tokio::task::spawn_blocking(move || opf::parse_opf_file(&opf_path))
-                            .await
-                            .map_err(|e| {
-                                anyhow::anyhow!("Failed to spawn OPF parse task: {}", e)
-                            })?;
+        if cal_config.read_opf_metadata {
+            let opf_path = file_path.parent().map(|p| p.join("metadata.opf"));
+            if let Some(opf_path) = opf_path {
+                let opf_result =
+                    tokio::task::spawn_blocking(move || opf::parse_opf_file(&opf_path))
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Failed to spawn OPF parse task: {}", e))?;
 
-                    match opf_result {
-                        Ok(opf_meta) => {
-                            let sidecar_ci = opf::opf_to_comic_info(&opf_meta);
+                match opf_result {
+                    Ok(opf_meta) => {
+                        let sidecar_ci = opf::opf_to_comic_info(&opf_meta);
 
-                            // Merge: sidecar wins over embedded metadata
-                            let merged_ci = if let Some(ref embedded_ci) = metadata.comic_info {
-                                opf::merge_comic_info(embedded_ci, &sidecar_ci)
-                            } else {
-                                sidecar_ci
-                            };
-                            metadata.comic_info = Some(merged_ci);
+                        // Merge: sidecar wins over embedded metadata
+                        let merged_ci = if let Some(ref embedded_ci) = metadata.comic_info {
+                            opf::merge_comic_info(embedded_ci, &sidecar_ci)
+                        } else {
+                            sidecar_ci
+                        };
+                        metadata.comic_info = Some(merged_ci);
 
-                            // Merge ISBNs (deduplicate)
-                            if !opf_meta.isbns.is_empty() {
-                                let mut all_isbns = metadata.isbns.clone();
-                                for isbn in &opf_meta.isbns {
-                                    if !all_isbns.contains(isbn) {
-                                        all_isbns.push(isbn.clone());
-                                    }
+                        // Merge ISBNs (deduplicate)
+                        if !opf_meta.isbns.is_empty() {
+                            let mut all_isbns = metadata.isbns.clone();
+                            for isbn in &opf_meta.isbns {
+                                if !all_isbns.contains(isbn) {
+                                    all_isbns.push(isbn.clone());
                                 }
-                                metadata.isbns = all_isbns;
                             }
+                            metadata.isbns = all_isbns;
+                        }
 
-                            debug!("Merged sidecar OPF metadata for: {}", book.file_path);
-                        }
-                        Err(_) => {
-                            // No sidecar OPF or parse error — continue with embedded metadata
-                            debug!("No sidecar metadata.opf for: {}", book.file_path);
-                        }
+                        debug!("Merged sidecar OPF metadata for: {}", book.file_path);
+                    }
+                    Err(_) => {
+                        // No sidecar OPF or parse error — continue with embedded metadata
+                        debug!("No sidecar metadata.opf for: {}", book.file_path);
                     }
                 }
             }
@@ -333,35 +331,34 @@ async fn analyze_single_book(
         }
 
         // Emit CoverUpdated event if cover became available
-        if cover_now_available {
-            if let Some(broadcaster) = event_broadcaster {
-                if let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await {
-                    use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
+        if cover_now_available
+            && let Some(broadcaster) = event_broadcaster
+            && let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await
+        {
+            use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 
-                    let event = EntityChangeEvent {
-                        event: EntityEvent::CoverUpdated {
-                            entity_type: EntityType::Book,
-                            entity_id: book.id,
-                            library_id: Some(series.library_id),
-                        },
-                        user_id: None,
-                        timestamp: Utc::now(),
-                    };
+            let event = EntityChangeEvent {
+                event: EntityEvent::CoverUpdated {
+                    entity_type: EntityType::Book,
+                    entity_id: book.id,
+                    library_id: Some(series.library_id),
+                },
+                user_id: None,
+                timestamp: Utc::now(),
+            };
 
-                    match broadcaster.emit(event) {
-                        Ok(count) => {
-                            debug!(
-                                "Emitted CoverUpdated event to {} subscribers for book: {}",
-                                count, book.id
-                            );
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Failed to emit CoverUpdated event for book {}: {:?}",
-                                book.id, e
-                            );
-                        }
-                    }
+            match broadcaster.emit(event) {
+                Ok(count) => {
+                    debug!(
+                        "Emitted CoverUpdated event to {} subscribers for book: {}",
+                        count, book.id
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to emit CoverUpdated event for book {}: {:?}",
+                        book.id, e
+                    );
                 }
             }
         }
@@ -680,12 +677,11 @@ async fn analyze_single_book(
         );
 
         // Upsert external link from ComicInfo web field
-        if let Some(ref web_url) = comic_info.web {
-            if let Err(e) =
+        if let Some(ref web_url) = comic_info.web
+            && let Err(e) =
                 BookExternalLinkRepository::upsert(db, book.id, "comicinfo", web_url, None).await
-            {
-                warn!("Failed to upsert external link for book {}: {}", book.id, e);
-            }
+        {
+            warn!("Failed to upsert external link for book {}: {}", book.id, e);
         }
 
         // Populate series metadata from the first book if not already populated
@@ -939,23 +935,21 @@ async fn analyze_single_book(
         // Update series title_sort if not set and not locked (even without ComicInfo)
         if let Ok(Some(series_metadata_model)) =
             SeriesMetadataRepository::get_by_series_id(db, book.series_id).await
+            && series_metadata_model.title_sort.is_none()
+            && !series_metadata_model.title_sort_lock
         {
-            if series_metadata_model.title_sort.is_none() && !series_metadata_model.title_sort_lock
-            {
-                use crate::db::entities::series_metadata;
-                use sea_orm::{ActiveModelTrait, Set};
+            use crate::db::entities::series_metadata;
+            use sea_orm::{ActiveModelTrait, Set};
 
-                let series_title = series_metadata_model.title.clone();
-                let mut metadata_active: series_metadata::ActiveModel =
-                    series_metadata_model.into();
-                metadata_active.title_sort = Set(Some(series_title.clone()));
-                metadata_active.updated_at = Set(Utc::now());
-                metadata_active.update(db).await?;
-                debug!(
-                    "Setting title_sort to '{}' for series (no ComicInfo)",
-                    series_title
-                );
-            }
+            let series_title = series_metadata_model.title.clone();
+            let mut metadata_active: series_metadata::ActiveModel = series_metadata_model.into();
+            metadata_active.title_sort = Set(Some(series_title.clone()));
+            metadata_active.updated_at = Set(Utc::now());
+            metadata_active.update(db).await?;
+            debug!(
+                "Setting title_sort to '{}' for series (no ComicInfo)",
+                series_title
+            );
         }
     }
 
@@ -986,48 +980,45 @@ async fn analyze_single_book(
                         // Populate publisher if not set and not locked
                         if series_metadata_model.publisher.is_none()
                             && !series_metadata_model.publisher_lock
+                            && let Some(ref publisher) = sj_meta.publisher
                         {
-                            if let Some(ref publisher) = sj_meta.publisher {
-                                metadata_active.publisher = Set(Some(publisher.clone()));
-                                needs_update = true;
-                            }
+                            metadata_active.publisher = Set(Some(publisher.clone()));
+                            needs_update = true;
                         }
 
                         // Populate year if not set and not locked
-                        if series_metadata_model.year.is_none() && !series_metadata_model.year_lock
+                        if series_metadata_model.year.is_none()
+                            && !series_metadata_model.year_lock
+                            && let Some(year) = sj_meta.year
                         {
-                            if let Some(year) = sj_meta.year {
-                                metadata_active.year = Set(Some(year));
-                                needs_update = true;
-                            }
+                            metadata_active.year = Set(Some(year));
+                            needs_update = true;
                         }
 
                         // Populate summary if not set and not locked
                         if series_metadata_model.summary.is_none()
                             && !series_metadata_model.summary_lock
+                            && let Some(ref desc) = sj_meta.description_text
                         {
-                            if let Some(ref desc) = sj_meta.description_text {
-                                metadata_active.summary = Set(Some(desc.clone()));
-                                needs_update = true;
-                            }
+                            metadata_active.summary = Set(Some(desc.clone()));
+                            needs_update = true;
                         }
 
                         // Populate status if not set and not locked
                         if series_metadata_model.status.is_none()
                             && !series_metadata_model.status_lock
+                            && let Some(ref status) = sj_meta.status
                         {
-                            if let Some(ref status) = sj_meta.status {
-                                // Map Mylar status to Codex SeriesStatus
-                                use crate::db::entities::series_metadata::SeriesStatus;
-                                let codex_status = match status.to_lowercase().as_str() {
-                                    "continuing" => "ongoing".to_string(),
-                                    "ended" => "ended".to_string(),
-                                    other => other.to_string(),
-                                };
-                                if let Ok(parsed) = codex_status.parse::<SeriesStatus>() {
-                                    metadata_active.status = Set(Some(parsed.as_str().to_string()));
-                                    needs_update = true;
-                                }
+                            // Map Mylar status to Codex SeriesStatus
+                            use crate::db::entities::series_metadata::SeriesStatus;
+                            let codex_status = match status.to_lowercase().as_str() {
+                                "continuing" => "ongoing".to_string(),
+                                "ended" => "ended".to_string(),
+                                other => other.to_string(),
+                            };
+                            if let Ok(parsed) = codex_status.parse::<SeriesStatus>() {
+                                metadata_active.status = Set(Some(parsed.as_str().to_string()));
+                                needs_update = true;
                             }
                         }
 

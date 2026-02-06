@@ -299,10 +299,14 @@ mod tests {
 
     fn setup_test_encryption_key() {
         if env::var("CODEX_ENCRYPTION_KEY").is_err() {
-            env::set_var(
-                "CODEX_ENCRYPTION_KEY",
-                "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
-            );
+            // SAFETY: Tests are run with --test-threads=1 or use serial execution,
+            // so there's no concurrent access to environment variables.
+            unsafe {
+                env::set_var(
+                    "CODEX_ENCRYPTION_KEY",
+                    "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+                );
+            }
         }
     }
 

@@ -2,12 +2,12 @@
 //!
 //! Handlers for series-related endpoints in the Komga-compatible API.
 
-use super::super::dto::book::{extract_library_id_from_condition, KomgaBookDto};
+use super::super::dto::book::{KomgaBookDto, extract_library_id_from_condition};
 use super::super::dto::pagination::KomgaPage;
 use super::super::dto::series::{
-    codex_to_komga_reading_direction, codex_to_komga_status, extract_read_status_from_condition,
     KomgaAlternateTitleDto, KomgaAuthorDto, KomgaBooksMetadataAggregationDto, KomgaSeriesDto,
     KomgaSeriesMetadataDto, KomgaSeriesSearchRequestDto, KomgaWebLinkDto,
+    codex_to_komga_reading_direction, codex_to_komga_status, extract_read_status_from_condition,
 };
 use super::libraries::{extract_page_image, generate_thumbnail};
 use crate::api::{
@@ -23,11 +23,11 @@ use crate::db::repositories::{
 };
 use crate::require_permission;
 use axum::{
+    Json,
     body::Body,
     extract::{Path, Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::Response,
-    Json,
 };
 use serde::Deserialize;
 use std::sync::Arc;

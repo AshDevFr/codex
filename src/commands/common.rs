@@ -22,10 +22,11 @@ pub fn ensure_dir_exists(path: &Path) -> anyhow::Result<()> {
 
 /// Ensure parent directory of a file path exists
 pub fn ensure_parent_dir_exists(path: &Path) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() && !parent.exists() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        fs::create_dir_all(parent)?;
     }
     Ok(())
 }

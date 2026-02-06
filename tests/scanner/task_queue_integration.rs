@@ -1,8 +1,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
 use codex::db::ScanningStrategy;
+use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
 use codex::scanner::ScanMode;
 use common::*;
 use sea_orm::EntityTrait;
@@ -804,8 +804,8 @@ async fn delete_all_tasks(db: &sea_orm::DatabaseConnection) {
 fn create_cbz_at_path(path: &std::path::Path, num_pages: usize, with_comic_info: bool) {
     use std::fs::File;
     use std::io::Write;
-    use zip::write::FileOptions;
     use zip::ZipWriter;
+    use zip::write::FileOptions;
 
     let file = File::create(path).unwrap();
     let mut zip = ZipWriter::new(file);

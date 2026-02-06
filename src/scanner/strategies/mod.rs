@@ -11,16 +11,16 @@ pub mod series;
 // Re-export book naming types
 // BookNamingStrategy is public API for external strategy implementations
 #[allow(unused_imports)]
-pub use book::{create_book_strategy, BookMetadata, BookNamingContext, BookNamingStrategy};
+pub use book::{BookMetadata, BookNamingContext, BookNamingStrategy, create_book_strategy};
 
 // Re-export common types for external strategy implementations
 #[allow(unused_imports)]
 pub use common::{DetectedBook, DetectedSeries};
 
 // Re-export number strategy types
-pub use number::{create_number_strategy, NumberContext, NumberMetadata};
+pub use number::{NumberContext, NumberMetadata, create_number_strategy};
 
 // Re-export series strategy types
 // ScanningStrategyImpl is public API for external strategy implementations
 #[allow(unused_imports)]
-pub use series::{create_strategy, ScanningStrategyImpl};
+pub use series::{ScanningStrategyImpl, create_strategy};

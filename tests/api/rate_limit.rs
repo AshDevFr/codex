@@ -11,14 +11,14 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use axum::body::Body;
 use axum::Router;
-use codex::api::extractors::{auth::UserAuthCache, AppState};
+use axum::body::Body;
+use codex::api::extractors::{AppState, auth::UserAuthCache};
 use codex::api::routes::create_router;
 use codex::config::{Config, RateLimitConfig};
 use codex::db::repositories::UserRepository;
-use codex::services::rate_limiter::RateLimiterService;
 use codex::services::InflightThumbnailTracker;
+use codex::services::rate_limiter::RateLimiterService;
 use codex::utils::password;
 use common::*;
 use http_body_util::BodyExt;
@@ -64,8 +64,8 @@ async fn create_rate_limited_app_state(
     use codex::events::EventBroadcaster;
     use codex::services::email::EmailService;
     use codex::services::{
-        plugin::PluginManager, AuthTrackingService, FileCleanupService, PdfPageCache,
-        PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
+        AuthTrackingService, FileCleanupService, PdfPageCache, PluginMetricsService,
+        ReadProgressService, SettingsService, ThumbnailService, plugin::PluginManager,
     };
     use codex::utils::jwt::JwtService;
 

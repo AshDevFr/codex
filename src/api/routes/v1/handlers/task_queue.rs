@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Path, Query, State},
     Json,
+    extract::{Path, Query, State},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -869,14 +869,14 @@ pub async fn generate_series_thumbnails(
     auth.require_permission(&Permission::TasksWrite)?;
 
     // If library_id provided (and no series_ids), verify it exists
-    if request.series_ids.is_none() {
-        if let Some(library_id) = request.library_id {
-            use crate::db::repositories::LibraryRepository;
-            LibraryRepository::get_by_id(&state.db, library_id)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
-                .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
-        }
+    if request.series_ids.is_none()
+        && let Some(library_id) = request.library_id
+    {
+        use crate::db::repositories::LibraryRepository;
+        LibraryRepository::get_by_id(&state.db, library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
     }
 
     let task_type = TaskType::GenerateSeriesThumbnails {
@@ -1273,13 +1273,13 @@ pub async fn reprocess_series_titles(
     }
 
     // If library_id provided (and no series_ids), verify it exists
-    if request.series_ids.is_none() {
-        if let Some(library_id) = request.library_id {
-            LibraryRepository::get_by_id(&state.db, library_id)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
-                .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
-        }
+    if request.series_ids.is_none()
+        && let Some(library_id) = request.library_id
+    {
+        LibraryRepository::get_by_id(&state.db, library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to check library: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Library not found".to_string()))?;
     }
 
     // Enqueue the fan-out task

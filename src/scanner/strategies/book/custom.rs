@@ -8,8 +8,8 @@ use regex::Regex;
 use crate::models::{BookStrategy, CustomBookConfig};
 
 use super::{
-    create_book_strategy, filename_without_extension, BookMetadata, BookNamingContext,
-    BookNamingStrategy,
+    BookMetadata, BookNamingContext, BookNamingStrategy, create_book_strategy,
+    filename_without_extension,
 };
 
 /// Custom book naming strategy using regex patterns

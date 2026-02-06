@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, ActiveModelTrait, Set, Statement};
+use sea_orm::{ActiveModelTrait, Set, Statement, entity::prelude::*};
 use sea_orm_migration::prelude::*;
 use uuid::Uuid;
 

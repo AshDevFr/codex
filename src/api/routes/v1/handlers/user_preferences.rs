@@ -4,11 +4,11 @@ use super::super::dto::{
     BulkSetPreferencesRequest, DeletePreferenceResponse, SetPreferenceRequest,
     SetPreferencesResponse, UserPreferenceDto, UserPreferencesResponse,
 };
-use crate::api::{error::ApiError, extractors::AuthContext, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext};
 use crate::db::repositories::UserPreferencesRepository;
 use axum::{
-    extract::{Path, State},
     Json,
+    extract::{Path, State},
 };
 use std::sync::Arc;
 use utoipa::OpenApi;

@@ -6,8 +6,8 @@ use chrono::Utc;
 use codex::config::{DatabaseConfig, DatabaseType, PostgresConfig};
 use codex::db::entities::{books, libraries, series};
 use codex::db::{
-    repositories::{BookRepository, LibraryRepository, SeriesRepository},
     Database,
+    repositories::{BookRepository, LibraryRepository, SeriesRepository},
 };
 use codex::models::ScanningStrategy;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, Statement};

@@ -60,25 +60,25 @@ pub fn check_rate_limited(err: &anyhow::Error) -> Option<u64> {
     // Try downcasting to known rate-limited error types
 
     // Check PluginManagerError
-    if let Some(e) = err.downcast_ref::<PluginManagerError>() {
-        if e.is_rate_limited() {
-            return Some(
-                e.retry_after_seconds()
-                    .unwrap_or(DEFAULT_RATE_LIMIT_RETRY_SECONDS),
-            );
-        }
+    if let Some(e) = err.downcast_ref::<PluginManagerError>()
+        && e.is_rate_limited()
+    {
+        return Some(
+            e.retry_after_seconds()
+                .unwrap_or(DEFAULT_RATE_LIMIT_RETRY_SECONDS),
+        );
     }
 
     // Check wrapped errors (anyhow chains)
     // Walk the error chain looking for rate-limited errors
     for cause in err.chain() {
-        if let Some(e) = cause.downcast_ref::<PluginManagerError>() {
-            if e.is_rate_limited() {
-                return Some(
-                    e.retry_after_seconds()
-                        .unwrap_or(DEFAULT_RATE_LIMIT_RETRY_SECONDS),
-                );
-            }
+        if let Some(e) = cause.downcast_ref::<PluginManagerError>()
+            && e.is_rate_limited()
+        {
+            return Some(
+                e.retry_after_seconds()
+                    .unwrap_or(DEFAULT_RATE_LIMIT_RETRY_SECONDS),
+            );
         }
         // Add more error types here as needed
     }

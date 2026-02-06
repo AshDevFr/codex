@@ -5,16 +5,16 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
-use codex::api::permissions::{serialize_permissions, Permission};
+use codex::api::permissions::{Permission, serialize_permissions};
 use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::api::routes::v1::dto::library::{
     CreateLibraryRequest, LibraryDto, UpdateLibraryRequest,
 };
 use codex::api::routes::v1::dto::patch::PatchValue;
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     ApiKeyRepository, BookRepository, LibraryRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
@@ -1206,10 +1206,12 @@ async fn test_reprocess_library_titles_empty_library() {
         .unwrap();
     let handler = ReprocessSeriesTitlesHandler::new();
     let task_result = handler.handle(&task, &db, None).await.unwrap();
-    assert!(task_result
-        .message
-        .unwrap()
-        .contains("No series to process"));
+    assert!(
+        task_result
+            .message
+            .unwrap()
+            .contains("No series to process")
+    );
 }
 
 #[tokio::test]

@@ -7,7 +7,7 @@
 mod common;
 
 use codex::models::{BookStrategy, SeriesStrategy};
-use codex::scanner::strategies::{create_book_strategy, BookMetadata, BookNamingContext};
+use codex::scanner::strategies::{BookMetadata, BookNamingContext, create_book_strategy};
 use common::*;
 
 // ============================================================================
@@ -333,8 +333,8 @@ async fn test_default_book_strategy() {
 /// Test book strategy config persistence
 #[tokio::test]
 async fn test_book_strategy_config_persistence() {
-    use codex::db::repositories::library::CreateLibraryParams;
     use codex::db::repositories::LibraryRepository;
+    use codex::db::repositories::library::CreateLibraryParams;
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -498,8 +498,8 @@ fn test_custom_strategy_filename_placeholder() {
 /// Test custom strategy config persistence
 #[tokio::test]
 async fn test_custom_book_strategy_persistence() {
-    use codex::db::repositories::library::CreateLibraryParams;
     use codex::db::repositories::LibraryRepository;
+    use codex::db::repositories::library::CreateLibraryParams;
 
     let (db, _temp_dir) = setup_test_db().await;
 

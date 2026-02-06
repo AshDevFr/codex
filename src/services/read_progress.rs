@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tokio::sync::Notify;
-use tokio::time::{interval, Duration as TokioDuration};
+use tokio::time::{Duration as TokioDuration, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 use uuid::Uuid;

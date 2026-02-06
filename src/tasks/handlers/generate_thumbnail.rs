@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -91,48 +91,47 @@ impl TaskHandler for GenerateThumbnailHandler {
 
                     // If this book is the first in its series, regenerate the series thumbnail
                     // to use this book's new cover
-                    if let Ok(is_first) = BookRepository::is_first_in_series(db, book_id).await {
-                        if is_first {
-                            debug!(
-                                "Book {} is first in series {}, queueing series thumbnail regeneration",
-                                book_id, book.series_id
+                    if let Ok(is_first) = BookRepository::is_first_in_series(db, book_id).await
+                        && is_first
+                    {
+                        debug!(
+                            "Book {} is first in series {}, queueing series thumbnail regeneration",
+                            book_id, book.series_id
+                        );
+                        // Queue a task to regenerate the series thumbnail with force=true
+                        // This will delete the old thumbnail and create a new one from this book
+                        let task_type = TaskType::GenerateSeriesThumbnail {
+                            series_id: book.series_id,
+                            force: true,
+                        };
+                        if let Err(e) = TaskRepository::enqueue(db, task_type, 0, None).await {
+                            warn!(
+                                "Failed to queue series thumbnail regeneration for series {}: {}",
+                                book.series_id, e
                             );
-                            // Queue a task to regenerate the series thumbnail with force=true
-                            // This will delete the old thumbnail and create a new one from this book
-                            let task_type = TaskType::GenerateSeriesThumbnail {
-                                series_id: book.series_id,
-                                force: true,
-                            };
-                            if let Err(e) = TaskRepository::enqueue(db, task_type, 0, None).await {
-                                warn!(
-                                    "Failed to queue series thumbnail regeneration for series {}: {}",
-                                    book.series_id, e
-                                );
-                            }
                         }
                     }
 
                     // Emit CoverUpdated event to notify UI
-                    if let Some(broadcaster) = event_broadcaster {
-                        if let Ok(Some(series)) =
+                    if let Some(broadcaster) = event_broadcaster
+                        && let Ok(Some(series)) =
                             SeriesRepository::get_by_id(db, book.series_id).await
-                        {
-                            let event = EntityChangeEvent {
-                                event: EntityEvent::CoverUpdated {
-                                    entity_type: EntityType::Book,
-                                    entity_id: book_id,
-                                    library_id: Some(series.library_id),
-                                },
-                                user_id: None,
-                                timestamp: chrono::Utc::now(),
-                            };
+                    {
+                        let event = EntityChangeEvent {
+                            event: EntityEvent::CoverUpdated {
+                                entity_type: EntityType::Book,
+                                entity_id: book_id,
+                                library_id: Some(series.library_id),
+                            },
+                            user_id: None,
+                            timestamp: chrono::Utc::now(),
+                        };
 
-                            if let Err(e) = broadcaster.emit(event) {
-                                warn!(
-                                    "Failed to emit CoverUpdated event for book {}: {:?}",
-                                    book_id, e
-                                );
-                            }
+                        if let Err(e) = broadcaster.emit(event) {
+                            warn!(
+                                "Failed to emit CoverUpdated event for book {}: {:?}",
+                                book_id, e
+                            );
                         }
                     }
 

@@ -197,10 +197,10 @@ impl UserSeriesRatingRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::entities::users;
     use crate::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
 
     fn create_user_model(email: &str) -> users::Model {
         users::Model {

@@ -227,24 +227,24 @@ impl FromRequestParts<Arc<AppState>> for AuthContext {
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
         // Try to extract from Authorization header
-        if let Some(auth_header) = parts.headers.get("authorization") {
-            if let Ok(auth_str) = auth_header.to_str() {
-                // Try JWT Bearer token
-                if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                    return extract_from_jwt(token, state).await;
-                }
-                // Try HTTP Basic authentication
-                if let Some(credentials) = auth_str.strip_prefix("Basic ") {
-                    return extract_from_basic_auth(credentials, state).await;
-                }
+        if let Some(auth_header) = parts.headers.get("authorization")
+            && let Ok(auth_str) = auth_header.to_str()
+        {
+            // Try JWT Bearer token
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                return extract_from_jwt(token, state).await;
+            }
+            // Try HTTP Basic authentication
+            if let Some(credentials) = auth_str.strip_prefix("Basic ") {
+                return extract_from_basic_auth(credentials, state).await;
             }
         }
 
         // Try to extract from X-API-Key header
-        if let Some(api_key_header) = parts.headers.get("x-api-key") {
-            if let Ok(api_key) = api_key_header.to_str() {
-                return extract_from_api_key(api_key, state).await;
-            }
+        if let Some(api_key_header) = parts.headers.get("x-api-key")
+            && let Ok(api_key) = api_key_header.to_str()
+        {
+            return extract_from_api_key(api_key, state).await;
         }
 
         Err(ApiError::Unauthorized(
@@ -351,10 +351,10 @@ async fn extract_from_api_key(api_key: &str, state: &AppState) -> Result<AuthCon
         api_key_model.ok_or_else(|| ApiError::Unauthorized("Invalid API key".to_string()))?;
 
     // Check if API key is expired
-    if let Some(expires_at) = api_key_model.expires_at {
-        if expires_at < chrono::Utc::now() {
-            return Err(ApiError::Unauthorized("API key has expired".to_string()));
-        }
+    if let Some(expires_at) = api_key_model.expires_at
+        && expires_at < chrono::Utc::now()
+    {
+        return Err(ApiError::Unauthorized("API key has expired".to_string()));
     }
 
     // Load user associated with API key
@@ -403,7 +403,7 @@ async fn extract_from_basic_auth(
     credentials: &str,
     state: &AppState,
 ) -> Result<AuthContext, ApiError> {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     // Decode base64 credentials
     let decoded = STANDARD
@@ -482,41 +482,41 @@ impl FromRequestParts<Arc<AppState>> for FlexibleAuthContext {
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
         // Try Authorization header first (Bearer token, Basic auth, API key)
-        if let Some(auth_header) = parts.headers.get("authorization") {
-            if let Ok(auth_str) = auth_header.to_str() {
-                // Try JWT Bearer token
-                if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                    return extract_from_jwt(token, state)
-                        .await
-                        .map(FlexibleAuthContext);
-                }
-                // Try HTTP Basic authentication
-                if let Some(credentials) = auth_str.strip_prefix("Basic ") {
-                    return extract_from_basic_auth(credentials, state)
-                        .await
-                        .map(FlexibleAuthContext);
-                }
+        if let Some(auth_header) = parts.headers.get("authorization")
+            && let Ok(auth_str) = auth_header.to_str()
+        {
+            // Try JWT Bearer token
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                return extract_from_jwt(token, state)
+                    .await
+                    .map(FlexibleAuthContext);
             }
-        }
-
-        // Try X-API-Key header
-        if let Some(api_key_header) = parts.headers.get("x-api-key") {
-            if let Ok(api_key) = api_key_header.to_str() {
-                return extract_from_api_key(api_key, state)
+            // Try HTTP Basic authentication
+            if let Some(credentials) = auth_str.strip_prefix("Basic ") {
+                return extract_from_basic_auth(credentials, state)
                     .await
                     .map(FlexibleAuthContext);
             }
         }
 
+        // Try X-API-Key header
+        if let Some(api_key_header) = parts.headers.get("x-api-key")
+            && let Ok(api_key) = api_key_header.to_str()
+        {
+            return extract_from_api_key(api_key, state)
+                .await
+                .map(FlexibleAuthContext);
+        }
+
         // Try cookie as fallback
-        if let Some(cookie_header) = parts.headers.get(COOKIE) {
-            if let Ok(cookie_str) = cookie_header.to_str() {
-                // Parse cookies to find auth_token
-                if let Some(token) = extract_token_from_cookies(cookie_str) {
-                    return extract_from_jwt(&token, state)
-                        .await
-                        .map(FlexibleAuthContext);
-                }
+        if let Some(cookie_header) = parts.headers.get(COOKIE)
+            && let Ok(cookie_str) = cookie_header.to_str()
+        {
+            // Parse cookies to find auth_token
+            if let Some(token) = extract_token_from_cookies(cookie_str) {
+                return extract_from_jwt(&token, state)
+                    .await
+                    .map(FlexibleAuthContext);
             }
         }
 

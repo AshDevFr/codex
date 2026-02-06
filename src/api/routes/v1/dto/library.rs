@@ -2,9 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::ScanningConfigDto;
 use super::common::is_false;
 use super::patch::PatchValue;
-use super::ScanningConfigDto;
 use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 
 /// Library data transfer object

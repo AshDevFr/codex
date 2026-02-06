@@ -1,7 +1,7 @@
 use crate::parsers::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::parsers::traits::FormatParser;
-use crate::parsers::{parse_comic_info, BookMetadata, FileFormat};
-use crate::utils::{hash_file, CodexError, Result};
+use crate::parsers::{BookMetadata, FileFormat, parse_comic_info};
+use crate::utils::{CodexError, Result, hash_file};
 use chrono::{DateTime, Utc};
 use std::path::Path;
 use unrar::Archive;
@@ -54,7 +54,7 @@ impl FormatParser for CbrParser {
                     return Err(CodexError::ParseError(format!(
                         "Failed to read RAR header: {}",
                         e
-                    )))
+                    )));
                 }
             };
 

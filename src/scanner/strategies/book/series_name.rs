@@ -7,7 +7,7 @@ use regex::Regex;
 
 use crate::models::BookStrategy;
 
-use super::{filename_without_extension, BookMetadata, BookNamingContext, BookNamingStrategy};
+use super::{BookMetadata, BookNamingContext, BookNamingStrategy, filename_without_extension};
 
 lazy_static! {
     /// Pattern for extracting numbers from strings

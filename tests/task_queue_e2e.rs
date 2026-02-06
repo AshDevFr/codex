@@ -2,8 +2,8 @@ mod common;
 
 use codex::db::repositories::TaskRepository;
 use codex::services::ThumbnailService;
-use codex::tasks::types::TaskType;
 use codex::tasks::TaskWorker;
+use codex::tasks::types::TaskType;
 use common::setup_test_db;
 use std::sync::Arc;
 use std::time::Duration;
@@ -543,8 +543,8 @@ async fn test_worker_with_prioritize_scans_enabled() {
 
 /// Helper to create a test library
 async fn create_test_library(db: &sea_orm::DatabaseConnection) -> Uuid {
-    use codex::db::repositories::LibraryRepository;
     use codex::db::ScanningStrategy;
+    use codex::db::repositories::LibraryRepository;
 
     let library = LibraryRepository::create(
         db,

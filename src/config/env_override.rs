@@ -13,10 +13,10 @@ pub trait EnvOverride {
 
 impl EnvOverride for TaskConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        if let Ok(worker_count) = env::var(format!("{}_WORKER_COUNT", prefix)) {
-            if let Ok(count) = worker_count.parse::<u32>() {
-                self.worker_count = count;
-            }
+        if let Ok(worker_count) = env::var(format!("{}_WORKER_COUNT", prefix))
+            && let Ok(count) = worker_count.parse::<u32>()
+        {
+            self.worker_count = count;
         }
     }
 }
@@ -24,10 +24,10 @@ impl EnvOverride for TaskConfig {
 impl EnvOverride for ScannerConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
         let env_key = format!("{}_MAX_CONCURRENT_SCANS", prefix);
-        if let Ok(max_scans) = env::var(&env_key) {
-            if let Ok(count) = max_scans.parse::<usize>() {
-                self.max_concurrent_scans = count;
-            }
+        if let Ok(max_scans) = env::var(&env_key)
+            && let Ok(count) = max_scans.parse::<usize>()
+        {
+            self.max_concurrent_scans = count;
         }
     }
 }
@@ -37,10 +37,10 @@ impl EnvOverride for KomgaApiConfig {
         if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
             self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
         }
-        if let Ok(prefix_value) = env::var(format!("{}_PREFIX", prefix)) {
-            if !prefix_value.is_empty() {
-                self.prefix = prefix_value;
-            }
+        if let Ok(prefix_value) = env::var(format!("{}_PREFIX", prefix))
+            && !prefix_value.is_empty()
+        {
+            self.prefix = prefix_value;
         }
     }
 }
@@ -50,25 +50,25 @@ impl EnvOverride for RateLimitConfig {
         if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
             self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
         }
-        if let Ok(anonymous_rps) = env::var(format!("{}_ANONYMOUS_RPS", prefix)) {
-            if let Ok(rps) = anonymous_rps.parse::<u32>() {
-                self.anonymous_rps = rps;
-            }
+        if let Ok(anonymous_rps) = env::var(format!("{}_ANONYMOUS_RPS", prefix))
+            && let Ok(rps) = anonymous_rps.parse::<u32>()
+        {
+            self.anonymous_rps = rps;
         }
-        if let Ok(anonymous_burst) = env::var(format!("{}_ANONYMOUS_BURST", prefix)) {
-            if let Ok(burst) = anonymous_burst.parse::<u32>() {
-                self.anonymous_burst = burst;
-            }
+        if let Ok(anonymous_burst) = env::var(format!("{}_ANONYMOUS_BURST", prefix))
+            && let Ok(burst) = anonymous_burst.parse::<u32>()
+        {
+            self.anonymous_burst = burst;
         }
-        if let Ok(authenticated_rps) = env::var(format!("{}_AUTHENTICATED_RPS", prefix)) {
-            if let Ok(rps) = authenticated_rps.parse::<u32>() {
-                self.authenticated_rps = rps;
-            }
+        if let Ok(authenticated_rps) = env::var(format!("{}_AUTHENTICATED_RPS", prefix))
+            && let Ok(rps) = authenticated_rps.parse::<u32>()
+        {
+            self.authenticated_rps = rps;
         }
-        if let Ok(authenticated_burst) = env::var(format!("{}_AUTHENTICATED_BURST", prefix)) {
-            if let Ok(burst) = authenticated_burst.parse::<u32>() {
-                self.authenticated_burst = burst;
-            }
+        if let Ok(authenticated_burst) = env::var(format!("{}_AUTHENTICATED_BURST", prefix))
+            && let Ok(burst) = authenticated_burst.parse::<u32>()
+        {
+            self.authenticated_burst = burst;
         }
         if let Ok(exempt_paths) = env::var(format!("{}_EXEMPT_PATHS", prefix)) {
             self.exempt_paths = exempt_paths
@@ -77,15 +77,15 @@ impl EnvOverride for RateLimitConfig {
                 .filter(|s| !s.is_empty())
                 .collect();
         }
-        if let Ok(cleanup_interval) = env::var(format!("{}_CLEANUP_INTERVAL_SECS", prefix)) {
-            if let Ok(secs) = cleanup_interval.parse::<u64>() {
-                self.cleanup_interval_secs = secs;
-            }
+        if let Ok(cleanup_interval) = env::var(format!("{}_CLEANUP_INTERVAL_SECS", prefix))
+            && let Ok(secs) = cleanup_interval.parse::<u64>()
+        {
+            self.cleanup_interval_secs = secs;
         }
-        if let Ok(bucket_ttl) = env::var(format!("{}_BUCKET_TTL_SECS", prefix)) {
-            if let Ok(secs) = bucket_ttl.parse::<u64>() {
-                self.bucket_ttl_secs = secs;
-            }
+        if let Ok(bucket_ttl) = env::var(format!("{}_BUCKET_TTL_SECS", prefix))
+            && let Ok(secs) = bucket_ttl.parse::<u64>()
+        {
+            self.bucket_ttl_secs = secs;
         }
     }
 }
@@ -116,10 +116,10 @@ impl EnvOverride for ApplicationConfig {
         if let Ok(host) = env::var(format!("{}_HOST", prefix)) {
             self.host = host;
         }
-        if let Ok(port) = env::var(format!("{}_PORT", prefix)) {
-            if let Ok(port_num) = port.parse() {
-                self.port = port_num;
-            }
+        if let Ok(port) = env::var(format!("{}_PORT", prefix))
+            && let Ok(port_num) = port.parse()
+        {
+            self.port = port_num;
         }
     }
 }
@@ -154,10 +154,10 @@ impl EnvOverride for PostgresConfig {
         if let Ok(host) = env::var(format!("{}_HOST", prefix)) {
             self.host = host;
         }
-        if let Ok(port) = env::var(format!("{}_PORT", prefix)) {
-            if let Ok(port_num) = port.parse() {
-                self.port = port_num;
-            }
+        if let Ok(port) = env::var(format!("{}_PORT", prefix))
+            && let Ok(port_num) = port.parse()
+        {
+            self.port = port_num;
         }
         if let Ok(username) = env::var(format!("{}_USERNAME", prefix)) {
             self.username = username;
@@ -182,23 +182,23 @@ impl EnvOverride for SQLiteConfig {
 
 impl EnvOverride for LoggingConfig {
     fn apply_env_overrides(&mut self, prefix: &str) {
-        if let Ok(level_str) = env::var(format!("{}_LEVEL", prefix)) {
-            if let Some(level) = match level_str.to_lowercase().as_str() {
+        if let Ok(level_str) = env::var(format!("{}_LEVEL", prefix))
+            && let Some(level) = match level_str.to_lowercase().as_str() {
                 "error" => Some(LogLevel::Error),
                 "warn" => Some(LogLevel::Warn),
                 "info" => Some(LogLevel::Info),
                 "debug" => Some(LogLevel::Debug),
                 "trace" => Some(LogLevel::Trace),
                 _ => None,
-            } {
-                self.level = level;
             }
+        {
+            self.level = level;
         }
 
-        if let Ok(console_str) = env::var(format!("{}_CONSOLE", prefix)) {
-            if let Ok(console_bool) = console_str.parse() {
-                self.console = console_bool;
-            }
+        if let Ok(console_str) = env::var(format!("{}_CONSOLE", prefix))
+            && let Ok(console_bool) = console_str.parse()
+        {
+            self.console = console_bool;
         }
 
         if let Ok(log_file) = env::var(format!("{}_FILE", prefix)) {
@@ -217,37 +217,39 @@ impl EnvOverride for AuthConfig {
         if let Ok(jwt_secret) = env::var(format!("{}_JWT_SECRET", prefix)) {
             self.jwt_secret = jwt_secret;
         } else if self.jwt_secret == "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION" {
-            eprintln!("WARNING: CODEX_AUTH_JWT_SECRET not set, using insecure default for development only!");
+            eprintln!(
+                "WARNING: CODEX_AUTH_JWT_SECRET not set, using insecure default for development only!"
+            );
         }
 
-        if let Ok(jwt_expiry) = env::var(format!("{}_JWT_EXPIRY_HOURS", prefix)) {
-            if let Ok(hours) = jwt_expiry.parse() {
-                self.jwt_expiry_hours = hours;
-            }
+        if let Ok(jwt_expiry) = env::var(format!("{}_JWT_EXPIRY_HOURS", prefix))
+            && let Ok(hours) = jwt_expiry.parse()
+        {
+            self.jwt_expiry_hours = hours;
         }
         if let Ok(refresh_enabled) = env::var(format!("{}_REFRESH_TOKEN_ENABLED", prefix)) {
             self.refresh_token_enabled =
                 refresh_enabled.eq_ignore_ascii_case("true") || refresh_enabled == "1";
         }
-        if let Ok(refresh_expiry) = env::var(format!("{}_REFRESH_TOKEN_EXPIRY_DAYS", prefix)) {
-            if let Ok(days) = refresh_expiry.parse() {
-                self.refresh_token_expiry_days = days;
-            }
+        if let Ok(refresh_expiry) = env::var(format!("{}_REFRESH_TOKEN_EXPIRY_DAYS", prefix))
+            && let Ok(days) = refresh_expiry.parse()
+        {
+            self.refresh_token_expiry_days = days;
         }
-        if let Ok(memory_cost) = env::var(format!("{}_ARGON2_MEMORY_COST", prefix)) {
-            if let Ok(cost) = memory_cost.parse() {
-                self.argon2_memory_cost = cost;
-            }
+        if let Ok(memory_cost) = env::var(format!("{}_ARGON2_MEMORY_COST", prefix))
+            && let Ok(cost) = memory_cost.parse()
+        {
+            self.argon2_memory_cost = cost;
         }
-        if let Ok(time_cost) = env::var(format!("{}_ARGON2_TIME_COST", prefix)) {
-            if let Ok(cost) = time_cost.parse() {
-                self.argon2_time_cost = cost;
-            }
+        if let Ok(time_cost) = env::var(format!("{}_ARGON2_TIME_COST", prefix))
+            && let Ok(cost) = time_cost.parse()
+        {
+            self.argon2_time_cost = cost;
         }
-        if let Ok(parallelism) = env::var(format!("{}_ARGON2_PARALLELISM", prefix)) {
-            if let Ok(p) = parallelism.parse() {
-                self.argon2_parallelism = p;
-            }
+        if let Ok(parallelism) = env::var(format!("{}_ARGON2_PARALLELISM", prefix))
+            && let Ok(p) = parallelism.parse()
+        {
+            self.argon2_parallelism = p;
         }
     }
 }
@@ -273,10 +275,10 @@ impl EnvOverride for ApiConfig {
                 .map(|s| s.trim().to_string())
                 .collect();
         }
-        if let Ok(max_page_size) = env::var(format!("{}_MAX_PAGE_SIZE", prefix)) {
-            if let Ok(size) = max_page_size.parse() {
-                self.max_page_size = size;
-            }
+        if let Ok(max_page_size) = env::var(format!("{}_MAX_PAGE_SIZE", prefix))
+            && let Ok(size) = max_page_size.parse()
+        {
+            self.max_page_size = size;
         }
     }
 }
@@ -308,51 +310,62 @@ mod tests {
     use serial_test::serial;
     use std::env;
 
+    // SAFETY: These tests run serially (via #[serial]) so there's no concurrent access to env vars.
+    // env::set_var and env::remove_var are unsafe in Rust 2024 due to potential data races,
+    // but serial execution ensures safety here.
+    fn set_var(key: &str, value: &str) {
+        unsafe { env::set_var(key, value) }
+    }
+
+    fn remove_var(key: &str) {
+        unsafe { env::remove_var(key) }
+    }
+
     #[test]
     #[serial]
     fn test_env_bool_or() {
-        env::set_var("TEST_BOOL_TRUE", "true");
-        env::set_var("TEST_BOOL_1", "1");
-        env::set_var("TEST_BOOL_FALSE", "false");
+        set_var("TEST_BOOL_TRUE", "true");
+        set_var("TEST_BOOL_1", "1");
+        set_var("TEST_BOOL_FALSE", "false");
 
         assert!(env_bool_or("TEST_BOOL_TRUE", false));
         assert!(env_bool_or("TEST_BOOL_1", false));
         assert!(!env_bool_or("TEST_BOOL_FALSE", false));
         assert!(env_bool_or("NONEXISTENT", true));
 
-        env::remove_var("TEST_BOOL_TRUE");
-        env::remove_var("TEST_BOOL_1");
-        env::remove_var("TEST_BOOL_FALSE");
+        remove_var("TEST_BOOL_TRUE");
+        remove_var("TEST_BOOL_1");
+        remove_var("TEST_BOOL_FALSE");
     }
 
     #[test]
     #[serial]
     fn test_env_or() {
-        env::set_var("TEST_PORT", "9090");
+        set_var("TEST_PORT", "9090");
         assert_eq!(env_or("TEST_PORT", 8080u16), 9090);
         assert_eq!(env_or("NONEXISTENT", 8080u16), 8080);
-        env::remove_var("TEST_PORT");
+        remove_var("TEST_PORT");
     }
 
     #[test]
     #[serial]
     fn test_env_string_opt() {
-        env::set_var("TEST_STRING", "value");
-        env::set_var("TEST_EMPTY", "");
+        set_var("TEST_STRING", "value");
+        set_var("TEST_EMPTY", "");
 
         assert_eq!(env_string_opt("TEST_STRING"), Some("value".to_string()));
         assert_eq!(env_string_opt("TEST_EMPTY"), None);
         assert_eq!(env_string_opt("NONEXISTENT"), None);
 
-        env::remove_var("TEST_STRING");
-        env::remove_var("TEST_EMPTY");
+        remove_var("TEST_STRING");
+        remove_var("TEST_EMPTY");
     }
 
     #[test]
     #[serial]
     fn test_application_config_override() {
-        env::set_var("CODEX_APPLICATION_HOST", "0.0.0.0");
-        env::set_var("CODEX_APPLICATION_PORT", "9090");
+        set_var("CODEX_APPLICATION_HOST", "0.0.0.0");
+        set_var("CODEX_APPLICATION_PORT", "9090");
 
         let mut config = ApplicationConfig {
             host: "127.0.0.1".to_string(),
@@ -364,33 +377,33 @@ mod tests {
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 9090);
 
-        env::remove_var("CODEX_APPLICATION_HOST");
-        env::remove_var("CODEX_APPLICATION_PORT");
+        remove_var("CODEX_APPLICATION_HOST");
+        remove_var("CODEX_APPLICATION_PORT");
     }
 
     #[test]
     #[serial]
     fn test_task_config_env_override() {
         // Clear any existing env vars first to avoid interference from other tests
-        env::remove_var("CODEX_TASK_WORKER_COUNT");
+        remove_var("CODEX_TASK_WORKER_COUNT");
 
-        env::set_var("CODEX_TASK_WORKER_COUNT", "8");
+        set_var("CODEX_TASK_WORKER_COUNT", "8");
 
         let mut config = TaskConfig::default();
         config.apply_env_overrides("CODEX_TASK");
 
         assert_eq!(config.worker_count, 8);
 
-        env::remove_var("CODEX_TASK_WORKER_COUNT");
+        remove_var("CODEX_TASK_WORKER_COUNT");
     }
 
     #[test]
     #[serial]
     fn test_task_config_env_override_invalid() {
         // Clear any existing env vars first to avoid interference from other tests
-        env::remove_var("CODEX_TASK_WORKER_COUNT");
+        remove_var("CODEX_TASK_WORKER_COUNT");
 
-        env::set_var("CODEX_TASK_WORKER_COUNT", "invalid");
+        set_var("CODEX_TASK_WORKER_COUNT", "invalid");
 
         let mut config = TaskConfig { worker_count: 4 };
         config.apply_env_overrides("CODEX_TASK");
@@ -398,14 +411,14 @@ mod tests {
         // Should keep original value if env var is invalid
         assert_eq!(config.worker_count, 4);
 
-        env::remove_var("CODEX_TASK_WORKER_COUNT");
+        remove_var("CODEX_TASK_WORKER_COUNT");
     }
 
     #[test]
     #[serial]
     fn test_scanner_config_env_override() {
         // Clear any existing env vars first
-        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
 
         // Create config with explicit values (not using default which reads env vars)
         let mut config = ScannerConfig {
@@ -413,39 +426,39 @@ mod tests {
         };
 
         // Set env vars and apply overrides
-        env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "6");
+        set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "6");
         config.apply_env_overrides("CODEX_SCANNER");
 
         assert_eq!(config.max_concurrent_scans, 6);
 
-        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
     }
 
     #[test]
     #[serial]
     fn test_scanner_config_env_override_partial() {
         // Clear any existing env vars first
-        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
 
         // Create config with explicit values (not using default which reads env vars)
         let mut config = ScannerConfig {
             max_concurrent_scans: 2,
         };
 
-        env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "10");
+        set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "10");
         config.apply_env_overrides("CODEX_SCANNER");
 
         assert_eq!(config.max_concurrent_scans, 10);
 
-        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
     }
 
     #[test]
     #[serial]
     fn test_config_env_override_task_and_scanner() {
         // Clear any existing env vars first
-        env::remove_var("CODEX_TASK_WORKER_COUNT");
-        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        remove_var("CODEX_TASK_WORKER_COUNT");
+        remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
 
         // Create config with explicit values to avoid reading env vars in default()
         // We'll use a helper to create a minimal config
@@ -482,8 +495,8 @@ mod tests {
         };
 
         // Set env vars BEFORE applying overrides
-        env::set_var("CODEX_TASK_WORKER_COUNT", "12");
-        env::set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "5");
+        set_var("CODEX_TASK_WORKER_COUNT", "12");
+        set_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS", "5");
 
         // Verify env vars are set before applying (capture values for debugging)
         let task_var_before = env::var("CODEX_TASK_WORKER_COUNT").ok();
@@ -497,7 +510,8 @@ mod tests {
         assert!(
             scanner_max_at_call.is_some(),
             "Environment variable CODEX_SCANNER_MAX_CONCURRENT_SCANS was cleared by another test (race condition). Value before: {:?}, value at call: {:?}",
-            scanner_max_var_before, scanner_max_at_call
+            scanner_max_var_before,
+            scanner_max_at_call
         );
 
         // Apply overrides - Config::apply_env_overrides("CODEX") will call:
@@ -522,21 +536,28 @@ mod tests {
         let env_value_when_checked = env::var(&env_key_used).ok();
 
         assert_eq!(
-            scanner_value_after, 5,
+            scanner_value_after,
+            5,
             "Scanner max_concurrent_scans should be overridden to 5 (got: {}, was: {}, env var before: {:?}, env var at call: {:?}, env var after: {:?}, env key used: {:?}, env value when checked: {:?})",
-            scanner_value_after, scanner_value_before, scanner_max_var_before, scanner_max_at_call, scanner_max_var_after, env_key_used, env_value_when_checked
+            scanner_value_after,
+            scanner_value_before,
+            scanner_max_var_before,
+            scanner_max_at_call,
+            scanner_max_var_after,
+            env_key_used,
+            env_value_when_checked
         );
 
-        env::remove_var("CODEX_TASK_WORKER_COUNT");
-        env::remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
+        remove_var("CODEX_TASK_WORKER_COUNT");
+        remove_var("CODEX_SCANNER_MAX_CONCURRENT_SCANS");
     }
 
     #[test]
     #[serial]
     fn test_komga_api_config_env_override() {
         // Clear any existing env vars first
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
-        env::remove_var("CODEX_KOMGA_API_PREFIX");
+        remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_PREFIX");
 
         // Create config with explicit values
         let mut config = KomgaApiConfig {
@@ -545,83 +566,83 @@ mod tests {
         };
 
         // Set env vars and apply overrides
-        env::set_var("CODEX_KOMGA_API_ENABLED", "true");
-        env::set_var("CODEX_KOMGA_API_PREFIX", "custom");
+        set_var("CODEX_KOMGA_API_ENABLED", "true");
+        set_var("CODEX_KOMGA_API_PREFIX", "custom");
         config.apply_env_overrides("CODEX_KOMGA_API");
 
         assert!(config.enabled);
         assert_eq!(config.prefix, "custom");
 
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
-        env::remove_var("CODEX_KOMGA_API_PREFIX");
+        remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_PREFIX");
     }
 
     #[test]
     #[serial]
     fn test_komga_api_config_env_override_enabled_with_1() {
         // Test that "1" is also accepted for enabled
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_ENABLED");
 
         let mut config = KomgaApiConfig {
             enabled: false,
             prefix: "default".to_string(),
         };
 
-        env::set_var("CODEX_KOMGA_API_ENABLED", "1");
+        set_var("CODEX_KOMGA_API_ENABLED", "1");
         config.apply_env_overrides("CODEX_KOMGA_API");
 
         assert!(config.enabled);
 
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_ENABLED");
     }
 
     #[test]
     #[serial]
     fn test_komga_api_config_env_override_partial() {
         // Test that partial env vars work (only enabled, not prefix)
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
-        env::remove_var("CODEX_KOMGA_API_PREFIX");
+        remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_PREFIX");
 
         let mut config = KomgaApiConfig {
             enabled: false,
             prefix: "original".to_string(),
         };
 
-        env::set_var("CODEX_KOMGA_API_ENABLED", "true");
+        set_var("CODEX_KOMGA_API_ENABLED", "true");
         // Don't set PREFIX
         config.apply_env_overrides("CODEX_KOMGA_API");
 
         assert!(config.enabled);
         assert_eq!(config.prefix, "original"); // Should remain unchanged
 
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_ENABLED");
     }
 
     #[test]
     #[serial]
     fn test_komga_api_config_env_override_empty_prefix_ignored() {
         // Test that empty PREFIX env var is ignored
-        env::remove_var("CODEX_KOMGA_API_PREFIX");
+        remove_var("CODEX_KOMGA_API_PREFIX");
 
         let mut config = KomgaApiConfig {
             enabled: false,
             prefix: "original".to_string(),
         };
 
-        env::set_var("CODEX_KOMGA_API_PREFIX", "");
+        set_var("CODEX_KOMGA_API_PREFIX", "");
         config.apply_env_overrides("CODEX_KOMGA_API");
 
         assert_eq!(config.prefix, "original"); // Should remain unchanged
 
-        env::remove_var("CODEX_KOMGA_API_PREFIX");
+        remove_var("CODEX_KOMGA_API_PREFIX");
     }
 
     #[test]
     #[serial]
     fn test_config_komga_api_env_override_via_main_config() {
         // Test that komga_api env overrides work through Config::apply_env_overrides
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
-        env::remove_var("CODEX_KOMGA_API_PREFIX");
+        remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_PREFIX");
 
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
@@ -658,29 +679,29 @@ mod tests {
             rate_limit: RateLimitConfig::default(),
         };
 
-        env::set_var("CODEX_KOMGA_API_ENABLED", "true");
-        env::set_var("CODEX_KOMGA_API_PREFIX", "mykomga");
+        set_var("CODEX_KOMGA_API_ENABLED", "true");
+        set_var("CODEX_KOMGA_API_PREFIX", "mykomga");
         config.apply_env_overrides("CODEX");
 
         assert!(config.komga_api.enabled);
         assert_eq!(config.komga_api.prefix, "mykomga");
 
-        env::remove_var("CODEX_KOMGA_API_ENABLED");
-        env::remove_var("CODEX_KOMGA_API_PREFIX");
+        remove_var("CODEX_KOMGA_API_ENABLED");
+        remove_var("CODEX_KOMGA_API_PREFIX");
     }
 
     #[test]
     #[serial]
     fn test_rate_limit_config_env_override() {
         // Clear any existing env vars first
-        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST");
-        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS");
-        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST");
-        env::remove_var("CODEX_RATE_LIMIT_EXEMPT_PATHS");
-        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
-        env::remove_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS");
+        remove_var("CODEX_RATE_LIMIT_ENABLED");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST");
+        remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS");
+        remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST");
+        remove_var("CODEX_RATE_LIMIT_EXEMPT_PATHS");
+        remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+        remove_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS");
 
         // Create config with explicit values
         let mut config = RateLimitConfig {
@@ -695,14 +716,14 @@ mod tests {
         };
 
         // Set env vars and apply overrides
-        env::set_var("CODEX_RATE_LIMIT_ENABLED", "false");
-        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "20");
-        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST", "100");
-        env::set_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS", "100");
-        env::set_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST", "400");
-        env::set_var("CODEX_RATE_LIMIT_EXEMPT_PATHS", "/health, /metrics");
-        env::set_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", "120");
-        env::set_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS", "600");
+        set_var("CODEX_RATE_LIMIT_ENABLED", "false");
+        set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "20");
+        set_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST", "100");
+        set_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS", "100");
+        set_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST", "400");
+        set_var("CODEX_RATE_LIMIT_EXEMPT_PATHS", "/health, /metrics");
+        set_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", "120");
+        set_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS", "600");
         config.apply_env_overrides("CODEX_RATE_LIMIT");
 
         assert!(!config.enabled);
@@ -717,21 +738,21 @@ mod tests {
         assert_eq!(config.cleanup_interval_secs, 120);
         assert_eq!(config.bucket_ttl_secs, 600);
 
-        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST");
-        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS");
-        env::remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST");
-        env::remove_var("CODEX_RATE_LIMIT_EXEMPT_PATHS");
-        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
-        env::remove_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS");
+        remove_var("CODEX_RATE_LIMIT_ENABLED");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_BURST");
+        remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_RPS");
+        remove_var("CODEX_RATE_LIMIT_AUTHENTICATED_BURST");
+        remove_var("CODEX_RATE_LIMIT_EXEMPT_PATHS");
+        remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+        remove_var("CODEX_RATE_LIMIT_BUCKET_TTL_SECS");
     }
 
     #[test]
     #[serial]
     fn test_rate_limit_config_env_override_enabled_with_1() {
         // Test that "1" is also accepted for enabled
-        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+        remove_var("CODEX_RATE_LIMIT_ENABLED");
 
         let mut config = RateLimitConfig {
             enabled: false,
@@ -744,20 +765,20 @@ mod tests {
             bucket_ttl_secs: 300,
         };
 
-        env::set_var("CODEX_RATE_LIMIT_ENABLED", "1");
+        set_var("CODEX_RATE_LIMIT_ENABLED", "1");
         config.apply_env_overrides("CODEX_RATE_LIMIT");
 
         assert!(config.enabled);
 
-        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
+        remove_var("CODEX_RATE_LIMIT_ENABLED");
     }
 
     #[test]
     #[serial]
     fn test_rate_limit_config_env_override_partial() {
         // Test that partial env vars work (only enabled and anonymous_rps)
-        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        remove_var("CODEX_RATE_LIMIT_ENABLED");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
 
         let mut config = RateLimitConfig {
             enabled: true,
@@ -770,8 +791,8 @@ mod tests {
             bucket_ttl_secs: 300,
         };
 
-        env::set_var("CODEX_RATE_LIMIT_ENABLED", "false");
-        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "5");
+        set_var("CODEX_RATE_LIMIT_ENABLED", "false");
+        set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "5");
         config.apply_env_overrides("CODEX_RATE_LIMIT");
 
         assert!(!config.enabled);
@@ -781,16 +802,16 @@ mod tests {
         assert_eq!(config.authenticated_rps, 50);
         assert_eq!(config.exempt_paths, vec!["/original".to_string()]);
 
-        env::remove_var("CODEX_RATE_LIMIT_ENABLED");
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        remove_var("CODEX_RATE_LIMIT_ENABLED");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
     }
 
     #[test]
     #[serial]
     fn test_rate_limit_config_env_override_invalid_values_ignored() {
         // Test that invalid env var values are ignored
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
-        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
 
         let mut config = RateLimitConfig {
             enabled: true,
@@ -803,15 +824,15 @@ mod tests {
             bucket_ttl_secs: 300,
         };
 
-        env::set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "invalid");
-        env::set_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", "not_a_number");
+        set_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS", "invalid");
+        set_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS", "not_a_number");
         config.apply_env_overrides("CODEX_RATE_LIMIT");
 
         // Should keep original values when env vars are invalid
         assert_eq!(config.anonymous_rps, 10);
         assert_eq!(config.cleanup_interval_secs, 60);
 
-        env::remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
-        env::remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+        remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
+        remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
     }
 }

@@ -731,9 +731,9 @@ impl SharingTagRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
     use crate::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
     use crate::db::test_helpers::create_test_db;
-    use crate::db::ScanningStrategy;
 
     async fn create_test_user(
         db: &DatabaseConnection,

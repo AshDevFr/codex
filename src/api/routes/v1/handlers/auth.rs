@@ -13,10 +13,10 @@ use crate::db::{
 };
 use crate::utils::password;
 use axum::{
-    extract::State,
-    http::{header, HeaderMap},
-    response::{IntoResponse, Response},
     Json,
+    extract::State,
+    http::{HeaderMap, header},
+    response::{IntoResponse, Response},
 };
 use chrono::Utc;
 use sea_orm::ActiveModelTrait;

@@ -1863,11 +1863,12 @@ async fn test_mark_rate_limited_fails_after_max_reschedules() {
     // Verify task failed
     assert_eq!(task.status, "failed");
     assert!(task.completed_at.is_some());
-    assert!(task
-        .last_error
-        .as_ref()
-        .unwrap()
-        .contains("max reschedules"));
+    assert!(
+        task.last_error
+            .as_ref()
+            .unwrap()
+            .contains("max reschedules")
+    );
 }
 
 /// Test multiple rate-limit reschedules track correctly

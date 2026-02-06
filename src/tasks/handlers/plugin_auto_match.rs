@@ -25,9 +25,10 @@ use crate::db::repositories::{
     PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::services::ThumbnailService;
 use crate::services::metadata::preprocessing::{
-    apply_rules, render_template, should_match, AutoMatchConditions, PreprocessingRule,
-    SeriesContext, SeriesContextBuilder,
+    AutoMatchConditions, PreprocessingRule, SeriesContext, SeriesContextBuilder, apply_rules,
+    render_template, should_match,
 };
 use crate::services::metadata::{
     ApplyOptions, BookApplyOptions, BookMetadataApplier, MetadataApplier, SkippedField,
@@ -37,7 +38,6 @@ use crate::services::plugin::protocol::{
 };
 use crate::services::plugin::{PluginManager, PluginManagerError};
 use crate::services::settings::SettingsService;
-use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 
@@ -315,15 +315,15 @@ impl PluginAutoMatchHandler {
                     .unwrap();
 
                 // Check confidence
-                if let Some(relevance_score) = best_match.relevance_score {
-                    if relevance_score < min_confidence {
-                        debug!(
-                            "Task {}: Book {} best match '{}' low confidence ({:.2} < {:.2})",
-                            task.id, book.id, best_match.title, relevance_score, min_confidence
-                        );
-                        _books_skipped += 1;
-                        continue;
-                    }
+                if let Some(relevance_score) = best_match.relevance_score
+                    && relevance_score < min_confidence
+                {
+                    debug!(
+                        "Task {}: Book {} best match '{}' low confidence ({:.2} < {:.2})",
+                        task.id, book.id, best_match.title, relevance_score, min_confidence
+                    );
+                    _books_skipped += 1;
+                    continue;
                 }
 
                 let ext_id = best_match.external_id.clone();
@@ -397,18 +397,18 @@ impl PluginAutoMatchHandler {
             }
 
             // Emit book updated event
-            if let Some(broadcaster) = event_broadcaster {
-                if !result.applied_fields.is_empty() {
-                    let _ = broadcaster.emit(EntityChangeEvent::new(
-                        EntityEvent::BookUpdated {
-                            book_id: book.id,
-                            series_id,
-                            library_id,
-                            fields: Some(result.applied_fields.clone()),
-                        },
-                        None,
-                    ));
-                }
+            if let Some(broadcaster) = event_broadcaster
+                && !result.applied_fields.is_empty()
+            {
+                let _ = broadcaster.emit(EntityChangeEvent::new(
+                    EntityEvent::BookUpdated {
+                        book_id: book.id,
+                        series_id,
+                        library_id,
+                        fields: Some(result.applied_fields.clone()),
+                    },
+                    None,
+                ));
             }
 
             if !result.applied_fields.is_empty() {
@@ -425,10 +425,10 @@ impl PluginAutoMatchHandler {
             }
 
             // Update search_query for tracking
-            if let Some(ref query) = search_query {
-                if first_search_query.is_none() {
-                    first_search_query = Some(query.clone());
-                }
+            if let Some(ref query) = search_query
+                && first_search_query.is_none()
+            {
+                first_search_query = Some(query.clone());
             }
         }
 
@@ -600,52 +600,52 @@ impl TaskHandler for PluginAutoMatchHandler {
 
             // Check library auto-match conditions
             let library_conditions = LibraryRepository::get_auto_match_conditions(&library);
-            if let Some(ref conditions) = library_conditions {
-                if !check_conditions(conditions, &series_context) {
-                    debug!(
-                        "Task {}: Library conditions not met for series {}",
-                        task.id, series_id
-                    );
-                    return Ok(TaskResult::success_with_data(
-                        "Library auto-match conditions not met, skipped",
-                        json!(PluginAutoMatchResult {
-                            matched: false,
-                            external_id: None,
-                            external_url: None,
-                            matched_title: None,
-                            fields_updated: vec![],
-                            fields_skipped: vec![],
-                            skipped_reason: Some("library_conditions_not_met".to_string()),
-                            used_existing_external_id: false,
-                            search_query_used: None,
-                        }),
-                    ));
-                }
+            if let Some(ref conditions) = library_conditions
+                && !check_conditions(conditions, &series_context)
+            {
+                debug!(
+                    "Task {}: Library conditions not met for series {}",
+                    task.id, series_id
+                );
+                return Ok(TaskResult::success_with_data(
+                    "Library auto-match conditions not met, skipped",
+                    json!(PluginAutoMatchResult {
+                        matched: false,
+                        external_id: None,
+                        external_url: None,
+                        matched_title: None,
+                        fields_updated: vec![],
+                        fields_skipped: vec![],
+                        skipped_reason: Some("library_conditions_not_met".to_string()),
+                        used_existing_external_id: false,
+                        search_query_used: None,
+                    }),
+                ));
             }
 
             // Check plugin auto-match conditions
             let plugin_conditions = PluginsRepository::get_auto_match_conditions(&plugin);
-            if let Some(ref conditions) = plugin_conditions {
-                if !check_conditions(conditions, &series_context) {
-                    debug!(
-                        "Task {}: Plugin conditions not met for series {}",
-                        task.id, series_id
-                    );
-                    return Ok(TaskResult::success_with_data(
-                        "Plugin auto-match conditions not met, skipped",
-                        json!(PluginAutoMatchResult {
-                            matched: false,
-                            external_id: None,
-                            external_url: None,
-                            matched_title: None,
-                            fields_updated: vec![],
-                            fields_skipped: vec![],
-                            skipped_reason: Some("plugin_conditions_not_met".to_string()),
-                            used_existing_external_id: false,
-                            search_query_used: None,
-                        }),
-                    ));
-                }
+            if let Some(ref conditions) = plugin_conditions
+                && !check_conditions(conditions, &series_context)
+            {
+                debug!(
+                    "Task {}: Plugin conditions not met for series {}",
+                    task.id, series_id
+                );
+                return Ok(TaskResult::success_with_data(
+                    "Plugin auto-match conditions not met, skipped",
+                    json!(PluginAutoMatchResult {
+                        matched: false,
+                        external_id: None,
+                        external_url: None,
+                        matched_title: None,
+                        fields_updated: vec![],
+                        fields_skipped: vec![],
+                        skipped_reason: Some("plugin_conditions_not_met".to_string()),
+                        used_existing_external_id: false,
+                        search_query_used: None,
+                    }),
+                ));
             }
 
             // Get preprocessing rules (shared between series and book flows)
@@ -749,7 +749,9 @@ impl TaskHandler for PluginAutoMatchHandler {
 
                 debug!(
                     "Task {}: Search query: '{}' -> '{}' (template: {}, plugin_rules: {}, library_rules: {})",
-                    task.id, base_query, search_query,
+                    task.id,
+                    base_query,
+                    search_query,
                     PluginsRepository::get_search_query_template(&plugin).is_some(),
                     plugin_rules.len(),
                     library_rules.len()
@@ -852,31 +854,31 @@ impl TaskHandler for PluginAutoMatchHandler {
                 let min_confidence = self.get_confidence_threshold().await;
 
                 // Check confidence threshold
-                if let Some(relevance_score) = best_match.relevance_score {
-                    if relevance_score < min_confidence {
-                        info!(
-                            "Task {}: Best match '{}' has low confidence ({:.2} < {:.2}), skipping",
-                            task.id, best_match.title, relevance_score, min_confidence
-                        );
-                        return Ok(TaskResult::success_with_data(
-                            format!(
-                                "Low confidence match ({:.0}% < {:.0}%), skipped",
-                                relevance_score * 100.0,
-                                min_confidence * 100.0
-                            ),
-                            json!(PluginAutoMatchResult {
-                                matched: false,
-                                external_id: Some(best_match.external_id.clone()),
-                                external_url: None,
-                                matched_title: Some(best_match.title.clone()),
-                                fields_updated: vec![],
-                                fields_skipped: vec![],
-                                skipped_reason: Some("low_confidence".to_string()),
-                                used_existing_external_id: false,
-                                search_query_used: Some(search_query),
-                            }),
-                        ));
-                    }
+                if let Some(relevance_score) = best_match.relevance_score
+                    && relevance_score < min_confidence
+                {
+                    info!(
+                        "Task {}: Best match '{}' has low confidence ({:.2} < {:.2}), skipping",
+                        task.id, best_match.title, relevance_score, min_confidence
+                    );
+                    return Ok(TaskResult::success_with_data(
+                        format!(
+                            "Low confidence match ({:.0}% < {:.0}%), skipped",
+                            relevance_score * 100.0,
+                            min_confidence * 100.0
+                        ),
+                        json!(PluginAutoMatchResult {
+                            matched: false,
+                            external_id: Some(best_match.external_id.clone()),
+                            external_url: None,
+                            matched_title: Some(best_match.title.clone()),
+                            fields_updated: vec![],
+                            fields_skipped: vec![],
+                            skipped_reason: Some("low_confidence".to_string()),
+                            used_existing_external_id: false,
+                            search_query_used: Some(search_query),
+                        }),
+                    ));
                 }
 
                 let ext_id = best_match.external_id.clone();
@@ -955,18 +957,18 @@ impl TaskHandler for PluginAutoMatchHandler {
             }
 
             // Emit series metadata updated event
-            if let Some(broadcaster) = event_broadcaster {
-                if !applied_fields.is_empty() {
-                    let _ = broadcaster.emit(EntityChangeEvent::new(
-                        EntityEvent::SeriesMetadataUpdated {
-                            series_id,
-                            library_id: series.library_id,
-                            plugin_id,
-                            fields_updated: applied_fields.clone(),
-                        },
-                        None,
-                    ));
-                }
+            if let Some(broadcaster) = event_broadcaster
+                && !applied_fields.is_empty()
+            {
+                let _ = broadcaster.emit(EntityChangeEvent::new(
+                    EntityEvent::SeriesMetadataUpdated {
+                        series_id,
+                        library_id: series.library_id,
+                        plugin_id,
+                        fields_updated: applied_fields.clone(),
+                    },
+                    None,
+                ));
             }
 
             // Record success with plugin

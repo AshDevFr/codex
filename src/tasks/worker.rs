@@ -19,8 +19,8 @@ use uuid::Uuid;
 use crate::config::FilesConfig;
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
-use crate::services::plugin::PluginManager;
 use crate::services::PdfPageCache;
+use crate::services::plugin::PluginManager;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{

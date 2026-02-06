@@ -3,8 +3,8 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use zip::write::FileOptions;
 use zip::ZipWriter;
+use zip::write::FileOptions;
 
 // Re-export for PDF creation
 use lopdf::dictionary;

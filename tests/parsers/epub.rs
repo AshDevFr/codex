@@ -1,7 +1,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::parsers::epub::{extract_page_from_epub, EpubParser};
+use codex::parsers::epub::{EpubParser, extract_page_from_epub};
 use codex::parsers::traits::FormatParser;
 use codex::parsers::{FileFormat, ImageFormat};
 use tempfile::TempDir;

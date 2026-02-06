@@ -4,8 +4,8 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
-use codex::api::extractors::auth::UserAuthCache;
 use codex::api::extractors::AppState;
+use codex::api::extractors::auth::UserAuthCache;
 use codex::api::routes::v1::dto::{
     PdfCacheCleanupResultDto, PdfCacheStatsDto, TriggerPdfCacheCleanupResponse,
 };
@@ -14,8 +14,9 @@ use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
-    plugin::PluginManager, AuthTrackingService, FileCleanupService, InflightThumbnailTracker,
-    PdfPageCache, PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
+    AuthTrackingService, FileCleanupService, InflightThumbnailTracker, PdfPageCache,
+    PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
+    plugin::PluginManager,
 };
 use codex::utils::jwt::JwtService;
 use codex::utils::password;

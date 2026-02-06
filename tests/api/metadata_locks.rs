@@ -7,11 +7,11 @@ use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::series::{
     FullSeriesMetadataResponse, MetadataLocks, UpdateMetadataLocksRequest,
 };
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
     LibraryRepository, SeriesRepository, TagRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

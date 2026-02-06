@@ -50,14 +50,14 @@ impl CalibreStrategy {
 
         // Author is the grandparent folder (parent of the book folder)
         // Structure: library/Author/Book Title/file.epub
-        if let Some(parent) = file_path.parent() {
-            if let Some(grandparent) = parent.parent() {
-                // Only if grandparent is not the library root
-                if grandparent != library_path {
-                    if let Some(author_name) = grandparent.file_name() {
-                        return Some(author_name.to_string_lossy().to_string());
-                    }
-                }
+        if let Some(parent) = file_path.parent()
+            && let Some(grandparent) = parent.parent()
+        {
+            // Only if grandparent is not the library root
+            if grandparent != library_path
+                && let Some(author_name) = grandparent.file_name()
+            {
+                return Some(author_name.to_string_lossy().to_string());
             }
         }
         None
@@ -66,11 +66,11 @@ impl CalibreStrategy {
     /// Extract book title from folder structure (immediate parent folder)
     fn extract_book_title(&self, file_path: &Path, _library_path: &Path) -> Option<String> {
         // Use immediate parent folder as book title
-        if let Some(parent) = file_path.parent() {
-            if let Some(folder_name) = parent.file_name() {
-                let name = folder_name.to_string_lossy().to_string();
-                return Some(self.strip_id_suffix(&name));
-            }
+        if let Some(parent) = file_path.parent()
+            && let Some(folder_name) = parent.file_name()
+        {
+            let name = folder_name.to_string_lossy().to_string();
+            return Some(self.strip_id_suffix(&name));
         }
         None
     }
@@ -93,10 +93,10 @@ impl CalibreStrategy {
             }
             CalibreSeriesMode::FromMetadata => {
                 // Read calibre:series from metadata.opf in the book's parent directory
-                if self.config.read_opf_metadata {
-                    if let Some(series_name) = self.read_series_from_opf(file_path) {
-                        return series_name;
-                    }
+                if self.config.read_opf_metadata
+                    && let Some(series_name) = self.read_series_from_opf(file_path)
+                {
+                    return series_name;
                 }
                 // Fall back to book title (standalone behavior) if OPF unavailable
                 book_title.unwrap_or("Unknown").to_string()
@@ -181,10 +181,10 @@ impl ScanningStrategyImpl for CalibreStrategy {
                     _ => file_path.parent(),
                 };
 
-                if let Some(folder) = target_folder {
-                    if let Ok(rel_path) = folder.strip_prefix(library_path) {
-                        series.path = Some(rel_path.to_string_lossy().to_string());
-                    }
+                if let Some(folder) = target_folder
+                    && let Ok(rel_path) = folder.strip_prefix(library_path)
+                {
+                    series.path = Some(rel_path.to_string_lossy().to_string());
                 }
             }
 

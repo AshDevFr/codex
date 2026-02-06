@@ -1,12 +1,12 @@
 /// Integration tests for book analysis with metadata extraction and storage
 use anyhow::Result;
 use chrono::Utc;
+use codex::db::ScanningStrategy;
 use codex::db::entities::{books, series};
 use codex::db::repositories::{
-    library::CreateLibraryParams, BookExternalLinkRepository, BookMetadataRepository,
-    BookRepository, LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository,
+    BookExternalLinkRepository, BookMetadataRepository, BookRepository, LibraryRepository,
+    PageRepository, SeriesMetadataRepository, SeriesRepository, library::CreateLibraryParams,
 };
-use codex::db::ScanningStrategy;
 use codex::models::BookStrategy;
 use codex::scanner::analyze_book;
 use std::fs;
@@ -14,8 +14,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use uuid::Uuid;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 #[path = "../common/mod.rs"]
 mod common;

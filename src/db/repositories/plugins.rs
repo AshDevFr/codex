@@ -15,9 +15,9 @@
 #![allow(dead_code)]
 
 use crate::db::entities::plugins::{self, Entity as Plugins, PluginPermission};
-use crate::services::plugin::protocol::PluginScope;
 use crate::services::CredentialEncryption;
-use anyhow::{anyhow, Result};
+use crate::services::plugin::protocol::PluginScope;
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
@@ -737,10 +737,14 @@ mod tests {
     fn setup_test_encryption_key() {
         // Set a test encryption key if not already set
         if env::var("CODEX_ENCRYPTION_KEY").is_err() {
-            env::set_var(
-                "CODEX_ENCRYPTION_KEY",
-                "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
-            );
+            // SAFETY: Tests are run with --test-threads=1 or use serial execution,
+            // so there's no concurrent access to environment variables.
+            unsafe {
+                env::set_var(
+                    "CODEX_ENCRYPTION_KEY",
+                    "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+                );
+            }
         }
     }
 

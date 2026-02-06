@@ -6,8 +6,8 @@ mod common;
 
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::scan::ScanStatusDto;
-use codex::db::repositories::{LibraryRepository, UserRepository};
 use codex::db::ScanningStrategy;
+use codex::db::repositories::{LibraryRepository, UserRepository};
 use codex::scanner::ScanMode;
 use codex::tasks::TaskWorker;
 use codex::utils::password;

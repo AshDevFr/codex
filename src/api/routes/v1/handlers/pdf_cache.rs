@@ -3,7 +3,7 @@
 //! These endpoints allow administrators to view cache statistics
 //! and trigger cache cleanup operations.
 
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use std::sync::Arc;
 
 use super::super::dto::{

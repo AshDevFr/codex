@@ -1,7 +1,9 @@
 use super::super::dto::{
+    BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
+    SeriesListResponse,
     common::{
-        ListPaginationParams, PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE,
-        DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE, PaginatedResponse,
+        PaginationLinkBuilder,
     },
     series::{
         AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
@@ -16,8 +18,6 @@ use super::super::dto::{
         TaxonomyCleanupResponse, UpdateAlternateTitleRequest, UpdateMetadataLocksRequest,
         UserRatingsListResponse, UserSeriesRatingDto,
     },
-    BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
-    SeriesListResponse,
 };
 use super::paginated_response;
 use crate::api::{
@@ -38,11 +38,11 @@ use crate::utils::{
     parse_custom_metadata, serialize_custom_metadata, validate_custom_metadata_size,
 };
 use axum::{
+    Json,
     body::Body,
     extract::{Multipart, Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
-    Json,
 };
 use chrono::Utc;
 use httpdate::fmt_http_date;
@@ -842,10 +842,10 @@ pub async fn search_series(
         .into_iter()
         .filter(|s| {
             // Apply library filter if specified
-            if let Some(lib_id) = request.library_id {
-                if s.library_id != lib_id {
-                    return false;
-                }
+            if let Some(lib_id) = request.library_id
+                && s.library_id != lib_id
+            {
+                return false;
             }
             // Apply sharing tag filter
             content_filter.is_series_visible(s.id)
@@ -1472,36 +1472,35 @@ pub async fn get_series_thumbnail(
         .await
     {
         // Check If-None-Match header for ETag validation
-        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
-            if let Ok(client_etag) = if_none_match.to_str() {
-                let client_etag = client_etag.trim().trim_start_matches("W/");
-                if client_etag == meta.etag
-                    || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
-                {
-                    return Ok(Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header(header::ETAG, &meta.etag)
-                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                        .body(Body::empty())
-                        .unwrap());
-                }
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+            && let Ok(client_etag) = if_none_match.to_str()
+        {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == meta.etag
+                || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+            {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
             }
         }
 
         // Check If-Modified-Since header
-        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
-            if let Ok(date_str) = if_modified_since.to_str() {
-                if let Ok(client_time) = httpdate::parse_http_date(date_str) {
-                    let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
-                    if file_time <= client_time {
-                        return Ok(Response::builder()
-                            .status(StatusCode::NOT_MODIFIED)
-                            .header(header::ETAG, &meta.etag)
-                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                            .body(Body::empty())
-                            .unwrap());
-                    }
-                }
+        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE)
+            && let Ok(date_str) = if_modified_since.to_str()
+            && let Ok(client_time) = httpdate::parse_http_date(date_str)
+        {
+            let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+            if file_time <= client_time {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
             }
         }
 
@@ -5057,34 +5056,33 @@ pub async fn get_series_cover_image(
     );
 
     // Check If-None-Match header for ETag validation
-    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
-        if let Ok(client_etag) = if_none_match.to_str() {
-            let client_etag = client_etag.trim().trim_start_matches("W/");
-            if client_etag == etag || client_etag.trim_matches('"') == etag.trim_matches('"') {
-                return Ok(Response::builder()
-                    .status(StatusCode::NOT_MODIFIED)
-                    .header(header::ETAG, &etag)
-                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                    .body(Body::empty())
-                    .unwrap());
-            }
+    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+        && let Ok(client_etag) = if_none_match.to_str()
+    {
+        let client_etag = client_etag.trim().trim_start_matches("W/");
+        if client_etag == etag || client_etag.trim_matches('"') == etag.trim_matches('"') {
+            return Ok(Response::builder()
+                .status(StatusCode::NOT_MODIFIED)
+                .header(header::ETAG, &etag)
+                .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                .body(Body::empty())
+                .unwrap());
         }
     }
 
     // Check If-Modified-Since header
-    if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
-        if let Ok(date_str) = if_modified_since.to_str() {
-            if let Ok(client_time) = httpdate::parse_http_date(date_str) {
-                let file_time = UNIX_EPOCH + Duration::from_secs(modified_unix);
-                if file_time <= client_time {
-                    return Ok(Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header(header::ETAG, &etag)
-                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                        .body(Body::empty())
-                        .unwrap());
-                }
-            }
+    if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE)
+        && let Ok(date_str) = if_modified_since.to_str()
+        && let Ok(client_time) = httpdate::parse_http_date(date_str)
+    {
+        let file_time = UNIX_EPOCH + Duration::from_secs(modified_unix);
+        if file_time <= client_time {
+            return Ok(Response::builder()
+                .status(StatusCode::NOT_MODIFIED)
+                .header(header::ETAG, &etag)
+                .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                .body(Body::empty())
+                .unwrap());
         }
     }
 

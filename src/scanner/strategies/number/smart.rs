@@ -5,7 +5,7 @@
 
 use crate::models::NumberStrategy;
 
-use super::{filename::FilenameStrategy, BookNumberStrategy, NumberContext, NumberMetadata};
+use super::{BookNumberStrategy, NumberContext, NumberMetadata, filename::FilenameStrategy};
 
 /// Smart fallback: metadata → filename → file order
 pub struct SmartStrategy;
@@ -115,9 +115,11 @@ mod tests {
         let ctx = make_context(1, 10);
 
         // Smart strategy should always return Some due to file_order fallback
-        assert!(strategy
-            .resolve_number("anything.cbz", None, &ctx)
-            .is_some());
+        assert!(
+            strategy
+                .resolve_number("anything.cbz", None, &ctx)
+                .is_some()
+        );
     }
 
     #[test]

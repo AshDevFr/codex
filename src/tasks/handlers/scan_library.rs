@@ -9,7 +9,7 @@ use crate::db::repositories::{
     BookRepository, LibraryRepository, PluginsRepository, SeriesRepository, TaskRepository,
 };
 use crate::events::EventBroadcaster;
-use crate::scanner::{scan_library, ScanMode, ScanningConfig};
+use crate::scanner::{ScanMode, ScanningConfig, scan_library};
 use crate::services::plugin::protocol::PluginScope;
 use crate::services::settings::SettingsService;
 use crate::tasks::handlers::TaskHandler;

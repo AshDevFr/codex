@@ -304,7 +304,7 @@ async fn test_logout_with_invalid_token() {
 
 #[tokio::test]
 async fn test_basic_auth_success() {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -335,7 +335,7 @@ async fn test_basic_auth_success() {
 
 #[tokio::test]
 async fn test_basic_auth_wrong_password() {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -369,7 +369,7 @@ async fn test_basic_auth_wrong_password() {
 
 #[tokio::test]
 async fn test_basic_auth_nonexistent_user() {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db).await;
@@ -418,7 +418,7 @@ async fn test_basic_auth_invalid_encoding() {
 
 #[tokio::test]
 async fn test_basic_auth_invalid_format() {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db).await;
@@ -445,7 +445,7 @@ async fn test_basic_auth_invalid_format() {
 
 #[tokio::test]
 async fn test_basic_auth_inactive_user() {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     let (db, _temp_dir) = setup_test_db().await;
 

@@ -13,13 +13,13 @@ use crate::db::repositories::{
 };
 use crate::require_permission;
 use axum::{
+    Json,
     body::Body,
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::Response,
-    Json,
 };
-use image::{imageops::FilterType, ImageFormat};
+use image::{ImageFormat, imageops::FilterType};
 use std::io::Cursor;
 use std::sync::Arc;
 use tokio::fs;

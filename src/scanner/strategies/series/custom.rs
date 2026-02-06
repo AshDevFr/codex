@@ -140,12 +140,11 @@ impl ScanningStrategyImpl for CustomStrategy {
             });
 
             // Set series path from file path
-            if series.path.is_none() {
-                if let Some(parent) = file_path.parent() {
-                    if let Ok(rel_parent) = parent.strip_prefix(library_path) {
-                        series.path = Some(rel_parent.to_string_lossy().to_string());
-                    }
-                }
+            if series.path.is_none()
+                && let Some(parent) = file_path.parent()
+                && let Ok(rel_parent) = parent.strip_prefix(library_path)
+            {
+                series.path = Some(rel_parent.to_string_lossy().to_string());
             }
 
             // Extract book number

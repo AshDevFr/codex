@@ -1,6 +1,6 @@
 use super::super::dto::{
-    common::PaginationLinkBuilder, CreateUserRequest, PaginatedResponse, UpdateUserRequest,
-    UserDetailDto, UserDto, UserListParams, UserSharingTagGrantDto,
+    CreateUserRequest, PaginatedResponse, UpdateUserRequest, UserDetailDto, UserDto,
+    UserListParams, UserSharingTagGrantDto, common::PaginationLinkBuilder,
 };
 use super::paginated_response;
 use crate::api::{
@@ -13,9 +13,9 @@ use crate::db::repositories::{SharingTagRepository, UserListFilter, UserReposito
 use crate::require_permission;
 use crate::utils::password;
 use axum::{
+    Json,
     extract::{Path, Query, State},
     response::Response,
-    Json,
 };
 use chrono::Utc;
 use std::sync::Arc;
@@ -341,20 +341,20 @@ pub async fn update_user(
     // Update fields
     if let Some(username) = request.username {
         // Check username is not taken by another user
-        if let Ok(Some(existing)) = UserRepository::get_by_username(&state.db, &username).await {
-            if existing.id != user_id {
-                return Err(ApiError::BadRequest("Username already exists".to_string()));
-            }
+        if let Ok(Some(existing)) = UserRepository::get_by_username(&state.db, &username).await
+            && existing.id != user_id
+        {
+            return Err(ApiError::BadRequest("Username already exists".to_string()));
         }
         user.username = username;
     }
 
     if let Some(email) = request.email {
         // Check email is not taken by another user
-        if let Ok(Some(existing)) = UserRepository::get_by_email(&state.db, &email).await {
-            if existing.id != user_id {
-                return Err(ApiError::BadRequest("Email already exists".to_string()));
-            }
+        if let Ok(Some(existing)) = UserRepository::get_by_email(&state.db, &email).await
+            && existing.id != user_id
+        {
+            return Err(ApiError::BadRequest("Email already exists".to_string()));
         }
         user.email = email;
     }

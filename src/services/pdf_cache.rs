@@ -361,11 +361,11 @@ impl PdfPageCache {
 
         let mut entries = fs::read_dir(&dir).await?;
         while let Some(entry) = entries.next_entry().await? {
-            if let Ok(metadata) = entry.metadata().await {
-                if metadata.is_file() {
-                    count += 1;
-                    total_size += metadata.len();
-                }
+            if let Ok(metadata) = entry.metadata().await
+                && metadata.is_file()
+            {
+                count += 1;
+                total_size += metadata.len();
             }
         }
 
@@ -453,10 +453,10 @@ impl PdfPageCache {
         }
 
         // Calculate age of oldest file
-        if let Some(oldest) = oldest_modified {
-            if let Ok(age) = now.duration_since(oldest) {
-                stats.oldest_file_age_days = Some((age.as_secs() / 86400) as u32);
-            }
+        if let Some(oldest) = oldest_modified
+            && let Ok(age) = now.duration_since(oldest)
+        {
+            stats.oldest_file_age_days = Some((age.as_secs() / 86400) as u32);
         }
 
         Ok(stats)

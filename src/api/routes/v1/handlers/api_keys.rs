@@ -1,23 +1,23 @@
 use super::super::dto::{
-    common::{
-        PaginatedResponse, PaginationLinkBuilder, DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
-    },
     ApiKeyDto, CreateApiKeyRequest, CreateApiKeyResponse, UpdateApiKeyRequest,
+    common::{
+        DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PaginatedResponse, PaginationLinkBuilder,
+    },
 };
 use super::paginated_response;
 use crate::api::{
     error::ApiError,
     extractors::{AuthContext, AuthState},
-    permissions::{serialize_permissions, Permission},
+    permissions::{Permission, serialize_permissions},
 };
 use crate::db::entities::api_keys;
 use crate::db::repositories::ApiKeyRepository;
 use crate::utils::password;
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::Response,
-    Json,
 };
 use chrono::Utc;
 use rand::Rng;
@@ -431,10 +431,10 @@ fn generate_api_key(
 
     // Generate random components
     let prefix_random: String = (0..16)
-        .map(|_| format!("{:x}", rng.gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
         .collect();
     let suffix_random: String = (0..32)
-        .map(|_| format!("{:x}", rng.gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
         .collect();
 
     // Construct full key

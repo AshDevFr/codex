@@ -11,14 +11,15 @@
 //! - POST /api/v1/books/:id/metadata/apply - Apply metadata for a book
 
 use super::super::dto::{
-    parse_scope, EnqueueAutoMatchRequest, EnqueueAutoMatchResponse, EnqueueBulkAutoMatchRequest,
+    EnqueueAutoMatchRequest, EnqueueAutoMatchResponse, EnqueueBulkAutoMatchRequest,
     EnqueueLibraryAutoMatchRequest, ExecutePluginRequest, ExecutePluginResponse, FieldApplyStatus,
     MetadataAction, MetadataApplyRequest, MetadataApplyResponse, MetadataAutoMatchRequest,
     MetadataAutoMatchResponse, MetadataFieldPreview, MetadataPreviewRequest,
     MetadataPreviewResponse, PluginActionDto, PluginActionRequest, PluginActionsResponse,
     PluginSearchResponse, PluginSearchResultDto, PreviewSummary, SearchTitleResponse, SkippedField,
+    parse_scope,
 };
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::entities::plugins::PluginPermission;
 use crate::db::repositories::{
     AlternateTitleRepository, BookExternalIdRepository, BookMetadataRepository, BookRepository,
@@ -27,20 +28,20 @@ use crate::db::repositories::{
     TagRepository, TaskRepository,
 };
 use crate::services::metadata::preprocessing::{
-    apply_rules, render_template, PreprocessingRule, SeriesContextBuilder,
+    PreprocessingRule, SeriesContextBuilder, apply_rules, render_template,
 };
 use crate::services::metadata::{
     ApplyOptions, BookApplyOptions, BookMetadataApplier, MetadataApplier,
 };
+use crate::services::plugin::PluginManagerError;
 use crate::services::plugin::protocol::{
     BookMatchParams, BookSearchParams, MetadataContentType, MetadataGetParams, MetadataMatchParams,
     MetadataSearchParams, PluginScope,
 };
-use crate::services::plugin::PluginManagerError;
 use crate::tasks::types::TaskType;
 use axum::{
-    extract::{Path, Query, State},
     Json,
+    extract::{Path, Query, State},
 };
 use serde::Deserialize;
 use std::collections::HashSet;

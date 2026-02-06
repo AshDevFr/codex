@@ -47,12 +47,12 @@ impl FlatStrategy {
     /// Extract series name from filename using configured patterns
     fn extract_from_filename(&self, filename: &str) -> Option<String> {
         for pattern in &self.patterns {
-            if let Some(caps) = pattern.captures(filename) {
-                if let Some(m) = caps.get(1) {
-                    let name = m.as_str().trim().to_string();
-                    if !name.is_empty() {
-                        return Some(name);
-                    }
+            if let Some(caps) = pattern.captures(filename)
+                && let Some(m) = caps.get(1)
+            {
+                let name = m.as_str().trim().to_string();
+                if !name.is_empty() {
+                    return Some(name);
                 }
             }
         }

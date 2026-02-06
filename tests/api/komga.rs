@@ -13,12 +13,12 @@ use codex::api::routes::komga::dto::book::KomgaBookDto;
 use codex::api::routes::komga::dto::library::KomgaLibraryDto;
 use codex::api::routes::komga::dto::pagination::KomgaPage;
 use codex::api::routes::komga::dto::series::KomgaSeriesDto;
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     AlternateTitleRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
     GenreRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, TagRepository,
     UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

@@ -4,7 +4,7 @@
 
 use super::handlers::{libraries, library_series, recent, root, search, series_books};
 use crate::api::extractors::AuthState;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 
 /// Create OPDS 2.0 router with all OPDS 2.0 endpoints

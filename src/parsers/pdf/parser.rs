@@ -2,7 +2,7 @@ use crate::parsers::isbn_utils::extract_isbns;
 use crate::parsers::pdf::renderer;
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
-use crate::utils::{hash_file, CodexError, Result};
+use crate::utils::{CodexError, Result, hash_file};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
 use lopdf::{Document, Object, ObjectId};
@@ -30,30 +30,28 @@ impl PdfParser {
         let mut all_text = String::new();
 
         // Try to get the Info dictionary
-        if let Ok(trailer) = doc.trailer.get(b"Info") {
-            if let Ok(info_ref) = trailer.as_reference() {
-                if let Ok(info_obj) = doc.get_object(info_ref) {
-                    if let Ok(info_dict) = info_obj.as_dict() {
-                        // Check common metadata fields that might contain ISBNs
-                        let fields = vec![
-                            b"ISBN".as_ref(),
-                            b"Keywords".as_ref(),
-                            b"Subject".as_ref(),
-                            b"Title".as_ref(),
-                            b"Description".as_ref(),
-                        ];
+        if let Ok(trailer) = doc.trailer.get(b"Info")
+            && let Ok(info_ref) = trailer.as_reference()
+            && let Ok(info_obj) = doc.get_object(info_ref)
+            && let Ok(info_dict) = info_obj.as_dict()
+        {
+            // Check common metadata fields that might contain ISBNs
+            let fields = vec![
+                b"ISBN".as_ref(),
+                b"Keywords".as_ref(),
+                b"Subject".as_ref(),
+                b"Title".as_ref(),
+                b"Description".as_ref(),
+            ];
 
-                        for field in fields {
-                            if let Ok(value) = info_dict.get(field) {
-                                if let Ok(bytes) = value.as_str() {
-                                    // Convert bytes to UTF-8 string, replacing invalid sequences
-                                    if let Ok(string) = String::from_utf8(bytes.to_vec()) {
-                                        all_text.push_str(&string);
-                                        all_text.push(' ');
-                                    }
-                                }
-                            }
-                        }
+            for field in fields {
+                if let Ok(value) = info_dict.get(field)
+                    && let Ok(bytes) = value.as_str()
+                {
+                    // Convert bytes to UTF-8 string, replacing invalid sequences
+                    if let Ok(string) = String::from_utf8(bytes.to_vec()) {
+                        all_text.push_str(&string);
+                        all_text.push(' ');
                     }
                 }
             }
@@ -94,60 +92,48 @@ impl PdfParser {
         };
 
         // Look for Resources
-        if let Ok(resources_obj) = page_dict.get(b"Resources") {
-            if let Ok(resources) = resources_obj.as_dict() {
-                // Look for XObject in Resources
-                if let Ok(xobject_obj) = resources.get(b"XObject") {
-                    if let Ok(xobject_ref) = xobject_obj.as_reference() {
-                        if let Ok(xobject_dict_obj) = doc.get_object(xobject_ref) {
-                            if let Ok(xobject_dict) = xobject_dict_obj.as_dict() {
-                                // Iterate through XObjects
-                                for (_name, obj_ref) in xobject_dict.iter() {
-                                    if let Ok(obj_id) = obj_ref.as_reference() {
-                                        if let Ok(stream_obj) = doc.get_object(obj_id) {
-                                            if let Ok(stream) = stream_obj.as_stream() {
-                                                // Check if it's an image
-                                                if let Ok(subtype) = stream.dict.get(b"Subtype") {
-                                                    if let Ok(subtype_name) = subtype.as_name_str()
-                                                    {
-                                                        if subtype_name == "Image" {
-                                                            // Try to extract the image
-                                                            if let Some(image_data) =
-                                                                Self::extract_image_stream(
-                                                                    doc, stream,
-                                                                )
-                                                            {
-                                                                images.push(image_data);
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+        if let Ok(resources_obj) = page_dict.get(b"Resources")
+            && let Ok(resources) = resources_obj.as_dict()
+        {
+            // Look for XObject in Resources
+            if let Ok(xobject_obj) = resources.get(b"XObject") {
+                if let Ok(xobject_ref) = xobject_obj.as_reference() {
+                    if let Ok(xobject_dict_obj) = doc.get_object(xobject_ref)
+                        && let Ok(xobject_dict) = xobject_dict_obj.as_dict()
+                    {
+                        // Iterate through XObjects
+                        for (_name, obj_ref) in xobject_dict.iter() {
+                            if let Ok(obj_id) = obj_ref.as_reference()
+                                && let Ok(stream_obj) = doc.get_object(obj_id)
+                                && let Ok(stream) = stream_obj.as_stream()
+                            {
+                                // Check if it's an image
+                                if let Ok(subtype) = stream.dict.get(b"Subtype")
+                                    && let Ok(subtype_name) = subtype.as_name_str()
+                                    && subtype_name == "Image"
+                                {
+                                    // Try to extract the image
+                                    if let Some(image_data) =
+                                        Self::extract_image_stream(doc, stream)
+                                    {
+                                        images.push(image_data);
                                     }
                                 }
                             }
                         }
-                    } else if let Ok(xobject_dict) = xobject_obj.as_dict() {
-                        // XObject is directly a dictionary
-                        for (_name, obj_ref) in xobject_dict.iter() {
-                            if let Ok(obj_id) = obj_ref.as_reference() {
-                                if let Ok(stream_obj) = doc.get_object(obj_id) {
-                                    if let Ok(stream) = stream_obj.as_stream() {
-                                        if let Ok(subtype) = stream.dict.get(b"Subtype") {
-                                            if let Ok(subtype_name) = subtype.as_name_str() {
-                                                if subtype_name == "Image" {
-                                                    if let Some(image_data) =
-                                                        Self::extract_image_stream(doc, stream)
-                                                    {
-                                                        images.push(image_data);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                    }
+                } else if let Ok(xobject_dict) = xobject_obj.as_dict() {
+                    // XObject is directly a dictionary
+                    for (_name, obj_ref) in xobject_dict.iter() {
+                        if let Ok(obj_id) = obj_ref.as_reference()
+                            && let Ok(stream_obj) = doc.get_object(obj_id)
+                            && let Ok(stream) = stream_obj.as_stream()
+                            && let Ok(subtype) = stream.dict.get(b"Subtype")
+                            && let Ok(subtype_name) = subtype.as_name_str()
+                            && subtype_name == "Image"
+                            && let Some(image_data) = Self::extract_image_stream(doc, stream)
+                        {
+                            images.push(image_data);
                         }
                     }
                 }
@@ -432,41 +418,40 @@ impl PdfParser {
             let page_number = page_idx + 1; // 1-indexed for PageInfo
 
             // Try to get embedded image info first (fast path)
-            if let Ok(page_images) = Self::extract_images_from_page(doc, page_idx as u32) {
-                if let Some((image_data, format, width, height, img_file_size)) =
+            if let Ok(page_images) = Self::extract_images_from_page(doc, page_idx as u32)
+                && let Some((image_data, format, width, height, img_file_size)) =
                     page_images.into_iter().next()
-                {
-                    // Try to verify dimensions with image crate
-                    let (final_width, final_height) =
-                        if let Ok(img) = image::load_from_memory(&image_data) {
-                            img.dimensions()
-                        } else {
-                            (width, height)
-                        };
+            {
+                // Try to verify dimensions with image crate
+                let (final_width, final_height) =
+                    if let Ok(img) = image::load_from_memory(&image_data) {
+                        img.dimensions()
+                    } else {
+                        (width, height)
+                    };
 
-                    pages.push(PageInfo {
+                pages.push(PageInfo {
+                    page_number,
+                    file_name: format!(
+                        "page_{}.{}",
                         page_number,
-                        file_name: format!(
-                            "page_{}.{}",
-                            page_number,
-                            match format {
-                                ImageFormat::JPEG => "jpg",
-                                ImageFormat::PNG => "png",
-                                ImageFormat::WEBP => "webp",
-                                ImageFormat::GIF => "gif",
-                                ImageFormat::BMP => "bmp",
-                                ImageFormat::AVIF => "avif",
-                                ImageFormat::SVG => "svg",
-                                ImageFormat::JXL => "jxl",
-                            }
-                        ),
-                        format,
-                        width: final_width,
-                        height: final_height,
-                        file_size: img_file_size,
-                    });
-                    continue;
-                }
+                        match format {
+                            ImageFormat::JPEG => "jpg",
+                            ImageFormat::PNG => "png",
+                            ImageFormat::WEBP => "webp",
+                            ImageFormat::GIF => "gif",
+                            ImageFormat::BMP => "bmp",
+                            ImageFormat::AVIF => "avif",
+                            ImageFormat::SVG => "svg",
+                            ImageFormat::JXL => "jxl",
+                        }
+                    ),
+                    format,
+                    width: final_width,
+                    height: final_height,
+                    file_size: img_file_size,
+                });
+                continue;
             }
 
             // No embedded image found - try to get dimensions from PDFium renderer

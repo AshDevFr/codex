@@ -4,7 +4,7 @@ use sea_orm::DatabaseConnection;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{interval, Duration as TokioDuration};
+use tokio::time::{Duration as TokioDuration, interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use uuid::Uuid;
@@ -378,21 +378,20 @@ impl TaskMetricsService {
                 }
 
                 // Extract and merge duration_samples
-                if let Some(ref samples_json) = record.duration_samples {
-                    if let Ok(samples) = serde_json::from_value::<Vec<i64>>(samples_json.clone()) {
-                        entry.duration_samples.extend(samples);
-                    }
+                if let Some(ref samples_json) = record.duration_samples
+                    && let Ok(samples) = serde_json::from_value::<Vec<i64>>(samples_json.clone())
+                {
+                    entry.duration_samples.extend(samples);
                 }
 
                 // Track most recent error
-                if let Some(ref error_at) = record.last_error_at {
-                    if entry
+                if let Some(ref error_at) = record.last_error_at
+                    && entry
                         .last_error_at
                         .is_none_or(|existing| error_at > &existing)
-                    {
-                        entry.last_error = record.last_error.clone();
-                        entry.last_error_at = Some(*error_at);
-                    }
+                {
+                    entry.last_error = record.last_error.clone();
+                    entry.last_error_at = Some(*error_at);
                 }
             }
 
@@ -721,11 +720,10 @@ impl TaskMetricsService {
                         _ = rollup_interval.tick() => {
                             // Only run rollup at midnight (hour 0)
                             let now = Utc::now();
-                            if now.time().hour() == 0 {
-                                if let Err(e) = service.rollup().await {
+                            if now.time().hour() == 0
+                                && let Err(e) = service.rollup().await {
                                     error!("Failed to rollup task metrics: {}", e);
                                 }
-                            }
                         }
                     }
                 }

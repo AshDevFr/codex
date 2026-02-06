@@ -8,7 +8,7 @@ use crate::db::repositories::{BookMetadataRepository, BookRepository, SettingsRe
 use crate::require_permission;
 use axum::{
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use chrono::Utc;

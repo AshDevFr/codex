@@ -10,8 +10,8 @@ use crate::api::{
 use crate::db::repositories::SettingsRepository;
 use crate::require_permission;
 use axum::{
-    extract::{Path, Query, State},
     Json,
+    extract::{Path, Query, State},
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -179,16 +179,15 @@ pub async fn update_setting(
     })?;
 
     // Reload scheduler when deduplication settings are updated
-    if setting_key.starts_with("deduplication.") {
-        if let Some(scheduler) = &state.scheduler {
-            if let Err(e) = scheduler.lock().await.reload_schedules().await {
-                tracing::warn!(
-                    "Failed to reload scheduler after deduplication settings update: {}",
-                    e
-                );
-                // Don't fail the request - setting was updated successfully
-            }
-        }
+    if setting_key.starts_with("deduplication.")
+        && let Some(scheduler) = &state.scheduler
+        && let Err(e) = scheduler.lock().await.reload_schedules().await
+    {
+        tracing::warn!(
+            "Failed to reload scheduler after deduplication settings update: {}",
+            e
+        );
+        // Don't fail the request - setting was updated successfully
     }
 
     let dto = SettingDto {

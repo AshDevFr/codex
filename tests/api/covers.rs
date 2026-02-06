@@ -5,10 +5,10 @@ mod common;
 
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::series::{SeriesCoverDto, SeriesCoverListResponse};
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     LibraryRepository, SeriesCoversRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

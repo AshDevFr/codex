@@ -9,13 +9,13 @@ use super::super::dto::{
     BulkGenerateSeriesThumbnailsRequest, BulkReprocessSeriesTitlesRequest, BulkSeriesRequest,
     BulkTaskResponse, MarkReadResponse,
 };
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{
     BookRepository, ReadProgressRepository, SeriesRepository, TaskRepository,
 };
 use crate::require_permission;
 use crate::tasks::types::TaskType;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use std::sync::Arc;
 use uuid::Uuid;
 

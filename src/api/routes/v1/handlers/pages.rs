@@ -5,15 +5,15 @@ use crate::api::{
 };
 use crate::db::repositories::{BookRepository, PageRepository};
 use crate::require_permission;
-use crate::utils::{with_deadline, DeadlineResult};
+use crate::utils::{DeadlineResult, with_deadline};
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
     response::Response,
 };
 use httpdate::fmt_http_date;
-use image::{imageops::FilterType, ImageFormat};
+use image::{ImageFormat, imageops::FilterType};
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
@@ -175,38 +175,37 @@ async fn serve_pdf_page_with_streaming(
     // Check cache for metadata (fast - just stat the file)
     if let Some(meta) = cache.get_metadata(book_id, page_number, dpi).await {
         // Check If-None-Match header for ETag validation
-        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
-            if let Ok(client_etag) = if_none_match.to_str() {
-                // Compare ETags (handle weak ETags by stripping W/ prefix)
-                let client_etag = client_etag.trim().trim_start_matches("W/");
-                if client_etag == meta.etag
-                    || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
-                {
-                    return Ok(Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header(header::ETAG, &meta.etag)
-                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                        .body(Body::empty())
-                        .unwrap());
-                }
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+            && let Ok(client_etag) = if_none_match.to_str()
+        {
+            // Compare ETags (handle weak ETags by stripping W/ prefix)
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == meta.etag
+                || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+            {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
             }
         }
 
         // Check If-Modified-Since header
-        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
-            if let Ok(date_str) = if_modified_since.to_str() {
-                if let Ok(client_time) = httpdate::parse_http_date(date_str) {
-                    let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
-                    // If file hasn't been modified since client's copy, return 304
-                    if file_time <= client_time {
-                        return Ok(Response::builder()
-                            .status(StatusCode::NOT_MODIFIED)
-                            .header(header::ETAG, &meta.etag)
-                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                            .body(Body::empty())
-                            .unwrap());
-                    }
-                }
+        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE)
+            && let Ok(date_str) = if_modified_since.to_str()
+            && let Ok(client_time) = httpdate::parse_http_date(date_str)
+        {
+            let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+            // If file hasn't been modified since client's copy, return 304
+            if file_time <= client_time {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
             }
         }
 
@@ -303,36 +302,35 @@ pub async fn get_book_thumbnail(
         .await
     {
         // Check If-None-Match header for ETag validation
-        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
-            if let Ok(client_etag) = if_none_match.to_str() {
-                let client_etag = client_etag.trim().trim_start_matches("W/");
-                if client_etag == meta.etag
-                    || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
-                {
-                    return Ok(Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header(header::ETAG, &meta.etag)
-                        .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                        .body(Body::empty())
-                        .unwrap());
-                }
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH)
+            && let Ok(client_etag) = if_none_match.to_str()
+        {
+            let client_etag = client_etag.trim().trim_start_matches("W/");
+            if client_etag == meta.etag
+                || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
+            {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
             }
         }
 
         // Check If-Modified-Since header
-        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) {
-            if let Ok(date_str) = if_modified_since.to_str() {
-                if let Ok(client_time) = httpdate::parse_http_date(date_str) {
-                    let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
-                    if file_time <= client_time {
-                        return Ok(Response::builder()
-                            .status(StatusCode::NOT_MODIFIED)
-                            .header(header::ETAG, &meta.etag)
-                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
-                            .body(Body::empty())
-                            .unwrap());
-                    }
-                }
+        if let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE)
+            && let Ok(date_str) = if_modified_since.to_str()
+            && let Ok(client_time) = httpdate::parse_http_date(date_str)
+        {
+            let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
+            if file_time <= client_time {
+                return Ok(Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, &meta.etag)
+                    .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                    .body(Body::empty())
+                    .unwrap());
             }
         }
 

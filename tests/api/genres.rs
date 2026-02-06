@@ -9,10 +9,10 @@ use codex::api::routes::v1::dto::series::{
     AddSeriesGenreRequest, GenreDto, GenreListResponse, SetSeriesGenresRequest,
     TaxonomyCleanupResponse,
 };
+use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     GenreRepository, LibraryRepository, SeriesRepository, UserRepository,
 };
-use codex::db::ScanningStrategy;
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;

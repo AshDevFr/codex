@@ -496,16 +496,16 @@ impl HelperDef for LookupHelper {
         let obj = h.param(0).map(|v| v.value());
         let key = h.param(1).and_then(|v| v.value().as_str());
 
-        if let (Some(Value::Object(map)), Some(k)) = (obj, key) {
-            if let Some(value) = map.get(k) {
-                let output = match value {
-                    Value::String(s) => s.clone(),
-                    Value::Number(n) => n.to_string(),
-                    Value::Bool(b) => b.to_string(),
-                    _ => String::new(),
-                };
-                out.write(&output)?;
-            }
+        if let (Some(Value::Object(map)), Some(k)) = (obj, key)
+            && let Some(value) = map.get(k)
+        {
+            let output = match value {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => b.to_string(),
+                _ => String::new(),
+            };
+            out.write(&output)?;
         }
         Ok(())
     }

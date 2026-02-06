@@ -4,22 +4,23 @@
 //! Requires the `PluginsManage` permission (granted to Admins by default).
 
 use super::super::dto::{
+    CreatePluginRequest, EnvVarDto, PluginDto, PluginFailureDto, PluginFailuresResponse,
+    PluginHealthDto, PluginHealthResponse, PluginManifestDto, PluginStatusResponse,
+    PluginTestResult, PluginsListResponse, UpdatePluginRequest,
     available_credential_delivery_methods, available_permissions, available_scopes,
-    parse_permission, parse_scope, CreatePluginRequest, EnvVarDto, PluginDto, PluginFailureDto,
-    PluginFailuresResponse, PluginHealthDto, PluginHealthResponse, PluginManifestDto,
-    PluginStatusResponse, PluginTestResult, PluginsListResponse, UpdatePluginRequest,
+    parse_permission, parse_scope,
 };
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::entities::plugins::PluginPermission;
 use crate::db::repositories::{PluginFailuresRepository, PluginsRepository};
 use crate::events::{EntityChangeEvent, EntityEvent};
+use crate::services::PluginHealthStatus;
 use crate::services::plugin::process::{allowed_commands_description, is_command_allowed};
 use crate::services::plugin::protocol::PluginScope;
-use crate::services::PluginHealthStatus;
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use std::sync::Arc;
 use std::time::Instant;
@@ -410,15 +411,15 @@ pub async fn update_plugin(
     auth.require_permission(&Permission::PluginsManage)?;
 
     // Validate command against allowlist if provided (security)
-    if let Some(ref command) = request.command {
-        if !is_command_allowed(command) {
-            return Err(ApiError::BadRequest(format!(
-                "Command '{}' is not in the plugin allowlist. Allowed commands: {}. \
+    if let Some(ref command) = request.command
+        && !is_command_allowed(command)
+    {
+        return Err(ApiError::BadRequest(format!(
+            "Command '{}' is not in the plugin allowlist. Allowed commands: {}. \
                  To add custom commands, set the CODEX_PLUGIN_ALLOWED_COMMANDS environment variable.",
-                command,
-                allowed_commands_description()
-            )));
-        }
+            command,
+            allowed_commands_description()
+        )));
     }
 
     // Validate credential delivery if provided

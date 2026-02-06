@@ -4,7 +4,7 @@
 
 use super::super::handlers;
 use crate::api::extractors::AppState;
-use axum::{routing::post, Router};
+use axum::{Router, routing::post};
 use std::sync::Arc;
 
 /// Create authentication routes

@@ -1,13 +1,13 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
-    Json,
 };
 use std::sync::Arc;
 use uuid::Uuid;
 
 use super::super::dto::{DuplicateGroup, ListDuplicatesResponse, TriggerDuplicateScanResponse};
-use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission, AppState};
+use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{BookDuplicatesRepository, TaskRepository};
 use crate::tasks::types::TaskType;
 

@@ -16,8 +16,8 @@ use anyhow::{Context, Result};
 use chrono::TimeZone;
 use chrono::Utc;
 use sea_orm::{
-    sqlx::{postgres::PgListener, PgPool},
     DatabaseConnection, SqlxPostgresPoolConnection,
+    sqlx::{PgPool, postgres::PgListener},
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -180,13 +180,13 @@ impl TaskListener {
 
         // Replay any recorded entity events from the task result
         // This bridges events from worker processes to the web server
-        if status == TaskStatus::Completed {
-            if let Err(e) = self.replay_recorded_events(task_id).await {
-                warn!(
-                    "Failed to replay recorded events for task {}: {:?}",
-                    task_id, e
-                );
-            }
+        if status == TaskStatus::Completed
+            && let Err(e) = self.replay_recorded_events(task_id).await
+        {
+            warn!(
+                "Failed to replay recorded events for task {}: {:?}",
+                task_id, e
+            );
         }
 
         Ok(())

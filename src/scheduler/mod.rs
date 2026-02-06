@@ -69,25 +69,23 @@ impl Scheduler {
             }
 
             // Trigger scan-on-start if configured
-            if let Some(config_json) = &library.scanning_config {
-                if let Ok(config) = serde_json::from_str::<ScanningConfig>(config_json) {
-                    if config.scan_on_start {
-                        info!("Triggering scan-on-start for library {}", library.name);
-                        let scan_mode = config.get_scan_mode().unwrap_or(ScanMode::Normal);
+            if let Some(config_json) = &library.scanning_config
+                && let Ok(config) = serde_json::from_str::<ScanningConfig>(config_json)
+                && config.scan_on_start
+            {
+                info!("Triggering scan-on-start for library {}", library.name);
+                let scan_mode = config.get_scan_mode().unwrap_or(ScanMode::Normal);
 
-                        let task_type = TaskType::ScanLibrary {
-                            library_id: library.id,
-                            mode: scan_mode.to_string(),
-                        };
+                let task_type = TaskType::ScanLibrary {
+                    library_id: library.id,
+                    mode: scan_mode.to_string(),
+                };
 
-                        if let Err(e) = TaskRepository::enqueue(&self.db, task_type, 0, None).await
-                        {
-                            warn!(
-                                "Failed to trigger scan-on-start for library {}: {}",
-                                library.name, e
-                            );
-                        }
-                    }
+                if let Err(e) = TaskRepository::enqueue(&self.db, task_type, 0, None).await {
+                    warn!(
+                        "Failed to trigger scan-on-start for library {}: {}",
+                        library.name, e
+                    );
                 }
             }
         }
