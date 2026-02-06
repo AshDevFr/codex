@@ -531,6 +531,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/oidc/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List available OIDC providers
+         * @description Returns the list of configured OIDC providers that users can authenticate with.
+         *     This endpoint is public and does not require authentication.
+         */
+        get: operations["list_providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Handle OIDC callback from identity provider
+         * @description This endpoint receives the callback from the identity provider after
+         *     the user has authenticated. It exchanges the authorization code for tokens,
+         *     validates the response, and either creates a new user or links to an existing one.
+         */
+        get: operations["callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/{provider}/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Initiate OIDC login flow
+         * @description Generates an authorization URL and returns it to the client.
+         *     The client should redirect the user to this URL to authenticate.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -9275,6 +9339,90 @@ export interface components {
          */
         NumberStrategy: "file_order" | "metadata" | "filename" | "smart";
         /**
+         * @description Response from OIDC callback (successful authentication)
+         *
+         *     This mirrors the standard LoginResponse format for consistency.
+         */
+        OidcCallbackResponse: {
+            /**
+             * @description JWT access token
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ
+             */
+            accessToken: string;
+            /**
+             * Format: int64
+             * @description Token expiry in seconds
+             * @example 86400
+             */
+            expiresIn: number;
+            /**
+             * @description Whether this is a newly created account
+             * @example false
+             */
+            newAccount: boolean;
+            /**
+             * @description OIDC provider used for authentication
+             * @example authentik
+             */
+            provider: string;
+            /**
+             * @description Token type (always "Bearer")
+             * @example Bearer
+             */
+            tokenType: string;
+            /** @description User information */
+            user: components["schemas"]["UserInfo"];
+        };
+        /** @description Error response for OIDC authentication failures */
+        OidcErrorResponse: {
+            /**
+             * @description Error code
+             * @example invalid_state
+             */
+            error: string;
+            /**
+             * @description Human-readable error description
+             * @example The authentication request has expired. Please try again.
+             */
+            errorDescription: string;
+        };
+        /** @description Response from initiating OIDC login */
+        OidcLoginResponse: {
+            /**
+             * @description URL to redirect the user to for authentication
+             * @example https://auth.example.com/authorize?client_id=...
+             */
+            redirectUrl: string;
+        };
+        /** @description Information about an available OIDC provider */
+        OidcProviderInfo: {
+            /**
+             * @description Display name shown to users
+             * @example Authentik SSO
+             */
+            displayName: string;
+            /**
+             * @description URL to initiate login with this provider
+             * @example /api/v1/auth/oidc/authentik/login
+             */
+            loginUrl: string;
+            /**
+             * @description Internal name of the provider (used in URLs)
+             * @example authentik
+             */
+            name: string;
+        };
+        /** @description Response listing available OIDC providers */
+        OidcProvidersResponse: {
+            /**
+             * @description Whether OIDC authentication is enabled
+             * @example true
+             */
+            enabled: boolean;
+            /** @description List of available OIDC providers */
+            providers: components["schemas"]["OidcProviderInfo"][];
+        };
+        /**
          * @description OPDS 2.0 Feed
          *
          *     The main container for OPDS 2.0 data. A feed contains metadata,
@@ -15471,6 +15619,103 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of available OIDC providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcProvidersResponse"];
+                };
+            };
+        };
+    };
+    callback: {
+        parameters: {
+            query: {
+                /** @description Authorization code from IdP */
+                code: string;
+                /** @description State parameter for CSRF protection */
+                state: string;
+            };
+            header?: never;
+            path: {
+                /** @description OIDC provider name */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to frontend with auth cookie set */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid callback parameters or OIDC error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal server error during authentication */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description OIDC provider name (e.g., 'authentik', 'keycloak') */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorization URL generated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcLoginResponse"];
+                };
+            };
+            /** @description OIDC not enabled or unknown provider */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to generate authorization URL */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

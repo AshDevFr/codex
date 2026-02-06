@@ -124,6 +124,20 @@ impl EnvOverride for OidcProviderConfig {
         if let Ok(email_claim) = env::var(format!("{}_EMAIL_CLAIM", prefix)) {
             self.email_claim = email_claim;
         }
+
+        // Role mapping: ROLE_MAPPING_ADMIN="group1, group2", ROLE_MAPPING_MAINTAINER="group3"
+        let role_mapping_prefix = format!("{}_ROLE_MAPPING_", prefix);
+        for (key, value) in env::vars() {
+            if let Some(role_name) = key.strip_prefix(&role_mapping_prefix) {
+                let role = role_name.to_lowercase();
+                let groups: Vec<String> = value
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                self.role_mapping.insert(role, groups);
+            }
+        }
     }
 }
 
@@ -1252,5 +1266,109 @@ mod tests {
 
         remove_var("CODEX_AUTH_OIDC_ENABLED");
         remove_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_provider_role_mapping_env_override() {
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_MAINTAINER");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_READER");
+
+        use crate::config::OidcProviderConfig;
+
+        let mut provider = OidcProviderConfig {
+            display_name: "Authentik".to_string(),
+            issuer_url: "https://auth.example.com".to_string(),
+            client_id: "codex".to_string(),
+            client_secret: None,
+            client_secret_env: None,
+            scopes: vec![],
+            role_mapping: std::collections::HashMap::new(),
+            groups_claim: "groups".to_string(),
+            username_claim: "preferred_username".to_string(),
+            email_claim: "email".to_string(),
+        };
+
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN",
+            "codex-admins, administrators",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_MAINTAINER",
+            "codex-editors",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_READER",
+            "codex-users, users, guests",
+        );
+        provider.apply_env_overrides("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK");
+
+        assert_eq!(
+            provider.role_mapping.get("admin"),
+            Some(&vec![
+                "codex-admins".to_string(),
+                "administrators".to_string()
+            ])
+        );
+        assert_eq!(
+            provider.role_mapping.get("maintainer"),
+            Some(&vec!["codex-editors".to_string()])
+        );
+        assert_eq!(
+            provider.role_mapping.get("reader"),
+            Some(&vec![
+                "codex-users".to_string(),
+                "users".to_string(),
+                "guests".to_string()
+            ])
+        );
+
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_MAINTAINER");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_READER");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_provider_role_mapping_env_override_merges_with_existing() {
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN");
+
+        use crate::config::OidcProviderConfig;
+
+        let mut role_mapping = std::collections::HashMap::new();
+        role_mapping.insert("reader".to_string(), vec!["yaml-readers".to_string()]);
+
+        let mut provider = OidcProviderConfig {
+            display_name: "Authentik".to_string(),
+            issuer_url: "https://auth.example.com".to_string(),
+            client_id: "codex".to_string(),
+            client_secret: None,
+            client_secret_env: None,
+            scopes: vec![],
+            role_mapping,
+            groups_claim: "groups".to_string(),
+            username_claim: "preferred_username".to_string(),
+            email_claim: "email".to_string(),
+        };
+
+        // Add admin via env, reader stays from YAML
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN",
+            "codex-admins",
+        );
+        provider.apply_env_overrides("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK");
+
+        assert_eq!(
+            provider.role_mapping.get("admin"),
+            Some(&vec!["codex-admins".to_string()])
+        );
+        // Existing reader mapping should still be present
+        assert_eq!(
+            provider.role_mapping.get("reader"),
+            Some(&vec!["yaml-readers".to_string()])
+        );
+
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN");
     }
 }

@@ -52,6 +52,7 @@ const sidebars: SidebarsConfig = {
             "users/permissions",
             "users/api-keys",
             "users/authentication",
+            "users/oidc",
             "users/sharing-tags",
           ],
         },

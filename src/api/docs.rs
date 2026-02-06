@@ -148,6 +148,11 @@ The following paths are exempt from rate limiting:
         v1::handlers::resend_verification,
         v1::handlers::get_me,
 
+        // OIDC auth endpoints
+        v1::handlers::oidc::list_providers,
+        v1::handlers::oidc::login,
+        v1::handlers::oidc::callback,
+
         // Library endpoints
         v1::handlers::list_libraries,
         v1::handlers::create_library,
@@ -499,6 +504,13 @@ The following paths are exempt from rate limiting:
             v1::dto::ResendVerificationRequest,
             v1::dto::ResendVerificationResponse,
             v1::dto::TokenResponse,
+
+            // OIDC DTOs
+            v1::dto::OidcProviderInfo,
+            v1::dto::OidcProvidersResponse,
+            v1::dto::OidcLoginResponse,
+            v1::dto::OidcCallbackResponse,
+            v1::dto::OidcErrorResponse,
 
             // Setup DTOs
             v1::dto::SetupStatusResponse,

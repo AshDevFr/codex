@@ -175,6 +175,45 @@ openssl rand -base64 32
 ```
 :::
 
+### OIDC (Single Sign-On)
+
+Enable OpenID Connect authentication to allow users to sign in via external identity providers:
+
+```yaml
+auth:
+  oidc:
+    enabled: true
+    auto_create_users: true
+    default_role: reader
+    providers:
+      authentik:
+        display_name: "Authentik"
+        issuer_url: "https://authentik.example.com/application/o/codex/"
+        client_id: "codex-client-id"
+        client_secret: "codex-client-secret"
+        scopes:
+          - email
+          - profile
+          - groups
+        role_mapping:
+          admin:
+            - codex-admins
+          maintainer:
+            - codex-editors
+          reader:
+            - codex-users
+        groups_claim: "groups"
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `oidc.enabled` | `false` | Enable OIDC authentication |
+| `oidc.auto_create_users` | `true` | Create users on first OIDC login |
+| `oidc.default_role` | `reader` | Default role when no groups match |
+| `oidc.redirect_uri_base` | auto-detected | Override base URL for OAuth callbacks |
+
+See [OIDC / Single Sign-On](./users/oidc) for full setup instructions and provider guides.
+
 ## API Configuration
 
 ```yaml

@@ -58,6 +58,16 @@ curl -u "username:password" \
   http://localhost:8080/api/v1/libraries
 ```
 
+### OIDC / Single Sign-On
+
+For enterprise and homelab SSO via external identity providers (Authentik, Keycloak, etc.):
+
+- Users click an OIDC provider button on the login page
+- They authenticate at the external IdP
+- Codex creates or links their account automatically
+
+See [OIDC / Single Sign-On](./oidc) for setup instructions.
+
 ## Email Verification
 
 Optional email verification can be enabled:

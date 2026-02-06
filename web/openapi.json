@@ -1688,6 +1688,117 @@
         ]
       }
     },
+    "/api/v1/auth/oidc/providers": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "List available OIDC providers",
+        "description": "Returns the list of configured OIDC providers that users can authenticate with.\nThis endpoint is public and does not require authentication.",
+        "operationId": "list_providers",
+        "responses": {
+          "200": {
+            "description": "List of available OIDC providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/{provider}/callback": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Handle OIDC callback from identity provider",
+        "description": "This endpoint receives the callback from the identity provider after\nthe user has authenticated. It exchanges the authorization code for tokens,\nvalidates the response, and either creates a new user or links to an existing one.",
+        "operationId": "callback",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "description": "OIDC provider name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "description": "Authorization code from IdP",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "State parameter for CSRF protection",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to frontend with auth cookie set"
+          },
+          "400": {
+            "description": "Invalid callback parameters or OIDC error"
+          },
+          "500": {
+            "description": "Internal server error during authentication"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/{provider}/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Initiate OIDC login flow",
+        "description": "Generates an authorization URL and returns it to the client.\nThe client should redirect the user to this URL to authenticate.",
+        "operationId": "login",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "description": "OIDC provider name (e.g., 'authentik', 'keycloak')",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcLoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OIDC not enabled or unknown provider"
+          },
+          "500": {
+            "description": "Failed to generate authorization URL"
+          }
+        }
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
         "tags": [
@@ -22174,6 +22285,133 @@
           "filename",
           "smart"
         ]
+      },
+      "OidcCallbackResponse": {
+        "type": "object",
+        "description": "Response from OIDC callback (successful authentication)\n\nThis mirrors the standard LoginResponse format for consistency.",
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn",
+          "user",
+          "newAccount",
+          "provider"
+        ],
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT access token",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Token expiry in seconds",
+            "example": 86400,
+            "minimum": 0
+          },
+          "newAccount": {
+            "type": "boolean",
+            "description": "Whether this is a newly created account",
+            "example": false
+          },
+          "provider": {
+            "type": "string",
+            "description": "OIDC provider used for authentication",
+            "example": "authentik"
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "Token type (always \"Bearer\")",
+            "example": "Bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserInfo",
+            "description": "User information"
+          }
+        }
+      },
+      "OidcErrorResponse": {
+        "type": "object",
+        "description": "Error response for OIDC authentication failures",
+        "required": [
+          "error",
+          "errorDescription"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error code",
+            "example": "invalid_state"
+          },
+          "errorDescription": {
+            "type": "string",
+            "description": "Human-readable error description",
+            "example": "The authentication request has expired. Please try again."
+          }
+        }
+      },
+      "OidcLoginResponse": {
+        "type": "object",
+        "description": "Response from initiating OIDC login",
+        "required": [
+          "redirectUrl"
+        ],
+        "properties": {
+          "redirectUrl": {
+            "type": "string",
+            "description": "URL to redirect the user to for authentication",
+            "example": "https://auth.example.com/authorize?client_id=..."
+          }
+        }
+      },
+      "OidcProviderInfo": {
+        "type": "object",
+        "description": "Information about an available OIDC provider",
+        "required": [
+          "name",
+          "displayName",
+          "loginUrl"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Display name shown to users",
+            "example": "Authentik SSO"
+          },
+          "loginUrl": {
+            "type": "string",
+            "description": "URL to initiate login with this provider",
+            "example": "/api/v1/auth/oidc/authentik/login"
+          },
+          "name": {
+            "type": "string",
+            "description": "Internal name of the provider (used in URLs)",
+            "example": "authentik"
+          }
+        }
+      },
+      "OidcProvidersResponse": {
+        "type": "object",
+        "description": "Response listing available OIDC providers",
+        "required": [
+          "enabled",
+          "providers"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether OIDC authentication is enabled",
+            "example": true
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OidcProviderInfo"
+            },
+            "description": "List of available OIDC providers"
+          }
+        }
       },
       "Opds2Feed": {
         "type": "object",

@@ -529,6 +529,31 @@ mod tests {
     }
 
     #[test]
+    fn test_sanitize_username_unicode() {
+        // is_alphanumeric() includes Unicode letters/digits, so they are preserved
+        assert_eq!(sanitize_username("jöhn_dœ"), "jöhn_dœ");
+        assert_eq!(sanitize_username("用户123"), "用户123");
+        // Emoji are not alphanumeric and get filtered
+        assert_eq!(sanitize_username("🎉party"), "party");
+    }
+
+    #[test]
+    fn test_sanitize_username_special_chars() {
+        assert_eq!(sanitize_username("john doe"), "johndoe"); // spaces removed
+        assert_eq!(sanitize_username("john\tdoe"), "johndoe"); // tabs removed
+        assert_eq!(sanitize_username("john/doe"), "johndoe"); // slashes removed
+        assert_eq!(sanitize_username("john\\doe"), "johndoe"); // backslashes removed
+        assert_eq!(sanitize_username("<script>"), "script"); // HTML stripped
+    }
+
+    #[test]
+    fn test_sanitize_username_preserves_hyphens_and_underscores() {
+        assert_eq!(sanitize_username("my-user_name"), "my-user_name");
+        assert_eq!(sanitize_username("___---"), "___---");
+        assert_eq!(sanitize_username("a-b_c-d"), "a-b_c-d");
+    }
+
+    #[test]
     fn test_parse_permissions_json() {
         let json = serde_json::json!(["read", "write"]);
         assert_eq!(parse_permissions_json(&json), vec!["read", "write"]);
@@ -538,5 +563,249 @@ mod tests {
 
         let invalid = serde_json::json!("not an array");
         assert!(parse_permissions_json(&invalid).is_empty());
+    }
+
+    #[test]
+    fn test_parse_permissions_json_with_mixed_types() {
+        // Array with non-string values should filter them out
+        let json = serde_json::json!(["read", 42, "write", null, true]);
+        let result = parse_permissions_json(&json);
+        assert_eq!(result, vec!["read", "write"]);
+    }
+
+    #[test]
+    fn test_parse_permissions_json_null() {
+        let json = serde_json::json!(null);
+        assert!(parse_permissions_json(&json).is_empty());
+    }
+
+    #[test]
+    fn test_parse_permissions_json_object() {
+        let json = serde_json::json!({"read": true});
+        assert!(parse_permissions_json(&json).is_empty());
+    }
+
+    // Integration tests for async functions that need a database
+    mod db_tests {
+        use super::*;
+        use crate::db::repositories::UserRepository;
+        use sea_orm::Database;
+
+        async fn setup_test_db() -> sea_orm::DatabaseConnection {
+            let db = Database::connect("sqlite::memory:")
+                .await
+                .expect("Failed to connect to in-memory database");
+
+            // Run migrations
+            use migration::{Migrator, MigratorTrait};
+            Migrator::up(&db, None)
+                .await
+                .expect("Failed to run migrations");
+
+            db
+        }
+
+        #[tokio::test]
+        async fn test_generate_unique_username_preferred() {
+            let db = setup_test_db().await;
+
+            let result = generate_unique_username(
+                &db,
+                Some("johndoe"),
+                Some("John Doe"),
+                "john@example.com",
+            )
+            .await
+            .unwrap();
+            assert_eq!(result, "johndoe");
+        }
+
+        #[tokio::test]
+        async fn test_generate_unique_username_with_suffix_when_taken() {
+            let db = setup_test_db().await;
+
+            // Create user with "johndoe" username to force numeric suffix
+            let user = users::Model {
+                id: Uuid::new_v4(),
+                username: "johndoe".to_string(),
+                email: "existing@example.com".to_string(),
+                password_hash: "hash".to_string(),
+                role: "reader".to_string(),
+                is_active: true,
+                email_verified: false,
+                permissions: serde_json::json!([]),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_login_at: None,
+            };
+            UserRepository::create(&db, &user).await.unwrap();
+
+            let result =
+                generate_unique_username(&db, Some("johndoe"), Some("John D"), "john@example.com")
+                    .await
+                    .unwrap();
+            // Tries "johndoe" first (taken), then "johndoe_1" (available)
+            assert_eq!(result, "johndoe_1");
+        }
+
+        #[tokio::test]
+        async fn test_generate_unique_username_tries_all_candidates() {
+            let db = setup_test_db().await;
+
+            // Fill up "johndoe" and all its suffixes, plus "johnd" and its suffixes
+            // to force fallback to email prefix
+            for username in ["johndoe", "johnd"] {
+                let user = users::Model {
+                    id: Uuid::new_v4(),
+                    username: username.to_string(),
+                    email: format!("{}@ex.com", username),
+                    password_hash: "hash".to_string(),
+                    role: "reader".to_string(),
+                    is_active: true,
+                    email_verified: false,
+                    permissions: serde_json::json!([]),
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    last_login_at: None,
+                };
+                UserRepository::create(&db, &user).await.unwrap();
+            }
+
+            // "johndoe" is taken -> tries "johndoe_1" which is available
+            let result = generate_unique_username(
+                &db,
+                Some("johndoe"),
+                Some("John D"),
+                "newuser@example.com",
+            )
+            .await
+            .unwrap();
+            assert_eq!(result, "johndoe_1");
+        }
+
+        #[tokio::test]
+        async fn test_generate_unique_username_with_suffix() {
+            let db = setup_test_db().await;
+
+            // Create user "testuser" to force numeric suffix
+            let user = users::Model {
+                id: Uuid::new_v4(),
+                username: "testuser".to_string(),
+                email: "existing@example.com".to_string(),
+                password_hash: "hash".to_string(),
+                role: "reader".to_string(),
+                is_active: true,
+                email_verified: false,
+                permissions: serde_json::json!([]),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_login_at: None,
+            };
+            UserRepository::create(&db, &user).await.unwrap();
+
+            let result =
+                generate_unique_username(&db, Some("testuser"), None, "testuser@example.com")
+                    .await
+                    .unwrap();
+            // Should get testuser_1 since testuser is taken
+            assert_eq!(result, "testuser_1");
+        }
+
+        #[tokio::test]
+        async fn test_generate_unique_username_no_inputs() {
+            let db = setup_test_db().await;
+
+            let result = generate_unique_username(
+                &db,
+                None,        // No preferred username
+                None,        // No display name
+                "@nodomain", // Email with no useful prefix
+            )
+            .await
+            .unwrap();
+            // Should generate a random username starting with "user_"
+            assert!(result.starts_with("user_"));
+        }
+
+        #[tokio::test]
+        async fn test_sync_role_from_groups_updates_role() {
+            let db = setup_test_db().await;
+
+            let user = users::Model {
+                id: Uuid::new_v4(),
+                username: "roletest".to_string(),
+                email: "role@example.com".to_string(),
+                password_hash: "hash".to_string(),
+                role: "reader".to_string(),
+                is_active: true,
+                email_verified: false,
+                permissions: serde_json::json!([]),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_login_at: None,
+            };
+            let created = UserRepository::create(&db, &user).await.unwrap();
+
+            // Sync role to admin
+            let updated = sync_role_from_groups(&db, created, "admin").await.unwrap();
+            assert_eq!(updated.role, "admin");
+
+            // Verify persisted
+            let fetched = UserRepository::get_by_id(&db, updated.id)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(fetched.role, "admin");
+        }
+
+        #[tokio::test]
+        async fn test_sync_role_from_groups_no_change() {
+            let db = setup_test_db().await;
+
+            let user = users::Model {
+                id: Uuid::new_v4(),
+                username: "norolechange".to_string(),
+                email: "nochange@example.com".to_string(),
+                password_hash: "hash".to_string(),
+                role: "admin".to_string(),
+                is_active: true,
+                email_verified: false,
+                permissions: serde_json::json!([]),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_login_at: None,
+            };
+            let created = UserRepository::create(&db, &user).await.unwrap();
+            let original_updated_at = created.updated_at;
+
+            // Sync with same role - should not update
+            let result = sync_role_from_groups(&db, created, "admin").await.unwrap();
+            assert_eq!(result.role, "admin");
+            assert_eq!(result.updated_at, original_updated_at);
+        }
+
+        #[tokio::test]
+        async fn test_sync_role_downgrades() {
+            let db = setup_test_db().await;
+
+            let user = users::Model {
+                id: Uuid::new_v4(),
+                username: "downgrade".to_string(),
+                email: "downgrade@example.com".to_string(),
+                password_hash: "hash".to_string(),
+                role: "admin".to_string(),
+                is_active: true,
+                email_verified: false,
+                permissions: serde_json::json!([]),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_login_at: None,
+            };
+            let created = UserRepository::create(&db, &user).await.unwrap();
+
+            // Role downgrade from admin to reader
+            let updated = sync_role_from_groups(&db, created, "reader").await.unwrap();
+            assert_eq!(updated.role, "reader");
+        }
     }
 }

@@ -1078,4 +1078,257 @@ mod tests {
         assert_eq!(deserialized.name, "authentik");
         assert_eq!(deserialized.display_name, "Authentik SSO");
     }
+
+    #[test]
+    fn test_extract_groups_from_claims_nested_objects_ignored() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        let mut claims = HashMap::new();
+        // Groups as nested objects (invalid format)
+        claims.insert(
+            "groups".to_string(),
+            serde_json::json!([{"name": "admin"}, {"name": "users"}]),
+        );
+
+        // Non-string array items should be filtered out
+        let groups = service.extract_groups_from_claims(&claims, "groups");
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn test_extract_groups_from_claims_mixed_array() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        let mut claims = HashMap::new();
+        // Mix of strings and non-strings
+        claims.insert(
+            "groups".to_string(),
+            serde_json::json!(["admin", 42, "users", null, true]),
+        );
+
+        let groups = service.extract_groups_from_claims(&claims, "groups");
+        assert_eq!(groups, vec!["admin", "users"]);
+    }
+
+    #[test]
+    fn test_parse_groups_value_empty_string() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        let value = serde_json::json!("");
+        let groups = service.parse_groups_value(&value);
+        // Empty string split by comma gives one empty element
+        assert_eq!(groups, Some(vec!["".to_string()]));
+    }
+
+    #[test]
+    fn test_parse_groups_value_single_group_string() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        let value = serde_json::json!("single-group");
+        let groups = service.parse_groups_value(&value);
+        assert_eq!(groups, Some(vec!["single-group".to_string()]));
+    }
+
+    #[test]
+    fn test_parse_groups_value_empty_array() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        let value = serde_json::json!([]);
+        let groups = service.parse_groups_value(&value);
+        assert_eq!(groups, Some(vec![]));
+    }
+
+    #[test]
+    fn test_parse_groups_value_boolean() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        let value = serde_json::json!(true);
+        let groups = service.parse_groups_value(&value);
+        assert!(groups.is_none());
+    }
+
+    #[test]
+    fn test_parse_groups_value_null() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        let value = serde_json::json!(null);
+        let groups = service.parse_groups_value(&value);
+        assert!(groups.is_none());
+    }
+
+    #[test]
+    fn test_multiple_providers_listing() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "provider-a".to_string(),
+            OidcProviderConfig {
+                display_name: "Provider A".to_string(),
+                issuer_url: "https://a.example.com".to_string(),
+                client_id: "a".to_string(),
+                client_secret: None,
+                client_secret_env: None,
+                scopes: vec![],
+                role_mapping: HashMap::new(),
+                groups_claim: "groups".to_string(),
+                username_claim: "preferred_username".to_string(),
+                email_claim: "email".to_string(),
+            },
+        );
+        providers.insert(
+            "provider-b".to_string(),
+            OidcProviderConfig {
+                display_name: "Provider B".to_string(),
+                issuer_url: "https://b.example.com".to_string(),
+                client_id: "b".to_string(),
+                client_secret: None,
+                client_secret_env: None,
+                scopes: vec![],
+                role_mapping: HashMap::new(),
+                groups_claim: "groups".to_string(),
+                username_claim: "preferred_username".to_string(),
+                email_claim: "email".to_string(),
+            },
+        );
+
+        let config = OidcConfig {
+            enabled: true,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
+            providers,
+        };
+
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+        let providers = service.get_providers();
+        assert_eq!(providers.len(), 2);
+
+        let names: Vec<&str> = providers.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"provider-a"));
+        assert!(names.contains(&"provider-b"));
+    }
+
+    #[test]
+    fn test_cleanup_only_removes_expired_states() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        // Add multiple states with different ages
+        for i in 0..5 {
+            let state = PendingAuth {
+                pkce_verifier: format!("verifier_{}", i),
+                nonce: format!("nonce_{}", i),
+                created_at: Utc::now() - Duration::seconds(AUTH_STATE_TTL_SECS + (i * 10) as i64),
+                provider_name: "test".to_string(),
+            };
+            service
+                .pending_states
+                .insert(format!("expired_{}", i), state);
+        }
+
+        for i in 0..3 {
+            let state = PendingAuth {
+                pkce_verifier: format!("verifier_valid_{}", i),
+                nonce: format!("nonce_valid_{}", i),
+                created_at: Utc::now(),
+                provider_name: "test".to_string(),
+            };
+            service.pending_states.insert(format!("valid_{}", i), state);
+        }
+
+        assert_eq!(service.pending_state_count(), 8);
+
+        service.cleanup_expired_states();
+
+        // Only the 3 valid states should remain
+        assert_eq!(service.pending_state_count(), 3);
+        for i in 0..3 {
+            assert!(service.pending_states.contains_key(&format!("valid_{}", i)));
+        }
+    }
+
+    #[test]
+    fn test_resolve_client_secret_prefers_direct_over_env() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        // Provider with both direct secret and env var
+        let provider = OidcProviderConfig {
+            display_name: "Both".to_string(),
+            issuer_url: "https://auth.example.com".to_string(),
+            client_id: "test".to_string(),
+            client_secret: Some("direct-secret".to_string()),
+            client_secret_env: Some("SOME_ENV_VAR".to_string()),
+            scopes: vec![],
+            role_mapping: HashMap::new(),
+            groups_claim: "groups".to_string(),
+            username_claim: "preferred_username".to_string(),
+            email_claim: "email".to_string(),
+        };
+
+        let secret = service.resolve_client_secret(&provider);
+        assert_eq!(secret, Some("direct-secret".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_client_secret_no_secret() {
+        let config = create_test_config();
+        let service = OidcService::new(config, "http://localhost:8080".to_string());
+
+        // Provider with no secret at all (public client)
+        let provider = OidcProviderConfig {
+            display_name: "Public".to_string(),
+            issuer_url: "https://auth.example.com".to_string(),
+            client_id: "test".to_string(),
+            client_secret: None,
+            client_secret_env: None,
+            scopes: vec![],
+            role_mapping: HashMap::new(),
+            groups_claim: "groups".to_string(),
+            username_claim: "preferred_username".to_string(),
+            email_claim: "email".to_string(),
+        };
+
+        let secret = service.resolve_client_secret(&provider);
+        assert!(secret.is_none());
+    }
+
+    #[test]
+    fn test_build_redirect_uri_various_bases() {
+        let config = create_test_config();
+
+        // Standard base
+        let service = OidcService::new(config.clone(), "http://localhost:8080".to_string());
+        assert_eq!(
+            service.build_redirect_uri("my-provider"),
+            "http://localhost:8080/api/v1/auth/oidc/my-provider/callback"
+        );
+
+        // HTTPS with path prefix
+        let service = OidcService::new(config.clone(), "https://codex.example.com".to_string());
+        assert_eq!(
+            service.build_redirect_uri("auth0"),
+            "https://codex.example.com/api/v1/auth/oidc/auth0/callback"
+        );
+
+        // With trailing slash (should be stripped)
+        let service = OidcService::new(config.clone(), "https://codex.example.com/".to_string());
+        assert_eq!(
+            service.build_redirect_uri("test"),
+            "https://codex.example.com/api/v1/auth/oidc/test/callback"
+        );
+
+        // With port
+        let service = OidcService::new(config, "http://192.168.1.100:3000".to_string());
+        assert_eq!(
+            service.build_redirect_uri("local"),
+            "http://192.168.1.100:3000/api/v1/auth/oidc/local/callback"
+        );
+    }
 }
