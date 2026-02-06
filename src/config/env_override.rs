@@ -142,6 +142,9 @@ impl EnvOverride for OidcConfig {
                 _ => OidcDefaultRole::Reader,
             };
         }
+        if let Ok(redirect_uri_base) = env::var(format!("{}_REDIRECT_URI_BASE", prefix)) {
+            self.redirect_uri_base = Some(redirect_uri_base);
+        }
 
         // Apply overrides to existing providers
         for (provider_name, provider_config) in self.providers.iter_mut() {
@@ -961,6 +964,7 @@ mod tests {
             enabled: false,
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
             providers: std::collections::HashMap::new(),
         };
 
@@ -990,6 +994,7 @@ mod tests {
             enabled: false,
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
             providers: std::collections::HashMap::new(),
         };
 
@@ -1013,6 +1018,7 @@ mod tests {
             enabled: false,
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
             providers: std::collections::HashMap::new(),
         };
 
@@ -1131,6 +1137,7 @@ mod tests {
             enabled: true,
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
             providers,
         };
 
@@ -1172,6 +1179,7 @@ mod tests {
             enabled: true,
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
             providers: std::collections::HashMap::new(),
         };
 
@@ -1230,6 +1238,7 @@ mod tests {
                 enabled: false,
                 auto_create_users: true,
                 default_role: OidcDefaultRole::Reader,
+                redirect_uri_base: None,
                 providers: std::collections::HashMap::new(),
             },
         };

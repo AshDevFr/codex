@@ -3,9 +3,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import { useAuthStore } from "@/store/authStore";
 import type { TaskProgressEvent } from "@/types";
+import { PERMISSIONS } from "@/types/permissions";
 import { TaskNotificationBadge } from "./TaskNotificationBadge";
 
 // Mock the useTaskProgress hook
@@ -13,9 +14,9 @@ vi.mock("@/hooks/useTaskProgress", () => ({
   useTaskProgress: vi.fn(),
 }));
 
-// Mock the useAuthStore hook
-vi.mock("@/store/authStore", () => ({
-  useAuthStore: vi.fn(),
+// Mock the usePermissions hook
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: vi.fn(),
 }));
 
 // Mock react-router-dom
@@ -29,32 +30,57 @@ const renderWithMantine = (component: React.ReactElement) => {
   return render(<MantineProvider>{component}</MantineProvider>);
 };
 
-// Default mock for useAuthStore (admin user)
-const mockAuthStoreAdmin = () => {
-  vi.mocked(useAuthStore).mockReturnValue({
-    user: { id: "user-1", username: "admin", role: "admin" },
-    token: "test-token",
-    isAuthenticated: true,
-    setAuth: vi.fn(),
-    clearAuth: vi.fn(),
+// Default mock for usePermissions (admin user with TASKS_READ)
+const mockPermissionsAdmin = () => {
+  vi.mocked(usePermissions).mockReturnValue({
+    user: { id: "user-1", username: "admin", role: "admin" } as ReturnType<
+      typeof usePermissions
+    >["user"],
+    isAdmin: true,
+    isMaintainer: true,
+    hasPermission: () => true,
+    hasAnyPermission: () => true,
+    hasAllPermissions: () => true,
+    getEffectivePermissions: () => Object.values(PERMISSIONS),
   });
 };
 
-// Mock for non-admin user
-const mockAuthStoreNonAdmin = () => {
-  vi.mocked(useAuthStore).mockReturnValue({
-    user: { id: "user-2", username: "user", role: "reader" },
-    token: "test-token",
-    isAuthenticated: true,
-    setAuth: vi.fn(),
-    clearAuth: vi.fn(),
+// Mock for non-admin user without TASKS_READ
+const mockPermissionsReader = () => {
+  vi.mocked(usePermissions).mockReturnValue({
+    user: { id: "user-2", username: "user", role: "reader" } as ReturnType<
+      typeof usePermissions
+    >["user"],
+    isAdmin: false,
+    isMaintainer: false,
+    hasPermission: (perm) => perm !== PERMISSIONS.TASKS_READ,
+    hasAnyPermission: () => false,
+    hasAllPermissions: () => false,
+    getEffectivePermissions: () => [],
+  });
+};
+
+// Mock for maintainer (has TASKS_READ but not admin)
+const mockPermissionsMaintainer = () => {
+  vi.mocked(usePermissions).mockReturnValue({
+    user: {
+      id: "user-3",
+      username: "maintainer",
+      role: "maintainer",
+    } as ReturnType<typeof usePermissions>["user"],
+    isAdmin: false,
+    isMaintainer: true,
+    hasPermission: () => true,
+    hasAnyPermission: () => true,
+    hasAllPermissions: () => true,
+    getEffectivePermissions: () => Object.values(PERMISSIONS),
   });
 };
 
 describe("TaskNotificationBadge", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
-    mockAuthStoreAdmin();
+    mockPermissionsAdmin();
   });
 
   it("should not render when no tasks are active", () => {
@@ -479,7 +505,7 @@ describe("TaskNotificationBadge", () => {
 
   it("should not navigate when non-admin clicks badge", async () => {
     const user = userEvent.setup();
-    mockAuthStoreNonAdmin();
+    mockPermissionsMaintainer();
 
     const mockTasks: TaskProgressEvent[] = [
       {
@@ -539,7 +565,7 @@ describe("TaskNotificationBadge", () => {
   });
 
   it("should have default cursor for non-admin", () => {
-    mockAuthStoreNonAdmin();
+    mockPermissionsMaintainer();
 
     const mockTasks: TaskProgressEvent[] = [
       {
@@ -566,5 +592,35 @@ describe("TaskNotificationBadge", () => {
 
     const badge = screen.getByText("1 pending task");
     expect(badge.parentElement).toHaveStyle({ cursor: "default" });
+  });
+
+  it("should not render for reader users without TASKS_READ permission", () => {
+    mockPermissionsReader();
+
+    const mockTasks: TaskProgressEvent[] = [
+      {
+        taskId: "task-1",
+        taskType: "analyze_book",
+        status: "running",
+        progress: undefined,
+        error: undefined,
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
+      },
+    ];
+
+    vi.mocked(useTaskProgress).mockReturnValue({
+      activeTasks: mockTasks,
+      connectionState: "connected",
+      pendingCounts: {},
+      getTasksByStatus: vi.fn(() => mockTasks),
+      getTasksByLibrary: vi.fn(() => mockTasks),
+      getTask: vi.fn(() => mockTasks[0]),
+    });
+
+    renderWithMantine(<TaskNotificationBadge />);
+
+    // Badge should not be rendered for readers
+    expect(screen.queryByText(/pending task/i)).not.toBeInTheDocument();
   });
 });

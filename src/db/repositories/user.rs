@@ -92,8 +92,19 @@ impl UserRepository {
 
     /// Update user
     pub async fn update(db: &DatabaseConnection, model: &users::Model) -> Result<users::Model> {
-        let mut active_model: users::ActiveModel = model.clone().into();
-        active_model.updated_at = Set(Utc::now());
+        let active_model = users::ActiveModel {
+            id: Unchanged(model.id),
+            username: Set(model.username.clone()),
+            email: Set(model.email.clone()),
+            password_hash: Set(model.password_hash.clone()),
+            role: Set(model.role.clone()),
+            is_active: Set(model.is_active),
+            email_verified: Set(model.email_verified),
+            permissions: Set(model.permissions.clone()),
+            last_login_at: Set(model.last_login_at),
+            created_at: Unchanged(model.created_at),
+            updated_at: Set(Utc::now()),
+        };
         let result = active_model.update(db).await?;
         Ok(result)
     }

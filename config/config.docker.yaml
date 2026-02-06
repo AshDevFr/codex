@@ -40,6 +40,7 @@ auth:
   #   enabled: true
   #   auto_create_users: true       # Auto-create local users on first OIDC login
   #   default_role: reader           # Default role when no group mapping matches (admin, maintainer, reader)
+  #   redirect_uri_base: "https://codex.example.com" # Optional, defaults to http://{application.host}:{application.port}
   #   providers:
   #     authentik:                   # Provider key (used in URLs: /auth/oidc/authentik/login)
   #       display_name: "Authentik SSO"
@@ -116,7 +117,8 @@ files:
 # Enables third-party apps like Komic to connect using Komga API format
 komga_api:
   enabled: true
-  prefix: komga  # URL prefix: /{prefix}/api/v1/...
+  prefix: komga # URL prefix: /{prefix}/api/v1/...
+
 
 # Rate Limiting (enabled by default)
 # ==================================

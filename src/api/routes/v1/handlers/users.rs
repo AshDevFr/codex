@@ -374,11 +374,14 @@ pub async fn update_user(
     }
 
     if let Some(permissions) = request.permissions {
-        // Validate permissions are valid permission strings
+        // Validate permissions - accept both colon format (e.g., "api-keys:read")
+        // and kebab-case (e.g., "api-keys-read") from the frontend
         for perm in &permissions {
-            // Normalize: convert kebab-case to colon format if needed
-            let normalized = perm.replace('-', ":");
-            if normalized.parse::<Permission>().is_err() {
+            let is_valid = perm.parse::<Permission>().is_ok() || {
+                let quoted = format!("\"{}\"", perm);
+                serde_json::from_str::<Permission>(&quoted).is_ok()
+            };
+            if !is_valid {
                 return Err(ApiError::BadRequest(format!(
                     "Invalid permission: {}",
                     perm

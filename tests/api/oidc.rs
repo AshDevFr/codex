@@ -123,6 +123,7 @@ fn create_test_oidc_config() -> OidcConfig {
         enabled: true,
         auto_create_users: true,
         default_role: OidcDefaultRole::Reader,
+        redirect_uri_base: None,
         providers,
     }
 }
@@ -363,6 +364,7 @@ async fn test_list_multiple_providers() {
         enabled: true,
         auto_create_users: true,
         default_role: OidcDefaultRole::Reader,
+        redirect_uri_base: None,
         providers,
     };
 

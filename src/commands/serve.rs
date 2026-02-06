@@ -222,15 +222,43 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Initialize OIDC service if enabled
     let oidc_service = if config.auth.oidc.enabled {
         info!("Initializing OIDC authentication service...");
-        let base_url = format!(
-            "http://{}:{}",
-            config.application.host, config.application.port
+        let base_url = config
+            .auth
+            .oidc
+            .redirect_uri_base
+            .clone()
+            .unwrap_or_else(|| {
+                format!(
+                    "http://{}:{}",
+                    config.application.host, config.application.port
+                )
+            });
+        info!("  Redirect URI base: {}", base_url);
+        info!(
+            "  Auto-create users: {}",
+            config.auth.oidc.auto_create_users
         );
-        let service = crate::services::OidcService::new(config.auth.oidc.clone(), base_url);
+        info!("  Default role: {}", config.auth.oidc.default_role.as_str());
+        let service = crate::services::OidcService::new(config.auth.oidc.clone(), base_url.clone());
         let provider_count = service.get_providers().len();
-        info!("  OIDC enabled with {} provider(s)", provider_count);
-        for provider in service.get_providers() {
-            info!("    - {} ({})", provider.display_name, provider.name);
+        info!("  Providers: {}", provider_count);
+        for (name, provider_config) in &config.auth.oidc.providers {
+            info!("    - {} ({})", provider_config.display_name, name);
+            info!("      Issuer: {}", provider_config.issuer_url);
+            info!("      Client ID: {}", provider_config.client_id);
+            info!(
+                "      Scopes: openid {}",
+                if provider_config.scopes.is_empty() {
+                    "(none additional)".to_string()
+                } else {
+                    provider_config.scopes.join(", ")
+                }
+            );
+            info!(
+                "      Callback: {}/api/v1/auth/oidc/{}/callback",
+                base_url.trim_end_matches('/'),
+                name
+            );
         }
         Some(Arc::new(service))
     } else {

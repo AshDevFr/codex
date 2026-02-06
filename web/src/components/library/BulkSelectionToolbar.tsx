@@ -23,11 +23,13 @@ import { useEffect, useMemo } from "react";
 import { booksApi } from "@/api/books";
 import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   selectSelectionCount,
   selectSelectionType,
   useBulkSelectionStore,
 } from "@/store/bulkSelectionStore";
+import { PERMISSIONS } from "@/types/permissions";
 
 /**
  * BulkSelectionToolbar - Fixed header toolbar that appears when items are selected
@@ -43,6 +45,10 @@ import {
  */
 export function BulkSelectionToolbar() {
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canWriteBooks = hasPermission(PERMISSIONS.BOOKS_WRITE);
+  const canWriteSeries = hasPermission(PERMISSIONS.SERIES_WRITE);
+  const canWriteTasks = hasPermission(PERMISSIONS.TASKS_WRITE);
 
   // Selection state
   const count = useBulkSelectionStore(selectSelectionCount);
@@ -379,11 +385,15 @@ export function BulkSelectionToolbar() {
     bulkGenerateSeriesBookThumbnailsMutation.isPending ||
     bulkReprocessTitlesMutation.isPending;
 
+  // Determine if the "More" menu should be shown based on permissions
+  const showBooksMoreMenu = isBooks && (canWriteBooks || canWriteTasks);
+  const showSeriesMoreMenu = !isBooks && (canWriteSeries || canWriteTasks);
+
   // Get available plugin actions based on selection type
   const pluginActions = isBooks
     ? (bookPluginActions?.actions ?? [])
     : (seriesPluginActions?.actions ?? []);
-  const hasPluginActions = pluginActions.length > 0;
+  const hasPluginActions = pluginActions.length > 0 && canWriteSeries;
 
   // Handle plugin auto-match action
   // Note: Currently only series bulk auto-match is supported
@@ -537,8 +547,8 @@ export function BulkSelectionToolbar() {
           </Button>
         </Tooltip>
 
-        {/* More actions menu - for books */}
-        {isBooks && (
+        {/* More actions menu - for books (requires write permissions) */}
+        {showBooksMoreMenu && (
           <Menu shadow="md" width={220} position="bottom-end">
             <Menu.Target>
               <Tooltip label="More actions">
@@ -555,38 +565,45 @@ export function BulkSelectionToolbar() {
             </Menu.Target>
 
             <Menu.Dropdown>
-              <Menu.Label>Analysis</Menu.Label>
-              <Menu.Item
-                leftSection={<IconAnalyze size={16} />}
-                onClick={handleAnalyze}
-                disabled={isAnyPending}
-              >
-                Analyze
-              </Menu.Item>
+              {canWriteBooks && (
+                <>
+                  <Menu.Label>Analysis</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconAnalyze size={16} />}
+                    onClick={handleAnalyze}
+                    disabled={isAnyPending}
+                  >
+                    Analyze
+                  </Menu.Item>
+                </>
+              )}
 
-              <Menu.Divider />
-
-              <Menu.Label>Book Thumbnails</Menu.Label>
-              <Menu.Item
-                leftSection={<IconPhotoPlus size={16} />}
-                onClick={handleGenerateMissingBookThumbnails}
-                disabled={isAnyPending}
-              >
-                Generate Missing
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconRefresh size={16} />}
-                onClick={handleRegenerateAllBookThumbnails}
-                disabled={isAnyPending}
-              >
-                Regenerate All
-              </Menu.Item>
+              {canWriteTasks && (
+                <>
+                  {canWriteBooks && <Menu.Divider />}
+                  <Menu.Label>Book Thumbnails</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconPhotoPlus size={16} />}
+                    onClick={handleGenerateMissingBookThumbnails}
+                    disabled={isAnyPending}
+                  >
+                    Generate Missing
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconRefresh size={16} />}
+                    onClick={handleRegenerateAllBookThumbnails}
+                    disabled={isAnyPending}
+                  >
+                    Regenerate All
+                  </Menu.Item>
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         )}
 
-        {/* More actions menu - for series */}
-        {!isBooks && (
+        {/* More actions menu - for series (requires write permissions) */}
+        {showSeriesMoreMenu && (
           <Menu shadow="md" width={220} position="bottom-end">
             <Menu.Target>
               <Tooltip label="More actions">
@@ -603,61 +620,71 @@ export function BulkSelectionToolbar() {
             </Menu.Target>
 
             <Menu.Dropdown>
-              <Menu.Label>Analysis</Menu.Label>
-              <Menu.Item
-                leftSection={<IconAnalyze size={16} />}
-                onClick={handleAnalyze}
-                disabled={isAnyPending}
-              >
-                Analyze
-              </Menu.Item>
+              {canWriteSeries && (
+                <>
+                  <Menu.Label>Analysis</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconAnalyze size={16} />}
+                    onClick={handleAnalyze}
+                    disabled={isAnyPending}
+                  >
+                    Analyze
+                  </Menu.Item>
+                </>
+              )}
 
-              <Menu.Divider />
+              {canWriteTasks && (
+                <>
+                  {canWriteSeries && <Menu.Divider />}
+                  <Menu.Label>Series Thumbnails</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconPhotoPlus size={16} />}
+                    onClick={handleGenerateMissingSeriesThumbnails}
+                    disabled={isAnyPending}
+                  >
+                    Generate Missing
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconRefresh size={16} />}
+                    onClick={handleRegenerateAllSeriesThumbnails}
+                    disabled={isAnyPending}
+                  >
+                    Regenerate All
+                  </Menu.Item>
 
-              <Menu.Label>Series Thumbnails</Menu.Label>
-              <Menu.Item
-                leftSection={<IconPhotoPlus size={16} />}
-                onClick={handleGenerateMissingSeriesThumbnails}
-                disabled={isAnyPending}
-              >
-                Generate Missing
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconRefresh size={16} />}
-                onClick={handleRegenerateAllSeriesThumbnails}
-                disabled={isAnyPending}
-              >
-                Regenerate All
-              </Menu.Item>
+                  <Menu.Divider />
 
-              <Menu.Divider />
+                  <Menu.Label>Books in Series Thumbnails</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconPhotoPlus size={16} />}
+                    onClick={handleGenerateMissingBooksInSeriesThumbnails}
+                    disabled={isAnyPending}
+                  >
+                    Generate Missing
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconRefresh size={16} />}
+                    onClick={handleRegenerateAllBooksInSeriesThumbnails}
+                    disabled={isAnyPending}
+                  >
+                    Regenerate All
+                  </Menu.Item>
+                </>
+              )}
 
-              <Menu.Label>Books in Series Thumbnails</Menu.Label>
-              <Menu.Item
-                leftSection={<IconPhotoPlus size={16} />}
-                onClick={handleGenerateMissingBooksInSeriesThumbnails}
-                disabled={isAnyPending}
-              >
-                Generate Missing
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<IconRefresh size={16} />}
-                onClick={handleRegenerateAllBooksInSeriesThumbnails}
-                disabled={isAnyPending}
-              >
-                Regenerate All
-              </Menu.Item>
-
-              <Menu.Divider />
-
-              <Menu.Label>Title Management</Menu.Label>
-              <Menu.Item
-                leftSection={<IconRefresh size={16} />}
-                onClick={handleReprocessTitles}
-                disabled={isAnyPending}
-              >
-                Reprocess Titles
-              </Menu.Item>
+              {canWriteSeries && (
+                <>
+                  {canWriteTasks && <Menu.Divider />}
+                  <Menu.Label>Title Management</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconRefresh size={16} />}
+                    onClick={handleReprocessTitles}
+                    disabled={isAnyPending}
+                  >
+                    Reprocess Titles
+                  </Menu.Item>
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         )}

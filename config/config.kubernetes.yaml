@@ -44,6 +44,7 @@
 #   CODEX_AUTH_OIDC_ENABLED=true
 #   CODEX_AUTH_OIDC_AUTO_CREATE_USERS=true
 #   CODEX_AUTH_OIDC_DEFAULT_ROLE=reader                           # admin, maintainer, reader
+#   CODEX_AUTH_OIDC_REDIRECT_URI_BASE=https://codex.example.com  # Optional, defaults to http://{application.host}:{application.port}
 #   # Per-provider settings (replace AUTHENTIK with your provider name):
 #   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_DISPLAY_NAME=Authentik SSO
 #   CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ISSUER_URL=https://authentik.example.com/application/o/codex/
@@ -111,6 +112,7 @@ files:
 #     enabled: true
 #     auto_create_users: true
 #     default_role: reader
+#     redirect_uri_base: "https://codex.example.com"  # Optional, defaults to http://{application.host}:{application.port}
 #     providers:
 #       authentik:
 #         display_name: "Authentik SSO"

@@ -1,18 +1,25 @@
 import { Badge, Group, Stack, Text, Tooltip } from "@mantine/core";
 import { IconLoader2 } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import { useAuthStore } from "@/store/authStore";
+import { PERMISSIONS } from "@/types/permissions";
 
 /**
  * Task notification badge that appears at the bottom of the navigation sidebar
  * Shows count of active tasks with a tooltip containing task details
+ * Only visible to users with TASKS_READ permission
  */
 export function TaskNotificationBadge() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { isAdmin, hasPermission } = usePermissions();
+  const canReadTasks = hasPermission(PERMISSIONS.TASKS_READ);
   const { activeTasks, pendingCounts } = useTaskProgress();
-  const isAdmin = user?.role === "admin";
+
+  // Don't show task badge for users without TASKS_READ permission
+  if (!canReadTasks) {
+    return null;
+  }
 
   // Filter to only running tasks (processing tasks are shown as running)
   // Note: pending tasks are shown separately via pendingCounts, not from activeTasks

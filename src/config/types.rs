@@ -152,6 +152,12 @@ pub struct OidcConfig {
     /// Default role for new OIDC users (if no group mapping matches)
     pub default_role: OidcDefaultRole,
 
+    /// Public-facing base URL for OIDC redirect URIs
+    /// e.g., "https://codex.example.com" or "http://localhost:8080"
+    /// If not set, falls back to http://{application.host}:{application.port}
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redirect_uri_base: Option<String>,
+
     /// Provider configurations keyed by provider name (e.g., "authentik", "keycloak")
     #[serde(default)]
     pub providers: HashMap<String, OidcProviderConfig>,
@@ -163,6 +169,7 @@ impl Default for OidcConfig {
             enabled: env_bool_or("CODEX_AUTH_OIDC_ENABLED", false),
             auto_create_users: env_bool_or("CODEX_AUTH_OIDC_AUTO_CREATE_USERS", true),
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: std::env::var("CODEX_AUTH_OIDC_REDIRECT_URI_BASE").ok(),
             providers: HashMap::new(),
         }
     }
@@ -1485,6 +1492,7 @@ client_id: "test-client"
             enabled: true,
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
             providers,
         };
 

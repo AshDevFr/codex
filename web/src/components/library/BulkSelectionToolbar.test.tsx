@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
 import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
+import { PERMISSIONS, type Permission } from "@/types/permissions";
 import { BulkSelectionToolbar } from "./BulkSelectionToolbar";
 
 // Mock the API modules
@@ -35,6 +37,50 @@ vi.mock("@/api/series", () => ({
     }),
   },
 }));
+
+// Mock the usePermissions hook - default to admin (all permissions)
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: vi.fn(),
+}));
+
+const mockPermissionsAdmin = () => {
+  vi.mocked(usePermissions).mockReturnValue({
+    user: { id: "user-1", username: "admin", role: "admin" } as ReturnType<
+      typeof usePermissions
+    >["user"],
+    isAdmin: true,
+    isMaintainer: true,
+    hasPermission: () => true,
+    hasAnyPermission: () => true,
+    hasAllPermissions: () => true,
+    getEffectivePermissions: () => Object.values(PERMISSIONS),
+  });
+};
+
+const READER_PERMISSIONS = new Set<Permission>([
+  PERMISSIONS.LIBRARIES_READ,
+  PERMISSIONS.SERIES_READ,
+  PERMISSIONS.BOOKS_READ,
+  PERMISSIONS.PAGES_READ,
+  PERMISSIONS.API_KEYS_READ,
+  PERMISSIONS.API_KEYS_WRITE,
+  PERMISSIONS.API_KEYS_DELETE,
+  PERMISSIONS.SYSTEM_HEALTH,
+]);
+
+const mockPermissionsReader = () => {
+  vi.mocked(usePermissions).mockReturnValue({
+    user: { id: "user-2", username: "reader", role: "reader" } as ReturnType<
+      typeof usePermissions
+    >["user"],
+    isAdmin: false,
+    isMaintainer: false,
+    hasPermission: (perm) => READER_PERMISSIONS.has(perm),
+    hasAnyPermission: (perms) => perms.some((p) => READER_PERMISSIONS.has(p)),
+    hasAllPermissions: (perms) => perms.every((p) => READER_PERMISSIONS.has(p)),
+    getEffectivePermissions: () => Array.from(READER_PERMISSIONS),
+  });
+};
 
 // Mock the plugins API
 const mockPluginActions = {
@@ -76,6 +122,7 @@ describe("BulkSelectionToolbar", () => {
     // Reset the store state before each test
     useBulkSelectionStore.getState().clearSelection();
     vi.clearAllMocks();
+    mockPermissionsAdmin();
   });
 
   describe("visibility", () => {
@@ -470,6 +517,54 @@ describe("BulkSelectionToolbar", () => {
 
       rerender(<BulkSelectionToolbar />);
       expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("reader permissions", () => {
+    beforeEach(() => {
+      mockPermissionsReader();
+    });
+
+    it("should not show More button for reader users selecting books", () => {
+      useBulkSelectionStore.getState().toggleSelection("book-1", "book");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      expect(screen.getByText("1 book selected")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /mark read/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /more actions/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("should not show More button for reader users selecting series", () => {
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      expect(screen.getByText("1 series selected")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /mark read/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /more actions/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("should not show Plugins button for reader users", async () => {
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await waitFor(() => {
+        expect(screen.getByText("1 series selected")).toBeInTheDocument();
+      });
+
+      expect(
+        screen.queryByRole("button", { name: /plugin actions/i }),
+      ).not.toBeInTheDocument();
     });
   });
 });

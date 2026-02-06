@@ -408,13 +408,18 @@ impl OidcService {
             .expires_in()
             .map(|d| Utc::now() + Duration::seconds(d.as_secs() as i64));
 
-        debug!(
+        info!(
             provider = %provider_name,
             subject = %subject,
             email = ?email,
-            groups = ?groups,
-            role = %mapped_role,
+            mapped_role = %mapped_role,
             "OIDC authentication successful"
+        );
+        debug!(
+            provider = %provider_name,
+            groups = ?groups,
+            groups_claim = %provider_config.groups_claim,
+            "OIDC groups received from IdP"
         );
 
         Ok(OidcAuthResult {
@@ -565,6 +570,12 @@ impl OidcService {
     ///
     /// Role priority: admin > maintainer > reader
     pub fn map_groups_to_role(&self, groups: &[String], provider: &OidcProviderConfig) -> String {
+        debug!(
+            user_groups = ?groups,
+            role_mapping = ?provider.role_mapping,
+            "Mapping IdP groups to Codex role"
+        );
+
         // Check for admin first (highest privilege)
         if let Some(admin_groups) = provider.role_mapping.get("admin")
             && groups.iter().any(|g| admin_groups.contains(g))
@@ -707,6 +718,7 @@ mod tests {
             enabled: true,
             auto_create_users: true,
             default_role: OidcDefaultRole::Reader,
+            redirect_uri_base: None,
             providers,
         }
     }

@@ -235,6 +235,9 @@ pub async fn callback(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update OIDC connection: {}", e)))?;
 
+        // Sync role from IdP groups on every login
+        let user = sync_role_from_groups(&state.db, user, &auth_result.mapped_role).await?;
+
         (user, false)
     } else {
         // No existing connection - try to find or create user
@@ -257,6 +260,8 @@ pub async fn callback(
                 provider = %provider,
                 "Linking OIDC connection to existing user"
             );
+            // Sync role from IdP groups
+            let user = sync_role_from_groups(&state.db, user, &auth_result.mapped_role).await?;
             (user, false)
         } else {
             // No existing user - check if auto-create is enabled
@@ -399,6 +404,33 @@ pub async fn callback(
     // Redirect to frontend callback page with auth data in URL fragment
     let redirect_url = format!("/login/oidc/complete#{}", encoded);
     Ok((headers, Redirect::to(&redirect_url)).into_response())
+}
+
+/// Sync user role from IdP group mapping on every OIDC login.
+///
+/// If the mapped role differs from the current role, updates the user in the database.
+async fn sync_role_from_groups(
+    db: &sea_orm::DatabaseConnection,
+    mut user: users::Model,
+    mapped_role: &str,
+) -> Result<users::Model, ApiError> {
+    if user.role != mapped_role {
+        info!(
+            user_id = %user.id,
+            username = %user.username,
+            old_role = %user.role,
+            new_role = %mapped_role,
+            "Updating user role from OIDC group mapping"
+        );
+        user.role = mapped_role.to_string();
+        user.updated_at = Utc::now();
+        let updated = UserRepository::update(db, &user)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to update user role: {}", e)))?;
+        Ok(updated)
+    } else {
+        Ok(user)
+    }
 }
 
 /// Generate a unique username for a new OIDC user

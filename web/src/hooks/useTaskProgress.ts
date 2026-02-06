@@ -5,8 +5,10 @@ import {
   type PendingTaskCounts,
   subscribeToTaskProgress,
 } from "@/api/tasks";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthStore } from "@/store/authStore";
 import type { TaskProgressEvent, TaskStatus } from "@/types";
+import { PERMISSIONS } from "@/types/permissions";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
@@ -21,11 +23,14 @@ type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
  * - Connection state tracking
  * - Active task tracking
  * - Task completion/failure cleanup
+ * - Permission-aware: skips task API calls if user lacks TASKS_READ permission
  *
  * @returns Object with active tasks and connection state
  */
 export function useTaskProgress() {
   const { isAuthenticated } = useAuthStore();
+  const { hasPermission } = usePermissions();
+  const canReadTasks = hasPermission(PERMISSIONS.TASKS_READ);
   const [activeTasks, setActiveTasks] = useState<
     Map<string, TaskProgressEvent>
   >(new Map());
@@ -40,6 +45,14 @@ export function useTaskProgress() {
   useEffect(() => {
     if (!isAuthenticated) {
       console.debug("Not authenticated, skipping task progress subscription");
+      hasSubscribedRef.current = false;
+      return;
+    }
+
+    if (!canReadTasks) {
+      console.debug(
+        "User lacks TASKS_READ permission, skipping task progress subscription",
+      );
       hasSubscribedRef.current = false;
       return;
     }
@@ -237,7 +250,7 @@ export function useTaskProgress() {
       clearInterval(pollInterval);
       unsubscribe();
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, canReadTasks]);
 
   // Sort helper for consistent ordering (by task_type alphabetically)
   const sortTasks = (tasks: TaskProgressEvent[]): TaskProgressEvent[] =>

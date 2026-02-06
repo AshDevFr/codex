@@ -43,11 +43,20 @@ vi.mock("@/store/authStore", () => ({
   })),
 }));
 
+// Mock the permissions hook - default to having TASKS_READ permission
+const mockHasPermission = vi.fn(() => true);
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: () => ({
+    hasPermission: mockHasPermission,
+  }),
+}));
+
 describe("useTaskProgress", () => {
   let mockUnsubscribe: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockUnsubscribe = vi.fn();
+    mockHasPermission.mockReturnValue(true);
 
     Storage.prototype.getItem = vi.fn((key) => {
       if (key === "jwt_token") return "test-token";
@@ -96,6 +105,20 @@ describe("useTaskProgress", () => {
     renderHook(() => useTaskProgress());
 
     expect(mockSubscribe).not.toHaveBeenCalled();
+  });
+
+  it("should not subscribe if user lacks TASKS_READ permission", () => {
+    mockHasPermission.mockReturnValue(false);
+
+    const mockSubscribe = vi
+      .spyOn(tasksApi, "subscribeToTaskProgress")
+      .mockReturnValue(mockUnsubscribe);
+
+    renderHook(() => useTaskProgress());
+
+    expect(mockSubscribe).not.toHaveBeenCalled();
+    expect(tasksApi.fetchPendingTaskCounts).not.toHaveBeenCalled();
+    expect(tasksApi.fetchTasksByStatus).not.toHaveBeenCalled();
   });
 
   it("should unsubscribe on unmount", () => {
