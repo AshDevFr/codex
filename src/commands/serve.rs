@@ -358,6 +358,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         plugin_manager: plugin_manager.clone(),
         plugin_metrics_service,
         oidc_service,
+        oauth_state_manager: Arc::new(crate::services::user_plugin::OAuthStateManager::new()),
     });
 
     // Build router using API module

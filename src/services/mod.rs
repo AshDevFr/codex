@@ -15,6 +15,7 @@ pub mod settings;
 pub mod task_listener;
 pub mod task_metrics;
 pub mod thumbnail;
+pub mod user_plugin;
 
 pub use auth_tracking::AuthTrackingService;
 pub use cleanup_subscriber::CleanupEventSubscriber;

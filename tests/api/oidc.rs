@@ -93,6 +93,7 @@ async fn create_test_state_with_oidc(
         plugin_manager,
         plugin_metrics_service,
         oidc_service,
+        oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
     })
 }
 

@@ -14,6 +14,7 @@ mod series;
 mod setup;
 mod tasks;
 mod user;
+mod user_plugins;
 mod users;
 
 use crate::api::extractors::AppState;
@@ -37,6 +38,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(tasks::routes(state.clone()))
         .merge(misc::routes(state.clone()))
         .merge(plugins::routes(state.clone()))
+        .merge(user_plugins::routes(state.clone()))
         // Apply state to all routes
         .with_state(state)
 }

@@ -64,6 +64,7 @@ pub mod setup;
 pub mod sharing_tags;
 pub mod task_metrics;
 pub mod task_queue;
+pub mod user_plugins;
 pub mod user_preferences;
 pub mod users;
 

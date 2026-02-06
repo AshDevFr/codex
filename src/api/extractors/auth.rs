@@ -216,6 +216,8 @@ pub struct AppState {
     /// OIDC authentication service for external identity provider authentication
     /// None when OIDC is disabled in config
     pub oidc_service: Option<Arc<crate::services::OidcService>>,
+    /// OAuth state manager for user plugin OAuth flows
+    pub oauth_state_manager: Arc<crate::services::user_plugin::OAuthStateManager>,
 }
 
 // Legacy alias for backwards compatibility during transition
