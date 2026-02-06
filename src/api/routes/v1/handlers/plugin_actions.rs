@@ -2212,6 +2212,14 @@ fn sanitize_plugin_error(error: &PluginManagerError) -> String {
         // Nested plugin errors - extract and sanitize
         PluginManagerError::Plugin(plugin_error) => sanitize_nested_plugin_error(plugin_error),
 
+        // User plugin errors
+        PluginManagerError::UserPluginNotFound { .. } => {
+            "User plugin connection not found".to_string()
+        }
+        PluginManagerError::UserPluginNotAuthenticated(id) => {
+            format!("Plugin {} requires authentication", id)
+        }
+
         // Internal errors - don't expose details
         PluginManagerError::Database(_) | PluginManagerError::Encryption(_) => {
             "An internal plugin error occurred".to_string()

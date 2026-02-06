@@ -41,6 +41,8 @@ pub enum Relation {
     UserSharingTags,
     #[sea_orm(has_many = "super::oidc_connections::Entity")]
     OidcConnections,
+    #[sea_orm(has_many = "super::user_plugins::Entity")]
+    UserPlugins,
 }
 
 impl Related<super::read_progress::Entity> for Entity {
@@ -67,6 +69,12 @@ impl Related<super::sharing_tags::Entity> for Entity {
 impl Related<super::oidc_connections::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::OidcConnections.def()
+    }
+}
+
+impl Related<super::user_plugins::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserPlugins.def()
     }
 }
 
