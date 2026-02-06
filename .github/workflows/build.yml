@@ -78,7 +78,7 @@ jobs:
 
   # Run tests in parallel partitions
   test:
-    name: Test (${{ matrix.partition }}/3)
+    name: Test (${{ matrix.partition }}/5)
     needs: build-tests
     # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
     runs-on: arc-runner-codex
@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2, 3]
+        partition: [1, 2, 3, 4, 5]
     steps:
       - name: Install base dependencies
         run: |
@@ -102,8 +102,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nextest-archive
-      - name: Run tests (partition ${{ matrix.partition }}/3)
-        run: cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/3
+      - name: Run tests (partition ${{ matrix.partition }}/5)
+        run: cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
 
   # Run linting checks
   lint:
