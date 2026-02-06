@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 pub struct OidcConnectionRepository;
 
+#[allow(dead_code)]
 impl OidcConnectionRepository {
     /// Create a new OIDC connection
     pub async fn create(

@@ -8,6 +8,7 @@ mod auth;
 mod books;
 mod libraries;
 mod misc;
+mod oidc;
 mod plugins;
 mod series;
 mod setup;
@@ -24,6 +25,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         // Nested routes (with path prefix handled by nest)
         .nest("/auth", auth::routes(state.clone()))
+        .nest("/auth/oidc", oidc::routes(state.clone()))
         .nest("/setup", setup::routes(state.clone()))
         // Merged routes (path prefix included in each module)
         .merge(libraries::routes(state.clone()))

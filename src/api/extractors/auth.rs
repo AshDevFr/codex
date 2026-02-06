@@ -213,6 +213,9 @@ pub struct AppState {
     /// Plugin metrics service for collecting plugin performance data
     /// Always available (in-memory only, no persistence)
     pub plugin_metrics_service: Arc<crate::services::PluginMetricsService>,
+    /// OIDC authentication service for external identity provider authentication
+    /// None when OIDC is disabled in config
+    pub oidc_service: Option<Arc<crate::services::OidcService>>,
 }
 
 // Legacy alias for backwards compatibility during transition

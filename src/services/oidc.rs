@@ -46,6 +46,7 @@ const DISCOVERY_CACHE_TTL_SECS: i64 = 3600;
 const AUTH_STATE_TTL_SECS: i64 = 300;
 
 /// Result of an OIDC authentication flow
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct OidcAuthResult {
     /// The subject (sub) claim - unique identifier at the IdP
@@ -132,6 +133,7 @@ impl OidcService {
     }
 
     /// Get the default role for new OIDC users
+    #[allow(dead_code)]
     pub fn default_role(&self) -> &OidcDefaultRole {
         &self.config.default_role
     }
@@ -478,6 +480,7 @@ impl OidcService {
     ///
     /// * `provider_name` - Name of the OIDC provider
     /// * `access_token` - Access token from the token exchange
+    #[allow(dead_code)]
     pub async fn get_user_info(
         &self,
         provider_name: &str,
@@ -546,11 +549,11 @@ impl OidcService {
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect(),
             )
-        } else if let Some(s) = value.as_str() {
-            // Some IdPs return groups as a comma-separated string
-            Some(s.split(',').map(|s| s.trim().to_string()).collect())
         } else {
-            None
+            // Some IdPs return groups as a comma-separated string
+            value
+                .as_str()
+                .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
         }
     }
 
@@ -563,24 +566,24 @@ impl OidcService {
     /// Role priority: admin > maintainer > reader
     pub fn map_groups_to_role(&self, groups: &[String], provider: &OidcProviderConfig) -> String {
         // Check for admin first (highest privilege)
-        if let Some(admin_groups) = provider.role_mapping.get("admin") {
-            if groups.iter().any(|g| admin_groups.contains(g)) {
-                return "admin".to_string();
-            }
+        if let Some(admin_groups) = provider.role_mapping.get("admin")
+            && groups.iter().any(|g| admin_groups.contains(g))
+        {
+            return "admin".to_string();
         }
 
         // Check for maintainer
-        if let Some(maintainer_groups) = provider.role_mapping.get("maintainer") {
-            if groups.iter().any(|g| maintainer_groups.contains(g)) {
-                return "maintainer".to_string();
-            }
+        if let Some(maintainer_groups) = provider.role_mapping.get("maintainer")
+            && groups.iter().any(|g| maintainer_groups.contains(g))
+        {
+            return "maintainer".to_string();
         }
 
         // Check for reader
-        if let Some(reader_groups) = provider.role_mapping.get("reader") {
-            if groups.iter().any(|g| reader_groups.contains(g)) {
-                return "reader".to_string();
-            }
+        if let Some(reader_groups) = provider.role_mapping.get("reader")
+            && groups.iter().any(|g| reader_groups.contains(g))
+        {
+            return "reader".to_string();
         }
 
         // Default role from config
@@ -590,6 +593,7 @@ impl OidcService {
     /// Clean up expired pending authentication states
     ///
     /// Should be called periodically to prevent memory leaks.
+    #[allow(dead_code)]
     pub fn cleanup_expired_states(&self) {
         let cutoff = Utc::now() - Duration::seconds(AUTH_STATE_TTL_SECS);
         let mut removed = 0;
@@ -610,12 +614,14 @@ impl OidcService {
     /// Invalidate the cached client for a provider
     ///
     /// This forces a re-fetch of the discovery document on the next request.
+    #[allow(dead_code)]
     pub fn invalidate_client_cache(&self, provider_name: &str) {
         self.clients.remove(provider_name);
         debug!(provider = %provider_name, "Invalidated OIDC client cache");
     }
 
     /// Invalidate all cached clients
+    #[allow(dead_code)]
     pub fn invalidate_all_caches(&self) {
         self.clients.clear();
         debug!("Invalidated all OIDC client caches");
@@ -648,6 +654,7 @@ pub struct ProviderInfo {
 }
 
 /// Result from the UserInfo endpoint
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct UserInfoResult {
     /// Subject (unique identifier at the IdP)

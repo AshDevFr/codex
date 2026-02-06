@@ -87,6 +87,7 @@ async fn create_test_app_state_with_pdf_cache(
         rate_limiter_service: None,
         plugin_manager,
         plugin_metrics_service,
+        oidc_service: None,
     })
 }
 

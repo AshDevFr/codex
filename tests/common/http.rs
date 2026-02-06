@@ -67,6 +67,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         rate_limiter_service: None, // Tests disable rate limiting by default
         plugin_manager,
         plugin_metrics_service,
+        oidc_service: None, // Tests disable OIDC by default
     })
 }
 
@@ -117,6 +118,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         rate_limiter_service: None, // Tests disable rate limiting by default
         plugin_manager,
         plugin_metrics_service,
+        oidc_service: None, // Tests disable OIDC by default
     })
 }
 
@@ -192,6 +194,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         rate_limiter_service: None, // Tests disable rate limiting by default
         plugin_manager,
         plugin_metrics_service,
+        oidc_service: None, // Tests disable OIDC by default
     });
     let config = create_test_config();
     create_router(app_state, &config)

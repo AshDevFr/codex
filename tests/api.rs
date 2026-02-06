@@ -22,6 +22,7 @@ mod api {
     mod libraries;
     mod metadata_locks;
     mod metrics;
+    mod oidc;
     mod opds;
     mod opds2;
     mod pages;

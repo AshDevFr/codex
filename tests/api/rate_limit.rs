@@ -117,6 +117,7 @@ async fn create_rate_limited_app_state(
         rate_limiter_service,
         plugin_manager,
         plugin_metrics_service,
+        oidc_service: None,
     })
 }
 

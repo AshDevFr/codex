@@ -219,6 +219,25 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  SMTP port: {}", config.email.smtp_port);
     info!("  From: {}", config.email.smtp_from_email);
 
+    // Initialize OIDC service if enabled
+    let oidc_service = if config.auth.oidc.enabled {
+        info!("Initializing OIDC authentication service...");
+        let base_url = format!(
+            "http://{}:{}",
+            config.application.host, config.application.port
+        );
+        let service = crate::services::OidcService::new(config.auth.oidc.clone(), base_url);
+        let provider_count = service.get_providers().len();
+        info!("  OIDC enabled with {} provider(s)", provider_count);
+        for provider in service.get_providers() {
+            info!("    - {} ({})", provider.display_name, provider.name);
+        }
+        Some(Arc::new(service))
+    } else {
+        info!("OIDC authentication disabled");
+        None
+    };
+
     // Initialize plugin metrics service
     info!("Initializing plugin metrics service...");
     let plugin_metrics_service = Arc::new(crate::services::PluginMetricsService::new());
@@ -310,6 +329,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         rate_limiter_service,
         plugin_manager: plugin_manager.clone(),
         plugin_metrics_service,
+        oidc_service,
     });
 
     // Build router using API module

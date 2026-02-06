@@ -139,7 +139,7 @@ impl EnvOverride for OidcConfig {
             self.default_role = match default_role.to_lowercase().as_str() {
                 "admin" => OidcDefaultRole::Admin,
                 "maintainer" => OidcDefaultRole::Maintainer,
-                "reader" | _ => OidcDefaultRole::Reader,
+                _ => OidcDefaultRole::Reader,
             };
         }
 
@@ -172,23 +172,25 @@ impl EnvOverride for OidcConfig {
                 let provider_prefix = format!("{}_PROVIDERS_{}", prefix, provider_name_upper);
 
                 // Only create new provider if it doesn't already exist
-                if !self.providers.contains_key(&provider_name) {
-                    // Create provider with defaults and then apply env overrides
-                    let mut new_provider = OidcProviderConfig {
-                        display_name: provider_name.clone(),
-                        issuer_url: String::new(),
-                        client_id: String::new(),
-                        client_secret: None,
-                        client_secret_env: None,
-                        scopes: vec!["email".to_string(), "profile".to_string()],
-                        role_mapping: HashMap::new(),
-                        groups_claim: "groups".to_string(),
-                        username_claim: "preferred_username".to_string(),
-                        email_claim: "email".to_string(),
-                    };
-                    new_provider.apply_env_overrides(&provider_prefix);
-                    self.providers.insert(provider_name, new_provider);
-                }
+                self.providers
+                    .entry(provider_name.clone())
+                    .or_insert_with(|| {
+                        // Create provider with defaults and then apply env overrides
+                        let mut new_provider = OidcProviderConfig {
+                            display_name: provider_name,
+                            issuer_url: String::new(),
+                            client_id: String::new(),
+                            client_secret: None,
+                            client_secret_env: None,
+                            scopes: vec!["email".to_string(), "profile".to_string()],
+                            role_mapping: HashMap::new(),
+                            groups_claim: "groups".to_string(),
+                            username_claim: "preferred_username".to_string(),
+                            email_claim: "email".to_string(),
+                        };
+                        new_provider.apply_env_overrides(&provider_prefix);
+                        new_provider
+                    });
             }
         }
     }
