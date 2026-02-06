@@ -25,10 +25,11 @@ use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
-    CleanupPdfCacheHandler, CleanupSeriesFilesHandler, FindDuplicatesHandler,
-    GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
-    GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler,
-    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesFilesHandler,
+    FindDuplicatesHandler, GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler,
+    GenerateThumbnailHandler, GenerateThumbnailsHandler, PluginAutoMatchHandler,
+    PurgeDeletedHandler, ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler,
+    ScanLibraryHandler, TaskHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -80,6 +81,11 @@ impl TaskWorker {
         handlers.insert(
             "reprocess_series_titles".to_string(),
             Arc::new(ReprocessSeriesTitlesHandler::new()),
+        );
+        // Plugin data cleanup handler (no dependencies)
+        handlers.insert(
+            "cleanup_plugin_data".to_string(),
+            Arc::new(CleanupPluginDataHandler::new()),
         );
 
         // Generate worker ID from hostname or random UUID

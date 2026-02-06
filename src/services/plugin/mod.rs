@@ -76,6 +76,8 @@ pub mod process;
 pub mod protocol;
 pub mod rpc;
 pub mod secrets;
+pub mod storage;
+pub mod storage_handler;
 
 // Re-exports for public API
 // Note: Many of these are designed for future use or exposed for the complete API surface.

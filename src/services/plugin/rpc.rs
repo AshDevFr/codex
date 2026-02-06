@@ -26,6 +26,8 @@ use super::process::{PluginProcess, ProcessError};
 use super::protocol::{
     JSONRPC_VERSION, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId, error_codes,
 };
+use super::storage::is_storage_method;
+use super::storage_handler::StorageRequestHandler;
 
 /// Error type for RPC operations
 #[derive(Debug, thiserror::Error)]
@@ -121,6 +123,28 @@ pub struct RpcClient {
 impl RpcClient {
     /// Create a new RPC client wrapping a plugin process
     pub fn new(process: PluginProcess, default_timeout: Duration) -> Self {
+        Self::new_internal(process, default_timeout, None)
+    }
+
+    /// Create a new RPC client with storage request handling support.
+    ///
+    /// When a plugin sends a `storage/*` JSON-RPC request on its stdout,
+    /// the reader task will intercept it, process it via the `StorageRequestHandler`,
+    /// and write the response back to the plugin's stdin. This enables bidirectional
+    /// RPC for user plugin storage operations.
+    pub fn new_with_storage(
+        process: PluginProcess,
+        default_timeout: Duration,
+        storage_handler: StorageRequestHandler,
+    ) -> Self {
+        Self::new_internal(process, default_timeout, Some(storage_handler))
+    }
+
+    fn new_internal(
+        process: PluginProcess,
+        default_timeout: Duration,
+        storage_handler: Option<StorageRequestHandler>,
+    ) -> Self {
         let process = Arc::new(Mutex::new(process));
         let pending: Arc<Mutex<HashMap<i64, PendingRequest>>> =
             Arc::new(Mutex::new(HashMap::new()));
@@ -132,7 +156,7 @@ impl RpcClient {
             let pending = Arc::clone(&pending);
             let process_alive = Arc::clone(&process_alive);
             tokio::spawn(async move {
-                response_reader_task(process, pending, process_alive).await;
+                response_reader_task(process, pending, process_alive, storage_handler).await;
             })
         };
 
@@ -339,11 +363,17 @@ impl RpcClient {
     }
 }
 
-/// Task that reads responses from the process and dispatches them
+/// Task that reads lines from the plugin process and dispatches them.
+///
+/// Handles two types of messages:
+/// 1. **Responses**: Lines with `result` or `error` → dispatched to pending requests
+/// 2. **Reverse RPC requests**: Lines with `method` (e.g., `storage/*`) → handled by
+///    the storage handler and response written back to the plugin's stdin
 async fn response_reader_task(
     process: Arc<Mutex<PluginProcess>>,
     pending: Arc<Mutex<HashMap<i64, PendingRequest>>>,
     process_alive: Arc<AtomicBool>,
+    storage_handler: Option<StorageRequestHandler>,
 ) {
     debug!("RPC response reader task started");
     loop {
@@ -374,7 +404,7 @@ async fn response_reader_task(
             continue;
         }
 
-        // Log the response (truncate for readability, respecting UTF-8 char boundaries)
+        // Log the line (truncate for readability, respecting UTF-8 char boundaries)
         let log_preview = if line.len() > 200 {
             // Find a valid UTF-8 char boundary at or before position 200
             let mut end = 200;
@@ -387,8 +417,78 @@ async fn response_reader_task(
         };
         debug!(bytes = line.len(), preview = %log_preview, "Received line from plugin");
 
-        // Parse the response
-        let response: JsonRpcResponse = match serde_json::from_str(&line) {
+        // Parse as generic JSON to determine if it's a request or response
+        let json_value: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(error = %e, line = %line, "Failed to parse plugin output as JSON");
+                continue;
+            }
+        };
+
+        // Check if this is a reverse RPC request from the plugin (has "method" field)
+        let is_request = json_value
+            .get("method")
+            .and_then(|m| m.as_str())
+            .map(|m| m.to_string());
+
+        if let Some(method) = is_request {
+            if is_storage_method(&method) {
+                if let Some(ref handler) = storage_handler {
+                    // Parse as a full request
+                    let request: JsonRpcRequest = match serde_json::from_value(json_value) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            warn!(error = %e, "Failed to parse storage request");
+                            continue;
+                        }
+                    };
+
+                    debug!(method = %method, "Handling reverse RPC storage request from plugin");
+                    let response = handler.handle_request(&request).await;
+
+                    // Write the response back to the plugin's stdin
+                    let response_json = match serde_json::to_string(&response) {
+                        Ok(j) => j,
+                        Err(e) => {
+                            error!(error = %e, "Failed to serialize storage response");
+                            continue;
+                        }
+                    };
+
+                    let process = process.lock().await;
+                    if let Err(e) = process.write_line(&response_json).await {
+                        error!(error = %e, "Failed to write storage response to plugin");
+                    }
+                } else {
+                    warn!(
+                        method = %method,
+                        "Plugin sent storage request but no storage handler is configured"
+                    );
+                    // Send error response back to plugin
+                    if let Ok(request) = serde_json::from_value::<JsonRpcRequest>(json_value) {
+                        let error_response = JsonRpcResponse::error(
+                            Some(request.id),
+                            JsonRpcError::new(
+                                error_codes::METHOD_NOT_FOUND,
+                                "Storage is not available for this plugin",
+                            ),
+                        );
+                        if let Ok(resp_json) = serde_json::to_string(&error_response) {
+                            let process = process.lock().await;
+                            let _ = process.write_line(&resp_json).await;
+                        }
+                    }
+                }
+                continue;
+            }
+            // Non-storage methods from the plugin are not supported
+            warn!(method = %method, "Plugin sent unsupported reverse RPC request");
+            continue;
+        }
+
+        // Normal response processing
+        let response: JsonRpcResponse = match serde_json::from_value(json_value) {
             Ok(r) => r,
             Err(e) => {
                 warn!(error = %e, line = %line, "Failed to parse plugin response as JSON-RPC");

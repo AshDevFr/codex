@@ -141,6 +141,9 @@ pub enum TaskType {
         #[serde(rename = "seriesIds", default)]
         series_ids: Option<Vec<Uuid>>, // If set, process only these specific series (bulk selection)
     },
+
+    /// Clean up expired plugin storage data across all user plugins
+    CleanupPluginData,
 }
 
 fn default_mode() -> String {
@@ -168,6 +171,7 @@ impl TaskType {
             TaskType::PluginAutoMatch { .. } => "plugin_auto_match",
             TaskType::ReprocessSeriesTitle { .. } => "reprocess_series_title",
             TaskType::ReprocessSeriesTitles { .. } => "reprocess_series_titles",
+            TaskType::CleanupPluginData => "cleanup_plugin_data",
         }
     }
 
