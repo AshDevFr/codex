@@ -66,6 +66,7 @@ use super::protocol::{
     PluginSeriesMetadata, SearchResult,
 };
 use super::secrets::SecretValue;
+use super::storage_handler::StorageRequestHandler;
 
 /// Error type for plugin manager operations
 #[derive(Debug, thiserror::Error)]
@@ -711,7 +712,10 @@ impl PluginManager {
         let handle_config = self
             .create_user_plugin_config(plugin_id, &user_plugin)
             .await?;
-        let handle = PluginHandle::new(handle_config);
+
+        // Create handle with storage support for user plugins
+        let storage_handler = StorageRequestHandler::new(self.db.as_ref().clone(), user_plugin.id);
+        let handle = PluginHandle::new_with_storage(handle_config, storage_handler);
 
         // Start the plugin
         match handle.start().await {

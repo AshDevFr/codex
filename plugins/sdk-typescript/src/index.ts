@@ -76,5 +76,17 @@ export {
   type SeriesMetadataPluginOptions,
 } from "./server.js";
 
+// Storage
+export {
+  PluginStorage,
+  type StorageClearResponse,
+  type StorageDeleteResponse,
+  StorageError,
+  type StorageGetResponse,
+  type StorageKeyEntry,
+  type StorageListResponse,
+  type StorageSetResponse,
+} from "./storage.js";
+
 // Types
 export * from "./types/index.js";

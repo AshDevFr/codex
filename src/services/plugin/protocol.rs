@@ -202,6 +202,18 @@ pub mod methods {
     pub const METADATA_BOOK_GET: &str = "metadata/book/get";
     /// Find best match for a book (ISBN first, then title fallback)
     pub const METADATA_BOOK_MATCH: &str = "metadata/book/match";
+
+    // Storage methods (user plugin data)
+    /// Get a value by key from plugin storage
+    pub const STORAGE_GET: &str = "storage/get";
+    /// Set a value by key in plugin storage (upsert)
+    pub const STORAGE_SET: &str = "storage/set";
+    /// Delete a value by key from plugin storage
+    pub const STORAGE_DELETE: &str = "storage/delete";
+    /// List all keys in plugin storage
+    pub const STORAGE_LIST: &str = "storage/list";
+    /// Clear all data from plugin storage
+    pub const STORAGE_CLEAR: &str = "storage/clear";
 }
 
 // =============================================================================

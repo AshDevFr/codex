@@ -28,6 +28,7 @@ use super::protocol::{
 };
 use super::rpc::{RpcClient, RpcError};
 use super::secrets::SecretValue;
+use super::storage_handler::StorageRequestHandler;
 
 /// Error type for plugin handle operations
 #[derive(Debug, thiserror::Error)]
@@ -131,6 +132,8 @@ pub struct PluginHandle {
     manifest: Arc<RwLock<Option<PluginManifest>>>,
     /// Health tracker
     health: Arc<HealthTracker>,
+    /// Optional storage handler for user plugin reverse RPC
+    storage_handler: Option<StorageRequestHandler>,
 }
 
 impl PluginHandle {
@@ -142,6 +145,22 @@ impl PluginHandle {
             state: Arc::new(RwLock::new(PluginState::Idle)),
             client: Arc::new(RwLock::new(None)),
             manifest: Arc::new(RwLock::new(None)),
+            storage_handler: None,
+        }
+    }
+
+    /// Create a new plugin handle with storage support for user plugins.
+    ///
+    /// The storage handler enables the plugin to make `storage/*` reverse RPC
+    /// calls that are handled by the host using the database.
+    pub fn new_with_storage(config: PluginConfig, storage_handler: StorageRequestHandler) -> Self {
+        Self {
+            health: Arc::new(HealthTracker::new(config.max_failures)),
+            config,
+            state: Arc::new(RwLock::new(PluginState::Idle)),
+            client: Arc::new(RwLock::new(None)),
+            manifest: Arc::new(RwLock::new(None)),
+            storage_handler: Some(storage_handler),
         }
     }
 
@@ -223,8 +242,14 @@ impl PluginHandle {
             }
         };
 
-        // Create RPC client
-        let mut client = RpcClient::new(process, self.config.request_timeout);
+        // Create RPC client (with storage support if configured)
+        let mut client = match &self.storage_handler {
+            Some(handler) => {
+                debug!("Creating RPC client with storage handler for user plugin");
+                RpcClient::new_with_storage(process, self.config.request_timeout, handler.clone())
+            }
+            None => RpcClient::new(process, self.config.request_timeout),
+        };
         debug!("RPC client created, sending initialize request");
 
         // Initialize the plugin
