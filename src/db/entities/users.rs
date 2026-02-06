@@ -39,6 +39,8 @@ pub enum Relation {
     ReadProgress,
     #[sea_orm(has_many = "super::user_sharing_tags::Entity")]
     UserSharingTags,
+    #[sea_orm(has_many = "super::oidc_connections::Entity")]
+    OidcConnections,
 }
 
 impl Related<super::read_progress::Entity> for Entity {
@@ -59,6 +61,12 @@ impl Related<super::sharing_tags::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::user_sharing_tags::Relation::User.def().rev())
+    }
+}
+
+impl Related<super::oidc_connections::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OidcConnections.def()
     }
 }
 

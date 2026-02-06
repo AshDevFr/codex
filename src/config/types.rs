@@ -64,6 +64,110 @@ fn default_exempt_paths() -> Vec<String> {
     vec!["/health".to_string(), "/api/v1/events".to_string()]
 }
 
+/// Default role for OIDC users
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum OidcDefaultRole {
+    Admin,
+    Maintainer,
+    #[default]
+    Reader,
+}
+
+impl OidcDefaultRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OidcDefaultRole::Admin => "admin",
+            OidcDefaultRole::Maintainer => "maintainer",
+            OidcDefaultRole::Reader => "reader",
+        }
+    }
+}
+
+/// Configuration for a single OIDC provider
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OidcProviderConfig {
+    /// Display name shown on login button
+    pub display_name: String,
+
+    /// OIDC discovery URL (provider's issuer URL)
+    /// e.g., "https://authentik.example.com/application/o/codex/"
+    pub issuer_url: String,
+
+    /// OAuth2 client ID
+    pub client_id: String,
+
+    /// OAuth2 client secret (optional if using client_secret_env)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_secret: Option<String>,
+
+    /// Environment variable name containing client secret
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_secret_env: Option<String>,
+
+    /// Scopes to request (openid is always included)
+    #[serde(default)]
+    pub scopes: Vec<String>,
+
+    /// Group-to-role mapping: role -> [group names]
+    /// e.g., {"admin": ["codex-admins"], "reader": ["codex-users"]}
+    #[serde(default)]
+    pub role_mapping: HashMap<String, Vec<String>>,
+
+    /// Claim containing groups (default: "groups")
+    #[serde(default = "default_groups_claim")]
+    pub groups_claim: String,
+
+    /// Claim for username (default: "preferred_username")
+    #[serde(default = "default_username_claim")]
+    pub username_claim: String,
+
+    /// Claim for email (default: "email")
+    #[serde(default = "default_email_claim")]
+    pub email_claim: String,
+}
+
+fn default_groups_claim() -> String {
+    "groups".to_string()
+}
+
+fn default_username_claim() -> String {
+    "preferred_username".to_string()
+}
+
+fn default_email_claim() -> String {
+    "email".to_string()
+}
+
+/// Configuration for OpenID Connect (OIDC) authentication
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct OidcConfig {
+    /// Enable OIDC authentication
+    pub enabled: bool,
+
+    /// Auto-create users on first OIDC login
+    pub auto_create_users: bool,
+
+    /// Default role for new OIDC users (if no group mapping matches)
+    pub default_role: OidcDefaultRole,
+
+    /// Provider configurations keyed by provider name (e.g., "authentik", "keycloak")
+    #[serde(default)]
+    pub providers: HashMap<String, OidcProviderConfig>,
+}
+
+impl Default for OidcConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_AUTH_OIDC_ENABLED", false),
+            auto_create_users: env_bool_or("CODEX_AUTH_OIDC_AUTO_CREATE_USERS", true),
+            default_role: OidcDefaultRole::Reader,
+            providers: HashMap::new(),
+        }
+    }
+}
+
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
@@ -196,6 +300,9 @@ pub struct AuthConfig {
     pub argon2_memory_cost: u32,
     pub argon2_time_cost: u32,
     pub argon2_parallelism: u32,
+    /// OIDC configuration for external identity provider authentication
+    #[serde(default)]
+    pub oidc: OidcConfig,
 }
 
 impl Default for AuthConfig {
@@ -212,6 +319,7 @@ impl Default for AuthConfig {
             argon2_memory_cost: 19456,
             argon2_time_cost: 2,
             argon2_parallelism: 1,
+            oidc: OidcConfig::default(),
         }
     }
 }
@@ -852,6 +960,7 @@ mod tests {
             argon2_memory_cost: 20000,
             argon2_time_cost: 3,
             argon2_parallelism: 2,
+            oidc: OidcConfig::default(),
         };
 
         let yaml = serde_yaml::to_string(&config).unwrap();
@@ -1200,5 +1309,284 @@ database:
         assert!(config.rate_limit.enabled);
         assert_eq!(config.rate_limit.anonymous_rps, 10);
         assert_eq!(config.rate_limit.authenticated_rps, 50);
+    }
+
+    // OIDC Configuration Tests
+
+    #[test]
+    fn test_oidc_default_role_serialization() {
+        let role = OidcDefaultRole::Admin;
+        let yaml = serde_yaml::to_string(&role).unwrap();
+        assert!(yaml.contains("admin"));
+
+        let role = OidcDefaultRole::Reader;
+        let yaml = serde_yaml::to_string(&role).unwrap();
+        assert!(yaml.contains("reader"));
+    }
+
+    #[test]
+    fn test_oidc_default_role_deserialization() {
+        let yaml = "admin";
+        let role: OidcDefaultRole = serde_yaml::from_str(yaml).unwrap();
+        assert!(matches!(role, OidcDefaultRole::Admin));
+
+        let yaml = "maintainer";
+        let role: OidcDefaultRole = serde_yaml::from_str(yaml).unwrap();
+        assert!(matches!(role, OidcDefaultRole::Maintainer));
+
+        let yaml = "reader";
+        let role: OidcDefaultRole = serde_yaml::from_str(yaml).unwrap();
+        assert!(matches!(role, OidcDefaultRole::Reader));
+    }
+
+    #[test]
+    fn test_oidc_default_role_as_str() {
+        assert_eq!(OidcDefaultRole::Admin.as_str(), "admin");
+        assert_eq!(OidcDefaultRole::Maintainer.as_str(), "maintainer");
+        assert_eq!(OidcDefaultRole::Reader.as_str(), "reader");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_config_default() {
+        let config = OidcConfig::default();
+        // Disabled by default for security
+        assert!(!config.enabled);
+        // Auto-create users enabled by default
+        assert!(config.auto_create_users);
+        // Default role is reader
+        assert!(matches!(config.default_role, OidcDefaultRole::Reader));
+        // No providers by default
+        assert!(config.providers.is_empty());
+    }
+
+    #[test]
+    fn test_oidc_provider_config_serialization() {
+        let mut role_mapping = HashMap::new();
+        role_mapping.insert("admin".to_string(), vec!["codex-admins".to_string()]);
+        role_mapping.insert(
+            "reader".to_string(),
+            vec!["codex-users".to_string(), "users".to_string()],
+        );
+
+        let provider = OidcProviderConfig {
+            display_name: "Authentik".to_string(),
+            issuer_url: "https://authentik.example.com/application/o/codex/".to_string(),
+            client_id: "codex-client".to_string(),
+            client_secret: Some("secret123".to_string()),
+            client_secret_env: None,
+            scopes: vec!["email".to_string(), "profile".to_string()],
+            role_mapping,
+            groups_claim: "groups".to_string(),
+            username_claim: "preferred_username".to_string(),
+            email_claim: "email".to_string(),
+        };
+
+        let yaml = serde_yaml::to_string(&provider).unwrap();
+        assert!(yaml.contains("Authentik"));
+        assert!(yaml.contains("codex-client"));
+        assert!(yaml.contains("authentik.example.com"));
+
+        let deserialized: OidcProviderConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.display_name, "Authentik");
+        assert_eq!(deserialized.client_id, "codex-client");
+        assert_eq!(deserialized.client_secret, Some("secret123".to_string()));
+        assert_eq!(deserialized.scopes.len(), 2);
+        assert!(deserialized.role_mapping.contains_key("admin"));
+    }
+
+    #[test]
+    fn test_oidc_provider_config_from_yaml() {
+        let yaml_content = r#"
+display_name: "Keycloak"
+issuer_url: "https://keycloak.example.com/realms/codex"
+client_id: "codex"
+client_secret_env: "CODEX_OIDC_KEYCLOAK_SECRET"
+scopes:
+  - email
+  - profile
+  - groups
+role_mapping:
+  admin:
+    - realm-admin
+    - codex-admin
+  maintainer:
+    - codex-editor
+  reader:
+    - codex-reader
+groups_claim: "groups"
+username_claim: "preferred_username"
+"#;
+
+        let provider: OidcProviderConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(provider.display_name, "Keycloak");
+        assert_eq!(
+            provider.issuer_url,
+            "https://keycloak.example.com/realms/codex"
+        );
+        assert_eq!(provider.client_id, "codex");
+        assert!(provider.client_secret.is_none());
+        assert_eq!(
+            provider.client_secret_env,
+            Some("CODEX_OIDC_KEYCLOAK_SECRET".to_string())
+        );
+        assert_eq!(provider.scopes, vec!["email", "profile", "groups"]);
+        assert_eq!(
+            provider.role_mapping.get("admin"),
+            Some(&vec!["realm-admin".to_string(), "codex-admin".to_string()])
+        );
+        assert_eq!(
+            provider.role_mapping.get("maintainer"),
+            Some(&vec!["codex-editor".to_string()])
+        );
+        assert_eq!(provider.groups_claim, "groups");
+        assert_eq!(provider.username_claim, "preferred_username");
+        // email_claim should use default
+        assert_eq!(provider.email_claim, "email");
+    }
+
+    #[test]
+    fn test_oidc_provider_config_defaults() {
+        let yaml_content = r#"
+display_name: "Test Provider"
+issuer_url: "https://test.example.com"
+client_id: "test-client"
+"#;
+
+        let provider: OidcProviderConfig = serde_yaml::from_str(yaml_content).unwrap();
+        // Check defaults are applied
+        assert_eq!(provider.groups_claim, "groups");
+        assert_eq!(provider.username_claim, "preferred_username");
+        assert_eq!(provider.email_claim, "email");
+        assert!(provider.scopes.is_empty());
+        assert!(provider.role_mapping.is_empty());
+    }
+
+    #[test]
+    fn test_oidc_config_serialization() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            "authentik".to_string(),
+            OidcProviderConfig {
+                display_name: "Authentik".to_string(),
+                issuer_url: "https://auth.example.com".to_string(),
+                client_id: "client".to_string(),
+                client_secret: Some("secret".to_string()),
+                client_secret_env: None,
+                scopes: vec!["email".to_string()],
+                role_mapping: HashMap::new(),
+                groups_claim: "groups".to_string(),
+                username_claim: "preferred_username".to_string(),
+                email_claim: "email".to_string(),
+            },
+        );
+
+        let config = OidcConfig {
+            enabled: true,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            providers,
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("enabled: true"));
+        assert!(yaml.contains("auto_create_users: true"));
+        assert!(yaml.contains("authentik"));
+
+        let deserialized: OidcConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(deserialized.enabled);
+        assert!(deserialized.auto_create_users);
+        assert!(deserialized.providers.contains_key("authentik"));
+    }
+
+    #[test]
+    fn test_oidc_config_from_yaml() {
+        let yaml_content = r#"
+enabled: true
+auto_create_users: false
+default_role: maintainer
+providers:
+  authentik:
+    display_name: "Authentik SSO"
+    issuer_url: "https://auth.example.com/application/o/codex/"
+    client_id: "codex"
+    client_secret: "secret123"
+    scopes:
+      - email
+      - profile
+      - groups
+    role_mapping:
+      admin:
+        - codex-admins
+      reader:
+        - codex-users
+"#;
+
+        let config: OidcConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.enabled);
+        assert!(!config.auto_create_users);
+        assert!(matches!(config.default_role, OidcDefaultRole::Maintainer));
+        assert!(config.providers.contains_key("authentik"));
+
+        let provider = config.providers.get("authentik").unwrap();
+        assert_eq!(provider.display_name, "Authentik SSO");
+        assert_eq!(provider.client_id, "codex");
+        assert_eq!(provider.client_secret, Some("secret123".to_string()));
+    }
+
+    #[test]
+    fn test_auth_config_includes_oidc() {
+        let yaml_content = r#"
+jwt_secret: "test-secret"
+jwt_expiry_hours: 24
+oidc:
+  enabled: true
+  auto_create_users: true
+  default_role: reader
+"#;
+
+        let config: AuthConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.jwt_secret, "test-secret");
+        assert!(config.oidc.enabled);
+        assert!(config.oidc.auto_create_users);
+    }
+
+    #[test]
+    #[serial]
+    fn test_auth_config_oidc_uses_defaults() {
+        // When oidc is not specified, it should use defaults
+        let yaml_content = r#"
+jwt_secret: "test-secret"
+jwt_expiry_hours: 24
+"#;
+
+        let config: AuthConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(!config.oidc.enabled);
+        assert!(config.oidc.auto_create_users);
+        assert!(matches!(config.oidc.default_role, OidcDefaultRole::Reader));
+    }
+
+    #[test]
+    fn test_full_config_with_oidc() {
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+auth:
+  jwt_secret: "test-secret"
+  oidc:
+    enabled: true
+    providers:
+      keycloak:
+        display_name: "Keycloak"
+        issuer_url: "https://keycloak.example.com/realms/codex"
+        client_id: "codex"
+        client_secret: "secret"
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.auth.oidc.enabled);
+        assert!(config.auth.oidc.providers.contains_key("keycloak"));
     }
 }

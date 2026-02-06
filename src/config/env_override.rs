@@ -1,8 +1,9 @@
 use super::types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, KomgaApiConfig,
-    LogLevel, LoggingConfig, PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig,
-    TaskConfig,
+    LogLevel, LoggingConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig, PostgresConfig,
+    RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
+use std::collections::HashMap;
 use std::env;
 
 /// Trait for applying environment variable overrides to configuration structs
@@ -86,6 +87,109 @@ impl EnvOverride for RateLimitConfig {
             && let Ok(secs) = bucket_ttl.parse::<u64>()
         {
             self.bucket_ttl_secs = secs;
+        }
+    }
+}
+
+impl EnvOverride for OidcProviderConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(display_name) = env::var(format!("{}_DISPLAY_NAME", prefix)) {
+            self.display_name = display_name;
+        }
+        if let Ok(issuer_url) = env::var(format!("{}_ISSUER_URL", prefix)) {
+            self.issuer_url = issuer_url;
+        }
+        if let Ok(client_id) = env::var(format!("{}_CLIENT_ID", prefix)) {
+            self.client_id = client_id;
+        }
+        if let Ok(client_secret) = env::var(format!("{}_CLIENT_SECRET", prefix)) {
+            self.client_secret = Some(client_secret);
+        }
+        if let Ok(client_secret_env) = env::var(format!("{}_CLIENT_SECRET_ENV", prefix)) {
+            self.client_secret_env = Some(client_secret_env);
+        }
+        if let Ok(scopes) = env::var(format!("{}_SCOPES", prefix)) {
+            self.scopes = scopes
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
+        if let Ok(groups_claim) = env::var(format!("{}_GROUPS_CLAIM", prefix)) {
+            self.groups_claim = groups_claim;
+        }
+        if let Ok(username_claim) = env::var(format!("{}_USERNAME_CLAIM", prefix)) {
+            self.username_claim = username_claim;
+        }
+        if let Ok(email_claim) = env::var(format!("{}_EMAIL_CLAIM", prefix)) {
+            self.email_claim = email_claim;
+        }
+    }
+}
+
+impl EnvOverride for OidcConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
+            self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
+        }
+        if let Ok(auto_create) = env::var(format!("{}_AUTO_CREATE_USERS", prefix)) {
+            self.auto_create_users = auto_create.eq_ignore_ascii_case("true") || auto_create == "1";
+        }
+        if let Ok(default_role) = env::var(format!("{}_DEFAULT_ROLE", prefix)) {
+            self.default_role = match default_role.to_lowercase().as_str() {
+                "admin" => OidcDefaultRole::Admin,
+                "maintainer" => OidcDefaultRole::Maintainer,
+                "reader" | _ => OidcDefaultRole::Reader,
+            };
+        }
+
+        // Apply overrides to existing providers
+        for (provider_name, provider_config) in self.providers.iter_mut() {
+            let provider_prefix = format!(
+                "{}_PROVIDERS_{}",
+                prefix,
+                provider_name.to_uppercase().replace('-', "_")
+            );
+            provider_config.apply_env_overrides(&provider_prefix);
+        }
+
+        // Check for dynamically configured providers via environment variables
+        // Format: CODEX_AUTH_OIDC_PROVIDERS_<NAME>_ISSUER_URL (required to detect a new provider)
+        // This allows adding providers purely through environment variables
+        for (key, _) in env::vars() {
+            let providers_prefix = format!("{}_PROVIDERS_", prefix);
+            if key.starts_with(&providers_prefix) && key.ends_with("_ISSUER_URL") {
+                // Extract provider name from key
+                let provider_name_upper = key
+                    .strip_prefix(&providers_prefix)
+                    .and_then(|s| s.strip_suffix("_ISSUER_URL"))
+                    .unwrap_or("");
+                if provider_name_upper.is_empty() {
+                    continue;
+                }
+
+                let provider_name = provider_name_upper.to_lowercase().replace('_', "-");
+                let provider_prefix = format!("{}_PROVIDERS_{}", prefix, provider_name_upper);
+
+                // Only create new provider if it doesn't already exist
+                if !self.providers.contains_key(&provider_name) {
+                    // Create provider with defaults and then apply env overrides
+                    let mut new_provider = OidcProviderConfig {
+                        display_name: provider_name.clone(),
+                        issuer_url: String::new(),
+                        client_id: String::new(),
+                        client_secret: None,
+                        client_secret_env: None,
+                        scopes: vec!["email".to_string(), "profile".to_string()],
+                        role_mapping: HashMap::new(),
+                        groups_claim: "groups".to_string(),
+                        username_claim: "preferred_username".to_string(),
+                        email_claim: "email".to_string(),
+                    };
+                    new_provider.apply_env_overrides(&provider_prefix);
+                    self.providers.insert(provider_name, new_provider);
+                }
+            }
         }
     }
 }
@@ -251,6 +355,9 @@ impl EnvOverride for AuthConfig {
         {
             self.argon2_parallelism = p;
         }
+
+        // Apply OIDC configuration overrides
+        self.oidc.apply_env_overrides(&format!("{}_OIDC", prefix));
     }
 }
 
@@ -834,5 +941,305 @@ mod tests {
 
         remove_var("CODEX_RATE_LIMIT_ANONYMOUS_RPS");
         remove_var("CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS");
+    }
+
+    // OIDC Configuration Environment Override Tests
+
+    #[test]
+    #[serial]
+    fn test_oidc_config_env_override() {
+        // Clear any existing env vars first
+        remove_var("CODEX_AUTH_OIDC_ENABLED");
+        remove_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS");
+        remove_var("CODEX_AUTH_OIDC_DEFAULT_ROLE");
+
+        use crate::config::{OidcConfig, OidcDefaultRole};
+
+        let mut config = OidcConfig {
+            enabled: false,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            providers: std::collections::HashMap::new(),
+        };
+
+        // Set env vars and apply overrides
+        set_var("CODEX_AUTH_OIDC_ENABLED", "true");
+        set_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS", "false");
+        set_var("CODEX_AUTH_OIDC_DEFAULT_ROLE", "admin");
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+
+        assert!(config.enabled);
+        assert!(!config.auto_create_users);
+        assert!(matches!(config.default_role, OidcDefaultRole::Admin));
+
+        remove_var("CODEX_AUTH_OIDC_ENABLED");
+        remove_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS");
+        remove_var("CODEX_AUTH_OIDC_DEFAULT_ROLE");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_config_env_override_enabled_with_1() {
+        remove_var("CODEX_AUTH_OIDC_ENABLED");
+
+        use crate::config::{OidcConfig, OidcDefaultRole};
+
+        let mut config = OidcConfig {
+            enabled: false,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            providers: std::collections::HashMap::new(),
+        };
+
+        set_var("CODEX_AUTH_OIDC_ENABLED", "1");
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+
+        assert!(config.enabled);
+
+        remove_var("CODEX_AUTH_OIDC_ENABLED");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_config_env_override_default_role_variants() {
+        use crate::config::{OidcConfig, OidcDefaultRole};
+
+        // Test maintainer role
+        remove_var("CODEX_AUTH_OIDC_DEFAULT_ROLE");
+
+        let mut config = OidcConfig {
+            enabled: false,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            providers: std::collections::HashMap::new(),
+        };
+
+        set_var("CODEX_AUTH_OIDC_DEFAULT_ROLE", "maintainer");
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+        assert!(matches!(config.default_role, OidcDefaultRole::Maintainer));
+
+        // Test reader role (explicit)
+        set_var("CODEX_AUTH_OIDC_DEFAULT_ROLE", "reader");
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+        assert!(matches!(config.default_role, OidcDefaultRole::Reader));
+
+        remove_var("CODEX_AUTH_OIDC_DEFAULT_ROLE");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_provider_config_env_override() {
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_DISPLAY_NAME");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ISSUER_URL");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM");
+
+        use crate::config::OidcProviderConfig;
+
+        let mut provider = OidcProviderConfig {
+            display_name: "Original".to_string(),
+            issuer_url: "https://original.example.com".to_string(),
+            client_id: "original-client".to_string(),
+            client_secret: None,
+            client_secret_env: None,
+            scopes: vec![],
+            role_mapping: std::collections::HashMap::new(),
+            groups_claim: "groups".to_string(),
+            username_claim: "preferred_username".to_string(),
+            email_claim: "email".to_string(),
+        };
+
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_DISPLAY_NAME",
+            "Authentik SSO",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ISSUER_URL",
+            "https://auth.example.com",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID",
+            "new-client-id",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET",
+            "secret123",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES",
+            "email, profile, groups",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM",
+            "custom_groups",
+        );
+        provider.apply_env_overrides("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK");
+
+        assert_eq!(provider.display_name, "Authentik SSO");
+        assert_eq!(provider.issuer_url, "https://auth.example.com");
+        assert_eq!(provider.client_id, "new-client-id");
+        assert_eq!(provider.client_secret, Some("secret123".to_string()));
+        assert_eq!(
+            provider.scopes,
+            vec![
+                "email".to_string(),
+                "profile".to_string(),
+                "groups".to_string()
+            ]
+        );
+        assert_eq!(provider.groups_claim, "custom_groups");
+
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_DISPLAY_NAME");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ISSUER_URL");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_config_existing_provider_env_override() {
+        // Test that env vars override existing provider config
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET");
+
+        use crate::config::{OidcConfig, OidcDefaultRole, OidcProviderConfig};
+
+        let mut providers = std::collections::HashMap::new();
+        providers.insert(
+            "authentik".to_string(),
+            OidcProviderConfig {
+                display_name: "Authentik".to_string(),
+                issuer_url: "https://auth.example.com".to_string(),
+                client_id: "yaml-client".to_string(),
+                client_secret: Some("yaml-secret".to_string()),
+                client_secret_env: None,
+                scopes: vec!["email".to_string()],
+                role_mapping: std::collections::HashMap::new(),
+                groups_claim: "groups".to_string(),
+                username_claim: "preferred_username".to_string(),
+                email_claim: "email".to_string(),
+            },
+        );
+
+        let mut config = OidcConfig {
+            enabled: true,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            providers,
+        };
+
+        // Override client_id and client_secret via env vars
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID",
+            "env-client",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET",
+            "env-secret",
+        );
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+
+        let provider = config.providers.get("authentik").unwrap();
+        assert_eq!(provider.client_id, "env-client");
+        assert_eq!(provider.client_secret, Some("env-secret".to_string()));
+        // Non-overridden values should remain
+        assert_eq!(provider.display_name, "Authentik");
+        assert_eq!(provider.issuer_url, "https://auth.example.com");
+
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET");
+    }
+
+    #[test]
+    #[serial]
+    fn test_oidc_config_dynamic_provider_creation_via_env() {
+        // Test that a new provider can be created purely through env vars
+        // This requires ISSUER_URL to be set (used as detection mechanism)
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_ISSUER_URL");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_CLIENT_ID");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_CLIENT_SECRET");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_DISPLAY_NAME");
+
+        use crate::config::{OidcConfig, OidcDefaultRole};
+
+        let mut config = OidcConfig {
+            enabled: true,
+            auto_create_users: true,
+            default_role: OidcDefaultRole::Reader,
+            providers: std::collections::HashMap::new(),
+        };
+
+        // Set env vars to create a new provider
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_ISSUER_URL",
+            "https://new.example.com",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_CLIENT_ID",
+            "new-client",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_CLIENT_SECRET",
+            "new-secret",
+        );
+        set_var(
+            "CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_DISPLAY_NAME",
+            "New Provider",
+        );
+        config.apply_env_overrides("CODEX_AUTH_OIDC");
+
+        // The provider should now exist (key is lowercase with hyphens)
+        assert!(config.providers.contains_key("newprovider"));
+        let provider = config.providers.get("newprovider").unwrap();
+        assert_eq!(provider.issuer_url, "https://new.example.com");
+        assert_eq!(provider.client_id, "new-client");
+        assert_eq!(provider.client_secret, Some("new-secret".to_string()));
+        assert_eq!(provider.display_name, "New Provider");
+
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_ISSUER_URL");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_CLIENT_ID");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_CLIENT_SECRET");
+        remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_DISPLAY_NAME");
+    }
+
+    #[test]
+    #[serial]
+    fn test_auth_config_oidc_env_override_via_parent() {
+        // Test that OIDC env overrides work through AuthConfig::apply_env_overrides
+        remove_var("CODEX_AUTH_OIDC_ENABLED");
+        remove_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS");
+
+        use crate::config::{AuthConfig, OidcConfig, OidcDefaultRole};
+
+        let mut config = AuthConfig {
+            jwt_secret: "test-secret".to_string(),
+            jwt_expiry_hours: 24,
+            refresh_token_enabled: false,
+            refresh_token_expiry_days: 30,
+            email_confirmation_required: false,
+            argon2_memory_cost: 19456,
+            argon2_time_cost: 2,
+            argon2_parallelism: 1,
+            oidc: OidcConfig {
+                enabled: false,
+                auto_create_users: true,
+                default_role: OidcDefaultRole::Reader,
+                providers: std::collections::HashMap::new(),
+            },
+        };
+
+        set_var("CODEX_AUTH_OIDC_ENABLED", "true");
+        set_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS", "false");
+        config.apply_env_overrides("CODEX_AUTH");
+
+        assert!(config.oidc.enabled);
+        assert!(!config.oidc.auto_create_users);
+
+        remove_var("CODEX_AUTH_OIDC_ENABLED");
+        remove_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS");
     }
 }

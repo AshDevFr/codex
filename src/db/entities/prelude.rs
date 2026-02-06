@@ -16,6 +16,10 @@ pub use super::task_metrics::Entity as TaskMetrics;
 pub use super::tasks::Entity as Tasks;
 pub use super::users::Entity as Users;
 
+// OIDC authentication
+#[allow(unused_imports)]
+pub use super::oidc_connections::Entity as OidcConnections;
+
 // Plugin entities (exported for external use, may not be used internally)
 #[allow(unused_imports)]
 pub use super::plugin_failures::Entity as PluginFailures;

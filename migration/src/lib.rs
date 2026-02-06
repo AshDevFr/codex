@@ -93,6 +93,9 @@ mod m20260203_000049_remove_book_metadata_web;
 // Plugin metadata targets configuration
 mod m20260203_000050_add_plugin_metadata_targets;
 
+// OIDC authentication
+pub mod m20260205_000051_create_oidc_connections;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -169,6 +172,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260203_000049_remove_book_metadata_web::Migration),
             // Plugin metadata targets configuration
             Box::new(m20260203_000050_add_plugin_metadata_targets::Migration),
+            // OIDC authentication
+            Box::new(m20260205_000051_create_oidc_connections::Migration),
         ]
     }
 }

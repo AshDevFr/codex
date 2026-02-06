@@ -31,6 +31,9 @@ pub mod user_series_rating;
 // Sharing tags for content access control
 pub mod sharing_tag;
 
+// OIDC authentication
+pub mod oidc_connection;
+
 // Re-export repositories
 pub use alternate_title::AlternateTitleRepository;
 pub use api_key::ApiKeyRepository;
@@ -66,3 +69,6 @@ pub use user_series_rating::UserSeriesRatingRepository;
 
 // Sharing tags
 pub use sharing_tag::SharingTagRepository;
+
+// OIDC authentication
+pub use oidc_connection::OidcConnectionRepository;

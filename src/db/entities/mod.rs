@@ -30,6 +30,9 @@ pub mod task_metrics;
 pub mod tasks;
 pub mod users;
 
+// OIDC authentication
+pub mod oidc_connections;
+
 // Series metadata enhancement entities
 pub mod genres;
 pub mod series_alternate_titles;
