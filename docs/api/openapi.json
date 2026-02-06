@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "1.8.5"
+    "version": "1.9.0"
   },
   "paths": {
     "/api/v1/admin/cleanup-orphans": {
@@ -1767,7 +1767,7 @@
         ],
         "summary": "Initiate OIDC login flow",
         "description": "Generates an authorization URL and returns it to the client.\nThe client should redirect the user to this URL to authenticate.",
-        "operationId": "login",
+        "operationId": "oidc_login",
         "parameters": [
           {
             "name": "provider",

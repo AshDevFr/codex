@@ -241,3 +241,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest
           cache-to: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest,mode=max
+
+  # Clean up intermediate artifacts that are no longer needed
+  cleanup:
+    name: Cleanup
+    needs:
+      - test
+      - docker
+    if: always()
+    runs-on: arc-runner-codex
+    container: ubuntu:22.04
+    steps:
+      - name: Delete intermediate artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: nextest-archive

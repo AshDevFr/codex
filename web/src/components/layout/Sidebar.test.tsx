@@ -14,6 +14,7 @@ vi.mock("@/api/tasks", () => ({
 }));
 vi.mock("@/api/plugins", () => ({
   pluginsApi: {
+    getAll: vi.fn(() => Promise.resolve({ plugins: [] })),
     getActions: vi.fn(() => Promise.resolve({ actions: [] })),
   },
   pluginActionsApi: {

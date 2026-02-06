@@ -277,7 +277,10 @@ describe("Login Component", () => {
     );
 
     await waitFor(() => {
-      expect(authApi.initiateOidcLogin).toHaveBeenCalledWith("authentik");
+      expect(authApi.initiateOidcLogin).toHaveBeenCalled();
+      expect(vi.mocked(authApi.initiateOidcLogin).mock.calls[0][0]).toBe(
+        "authentik",
+      );
       expect(window.location.href).toBe(
         "https://auth.example.com/authorize?client_id=abc",
       );

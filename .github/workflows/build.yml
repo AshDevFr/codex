@@ -286,6 +286,7 @@ jobs:
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/dist
+          retention-days: 1
       - name: Run dist plan
         id: plan
         shell: bash
@@ -303,6 +304,7 @@ jobs:
         with:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
+          retention-days: 1
 
   # Build and packages all the platform-specific things
   build-local-artifacts:
@@ -390,6 +392,7 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+          retention-days: 5
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
@@ -450,6 +453,7 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+          retention-days: 5
   # Build and push Docker images (multi-arch) using cross-compilation
   # Uses Dockerfile.cross which cross-compiles ARM on x86 (no QEMU emulation)
   docker:
@@ -579,6 +583,7 @@ jobs:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
           path: dist-manifest.json
+          retention-days: 5
       # Create a GitHub Release while uploading all files to it
       - name: "Download GitHub Artifacts"
         uses: actions/download-artifact@v4
@@ -727,3 +732,26 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+
+  # Clean up intermediate artifacts that are no longer needed
+  cleanup:
+    name: Cleanup
+    needs:
+      - plan
+      - build-local-artifacts
+      - build-global-artifacts
+      - host
+      - docker
+      - announce
+    if: always()
+    runs-on: arc-runner-codex
+    container: ubuntu:22.04
+    steps:
+      - name: Delete intermediate artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: |
+            nextest-archive
+            frontend-dist
+            cargo-dist-cache
+            artifacts-plan-dist-manifest

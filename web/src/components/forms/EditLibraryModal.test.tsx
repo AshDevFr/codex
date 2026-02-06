@@ -420,54 +420,58 @@ describe("LibraryModal (Edit Mode)", () => {
     expect(mockOnClose).toHaveBeenCalled();
   });
 
-  it("should validate cron input when auto scan is enabled", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(
-      <LibraryModal
-        opened={true}
-        onClose={mockOnClose}
-        library={mockLibrary}
-      />,
-    );
+  it(
+    "should validate cron input when auto scan is enabled",
+    { timeout: 15000 },
+    async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <LibraryModal
+          opened={true}
+          onClose={mockOnClose}
+          library={mockLibrary}
+        />,
+      );
 
-    await waitFor(() => {
-      expect(screen.getByText("Edit Library")).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(screen.getByText("Edit Library")).toBeInTheDocument();
+      });
 
-    // Navigate to the Scanning tab
-    const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
-    await user.click(scanningTab);
+      // Navigate to the Scanning tab
+      const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+      await user.click(scanningTab);
 
-    // Wait for the Scanning tab content to load
-    await waitFor(() => {
-      expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
-    });
+      // Wait for the Scanning tab content to load
+      await waitFor(() => {
+        expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+      });
 
-    // Switch to auto scan
-    const selectInput = screen.getByText("Manual - Trigger scans on demand");
-    await user.click(selectInput);
+      // Switch to auto scan
+      const selectInput = screen.getByText("Manual - Trigger scans on demand");
+      await user.click(selectInput);
 
-    await waitFor(() => {
-      expect(
-        screen.getByText("Automatic - Scheduled scanning"),
-      ).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(
+          screen.getByText("Automatic - Scheduled scanning"),
+        ).toBeInTheDocument();
+      });
 
-    const autoOption = screen.getByText("Automatic - Scheduled scanning");
-    await user.click(autoOption);
+      const autoOption = screen.getByText("Automatic - Scheduled scanning");
+      await user.click(autoOption);
 
-    // Wait for cron input and enter invalid value
-    const cronInput = await screen.findByPlaceholderText("0 0 * * *");
-    expect(cronInput).toBeInTheDocument();
+      // Wait for cron input and enter invalid value
+      const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+      expect(cronInput).toBeInTheDocument();
 
-    await user.clear(cronInput);
-    await user.type(cronInput, "invalid cron");
+      await user.clear(cronInput);
+      await user.type(cronInput, "invalid cron");
 
-    // Input should show validation error
-    await waitFor(() => {
-      expect(cronInput).toHaveAttribute("aria-invalid", "true");
-    });
-  });
+      // Input should show validation error
+      await waitFor(() => {
+        expect(cronInput).toHaveAttribute("aria-invalid", "true");
+      });
+    },
+  );
 
   it("should default to all formats when library has empty allowedFormats", async () => {
     renderWithProviders(

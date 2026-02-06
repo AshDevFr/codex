@@ -2,6 +2,26 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.9.0] - 2026-02-06
+
+### 🚀 Features
+
+- *(auth)* Add OIDC configuration and data model
+- *(auth)* Implement OIDC service core
+- *(auth)* Add OIDC API endpoints
+- *(auth)* Add OIDC frontend integration
+- *(auth)* Improve OIDC config, role sync, and permission-aware frontend
+- *(auth)* Add OIDC tests, documentation, and role mapping env overrides
+
+### 🐛 Bug Fixes
+
+- *(duplicates)* Exclude books with empty file_hash from duplicate detection
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade to Rust 2024 edition
+- Increase test parallelism from 3 to 5 partitions
+
 ## [1.8.5] - 2026-02-05
 
 ### 🐛 Bug Fixes

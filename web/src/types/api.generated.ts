@@ -588,7 +588,7 @@ export interface paths {
          * @description Generates an authorization URL and returns it to the client.
          *     The client should redirect the user to this URL to authenticate.
          */
-        post: operations["login"];
+        post: operations["oidc_login"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15686,7 +15686,7 @@ export interface operations {
             };
         };
     };
-    login: {
+    oidc_login: {
         parameters: {
             query?: never;
             header?: never;

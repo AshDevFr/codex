@@ -75,6 +75,7 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> Json<OidcProv
 #[utoipa::path(
     post,
     path = "/api/v1/auth/oidc/{provider}/login",
+    operation_id = "oidc_login",
     params(
         ("provider" = String, Path, description = "OIDC provider name (e.g., 'authentik', 'keycloak')")
     ),

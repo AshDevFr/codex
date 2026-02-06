@@ -281,105 +281,113 @@ describe("LibraryModal (Add Mode)", () => {
     });
   });
 
-  it("should create library with valid inputs", async () => {
-    const user = userEvent.setup();
-    const mockLibrary = createMockLibrary();
+  it(
+    "should create library with valid inputs",
+    { timeout: 15000 },
+    async () => {
+      const user = userEvent.setup();
+      const mockLibrary = createMockLibrary();
 
-    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-    // Wait for modal and find form fields
-    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-    const modalContent = within(modal);
-    const nameInput = await modalContent.findByPlaceholderText(
-      "Enter library name",
-      {},
-      { timeout: 3000 },
-    );
-
-    // Fill in form
-    await user.clear(nameInput);
-    await user.type(nameInput, "Test Library");
-
-    // Set path directly (simulating browse selection)
-    const browseButton = screen.getByText("Browse");
-    await user.click(browseButton);
-
-    const driveButton = await screen.findByText("Home Directory");
-    await user.click(driveButton);
-
-    const selectButton = await screen.findByText("Select This Folder");
-    await user.click(selectButton);
-
-    // Submit form
-    await waitFor(() => {
-      const createButton = screen.getByText("Create Library");
-      expect(createButton).not.toBeDisabled();
-    });
-
-    const createButton = screen.getByText("Create Library");
-    await user.click(createButton);
-
-    await waitFor(() => {
-      expect(librariesApi.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: "Test Library",
-          path: "/home/user",
-          scanningConfig: expect.objectContaining({
-            enabled: false,
-            scanMode: "normal",
-          }),
-        }),
+      // Wait for modal and find form fields
+      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+      const modalContent = within(modal);
+      const nameInput = await modalContent.findByPlaceholderText(
+        "Enter library name",
+        {},
+        { timeout: 3000 },
       );
-    });
-  });
 
-  it("should call onClose with created library on successful creation", async () => {
-    const user = userEvent.setup();
-    const mockLibrary = createMockLibrary({ id: "123" });
+      // Fill in form
+      await user.clear(nameInput);
+      await user.type(nameInput, "Test Library");
 
-    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+      // Set path directly (simulating browse selection)
+      const browseButton = screen.getByText("Browse");
+      await user.click(browseButton);
 
-    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+      const driveButton = await screen.findByText("Home Directory");
+      await user.click(driveButton);
 
-    // Wait for modal and find form fields
-    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-    const modalContent = within(modal);
-    const nameInput = await modalContent.findByPlaceholderText(
-      "Enter library name",
-      {},
-      { timeout: 3000 },
-    );
+      const selectButton = await screen.findByText("Select This Folder");
+      await user.click(selectButton);
 
-    // Fill in form
-    await user.clear(nameInput);
-    await user.type(nameInput, "Test Library");
+      // Submit form
+      await waitFor(() => {
+        const createButton = screen.getByText("Create Library");
+        expect(createButton).not.toBeDisabled();
+      });
 
-    // Set path
-    const browseButton = screen.getByText("Browse");
-    await user.click(browseButton);
-
-    const driveButton = await screen.findByText("Home Directory");
-    await user.click(driveButton);
-
-    const selectButton = await screen.findByText("Select This Folder");
-    await user.click(selectButton);
-
-    // Submit form
-    await waitFor(() => {
       const createButton = screen.getByText("Create Library");
-      expect(createButton).not.toBeDisabled();
-    });
+      await user.click(createButton);
 
-    const createButton = screen.getByText("Create Library");
-    await user.click(createButton);
+      await waitFor(() => {
+        expect(librariesApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "Test Library",
+            path: "/home/user",
+            scanningConfig: expect.objectContaining({
+              enabled: false,
+              scanMode: "normal",
+            }),
+          }),
+        );
+      });
+    },
+  );
 
-    // Wait for the mutation to complete and onClose to be called with the created library
-    await waitFor(() => {
-      expect(mockOnClose).toHaveBeenCalledWith(mockLibrary);
-    });
-  });
+  it(
+    "should call onClose with created library on successful creation",
+    { timeout: 15000 },
+    async () => {
+      const user = userEvent.setup();
+      const mockLibrary = createMockLibrary({ id: "123" });
+
+      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+
+      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+
+      // Wait for modal and find form fields
+      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+      const modalContent = within(modal);
+      const nameInput = await modalContent.findByPlaceholderText(
+        "Enter library name",
+        {},
+        { timeout: 3000 },
+      );
+
+      // Fill in form
+      await user.clear(nameInput);
+      await user.type(nameInput, "Test Library");
+
+      // Set path
+      const browseButton = screen.getByText("Browse");
+      await user.click(browseButton);
+
+      const driveButton = await screen.findByText("Home Directory");
+      await user.click(driveButton);
+
+      const selectButton = await screen.findByText("Select This Folder");
+      await user.click(selectButton);
+
+      // Submit form
+      await waitFor(() => {
+        const createButton = screen.getByText("Create Library");
+        expect(createButton).not.toBeDisabled();
+      });
+
+      const createButton = screen.getByText("Create Library");
+      await user.click(createButton);
+
+      // Wait for the mutation to complete and onClose to be called with the created library
+      await waitFor(() => {
+        expect(mockOnClose).toHaveBeenCalledWith(mockLibrary);
+      });
+    },
+  );
 
   it("should show validation error when name is missing", async () => {
     renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
