@@ -12,6 +12,8 @@
  */
 
 import {
+  createLogger,
+  createSyncPlugin,
   type ExternalUserInfo,
   type InitializeParams,
   type SyncEntry,
@@ -22,8 +24,6 @@ import {
   type SyncPushRequest,
   type SyncPushResponse,
   type SyncStatusResponse,
-  createLogger,
-  createSyncPlugin,
 } from "@ashdev/codex-plugin-sdk";
 import {
   AniListClient,
@@ -186,9 +186,7 @@ const provider: SyncProvider = {
 
     return {
       entries,
-      nextCursor: result.pageInfo.hasNextPage
-        ? String(result.pageInfo.currentPage + 1)
-        : undefined,
+      nextCursor: result.pageInfo.hasNextPage ? String(result.pageInfo.currentPage + 1) : undefined,
       hasMore: result.pageInfo.hasNextPage,
     };
   },

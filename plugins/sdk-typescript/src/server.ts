@@ -1,21 +1,24 @@
 /**
  * Plugin server - handles JSON-RPC communication over stdio
+ *
+ * Provides factory functions for creating different plugin types.
+ * All plugin types share a common base server that handles:
+ * - stdin readline parsing
+ * - JSON-RPC error handling
+ * - initialize/ping/shutdown lifecycle methods
+ *
+ * Each plugin type adds its own method routing on top.
  */
 
 import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
 import { createLogger, type Logger } from "./logger.js";
 import type {
-  ProfileUpdateRequest,
-  RecommendationDismissRequest,
-  RecommendationProvider,
-  RecommendationRequest,
-} from "./recommendations.js";
-import type { SyncProvider, SyncPullRequest, SyncPushRequest } from "./sync.js";
-import type {
   BookMetadataProvider,
   MetadataContentType,
   MetadataProvider,
+  RecommendationProvider,
+  SyncProvider,
 } from "./types/capabilities.js";
 import type { PluginManifest } from "./types/manifest.js";
 import type {
@@ -25,12 +28,18 @@ import type {
   MetadataMatchParams,
   MetadataSearchParams,
 } from "./types/protocol.js";
+import type {
+  ProfileUpdateRequest,
+  RecommendationDismissRequest,
+  RecommendationRequest,
+} from "./types/recommendations.js";
 import {
   JSON_RPC_ERROR_CODES,
   type JsonRpcError,
   type JsonRpcRequest,
   type JsonRpcResponse,
 } from "./types/rpc.js";
+import type { SyncPullRequest, SyncPushRequest } from "./types/sync.js";
 
 // =============================================================================
 // Parameter Validation
@@ -134,6 +143,10 @@ function invalidParamsError(id: string | number | null, error: ValidationError):
   };
 }
 
+// =============================================================================
+// Shared Types
+// =============================================================================
+
 /**
  * Initialize parameters received from Codex
  */
@@ -143,6 +156,192 @@ export interface InitializeParams {
   /** Plugin credentials (API keys, tokens, etc.) */
   credentials?: Record<string, string>;
 }
+
+/**
+ * A method router handles capability-specific JSON-RPC methods.
+ * Returns a response for known methods, or null to indicate "not my method".
+ */
+type MethodRouter = (
+  method: string,
+  params: unknown,
+  id: string | number | null,
+) => Promise<JsonRpcResponse | null>;
+
+// =============================================================================
+// Shared Plugin Server
+// =============================================================================
+
+interface PluginServerOptions {
+  manifest: PluginManifest;
+  onInitialize?: ((params: InitializeParams) => void | Promise<void>) | undefined;
+  logLevel?: "debug" | "info" | "warn" | "error" | undefined;
+  label?: string | undefined;
+  router: MethodRouter;
+}
+
+/**
+ * Shared plugin server that handles JSON-RPC communication over stdio.
+ *
+ * Handles the common lifecycle methods (initialize, ping, shutdown) and
+ * delegates capability-specific methods to the provided router.
+ */
+function createPluginServer(options: PluginServerOptions): void {
+  const { manifest, onInitialize, logLevel = "info", label, router } = options;
+  const logger = createLogger({ name: manifest.name, level: logLevel });
+  const prefix = label ? `${label} plugin` : "plugin";
+
+  logger.info(`Starting ${prefix}: ${manifest.displayName} v${manifest.version}`);
+
+  const rl = createInterface({
+    input: process.stdin,
+    terminal: false,
+  });
+
+  rl.on("line", (line) => {
+    void handleLine(line, manifest, onInitialize, router, logger);
+  });
+
+  rl.on("close", () => {
+    logger.info("stdin closed, shutting down");
+    process.exit(0);
+  });
+
+  process.on("uncaughtException", (error) => {
+    logger.error("Uncaught exception", error);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error("Unhandled rejection", reason);
+  });
+}
+
+async function handleLine(
+  line: string,
+  manifest: PluginManifest,
+  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
+  router: MethodRouter,
+  logger: Logger,
+): Promise<void> {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+
+  let id: string | number | null = null;
+
+  try {
+    const request = JSON.parse(trimmed) as JsonRpcRequest;
+    id = request.id;
+
+    logger.debug(`Received request: ${request.method}`, { id: request.id });
+
+    const response = await handleRequest(request, manifest, onInitialize, router, logger);
+    if (response !== null) {
+      writeResponse(response);
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      writeResponse({
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: JSON_RPC_ERROR_CODES.PARSE_ERROR,
+          message: "Parse error: invalid JSON",
+        },
+      });
+    } else if (error instanceof PluginError) {
+      writeResponse({
+        jsonrpc: "2.0",
+        id,
+        error: error.toJsonRpcError(),
+      });
+    } else {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Request failed", error);
+      writeResponse({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: JSON_RPC_ERROR_CODES.INTERNAL_ERROR,
+          message,
+        },
+      });
+    }
+  }
+}
+
+async function handleRequest(
+  request: JsonRpcRequest,
+  manifest: PluginManifest,
+  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
+  router: MethodRouter,
+  logger: Logger,
+): Promise<JsonRpcResponse> {
+  const { method, params, id } = request;
+
+  // Common lifecycle methods
+  switch (method) {
+    case "initialize":
+      if (onInitialize) {
+        await onInitialize(params as InitializeParams);
+      }
+      return { jsonrpc: "2.0", id, result: manifest };
+
+    case "ping":
+      return { jsonrpc: "2.0", id, result: "pong" };
+
+    case "shutdown": {
+      logger.info("Shutdown requested");
+      const response: JsonRpcResponse = { jsonrpc: "2.0", id, result: null };
+      process.stdout.write(`${JSON.stringify(response)}\n`, () => {
+        process.exit(0);
+      });
+      return null as unknown as JsonRpcResponse;
+    }
+  }
+
+  // Delegate to capability-specific router
+  const response = await router(method, params, id);
+  if (response !== null) {
+    return response;
+  }
+
+  // Unknown method
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+      message: `Method not found: ${method}`,
+    },
+  };
+}
+
+function writeResponse(response: JsonRpcResponse): void {
+  process.stdout.write(`${JSON.stringify(response)}\n`);
+}
+
+// =============================================================================
+// Response Helpers
+// =============================================================================
+
+function methodNotFound(id: string | number | null, message: string): JsonRpcResponse {
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+      message,
+    },
+  };
+}
+
+function success(id: string | number | null, result: unknown): JsonRpcResponse {
+  return { jsonrpc: "2.0", id, result };
+}
+
+// =============================================================================
+// Metadata Plugin
+// =============================================================================
 
 /**
  * Options for creating a metadata plugin
@@ -212,8 +411,7 @@ export interface MetadataPluginOptions {
  * ```
  */
 export function createMetadataPlugin(options: MetadataPluginOptions): void {
-  const { manifest, provider, bookProvider, onInitialize, logLevel = "info" } = options;
-  const logger = createLogger({ name: manifest.name, level: logLevel });
+  const { manifest, provider, bookProvider, onInitialize, logLevel } = options;
 
   // Validate that required providers are present based on manifest
   const contentTypes = manifest.capabilities.metadataProvider;
@@ -228,73 +426,61 @@ export function createMetadataPlugin(options: MetadataPluginOptions): void {
     );
   }
 
-  logger.info(`Starting plugin: ${manifest.displayName} v${manifest.version}`);
+  const router: MethodRouter = async (method, params, id) => {
+    switch (method) {
+      // Series metadata methods
+      case "metadata/series/search": {
+        if (!provider) return methodNotFound(id, "This plugin does not support series metadata");
+        const err = validateSearchParams(params);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await provider.search(params as MetadataSearchParams));
+      }
+      case "metadata/series/get": {
+        if (!provider) return methodNotFound(id, "This plugin does not support series metadata");
+        const err = validateGetParams(params);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await provider.get(params as MetadataGetParams));
+      }
+      case "metadata/series/match": {
+        if (!provider) return methodNotFound(id, "This plugin does not support series metadata");
+        if (!provider.match) return methodNotFound(id, "This plugin does not support series match");
+        const err = validateMatchParams(params);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await provider.match(params as MetadataMatchParams));
+      }
 
-  const rl = createInterface({
-    input: process.stdin,
-    terminal: false,
-  });
+      // Book metadata methods
+      case "metadata/book/search": {
+        if (!bookProvider) return methodNotFound(id, "This plugin does not support book metadata");
+        const err = validateBookSearchParams(params);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await bookProvider.search(params as BookSearchParams));
+      }
+      case "metadata/book/get": {
+        if (!bookProvider) return methodNotFound(id, "This plugin does not support book metadata");
+        const err = validateGetParams(params);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await bookProvider.get(params as MetadataGetParams));
+      }
+      case "metadata/book/match": {
+        if (!bookProvider) return methodNotFound(id, "This plugin does not support book metadata");
+        if (!bookProvider.match)
+          return methodNotFound(id, "This plugin does not support book match");
+        const err = validateBookMatchParams(params);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await bookProvider.match(params as BookMatchParams));
+      }
 
-  rl.on("line", (line) => {
-    void handleLine(line, manifest, provider, bookProvider, onInitialize, logger);
-  });
-
-  rl.on("close", () => {
-    logger.info("stdin closed, shutting down");
-    process.exit(0);
-  });
-
-  // Handle uncaught errors
-  process.on("uncaughtException", (error) => {
-    logger.error("Uncaught exception", error);
-    process.exit(1);
-  });
-
-  process.on("unhandledRejection", (reason) => {
-    logger.error("Unhandled rejection", reason);
-  });
-}
-
-// =============================================================================
-// Backwards Compatibility (deprecated)
-// =============================================================================
-
-/**
- * @deprecated Use createMetadataPlugin instead
- */
-export function createSeriesMetadataPlugin(options: SeriesMetadataPluginOptions): void {
-  // Convert legacy options to new format
-  const newOptions: MetadataPluginOptions = {
-    ...options,
-    manifest: {
-      ...options.manifest,
-      capabilities: {
-        ...options.manifest.capabilities,
-        metadataProvider: ["series"] as MetadataContentType[],
-      },
-    },
+      default:
+        return null;
+    }
   };
-  createMetadataPlugin(newOptions);
-}
 
-/**
- * @deprecated Use MetadataPluginOptions instead
- */
-export interface SeriesMetadataPluginOptions {
-  /** Plugin manifest - must have capabilities.seriesMetadataProvider: true */
-  manifest: PluginManifest & {
-    capabilities: { seriesMetadataProvider: true };
-  };
-  /** SeriesMetadataProvider implementation */
-  provider: MetadataProvider;
-  /** Called when plugin receives initialize with credentials/config */
-  onInitialize?: (params: InitializeParams) => void | Promise<void>;
-  /** Log level (default: "info") */
-  logLevel?: "debug" | "info" | "warn" | "error";
+  createPluginServer({ manifest, onInitialize, logLevel, router });
 }
 
 // =============================================================================
-// Sync Plugin Factory
+// Sync Plugin
 // =============================================================================
 
 /**
@@ -350,38 +536,30 @@ export interface SyncPluginOptions {
  * ```
  */
 export function createSyncPlugin(options: SyncPluginOptions): void {
-  const { manifest, provider, onInitialize, logLevel = "info" } = options;
-  const logger = createLogger({ name: manifest.name, level: logLevel });
+  const { manifest, provider, onInitialize, logLevel } = options;
 
-  logger.info(`Starting sync plugin: ${manifest.displayName} v${manifest.version}`);
+  const router: MethodRouter = async (method, params, id) => {
+    switch (method) {
+      case "sync/getUserInfo":
+        return success(id, await provider.getUserInfo());
+      case "sync/pushProgress":
+        return success(id, await provider.pushProgress(params as SyncPushRequest));
+      case "sync/pullProgress":
+        return success(id, await provider.pullProgress(params as SyncPullRequest));
+      case "sync/status": {
+        if (!provider.status) return methodNotFound(id, "This plugin does not support sync/status");
+        return success(id, await provider.status());
+      }
+      default:
+        return null;
+    }
+  };
 
-  const rl = createInterface({
-    input: process.stdin,
-    terminal: false,
-  });
-
-  rl.on("line", (line) => {
-    void handleSyncLine(line, manifest, provider, onInitialize, logger);
-  });
-
-  rl.on("close", () => {
-    logger.info("stdin closed, shutting down");
-    process.exit(0);
-  });
-
-  // Handle uncaught errors
-  process.on("uncaughtException", (error) => {
-    logger.error("Uncaught exception", error);
-    process.exit(1);
-  });
-
-  process.on("unhandledRejection", (reason) => {
-    logger.error("Unhandled rejection", reason);
-  });
+  createPluginServer({ manifest, onInitialize, logLevel, label: "sync", router });
 }
 
 // =============================================================================
-// Recommendation Plugin Factory
+// Recommendation Plugin
 // =============================================================================
 
 /**
@@ -407,601 +585,70 @@ export interface RecommendationPluginOptions {
  * for recommendation operations (get recommendations, update profile, dismiss).
  */
 export function createRecommendationPlugin(options: RecommendationPluginOptions): void {
-  const { manifest, provider, onInitialize, logLevel = "info" } = options;
-  const logger = createLogger({ name: manifest.name, level: logLevel });
+  const { manifest, provider, onInitialize, logLevel } = options;
 
-  logger.info(`Starting recommendation plugin: ${manifest.displayName} v${manifest.version}`);
+  const router: MethodRouter = async (method, params, id) => {
+    switch (method) {
+      case "recommendations/get":
+        return success(id, await provider.get(params as RecommendationRequest));
+      case "recommendations/updateProfile": {
+        if (!provider.updateProfile)
+          return methodNotFound(id, "This plugin does not support recommendations/updateProfile");
+        return success(id, await provider.updateProfile(params as ProfileUpdateRequest));
+      }
+      case "recommendations/clear": {
+        if (!provider.clear)
+          return methodNotFound(id, "This plugin does not support recommendations/clear");
+        return success(id, await provider.clear());
+      }
+      case "recommendations/dismiss": {
+        if (!provider.dismiss)
+          return methodNotFound(id, "This plugin does not support recommendations/dismiss");
+        const err = validateStringFields(params, ["externalId"]);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await provider.dismiss(params as RecommendationDismissRequest));
+      }
+      default:
+        return null;
+    }
+  };
 
-  const rl = createInterface({
-    input: process.stdin,
-    terminal: false,
-  });
-
-  rl.on("line", (line) => {
-    void handleRecommendationLine(line, manifest, provider, onInitialize, logger);
-  });
-
-  rl.on("close", () => {
-    logger.info("stdin closed, shutting down");
-    process.exit(0);
-  });
-
-  process.on("uncaughtException", (error) => {
-    logger.error("Uncaught exception", error);
-    process.exit(1);
-  });
-
-  process.on("unhandledRejection", (reason) => {
-    logger.error("Unhandled rejection", reason);
-  });
+  createPluginServer({ manifest, onInitialize, logLevel, label: "recommendation", router });
 }
 
 // =============================================================================
-// Internal Implementation
+// Backwards Compatibility (deprecated)
 // =============================================================================
 
-async function handleRecommendationLine(
-  line: string,
-  manifest: PluginManifest,
-  provider: RecommendationProvider,
-  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
-  logger: Logger,
-): Promise<void> {
-  const trimmed = line.trim();
-  if (!trimmed) return;
-
-  let id: string | number | null = null;
-
-  try {
-    const request = JSON.parse(trimmed) as JsonRpcRequest;
-    id = request.id;
-
-    logger.debug(`Received request: ${request.method}`, { id: request.id });
-
-    const response = await handleRecommendationRequest(
-      request,
-      manifest,
-      provider,
-      onInitialize,
-      logger,
-    );
-    if (response !== null) {
-      writeResponse(response);
-    }
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      writeResponse({
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: JSON_RPC_ERROR_CODES.PARSE_ERROR,
-          message: "Parse error: invalid JSON",
-        },
-      });
-    } else if (error instanceof PluginError) {
-      writeResponse({
-        jsonrpc: "2.0",
-        id,
-        error: error.toJsonRpcError(),
-      });
-    } else {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      logger.error("Request failed", error);
-      writeResponse({
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: JSON_RPC_ERROR_CODES.INTERNAL_ERROR,
-          message,
-        },
-      });
-    }
-  }
+/**
+ * @deprecated Use createMetadataPlugin instead
+ */
+export function createSeriesMetadataPlugin(options: SeriesMetadataPluginOptions): void {
+  const newOptions: MetadataPluginOptions = {
+    ...options,
+    manifest: {
+      ...options.manifest,
+      capabilities: {
+        ...options.manifest.capabilities,
+        metadataProvider: ["series"] as MetadataContentType[],
+      },
+    },
+  };
+  createMetadataPlugin(newOptions);
 }
 
-async function handleRecommendationRequest(
-  request: JsonRpcRequest,
-  manifest: PluginManifest,
-  provider: RecommendationProvider,
-  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
-  _logger: Logger,
-): Promise<JsonRpcResponse> {
-  const { method, params, id } = request;
-
-  switch (method) {
-    case "initialize":
-      if (onInitialize) {
-        await onInitialize(params as InitializeParams);
-      }
-      return { jsonrpc: "2.0", id, result: manifest };
-
-    case "ping":
-      return { jsonrpc: "2.0", id, result: "pong" };
-
-    case "shutdown": {
-      const response: JsonRpcResponse = { jsonrpc: "2.0", id, result: null };
-      process.stdout.write(`${JSON.stringify(response)}\n`, () => {
-        process.exit(0);
-      });
-      return null as unknown as JsonRpcResponse;
-    }
-
-    case "recommendations/get":
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.get(params as RecommendationRequest),
-      };
-
-    case "recommendations/updateProfile": {
-      if (!provider.updateProfile) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support recommendations/updateProfile",
-          },
-        };
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.updateProfile(params as ProfileUpdateRequest),
-      };
-    }
-
-    case "recommendations/clear": {
-      if (!provider.clear) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support recommendations/clear",
-          },
-        };
-      }
-      return { jsonrpc: "2.0", id, result: await provider.clear() };
-    }
-
-    case "recommendations/dismiss": {
-      if (!provider.dismiss) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support recommendations/dismiss",
-          },
-        };
-      }
-      const validationError = validateStringFields(params, ["externalId"]);
-      if (validationError) {
-        return invalidParamsError(id, validationError);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.dismiss(params as RecommendationDismissRequest),
-      };
-    }
-
-    default:
-      return {
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-          message: `Method not found: ${method}`,
-        },
-      };
-  }
-}
-
-async function handleSyncLine(
-  line: string,
-  manifest: PluginManifest,
-  provider: SyncProvider,
-  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
-  logger: Logger,
-): Promise<void> {
-  const trimmed = line.trim();
-  if (!trimmed) return;
-
-  let id: string | number | null = null;
-
-  try {
-    const request = JSON.parse(trimmed) as JsonRpcRequest;
-    id = request.id;
-
-    logger.debug(`Received request: ${request.method}`, { id: request.id });
-
-    const response = await handleSyncRequest(request, manifest, provider, onInitialize, logger);
-    if (response !== null) {
-      writeResponse(response);
-    }
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      writeResponse({
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: JSON_RPC_ERROR_CODES.PARSE_ERROR,
-          message: "Parse error: invalid JSON",
-        },
-      });
-    } else if (error instanceof PluginError) {
-      writeResponse({
-        jsonrpc: "2.0",
-        id,
-        error: error.toJsonRpcError(),
-      });
-    } else {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      logger.error("Request failed", error);
-      writeResponse({
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: JSON_RPC_ERROR_CODES.INTERNAL_ERROR,
-          message,
-        },
-      });
-    }
-  }
-}
-
-async function handleSyncRequest(
-  request: JsonRpcRequest,
-  manifest: PluginManifest,
-  provider: SyncProvider,
-  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
-  logger: Logger,
-): Promise<JsonRpcResponse> {
-  const { method, params, id } = request;
-
-  switch (method) {
-    case "initialize":
-      if (onInitialize) {
-        await onInitialize(params as InitializeParams);
-      }
-      return { jsonrpc: "2.0", id, result: manifest };
-
-    case "ping":
-      return { jsonrpc: "2.0", id, result: "pong" };
-
-    case "shutdown": {
-      logger.info("Shutdown requested");
-      const response: JsonRpcResponse = { jsonrpc: "2.0", id, result: null };
-      process.stdout.write(`${JSON.stringify(response)}\n`, () => {
-        process.exit(0);
-      });
-      return null as unknown as JsonRpcResponse;
-    }
-
-    case "sync/getUserInfo":
-      return { jsonrpc: "2.0", id, result: await provider.getUserInfo() };
-
-    case "sync/pushProgress":
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.pushProgress(params as SyncPushRequest),
-      };
-
-    case "sync/pullProgress":
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.pullProgress(params as SyncPullRequest),
-      };
-
-    case "sync/status": {
-      if (!provider.status) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support sync/status",
-          },
-        };
-      }
-      return { jsonrpc: "2.0", id, result: await provider.status() };
-    }
-
-    default:
-      return {
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-          message: `Method not found: ${method}`,
-        },
-      };
-  }
-}
-
-async function handleLine(
-  line: string,
-  manifest: PluginManifest,
-  provider: MetadataProvider | undefined,
-  bookProvider: BookMetadataProvider | undefined,
-  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
-  logger: Logger,
-): Promise<void> {
-  const trimmed = line.trim();
-  if (!trimmed) return;
-
-  let id: string | number | null = null;
-
-  try {
-    const request = JSON.parse(trimmed) as JsonRpcRequest;
-    id = request.id;
-
-    logger.debug(`Received request: ${request.method}`, { id: request.id });
-
-    const response = await handleRequest(
-      request,
-      manifest,
-      provider,
-      bookProvider,
-      onInitialize,
-      logger,
-    );
-    // Shutdown handler writes response directly and returns null
-    if (response !== null) {
-      writeResponse(response);
-    }
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      // JSON parse error
-      writeResponse({
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: JSON_RPC_ERROR_CODES.PARSE_ERROR,
-          message: "Parse error: invalid JSON",
-        },
-      });
-    } else if (error instanceof PluginError) {
-      writeResponse({
-        jsonrpc: "2.0",
-        id,
-        error: error.toJsonRpcError(),
-      });
-    } else {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      logger.error("Request failed", error);
-      writeResponse({
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: JSON_RPC_ERROR_CODES.INTERNAL_ERROR,
-          message,
-        },
-      });
-    }
-  }
-}
-
-async function handleRequest(
-  request: JsonRpcRequest,
-  manifest: PluginManifest,
-  provider: MetadataProvider | undefined,
-  bookProvider: BookMetadataProvider | undefined,
-  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
-  logger: Logger,
-): Promise<JsonRpcResponse> {
-  const { method, params, id } = request;
-
-  switch (method) {
-    case "initialize":
-      // Call onInitialize callback if provided (to receive credentials/config)
-      if (onInitialize) {
-        await onInitialize(params as InitializeParams);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: manifest,
-      };
-
-    case "ping":
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: "pong",
-      };
-
-    case "shutdown": {
-      logger.info("Shutdown requested");
-      // Write response directly with callback to ensure it's flushed before exit
-      const response: JsonRpcResponse = {
-        jsonrpc: "2.0",
-        id,
-        result: null,
-      };
-      process.stdout.write(`${JSON.stringify(response)}\n`, () => {
-        // Callback is called after the write is flushed to the OS
-        process.exit(0);
-      });
-      // Return a sentinel that handleLine will recognize and skip normal writeResponse
-      return null as unknown as JsonRpcResponse;
-    }
-
-    // =========================================================================
-    // Series metadata methods
-    // =========================================================================
-    case "metadata/series/search": {
-      if (!provider) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support series metadata",
-          },
-        };
-      }
-      const validationError = validateSearchParams(params);
-      if (validationError) {
-        return invalidParamsError(id, validationError);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.search(params as MetadataSearchParams),
-      };
-    }
-
-    case "metadata/series/get": {
-      if (!provider) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support series metadata",
-          },
-        };
-      }
-      const validationError = validateGetParams(params);
-      if (validationError) {
-        return invalidParamsError(id, validationError);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.get(params as MetadataGetParams),
-      };
-    }
-
-    case "metadata/series/match": {
-      if (!provider) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support series metadata",
-          },
-        };
-      }
-      if (!provider.match) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support series match",
-          },
-        };
-      }
-      const validationError = validateMatchParams(params);
-      if (validationError) {
-        return invalidParamsError(id, validationError);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await provider.match(params as MetadataMatchParams),
-      };
-    }
-
-    // =========================================================================
-    // Book metadata methods
-    // =========================================================================
-    case "metadata/book/search": {
-      if (!bookProvider) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support book metadata",
-          },
-        };
-      }
-      const validationError = validateBookSearchParams(params);
-      if (validationError) {
-        return invalidParamsError(id, validationError);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await bookProvider.search(params as BookSearchParams),
-      };
-    }
-
-    case "metadata/book/get": {
-      if (!bookProvider) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support book metadata",
-          },
-        };
-      }
-      const validationError = validateGetParams(params);
-      if (validationError) {
-        return invalidParamsError(id, validationError);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await bookProvider.get(params as MetadataGetParams),
-      };
-    }
-
-    case "metadata/book/match": {
-      if (!bookProvider) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support book metadata",
-          },
-        };
-      }
-      if (!bookProvider.match) {
-        return {
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-            message: "This plugin does not support book match",
-          },
-        };
-      }
-      const validationError = validateBookMatchParams(params);
-      if (validationError) {
-        return invalidParamsError(id, validationError);
-      }
-      return {
-        jsonrpc: "2.0",
-        id,
-        result: await bookProvider.match(params as BookMatchParams),
-      };
-    }
-
-    default:
-      return {
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
-          message: `Method not found: ${method}`,
-        },
-      };
-  }
-}
-
-function writeResponse(response: JsonRpcResponse): void {
-  // Write to stdout - this is the JSON-RPC channel
-  process.stdout.write(`${JSON.stringify(response)}\n`);
+/**
+ * @deprecated Use MetadataPluginOptions instead
+ */
+export interface SeriesMetadataPluginOptions {
+  /** Plugin manifest - must have capabilities.seriesMetadataProvider: true */
+  manifest: PluginManifest & {
+    capabilities: { seriesMetadataProvider: true };
+  };
+  /** SeriesMetadataProvider implementation */
+  provider: MetadataProvider;
+  /** Called when plugin receives initialize with credentials/config */
+  onInitialize?: (params: InitializeParams) => void | Promise<void>;
+  /** Log level (default: "info") */
+  logLevel?: "debug" | "info" | "warn" | "error";
 }

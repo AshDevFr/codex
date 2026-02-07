@@ -1,9 +1,8 @@
 /**
  * Capability interfaces - type-safe contracts for plugin capabilities
  *
- * Plugins declare which content types they support in their manifest's
- * capabilities.metadataProvider array. The SDK automatically routes
- * scoped methods (e.g., metadata/series/search) to the provider.
+ * All provider interfaces live here. Plugins declare which capabilities
+ * they support in their manifest, and implement the corresponding interface.
  *
  * @example
  * ```typescript
@@ -28,9 +27,23 @@ import type {
   PluginBookMetadata,
   PluginSeriesMetadata,
 } from "./protocol.js";
-
-// Re-export SyncProvider from the sync module (replaces the former placeholder)
-export type { SyncProvider } from "../sync.js";
+import type {
+  ProfileUpdateRequest,
+  ProfileUpdateResponse,
+  RecommendationClearResponse,
+  RecommendationDismissRequest,
+  RecommendationDismissResponse,
+  RecommendationRequest,
+  RecommendationResponse,
+} from "./recommendations.js";
+import type {
+  ExternalUserInfo,
+  SyncPullRequest,
+  SyncPullResponse,
+  SyncPushRequest,
+  SyncPushResponse,
+  SyncStatusResponse,
+} from "./sync.js";
 
 // =============================================================================
 // Content Types
@@ -122,13 +135,106 @@ export interface BookMetadataProvider {
 }
 
 // =============================================================================
-// Future Capabilities (v2)
+// Sync Provider Capability
 // =============================================================================
 
-// SyncProvider is now defined in ../sync.ts and re-exported above.
+/**
+ * Interface for plugins that sync reading progress.
+ *
+ * Plugins implementing this capability can push and pull reading progress
+ * between Codex and external services (e.g., AniList, MyAnimeList).
+ *
+ * Declare this capability in the plugin manifest with `userSyncProvider: true`.
+ *
+ * @example
+ * ```typescript
+ * const provider: SyncProvider = {
+ *   async getUserInfo() {
+ *     return {
+ *       externalId: "12345",
+ *       username: "manga_reader",
+ *       avatarUrl: "https://anilist.co/img/avatar.jpg",
+ *       profileUrl: "https://anilist.co/user/manga_reader",
+ *     };
+ *   },
+ *   async pushProgress(params) {
+ *     // Push entries to external service
+ *     return { success: [], failed: [] };
+ *   },
+ *   async pullProgress(params) {
+ *     // Pull entries from external service
+ *     return { entries: [], hasMore: false };
+ *   },
+ * };
+ * ```
+ */
+export interface SyncProvider {
+  /**
+   * Get user info from the external service.
+   *
+   * Returns the user's identity on the external service.
+   * Used to display the connected account in the UI.
+   *
+   * @returns External user information
+   */
+  getUserInfo(): Promise<ExternalUserInfo>;
 
-// Re-export RecommendationProvider from the recommendations module
-export type { RecommendationProvider } from "../recommendations.js";
+  /**
+   * Push reading progress to the external service.
+   *
+   * Sends one or more reading progress entries from Codex to the
+   * external service. Returns results indicating which entries
+   * were created, updated, unchanged, or failed.
+   *
+   * @param params - Push request with entries to sync
+   * @returns Push results with success and failure details
+   */
+  pushProgress(params: SyncPushRequest): Promise<SyncPushResponse>;
+
+  /**
+   * Pull reading progress from the external service.
+   *
+   * Retrieves reading progress entries from the external service.
+   * Supports pagination via cursor and incremental sync via `since`.
+   *
+   * @param params - Pull request with optional filters and pagination
+   * @returns Pull results with entries and pagination info
+   */
+  pullProgress(params: SyncPullRequest): Promise<SyncPullResponse>;
+
+  /**
+   * Get sync status overview (optional).
+   *
+   * Provides a summary of the sync state between Codex and the
+   * external service, including pending operations and conflicts.
+   *
+   * @returns Sync status information
+   */
+  status?(): Promise<SyncStatusResponse>;
+}
+
+// =============================================================================
+// Recommendation Provider Capability
+// =============================================================================
+
+/**
+ * Interface for plugins that provide recommendations.
+ *
+ * Plugins implementing this capability generate personalized suggestions
+ * based on a user's library and reading history.
+ *
+ * Declare this capability in the plugin manifest with `recommendationProvider: true`.
+ */
+export interface RecommendationProvider {
+  /** Get personalized recommendations */
+  get(params: RecommendationRequest): Promise<RecommendationResponse>;
+  /** Update the user's taste profile from new activity */
+  updateProfile?(params: ProfileUpdateRequest): Promise<ProfileUpdateResponse>;
+  /** Clear cached recommendations */
+  clear?(): Promise<RecommendationClearResponse>;
+  /** Dismiss a recommendation */
+  dismiss?(params: RecommendationDismissRequest): Promise<RecommendationDismissResponse>;
+}
 
 // =============================================================================
 // Type Helpers

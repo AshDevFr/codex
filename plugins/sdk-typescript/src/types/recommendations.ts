@@ -1,7 +1,20 @@
 /**
- * Recommendation provider types
+ * Recommendation Provider Protocol Types
  *
- * Matches the Rust-side types in src/services/plugin/recommendations.rs
+ * Defines the types for recommendation provider operations. These types MUST match
+ * the Rust protocol exactly (see src/services/plugin/recommendations.rs in the Codex backend).
+ *
+ * Recommendation providers generate personalized suggestions based on a user's
+ * library and reading history.
+ *
+ * ## Methods
+ *
+ * - `recommendations/get` - Get personalized recommendations
+ * - `recommendations/updateProfile` - Update the user's taste profile
+ * - `recommendations/clear` - Clear cached recommendations
+ * - `recommendations/dismiss` - Dismiss a recommendation
+ *
+ * @see src/services/plugin/recommendations.rs in the Codex backend
  */
 
 // =============================================================================
@@ -143,20 +156,4 @@ export interface RecommendationDismissRequest {
 export interface RecommendationDismissResponse {
   /** Whether the dismissal was recorded */
   dismissed: boolean;
-}
-
-// =============================================================================
-// Provider Interface
-// =============================================================================
-
-/** Interface for recommendation provider plugins */
-export interface RecommendationProvider {
-  /** Get personalized recommendations */
-  get(params: RecommendationRequest): Promise<RecommendationResponse>;
-  /** Update the user's taste profile from new activity */
-  updateProfile?(params: ProfileUpdateRequest): Promise<ProfileUpdateResponse>;
-  /** Clear cached recommendations */
-  clear?(): Promise<RecommendationClearResponse>;
-  /** Dismiss a recommendation */
-  dismiss?(params: RecommendationDismissRequest): Promise<RecommendationDismissResponse>;
 }
