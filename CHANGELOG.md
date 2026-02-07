@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.9.3] - 2026-02-07
+
+### 🐛 Bug Fixes
+
+- *(api)* Use COALESCE for title sort in v1 series endpoints to handle NULL title_sort values
+
 ## [1.9.2] - 2026-02-07
 
 ### 🐛 Bug Fixes
