@@ -224,6 +224,16 @@ pub mod methods {
     pub const SYNC_PULL_PROGRESS: &str = "sync/pullProgress";
     /// Get sync status/diff between Codex and external service
     pub const SYNC_STATUS: &str = "sync/status";
+
+    // Recommendation methods (user plugin recommendation providers)
+    /// Get personalized recommendations
+    pub const RECOMMENDATIONS_GET: &str = "recommendations/get";
+    /// Update taste profile from new user activity
+    pub const RECOMMENDATIONS_UPDATE_PROFILE: &str = "recommendations/updateProfile";
+    /// Clear cached recommendations
+    pub const RECOMMENDATIONS_CLEAR: &str = "recommendations/clear";
+    /// Dismiss a recommendation (user not interested)
+    pub const RECOMMENDATIONS_DISMISS: &str = "recommendations/dismiss";
 }
 
 // =============================================================================
@@ -1722,7 +1732,7 @@ mod tests {
     #[test]
     fn test_plugin_manifest_with_oauth_config() {
         let json = json!({
-            "name": "anilist-sync",
+            "name": "sync-anilist",
             "displayName": "AniList Sync",
             "version": "1.0.0",
             "protocolVersion": "1.0",
@@ -1741,7 +1751,7 @@ mod tests {
         });
 
         let manifest: PluginManifest = serde_json::from_value(json).unwrap();
-        assert_eq!(manifest.name, "anilist-sync");
+        assert_eq!(manifest.name, "sync-anilist");
         assert_eq!(manifest.plugin_type, PluginManifestType::User);
         assert!(manifest.capabilities.user_sync_provider);
         assert!(!manifest.capabilities.recommendation_provider);

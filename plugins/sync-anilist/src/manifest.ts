@@ -2,7 +2,7 @@ import type { PluginManifest } from "@ashdev/codex-plugin-sdk";
 import packageJson from "../package.json" with { type: "json" };
 
 export const manifest = {
-  name: "anilist-sync",
+  name: "sync-anilist",
   displayName: "AniList Sync",
   version: packageJson.version,
   description:

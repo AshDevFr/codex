@@ -127,12 +127,8 @@ export interface BookMetadataProvider {
 
 // SyncProvider is now defined in ../sync.ts and re-exported above.
 
-/**
- * Interface for plugins that provide recommendations (recommendationProvider: true)
- * @future v2 - Methods will be defined when recommendation capability is implemented
- */
-// biome-ignore lint/suspicious/noEmptyInterface: Placeholder for future v2 capability
-export interface RecommendationProvider {}
+// Re-export RecommendationProvider from the recommendations module
+export type { RecommendationProvider } from "../recommendations.js";
 
 // =============================================================================
 // Type Helpers

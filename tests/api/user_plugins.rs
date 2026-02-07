@@ -770,7 +770,7 @@ async fn test_trigger_sync_not_enabled() {
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // Try to sync without enabling
     let app = create_test_router(state.clone()).await;
@@ -833,7 +833,7 @@ async fn test_trigger_sync_not_connected() {
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // Enable but don't connect (no OAuth)
     let app = create_test_router(state.clone()).await;
@@ -861,7 +861,7 @@ async fn test_trigger_sync_success() {
     let state = create_test_auth_state(db.clone()).await;
     let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // Enable the plugin
     let app = create_test_router(state.clone()).await;
@@ -908,7 +908,7 @@ async fn test_trigger_sync_disabled_plugin() {
     let state = create_test_auth_state(db.clone()).await;
     let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // Enable plugin
     let app = create_test_router(state.clone()).await;
@@ -979,7 +979,7 @@ async fn test_sync_status_not_enabled() {
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth(
@@ -998,7 +998,7 @@ async fn test_sync_status_success() {
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // Enable
     let app = create_test_router(state.clone()).await;
@@ -1036,7 +1036,7 @@ async fn test_sync_status_isolation() {
     let (_, token_a) = create_user_and_token(&db, &state, "usera").await;
     let (_, token_b) = create_user_and_token(&db, &state, "userb").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // User A enables
     let app = create_test_router(state.clone()).await;
@@ -1065,7 +1065,7 @@ async fn test_sync_status_default_has_no_live_fields() {
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // Enable
     let app = create_test_router(state.clone()).await;
@@ -1106,7 +1106,7 @@ async fn test_sync_status_live_degrades_gracefully() {
     let state = create_test_auth_state(db.clone()).await;
     let (_, token) = create_user_and_token(&db, &state, "testuser").await;
 
-    let plugin_id = create_sync_plugin(&db, "anilist-sync", "AniList Sync").await;
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
 
     // Enable
     let app = create_test_router(state.clone()).await;
