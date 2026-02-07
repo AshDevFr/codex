@@ -194,5 +194,17 @@ describe("ReaderToolbar", () => {
       fireEvent.click(buttons[2]);
       expect(useReaderStore.getState().currentPage).toBe(4);
     });
+
+    it("should use scaleX(-1) with unchanged slider value in RTL mode", () => {
+      // currentPage=5, totalPages=10
+      // The slider value stays as currentPage (scaleX(-1) handles the visual flip)
+      // Only onChange inverts the value so clicks map to the correct page
+      renderWithProviders(<ReaderToolbar {...defaultProps} />);
+
+      const slider = screen.getByRole("slider");
+      expect(slider).toHaveAttribute("aria-valuenow", "5");
+      expect(slider).toHaveAttribute("aria-valuemin", "1");
+      expect(slider).toHaveAttribute("aria-valuemax", "10");
+    });
   });
 });

@@ -354,7 +354,11 @@ export function ReaderToolbar({
                   value={currentPage}
                   min={1}
                   max={totalPages}
-                  onChange={setPage}
+                  onChange={(val) =>
+                    setPage(
+                      readingDirection === "rtl" ? totalPages + 1 - val : val,
+                    )
+                  }
                   size="xs"
                   style={{
                     flex: 1,
