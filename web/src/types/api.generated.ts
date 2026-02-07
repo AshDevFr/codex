@@ -3854,6 +3854,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List user's plugins (enabled and available)
+         * @description Returns both plugins the user has enabled and plugins available for them to enable.
+         */
+        get: operations["list_user_plugins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/plugins/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Handle OAuth callback from external provider
+         * @description This endpoint receives the callback after the user authenticates with the
+         *     external service. It exchanges the authorization code for tokens and stores
+         *     them encrypted in the database.
+         */
+        get: operations["oauth_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/plugins/{plugin_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single user plugin instance
+         * @description Returns detailed status for a plugin the user has enabled.
+         */
+        get: operations["get_user_plugin"];
+        put?: never;
+        post?: never;
+        /** Disconnect a plugin (remove data and credentials) */
+        delete: operations["disconnect_plugin"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/plugins/{plugin_id}/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update user plugin configuration
+         * @description Allows the user to set per-user configuration overrides for their plugin instance.
+         */
+        patch: operations["update_user_plugin_config"];
+        trace?: never;
+    };
+    "/api/v1/user/plugins/{plugin_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a plugin for the current user */
+        post: operations["disable_plugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/plugins/{plugin_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable a plugin for the current user */
+        post: operations["enable_plugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/plugins/{plugin_id}/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start OAuth flow for a user plugin
+         * @description Generates an authorization URL and returns it to the client.
+         *     The client should open this URL in a popup or redirect the user.
+         */
+        post: operations["oauth_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/preferences": {
         parameters: {
             query?: never;
@@ -5486,6 +5624,24 @@ export interface components {
              * @example 1.0.0
              */
             version: string;
+        };
+        /** @description Available plugin (not yet enabled by user) */
+        AvailablePluginDto: {
+            /** @description Plugin capabilities */
+            capabilities: components["schemas"]["UserPluginCapabilitiesDto"];
+            /** @description Plugin description */
+            description?: string | null;
+            /** @description Plugin display name */
+            displayName: string;
+            /** @description Plugin name */
+            name: string;
+            /**
+             * Format: uuid
+             * @description Plugin definition ID
+             */
+            pluginId: string;
+            /** @description Whether this plugin requires OAuth authentication */
+            requiresOauth: boolean;
         };
         /** @description Series membership information */
         BelongsTo: {
@@ -9829,6 +9985,14 @@ export interface components {
          * @enum {string}
          */
         NumberStrategy: "file_order" | "metadata" | "filename" | "smart";
+        /** @description OAuth initiation response */
+        OAuthStartResponse: {
+            /**
+             * @description The URL to redirect the user to for OAuth authorization
+             * @example https://anilist.co/api/v2/oauth/authorize?response_type=code&client_id=...
+             */
+            redirectUrl: string;
+        };
         /**
          * @description Response from OIDC callback (successful authentication)
          *
@@ -13838,6 +14002,9 @@ export interface components {
             seriesIds?: string[] | null;
             /** @enum {string} */
             type: "reprocess_series_titles";
+        } | {
+            /** @enum {string} */
+            type: "cleanup_plugin_data";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -14400,6 +14567,11 @@ export interface components {
              */
             name?: string | null;
         };
+        /** @description Request to update user plugin configuration */
+        UpdateUserPluginConfigRequest: {
+            /** @description Configuration overrides for this plugin */
+            config: unknown;
+        };
         /** @description Update user request */
         UpdateUserRequest: {
             /**
@@ -14559,6 +14731,70 @@ export interface components {
              * @example admin
              */
             username: string;
+        };
+        /** @description Plugin capabilities for display (user plugin context) */
+        UserPluginCapabilitiesDto: {
+            /** @description Can provide recommendations */
+            recommendationProvider: boolean;
+            /** @description Can sync reading progress */
+            syncProvider: boolean;
+        };
+        /** @description User plugin instance status */
+        UserPluginDto: {
+            /** @description Per-user configuration */
+            config: unknown;
+            /** @description Whether the plugin is connected (has valid credentials/OAuth) */
+            connected: boolean;
+            /**
+             * Format: date-time
+             * @description Created timestamp
+             */
+            createdAt: string;
+            /** @description User-facing description of the plugin */
+            description?: string | null;
+            /** @description Whether the user has enabled this plugin */
+            enabled: boolean;
+            /** @description External service avatar URL */
+            externalAvatarUrl?: string | null;
+            /** @description External service username (if connected via OAuth) */
+            externalUsername?: string | null;
+            /** @description Health status of this user's plugin instance */
+            healthStatus: string;
+            /**
+             * Format: uuid
+             * @description User plugin instance ID
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Last successful operation timestamp
+             */
+            lastSuccessAt?: string | null;
+            /**
+             * Format: date-time
+             * @description Last sync timestamp
+             */
+            lastSyncAt?: string | null;
+            /** @description Plugin display name for UI */
+            pluginDisplayName: string;
+            /**
+             * Format: uuid
+             * @description Plugin definition ID
+             */
+            pluginId: string;
+            /** @description Plugin display name */
+            pluginName: string;
+            /** @description Plugin type: "system" or "user" */
+            pluginType: string;
+            /** @description Whether this plugin requires OAuth authentication */
+            requiresOauth: boolean;
+        };
+        /** @description User plugins list response */
+        UserPluginsListResponse: {
+            /** @description Plugins available for the user to enable */
+            available: components["schemas"]["AvailablePluginDto"][];
+            /** @description Plugins the user has enabled */
+            enabled: components["schemas"]["UserPluginDto"][];
         };
         /** @description A single user preference */
         UserPreferenceDto: {
@@ -23214,6 +23450,306 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_user_plugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User plugins list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginsListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oauth_callback: {
+        parameters: {
+            query: {
+                /** @description Authorization code from OAuth provider */
+                code: string;
+                /** @description State parameter for CSRF protection */
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to frontend with result */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid callback parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_user_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User plugin details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginDto"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disconnect_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to disconnect */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin disconnected and data removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_user_plugin_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to update config for */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserPluginConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Configuration updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginDto"];
+                };
+            };
+            /** @description Invalid configuration */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disable_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to disable */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    enable_plugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to enable */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginDto"];
+                };
+            };
+            /** @description Plugin is not a user plugin or not available */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin already enabled for this user */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oauth_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to start OAuth for */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OAuth authorization URL generated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthStartResponse"];
+                };
+            };
+            /** @description Plugin does not support OAuth or not configured */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not found or not enabled */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -6,7 +6,7 @@ use super::super::handlers;
 use crate::api::extractors::AppState;
 use axum::{
     Router,
-    routing::{delete, get, post},
+    routing::{get, patch, post},
 };
 use std::sync::Arc;
 
@@ -16,8 +16,10 @@ use std::sync::Arc;
 ///
 /// Routes:
 /// - List plugins: GET /user/plugins
+/// - Get plugin: GET /user/plugins/:plugin_id
 /// - Enable: POST /user/plugins/:plugin_id/enable
 /// - Disable: POST /user/plugins/:plugin_id/disable
+/// - Update config: PATCH /user/plugins/:plugin_id/config
 /// - Disconnect: DELETE /user/plugins/:plugin_id
 /// - OAuth start: POST /user/plugins/:plugin_id/oauth/start
 /// - OAuth callback: GET /user/plugins/oauth/callback (no auth - receives redirect)
@@ -38,7 +40,12 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             "/user/plugins/:plugin_id",
-            delete(handlers::user_plugins::disconnect_plugin),
+            get(handlers::user_plugins::get_user_plugin)
+                .delete(handlers::user_plugins::disconnect_plugin),
+        )
+        .route(
+            "/user/plugins/:plugin_id/config",
+            patch(handlers::user_plugins::update_user_plugin_config),
         )
         // OAuth flow
         .route(

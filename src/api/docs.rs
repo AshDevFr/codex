@@ -412,6 +412,16 @@ The following paths are exempt from rate limiting:
         v1::handlers::plugin_actions::enqueue_bulk_auto_match_tasks,
         v1::handlers::plugin_actions::enqueue_library_auto_match_tasks,
 
+        // User Plugin endpoints
+        v1::handlers::user_plugins::list_user_plugins,
+        v1::handlers::user_plugins::enable_plugin,
+        v1::handlers::user_plugins::disable_plugin,
+        v1::handlers::user_plugins::disconnect_plugin,
+        v1::handlers::user_plugins::get_user_plugin,
+        v1::handlers::user_plugins::update_user_plugin_config,
+        v1::handlers::user_plugins::oauth_start,
+        v1::handlers::user_plugins::oauth_callback,
+
         // Sharing Tags endpoints
         v1::handlers::sharing_tags::list_sharing_tags,
         v1::handlers::sharing_tags::get_sharing_tag,
@@ -764,6 +774,14 @@ The following paths are exempt from rate limiting:
             v1::dto::PluginFailureDto,
             v1::dto::PluginFailuresResponse,
 
+            // User Plugin DTOs
+            v1::dto::UserPluginDto,
+            v1::dto::AvailablePluginDto,
+            v1::dto::UserPluginCapabilitiesDto,
+            v1::dto::UserPluginsListResponse,
+            v1::dto::OAuthStartResponse,
+            v1::dto::UpdateUserPluginConfigRequest,
+
             // Plugin Actions DTOs
             v1::dto::PluginActionDto,
             v1::dto::PluginActionsResponse,
@@ -904,6 +922,7 @@ The following paths are exempt from rate limiting:
         (name = "Settings", description = "Runtime configuration settings (admin only)"),
         (name = "Plugins", description = "Admin-managed external plugin processes"),
         (name = "Plugin Actions", description = "Plugin action discovery and execution for metadata fetching"),
+        (name = "User Plugins", description = "User-facing plugin management, OAuth, and configuration"),
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Filesystem", description = "Filesystem browsing for library paths"),
         (name = "Duplicates", description = "Duplicate book detection and management"),
@@ -1028,7 +1047,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "User Features",
-                "tags": ["Users", "User Preferences", "Reading Progress"]
+                "tags": ["Users", "User Preferences", "User Plugins", "Reading Progress"]
             },
             {
                 "name": "Background Jobs",

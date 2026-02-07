@@ -27,6 +27,7 @@ import {
   BooksInErrorSettings,
   CleanupSettings,
   DuplicatesSettings,
+  IntegrationsSettings,
   MetricsSettings,
   PdfCacheSettings,
   PluginsSettings,
@@ -221,6 +222,17 @@ function App() {
         />
 
         {/* Settings routes */}
+        <Route
+          path="/settings/integrations"
+          element={
+            <ProtectedRoute>
+              <AppLayout currentPath="/settings/integrations">
+                <IntegrationsSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/settings/profile"
           element={

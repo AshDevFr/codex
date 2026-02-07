@@ -11439,6 +11439,309 @@
         ]
       }
     },
+    "/api/v1/user/plugins": {
+      "get": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "List user's plugins (enabled and available)",
+        "description": "Returns both plugins the user has enabled and plugins available for them to enable.",
+        "operationId": "list_user_plugins",
+        "responses": {
+          "200": {
+            "description": "User plugins list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPluginsListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/oauth/callback": {
+      "get": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Handle OAuth callback from external provider",
+        "description": "This endpoint receives the callback after the user authenticates with the\nexternal service. It exchanges the authorization code for tokens and stores\nthem encrypted in the database.",
+        "operationId": "oauth_callback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "description": "Authorization code from OAuth provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "State parameter for CSRF protection",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to frontend with result"
+          },
+          "400": {
+            "description": "Invalid callback parameters"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/{plugin_id}": {
+      "get": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Get a single user plugin instance",
+        "description": "Returns detailed status for a plugin the user has enabled.",
+        "operationId": "get_user_plugin",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User plugin details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPluginDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Disconnect a plugin (remove data and credentials)",
+        "operationId": "disconnect_plugin",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to disconnect",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin disconnected and data removed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/{plugin_id}/config": {
+      "patch": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Update user plugin configuration",
+        "description": "Allows the user to set per-user configuration overrides for their plugin instance.",
+        "operationId": "update_user_plugin_config",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to update config for",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPluginConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPluginDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/{plugin_id}/disable": {
+      "post": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Disable a plugin for the current user",
+        "operationId": "disable_plugin",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to disable",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin disabled"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/{plugin_id}/enable": {
+      "post": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Enable a plugin for the current user",
+        "operationId": "enable_plugin",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to enable",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPluginDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Plugin is not a user plugin or not available"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "Plugin already enabled for this user"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/{plugin_id}/oauth/start": {
+      "post": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Start OAuth flow for a user plugin",
+        "description": "Generates an authorization URL and returns it to the client.\nThe client should open this URL in a popup or redirect the user.",
+        "operationId": "oauth_start",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to start OAuth for",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuth authorization URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthStartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Plugin does not support OAuth or not configured"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not found or not enabled"
+          }
+        }
+      }
+    },
     "/api/v1/user/preferences": {
       "get": {
         "tags": [
@@ -15104,6 +15407,47 @@
             "type": "string",
             "description": "Application version from Cargo.toml",
             "example": "1.0.0"
+          }
+        }
+      },
+      "AvailablePluginDto": {
+        "type": "object",
+        "description": "Available plugin (not yet enabled by user)",
+        "required": [
+          "pluginId",
+          "name",
+          "displayName",
+          "requiresOauth",
+          "capabilities"
+        ],
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/UserPluginCapabilitiesDto",
+            "description": "Plugin capabilities"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Plugin description"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Plugin display name"
+          },
+          "name": {
+            "type": "string",
+            "description": "Plugin name"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin definition ID"
+          },
+          "requiresOauth": {
+            "type": "boolean",
+            "description": "Whether this plugin requires OAuth authentication"
           }
         }
       },
@@ -23245,6 +23589,20 @@
           "smart"
         ]
       },
+      "OAuthStartResponse": {
+        "type": "object",
+        "description": "OAuth initiation response",
+        "required": [
+          "redirectUrl"
+        ],
+        "properties": {
+          "redirectUrl": {
+            "type": "string",
+            "description": "The URL to redirect the user to for OAuth authorization",
+            "example": "https://anilist.co/api/v2/oauth/authorize?response_type=code&client_id=..."
+          }
+        }
+      },
       "OidcCallbackResponse": {
         "type": "object",
         "description": "Response from OIDC callback (successful authentication)\n\nThis mirrors the standard LoginResponse format for consistency.",
@@ -30215,6 +30573,21 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Clean up expired plugin storage data across all user plugins",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_plugin_data"
+                ]
+              }
+            }
           }
         ],
         "description": "Task types supported by the distributed task queue"
@@ -31296,6 +31669,18 @@
           }
         }
       },
+      "UpdateUserPluginConfigRequest": {
+        "type": "object",
+        "description": "Request to update user plugin configuration",
+        "required": [
+          "config"
+        ],
+        "properties": {
+          "config": {
+            "description": "Configuration overrides for this plugin"
+          }
+        }
+      },
       "UpdateUserRequest": {
         "type": "object",
         "description": "Update user request",
@@ -31549,6 +31934,150 @@
             "type": "string",
             "description": "Username",
             "example": "admin"
+          }
+        }
+      },
+      "UserPluginCapabilitiesDto": {
+        "type": "object",
+        "description": "Plugin capabilities for display (user plugin context)",
+        "required": [
+          "syncProvider",
+          "recommendationProvider"
+        ],
+        "properties": {
+          "recommendationProvider": {
+            "type": "boolean",
+            "description": "Can provide recommendations"
+          },
+          "syncProvider": {
+            "type": "boolean",
+            "description": "Can sync reading progress"
+          }
+        }
+      },
+      "UserPluginDto": {
+        "type": "object",
+        "description": "User plugin instance status",
+        "required": [
+          "id",
+          "pluginId",
+          "pluginName",
+          "pluginDisplayName",
+          "pluginType",
+          "enabled",
+          "connected",
+          "healthStatus",
+          "requiresOauth",
+          "config",
+          "createdAt"
+        ],
+        "properties": {
+          "config": {
+            "description": "Per-user configuration"
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the plugin is connected (has valid credentials/OAuth)"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Created timestamp"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "User-facing description of the plugin"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the user has enabled this plugin"
+          },
+          "externalAvatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External service avatar URL"
+          },
+          "externalUsername": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External service username (if connected via OAuth)"
+          },
+          "healthStatus": {
+            "type": "string",
+            "description": "Health status of this user's plugin instance"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User plugin instance ID"
+          },
+          "lastSuccessAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last successful operation timestamp"
+          },
+          "lastSyncAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last sync timestamp"
+          },
+          "pluginDisplayName": {
+            "type": "string",
+            "description": "Plugin display name for UI"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin definition ID"
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Plugin display name"
+          },
+          "pluginType": {
+            "type": "string",
+            "description": "Plugin type: \"system\" or \"user\""
+          },
+          "requiresOauth": {
+            "type": "boolean",
+            "description": "Whether this plugin requires OAuth authentication"
+          }
+        }
+      },
+      "UserPluginsListResponse": {
+        "type": "object",
+        "description": "User plugins list response",
+        "required": [
+          "enabled",
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailablePluginDto"
+            },
+            "description": "Plugins available for the user to enable"
+          },
+          "enabled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserPluginDto"
+            },
+            "description": "Plugins the user has enabled"
           }
         }
       },
@@ -31941,6 +32470,10 @@
       "description": "Plugin action discovery and execution for metadata fetching"
     },
     {
+      "name": "User Plugins",
+      "description": "User-facing plugin management, OAuth, and configuration"
+    },
+    {
       "name": "Metrics",
       "description": "Application metrics and statistics"
     },
@@ -32010,6 +32543,7 @@
       "tags": [
         "Users",
         "User Preferences",
+        "User Plugins",
         "Reading Progress"
       ]
     },
