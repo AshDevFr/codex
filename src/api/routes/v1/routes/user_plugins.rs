@@ -47,6 +47,15 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/user/plugins/:plugin_id/config",
             patch(handlers::user_plugins::update_user_plugin_config),
         )
+        // Sync operations
+        .route(
+            "/user/plugins/:plugin_id/sync",
+            post(handlers::user_plugins::trigger_sync),
+        )
+        .route(
+            "/user/plugins/:plugin_id/sync/status",
+            get(handlers::user_plugins::get_sync_status),
+        )
         // OAuth flow
         .route(
             "/user/plugins/:plugin_id/oauth/start",

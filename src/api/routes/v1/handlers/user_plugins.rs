@@ -5,13 +5,16 @@
 //! and manage their plugin integrations.
 
 use super::super::dto::user_plugins::{
-    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, UpdateUserPluginConfigRequest,
-    UserPluginCapabilitiesDto, UserPluginDto, UserPluginsListResponse,
+    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SyncStatusDto, SyncStatusQuery,
+    SyncTriggerResponse, UpdateUserPluginConfigRequest, UserPluginCapabilitiesDto, UserPluginDto,
+    UserPluginsListResponse,
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::db::repositories::{PluginsRepository, UserPluginsRepository};
-use crate::services::plugin::protocol::{OAuthConfig, PluginManifest};
+use crate::db::repositories::{PluginsRepository, TaskRepository, UserPluginsRepository};
+use crate::services::plugin::protocol::{OAuthConfig, PluginManifest, methods};
+use crate::services::plugin::sync::SyncStatusResponse;
+use crate::tasks::types::TaskType;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -194,6 +197,7 @@ pub async fn list_user_plugins(
 #[utoipa::path(
     post,
     path = "/api/v1/user/plugins/{plugin_id}/enable",
+    operation_id = "enable_user_plugin",
     params(
         ("plugin_id" = Uuid, Path, description = "Plugin ID to enable")
     ),
@@ -281,6 +285,7 @@ pub async fn enable_plugin(
 #[utoipa::path(
     post,
     path = "/api/v1/user/plugins/{plugin_id}/disable",
+    operation_id = "disable_user_plugin",
     params(
         ("plugin_id" = Uuid, Path, description = "Plugin ID to disable")
     ),
@@ -659,4 +664,209 @@ pub async fn update_user_plugin_config(
     );
 
     Ok(Json(build_user_plugin_dto(&updated, &plugin)))
+}
+
+/// Trigger a sync operation for a user plugin
+///
+/// Enqueues a background sync task that will push/pull reading progress
+/// between Codex and the external service.
+#[utoipa::path(
+    post,
+    path = "/api/v1/user/plugins/{plugin_id}/sync",
+    params(
+        ("plugin_id" = Uuid, Path, description = "Plugin ID to sync")
+    ),
+    responses(
+        (status = 200, description = "Sync task enqueued", body = SyncTriggerResponse),
+        (status = 400, description = "Plugin is not a sync provider or not connected"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plugin not enabled for this user"),
+    ),
+    tag = "User Plugins"
+)]
+pub async fn trigger_sync(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+) -> Result<Json<SyncTriggerResponse>, ApiError> {
+    // Verify user has this plugin enabled
+    let instance =
+        UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
+
+    if !instance.enabled {
+        return Err(ApiError::BadRequest(
+            "Plugin is disabled. Enable it before syncing.".to_string(),
+        ));
+    }
+
+    // Verify the plugin is a sync provider
+    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
+
+    let manifest: Option<PluginManifest> = plugin
+        .manifest
+        .as_ref()
+        .and_then(|m| serde_json::from_value(m.clone()).ok());
+
+    let is_sync_provider = manifest
+        .as_ref()
+        .map(|m| m.capabilities.user_sync_provider)
+        .unwrap_or(false);
+
+    if !is_sync_provider {
+        return Err(ApiError::BadRequest(
+            "Plugin is not a sync provider".to_string(),
+        ));
+    }
+
+    // Verify the plugin is connected (has credentials)
+    if !instance.is_authenticated() {
+        return Err(ApiError::BadRequest(
+            "Plugin is not connected. Complete authentication before syncing.".to_string(),
+        ));
+    }
+
+    // Enqueue sync task
+    let task_type = TaskType::UserPluginSync {
+        plugin_id,
+        user_id: auth.user_id,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue sync task: {}", e)))?;
+
+    info!(
+        user_id = %auth.user_id,
+        plugin_id = %plugin_id,
+        task_id = %task_id,
+        plugin_name = %plugin.name,
+        "Enqueued user plugin sync task"
+    );
+
+    Ok(Json(SyncTriggerResponse {
+        task_id,
+        message: format!("Sync task enqueued for {}", plugin.display_name),
+    }))
+}
+
+/// Get sync status for a user plugin
+///
+/// Returns the current sync status including last sync time, health, and failure count.
+/// Pass `?live=true` to also query the plugin process for live sync state (pending push/pull,
+/// conflicts, external entry count). This spawns the plugin process and is more expensive.
+#[utoipa::path(
+    get,
+    path = "/api/v1/user/plugins/{plugin_id}/sync/status",
+    params(
+        ("plugin_id" = Uuid, Path, description = "Plugin ID to check sync status"),
+        SyncStatusQuery,
+    ),
+    responses(
+        (status = 200, description = "Sync status", body = SyncStatusDto),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plugin not enabled for this user"),
+    ),
+    tag = "User Plugins"
+)]
+pub async fn get_sync_status(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+    Query(query): Query<SyncStatusQuery>,
+) -> Result<Json<SyncStatusDto>, ApiError> {
+    let instance =
+        UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
+
+    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
+
+    // Optionally query live sync state from the plugin process
+    let (external_count, pending_push, pending_pull, conflicts, live_error) = if query.live {
+        debug!(
+            user_id = %auth.user_id,
+            plugin_id = %plugin_id,
+            "Querying live sync status from plugin process"
+        );
+        match state
+            .plugin_manager
+            .get_user_plugin_handle(plugin_id, auth.user_id)
+            .await
+        {
+            Ok((handle, _context)) => {
+                match handle
+                    .call_method::<serde_json::Value, SyncStatusResponse>(
+                        methods::SYNC_STATUS,
+                        serde_json::json!({}),
+                    )
+                    .await
+                {
+                    Ok(resp) => (
+                        resp.external_count,
+                        Some(resp.pending_push),
+                        Some(resp.pending_pull),
+                        Some(resp.conflicts),
+                        None,
+                    ),
+                    Err(e) => {
+                        warn!(
+                            plugin_id = %plugin_id,
+                            error = %e,
+                            "Failed to get live sync status from plugin"
+                        );
+                        (
+                            None,
+                            None,
+                            None,
+                            None,
+                            Some(format!("sync/status call failed: {}", e)),
+                        )
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(
+                    plugin_id = %plugin_id,
+                    error = %e,
+                    "Failed to spawn plugin for live sync status"
+                );
+                (
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(format!("Plugin unavailable: {}", e)),
+                )
+            }
+        }
+    } else {
+        (None, None, None, None, None)
+    };
+
+    Ok(Json(SyncStatusDto {
+        plugin_id: plugin.id,
+        plugin_name: plugin.display_name.clone(),
+        connected: instance.is_authenticated(),
+        last_sync_at: instance.last_sync_at,
+        last_success_at: instance.last_success_at,
+        last_failure_at: instance.last_failure_at,
+        health_status: instance.health_status.clone(),
+        failure_count: instance.failure_count,
+        enabled: instance.enabled,
+        external_count,
+        pending_push,
+        pending_pull,
+        conflicts,
+        live_error,
+    }))
 }

@@ -2,19 +2,33 @@
  * Re-export all types
  */
 
+// From sync - sync provider protocol types (these match Rust exactly)
+export type {
+  ExternalUserInfo,
+  SyncEntry,
+  SyncEntryResult,
+  SyncEntryResultStatus,
+  SyncProgress,
+  SyncProvider,
+  SyncPullRequest,
+  SyncPullResponse,
+  SyncPushRequest,
+  SyncPushResponse,
+  SyncReadingStatus,
+  SyncStatusResponse,
+} from "../sync.js";
+
 // From capabilities - interface contracts
 export type {
-  // Primary types
   BookMetadataProvider,
   MetadataContentType,
   MetadataProvider,
   PartialBookMetadataProvider,
   PartialMetadataProvider,
+  // Deprecated aliases
   PartialSeriesMetadataProvider,
   RecommendationProvider,
-  // Deprecated aliases
   SeriesMetadataProvider,
-  SyncProvider,
 } from "./capabilities.js";
 
 // From manifest - plugin configuration types
@@ -29,9 +43,7 @@ export { hasBookMetadataProvider, hasSeriesMetadataProvider } from "./manifest.j
 
 // From protocol - JSON-RPC protocol types (these match Rust exactly)
 export type {
-  // Common types
   AlternateTitle,
-  // Book metadata types
   BookAuthor,
   BookAuthorRole,
   BookAward,
@@ -42,7 +54,6 @@ export type {
   ExternalLink,
   ExternalLinkType,
   ExternalRating,
-  // Series metadata types
   MetadataGetParams,
   MetadataMatchParams,
   MetadataMatchResponse,

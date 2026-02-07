@@ -116,3 +116,165 @@ pub struct UserPluginsListResponse {
     /// Plugins available for the user to enable
     pub available: Vec<AvailablePluginDto>,
 }
+
+/// Response from triggering a sync operation
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTriggerResponse {
+    /// Task ID for tracking the sync operation
+    pub task_id: Uuid,
+    /// Human-readable status message
+    pub message: String,
+}
+
+/// Query parameters for sync status endpoint
+#[derive(Debug, Clone, Deserialize, ToSchema, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatusQuery {
+    /// If true, spawn the plugin process and query live sync state
+    /// (external count, pending push/pull, conflicts).
+    /// Default: false (returns database-stored metadata only).
+    #[serde(default)]
+    pub live: bool,
+}
+
+/// Sync status response for a user plugin
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatusDto {
+    /// Plugin ID
+    pub plugin_id: Uuid,
+    /// Plugin name
+    pub plugin_name: String,
+    /// Whether the plugin is connected and ready to sync
+    pub connected: bool,
+    /// Last successful sync timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_sync_at: Option<DateTime<Utc>>,
+    /// Last successful operation timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_success_at: Option<DateTime<Utc>>,
+    /// Last failure timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_failure_at: Option<DateTime<Utc>>,
+    /// Health status
+    pub health_status: String,
+    /// Number of consecutive failures
+    pub failure_count: i32,
+    /// Whether the plugin is currently enabled
+    pub enabled: bool,
+    /// Number of entries tracked on the external service (only with `?live=true`)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_count: Option<u32>,
+    /// Number of local entries that need to be pushed (only with `?live=true`)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_push: Option<u32>,
+    /// Number of external entries that need to be pulled (only with `?live=true`)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_pull: Option<u32>,
+    /// Number of entries with conflicts on both sides (only with `?live=true`)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflicts: Option<u32>,
+    /// Error message if `?live=true` was requested but the plugin could not be queried
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub live_error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sync_status_dto_omits_live_fields_when_none() {
+        let dto = SyncStatusDto {
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "AniList".to_string(),
+            connected: true,
+            last_sync_at: None,
+            last_success_at: None,
+            last_failure_at: None,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            enabled: true,
+            external_count: None,
+            pending_push: None,
+            pending_pull: None,
+            conflicts: None,
+            live_error: None,
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        let obj = json.as_object().unwrap();
+        assert!(!obj.contains_key("externalCount"));
+        assert!(!obj.contains_key("pendingPush"));
+        assert!(!obj.contains_key("pendingPull"));
+        assert!(!obj.contains_key("conflicts"));
+        assert!(!obj.contains_key("liveError"));
+    }
+
+    #[test]
+    fn test_sync_status_dto_includes_live_fields_when_present() {
+        let dto = SyncStatusDto {
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "AniList".to_string(),
+            connected: true,
+            last_sync_at: None,
+            last_success_at: None,
+            last_failure_at: None,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            enabled: true,
+            external_count: Some(150),
+            pending_push: Some(5),
+            pending_pull: Some(3),
+            conflicts: Some(1),
+            live_error: None,
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["externalCount"], 150);
+        assert_eq!(json["pendingPush"], 5);
+        assert_eq!(json["pendingPull"], 3);
+        assert_eq!(json["conflicts"], 1);
+        assert!(!json.as_object().unwrap().contains_key("liveError"));
+    }
+
+    #[test]
+    fn test_sync_status_dto_includes_live_error() {
+        let dto = SyncStatusDto {
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "AniList".to_string(),
+            connected: false,
+            last_sync_at: None,
+            last_success_at: None,
+            last_failure_at: None,
+            health_status: "unknown".to_string(),
+            failure_count: 0,
+            enabled: true,
+            external_count: None,
+            pending_push: None,
+            pending_pull: None,
+            conflicts: None,
+            live_error: Some("Plugin unavailable: not found".to_string()),
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert!(
+            json["liveError"]
+                .as_str()
+                .unwrap()
+                .contains("Plugin unavailable")
+        );
+        assert!(!json.as_object().unwrap().contains_key("externalCount"));
+    }
+
+    #[test]
+    fn test_sync_status_query_defaults_to_false() {
+        let query: SyncStatusQuery = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(!query.live);
+    }
+
+    #[test]
+    fn test_sync_status_query_live_true() {
+        let query: SyncStatusQuery =
+            serde_json::from_value(serde_json::json!({"live": true})).unwrap();
+        assert!(query.live);
+    }
+}

@@ -29,6 +29,9 @@ import type {
   PluginSeriesMetadata,
 } from "./protocol.js";
 
+// Re-export SyncProvider from the sync module (replaces the former placeholder)
+export type { SyncProvider } from "../sync.js";
+
 // =============================================================================
 // Content Types
 // =============================================================================
@@ -122,12 +125,7 @@ export interface BookMetadataProvider {
 // Future Capabilities (v2)
 // =============================================================================
 
-/**
- * Interface for plugins that sync reading progress (syncProvider: true)
- * @future v2 - Methods will be defined when sync capability is implemented
- */
-// biome-ignore lint/suspicious/noEmptyInterface: Placeholder for future v2 capability
-export interface SyncProvider {}
+// SyncProvider is now defined in ../sync.ts and re-exported above.
 
 /**
  * Interface for plugins that provide recommendations (recommendationProvider: true)

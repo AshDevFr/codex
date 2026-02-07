@@ -65,15 +65,16 @@ export {
 
 // Logger
 export { createLogger, Logger, type LoggerOptions, type LogLevel } from "./logger.js";
+
 // Server
 export {
-  // Primary exports
   createMetadataPlugin,
-  // Deprecated aliases
   createSeriesMetadataPlugin,
+  createSyncPlugin,
   type InitializeParams,
   type MetadataPluginOptions,
   type SeriesMetadataPluginOptions,
+  type SyncPluginOptions,
 } from "./server.js";
 
 // Storage
@@ -88,5 +89,21 @@ export {
   type StorageSetResponse,
 } from "./storage.js";
 
-// Types
+// Sync - sync provider protocol types
+export type {
+  ExternalUserInfo,
+  SyncEntry,
+  SyncEntryResult,
+  SyncEntryResultStatus,
+  SyncProgress,
+  SyncProvider,
+  SyncPullRequest,
+  SyncPullResponse,
+  SyncPushRequest,
+  SyncPushResponse,
+  SyncReadingStatus,
+  SyncStatusResponse,
+} from "./sync.js";
+
+// Types (all remaining types re-exported from barrel)
 export * from "./types/index.js";

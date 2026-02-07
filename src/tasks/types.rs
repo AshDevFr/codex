@@ -144,6 +144,14 @@ pub enum TaskType {
 
     /// Clean up expired plugin storage data across all user plugins
     CleanupPluginData,
+
+    /// Sync user plugin data with external service
+    UserPluginSync {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+        #[serde(rename = "userId")]
+        user_id: Uuid,
+    },
 }
 
 fn default_mode() -> String {
@@ -172,6 +180,7 @@ impl TaskType {
             TaskType::ReprocessSeriesTitle { .. } => "reprocess_series_title",
             TaskType::ReprocessSeriesTitles { .. } => "reprocess_series_titles",
             TaskType::CleanupPluginData => "cleanup_plugin_data",
+            TaskType::UserPluginSync { .. } => "user_plugin_sync",
         }
     }
 
@@ -242,6 +251,9 @@ impl TaskType {
             }
             TaskType::ReprocessSeriesTitles { series_ids, .. } => {
                 serde_json::json!({ "series_ids": series_ids })
+            }
+            TaskType::UserPluginSync { plugin_id, user_id } => {
+                serde_json::json!({ "plugin_id": plugin_id, "user_id": user_id })
             }
             _ => serde_json::json!({}),
         }

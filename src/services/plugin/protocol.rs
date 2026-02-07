@@ -214,6 +214,16 @@ pub mod methods {
     pub const STORAGE_LIST: &str = "storage/list";
     /// Clear all data from plugin storage
     pub const STORAGE_CLEAR: &str = "storage/clear";
+
+    // Sync methods (user plugin sync providers)
+    /// Get user info from external service
+    pub const SYNC_GET_USER_INFO: &str = "sync/getUserInfo";
+    /// Push reading progress to external service
+    pub const SYNC_PUSH_PROGRESS: &str = "sync/pushProgress";
+    /// Pull reading progress from external service
+    pub const SYNC_PULL_PROGRESS: &str = "sync/pullProgress";
+    /// Get sync status/diff between Codex and external service
+    pub const SYNC_STATUS: &str = "sync/status";
 }
 
 // =============================================================================
@@ -1003,6 +1013,97 @@ pub enum ExternalLinkType {
 }
 
 // =============================================================================
+// User Library Data Contract (Sync Providers)
+// =============================================================================
+
+/// A user's library entry sent to sync plugins
+///
+/// Contains series info, reading progress, and the user's personal data
+/// (rating, notes) needed for sync providers to push/pull state with
+/// external services.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserLibraryEntry {
+    /// Codex series ID
+    pub series_id: String,
+    /// Primary title
+    pub title: String,
+    /// Alternative titles (native, romaji, etc.)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternate_titles: Vec<String>,
+    /// Publication year
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<i32>,
+    /// Series status
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<SeriesStatus>,
+    /// Genres
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub genres: Vec<String>,
+    /// Tags
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    /// Total book count in the series
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_book_count: Option<i32>,
+
+    /// Known external IDs (source → external_id mapping)
+    /// e.g., {"anilist": "12345", "myanimelist": "67890"}
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_ids: Vec<UserLibraryExternalId>,
+
+    /// User's reading status (derived from progress across books)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reading_status: Option<UserReadingStatus>,
+    /// Number of books the user has completed in this series
+    #[serde(default)]
+    pub books_read: i32,
+    /// Total number of books in the user's library for this series
+    #[serde(default)]
+    pub books_owned: i32,
+    /// User's personal rating (1-100 scale)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_rating: Option<i32>,
+    /// User's personal notes
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_notes: Option<String>,
+    /// When the user started reading (ISO 8601)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
+    /// When the user last read (ISO 8601)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_read_at: Option<String>,
+    /// When the user completed the series (ISO 8601)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<String>,
+}
+
+/// External ID mapping for a library entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserLibraryExternalId {
+    /// Source name (e.g., "anilist", "myanimelist", "mangadex")
+    pub source: String,
+    /// External ID on that service
+    pub external_id: String,
+    /// URL to the entry on the external service
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_url: Option<String>,
+}
+
+/// User's reading status for a series (derived from book progress)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UserReadingStatus {
+    /// User has not started reading
+    Unread,
+    /// User is currently reading (some books have progress)
+    Reading,
+    /// User has completed all available books
+    Completed,
+}
+
+// =============================================================================
 // Initialize Response
 // =============================================================================
 
@@ -1694,5 +1795,195 @@ mod tests {
         assert!(manifest.capabilities.recommendation_provider);
         assert!(!manifest.capabilities.user_sync_provider);
         assert!(manifest.capabilities.metadata_provider.is_empty());
+    }
+
+    // =========================================================================
+    // User Library Data Contract Tests
+    // =========================================================================
+
+    #[test]
+    fn test_user_library_entry_full_serialization() {
+        let entry = UserLibraryEntry {
+            series_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            title: "One Piece".to_string(),
+            alternate_titles: vec!["ワンピース".to_string()],
+            year: Some(1997),
+            status: Some(SeriesStatus::Ongoing),
+            genres: vec!["Action".to_string(), "Adventure".to_string()],
+            tags: vec!["pirates".to_string()],
+            total_book_count: Some(107),
+            external_ids: vec![UserLibraryExternalId {
+                source: "anilist".to_string(),
+                external_id: "21".to_string(),
+                external_url: Some("https://anilist.co/manga/21".to_string()),
+            }],
+            reading_status: Some(UserReadingStatus::Reading),
+            books_read: 95,
+            books_owned: 100,
+            user_rating: Some(95),
+            user_notes: Some("Masterpiece".to_string()),
+            started_at: Some("2024-01-01T00:00:00Z".to_string()),
+            last_read_at: Some("2026-02-06T00:00:00Z".to_string()),
+            completed_at: None,
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["seriesId"], "550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(json["title"], "One Piece");
+        assert_eq!(json["alternateTitles"][0], "ワンピース");
+        assert_eq!(json["year"], 1997);
+        assert_eq!(json["status"], "ongoing");
+        assert_eq!(json["genres"].as_array().unwrap().len(), 2);
+        assert_eq!(json["totalBookCount"], 107);
+        assert_eq!(json["externalIds"][0]["source"], "anilist");
+        assert_eq!(json["externalIds"][0]["externalId"], "21");
+        assert_eq!(json["readingStatus"], "reading");
+        assert_eq!(json["booksRead"], 95);
+        assert_eq!(json["booksOwned"], 100);
+        assert_eq!(json["userRating"], 95);
+        assert_eq!(json["userNotes"], "Masterpiece");
+        assert!(!json.as_object().unwrap().contains_key("completedAt"));
+    }
+
+    #[test]
+    fn test_user_library_entry_minimal() {
+        let entry = UserLibraryEntry {
+            series_id: "abc".to_string(),
+            title: "Test".to_string(),
+            alternate_titles: vec![],
+            year: None,
+            status: None,
+            genres: vec![],
+            tags: vec![],
+            total_book_count: None,
+            external_ids: vec![],
+            reading_status: None,
+            books_read: 0,
+            books_owned: 3,
+            user_rating: None,
+            user_notes: None,
+            started_at: None,
+            last_read_at: None,
+            completed_at: None,
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["seriesId"], "abc");
+        assert_eq!(json["title"], "Test");
+        let obj = json.as_object().unwrap();
+        assert!(!obj.contains_key("alternateTitles"));
+        assert!(!obj.contains_key("year"));
+        assert!(!obj.contains_key("status"));
+        assert!(!obj.contains_key("genres"));
+        assert!(!obj.contains_key("externalIds"));
+        assert!(!obj.contains_key("readingStatus"));
+        assert!(!obj.contains_key("userRating"));
+    }
+
+    #[test]
+    fn test_user_library_entry_deserialization() {
+        let json = json!({
+            "seriesId": "123",
+            "title": "Berserk",
+            "readingStatus": "completed",
+            "booksRead": 42,
+            "booksOwned": 42,
+            "userRating": 100,
+            "completedAt": "2025-12-01T00:00:00Z"
+        });
+        let entry: UserLibraryEntry = serde_json::from_value(json).unwrap();
+        assert_eq!(entry.series_id, "123");
+        assert_eq!(entry.title, "Berserk");
+        assert_eq!(entry.reading_status, Some(UserReadingStatus::Completed));
+        assert_eq!(entry.books_read, 42);
+        assert_eq!(entry.user_rating, Some(100));
+        assert_eq!(entry.completed_at.unwrap(), "2025-12-01T00:00:00Z");
+    }
+
+    #[test]
+    fn test_user_library_external_id_serialization() {
+        let ext_id = UserLibraryExternalId {
+            source: "myanimelist".to_string(),
+            external_id: "99999".to_string(),
+            external_url: Some("https://myanimelist.net/manga/99999".to_string()),
+        };
+        let json = serde_json::to_value(&ext_id).unwrap();
+        assert_eq!(json["source"], "myanimelist");
+        assert_eq!(json["externalId"], "99999");
+        assert_eq!(json["externalUrl"], "https://myanimelist.net/manga/99999");
+    }
+
+    #[test]
+    fn test_user_library_external_id_without_url() {
+        let ext_id = UserLibraryExternalId {
+            source: "comicinfo".to_string(),
+            external_id: "abc".to_string(),
+            external_url: None,
+        };
+        let json = serde_json::to_value(&ext_id).unwrap();
+        assert!(!json.as_object().unwrap().contains_key("externalUrl"));
+    }
+
+    #[test]
+    fn test_user_reading_status_serialization() {
+        assert_eq!(
+            serde_json::to_value(UserReadingStatus::Unread).unwrap(),
+            json!("unread")
+        );
+        assert_eq!(
+            serde_json::to_value(UserReadingStatus::Reading).unwrap(),
+            json!("reading")
+        );
+        assert_eq!(
+            serde_json::to_value(UserReadingStatus::Completed).unwrap(),
+            json!("completed")
+        );
+    }
+
+    #[test]
+    fn test_user_reading_status_deserialization() {
+        let unread: UserReadingStatus = serde_json::from_value(json!("unread")).unwrap();
+        assert_eq!(unread, UserReadingStatus::Unread);
+        let reading: UserReadingStatus = serde_json::from_value(json!("reading")).unwrap();
+        assert_eq!(reading, UserReadingStatus::Reading);
+        let completed: UserReadingStatus = serde_json::from_value(json!("completed")).unwrap();
+        assert_eq!(completed, UserReadingStatus::Completed);
+    }
+
+    #[test]
+    fn test_user_library_entry_multiple_external_ids() {
+        let entry = UserLibraryEntry {
+            series_id: "s1".to_string(),
+            title: "Test Series".to_string(),
+            alternate_titles: vec![],
+            year: None,
+            status: None,
+            genres: vec![],
+            tags: vec![],
+            total_book_count: None,
+            external_ids: vec![
+                UserLibraryExternalId {
+                    source: "anilist".to_string(),
+                    external_id: "21".to_string(),
+                    external_url: None,
+                },
+                UserLibraryExternalId {
+                    source: "myanimelist".to_string(),
+                    external_id: "13".to_string(),
+                    external_url: None,
+                },
+            ],
+            reading_status: None,
+            books_read: 0,
+            books_owned: 0,
+            user_rating: None,
+            user_notes: None,
+            started_at: None,
+            last_read_at: None,
+            completed_at: None,
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        let ids = json["externalIds"].as_array().unwrap();
+        assert_eq!(ids.len(), 2);
+        assert_eq!(ids[0]["source"], "anilist");
+        assert_eq!(ids[1]["source"], "myanimelist");
     }
 }
