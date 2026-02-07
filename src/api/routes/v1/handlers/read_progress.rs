@@ -61,6 +61,25 @@ pub async fn update_reading_progress(
     // Check permission - users can manage their own reading progress
     auth.require_permission(&Permission::BooksRead)?;
 
+    // Look up the book to get its page count for auto-completion detection
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Auto-detect completion: if the client explicitly set completed to true, use that.
+    // Otherwise, mark as completed when current_page reaches the book's page count,
+    // or when progress_percentage >= 98% (for EPUB books with reflowable content
+    // where reaching exactly 100% is difficult).
+    // This handles readers that send page progress but never set completed: true.
+    let completed = match request.completed {
+        Some(true) => true,
+        _ => {
+            request.current_page >= book.page_count
+                || request.progress_percentage.is_some_and(|p| p >= 0.98)
+        }
+    };
+
     // Update progress with optional percentage (used for EPUB books)
     let progress = ReadProgressRepository::upsert_with_percentage(
         &state.db,
@@ -68,7 +87,7 @@ pub async fn update_reading_progress(
         book_id,
         request.current_page,
         request.progress_percentage,
-        request.completed,
+        completed,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update reading progress: {}", e)))?;

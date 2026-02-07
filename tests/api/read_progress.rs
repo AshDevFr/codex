@@ -391,3 +391,184 @@ async fn test_mark_series_as_read_unauthorized() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+// ============================================================================
+// Auto-completion on Progress Update Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_update_progress_auto_completes_on_last_page() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a test book with 178 pages
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book 1".to_string()),
+        178,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Send progress update with page 178 (last page) but without completed: true
+    // This mimics a reader that just sends the page number
+    let body = serde_json::json!({ "currentPage": 178 });
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/progress", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ReadProgressResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let progress = response.unwrap();
+    assert_eq!(progress.current_page, 178);
+    assert!(
+        progress.completed,
+        "Book should be auto-completed when current_page reaches page_count"
+    );
+    assert!(progress.completed_at.is_some());
+}
+
+#[tokio::test]
+async fn test_update_progress_does_not_complete_before_last_page() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a test book with 178 pages
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book 1".to_string()),
+        178,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Send progress update with page 177 (one before last)
+    let body = serde_json::json!({ "currentPage": 177 });
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/progress", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ReadProgressResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let progress = response.unwrap();
+    assert_eq!(progress.current_page, 177);
+    assert!(
+        !progress.completed,
+        "Book should NOT be completed when current_page < page_count"
+    );
+    assert!(progress.completed_at.is_none());
+}
+
+#[tokio::test]
+async fn test_update_progress_explicit_completed_true_always_works() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a test book with 178 pages
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book 1".to_string()),
+        178,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Send progress with completed: true even though not on last page
+    let body = serde_json::json!({ "currentPage": 50, "completed": true });
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/progress", book.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ReadProgressResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let progress = response.unwrap();
+    assert_eq!(progress.current_page, 50);
+    assert!(
+        progress.completed,
+        "Explicit completed: true should always be respected"
+    );
+    assert!(progress.completed_at.is_some());
+}
+
+#[tokio::test]
+async fn test_update_progress_returns_not_found_for_missing_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let non_existent_id = uuid::Uuid::new_v4();
+
+    let body = serde_json::json!({ "currentPage": 10 });
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/progress", non_existent_id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert!(
+        error.message.to_lowercase().contains("book")
+            && error.message.to_lowercase().contains("not"),
+        "Expected error to mention book not found, got: {}",
+        error.message
+    );
+}

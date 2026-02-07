@@ -80,9 +80,13 @@ pub async fn update_progress(
     let current_page = request.page.unwrap_or(1).max(1);
 
     // Determine completed status
-    // If completed is explicitly set, use that value
-    // Otherwise, consider completed if current_page >= page_count
-    let completed = request.completed.unwrap_or(current_page >= book.page_count);
+    // If completed is explicitly set to true, use that.
+    // Otherwise, auto-detect: mark as completed when current_page reaches page_count.
+    // This handles readers that send { "completed": false, "page": 178 } on a 178-page book.
+    let completed = match request.completed {
+        Some(true) => true,
+        _ => current_page >= book.page_count,
+    };
 
     // Update progress using existing repository
     ReadProgressRepository::upsert(&state.db, user_id, book_id, current_page, completed)

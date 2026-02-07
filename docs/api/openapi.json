@@ -30269,7 +30269,10 @@
         ],
         "properties": {
           "completed": {
-            "type": "boolean",
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Whether the book is marked as completed",
             "example": false
           },

@@ -18,8 +18,8 @@ pub struct UpdateProgressRequest {
 
     /// Whether the book is marked as completed
     #[schema(example = false)]
-    #[serde(default)]
-    pub completed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed: Option<bool>,
 }
 
 /// Response containing reading progress for a book

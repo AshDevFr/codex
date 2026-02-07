@@ -13869,7 +13869,7 @@ export interface components {
              * @description Whether the book is marked as completed
              * @example false
              */
-            completed?: boolean;
+            completed?: boolean | null;
             /**
              * Format: int32
              * @description Current page number (1-indexed)
