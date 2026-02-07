@@ -47,15 +47,15 @@ export function IntegrationsSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-plugins"] });
       notifications.show({
-        title: "Plugin enabled",
-        message: "The plugin has been enabled for your account.",
+        title: "Integration enabled",
+        message: "The integration has been enabled for your account.",
         color: "green",
       });
     },
     onError: (error: Error) => {
       notifications.show({
         title: "Error",
-        message: error.message || "Failed to enable plugin",
+        message: error.message || "Failed to enable integration",
         color: "red",
       });
     },
@@ -69,14 +69,14 @@ export function IntegrationsSettings() {
       setDisconnectTarget(null);
       notifications.show({
         title: "Disconnected",
-        message: "Plugin has been disconnected and data removed.",
+        message: "Integration has been disconnected and data removed.",
         color: "green",
       });
     },
     onError: (error: Error) => {
       notifications.show({
         title: "Error",
-        message: error.message || "Failed to disconnect plugin",
+        message: error.message || "Failed to disconnect integration",
         color: "red",
       });
     },
@@ -142,15 +142,15 @@ export function IntegrationsSettings() {
             color="blue"
             variant="light"
           >
-            No user plugins have been installed by your administrator. Contact
-            your admin to install sync or recommendation plugins.
+            No integrations have been configured by your administrator. Contact
+            your admin to install plugins for sync or recommendations.
           </Alert>
         )}
 
-        {/* Connected Services */}
+        {/* Connected Integrations */}
         {enabled.length > 0 && (
           <Stack gap="md">
-            <Title order={3}>Connected Services</Title>
+            <Title order={3}>Connected</Title>
             {enabled.map((plugin) => (
               <ConnectedPluginCard
                 key={plugin.id}
@@ -166,13 +166,13 @@ export function IntegrationsSettings() {
           </Stack>
         )}
 
-        {/* Available Plugins */}
+        {/* Available Integrations */}
         {available.length > 0 && (
           <Stack gap="md">
-            <Title order={3}>Available Plugins</Title>
+            <Title order={3}>Available</Title>
             <Text size="sm" c="dimmed">
-              These plugins are available for you to connect. Enable them to
-              sync reading progress, get recommendations, and more.
+              These integrations are available for you to connect. Enable them
+              to sync reading progress, get recommendations, and more.
             </Text>
             {available.map((plugin) => (
               <AvailablePluginCard
@@ -194,13 +194,13 @@ export function IntegrationsSettings() {
       <Modal
         opened={disconnectTarget !== null}
         onClose={() => setDisconnectTarget(null)}
-        title="Disconnect Plugin"
+        title="Disconnect Integration"
         centered
       >
         <Stack gap="md">
           <Text>
-            Are you sure you want to disconnect this plugin? This will remove
-            your credentials and all plugin data.
+            Are you sure you want to disconnect this integration? This will
+            remove your credentials and all synced data.
           </Text>
           <Group justify="flex-end">
             <Button variant="subtle" onClick={() => setDisconnectTarget(null)}>
