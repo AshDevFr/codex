@@ -25820,6 +25820,13 @@
         "type": "object",
         "description": "Plugin capabilities",
         "properties": {
+          "externalIdSource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External ID source for matching sync entries to series (e.g., \"api:anilist\")"
+          },
           "metadataProvider": {
             "type": "array",
             "items": {

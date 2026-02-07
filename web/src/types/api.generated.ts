@@ -11362,6 +11362,8 @@ export interface components {
         };
         /** @description Plugin capabilities */
         PluginCapabilitiesDto: {
+            /** @description External ID source for matching sync entries to series (e.g., "api:anilist") */
+            externalIdSource?: string | null;
             /** @description Content types this plugin can provide metadata for (e.g., ["series", "book"]) */
             metadataProvider?: string[];
             /** @description Can sync user reading progress */
