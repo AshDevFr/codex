@@ -4285,6 +4285,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{prefix}/api/v1/age-ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List age ratings (stub - always returns empty array)
+         * @description Returns all age ratings in the library.
+         *     Currently returns empty as Codex doesn't aggregate age ratings separately.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/age-ratings`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_age_ratings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{prefix}/api/v1/books/list": {
         parameters: {
             query?: never;
@@ -4655,6 +4684,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{prefix}/api/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List collections (stub - always returns empty)
+         * @description Komga collections are user-created groupings of series.
+         *     Codex doesn't support this feature, so we return empty results.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/collections`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_collections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List genres
+         * @description Returns all genres in the library.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/genres`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_genres"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List languages (stub - always returns empty array)
+         * @description Returns all languages in the library.
+         *     Currently returns empty as Codex doesn't aggregate languages separately.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/languages`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_languages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{prefix}/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -4740,6 +4855,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{prefix}/api/v1/publishers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List publishers (stub - always returns empty array)
+         * @description Returns all publishers in the library.
+         *     Currently returns empty as Codex doesn't aggregate publishers separately.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/publishers`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_publishers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/readlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List read lists (stub - always returns empty)
+         * @description Komga read lists are user-created lists of books to read.
+         *     Codex doesn't support this feature, so we return empty results.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/readlists`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_readlists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{prefix}/api/v1/series": {
         parameters: {
             query?: never;
@@ -4774,6 +4947,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{prefix}/api/v1/series/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search/filter series
+         * @description Returns series matching the filter criteria.
+         *     This uses POST to support complex filter bodies.
+         *
+         *     ## Endpoint
+         *     `POST /{prefix}/api/v1/series/list`
+         *
+         *     ## Query Parameters
+         *     - `page` - Page number (0-indexed, default: 0)
+         *     - `size` - Page size (default: 20)
+         *     - `sort` - Sort parameter (e.g., "createdDate,desc")
+         *
+         *     ## Request Body
+         *     JSON object with filter criteria (library_id, fullTextSearch, condition, etc.)
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        post: operations["komga_search_series"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{prefix}/api/v1/series/new": {
         parameters: {
             query?: never;
@@ -4799,6 +5009,35 @@ export interface paths {
          *     - API Key
          */
         get: operations["komga_get_series_new"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v1/series/release-dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List series release dates (stub - always returns empty array)
+         * @description Returns all release dates used by series in the library.
+         *     Currently returns empty as Codex doesn't aggregate release dates separately.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/series/release-dates`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_series_release_dates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4976,6 +5215,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/{prefix}/api/v1/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List tags
+         * @description Returns all tags in the library.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v1/tags`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["komga_list_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{prefix}/api/v1/users/me": {
         parameters: {
             query?: never;
@@ -5006,6 +5273,35 @@ export interface paths {
          *     - API Key
          */
         get: operations["komga_get_current_user"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{prefix}/api/v2/authors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List authors v2 (stub - always returns empty array)
+         * @description Returns all authors in the library (v2 endpoint used by Komic).
+         *     Currently returns empty as Codex doesn't aggregate authors separately.
+         *
+         *     ## Endpoint
+         *     `GET /{prefix}/api/v2/authors`
+         *
+         *     ## Authentication
+         *     - Bearer token (JWT)
+         *     - Basic Auth
+         *     - API Key
+         */
+        get: operations["list_authors_v2"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8211,6 +8507,28 @@ export interface components {
             /** @description Tags filter */
             tag?: string[] | null;
         };
+        /**
+         * @description Minimal collection DTO (stub)
+         *
+         *     Komga collections are user-created groupings of series.
+         *     Codex doesn't support this feature, so we return empty results.
+         */
+        KomgaCollectionDto: {
+            /** @description Created timestamp (ISO 8601) */
+            createdDate: string;
+            /** @description Whether this collection is filtered from the user's view */
+            filtered: boolean;
+            /** @description Collection unique identifier */
+            id: string;
+            /** @description Last modified timestamp (ISO 8601) */
+            lastModifiedDate: string;
+            /** @description Collection name */
+            name: string;
+            /** @description Whether the collection is ordered */
+            ordered: boolean;
+            /** @description Series IDs in the collection */
+            seriesIds: string[];
+        };
         /** @description Komga content restrictions DTO */
         KomgaContentRestrictionsDto: {
             ageRestriction?: null | components["schemas"]["KomgaAgeRestrictionDto"];
@@ -8435,6 +8753,126 @@ export interface components {
          *
          *     This matches the exact structure Komic expects from Komga.
          */
+        KomgaPage_KomgaCollectionDto: {
+            /** @description The content items for this page */
+            content: {
+                /** @description Created timestamp (ISO 8601) */
+                createdDate: string;
+                /** @description Whether this collection is filtered from the user's view */
+                filtered: boolean;
+                /** @description Collection unique identifier */
+                id: string;
+                /** @description Last modified timestamp (ISO 8601) */
+                lastModifiedDate: string;
+                /** @description Collection name */
+                name: string;
+                /** @description Whether the collection is ordered */
+                ordered: boolean;
+                /** @description Series IDs in the collection */
+                seriesIds: string[];
+            }[];
+            /** @description Whether the page is empty */
+            empty: boolean;
+            /** @description Whether this is the first page */
+            first: boolean;
+            /** @description Whether this is the last page */
+            last: boolean;
+            /**
+             * Format: int32
+             * @description Current page number (0-indexed)
+             */
+            number: number;
+            /**
+             * Format: int32
+             * @description Number of elements on this page
+             */
+            numberOfElements: number;
+            /** @description Pageable information */
+            pageable: components["schemas"]["KomgaPageable"];
+            /**
+             * Format: int32
+             * @description Page size
+             */
+            size: number;
+            /** @description Sort information */
+            sort: components["schemas"]["KomgaSort"];
+            /**
+             * Format: int64
+             * @description Total number of elements across all pages
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Total number of pages
+             */
+            totalPages: number;
+        };
+        /**
+         * @description Komga paginated response wrapper (Spring Data Page format)
+         *
+         *     This matches the exact structure Komic expects from Komga.
+         */
+        KomgaPage_KomgaReadListDto: {
+            /** @description The content items for this page */
+            content: {
+                /** @description Book IDs in the read list */
+                bookIds: string[];
+                /** @description Created timestamp (ISO 8601) */
+                createdDate: string;
+                /** @description Whether this read list is filtered from the user's view */
+                filtered: boolean;
+                /** @description Read list unique identifier */
+                id: string;
+                /** @description Last modified timestamp (ISO 8601) */
+                lastModifiedDate: string;
+                /** @description Read list name */
+                name: string;
+                /** @description Whether the read list is ordered */
+                ordered: boolean;
+                /** @description Read list summary/description */
+                summary: string;
+            }[];
+            /** @description Whether the page is empty */
+            empty: boolean;
+            /** @description Whether this is the first page */
+            first: boolean;
+            /** @description Whether this is the last page */
+            last: boolean;
+            /**
+             * Format: int32
+             * @description Current page number (0-indexed)
+             */
+            number: number;
+            /**
+             * Format: int32
+             * @description Number of elements on this page
+             */
+            numberOfElements: number;
+            /** @description Pageable information */
+            pageable: components["schemas"]["KomgaPageable"];
+            /**
+             * Format: int32
+             * @description Page size
+             */
+            size: number;
+            /** @description Sort information */
+            sort: components["schemas"]["KomgaSort"];
+            /**
+             * Format: int64
+             * @description Total number of elements across all pages
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Total number of pages
+             */
+            totalPages: number;
+        };
+        /**
+         * @description Komga paginated response wrapper (Spring Data Page format)
+         *
+         *     This matches the exact structure Komic expects from Komga.
+         */
         KomgaPage_KomgaSeriesDto: {
             /** @description The content items for this page */
             content: {
@@ -8540,6 +8978,30 @@ export interface components {
             sort: components["schemas"]["KomgaSort"];
             /** @description Whether the pageable is unpaged (always false for paginated results) */
             unpaged: boolean;
+        };
+        /**
+         * @description Minimal read list DTO (stub)
+         *
+         *     Komga read lists are user-created lists of books to read.
+         *     Codex doesn't support this feature, so we return empty results.
+         */
+        KomgaReadListDto: {
+            /** @description Book IDs in the read list */
+            bookIds: string[];
+            /** @description Created timestamp (ISO 8601) */
+            createdDate: string;
+            /** @description Whether this read list is filtered from the user's view */
+            filtered: boolean;
+            /** @description Read list unique identifier */
+            id: string;
+            /** @description Last modified timestamp (ISO 8601) */
+            lastModifiedDate: string;
+            /** @description Read list name */
+            name: string;
+            /** @description Whether the read list is ordered */
+            ordered: boolean;
+            /** @description Read list summary/description */
+            summary: string;
         };
         /** @description Komga read progress DTO */
         KomgaReadProgressDto: {
@@ -8696,6 +9158,35 @@ export interface components {
             totalBookCount?: number | null;
             /** @description Whether total_book_count is locked */
             totalBookCountLock?: boolean;
+        };
+        /**
+         * @description Request DTO for searching/filtering series (POST /api/v1/series/list)
+         *
+         *     This is used by Komic to filter series with complex conditions.
+         */
+        KomgaSeriesSearchRequestDto: {
+            /** @description Collection IDs to filter by */
+            collectionId?: string[] | null;
+            /** @description Condition object for complex queries (currently accepted but not processed) */
+            condition?: unknown;
+            /** @description Whether to include deleted series */
+            deleted?: boolean | null;
+            /** @description Full text search query */
+            fullTextSearch?: string | null;
+            /** @description Genres filter */
+            genre?: string[] | null;
+            /** @description Language filter */
+            language?: string[] | null;
+            /** @description Library IDs to filter by */
+            libraryId?: string[] | null;
+            /** @description Whether to include only oneshots */
+            oneshot?: boolean | null;
+            /** @description Publishers filter */
+            publisher?: string[] | null;
+            /** @description Read status filter */
+            readStatus?: string[] | null;
+            /** @description Tags filter */
+            tag?: string[] | null;
         };
         /** @description Komga pagination sort information */
         KomgaSort: {
@@ -23688,6 +24179,36 @@ export interface operations {
             };
         };
     };
+    komga_list_age_ratings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty list of age ratings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     komga_search_books: {
         parameters: {
             query?: {
@@ -24164,6 +24685,96 @@ export interface operations {
             };
         };
     };
+    komga_list_collections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty list of collections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaCollectionDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_list_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of all genres */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_list_languages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty list of languages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     komga_list_libraries: {
         parameters: {
             query?: never;
@@ -24272,6 +24883,66 @@ export interface operations {
             };
         };
     };
+    komga_list_publishers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty list of publishers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_list_readlists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty list of read lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaReadListDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     komga_list_series: {
         parameters: {
             query?: {
@@ -24296,6 +24967,51 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Paginated list of series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaPage_KomgaSeriesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_search_series: {
+        parameters: {
+            query?: {
+                /** @description Page number (0-indexed, Komga-style) */
+                page?: number;
+                /** @description Page size (default: 20) */
+                size?: number;
+                /** @description Filter by library ID */
+                library_id?: string | null;
+                /** @description Search query */
+                search?: string | null;
+                /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
+                sort?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KomgaSeriesSearchRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Paginated list of series matching filter */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -24343,6 +25059,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KomgaPage_KomgaSeriesDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    komga_list_series_release_dates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty list of release dates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             /** @description Unauthorized */
@@ -24597,6 +25343,36 @@ export interface operations {
             };
         };
     };
+    komga_list_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of all tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     komga_get_current_user: {
         parameters: {
             query?: never;
@@ -24616,6 +25392,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KomgaUserDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_authors_v2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Komga API prefix (default: komga) */
+                prefix: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty list of authors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KomgaAuthorDto"][];
                 };
             };
             /** @description Unauthorized */

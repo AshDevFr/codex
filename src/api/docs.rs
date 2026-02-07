@@ -488,6 +488,18 @@ The following paths are exempt from rate limiting:
         komga::handlers::mark_series_as_read,
         komga::handlers::mark_series_as_unread,
         komga::handlers::get_current_user,
+        komga::handlers::search_series,
+
+        // Komga stub endpoints (empty responses for third-party app compatibility)
+        komga::handlers::list_collections,
+        komga::handlers::list_readlists,
+        komga::handlers::list_genres,
+        komga::handlers::list_tags,
+        komga::handlers::list_authors_v2,
+        komga::handlers::list_languages,
+        komga::handlers::list_publishers,
+        komga::handlers::list_age_ratings,
+        komga::handlers::list_series_release_dates,
     ),
     components(
         schemas(
@@ -849,6 +861,9 @@ The following paths are exempt from rate limiting:
             komga::dto::KomgaUserDto,
             komga::dto::KomgaContentRestrictionsDto,
             komga::dto::KomgaAgeRestrictionDto,
+            komga::dto::KomgaSeriesSearchRequestDto,
+            komga::dto::KomgaCollectionDto,
+            komga::dto::KomgaReadListDto,
             komga::handlers::series::SeriesPaginationQuery,
             komga::handlers::books::BooksPaginationQuery,
         )

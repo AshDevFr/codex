@@ -12722,6 +12722,54 @@
         ]
       }
     },
+    "/{prefix}/api/v1/age-ratings": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List age ratings (stub - always returns empty array)",
+        "description": "Returns all age ratings in the library.\nCurrently returns empty as Codex doesn't aggregate age ratings separately.\n\n## Endpoint\n`GET /{prefix}/api/v1/age-ratings`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_age_ratings",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Empty list of age ratings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/{prefix}/api/v1/books/list": {
       "post": {
         "tags": [
@@ -13481,6 +13529,144 @@
         ]
       }
     },
+    "/{prefix}/api/v1/collections": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List collections (stub - always returns empty)",
+        "description": "Komga collections are user-created groupings of series.\nCodex doesn't support this feature, so we return empty results.\n\n## Endpoint\n`GET /{prefix}/api/v1/collections`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_collections",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Empty list of collections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaCollectionDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/genres": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List genres",
+        "description": "Returns all genres in the library.\n\n## Endpoint\n`GET /{prefix}/api/v1/genres`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_genres",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of all genres",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/languages": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List languages (stub - always returns empty array)",
+        "description": "Returns all languages in the library.\nCurrently returns empty as Codex doesn't aggregate languages separately.\n\n## Endpoint\n`GET /{prefix}/api/v1/languages`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_languages",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Empty list of languages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/{prefix}/api/v1/libraries": {
       "get": {
         "tags": [
@@ -13638,6 +13824,97 @@
         ]
       }
     },
+    "/{prefix}/api/v1/publishers": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List publishers (stub - always returns empty array)",
+        "description": "Returns all publishers in the library.\nCurrently returns empty as Codex doesn't aggregate publishers separately.\n\n## Endpoint\n`GET /{prefix}/api/v1/publishers`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_publishers",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Empty list of publishers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/readlists": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List read lists (stub - always returns empty)",
+        "description": "Komga read lists are user-created lists of books to read.\nCodex doesn't support this feature, so we return empty results.\n\n## Endpoint\n`GET /{prefix}/api/v1/readlists`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_readlists",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Empty list of read lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaReadListDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/{prefix}/api/v1/series": {
       "get": {
         "tags": [
@@ -13717,6 +13994,117 @@
         "responses": {
           "200": {
             "description": "Paginated list of series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KomgaPage_KomgaSeriesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/list": {
+      "post": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "Search/filter series",
+        "description": "Returns series matching the filter criteria.\nThis uses POST to support complex filter bodies.\n\n## Endpoint\n`POST /{prefix}/api/v1/series/list`\n\n## Query Parameters\n- `page` - Page number (0-indexed, default: 0)\n- `size` - Page size (default: 20)\n- `sort` - Sort parameter (e.g., \"createdDate,desc\")\n\n## Request Body\nJSON object with filter criteria (library_id, fullTextSearch, condition, etc.)\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_search_series",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (0-indexed, Komga-style)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size (default: 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "library_id",
+            "in": "query",
+            "description": "Filter by library ID",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KomgaSeriesSearchRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Paginated list of series matching filter",
             "content": {
               "application/json": {
                 "schema": {
@@ -13822,6 +14210,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/KomgaPage_KomgaSeriesDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v1/series/release-dates": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List series release dates (stub - always returns empty array)",
+        "description": "Returns all release dates used by series in the library.\nCurrently returns empty as Codex doesn't aggregate release dates separately.\n\n## Endpoint\n`GET /{prefix}/api/v1/series/release-dates`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_series_release_dates",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Empty list of release dates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -14263,6 +14698,53 @@
         ]
       }
     },
+    "/{prefix}/api/v1/tags": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List tags",
+        "description": "Returns all tags in the library.\n\n## Endpoint\n`GET /{prefix}/api/v1/tags`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "komga_list_tags",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of all tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/{prefix}/api/v1/users/me": {
       "get": {
         "tags": [
@@ -14289,6 +14771,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/KomgaUserDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/{prefix}/api/v2/authors": {
+      "get": {
+        "tags": [
+          "Komga"
+        ],
+        "summary": "List authors v2 (stub - always returns empty array)",
+        "description": "Returns all authors in the library (v2 endpoint used by Komic).\nCurrently returns empty as Codex doesn't aggregate authors separately.\n\n## Endpoint\n`GET /{prefix}/api/v2/authors`\n\n## Authentication\n- Bearer token (JWT)\n- Basic Auth\n- API Key",
+        "operationId": "list_authors_v2",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Komga API prefix (default: komga)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Empty list of authors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KomgaAuthorDto"
+                  }
                 }
               }
             }
@@ -20249,6 +20778,52 @@
           }
         }
       },
+      "KomgaCollectionDto": {
+        "type": "object",
+        "description": "Minimal collection DTO (stub)\n\nKomga collections are user-created groupings of series.\nCodex doesn't support this feature, so we return empty results.",
+        "required": [
+          "id",
+          "name",
+          "ordered",
+          "seriesIds",
+          "createdDate",
+          "lastModifiedDate",
+          "filtered"
+        ],
+        "properties": {
+          "createdDate": {
+            "type": "string",
+            "description": "Created timestamp (ISO 8601)"
+          },
+          "filtered": {
+            "type": "boolean",
+            "description": "Whether this collection is filtered from the user's view"
+          },
+          "id": {
+            "type": "string",
+            "description": "Collection unique identifier"
+          },
+          "lastModifiedDate": {
+            "type": "string",
+            "description": "Last modified timestamp (ISO 8601)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Collection name"
+          },
+          "ordered": {
+            "type": "boolean",
+            "description": "Whether the collection is ordered"
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Series IDs in the collection"
+          }
+        }
+      },
       "KomgaContentRestrictionsDto": {
         "type": "object",
         "description": "Komga content restrictions DTO",
@@ -20676,6 +21251,239 @@
           }
         }
       },
+      "KomgaPage_KomgaCollectionDto": {
+        "type": "object",
+        "description": "Komga paginated response wrapper (Spring Data Page format)\n\nThis matches the exact structure Komic expects from Komga.",
+        "required": [
+          "content",
+          "pageable",
+          "totalElements",
+          "totalPages",
+          "last",
+          "number",
+          "size",
+          "numberOfElements",
+          "first",
+          "empty",
+          "sort"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Minimal collection DTO (stub)\n\nKomga collections are user-created groupings of series.\nCodex doesn't support this feature, so we return empty results.",
+              "required": [
+                "id",
+                "name",
+                "ordered",
+                "seriesIds",
+                "createdDate",
+                "lastModifiedDate",
+                "filtered"
+              ],
+              "properties": {
+                "createdDate": {
+                  "type": "string",
+                  "description": "Created timestamp (ISO 8601)"
+                },
+                "filtered": {
+                  "type": "boolean",
+                  "description": "Whether this collection is filtered from the user's view"
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Collection unique identifier"
+                },
+                "lastModifiedDate": {
+                  "type": "string",
+                  "description": "Last modified timestamp (ISO 8601)"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Collection name"
+                },
+                "ordered": {
+                  "type": "boolean",
+                  "description": "Whether the collection is ordered"
+                },
+                "seriesIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Series IDs in the collection"
+                }
+              }
+            },
+            "description": "The content items for this page"
+          },
+          "empty": {
+            "type": "boolean",
+            "description": "Whether the page is empty"
+          },
+          "first": {
+            "type": "boolean",
+            "description": "Whether this is the first page"
+          },
+          "last": {
+            "type": "boolean",
+            "description": "Whether this is the last page"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current page number (0-indexed)"
+          },
+          "numberOfElements": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of elements on this page"
+          },
+          "pageable": {
+            "$ref": "#/components/schemas/KomgaPageable",
+            "description": "Pageable information"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/KomgaSort",
+            "description": "Sort information"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of elements across all pages"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of pages"
+          }
+        }
+      },
+      "KomgaPage_KomgaReadListDto": {
+        "type": "object",
+        "description": "Komga paginated response wrapper (Spring Data Page format)\n\nThis matches the exact structure Komic expects from Komga.",
+        "required": [
+          "content",
+          "pageable",
+          "totalElements",
+          "totalPages",
+          "last",
+          "number",
+          "size",
+          "numberOfElements",
+          "first",
+          "empty",
+          "sort"
+        ],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Minimal read list DTO (stub)\n\nKomga read lists are user-created lists of books to read.\nCodex doesn't support this feature, so we return empty results.",
+              "required": [
+                "id",
+                "name",
+                "summary",
+                "ordered",
+                "bookIds",
+                "createdDate",
+                "lastModifiedDate",
+                "filtered"
+              ],
+              "properties": {
+                "bookIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Book IDs in the read list"
+                },
+                "createdDate": {
+                  "type": "string",
+                  "description": "Created timestamp (ISO 8601)"
+                },
+                "filtered": {
+                  "type": "boolean",
+                  "description": "Whether this read list is filtered from the user's view"
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Read list unique identifier"
+                },
+                "lastModifiedDate": {
+                  "type": "string",
+                  "description": "Last modified timestamp (ISO 8601)"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Read list name"
+                },
+                "ordered": {
+                  "type": "boolean",
+                  "description": "Whether the read list is ordered"
+                },
+                "summary": {
+                  "type": "string",
+                  "description": "Read list summary/description"
+                }
+              }
+            },
+            "description": "The content items for this page"
+          },
+          "empty": {
+            "type": "boolean",
+            "description": "Whether the page is empty"
+          },
+          "first": {
+            "type": "boolean",
+            "description": "Whether this is the first page"
+          },
+          "last": {
+            "type": "boolean",
+            "description": "Whether this is the last page"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Current page number (0-indexed)"
+          },
+          "numberOfElements": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of elements on this page"
+          },
+          "pageable": {
+            "$ref": "#/components/schemas/KomgaPageable",
+            "description": "Pageable information"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size"
+          },
+          "sort": {
+            "$ref": "#/components/schemas/KomgaSort",
+            "description": "Sort information"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of elements across all pages"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of pages"
+          }
+        }
+      },
       "KomgaPage_KomgaSeriesDto": {
         "type": "object",
         "description": "Komga paginated response wrapper (Spring Data Page format)\n\nThis matches the exact structure Komic expects from Komga.",
@@ -20867,6 +21675,57 @@
           "unpaged": {
             "type": "boolean",
             "description": "Whether the pageable is unpaged (always false for paginated results)"
+          }
+        }
+      },
+      "KomgaReadListDto": {
+        "type": "object",
+        "description": "Minimal read list DTO (stub)\n\nKomga read lists are user-created lists of books to read.\nCodex doesn't support this feature, so we return empty results.",
+        "required": [
+          "id",
+          "name",
+          "summary",
+          "ordered",
+          "bookIds",
+          "createdDate",
+          "lastModifiedDate",
+          "filtered"
+        ],
+        "properties": {
+          "bookIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Book IDs in the read list"
+          },
+          "createdDate": {
+            "type": "string",
+            "description": "Created timestamp (ISO 8601)"
+          },
+          "filtered": {
+            "type": "boolean",
+            "description": "Whether this read list is filtered from the user's view"
+          },
+          "id": {
+            "type": "string",
+            "description": "Read list unique identifier"
+          },
+          "lastModifiedDate": {
+            "type": "string",
+            "description": "Last modified timestamp (ISO 8601)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Read list name"
+          },
+          "ordered": {
+            "type": "boolean",
+            "description": "Whether the read list is ordered"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Read list summary/description"
           }
         }
       },
@@ -21190,6 +22049,106 @@
           "totalBookCountLock": {
             "type": "boolean",
             "description": "Whether total_book_count is locked"
+          }
+        }
+      },
+      "KomgaSeriesSearchRequestDto": {
+        "type": "object",
+        "description": "Request DTO for searching/filtering series (POST /api/v1/series/list)\n\nThis is used by Komic to filter series with complex conditions.",
+        "properties": {
+          "collectionId": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Collection IDs to filter by"
+          },
+          "condition": {
+            "description": "Condition object for complex queries (currently accepted but not processed)"
+          },
+          "deleted": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to include deleted series"
+          },
+          "fullTextSearch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full text search query"
+          },
+          "genre": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Genres filter"
+          },
+          "language": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Language filter"
+          },
+          "libraryId": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Library IDs to filter by"
+          },
+          "oneshot": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to include only oneshots"
+          },
+          "publisher": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Publishers filter"
+          },
+          "readStatus": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Read status filter"
+          },
+          "tag": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags filter"
           }
         }
       },

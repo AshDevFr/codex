@@ -16,8 +16,8 @@ use codex::api::routes::komga::dto::series::KomgaSeriesDto;
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     AlternateTitleRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
-    GenreRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, TagRepository,
-    UserRepository,
+    GenreRepository, LibraryRepository, ReadProgressRepository, SeriesMetadataRepository,
+    SeriesRepository, TagRepository, UserRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -3694,4 +3694,975 @@ async fn create_book_metadata_with_authors(
         updated_at: chrono::Utc::now(),
     };
     BookMetadataRepository::upsert(db, &metadata).await.unwrap();
+}
+
+// ============================================================================
+// Series Sort Tests (Komga series list sorting)
+// ============================================================================
+
+/// Test that POST /series/list with sort=metadata.titleSort,asc sorts by title_sort ascending.
+///
+/// This creates series with explicit title_sort values that differ from alphabetical title order,
+/// verifying that the sort actually uses title_sort (not title).
+#[tokio::test]
+async fn test_komga_search_series_sort_by_title_sort_asc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with names out of alphabetical order
+    let series_z = SeriesRepository::create(&db, library.id, "Zebra", None)
+        .await
+        .unwrap();
+    let series_a = SeriesRepository::create(&db, library.id, "Apple", None)
+        .await
+        .unwrap();
+    let series_m = SeriesRepository::create(&db, library.id, "Mango", None)
+        .await
+        .unwrap();
+
+    // Set explicit title_sort values to control sort order
+    // title_sort should determine the order, not the title itself
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_z.id,
+        "Zebra".to_string(),
+        Some("01 Zebra".to_string()),
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_a.id,
+        "Apple".to_string(),
+        Some("03 Apple".to_string()),
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_m.id,
+        "Mango".to_string(),
+        Some("02 Mango".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by metadata.titleSort ascending
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=metadata.titleSort,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Expected order by title_sort: "01 Zebra", "02 Mango", "03 Apple"
+    assert_eq!(page.content[0].name, "Zebra");
+    assert_eq!(page.content[1].name, "Mango");
+    assert_eq!(page.content[2].name, "Apple");
+}
+
+/// Test that POST /series/list with sort=metadata.titleSort,desc sorts by title_sort descending
+#[tokio::test]
+async fn test_komga_search_series_sort_by_title_sort_desc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series_z = SeriesRepository::create(&db, library.id, "Zebra", None)
+        .await
+        .unwrap();
+    let series_a = SeriesRepository::create(&db, library.id, "Apple", None)
+        .await
+        .unwrap();
+    let series_m = SeriesRepository::create(&db, library.id, "Mango", None)
+        .await
+        .unwrap();
+
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_z.id,
+        "Zebra".to_string(),
+        Some("01 Zebra".to_string()),
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_a.id,
+        "Apple".to_string(),
+        Some("03 Apple".to_string()),
+    )
+    .await
+    .unwrap();
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_m.id,
+        "Mango".to_string(),
+        Some("02 Mango".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by metadata.titleSort descending
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=metadata.titleSort,desc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Expected order by title_sort desc: "03 Apple", "02 Mango", "01 Zebra"
+    assert_eq!(page.content[0].name, "Apple");
+    assert_eq!(page.content[1].name, "Mango");
+    assert_eq!(page.content[2].name, "Zebra");
+}
+
+/// Test that GET /series with sort=metadata.titleSort,asc also works (not just POST)
+#[tokio::test]
+async fn test_komga_list_series_sort_by_title_sort_asc_get() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series out of alphabetical order
+    SeriesRepository::create(&db, library.id, "Zebra", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Apple", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Mango", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by metadata.titleSort ascending via GET
+    let request = get_request_with_auth(
+        "/komga/api/v1/series?page=0&size=20&sort=metadata.titleSort,asc",
+        &token,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Default title_sort is None, so should fall back to title and sort alphabetically
+    assert_eq!(page.content[0].name, "Apple");
+    assert_eq!(page.content[1].name, "Mango");
+    assert_eq!(page.content[2].name, "Zebra");
+}
+
+/// Test that POST /series/list with sort=createdDate,asc sorts by creation date ascending
+#[tokio::test]
+async fn test_komga_search_series_sort_by_created_date_asc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with sequential timestamps
+    let series1 = SeriesRepository::create(&db, library.id, "First Created", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series2 = SeriesRepository::create(&db, library.id, "Second Created", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series3 = SeriesRepository::create(&db, library.id, "Third Created", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by createdDate ascending (oldest first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=createdDate,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    assert_eq!(page.content[0].id, series1.id.to_string());
+    assert_eq!(page.content[1].id, series2.id.to_string());
+    assert_eq!(page.content[2].id, series3.id.to_string());
+}
+
+/// Test that POST /series/list with sort=createdDate,desc sorts by creation date descending
+#[tokio::test]
+async fn test_komga_search_series_sort_by_created_date_desc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "First Created", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series2 = SeriesRepository::create(&db, library.id, "Second Created", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series3 = SeriesRepository::create(&db, library.id, "Third Created", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by createdDate descending (newest first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=createdDate,desc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Newest first
+    assert_eq!(page.content[0].id, series3.id.to_string());
+    assert_eq!(page.content[1].id, series2.id.to_string());
+    assert_eq!(page.content[2].id, series1.id.to_string());
+}
+
+/// Test that POST /series/list with sort=lastModifiedDate,desc sorts by update date descending
+#[tokio::test]
+async fn test_komga_search_series_sort_by_last_modified_date_desc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create three series
+    let series1 = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series2 = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series3 = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+
+    // Update series1 last so it has the most recent updated_at
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    SeriesRepository::update_name(&db, series1.id, "Series A Updated")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by lastModifiedDate descending (most recently modified first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=lastModifiedDate,desc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // series1 was updated last, so it should be first
+    assert_eq!(page.content[0].id, series1.id.to_string());
+}
+
+/// Test that POST /series/list with sort=lastModifiedDate,asc sorts by update date ascending
+#[tokio::test]
+async fn test_komga_search_series_sort_by_last_modified_date_asc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series2 = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    let series3 = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+
+    // Update series1 last so it has the most recent updated_at
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    SeriesRepository::update_name(&db, series1.id, "Series A Updated")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by lastModifiedDate ascending (least recently modified first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=lastModifiedDate,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // series2 was created second and never updated, series3 was created last but not updated after
+    // series1 was updated most recently, so it should be last
+    assert_eq!(page.content[2].id, series1.id.to_string());
+}
+
+/// Test that POST /series/list with sort=metadata.releaseDate,desc sorts by year descending
+#[tokio::test]
+async fn test_komga_search_series_sort_by_release_date_desc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series_old = SeriesRepository::create(&db, library.id, "Old Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, series_old.id, Some(1990))
+        .await
+        .unwrap();
+
+    let series_new = SeriesRepository::create(&db, library.id, "New Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, series_new.id, Some(2024))
+        .await
+        .unwrap();
+
+    let series_mid = SeriesRepository::create(&db, library.id, "Mid Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, series_mid.id, Some(2010))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by releaseDate descending (newest year first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=metadata.releaseDate,desc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Newest year first
+    assert_eq!(page.content[0].id, series_new.id.to_string());
+    assert_eq!(page.content[1].id, series_mid.id.to_string());
+    assert_eq!(page.content[2].id, series_old.id.to_string());
+}
+
+/// Test that POST /series/list with sort=metadata.releaseDate,asc sorts by year ascending
+#[tokio::test]
+async fn test_komga_search_series_sort_by_release_date_asc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series_old = SeriesRepository::create(&db, library.id, "Old Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, series_old.id, Some(1990))
+        .await
+        .unwrap();
+
+    let series_new = SeriesRepository::create(&db, library.id, "New Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, series_new.id, Some(2024))
+        .await
+        .unwrap();
+
+    let series_mid = SeriesRepository::create(&db, library.id, "Mid Series", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, series_mid.id, Some(2010))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by releaseDate ascending (oldest year first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=metadata.releaseDate,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Oldest year first
+    assert_eq!(page.content[0].id, series_old.id.to_string());
+    assert_eq!(page.content[1].id, series_mid.id.to_string());
+    assert_eq!(page.content[2].id, series_new.id.to_string());
+}
+
+/// Test that POST /series/list with sort=lastReadDate,desc sorts by most recently read
+#[tokio::test]
+async fn test_komga_search_series_sort_by_last_read_date_desc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create three series, each with one book
+    let series1 = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    let book1 = create_test_book(
+        series1.id,
+        library.id,
+        "/comics/a/book1.cbz",
+        "book1.cbz",
+        "hash_read_sort_1",
+        "cbz",
+        10,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let series2 = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    let book2 = create_test_book(
+        series2.id,
+        library.id,
+        "/comics/b/book2.cbz",
+        "book2.cbz",
+        "hash_read_sort_2",
+        "cbz",
+        10,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let series3 = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+    let book3 = create_test_book(
+        series3.id,
+        library.id,
+        "/comics/c/book3.cbz",
+        "book3.cbz",
+        "hash_read_sort_3",
+        "cbz",
+        10,
+    );
+    let created_book3 = BookRepository::create(&db, &book3, None).await.unwrap();
+
+    // Create admin user and read books in specific order
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let admin = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Read series2 first, then series3, then series1
+    ReadProgressRepository::upsert(&db, admin.id, created_book2.id, 5, false)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    ReadProgressRepository::upsert(&db, admin.id, created_book3.id, 3, false)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    ReadProgressRepository::upsert(&db, admin.id, created_book1.id, 7, false)
+        .await
+        .unwrap();
+
+    let app = create_test_router_with_komga(state);
+
+    // Sort by lastReadDate descending (most recently read first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=lastReadDate,desc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Most recently read first: series1, series3, series2
+    assert_eq!(page.content[0].id, series1.id.to_string());
+    assert_eq!(page.content[1].id, series3.id.to_string());
+    assert_eq!(page.content[2].id, series2.id.to_string());
+}
+
+/// Test that POST /series/list with sort=lastReadDate,asc sorts by least recently read
+#[tokio::test]
+async fn test_komga_search_series_sort_by_last_read_date_asc() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series1 = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    let book1 = create_test_book(
+        series1.id,
+        library.id,
+        "/comics/a/book1.cbz",
+        "book1.cbz",
+        "hash_read_asc_1",
+        "cbz",
+        10,
+    );
+    let created_book1 = BookRepository::create(&db, &book1, None).await.unwrap();
+
+    let series2 = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    let book2 = create_test_book(
+        series2.id,
+        library.id,
+        "/comics/b/book2.cbz",
+        "book2.cbz",
+        "hash_read_asc_2",
+        "cbz",
+        10,
+    );
+    let created_book2 = BookRepository::create(&db, &book2, None).await.unwrap();
+
+    let series3 = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+    let book3 = create_test_book(
+        series3.id,
+        library.id,
+        "/comics/c/book3.cbz",
+        "book3.cbz",
+        "hash_read_asc_3",
+        "cbz",
+        10,
+    );
+    let created_book3 = BookRepository::create(&db, &book3, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let admin = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Read in order: series2, series3, series1
+    ReadProgressRepository::upsert(&db, admin.id, created_book2.id, 5, false)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    ReadProgressRepository::upsert(&db, admin.id, created_book3.id, 3, false)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+    ReadProgressRepository::upsert(&db, admin.id, created_book1.id, 7, false)
+        .await
+        .unwrap();
+
+    let app = create_test_router_with_komga(state);
+
+    // Sort by lastReadDate ascending (least recently read first)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=lastReadDate,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Least recently read first: series2, series3, series1
+    assert_eq!(page.content[0].id, series2.id.to_string());
+    assert_eq!(page.content[1].id, series3.id.to_string());
+    assert_eq!(page.content[2].id, series1.id.to_string());
+}
+
+/// Test that POST /series/list with unknown sort field falls back to default title sort
+#[tokio::test]
+async fn test_komga_search_series_sort_unknown_field_uses_default() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Zebra", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Apple", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Mango", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Unknown sort field should fall back to default (title sort ascending)
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=unknownField,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Default sort is title ascending
+    assert_eq!(page.content[0].name, "Apple");
+    assert_eq!(page.content[1].name, "Mango");
+    assert_eq!(page.content[2].name, "Zebra");
+}
+
+/// Test that POST /series/list with no sort parameter uses default title sort
+#[tokio::test]
+async fn test_komga_search_series_sort_no_param_uses_default() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    SeriesRepository::create(&db, library.id, "Zebra", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Apple", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Mango", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // No sort parameter at all
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 3);
+    // Default sort is title ascending
+    assert_eq!(page.content[0].name, "Apple");
+    assert_eq!(page.content[1].name, "Mango");
+    assert_eq!(page.content[2].name, "Zebra");
+}
+
+/// Test that title sort with pagination works correctly across pages
+/// (sort happens at database level BEFORE pagination)
+#[tokio::test]
+async fn test_komga_search_series_sort_title_with_pagination() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 5 series with title_sort values
+    for (name, sort_key) in [
+        ("Echo", "05"),
+        ("Alpha", "01"),
+        ("Charlie", "03"),
+        ("Bravo", "02"),
+        ("Delta", "04"),
+    ] {
+        let series = SeriesRepository::create(&db, library.id, name, None)
+            .await
+            .unwrap();
+        SeriesMetadataRepository::update_title(
+            &db,
+            series.id,
+            name.to_string(),
+            Some(sort_key.to_string()),
+        )
+        .await
+        .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Get first page (2 items) sorted by title_sort ascending
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=2&sort=metadata.titleSort,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page1 = response.unwrap();
+    assert_eq!(page1.total_elements, 5);
+    assert_eq!(page1.content.len(), 2);
+    // First page: "01" (Alpha), "02" (Bravo)
+    assert_eq!(page1.content[0].name, "Alpha");
+    assert_eq!(page1.content[1].name, "Bravo");
+
+    // Get second page
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=1&size=2&sort=metadata.titleSort,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page2 = response.unwrap();
+    assert_eq!(page2.content.len(), 2);
+    // Second page: "03" (Charlie), "04" (Delta)
+    assert_eq!(page2.content[0].name, "Charlie");
+    assert_eq!(page2.content[1].name, "Delta");
+
+    // Get third page
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=2&size=2&sort=metadata.titleSort,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page3 = response.unwrap();
+    assert_eq!(page3.content.len(), 1);
+    // Third page: "05" (Echo)
+    assert_eq!(page3.content[0].name, "Echo");
+}
+
+/// Test that title sort works correctly when title_sort is NULL for all series.
+///
+/// In production, most series have title_sort = NULL (the default).
+/// The sort should fall back to sorting by title when title_sort is NULL.
+/// This test reproduces the production bug where NULL title_sort causes
+/// series to appear in insertion order rather than alphabetical order.
+#[tokio::test]
+async fn test_komga_search_series_sort_by_title_with_null_title_sort() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with names that would be sorted differently than insertion order
+    // Deliberately inserting out of alphabetical order to catch insertion-order bugs
+    // These all have title_sort = NULL (the default), which is the common production case
+    SeriesRepository::create(&db, library.id, "Kaiju No. 8", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "A Couple of Cuckoos", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "+Anima", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Fairy Tail's Fairy Girls", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "01 Locke & Key", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Air Gear", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "ALIVE: The Final Evolution", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Shinobi Life", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    // Sort by metadata.titleSort ascending - with all NULL title_sort values,
+    // this should fall back to sorting by title alphabetically
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=metadata.titleSort,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 8);
+
+    // When title_sort is NULL for all series, the sort should fall back to title.
+    // The database sorts case-sensitively by default (uppercase before lowercase in SQLite),
+    // so the expected order is based on raw byte/codepoint ordering.
+    let titles: Vec<&str> = page.content.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        titles,
+        vec![
+            "+Anima",
+            "01 Locke & Key",
+            "A Couple of Cuckoos",
+            "ALIVE: The Final Evolution",
+            "Air Gear",
+            "Fairy Tail's Fairy Girls",
+            "Kaiju No. 8",
+            "Shinobi Life",
+        ],
+        "Series should be sorted alphabetically by title when title_sort is NULL, got: {:?}",
+        titles
+    );
+}
+
+/// Test that title sort works correctly with a mix of NULL and non-NULL title_sort values.
+///
+/// In production, some series may have title_sort set (e.g., from ComicInfo.xml metadata)
+/// while others have NULL. The sort should use title_sort where available and fall back
+/// to title for NULLs. NULLs should not cluster at the beginning/end.
+#[tokio::test]
+async fn test_komga_search_series_sort_by_title_mixed_null_and_set() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Series with NULL title_sort (default)
+    SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Daredevil", None)
+        .await
+        .unwrap();
+
+    // Series with explicit title_sort that differs from title
+    let series_the = SeriesRepository::create(&db, library.id, "The Amazing Spider-Man", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_the.id,
+        "The Amazing Spider-Man".to_string(),
+        Some("Amazing Spider-Man, The".to_string()),
+    )
+    .await
+    .unwrap();
+
+    // Another series with NULL title_sort
+    SeriesRepository::create(&db, library.id, "Cable", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let request = post_request_with_auth_json(
+        "/komga/api/v1/series/list?page=0&size=20&sort=metadata.titleSort,asc",
+        &token,
+        r#"{"condition":{"allOf":[]},"fullTextSearch":""}"#,
+    );
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaSeriesDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.content.len(), 4);
+
+    // Expected order:
+    // "The Amazing Spider-Man" (title_sort="Amazing Spider-Man, The" -> sorts under A)
+    // "Batman" (title_sort=NULL, falls back to title "Batman")
+    // "Cable" (title_sort=NULL, falls back to title "Cable")
+    // "Daredevil" (title_sort=NULL, falls back to title "Daredevil")
+    let titles: Vec<&str> = page.content.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        titles,
+        vec!["The Amazing Spider-Man", "Batman", "Cable", "Daredevil",],
+        "Series with title_sort should be interleaved with NULL title_sort series (sorted by title), got: {:?}",
+        titles
+    );
 }

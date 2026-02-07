@@ -146,9 +146,15 @@ impl SeriesRepository {
 
         // Apply sorting
         query = match sort_field {
-            Some(SeriesSortFieldRepo::Title) | None => query
-                .order_by(series_metadata::Column::TitleSort, order.clone())
-                .order_by(series_metadata::Column::Title, order),
+            Some(SeriesSortFieldRepo::Title) | None => {
+                // Use COALESCE(title_sort, title) so that series with NULL title_sort
+                // are sorted by title rather than clustering at the start/end
+                let sort_expr = Func::coalesce([
+                    Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
+                    Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
+                ]);
+                query.order_by(Expr::expr(sort_expr), order)
+            }
             Some(SeriesSortFieldRepo::DateAdded) => {
                 query.order_by(series::Column::CreatedAt, order)
             }

@@ -30,7 +30,7 @@ pub use pagination::{KomgaPage, KomgaPageable, KomgaSort};
 #[allow(unused_imports)]
 pub use series::{
     KomgaAlternateTitleDto, KomgaAuthorDto, KomgaBooksMetadataAggregationDto, KomgaSeriesDto,
-    KomgaSeriesMetadataDto, KomgaWebLinkDto,
+    KomgaSeriesMetadataDto, KomgaSeriesSearchRequestDto, KomgaWebLinkDto,
 };
 #[allow(unused_imports)]
 pub use user::{KomgaAgeRestrictionDto, KomgaContentRestrictionsDto, KomgaUserDto};
