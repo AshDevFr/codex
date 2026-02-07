@@ -666,6 +666,111 @@ async fn test_komga_books_ondeck_empty() {
     assert!(page.empty);
 }
 
+/// Test that on-deck orders by most recently read series first.
+/// Series B is read more recently, so its next unread book should appear first.
+#[tokio::test]
+async fn test_komga_books_ondeck_ordered_by_recency() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    // Create two series, each with 2 books
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series_a = SeriesRepository::create(&db, library.id, "Alpha Series", None)
+        .await
+        .unwrap();
+    let series_b = SeriesRepository::create(&db, library.id, "Beta Series", None)
+        .await
+        .unwrap();
+
+    // Alpha series: book 1 + book 2
+    let a1 = create_test_book(
+        series_a.id,
+        library.id,
+        "/comics/Alpha/issue1.cbz",
+        "issue1.cbz",
+        "hash_a1",
+        "cbz",
+        20,
+    );
+    let created_a1 = BookRepository::create(&db, &a1, None).await.unwrap();
+    let a2 = create_test_book(
+        series_a.id,
+        library.id,
+        "/comics/Alpha/issue2.cbz",
+        "issue2.cbz",
+        "hash_a2",
+        "cbz",
+        20,
+    );
+    let created_a2 = BookRepository::create(&db, &a2, None).await.unwrap();
+
+    // Beta series: book 1 + book 2
+    let b1 = create_test_book(
+        series_b.id,
+        library.id,
+        "/comics/Beta/issue1.cbz",
+        "issue1.cbz",
+        "hash_b1",
+        "cbz",
+        20,
+    );
+    let created_b1 = BookRepository::create(&db, &b1, None).await.unwrap();
+    let b2 = create_test_book(
+        series_b.id,
+        library.id,
+        "/comics/Beta/issue2.cbz",
+        "issue2.cbz",
+        "hash_b2",
+        "cbz",
+        20,
+    );
+    let created_b2 = BookRepository::create(&db, &b2, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Get user ID for direct progress updates
+    let user = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Mark Alpha book 1 as read FIRST (older timestamp)
+    ReadProgressRepository::mark_as_read(&db, user.id, created_a1.id, 20)
+        .await
+        .unwrap();
+
+    // Small delay to ensure different timestamps
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Mark Beta book 1 as read SECOND (newer timestamp)
+    ReadProgressRepository::mark_as_read(&db, user.id, created_b1.id, 20)
+        .await
+        .unwrap();
+
+    // Now on-deck should show Beta book 2 FIRST (most recently read series),
+    // then Alpha book 2
+    let app = create_test_router_with_komga(state);
+    let request = get_request_with_auth("/komga/api/v1/books/ondeck", &token);
+    let (status, response): (StatusCode, Option<KomgaPage<KomgaBookDto>>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let page = response.unwrap();
+    assert_eq!(page.total_elements, 2);
+    assert_eq!(
+        page.content[0].id,
+        created_b2.id.to_string(),
+        "Beta series (read more recently) should appear first on-deck"
+    );
+    assert_eq!(
+        page.content[1].id,
+        created_a2.id.to_string(),
+        "Alpha series (read earlier) should appear second on-deck"
+    );
+}
+
 #[tokio::test]
 async fn test_komga_search_books_empty() {
     let (db, temp_dir) = setup_test_db().await;
@@ -1277,6 +1382,63 @@ async fn test_komga_update_read_progress_marks_completed() {
     let (status, _) = make_raw_request(app, request).await;
 
     assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+/// Test that marking a book as completed without a page field sets current_page to page_count.
+/// This is the exact format Komic sends: `{ "completed": true }` with no page.
+#[tokio::test]
+async fn test_komga_mark_completed_without_page_sets_last_page() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.cbz",
+        "issue1.cbz",
+        "hash1",
+        "cbz",
+        178, // 178 pages
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Mark as completed without sending a page — the exact Komic "mark as read" payload
+    {
+        let app = create_test_router_with_komga(state.clone());
+        let uri = format!("/komga/api/v1/books/{}/read-progress", created_book.id);
+        let body = r#"{"completed":true}"#;
+        let request = patch_request_with_auth_json(&uri, &token, body);
+        let (status, _) = make_raw_request(app, request).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+
+    // Verify via the book DTO endpoint that progress page = page_count
+    {
+        let app = create_test_router_with_komga(state);
+        let uri = format!("/komga/api/v1/books/{}", created_book.id);
+        let request = get_request_with_auth(&uri, &token);
+        let (status, response): (StatusCode, Option<KomgaBookDto>) =
+            make_json_request(app, request).await;
+
+        assert_eq!(status, StatusCode::OK);
+        let book_dto = response.unwrap();
+        assert!(book_dto.read_progress.is_some());
+        let progress = book_dto.read_progress.unwrap();
+        assert!(progress.completed, "Book should be marked as completed");
+        assert_eq!(
+            progress.page, 178,
+            "Completed book without explicit page should have current_page = page_count"
+        );
+    }
 }
 
 #[tokio::test]

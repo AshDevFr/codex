@@ -75,17 +75,26 @@ pub async fn update_progress(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Determine the current page (default to 1 if not specified)
-    // Komga uses 1-indexed pages, and so does Codex
+    // Determine completed status and current page together.
+    // When completed is explicitly true and no page is provided, set current_page
+    // to the book's last page (page_count). This handles Komic sending just
+    // { "completed": true } to mark a book as read.
+    // When completed is not explicitly true, auto-detect: mark as completed when
+    // current_page reaches page_count. This handles readers that send
+    // { "completed": false, "page": 178 } on a 178-page book.
     let current_page = request.page.unwrap_or(1).max(1);
-
-    // Determine completed status
-    // If completed is explicitly set to true, use that.
-    // Otherwise, auto-detect: mark as completed when current_page reaches page_count.
-    // This handles readers that send { "completed": false, "page": 178 } on a 178-page book.
-    let completed = match request.completed {
-        Some(true) => true,
-        _ => current_page >= book.page_count,
+    let (current_page, completed) = match request.completed {
+        Some(true) => {
+            // Explicitly marked as completed — if no page was sent,
+            // snap to the last page so the progress looks correct.
+            let page = if request.page.is_none() {
+                book.page_count
+            } else {
+                current_page
+            };
+            (page, true)
+        }
+        _ => (current_page, current_page >= book.page_count),
     };
 
     // Update progress using existing repository

@@ -1179,20 +1179,29 @@ impl BookRepository {
         use crate::db::entities::{read_progress, series};
         use sea_orm::JoinType;
 
-        // Step 1: Get series IDs where user has completed at least one book
-        let completed_series_query = Books::find()
-            .select_only()
-            .column(books::Column::SeriesId)
-            .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
-            .filter(read_progress::Column::UserId.eq(user_id))
-            .filter(read_progress::Column::Completed.eq(true))
-            .group_by(books::Column::SeriesId);
+        // Step 1: Get series where user has completed at least one book,
+        // along with the most recent read-progress timestamp (for sorting by recency).
+        let series_with_last_read: Vec<(Uuid, Option<chrono::DateTime<chrono::Utc>>)> =
+            Books::find()
+                .select_only()
+                .column(books::Column::SeriesId)
+                .column_as(read_progress::Column::UpdatedAt.max(), "last_read")
+                .join(JoinType::InnerJoin, books::Relation::ReadProgress.def())
+                .filter(read_progress::Column::UserId.eq(user_id))
+                .filter(read_progress::Column::Completed.eq(true))
+                .group_by(books::Column::SeriesId)
+                .into_tuple()
+                .all(db)
+                .await
+                .context("Failed to get completed series")?;
 
-        let completed_series: Vec<Uuid> = completed_series_query
-            .into_tuple::<Uuid>()
-            .all(db)
-            .await
-            .context("Failed to get completed series")?;
+        let completed_series: Vec<Uuid> = series_with_last_read.iter().map(|(id, _)| *id).collect();
+
+        let series_last_read: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> =
+            series_with_last_read
+                .into_iter()
+                .filter_map(|(id, ts)| ts.map(|t| (id, t)))
+                .collect();
 
         if completed_series.is_empty() {
             return Ok((vec![], 0));
@@ -1274,6 +1283,13 @@ impl BookRepository {
                 on_deck_books.push(book);
             }
         }
+
+        // Sort by most recently read series first (descending activity timestamp)
+        on_deck_books.sort_by(|a, b| {
+            let a_activity = series_last_read.get(&a.series_id);
+            let b_activity = series_last_read.get(&b.series_id);
+            b_activity.cmp(&a_activity)
+        });
 
         let total = on_deck_books.len() as u64;
 
