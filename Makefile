@@ -247,7 +247,7 @@ frontend-lint-fix: ## Run frontend lint with auto-fix
 # Plugin Development
 # =============================================================================
 
-PLUGIN_DIRS := sdk-typescript metadata-echo metadata-mangabaka metadata-openlibrary
+PLUGIN_DIRS := $(notdir $(patsubst %/package.json,%,$(wildcard plugins/*/package.json)))
 
 plugins-install: ## Install dependencies for all plugins
 	@echo "$(BLUE)Installing plugin dependencies...$(NC)"
