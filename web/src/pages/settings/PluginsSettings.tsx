@@ -12,7 +12,6 @@ import {
   Group,
   Loader,
   Modal,
-  MultiSelect,
   NumberInput,
   ScrollArea,
   Select,
@@ -45,8 +44,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { librariesApi } from "@/api/libraries";
 import {
-  AVAILABLE_PERMISSIONS,
-  AVAILABLE_SCOPES,
   CREDENTIAL_DELIVERY_OPTIONS,
   type CreatePluginRequest,
   type PluginDto,
@@ -54,7 +51,7 @@ import {
   type PluginHealthStatus,
   pluginsApi,
 } from "@/api/plugins";
-import { SearchConfigModal } from "@/components/forms/SearchConfigModal";
+import { PluginConfigModal } from "@/components/forms/PluginConfigModal";
 
 // Health status badge color mapping
 const healthStatusColors: Record<PluginHealthStatus, string> = {
@@ -74,10 +71,6 @@ interface PluginFormValues {
   args: string;
   envVars: { key: string; value: string }[];
   workingDirectory: string;
-  permissions: string[];
-  scopes: string[];
-  allLibraries: boolean;
-  libraryIds: string[];
   credentialDelivery: string;
   credentials: string;
   config: string;
@@ -94,10 +87,6 @@ const defaultFormValues: PluginFormValues = {
   args: "",
   envVars: [],
   workingDirectory: "",
-  permissions: [],
-  scopes: [],
-  allLibraries: true,
-  libraryIds: [],
   credentialDelivery: "env",
   credentials: "",
   config: "",
@@ -153,8 +142,7 @@ export function PluginsSettings() {
   ] = useDisclosure(false);
   const [selectedPlugin, setSelectedPlugin] = useState<PluginDto | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [searchConfigPlugin, setSearchConfigPlugin] =
-    useState<PluginDto | null>(null);
+  const [configPlugin, setConfigPlugin] = useState<PluginDto | null>(null);
 
   // Fetch plugins
   const {
@@ -215,9 +203,6 @@ export function PluginsSettings() {
           .filter(Boolean),
         env: values.envVars.filter((e) => e.key.trim()),
         workingDirectory: values.workingDirectory.trim() || undefined,
-        permissions: values.permissions,
-        scopes: values.scopes,
-        libraryIds: values.allLibraries ? [] : values.libraryIds,
         credentialDelivery: values.credentialDelivery,
         credentials: values.credentials.trim()
           ? safeJsonParse(values.credentials, "credentials")
@@ -270,9 +255,6 @@ export function PluginsSettings() {
           .filter(Boolean),
         env: values.envVars.filter((e) => e.key.trim()),
         workingDirectory: values.workingDirectory.trim() || null,
-        permissions: values.permissions,
-        scopes: values.scopes,
-        libraryIds: values.allLibraries ? [] : values.libraryIds,
         credentialDelivery: values.credentialDelivery,
         credentials: values.credentials.trim()
           ? safeJsonParse(values.credentials, "credentials")
@@ -429,10 +411,6 @@ export function PluginsSettings() {
             )
           : [],
       workingDirectory: plugin.workingDirectory || "",
-      permissions: plugin.permissions,
-      scopes: plugin.scopes,
-      allLibraries: plugin.libraryIds.length === 0,
-      libraryIds: plugin.libraryIds,
       credentialDelivery: plugin.credentialDelivery,
       credentials: "",
       config:
@@ -604,21 +582,15 @@ export function PluginsSettings() {
                                 </ActionIcon>
                               </Tooltip>
                             )}
-                            {plugin.manifest?.capabilities?.metadataProvider &&
-                              plugin.manifest.capabilities.metadataProvider
-                                .length > 0 && (
-                                <Tooltip label="Configure Search">
-                                  <ActionIcon
-                                    variant="subtle"
-                                    color="blue"
-                                    onClick={() =>
-                                      setSearchConfigPlugin(plugin)
-                                    }
-                                  >
-                                    <IconSettings size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                              )}
+                            <Tooltip label="Configure Plugin">
+                              <ActionIcon
+                                variant="subtle"
+                                color="blue"
+                                onClick={() => setConfigPlugin(plugin)}
+                              >
+                                <IconSettings size={16} />
+                              </ActionIcon>
+                            </Tooltip>
                             <Tooltip label="Edit Plugin">
                               <ActionIcon
                                 variant="subtle"
@@ -698,7 +670,6 @@ export function PluginsSettings() {
             createForm.reset();
           }}
           isCreate
-          libraries={libraries}
         />
       </Modal>
 
@@ -723,7 +694,6 @@ export function PluginsSettings() {
             closeEditModal();
             setSelectedPlugin(null);
           }}
-          libraries={libraries}
           manifest={selectedPlugin?.manifest}
         />
       </Modal>
@@ -768,12 +738,13 @@ export function PluginsSettings() {
         </Stack>
       </Modal>
 
-      {/* Search Config Modal */}
-      {searchConfigPlugin && (
-        <SearchConfigModal
-          plugin={searchConfigPlugin}
-          opened={!!searchConfigPlugin}
-          onClose={() => setSearchConfigPlugin(null)}
+      {/* Plugin Config Modal */}
+      {configPlugin && (
+        <PluginConfigModal
+          plugin={configPlugin}
+          opened={!!configPlugin}
+          onClose={() => setConfigPlugin(null)}
+          libraries={libraries}
         />
       )}
     </Box>
@@ -781,13 +752,13 @@ export function PluginsSettings() {
 }
 
 // Plugin details component for expanded row
-function PluginDetails({
-  plugin,
-  libraries,
-}: {
-  plugin: PluginDto;
-  libraries: { id: string; name: string }[];
-}) {
+// Metadata provider configuration details (left column)
+function MetadataConfigDetails({ plugin }: { plugin: PluginDto }) {
+  const isMetadataProvider =
+    plugin.manifest?.capabilities?.metadataProvider &&
+    plugin.manifest.capabilities.metadataProvider.length > 0;
+  if (!isMetadataProvider) return null;
+
   const preprocessingRulesCount = Array.isArray(plugin.searchPreprocessingRules)
     ? (plugin.searchPreprocessingRules as unknown[]).length
     : 0;
@@ -803,6 +774,116 @@ function PluginDetails({
         ).length
       : 0;
 
+  return (
+    <Group gap="xl">
+      <div>
+        <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+          External ID
+        </Text>
+        <Badge
+          variant="light"
+          size="sm"
+          color={plugin.useExistingExternalId ? "violet" : "gray"}
+          mt={4}
+        >
+          {plugin.useExistingExternalId ? "Prioritized" : "Not prioritized"}
+        </Badge>
+      </div>
+      <div>
+        <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+          Search Template
+        </Text>
+        <Badge
+          variant="light"
+          size="sm"
+          color={plugin.searchQueryTemplate ? "blue" : "gray"}
+          mt={4}
+        >
+          {plugin.searchQueryTemplate ? "Custom" : "Default"}
+        </Badge>
+      </div>
+      <div>
+        <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+          Preprocessing Rules
+        </Text>
+        <Text size="sm" mt={4}>
+          {preprocessingRulesCount}{" "}
+          {preprocessingRulesCount === 1 ? "rule" : "rules"}
+        </Text>
+      </div>
+      <div>
+        <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+          Auto-Match Conditions
+        </Text>
+        <Text size="sm" mt={4}>
+          {autoMatchConditionsCount}{" "}
+          {autoMatchConditionsCount === 1 ? "condition" : "conditions"}
+        </Text>
+      </div>
+    </Group>
+  );
+}
+
+// Metadata provider manifest details (right column)
+function MetadataManifestDetails({ plugin }: { plugin: PluginDto }) {
+  const metadataProvider = plugin.manifest?.capabilities?.metadataProvider;
+  if (!metadataProvider || metadataProvider.length === 0) return null;
+
+  return (
+    <div>
+      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+        Metadata Targets
+      </Text>
+      <Group gap="xs" mt={4}>
+        {(["series", "book"] as const).map((target) => {
+          const pluginSupports = metadataProvider.includes(target);
+          if (!pluginSupports) return null;
+          const isActive = plugin.metadataTargets
+            ? plugin.metadataTargets.includes(target)
+            : true; // null = auto (all capabilities active)
+          return (
+            <Badge
+              key={target}
+              variant={isActive ? "light" : "outline"}
+              color={isActive ? "teal" : "gray"}
+              size="sm"
+            >
+              {target === "series" ? "Series" : "Books"}
+            </Badge>
+          );
+        })}
+      </Group>
+    </div>
+  );
+}
+
+// Sync provider manifest details (right column)
+function SyncManifestDetails({ plugin }: { plugin: PluginDto }) {
+  if (!plugin.manifest?.capabilities?.userSyncProvider) return null;
+
+  const externalIdSource = plugin.manifest.capabilities.externalIdSource;
+
+  if (!externalIdSource) return null;
+
+  return (
+    <div>
+      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+        External ID Source
+      </Text>
+      <Badge variant="light" size="sm" color="violet" mt={4}>
+        {externalIdSource}
+      </Badge>
+    </div>
+  );
+}
+
+function PluginDetails({
+  plugin,
+  libraries,
+}: {
+  plugin: PluginDto;
+  libraries: { id: string; name: string }[];
+}) {
   return (
     <Grid gutter="xl">
       {/* Left column: plugin configuration */}
@@ -916,54 +997,7 @@ function PluginDetails({
             </div>
           </Group>
 
-          <Group gap="xl">
-            <div>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                External ID
-              </Text>
-              <Badge
-                variant="light"
-                size="sm"
-                color={plugin.useExistingExternalId ? "violet" : "gray"}
-                mt={4}
-              >
-                {plugin.useExistingExternalId
-                  ? "Prioritized"
-                  : "Not prioritized"}
-              </Badge>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Search Template
-              </Text>
-              <Badge
-                variant="light"
-                size="sm"
-                color={plugin.searchQueryTemplate ? "blue" : "gray"}
-                mt={4}
-              >
-                {plugin.searchQueryTemplate ? "Custom" : "Default"}
-              </Badge>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Preprocessing Rules
-              </Text>
-              <Text size="sm" mt={4}>
-                {preprocessingRulesCount}{" "}
-                {preprocessingRulesCount === 1 ? "rule" : "rules"}
-              </Text>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Auto-Match Conditions
-              </Text>
-              <Text size="sm" mt={4}>
-                {autoMatchConditionsCount}{" "}
-                {autoMatchConditionsCount === 1 ? "condition" : "conditions"}
-              </Text>
-            </div>
-          </Group>
+          <MetadataConfigDetails plugin={plugin} />
 
           {plugin.disabledReason && (
             <Alert
@@ -1018,41 +1052,13 @@ function PluginDetails({
                 )}
               {plugin.manifest.capabilities.userSyncProvider && (
                 <Badge color="violet" variant="light">
-                  User Sync Provider
+                  Reading Sync
                 </Badge>
               )}
             </Group>
 
-            {plugin.manifest.capabilities.metadataProvider &&
-              plugin.manifest.capabilities.metadataProvider.length > 0 && (
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Metadata Targets
-                  </Text>
-                  <Group gap="xs" mt={4}>
-                    {(["series", "book"] as const).map((target) => {
-                      const pluginSupports =
-                        plugin.manifest?.capabilities?.metadataProvider?.includes(
-                          target,
-                        ) ?? false;
-                      if (!pluginSupports) return null;
-                      const isActive = plugin.metadataTargets
-                        ? plugin.metadataTargets.includes(target)
-                        : true; // null = auto (all capabilities active)
-                      return (
-                        <Badge
-                          key={target}
-                          variant={isActive ? "light" : "outline"}
-                          color={isActive ? "teal" : "gray"}
-                          size="sm"
-                        >
-                          {target === "series" ? "Series" : "Books"}
-                        </Badge>
-                      );
-                    })}
-                  </Group>
-                </div>
-              )}
+            <MetadataManifestDetails plugin={plugin} />
+            <SyncManifestDetails plugin={plugin} />
 
             {plugin.manifest.configSchema && (
               <ConfigSchemaHelp schema={plugin.manifest.configSchema} />
@@ -1359,7 +1365,6 @@ interface PluginFormProps {
   isLoading: boolean;
   onCancel: () => void;
   isCreate?: boolean;
-  libraries: { id: string; name: string }[];
   manifest?: PluginDto["manifest"];
 }
 
@@ -1369,7 +1374,6 @@ function PluginForm({
   isLoading,
   onCancel,
   isCreate,
-  libraries,
   manifest,
 }: PluginFormProps) {
   const [activeTab, setActiveTab] = useState<string | null>("general");
@@ -1406,7 +1410,6 @@ function PluginForm({
           >
             Execution{executionTabErrors ? " *" : ""}
           </Tabs.Tab>
-          <Tabs.Tab value="permissions">Permissions</Tabs.Tab>
           <Tabs.Tab value="credentials">Credentials</Tabs.Tab>
         </Tabs.List>
 
@@ -1516,52 +1519,6 @@ function PluginForm({
                   min={1}
                   max={1000}
                   {...form.getInputProps("rateLimitRequestsPerMinute")}
-                />
-              )}
-            </Stack>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="permissions">
-            <Stack gap="md">
-              <MultiSelect
-                label="Permissions"
-                placeholder="Select permissions"
-                description="RBAC permissions controlling what the plugin can write"
-                data={AVAILABLE_PERMISSIONS.map((p) => ({
-                  value: p.value,
-                  label: p.label,
-                }))}
-                searchable
-                {...form.getInputProps("permissions")}
-              />
-              <MultiSelect
-                label="Scopes"
-                placeholder="Select scopes"
-                description="Where the plugin actions will be available in the UI"
-                data={AVAILABLE_SCOPES.map((s) => ({
-                  value: s.value,
-                  label: s.label,
-                }))}
-                searchable
-                {...form.getInputProps("scopes")}
-              />
-              <Divider label="Library Filter" labelPosition="center" />
-              <Switch
-                label="All Libraries"
-                description="When enabled, plugin applies to all libraries. Disable to select specific libraries."
-                {...form.getInputProps("allLibraries", { type: "checkbox" })}
-              />
-              {!form.values.allLibraries && (
-                <MultiSelect
-                  label="Libraries"
-                  placeholder="Select libraries"
-                  description="Plugin will only be available for series/books in these libraries"
-                  data={libraries.map((lib) => ({
-                    value: lib.id,
-                    label: lib.name,
-                  }))}
-                  searchable
-                  {...form.getInputProps("libraryIds")}
                 />
               )}
             </Stack>
