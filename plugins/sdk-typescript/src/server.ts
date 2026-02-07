@@ -5,6 +5,7 @@
 import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
 import { createLogger, type Logger } from "./logger.js";
+import type { SyncProvider, SyncPullRequest, SyncPushRequest } from "./sync.js";
 import type {
   BookMetadataProvider,
   MetadataContentType,
@@ -287,8 +288,219 @@ export interface SeriesMetadataPluginOptions {
 }
 
 // =============================================================================
+// Sync Plugin Factory
+// =============================================================================
+
+/**
+ * Options for creating a sync provider plugin
+ */
+export interface SyncPluginOptions {
+  /** Plugin manifest - must have capabilities.userSyncProvider: true */
+  manifest: PluginManifest & {
+    capabilities: { userSyncProvider: true };
+  };
+  /** SyncProvider implementation */
+  provider: SyncProvider;
+  /** Called when plugin receives initialize with credentials/config */
+  onInitialize?: (params: InitializeParams) => void | Promise<void>;
+  /** Log level (default: "info") */
+  logLevel?: "debug" | "info" | "warn" | "error";
+}
+
+/**
+ * Create and run a sync provider plugin
+ *
+ * Creates a plugin server that handles JSON-RPC communication over stdio
+ * for sync operations (push/pull reading progress with external services).
+ *
+ * @example
+ * ```typescript
+ * import { createSyncPlugin, type SyncProvider } from "@ashdev/codex-plugin-sdk";
+ *
+ * const provider: SyncProvider = {
+ *   async getUserInfo() {
+ *     return { externalId: "123", username: "user" };
+ *   },
+ *   async pushProgress(params) {
+ *     return { success: [], failed: [] };
+ *   },
+ *   async pullProgress(params) {
+ *     return { entries: [], hasMore: false };
+ *   },
+ * };
+ *
+ * createSyncPlugin({
+ *   manifest: {
+ *     name: "my-sync-plugin",
+ *     displayName: "My Sync Plugin",
+ *     version: "1.0.0",
+ *     description: "Syncs reading progress",
+ *     author: "Me",
+ *     protocolVersion: "1.0",
+ *     capabilities: { userSyncProvider: true },
+ *   },
+ *   provider,
+ * });
+ * ```
+ */
+export function createSyncPlugin(options: SyncPluginOptions): void {
+  const { manifest, provider, onInitialize, logLevel = "info" } = options;
+  const logger = createLogger({ name: manifest.name, level: logLevel });
+
+  logger.info(`Starting sync plugin: ${manifest.displayName} v${manifest.version}`);
+
+  const rl = createInterface({
+    input: process.stdin,
+    terminal: false,
+  });
+
+  rl.on("line", (line) => {
+    void handleSyncLine(line, manifest, provider, onInitialize, logger);
+  });
+
+  rl.on("close", () => {
+    logger.info("stdin closed, shutting down");
+    process.exit(0);
+  });
+
+  // Handle uncaught errors
+  process.on("uncaughtException", (error) => {
+    logger.error("Uncaught exception", error);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error("Unhandled rejection", reason);
+  });
+}
+
+// =============================================================================
 // Internal Implementation
 // =============================================================================
+
+async function handleSyncLine(
+  line: string,
+  manifest: PluginManifest,
+  provider: SyncProvider,
+  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
+  logger: Logger,
+): Promise<void> {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+
+  let id: string | number | null = null;
+
+  try {
+    const request = JSON.parse(trimmed) as JsonRpcRequest;
+    id = request.id;
+
+    logger.debug(`Received request: ${request.method}`, { id: request.id });
+
+    const response = await handleSyncRequest(request, manifest, provider, onInitialize, logger);
+    if (response !== null) {
+      writeResponse(response);
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      writeResponse({
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: JSON_RPC_ERROR_CODES.PARSE_ERROR,
+          message: "Parse error: invalid JSON",
+        },
+      });
+    } else if (error instanceof PluginError) {
+      writeResponse({
+        jsonrpc: "2.0",
+        id,
+        error: error.toJsonRpcError(),
+      });
+    } else {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Request failed", error);
+      writeResponse({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: JSON_RPC_ERROR_CODES.INTERNAL_ERROR,
+          message,
+        },
+      });
+    }
+  }
+}
+
+async function handleSyncRequest(
+  request: JsonRpcRequest,
+  manifest: PluginManifest,
+  provider: SyncProvider,
+  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
+  logger: Logger,
+): Promise<JsonRpcResponse> {
+  const { method, params, id } = request;
+
+  switch (method) {
+    case "initialize":
+      if (onInitialize) {
+        await onInitialize(params as InitializeParams);
+      }
+      return { jsonrpc: "2.0", id, result: manifest };
+
+    case "ping":
+      return { jsonrpc: "2.0", id, result: "pong" };
+
+    case "shutdown": {
+      logger.info("Shutdown requested");
+      const response: JsonRpcResponse = { jsonrpc: "2.0", id, result: null };
+      process.stdout.write(`${JSON.stringify(response)}\n`, () => {
+        process.exit(0);
+      });
+      return null as unknown as JsonRpcResponse;
+    }
+
+    case "sync/getUserInfo":
+      return { jsonrpc: "2.0", id, result: await provider.getUserInfo() };
+
+    case "sync/pushProgress":
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await provider.pushProgress(params as SyncPushRequest),
+      };
+
+    case "sync/pullProgress":
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await provider.pullProgress(params as SyncPullRequest),
+      };
+
+    case "sync/status": {
+      if (!provider.status) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support sync/status",
+          },
+        };
+      }
+      return { jsonrpc: "2.0", id, result: await provider.status() };
+    }
+
+    default:
+      return {
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+          message: `Method not found: ${method}`,
+        },
+      };
+  }
+}
 
 async function handleLine(
   line: string,

@@ -33,10 +33,15 @@ export interface PluginCapabilities {
    * E.g., ["series"] or ["series", "book"]
    */
   metadataProvider?: MetadataContentType[];
-  /** Can sync reading progress with external service */
-  syncProvider?: boolean;
+  /** Can sync reading progress with external service (per-user) */
+  userSyncProvider?: boolean;
   /** Can provide recommendations */
   recommendationProvider?: boolean;
+  /**
+   * @deprecated Use userSyncProvider instead
+   * Kept for backwards compatibility
+   */
+  syncProvider?: boolean;
 }
 
 /**

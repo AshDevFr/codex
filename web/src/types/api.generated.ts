@@ -3947,7 +3947,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Disable a plugin for the current user */
-        post: operations["disable_plugin"];
+        post: operations["disable_user_plugin"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3964,7 +3964,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Enable a plugin for the current user */
-        post: operations["enable_plugin"];
+        post: operations["enable_user_plugin"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14005,6 +14005,13 @@ export interface components {
         } | {
             /** @enum {string} */
             type: "cleanup_plugin_data";
+        } | {
+            /** Format: uuid */
+            pluginId: string;
+            /** @enum {string} */
+            type: "user_plugin_sync";
+            /** Format: uuid */
+            userId: string;
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -23634,7 +23641,7 @@ export interface operations {
             };
         };
     };
-    disable_plugin: {
+    disable_user_plugin: {
         parameters: {
             query?: never;
             header?: never;
@@ -23669,7 +23676,7 @@ export interface operations {
             };
         };
     };
-    enable_plugin: {
+    enable_user_plugin: {
         parameters: {
             query?: never;
             header?: never;

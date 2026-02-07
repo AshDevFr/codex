@@ -11631,7 +11631,7 @@
           "User Plugins"
         ],
         "summary": "Disable a plugin for the current user",
-        "operationId": "disable_plugin",
+        "operationId": "disable_user_plugin",
         "parameters": [
           {
             "name": "plugin_id",
@@ -11663,7 +11663,7 @@
           "User Plugins"
         ],
         "summary": "Enable a plugin for the current user",
-        "operationId": "enable_plugin",
+        "operationId": "enable_user_plugin",
         "parameters": [
           {
             "name": "plugin_id",
@@ -30586,6 +30586,31 @@
                 "enum": [
                   "cleanup_plugin_data"
                 ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Sync user plugin data with external service",
+            "required": [
+              "pluginId",
+              "userId",
+              "type"
+            ],
+            "properties": {
+              "pluginId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_plugin_sync"
+                ]
+              },
+              "userId": {
+                "type": "string",
+                "format": "uuid"
               }
             }
           }

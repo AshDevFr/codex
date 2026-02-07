@@ -1,5 +1,5 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
 import { renderWithProviders, userEvent } from "@/test/utils";
@@ -8,6 +8,11 @@ import { LibraryModal } from "./LibraryModal";
 
 vi.mock("@/api/filesystem");
 vi.mock("@/api/libraries");
+vi.mock("@mantine/notifications", () => ({
+  notifications: {
+    show: vi.fn(),
+  },
+}));
 
 // Helper to create a complete Library mock with all required fields
 const createMockLibrary = (overrides?: Partial<Library>): Library => ({
@@ -66,11 +71,18 @@ const mockBrowseResponse: BrowseResponse = {
 
 describe("LibraryModal (Add Mode)", () => {
   const mockOnClose = vi.fn();
+  const originalScrollIntoView = Element.prototype.scrollIntoView;
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(filesystemApi.getDrives).mockResolvedValue(mockDrives);
     vi.mocked(filesystemApi.browse).mockResolvedValue(mockBrowseResponse);
+    // Mock scrollIntoView for Mantine Combobox
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    Element.prototype.scrollIntoView = originalScrollIntoView;
   });
 
   it("should not render when closed", () => {
@@ -831,7 +843,9 @@ describe("LibraryModal (Add Mode)", () => {
 
   it("should reset to all formats when modal closes", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+    const { unmount } = renderWithProviders(
+      <LibraryModal opened={true} onClose={mockOnClose} />,
+    );
 
     // Wait for modal
     const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
@@ -874,17 +888,18 @@ describe("LibraryModal (Add Mode)", () => {
 
     expect(mockOnClose).toHaveBeenCalled();
 
-    // Clean up the first render before re-rendering
-    cleanup();
+    // Unmount the first render before re-rendering
+    unmount();
 
     // Reopen modal - formats should be reset to all
+    const user2 = userEvent.setup();
     renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
     const newModal = await screen.findByRole("dialog", {}, { timeout: 3000 });
     const newModalContent = within(newModal);
 
     const newFormatsInput = newModalContent.getByLabelText("Allowed Formats");
-    await user.click(newFormatsInput);
+    await user2.click(newFormatsInput);
 
     // All formats should be available again (may appear multiple times in MultiSelect)
     // Use getAllByText to handle multiple instances - this is expected behavior

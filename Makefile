@@ -146,6 +146,9 @@ test-fast-postgres-run: ## Run PostgreSQL tests with nextest (assumes DB running
 docs-install: ## Install documentation dependencies
 	cd docs && npm install
 
+docs-outdated: ## Check for outdated documentation dependencies
+	cd docs && npm outdated
+
 docs-start: ## Start documentation dev server
 	cd docs && npm start
 
@@ -215,6 +218,9 @@ frontend-mock-fresh: openapi-all ## Regenerate API types, then start frontend wi
 frontend-install: ## Install frontend dependencies
 	cd web && npm install
 
+frontend-outdated: ## Check for outdated frontend dependencies
+	cd web && npm outdated
+
 openapi: ## Generate OpenAPI spec from backend
 	cargo run -- openapi --output web/openapi.json
 	@echo "$(GREEN)OpenAPI spec generated!$(NC)"
@@ -250,6 +256,14 @@ plugins-install: ## Install dependencies for all plugins
 		(cd plugins/$$dir && npm install); \
 	done
 	@echo "$(GREEN)All plugin dependencies installed!$(NC)"
+
+plugins-outdated: ## Check for outdated plugin dependencies
+	@echo "$(BLUE)Checking for outdated plugin dependencies...$(NC)"
+	@for dir in $(PLUGIN_DIRS); do \
+		echo "$(YELLOW)Checking $$dir...$(NC)"; \
+		(cd plugins/$$dir && npm outdated); \
+	done
+	@echo "$(GREEN)All plugin dependencies up to date!$(NC)"
 
 plugins-build: ## Build all plugins
 	@echo "$(BLUE)Building plugins...$(NC)"
