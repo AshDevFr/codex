@@ -1472,14 +1472,14 @@ function PluginForm({
             <Stack gap="md">
               <TextInput
                 label="Command"
-                placeholder="node"
+                placeholder="npx"
                 description="The command to execute (e.g., node, python, npx)"
                 withAsterisk
                 {...form.getInputProps("command")}
               />
               <Textarea
                 label="Arguments"
-                placeholder="/opt/codex/plugins/mangabaka/dist/index.js"
+                placeholder={`-y\n@ashdev/codex-plugin-metadata-mangabaka@1.0.0`}
                 description="Command arguments, one per line"
                 rows={3}
                 {...form.getInputProps("args")}
