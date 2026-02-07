@@ -231,6 +231,8 @@ jobs:
           - metadata-echo
           - metadata-mangabaka
           - metadata-openlibrary
+          - recommendations-anilist
+          - sync-anilist
     steps:
       - name: Install base dependencies
         run: |
@@ -832,6 +834,8 @@ jobs:
           - metadata-echo
           - metadata-mangabaka
           - metadata-openlibrary
+          - recommendations-anilist
+          - sync-anilist
     steps:
       - name: Install base dependencies
         run: |

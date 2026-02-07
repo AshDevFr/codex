@@ -206,6 +206,8 @@ jobs:
           - metadata-echo
           - metadata-mangabaka
           - metadata-openlibrary
+          - recommendations-anilist
+          - sync-anilist
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -779,6 +781,8 @@ jobs:
           - metadata-echo
           - metadata-mangabaka
           - metadata-openlibrary
+          - recommendations-anilist
+          - sync-anilist
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
