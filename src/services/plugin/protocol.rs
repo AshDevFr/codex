@@ -749,6 +749,12 @@ pub struct PluginSeriesMetadata {
     // External links
     #[serde(default)]
     pub external_links: Vec<ExternalLink>,
+
+    // External IDs (cross-references to other services)
+    /// Cross-reference IDs from other services (e.g., AniList, MAL, MangaDex).
+    /// These use the `api:` prefix convention (e.g., "api:anilist").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_ids: Vec<PluginExternalId>,
 }
 
 /// Full book metadata from a provider
@@ -998,6 +1004,25 @@ pub struct ExternalRating {
     pub vote_count: Option<i32>,
     /// Source name (e.g., "mangaupdates")
     pub source: String,
+}
+
+/// External ID cross-reference from a metadata provider
+///
+/// Allows metadata plugins to return IDs for the same series on other services.
+/// For example, a MangaBaka plugin can return the AniList and MAL IDs it knows about.
+///
+/// ## Source Naming Convention
+///
+/// - `api:<service>` - External API service ID (e.g., "api:anilist", "api:myanimelist")
+/// - `plugin:<name>` - Plugin match provenance (managed by Codex, not returned by plugins)
+/// - No prefix - File/user sources (e.g., "comicinfo", "epub", "manual")
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginExternalId {
+    /// Source identifier (e.g., "api:anilist", "api:myanimelist", "api:mangadex")
+    pub source: String,
+    /// ID on the external service
+    pub external_id: String,
 }
 
 /// External link to other sites
@@ -1333,11 +1358,80 @@ mod tests {
             }),
             external_ratings: vec![],
             external_links: vec![],
+            external_ids: vec![
+                PluginExternalId {
+                    source: "api:anilist".to_string(),
+                    external_id: "21".to_string(),
+                },
+                PluginExternalId {
+                    source: "api:myanimelist".to_string(),
+                    external_id: "13".to_string(),
+                },
+            ],
         };
 
         let json = serde_json::to_value(&metadata).unwrap();
         assert_eq!(json["externalId"], "12345");
         assert_eq!(json["status"], "ongoing");
+        let ext_ids = json["externalIds"].as_array().unwrap();
+        assert_eq!(ext_ids.len(), 2);
+        assert_eq!(ext_ids[0]["source"], "api:anilist");
+        assert_eq!(ext_ids[0]["externalId"], "21");
+        assert_eq!(ext_ids[1]["source"], "api:myanimelist");
+        assert_eq!(ext_ids[1]["externalId"], "13");
+    }
+
+    #[test]
+    fn test_plugin_external_id_serialization() {
+        let ext_id = PluginExternalId {
+            source: "api:anilist".to_string(),
+            external_id: "97".to_string(),
+        };
+        let json = serde_json::to_value(&ext_id).unwrap();
+        assert_eq!(json["source"], "api:anilist");
+        assert_eq!(json["externalId"], "97");
+    }
+
+    #[test]
+    fn test_plugin_external_id_deserialization() {
+        let json = serde_json::json!({
+            "source": "api:mangadex",
+            "externalId": "abc-def-123"
+        });
+        let ext_id: PluginExternalId = serde_json::from_value(json).unwrap();
+        assert_eq!(ext_id.source, "api:mangadex");
+        assert_eq!(ext_id.external_id, "abc-def-123");
+    }
+
+    #[test]
+    fn test_plugin_series_metadata_empty_external_ids_skipped() {
+        let metadata = PluginSeriesMetadata {
+            external_id: "1".to_string(),
+            external_url: "https://example.com/1".to_string(),
+            title: None,
+            alternate_titles: vec![],
+            summary: None,
+            status: None,
+            year: None,
+            total_book_count: None,
+            language: None,
+            age_rating: None,
+            reading_direction: None,
+            genres: vec![],
+            tags: vec![],
+            authors: vec![],
+            artists: vec![],
+            publisher: None,
+            cover_url: None,
+            banner_url: None,
+            rating: None,
+            external_ratings: vec![],
+            external_links: vec![],
+            external_ids: vec![],
+        };
+        let json = serde_json::to_value(&metadata).unwrap();
+        // externalIds should be omitted when empty
+        assert!(!json.as_object().unwrap().contains_key("externalIds"));
     }
 
     #[test]

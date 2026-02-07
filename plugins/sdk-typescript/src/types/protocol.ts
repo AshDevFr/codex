@@ -143,6 +143,31 @@ export interface PluginSeriesMetadata {
   // External links
   /** Links to other sites */
   externalLinks: ExternalLink[];
+
+  // External IDs (cross-references to other services)
+  /**
+   * Cross-reference IDs from other services.
+   * Uses the `api:` prefix convention (e.g., "api:anilist", "api:myanimelist").
+   *
+   * These allow other plugins (sync, recommendations) to match series
+   * to external services without needing title-based search.
+   */
+  externalIds?: ExternalId[];
+}
+
+/**
+ * Cross-reference ID for a series on an external service.
+ *
+ * Source naming convention:
+ * - `api:<service>` - External API service ID (e.g., "api:anilist", "api:myanimelist")
+ * - `plugin:<name>` - Plugin match provenance (managed by Codex, not set by plugins)
+ * - No prefix - File/user sources (e.g., "comicinfo", "epub", "manual")
+ */
+export interface ExternalId {
+  /** Source identifier (e.g., "api:anilist", "api:myanimelist", "api:mangadex") */
+  source: string;
+  /** ID on the external service */
+  externalId: string;
 }
 
 /**

@@ -110,13 +110,7 @@ export function RecommendationCompactCard({
   );
 
   return (
-    <Tooltip
-      label={reason}
-      multiline
-      maw={250}
-      withArrow
-      openDelay={400}
-    >
+    <Tooltip label={reason} multiline maw={250} withArrow openDelay={400}>
       {card}
     </Tooltip>
   );

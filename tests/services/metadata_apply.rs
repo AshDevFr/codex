@@ -80,6 +80,7 @@ fn create_test_metadata(title: &str) -> PluginSeriesMetadata {
         rating: None,
         external_ratings: vec![],
         external_links: vec![],
+        external_ids: vec![],
     }
 }
 

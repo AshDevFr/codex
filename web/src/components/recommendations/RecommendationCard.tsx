@@ -8,11 +8,7 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
-import {
-  IconCheck,
-  IconExternalLink,
-  IconX,
-} from "@tabler/icons-react";
+import { IconCheck, IconExternalLink, IconX } from "@tabler/icons-react";
 import type { RecommendationDto } from "@/api/recommendations";
 
 // =============================================================================
@@ -56,11 +52,7 @@ export function RecommendationCard({
     <Card withBorder padding="lg" data-testid="recommendation-card">
       <Group align="flex-start" gap="lg" wrap="nowrap">
         {/* Cover image */}
-        <Box
-          w={100}
-          miw={100}
-          style={{ flexShrink: 0 }}
-        >
+        <Box w={100} miw={100} style={{ flexShrink: 0 }}>
           {coverUrl ? (
             <Image
               src={coverUrl}

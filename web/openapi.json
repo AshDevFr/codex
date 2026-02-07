@@ -30613,6 +30613,31 @@
                 "format": "uuid"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Refresh recommendations from a user plugin",
+            "required": [
+              "pluginId",
+              "userId",
+              "type"
+            ],
+            "properties": {
+              "pluginId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_plugin_recommendations"
+                ]
+              },
+              "userId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
           }
         ],
         "description": "Task types supported by the distributed task queue"

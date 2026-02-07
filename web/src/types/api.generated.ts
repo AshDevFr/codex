@@ -14012,6 +14012,13 @@ export interface components {
             type: "user_plugin_sync";
             /** Format: uuid */
             userId: string;
+        } | {
+            /** Format: uuid */
+            pluginId: string;
+            /** @enum {string} */
+            type: "user_plugin_recommendations";
+            /** Format: uuid */
+            userId: string;
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {

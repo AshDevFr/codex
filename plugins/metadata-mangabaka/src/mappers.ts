@@ -4,6 +4,7 @@
 
 import type {
   AlternateTitle,
+  ExternalId,
   ExternalLink,
   ExternalRating,
   PluginSeriesMetadata,
@@ -268,8 +269,9 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     },
   };
 
-  // Build external links and ratings from sources in a single pass
+  // Build external links, ratings, and cross-reference IDs from sources in a single pass
   const externalRatings: ExternalRating[] = [];
+  const externalIds: ExternalId[] = [];
 
   if (series.source) {
     for (const [key, info] of Object.entries(series.source)) {
@@ -278,6 +280,14 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
       const config = sourceConfig[key];
       // Use config if available, otherwise generate defaults from key
       const ratingKey = config?.ratingKey ?? key.replace(/_/g, "");
+
+      // Add cross-reference external ID with api: prefix
+      if (info.id != null) {
+        externalIds.push({
+          source: `api:${ratingKey}`,
+          externalId: String(info.id),
+        });
+      }
 
       // Add external link if source has an ID and URL pattern
       if (info.id != null && config?.urlPattern) {
@@ -323,5 +333,6 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     })(),
     externalRatings: externalRatings.length > 0 ? externalRatings : undefined,
     externalLinks,
+    externalIds: externalIds.length > 0 ? externalIds : undefined,
   };
 }

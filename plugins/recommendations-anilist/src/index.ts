@@ -57,8 +57,9 @@ async function resolveAniListIds(
 
   for (const entry of entries) {
     // Check if we already have an AniList external ID
+    // Prefer api:anilist (new convention), fall back to legacy source names
     const anilistExt = entry.externalIds?.find(
-      (e) => e.source === "anilist" || e.source === "AniList",
+      (e) => e.source === "api:anilist" || e.source === "anilist" || e.source === "AniList",
     );
 
     if (anilistExt) {

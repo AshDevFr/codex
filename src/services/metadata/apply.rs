@@ -17,7 +17,7 @@ use crate::db::entities::plugins::{Model as Plugin, PluginPermission};
 use crate::db::entities::series_metadata::Model as SeriesMetadata;
 use crate::db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
-    SeriesMetadataRepository, TagRepository,
+    SeriesExternalIdRepository, SeriesMetadataRepository, TagRepository,
 };
 use crate::events::EventBroadcaster;
 use crate::services::ThumbnailService;
@@ -432,6 +432,30 @@ impl MetadataApplier {
                         .context("Failed to upsert external link")?;
                 }
                 applied_fields.push("externalLinks".to_string());
+            }
+        }
+
+        // External IDs (cross-references to other services)
+        if should_apply_field("externalIds") && !metadata.external_ids.is_empty() {
+            if !plugin.has_permission(&PluginPermission::MetadataWriteExternalIds) {
+                skipped_fields.push(SkippedField {
+                    field: "externalIds".to_string(),
+                    reason: "Plugin does not have permission".to_string(),
+                });
+            } else {
+                for ext_id in &metadata.external_ids {
+                    SeriesExternalIdRepository::upsert(
+                        db,
+                        series_id,
+                        &ext_id.source,
+                        &ext_id.external_id,
+                        None, // external_url - not provided in cross-references
+                        None, // metadata_hash - not applicable for cross-references
+                    )
+                    .await
+                    .context("Failed to upsert external ID")?;
+                }
+                applied_fields.push("externalIds".to_string());
             }
         }
 
