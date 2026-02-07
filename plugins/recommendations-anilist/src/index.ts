@@ -11,6 +11,8 @@
  */
 
 import {
+  createLogger,
+  createRecommendationPlugin,
   type InitializeParams,
   type Recommendation,
   type RecommendationDismissRequest,
@@ -19,8 +21,6 @@ import {
   type RecommendationRequest,
   type RecommendationResponse,
   type UserLibraryEntry,
-  createLogger,
-  createRecommendationPlugin,
 } from "@ashdev/codex-plugin-sdk";
 import {
   AniListRecommendationClient,
@@ -53,10 +53,7 @@ async function resolveAniListIds(
 ): Promise<Map<string, { anilistId: number; title: string; rating: number }>> {
   if (!client) throw new Error("Plugin not initialized");
 
-  const resolved = new Map<
-    string,
-    { anilistId: number; title: string; rating: number }
-  >();
+  const resolved = new Map<string, { anilistId: number; title: string; rating: number }>();
 
   for (const entry of entries) {
     // Check if we already have an AniList external ID
@@ -195,14 +192,9 @@ const provider: RecommendationProvider = {
           const existing = allRecs.get(rec.externalId);
           if (existing) {
             // Merge basedOn titles
-            const mergedBasedOn = [
-              ...new Set([...existing.basedOn, ...rec.basedOn]),
-            ];
+            const mergedBasedOn = [...new Set([...existing.basedOn, ...rec.basedOn])];
             // Boost score slightly for multiply-recommended titles
-            const boostedScore = Math.min(
-              existing.score + 0.05,
-              1.0,
-            );
+            const boostedScore = Math.min(existing.score + 0.05, 1.0);
             allRecs.set(rec.externalId, {
               ...existing,
               score: Math.round(boostedScore * 100) / 100,
@@ -223,13 +215,9 @@ const provider: RecommendationProvider = {
     }
 
     // Sort by score descending and take top N
-    const sorted = [...allRecs.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, effectiveLimit);
+    const sorted = [...allRecs.values()].sort((a, b) => b.score - a.score).slice(0, effectiveLimit);
 
-    logger.info(
-      `Generated ${sorted.length} recommendations from ${resolved.size} seed titles`,
-    );
+    logger.info(`Generated ${sorted.length} recommendations from ${resolved.size} seed titles`);
 
     return {
       recommendations: sorted,
@@ -240,7 +228,9 @@ const provider: RecommendationProvider = {
 
   async dismiss(params: RecommendationDismissRequest): Promise<RecommendationDismissResponse> {
     dismissedIds.add(params.externalId);
-    logger.debug(`Dismissed recommendation: ${params.externalId} (reason: ${params.reason ?? "none"})`);
+    logger.debug(
+      `Dismissed recommendation: ${params.externalId} (reason: ${params.reason ?? "none"})`,
+    );
     return { dismissed: true };
   },
 };

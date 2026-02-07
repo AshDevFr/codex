@@ -91,21 +91,5 @@ export {
   type StorageSetResponse,
 } from "./storage.js";
 
-// Sync - sync provider protocol types
-export type {
-  ExternalUserInfo,
-  SyncEntry,
-  SyncEntryResult,
-  SyncEntryResultStatus,
-  SyncProgress,
-  SyncProvider,
-  SyncPullRequest,
-  SyncPullResponse,
-  SyncPushRequest,
-  SyncPushResponse,
-  SyncReadingStatus,
-  SyncStatusResponse,
-} from "./sync.js";
-
-// Types (all remaining types re-exported from barrel)
+// Types (all types re-exported from barrel)
 export * from "./types/index.js";

@@ -1,5 +1,5 @@
 /**
- * Tests for sync.ts - Sync provider protocol types
+ * Tests for sync protocol types and SyncProvider interface
  *
  * These tests cover:
  * - Type definitions compile correctly with valid data
@@ -10,13 +10,13 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { SyncProvider } from "./capabilities.js";
 import type {
   ExternalUserInfo,
   SyncEntry,
   SyncEntryResult,
   SyncEntryResultStatus,
   SyncProgress,
-  SyncProvider,
   SyncPullRequest,
   SyncPullResponse,
   SyncPushRequest,

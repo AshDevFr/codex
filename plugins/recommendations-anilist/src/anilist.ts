@@ -115,10 +115,7 @@ export class AniListRecommendationClient {
     this.accessToken = accessToken;
   }
 
-  private async query<T>(
-    queryStr: string,
-    variables?: Record<string, unknown>,
-  ): Promise<T> {
+  private async query<T>(queryStr: string, variables?: Record<string, unknown>): Promise<T> {
     const response = await fetch(ANILIST_API_URL, {
       method: "POST",
       headers: {

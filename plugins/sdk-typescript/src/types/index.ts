@@ -2,23 +2,7 @@
  * Re-export all types
  */
 
-// From sync - sync provider protocol types (these match Rust exactly)
-export type {
-  ExternalUserInfo,
-  SyncEntry,
-  SyncEntryResult,
-  SyncEntryResultStatus,
-  SyncProgress,
-  SyncProvider,
-  SyncPullRequest,
-  SyncPullResponse,
-  SyncPushRequest,
-  SyncPushResponse,
-  SyncReadingStatus,
-  SyncStatusResponse,
-} from "../sync.js";
-
-// From capabilities - interface contracts
+// From capabilities - all provider interfaces
 export type {
   BookMetadataProvider,
   MetadataContentType,
@@ -29,6 +13,7 @@ export type {
   PartialSeriesMetadataProvider,
   RecommendationProvider,
   SeriesMetadataProvider,
+  SyncProvider,
 } from "./capabilities.js";
 
 // From manifest - plugin configuration types
@@ -41,7 +26,7 @@ export type {
 } from "./manifest.js";
 export { hasBookMetadataProvider, hasSeriesMetadataProvider } from "./manifest.js";
 
-// From protocol - JSON-RPC protocol types (these match Rust exactly)
+// From protocol - metadata protocol types (these match Rust exactly)
 export type {
   AlternateTitle,
   BookAuthor,
@@ -66,18 +51,32 @@ export type {
   SearchResultPreview,
   SeriesStatus,
 } from "./protocol.js";
-export * from "./rpc.js";
-
-// From recommendations - recommendation provider protocol types (these match Rust exactly)
+// From recommendations - recommendation protocol types (these match Rust exactly)
 export type {
   DismissReason,
+  ProfileUpdateRequest,
+  ProfileUpdateResponse,
   Recommendation,
   RecommendationClearResponse,
   RecommendationDismissRequest,
   RecommendationDismissResponse,
   RecommendationRequest,
   RecommendationResponse,
-  ProfileUpdateRequest,
-  ProfileUpdateResponse,
   UserLibraryEntry,
-} from "../recommendations.js";
+} from "./recommendations.js";
+// From rpc - JSON-RPC primitives
+export * from "./rpc.js";
+// From sync - sync protocol types (these match Rust exactly)
+export type {
+  ExternalUserInfo,
+  SyncEntry,
+  SyncEntryResult,
+  SyncEntryResultStatus,
+  SyncProgress,
+  SyncPullRequest,
+  SyncPullResponse,
+  SyncPushRequest,
+  SyncPushResponse,
+  SyncReadingStatus,
+  SyncStatusResponse,
+} from "./sync.js";
