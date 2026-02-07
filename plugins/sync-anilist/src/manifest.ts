@@ -12,6 +12,7 @@ export const manifest = {
   protocolVersion: "1.0",
   capabilities: {
     userSyncProvider: true,
+    externalIdSource: "api:anilist",
   },
   requiredCredentials: [
     {

@@ -13,12 +13,13 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::tasks;
-use crate::db::repositories::UserPluginsRepository;
+use crate::db::repositories::{SeriesExternalIdRepository, UserPluginsRepository};
 use crate::events::EventBroadcaster;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::protocol::methods;
 use crate::services::plugin::sync::{
-    ExternalUserInfo, SyncPullRequest, SyncPullResponse, SyncPushRequest, SyncPushResponse,
+    ExternalUserInfo, SyncEntry, SyncPullRequest, SyncPullResponse, SyncPushRequest,
+    SyncPushResponse,
 };
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
@@ -38,6 +39,9 @@ pub struct UserPluginSyncResult {
     pub pushed: u32,
     /// Number of entries pulled
     pub pulled: u32,
+    /// Number of pulled entries matched to Codex series via external IDs
+    #[serde(default)]
+    pub matched: u32,
     /// Push failures
     pub push_failures: u32,
     /// Pull had more pages (not all pulled)
@@ -116,6 +120,7 @@ impl TaskHandler for UserPluginSyncHandler {
                             external_username: None,
                             pushed: 0,
                             pulled: 0,
+                            matched: 0,
                             push_failures: 0,
                             pull_incomplete: false,
                             skipped_reason: Some(reason.to_string()),
@@ -148,6 +153,19 @@ impl TaskHandler for UserPluginSyncHandler {
                 }
             };
 
+            // Resolve the external ID source from the plugin manifest
+            let external_id_source = handle
+                .manifest()
+                .await
+                .and_then(|m| m.capabilities.external_id_source.clone());
+
+            if let Some(ref source) = external_id_source {
+                debug!(
+                    "Task {}: Plugin declares externalIdSource: {}",
+                    task.id, source
+                );
+            }
+
             // Step 2: Pull progress from external service
             let pull_request = SyncPullRequest {
                 since: None, // Full pull for now; incremental can use last_sync_at
@@ -155,7 +173,7 @@ impl TaskHandler for UserPluginSyncHandler {
                 cursor: None,
             };
 
-            let (pulled_count, pull_incomplete) = match handle
+            let (pulled_count, pull_incomplete, matched_count) = match handle
                 .call_method::<SyncPullRequest, SyncPullResponse>(
                     methods::SYNC_PULL_PROGRESS,
                     pull_request,
@@ -169,15 +187,26 @@ impl TaskHandler for UserPluginSyncHandler {
                         "Task {}: Pulled {} entries from external service (has_more: {})",
                         task.id, count, has_more
                     );
-                    // TODO: Apply pulled entries to Codex user's reading progress
+
+                    // Match pulled entries to Codex series via external IDs
+                    let matched = match_pulled_entries(
+                        db,
+                        &pull_response.entries,
+                        external_id_source.as_deref(),
+                        task.id,
+                    )
+                    .await;
+
+                    // TODO: Apply matched entries to Codex user's reading progress
                     // This will be integrated when the reading progress tracking
                     // system is available in Codex
-                    (count, has_more)
+
+                    (count, has_more, matched)
                 }
                 Err(e) => {
                     error!("Task {}: Pull failed: {}", task.id, e);
                     // Continue to push even if pull fails
-                    (0, false)
+                    (0, false, 0)
                 }
             };
 
@@ -234,14 +263,15 @@ impl TaskHandler for UserPluginSyncHandler {
                 external_username,
                 pushed: pushed_count,
                 pulled: pulled_count,
+                matched: matched_count,
                 push_failures,
                 pull_incomplete,
                 skipped_reason: None,
             };
 
             let message = format!(
-                "Sync complete: pulled {} entries, pushed {} entries",
-                pulled_count, pushed_count
+                "Sync complete: pulled {} entries ({} matched), pushed {} entries",
+                pulled_count, matched_count, pushed_count
             );
 
             info!("Task {}: {}", task.id, message);
@@ -251,9 +281,77 @@ impl TaskHandler for UserPluginSyncHandler {
     }
 }
 
+/// Match pulled sync entries to Codex series using external IDs.
+///
+/// For each pulled entry, looks up `series_external_ids` where
+/// `source = external_id_source` and `external_id = entry.external_id`.
+/// Returns the number of entries that were successfully matched.
+async fn match_pulled_entries(
+    db: &DatabaseConnection,
+    entries: &[SyncEntry],
+    external_id_source: Option<&str>,
+    task_id: Uuid,
+) -> u32 {
+    let Some(source) = external_id_source else {
+        debug!(
+            "Task {}: No externalIdSource configured, skipping entry matching",
+            task_id
+        );
+        return 0;
+    };
+
+    if entries.is_empty() {
+        return 0;
+    }
+
+    let mut matched: u32 = 0;
+    let mut unmatched: u32 = 0;
+
+    for entry in entries {
+        match SeriesExternalIdRepository::find_by_external_id_and_source(
+            db,
+            &entry.external_id,
+            source,
+        )
+        .await
+        {
+            Ok(Some(ext_id)) => {
+                debug!(
+                    "Task {}: Matched entry {} -> series {} (source: {})",
+                    task_id, entry.external_id, ext_id.series_id, source
+                );
+                matched += 1;
+            }
+            Ok(None) => {
+                unmatched += 1;
+            }
+            Err(e) => {
+                warn!(
+                    "Task {}: Failed to look up external ID {} (source: {}): {}",
+                    task_id, entry.external_id, source, e
+                );
+                unmatched += 1;
+            }
+        }
+    }
+
+    if unmatched > 0 {
+        debug!(
+            "Task {}: {} entries matched, {} unmatched (source: {})",
+            task_id, matched, unmatched, source
+        );
+    }
+
+    matched
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::ScanningStrategy;
+    use crate::db::repositories::{LibraryRepository, SeriesRepository};
+    use crate::db::test_helpers::create_test_db;
+    use crate::services::plugin::sync::SyncReadingStatus;
 
     #[test]
     fn test_handler_creation() {
@@ -269,6 +367,7 @@ mod tests {
             external_username: Some("manga_reader".to_string()),
             pushed: 5,
             pulled: 10,
+            matched: 8,
             push_failures: 1,
             pull_incomplete: false,
             skipped_reason: None,
@@ -278,6 +377,7 @@ mod tests {
         assert_eq!(json["externalUsername"], "manga_reader");
         assert_eq!(json["pushed"], 5);
         assert_eq!(json["pulled"], 10);
+        assert_eq!(json["matched"], 8);
         assert_eq!(json["pushFailures"], 1);
         assert!(!json["pullIncomplete"].as_bool().unwrap());
         assert!(!json.as_object().unwrap().contains_key("skippedReason"));
@@ -291,6 +391,7 @@ mod tests {
             external_username: None,
             pushed: 0,
             pulled: 0,
+            matched: 0,
             push_failures: 0,
             pull_incomplete: false,
             skipped_reason: Some("plugin_not_enabled".to_string()),
@@ -301,6 +402,7 @@ mod tests {
         assert!(!json.as_object().unwrap().contains_key("externalUsername"));
         assert_eq!(json["pushed"], 0);
         assert_eq!(json["pulled"], 0);
+        assert_eq!(json["matched"], 0);
     }
 
     #[test]
@@ -311,6 +413,7 @@ mod tests {
             "externalUsername": "test_user",
             "pushed": 3,
             "pulled": 7,
+            "matched": 5,
             "pushFailures": 0,
             "pullIncomplete": true,
         });
@@ -319,6 +422,7 @@ mod tests {
         assert_eq!(result.external_username, Some("test_user".to_string()));
         assert_eq!(result.pushed, 3);
         assert_eq!(result.pulled, 7);
+        assert_eq!(result.matched, 5);
         assert!(result.pull_incomplete);
         assert!(result.skipped_reason.is_none());
     }
@@ -331,6 +435,7 @@ mod tests {
             external_username: Some("user".to_string()),
             pushed: 0,
             pulled: 500,
+            matched: 300,
             push_failures: 0,
             pull_incomplete: true,
             skipped_reason: None,
@@ -339,5 +444,100 @@ mod tests {
         let json = serde_json::to_value(&result).unwrap();
         assert!(json["pullIncomplete"].as_bool().unwrap());
         assert_eq!(json["pulled"], 500);
+        assert_eq!(json["matched"], 300);
+    }
+
+    #[tokio::test]
+    async fn test_match_pulled_entries_no_source() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let entries = vec![SyncEntry {
+            external_id: "12345".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: None,
+            score: None,
+            started_at: None,
+            completed_at: None,
+            notes: None,
+        }];
+
+        let matched =
+            match_pulled_entries(db.sea_orm_connection(), &entries, None, Uuid::new_v4()).await;
+        assert_eq!(matched, 0);
+    }
+
+    #[tokio::test]
+    async fn test_match_pulled_entries_with_matches() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "My Manga", None)
+                .await
+                .unwrap();
+
+        // Create an api:anilist external ID for the series
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "12345",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let entries = vec![
+            SyncEntry {
+                external_id: "12345".to_string(), // matches
+                status: SyncReadingStatus::Reading,
+                progress: None,
+                score: None,
+                started_at: None,
+                completed_at: None,
+                notes: None,
+            },
+            SyncEntry {
+                external_id: "99999".to_string(), // no match
+                status: SyncReadingStatus::Completed,
+                progress: None,
+                score: None,
+                started_at: None,
+                completed_at: None,
+                notes: None,
+            },
+        ];
+
+        let matched = match_pulled_entries(
+            db.sea_orm_connection(),
+            &entries,
+            Some("api:anilist"),
+            Uuid::new_v4(),
+        )
+        .await;
+        assert_eq!(matched, 1);
+    }
+
+    #[tokio::test]
+    async fn test_match_pulled_entries_empty() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let matched = match_pulled_entries(
+            db.sea_orm_connection(),
+            &[],
+            Some("api:anilist"),
+            Uuid::new_v4(),
+        )
+        .await;
+        assert_eq!(matched, 0);
     }
 }

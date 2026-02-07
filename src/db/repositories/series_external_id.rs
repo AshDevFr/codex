@@ -283,6 +283,23 @@ impl SeriesExternalIdRepository {
             .await?;
         Ok(results)
     }
+
+    /// Find a series external ID by external ID value and source
+    ///
+    /// Used for reverse lookups, e.g. finding which Codex series has a given
+    /// AniList media ID (`source = "api:anilist"`, `external_id = "12345"`).
+    pub async fn find_by_external_id_and_source(
+        db: &DatabaseConnection,
+        external_id: &str,
+        source: &str,
+    ) -> Result<Option<SeriesExternalId>> {
+        let result = SeriesExternalIds::find()
+            .filter(series_external_ids::Column::ExternalId.eq(external_id))
+            .filter(series_external_ids::Column::Source.eq(source))
+            .one(db)
+            .await?;
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -1007,5 +1024,107 @@ mod tests {
                 .unwrap();
 
         assert_eq!(comicinfo_ids.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_external_id_and_source() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1", None)
+                .await
+                .unwrap();
+
+        let series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2", None)
+                .await
+                .unwrap();
+
+        // Create api:anilist external IDs for both series
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series1.id,
+            "api:anilist",
+            "12345",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series2.id,
+            "api:anilist",
+            "67890",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Also create a different source with the same external ID
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series1.id,
+            "api:myanimelist",
+            "12345",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Find by anilist ID
+        let found = SeriesExternalIdRepository::find_by_external_id_and_source(
+            db.sea_orm_connection(),
+            "12345",
+            "api:anilist",
+        )
+        .await
+        .unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().series_id, series1.id);
+
+        // Find different anilist ID
+        let found = SeriesExternalIdRepository::find_by_external_id_and_source(
+            db.sea_orm_connection(),
+            "67890",
+            "api:anilist",
+        )
+        .await
+        .unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().series_id, series2.id);
+
+        // Non-existent external ID returns None
+        let not_found = SeriesExternalIdRepository::find_by_external_id_and_source(
+            db.sea_orm_connection(),
+            "99999",
+            "api:anilist",
+        )
+        .await
+        .unwrap();
+        assert!(not_found.is_none());
+
+        // Same external ID but different source returns correct result
+        let found_mal = SeriesExternalIdRepository::find_by_external_id_and_source(
+            db.sea_orm_connection(),
+            "12345",
+            "api:myanimelist",
+        )
+        .await
+        .unwrap();
+        assert!(found_mal.is_some());
+        assert_eq!(found_mal.unwrap().series_id, series1.id);
     }
 }

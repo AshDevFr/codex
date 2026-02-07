@@ -312,6 +312,13 @@ pub struct PluginCapabilities {
     /// Can sync user reading progress (v2)
     #[serde(default)]
     pub user_sync_provider: bool,
+    /// External ID source used to match sync entries to Codex series.
+    /// When set, pulled sync entries are matched to series via the
+    /// `series_external_ids` table using this source string.
+    /// Uses the `api:<service>` convention, e.g. "api:anilist".
+    /// Only meaningful when `user_sync_provider` is true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_id_source: Option<String>,
     /// Can provide personalized recommendations (v2)
     #[serde(default)]
     pub recommendation_provider: bool,
