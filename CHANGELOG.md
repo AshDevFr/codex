@@ -2,6 +2,14 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.9.2] - 2026-02-07
+
+### 🐛 Bug Fixes
+
+- *(komga)* Set page to last page on mark-as-read and sort on-deck by recency
+- *(reader)* Correct progress bar click mapping in RTL mode
+- *(komga)* Use COALESCE for title sort to handle NULL title_sort values
+
 ## [1.9.1] - 2026-02-07
 
 ### 🚀 Features
