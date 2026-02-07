@@ -49,7 +49,7 @@ const availablePlugin: AvailablePluginDto = {
   description: "Get personalized manga recommendations",
   requiresOauth: false,
   capabilities: {
-    syncProvider: false,
+    userSyncProvider: false,
     recommendationProvider: true,
   },
 };
@@ -61,7 +61,7 @@ const availableOAuthPlugin: AvailablePluginDto = {
   description: "Sync reading progress with AniList",
   requiresOauth: true,
   capabilities: {
-    syncProvider: true,
+    userSyncProvider: true,
     recommendationProvider: false,
   },
 };

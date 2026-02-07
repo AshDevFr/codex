@@ -39,7 +39,7 @@ export interface AvailablePluginDto {
 
 /** Plugin capabilities (user plugin context) */
 export interface UserPluginCapabilitiesDto {
-  syncProvider: boolean;
+  userSyncProvider: boolean;
   recommendationProvider: boolean;
 }
 
