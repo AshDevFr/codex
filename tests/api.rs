@@ -31,6 +31,7 @@ mod api {
     mod plugins;
     mod rate_limit;
     mod read_progress;
+    mod recommendations;
     mod scan;
     mod series;
     mod settings;

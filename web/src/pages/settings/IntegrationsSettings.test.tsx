@@ -38,7 +38,7 @@ const responseWithAvailable: UserPluginsListResponse = {
   available: [
     {
       pluginId: "plugin-1",
-      name: "anilist-sync",
+      name: "sync-anilist",
       displayName: "AniList Sync",
       description: "Sync reading progress with AniList",
       requiresOauth: true,
@@ -60,7 +60,7 @@ const responseWithEnabled: UserPluginsListResponse = {
     {
       id: "inst-1",
       pluginId: "plugin-1",
-      pluginName: "anilist-sync",
+      pluginName: "sync-anilist",
       pluginDisplayName: "AniList Sync",
       pluginType: "user",
       enabled: true,

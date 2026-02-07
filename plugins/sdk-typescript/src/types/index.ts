@@ -67,3 +67,17 @@ export type {
   SeriesStatus,
 } from "./protocol.js";
 export * from "./rpc.js";
+
+// From recommendations - recommendation provider protocol types (these match Rust exactly)
+export type {
+  DismissReason,
+  Recommendation,
+  RecommendationClearResponse,
+  RecommendationDismissRequest,
+  RecommendationDismissResponse,
+  RecommendationRequest,
+  RecommendationResponse,
+  ProfileUpdateRequest,
+  ProfileUpdateResponse,
+  UserLibraryEntry,
+} from "../recommendations.js";

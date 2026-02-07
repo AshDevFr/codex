@@ -57,6 +57,7 @@ pub mod pdf_cache;
 pub mod plugin_actions;
 pub mod plugins;
 pub mod read_progress;
+pub mod recommendations;
 pub mod scan;
 pub mod series;
 pub mod settings;

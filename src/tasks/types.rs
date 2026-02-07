@@ -152,6 +152,14 @@ pub enum TaskType {
         #[serde(rename = "userId")]
         user_id: Uuid,
     },
+
+    /// Refresh recommendations from a user plugin
+    UserPluginRecommendations {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+        #[serde(rename = "userId")]
+        user_id: Uuid,
+    },
 }
 
 fn default_mode() -> String {
@@ -181,6 +189,7 @@ impl TaskType {
             TaskType::ReprocessSeriesTitles { .. } => "reprocess_series_titles",
             TaskType::CleanupPluginData => "cleanup_plugin_data",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
+            TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",
         }
     }
 
@@ -253,6 +262,9 @@ impl TaskType {
                 serde_json::json!({ "series_ids": series_ids })
             }
             TaskType::UserPluginSync { plugin_id, user_id } => {
+                serde_json::json!({ "plugin_id": plugin_id, "user_id": user_id })
+            }
+            TaskType::UserPluginRecommendations { plugin_id, user_id } => {
                 serde_json::json!({ "plugin_id": plugin_id, "user_id": user_id })
             }
             _ => serde_json::json!({}),

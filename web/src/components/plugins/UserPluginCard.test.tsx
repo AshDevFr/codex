@@ -11,7 +11,7 @@ import { AvailablePluginCard, ConnectedPluginCard } from "./UserPluginCard";
 const connectedPlugin: UserPluginDto = {
   id: "inst-1",
   pluginId: "plugin-1",
-  pluginName: "anilist-sync",
+  pluginName: "sync-anilist",
   pluginDisplayName: "AniList Sync",
   pluginType: "user",
   enabled: true,
@@ -30,7 +30,7 @@ const connectedPlugin: UserPluginDto = {
 const enabledNotConnected: UserPluginDto = {
   id: "inst-2",
   pluginId: "plugin-2",
-  pluginName: "mal-sync",
+  pluginName: "sync-mal",
   pluginDisplayName: "MyAnimeList",
   pluginType: "user",
   enabled: true,
@@ -56,7 +56,7 @@ const availablePlugin: AvailablePluginDto = {
 
 const availableOAuthPlugin: AvailablePluginDto = {
   pluginId: "plugin-4",
-  name: "anilist-sync",
+  name: "sync-anilist",
   displayName: "AniList Sync",
   description: "Sync reading progress with AniList",
   requiresOauth: true,

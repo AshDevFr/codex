@@ -35,7 +35,7 @@ import {
 } from "./anilist.js";
 import { manifest } from "./manifest.js";
 
-const logger = createLogger({ name: "anilist-sync", level: "debug" });
+const logger = createLogger({ name: "sync-anilist", level: "debug" });
 
 // Plugin state (set during initialization)
 let client: AniListClient | null = null;

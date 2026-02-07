@@ -31,6 +31,7 @@ import {
   IconServer,
   IconSettings,
   IconShare,
+  IconSparkles,
   IconTrashX,
   IconUser,
   IconUsers,
@@ -320,6 +321,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
               label="Home"
               leftSection={<IconHome size={20} />}
               active={currentPath === "/"}
+            />
+            <NavLink
+              component={Link}
+              to="/recommendations"
+              label="Recommendations"
+              leftSection={<IconSparkles size={20} />}
+              active={currentPath === "/recommendations"}
             />
             <NavLink
               component={Link}

@@ -74,6 +74,7 @@ pub mod health;
 pub mod manager;
 pub mod process;
 pub mod protocol;
+pub mod recommendations;
 pub mod rpc;
 pub mod secrets;
 pub mod storage;

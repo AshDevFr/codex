@@ -5,6 +5,12 @@
 import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
 import { createLogger, type Logger } from "./logger.js";
+import type {
+  ProfileUpdateRequest,
+  RecommendationDismissRequest,
+  RecommendationProvider,
+  RecommendationRequest,
+} from "./recommendations.js";
 import type { SyncProvider, SyncPullRequest, SyncPushRequest } from "./sync.js";
 import type {
   BookMetadataProvider,
@@ -375,8 +381,223 @@ export function createSyncPlugin(options: SyncPluginOptions): void {
 }
 
 // =============================================================================
+// Recommendation Plugin Factory
+// =============================================================================
+
+/**
+ * Options for creating a recommendation provider plugin
+ */
+export interface RecommendationPluginOptions {
+  /** Plugin manifest - must have capabilities.recommendationProvider: true */
+  manifest: PluginManifest & {
+    capabilities: { recommendationProvider: true };
+  };
+  /** RecommendationProvider implementation */
+  provider: RecommendationProvider;
+  /** Called when plugin receives initialize with credentials/config */
+  onInitialize?: (params: InitializeParams) => void | Promise<void>;
+  /** Log level (default: "info") */
+  logLevel?: "debug" | "info" | "warn" | "error";
+}
+
+/**
+ * Create and run a recommendation provider plugin
+ *
+ * Creates a plugin server that handles JSON-RPC communication over stdio
+ * for recommendation operations (get recommendations, update profile, dismiss).
+ */
+export function createRecommendationPlugin(options: RecommendationPluginOptions): void {
+  const { manifest, provider, onInitialize, logLevel = "info" } = options;
+  const logger = createLogger({ name: manifest.name, level: logLevel });
+
+  logger.info(`Starting recommendation plugin: ${manifest.displayName} v${manifest.version}`);
+
+  const rl = createInterface({
+    input: process.stdin,
+    terminal: false,
+  });
+
+  rl.on("line", (line) => {
+    void handleRecommendationLine(line, manifest, provider, onInitialize, logger);
+  });
+
+  rl.on("close", () => {
+    logger.info("stdin closed, shutting down");
+    process.exit(0);
+  });
+
+  process.on("uncaughtException", (error) => {
+    logger.error("Uncaught exception", error);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error("Unhandled rejection", reason);
+  });
+}
+
+// =============================================================================
 // Internal Implementation
 // =============================================================================
+
+async function handleRecommendationLine(
+  line: string,
+  manifest: PluginManifest,
+  provider: RecommendationProvider,
+  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
+  logger: Logger,
+): Promise<void> {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+
+  let id: string | number | null = null;
+
+  try {
+    const request = JSON.parse(trimmed) as JsonRpcRequest;
+    id = request.id;
+
+    logger.debug(`Received request: ${request.method}`, { id: request.id });
+
+    const response = await handleRecommendationRequest(
+      request,
+      manifest,
+      provider,
+      onInitialize,
+      logger,
+    );
+    if (response !== null) {
+      writeResponse(response);
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      writeResponse({
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: JSON_RPC_ERROR_CODES.PARSE_ERROR,
+          message: "Parse error: invalid JSON",
+        },
+      });
+    } else if (error instanceof PluginError) {
+      writeResponse({
+        jsonrpc: "2.0",
+        id,
+        error: error.toJsonRpcError(),
+      });
+    } else {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Request failed", error);
+      writeResponse({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: JSON_RPC_ERROR_CODES.INTERNAL_ERROR,
+          message,
+        },
+      });
+    }
+  }
+}
+
+async function handleRecommendationRequest(
+  request: JsonRpcRequest,
+  manifest: PluginManifest,
+  provider: RecommendationProvider,
+  onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
+  _logger: Logger,
+): Promise<JsonRpcResponse> {
+  const { method, params, id } = request;
+
+  switch (method) {
+    case "initialize":
+      if (onInitialize) {
+        await onInitialize(params as InitializeParams);
+      }
+      return { jsonrpc: "2.0", id, result: manifest };
+
+    case "ping":
+      return { jsonrpc: "2.0", id, result: "pong" };
+
+    case "shutdown": {
+      const response: JsonRpcResponse = { jsonrpc: "2.0", id, result: null };
+      process.stdout.write(`${JSON.stringify(response)}\n`, () => {
+        process.exit(0);
+      });
+      return null as unknown as JsonRpcResponse;
+    }
+
+    case "recommendations/get":
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await provider.get(params as RecommendationRequest),
+      };
+
+    case "recommendations/updateProfile": {
+      if (!provider.updateProfile) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support recommendations/updateProfile",
+          },
+        };
+      }
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await provider.updateProfile(params as ProfileUpdateRequest),
+      };
+    }
+
+    case "recommendations/clear": {
+      if (!provider.clear) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support recommendations/clear",
+          },
+        };
+      }
+      return { jsonrpc: "2.0", id, result: await provider.clear() };
+    }
+
+    case "recommendations/dismiss": {
+      if (!provider.dismiss) {
+        return {
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+            message: "This plugin does not support recommendations/dismiss",
+          },
+        };
+      }
+      const validationError = validateStringFields(params, ["externalId"]);
+      if (validationError) {
+        return invalidParamsError(id, validationError);
+      }
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: await provider.dismiss(params as RecommendationDismissRequest),
+      };
+    }
+
+    default:
+      return {
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: JSON_RPC_ERROR_CODES.METHOD_NOT_FOUND,
+          message: `Method not found: ${method}`,
+        },
+      };
+  }
+}
 
 async function handleSyncLine(
   line: string,

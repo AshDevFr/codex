@@ -1,5 +1,5 @@
 {
-  "name": "@ashdev/codex-plugin-anilist-sync",
+  "name": "@ashdev/codex-plugin-sync-anilist",
   "version": "1.9.0",
   "description": "AniList reading progress sync plugin for Codex",
   "main": "dist/index.js",
@@ -12,7 +12,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/AshDevFr/codex.git",
-    "directory": "plugins/anilist-sync"
+    "directory": "plugins/sync-anilist"
   },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --sourcemap --banner:js='#!/usr/bin/env node'",

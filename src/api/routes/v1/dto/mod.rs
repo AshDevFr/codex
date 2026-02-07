@@ -18,6 +18,7 @@ pub mod patch;
 pub mod pdf_cache;
 pub mod plugins;
 pub mod read_progress;
+pub mod recommendations;
 pub mod scan;
 pub mod series;
 pub mod settings;
@@ -43,6 +44,8 @@ pub use page::*;
 pub use pdf_cache::*;
 pub use plugins::*;
 pub use read_progress::*;
+#[allow(unused_imports)]
+pub use recommendations::*;
 pub use scan::*;
 pub use series::*;
 pub use settings::*;
