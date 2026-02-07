@@ -99,6 +99,14 @@ pub struct UserPluginCapabilitiesDto {
     pub recommendation_provider: bool,
 }
 
+/// Request to update user plugin configuration
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateUserPluginConfigRequest {
+    /// Configuration overrides for this plugin
+    pub config: serde_json::Value,
+}
+
 /// User plugins list response
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

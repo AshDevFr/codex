@@ -21,6 +21,7 @@ import {
   IconDotsVertical,
   IconFileTypePdf,
   IconHome,
+  IconLink,
   IconLogout,
   IconPhoto,
   IconPlugConnected,
@@ -624,6 +625,13 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
                 </>
               )}
 
+              <NavLink
+                component={Link}
+                to="/settings/integrations"
+                label="Integrations"
+                leftSection={<IconLink size={16} />}
+                active={currentPath.startsWith("/settings/integrations")}
+              />
               <NavLink
                 component={Link}
                 to="/settings/profile"

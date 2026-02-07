@@ -5,8 +5,8 @@
 //! and manage their plugin integrations.
 
 use super::super::dto::user_plugins::{
-    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, UserPluginCapabilitiesDto,
-    UserPluginDto, UserPluginsListResponse,
+    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, UpdateUserPluginConfigRequest,
+    UserPluginCapabilitiesDto, UserPluginDto, UserPluginsListResponse,
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
@@ -54,6 +54,37 @@ fn get_oauth_client_secret(plugin: &crate::db::entities::plugins::Model) -> Opti
         .get("oauth_client_secret")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
+}
+
+/// Build a UserPluginDto from a user plugin instance and its parent plugin definition
+fn build_user_plugin_dto(
+    instance: &crate::db::entities::user_plugins::Model,
+    plugin: &crate::db::entities::plugins::Model,
+) -> UserPluginDto {
+    let oauth_config = get_oauth_config_from_plugin(plugin);
+    let manifest: Option<PluginManifest> = plugin
+        .manifest
+        .as_ref()
+        .and_then(|m| serde_json::from_value(m.clone()).ok());
+
+    UserPluginDto {
+        id: instance.id,
+        plugin_id: plugin.id,
+        plugin_name: plugin.name.clone(),
+        plugin_display_name: plugin.display_name.clone(),
+        plugin_type: plugin.plugin_type.clone(),
+        enabled: instance.enabled,
+        connected: instance.is_authenticated(),
+        health_status: instance.health_status.clone(),
+        external_username: instance.external_username.clone(),
+        external_avatar_url: instance.external_avatar_url.clone(),
+        last_sync_at: instance.last_sync_at,
+        last_success_at: instance.last_success_at,
+        requires_oauth: oauth_config.is_some(),
+        description: manifest.and_then(|m| m.user_description),
+        config: instance.config.clone(),
+        created_at: instance.created_at,
+    }
 }
 
 /// List user's plugins (enabled and available)
@@ -538,4 +569,94 @@ pub async fn oauth_callback(
     let redirect_url = format!("/settings/integrations?oauth=success&plugin={}", plugin_id);
 
     Ok(axum::response::Redirect::to(&redirect_url))
+}
+
+/// Get a single user plugin instance
+///
+/// Returns detailed status for a plugin the user has enabled.
+#[utoipa::path(
+    get,
+    path = "/api/v1/user/plugins/{plugin_id}",
+    params(
+        ("plugin_id" = Uuid, Path, description = "Plugin ID")
+    ),
+    responses(
+        (status = 200, description = "User plugin details", body = UserPluginDto),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plugin not enabled for this user"),
+    ),
+    tag = "User Plugins"
+)]
+pub async fn get_user_plugin(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+) -> Result<Json<UserPluginDto>, ApiError> {
+    let instance =
+        UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
+
+    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
+
+    Ok(Json(build_user_plugin_dto(&instance, &plugin)))
+}
+
+/// Update user plugin configuration
+///
+/// Allows the user to set per-user configuration overrides for their plugin instance.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/user/plugins/{plugin_id}/config",
+    params(
+        ("plugin_id" = Uuid, Path, description = "Plugin ID to update config for")
+    ),
+    request_body = UpdateUserPluginConfigRequest,
+    responses(
+        (status = 200, description = "Configuration updated", body = UserPluginDto),
+        (status = 400, description = "Invalid configuration"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plugin not enabled for this user"),
+    ),
+    tag = "User Plugins"
+)]
+pub async fn update_user_plugin_config(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+    Json(request): Json<UpdateUserPluginConfigRequest>,
+) -> Result<Json<UserPluginDto>, ApiError> {
+    // Validate config is a JSON object
+    if !request.config.is_object() {
+        return Err(ApiError::BadRequest(
+            "Config must be a JSON object".to_string(),
+        ));
+    }
+
+    let instance =
+        UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
+
+    let updated = UserPluginsRepository::update_config(&state.db, instance.id, request.config)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update config: {}", e)))?;
+
+    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
+
+    debug!(
+        user_id = %auth.user_id,
+        plugin_id = %plugin_id,
+        "User updated plugin config"
+    );
+
+    Ok(Json(build_user_plugin_dto(&updated, &plugin)))
 }
