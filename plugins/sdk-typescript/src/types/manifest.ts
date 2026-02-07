@@ -46,11 +46,6 @@ export interface PluginCapabilities {
   externalIdSource?: string;
   /** Can provide recommendations */
   recommendationProvider?: boolean;
-  /**
-   * @deprecated Use userSyncProvider instead
-   * Kept for backwards compatibility
-   */
-  syncProvider?: boolean;
 }
 
 /**
@@ -144,18 +139,4 @@ export function hasBookMetadataProvider(manifest: PluginManifest): manifest is P
     Array.isArray(manifest.capabilities.metadataProvider) &&
     manifest.capabilities.metadataProvider.includes("book")
   );
-}
-
-// =============================================================================
-// Backwards Compatibility (deprecated)
-// =============================================================================
-
-/**
- * @deprecated Use PluginCapabilities with metadataProvider array instead
- */
-export interface LegacyPluginCapabilities {
-  /** @deprecated Use metadataProvider: ["series"] instead */
-  seriesMetadataProvider?: boolean;
-  syncProvider?: boolean;
-  recommendationProvider?: boolean;
 }

@@ -42,7 +42,7 @@ const responseWithAvailable: UserPluginsListResponse = {
       displayName: "AniList Sync",
       description: "Sync reading progress with AniList",
       requiresOauth: true,
-      capabilities: { syncProvider: true, recommendationProvider: false },
+      capabilities: { userSyncProvider: true, recommendationProvider: false },
     },
     {
       pluginId: "plugin-2",
@@ -50,7 +50,7 @@ const responseWithAvailable: UserPluginsListResponse = {
       displayName: "Smart Recommendations",
       description: "Get personalized recommendations",
       requiresOauth: false,
-      capabilities: { syncProvider: false, recommendationProvider: true },
+      capabilities: { userSyncProvider: false, recommendationProvider: true },
     },
   ],
 };
