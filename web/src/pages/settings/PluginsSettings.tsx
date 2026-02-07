@@ -1010,11 +1010,13 @@ function PluginDetails({
               )}
             </Group>
             <Group gap="xs">
-              {plugin.manifest.capabilities.metadataProvider && (
-                <Badge color="teal" variant="light">
-                  Metadata Provider
-                </Badge>
-              )}
+              {plugin.manifest.capabilities.metadataProvider &&
+                plugin.manifest.capabilities.metadataProvider.length >
+                  0 && (
+                  <Badge color="teal" variant="light">
+                    Metadata Provider
+                  </Badge>
+                )}
               {plugin.manifest.capabilities.userSyncProvider && (
                 <Badge color="violet" variant="light">
                   User Sync Provider
