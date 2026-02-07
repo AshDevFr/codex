@@ -10,40 +10,56 @@ import { mapSearchResult } from "../mappers.js";
 const logger = createLogger({ name: "mangabaka-match", level: "info" });
 
 /**
- * Calculate string similarity using word overlap
+ * Calculate string similarity using word overlap and containment scoring
  * Returns a value between 0 and 1
  */
-function similarity(a: string, b: string): number {
+export function similarity(a: string, b: string): number {
   const aLower = a.toLowerCase().trim();
   const bLower = b.toLowerCase().trim();
 
   if (aLower === bLower) return 1.0;
   if (aLower.length === 0 || bLower.length === 0) return 0;
 
-  // Check if one contains the other
-  if (aLower.includes(bLower) || bLower.includes(aLower)) {
-    return 0.8;
+  let score = 0;
+
+  // Containment check with length-ratio penalty
+  // Prevents short queries like "Air" from matching "Air Gear" too strongly
+  const shorter = aLower.length <= bLower.length ? aLower : bLower;
+  const longer = aLower.length <= bLower.length ? bLower : aLower;
+
+  if (longer.includes(shorter)) {
+    const lengthRatio = shorter.length / longer.length;
+    score = Math.max(score, 0.8 * lengthRatio);
   }
 
-  // Simple word overlap scoring
+  // Word overlap scoring (Jaccard similarity)
   const aWords = new Set(aLower.split(/\s+/));
   const bWords = new Set(bLower.split(/\s+/));
   const intersection = [...aWords].filter((w) => bWords.has(w));
   const union = new Set([...aWords, ...bWords]);
 
-  return intersection.length / union.size;
+  if (union.size > 0) {
+    score = Math.max(score, intersection.length / union.size);
+  }
+
+  return score;
 }
 
 /**
  * Score a search result against the match parameters
  * Returns a value between 0 and 1
  */
-function scoreResult(result: SearchResult, params: MetadataMatchParams): number {
+export function scoreResult(result: SearchResult, params: MetadataMatchParams): number {
   let score = 0;
 
+  // Find best title similarity across primary and alternate titles
+  let bestTitleSimilarity = similarity(result.title, params.title);
+  for (const alt of result.alternateTitles) {
+    bestTitleSimilarity = Math.max(bestTitleSimilarity, similarity(alt, params.title));
+  }
+
   // Title similarity (up to 0.6)
-  const titleScore = similarity(result.title, params.title);
-  score += titleScore * 0.6;
+  score += bestTitleSimilarity * 0.6;
 
   // Year match (up to 0.2)
   if (params.year && result.year) {
@@ -54,8 +70,13 @@ function scoreResult(result: SearchResult, params: MetadataMatchParams): number 
     }
   }
 
-  // Boost for exact title match (up to 0.2)
-  if (result.title.toLowerCase() === params.title.toLowerCase()) {
+  // Boost for exact title match across primary and alternate titles (up to 0.2)
+  const searchLower = params.title.toLowerCase();
+  const hasExactMatch =
+    result.title.toLowerCase() === searchLower ||
+    result.alternateTitles.some((alt) => alt.toLowerCase() === searchLower);
+
+  if (hasExactMatch) {
     score += 0.2;
   }
 
