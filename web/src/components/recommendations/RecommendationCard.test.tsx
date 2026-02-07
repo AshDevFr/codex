@@ -138,10 +138,7 @@ describe("RecommendationCard", () => {
   it("renders external link when URL is provided", () => {
     renderWithProviders(<RecommendationCard {...defaultProps} />);
     const link = screen.getByRole("link");
-    expect(link).toHaveAttribute(
-      "href",
-      "https://anilist.co/manga/12345",
-    );
+    expect(link).toHaveAttribute("href", "https://anilist.co/manga/12345");
     expect(link).toHaveAttribute("target", "_blank");
   });
 

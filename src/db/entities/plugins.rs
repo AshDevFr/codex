@@ -351,6 +351,9 @@ pub enum PluginPermission {
     /// Add external links
     #[serde(rename = "metadata:write:links")]
     MetadataWriteLinks,
+    /// Write cross-reference external IDs (e.g., api:anilist, api:myanimelist)
+    #[serde(rename = "metadata:write:external_ids")]
+    MetadataWriteExternalIds,
     /// Update publication year
     #[serde(rename = "metadata:write:year")]
     MetadataWriteYear,
@@ -441,6 +444,7 @@ impl PluginPermission {
             PluginPermission::MetadataWriteCovers => "metadata:write:covers",
             PluginPermission::MetadataWriteRatings => "metadata:write:ratings",
             PluginPermission::MetadataWriteLinks => "metadata:write:links",
+            PluginPermission::MetadataWriteExternalIds => "metadata:write:external_ids",
             PluginPermission::MetadataWriteYear => "metadata:write:year",
             PluginPermission::MetadataWriteStatus => "metadata:write:status",
             PluginPermission::MetadataWritePublisher => "metadata:write:publisher",
@@ -481,6 +485,7 @@ impl PluginPermission {
             PluginPermission::MetadataWriteCovers,
             PluginPermission::MetadataWriteRatings,
             PluginPermission::MetadataWriteLinks,
+            PluginPermission::MetadataWriteExternalIds,
             PluginPermission::MetadataWriteYear,
             PluginPermission::MetadataWriteStatus,
             PluginPermission::MetadataWritePublisher,
@@ -514,6 +519,7 @@ impl PluginPermission {
             PluginPermission::MetadataWriteCovers,
             PluginPermission::MetadataWriteRatings,
             PluginPermission::MetadataWriteLinks,
+            PluginPermission::MetadataWriteExternalIds,
             PluginPermission::MetadataWriteYear,
             PluginPermission::MetadataWriteStatus,
             PluginPermission::MetadataWritePublisher,
@@ -558,6 +564,7 @@ impl FromStr for PluginPermission {
             "metadata:write:covers" => Ok(PluginPermission::MetadataWriteCovers),
             "metadata:write:ratings" => Ok(PluginPermission::MetadataWriteRatings),
             "metadata:write:links" => Ok(PluginPermission::MetadataWriteLinks),
+            "metadata:write:external_ids" => Ok(PluginPermission::MetadataWriteExternalIds),
             "metadata:write:year" => Ok(PluginPermission::MetadataWriteYear),
             "metadata:write:status" => Ok(PluginPermission::MetadataWriteStatus),
             "metadata:write:publisher" => Ok(PluginPermission::MetadataWritePublisher),
@@ -653,6 +660,7 @@ impl Model {
                     | PluginPermission::MetadataWriteCovers
                     | PluginPermission::MetadataWriteRatings
                     | PluginPermission::MetadataWriteLinks
+                    | PluginPermission::MetadataWriteExternalIds
                     | PluginPermission::MetadataWriteYear
                     | PluginPermission::MetadataWriteStatus
                     | PluginPermission::MetadataWritePublisher
@@ -891,8 +899,9 @@ mod tests {
         // Excluded permissions
         assert!(!perms.contains(&PluginPermission::MetadataWriteAll));
         assert!(!perms.contains(&PluginPermission::MetadataRead));
-        // Should have 26 write permissions (14 common + 12 book-specific)
-        assert_eq!(perms.len(), 26);
+        assert!(perms.contains(&PluginPermission::MetadataWriteExternalIds));
+        // Should have 27 write permissions (15 common + 12 book-specific)
+        assert_eq!(perms.len(), 27);
     }
 
     #[test]
@@ -904,8 +913,9 @@ mod tests {
         // Book-specific should NOT be in common
         assert!(!perms.contains(&PluginPermission::MetadataWriteBookType));
         assert!(!perms.contains(&PluginPermission::MetadataWriteIsbn));
-        // Should have 14 common permissions
-        assert_eq!(perms.len(), 14);
+        assert!(perms.contains(&PluginPermission::MetadataWriteExternalIds));
+        // Should have 15 common permissions
+        assert_eq!(perms.len(), 15);
     }
 
     #[test]
@@ -972,6 +982,27 @@ mod tests {
             PluginPermission::from_str("metadata:write:isbn").unwrap(),
             PluginPermission::MetadataWriteIsbn
         );
+    }
+
+    #[test]
+    fn test_external_ids_permission() {
+        // as_str
+        assert_eq!(
+            PluginPermission::MetadataWriteExternalIds.as_str(),
+            "metadata:write:external_ids"
+        );
+        // from_str
+        assert_eq!(
+            PluginPermission::from_str("metadata:write:external_ids").unwrap(),
+            PluginPermission::MetadataWriteExternalIds
+        );
+        // serialization
+        let perm = PluginPermission::MetadataWriteExternalIds;
+        let json = serde_json::to_string(&perm).unwrap();
+        assert_eq!(json, "\"metadata:write:external_ids\"");
+        let deserialized: PluginPermission =
+            serde_json::from_str("\"metadata:write:external_ids\"").unwrap();
+        assert_eq!(deserialized, PluginPermission::MetadataWriteExternalIds);
     }
 
     #[test]

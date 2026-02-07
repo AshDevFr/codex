@@ -1,5 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { renderWithProviders } from "@/test/utils";
@@ -36,7 +36,9 @@ describe("RecommendationsWidget", () => {
 
     // Wait for query to resolve, then verify nothing rendered
     await waitFor(() => {
-      expect(container.querySelector("[data-testid='recommendation-compact-card']")).not.toBeInTheDocument();
+      expect(
+        container.querySelector("[data-testid='recommendation-compact-card']"),
+      ).not.toBeInTheDocument();
     });
     expect(screen.queryByText("Recommended For You")).not.toBeInTheDocument();
   });
@@ -55,7 +57,9 @@ describe("RecommendationsWidget", () => {
 
     // Wait a tick for the query to settle
     await new Promise((r) => setTimeout(r, 100));
-    expect(container.querySelector("[data-testid='recommendation-compact-card']")).not.toBeInTheDocument();
+    expect(
+      container.querySelector("[data-testid='recommendation-compact-card']"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Recommended For You")).not.toBeInTheDocument();
   });
 
@@ -118,9 +122,7 @@ describe("RecommendationsWidget", () => {
     renderWithProviders(<RecommendationsWidget />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Powered by AniList Recs"),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Powered by AniList Recs")).toBeInTheDocument();
     });
   });
 });

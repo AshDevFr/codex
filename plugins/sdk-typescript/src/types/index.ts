@@ -36,6 +36,7 @@ export type {
   BookCoverSize,
   BookMatchParams,
   BookSearchParams,
+  ExternalId,
   ExternalLink,
   ExternalLinkType,
   ExternalRating,

@@ -26,10 +26,7 @@ export function RecommendationsWidget() {
   return (
     <HorizontalCarousel title="Recommended For You" subtitle={subtitle}>
       {limited.map((rec) => (
-        <RecommendationCompactCard
-          key={rec.externalId}
-          recommendation={rec}
-        />
+        <RecommendationCompactCard key={rec.externalId} recommendation={rec} />
       ))}
     </HorizontalCarousel>
   );

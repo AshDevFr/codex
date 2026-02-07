@@ -95,9 +95,8 @@ export function Recommendations() {
 
   // No plugin enabled (404 from backend)
   if (error) {
-    const apiError = error as ApiError;
-    const isNoPlugin =
-      apiError.error === "No recommendation plugin enabled";
+    const apiError = error as unknown as ApiError;
+    const isNoPlugin = apiError.error === "No recommendation plugin enabled";
 
     if (isNoPlugin) {
       return (
@@ -111,7 +110,13 @@ export function Recommendations() {
               variant="light"
             >
               Enable a recommendation plugin in{" "}
-              <Text component="a" href="/settings/integrations" c="blue" td="underline" span>
+              <Text
+                component="a"
+                href="/settings/integrations"
+                c="blue"
+                td="underline"
+                span
+              >
                 Settings &gt; Integrations
               </Text>{" "}
               to get personalized suggestions based on your library.
@@ -177,8 +182,9 @@ export function Recommendations() {
             color="blue"
             variant="light"
           >
-            Your recommendation plugin hasn&apos;t generated any suggestions yet.
-            Try clicking Refresh to generate recommendations based on your library.
+            Your recommendation plugin hasn&apos;t generated any suggestions
+            yet. Try clicking Refresh to generate recommendations based on your
+            library.
           </Alert>
         )}
 

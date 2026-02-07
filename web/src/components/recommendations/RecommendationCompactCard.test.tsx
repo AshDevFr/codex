@@ -1,8 +1,8 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import type { RecommendationDto } from "@/api/recommendations";
 import { renderWithProviders } from "@/test/utils";
 import { RecommendationCompactCard } from "./RecommendationCompactCard";
-import type { RecommendationDto } from "@/api/recommendations";
 
 const baseRec: RecommendationDto = {
   externalId: "1",
@@ -47,7 +47,10 @@ describe("RecommendationCompactCard", () => {
   it("renders cover image when coverUrl provided", () => {
     renderWithProviders(
       <RecommendationCompactCard
-        recommendation={{ ...baseRec, coverUrl: "https://example.com/cover.jpg" }}
+        recommendation={{
+          ...baseRec,
+          coverUrl: "https://example.com/cover.jpg",
+        }}
       />,
     );
     expect(screen.getByAltText("Vinland Saga")).toBeInTheDocument();
