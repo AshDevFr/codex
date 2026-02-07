@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "https://opensource.org/licenses/MIT"
     },
-    "version": "1.9.0"
+    "version": "1.9.1"
   },
   "paths": {
     "/api/v1/admin/cleanup-orphans": {

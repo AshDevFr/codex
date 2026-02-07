@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.9.1] - 2026-02-07
+
+### 🚀 Features
+
+- *(progress)* Auto-detect book completion when current page reaches page count
+
 ## [1.9.0] - 2026-02-06
 
 ### 🚀 Features
