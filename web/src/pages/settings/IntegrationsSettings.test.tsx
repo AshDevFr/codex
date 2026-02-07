@@ -42,7 +42,7 @@ const responseWithAvailable: UserPluginsListResponse = {
       displayName: "AniList Sync",
       description: "Sync reading progress with AniList",
       requiresOauth: true,
-      capabilities: { userSyncProvider: true, recommendationProvider: false },
+      capabilities: { syncProvider: true, recommendationProvider: false },
     },
     {
       pluginId: "plugin-2",
@@ -50,7 +50,7 @@ const responseWithAvailable: UserPluginsListResponse = {
       displayName: "Smart Recommendations",
       description: "Get personalized recommendations",
       requiresOauth: false,
-      capabilities: { userSyncProvider: false, recommendationProvider: true },
+      capabilities: { syncProvider: false, recommendationProvider: true },
     },
   ],
 };
@@ -111,7 +111,7 @@ describe("IntegrationsSettings", () => {
     renderWithProviders(<IntegrationsSettings />);
 
     await waitFor(() => {
-      expect(screen.getByText("Available Plugins")).toBeInTheDocument();
+      expect(screen.getByText("Available")).toBeInTheDocument();
       expect(screen.getByText("AniList Sync")).toBeInTheDocument();
       expect(screen.getByText("Smart Recommendations")).toBeInTheDocument();
     });
@@ -123,9 +123,9 @@ describe("IntegrationsSettings", () => {
     renderWithProviders(<IntegrationsSettings />);
 
     await waitFor(() => {
-      expect(screen.getByText("Connected Services")).toBeInTheDocument();
       expect(screen.getByText("AniList Sync")).toBeInTheDocument();
-      expect(screen.getByText("Connected")).toBeInTheDocument();
+      // Section title "Connected" + badge "Connected" should both be present
+      expect(screen.getAllByText("Connected").length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -152,7 +152,7 @@ describe("IntegrationsSettings", () => {
     await user.click(screen.getByRole("button", { name: /disconnect/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("Disconnect Plugin")).toBeInTheDocument();
+      expect(screen.getByText("Disconnect Integration")).toBeInTheDocument();
       expect(
         screen.getByText(/are you sure you want to disconnect/i),
       ).toBeInTheDocument();

@@ -40,7 +40,7 @@ import { useAppName } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/authStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
-import type { components } from "@/types/api.generated";
+import type { ApiKeyDto } from "@/types";
 import {
   ALL_PERMISSIONS,
   getPermissionsForRole,
@@ -51,8 +51,6 @@ import {
 } from "@/types/permissions";
 import type { PreferenceKey, TypedPreferences } from "@/types/preferences";
 import { PREFERENCE_DEFAULTS } from "@/types/preferences";
-
-type ApiKeyDto = components["schemas"]["ApiKeyDto"];
 
 export function ProfileSettings() {
   const appName = useAppName();

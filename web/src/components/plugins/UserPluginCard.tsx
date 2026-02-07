@@ -232,7 +232,7 @@ export function AvailablePluginCard({
           </div>
         </Group>
         <Group gap="xs">
-          {plugin.capabilities.userSyncProvider && (
+          {plugin.capabilities.syncProvider && (
             <Badge variant="light" color="blue" size="sm">
               Sync
             </Badge>

@@ -1011,8 +1011,7 @@ function PluginDetails({
             </Group>
             <Group gap="xs">
               {plugin.manifest.capabilities.metadataProvider &&
-                plugin.manifest.capabilities.metadataProvider.length >
-                  0 && (
+                plugin.manifest.capabilities.metadataProvider.length > 0 && (
                   <Badge color="teal" variant="light">
                     Metadata Provider
                   </Badge>

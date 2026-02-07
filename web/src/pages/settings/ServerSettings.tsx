@@ -34,14 +34,15 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { type SettingDto, settingsApi } from "@/api/settings";
+import {
+  type SettingDto,
+  type SettingHistoryDto,
+  settingsApi,
+} from "@/api/settings";
 import { TemplateEditor } from "@/components/forms/TemplateEditor";
 import { TemplateSelector } from "@/components/forms/TemplateSelector";
 import { brandingQueryKey } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import type { components } from "@/types/api.generated";
-
-type SettingHistoryDto = components["schemas"]["SettingHistoryDto"];
 
 // Group settings by category
 function groupSettingsByCategory(settings: SettingDto[]) {

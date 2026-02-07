@@ -17,6 +17,7 @@ type Schemas = components["schemas"];
 // =============================================================================
 export type User = Schemas["UserInfo"];
 export type UserDto = Schemas["UserDto"];
+export type ApiKeyDto = Schemas["ApiKeyDto"];
 
 // =============================================================================
 // Auth types
@@ -77,6 +78,7 @@ export type FullBook = Schemas["FullBookResponse"];
 /** Book metadata with all fields and lock states */
 export type BookFullMetadata = Schemas["BookFullMetadata"];
 export type ReadProgress = Schemas["ReadProgressResponse"];
+export type BookTypeDto = Schemas["BookTypeDto"];
 
 // =============================================================================
 // Filesystem types

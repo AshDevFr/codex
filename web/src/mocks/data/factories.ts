@@ -6,6 +6,7 @@
  */
 
 import { faker } from "@faker-js/faker";
+import type { PaginatedResponse, PaginationLinks } from "@/types";
 import type { components } from "@/types/api.generated";
 
 // Re-export types for convenience
@@ -13,12 +14,6 @@ export type UserDto = components["schemas"]["UserDto"];
 export type LibraryDto = components["schemas"]["LibraryDto"];
 export type SeriesDto = components["schemas"]["SeriesDto"];
 export type BookDto = components["schemas"]["BookDto"];
-
-// Extended mock types with additional fields for UI convenience
-export type MockLibrary = LibraryDto;
-export type MockSeries = SeriesDto & { libraryName?: string };
-// MockBook includes libraryId for mock filtering (books are associated with libraries via series)
-export type MockBook = BookDto & { libraryId?: string };
 export type ReadProgressResponse =
   components["schemas"]["ReadProgressResponse"];
 export type MetricsDto = components["schemas"]["MetricsDto"];
@@ -41,22 +36,9 @@ export type TaskStats = components["schemas"]["TaskStats"];
 export type SettingDto = components["schemas"]["SettingDto"];
 export type SettingHistoryDto = components["schemas"]["SettingHistoryDto"];
 export type DuplicateGroup = components["schemas"]["DuplicateGroup"];
-export type PaginationLinks = {
-  self: string;
-  first: string;
-  prev: string | null;
-  next: string | null;
-  last: string;
-};
 
-export type PaginatedResponse<T> = {
-  data: T[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-  links: PaginationLinks;
-};
+// Re-export pagination types from centralized definitions
+export type { PaginatedResponse, PaginationLinks };
 
 /**
  * Helper to generate consistent UUIDs for related entities.
@@ -161,11 +143,9 @@ export const seriesSummaries: Record<string, string> = {
 };
 
 /**
- * Series factory - matches SeriesDto schema with optional mock extensions
+ * Series factory - matches SeriesDto schema
  */
-export const createSeries = (
-  overrides: Partial<MockSeries> = {},
-): MockSeries => {
+export const createSeries = (overrides: Partial<SeriesDto> = {}): SeriesDto => {
   const publishers: Record<string, string> = {
     "Batman: Year One": "DC Comics",
     "Batman: The Dark Knight Returns": "DC Comics",
@@ -546,9 +526,8 @@ export const bookTitlesAndSummaries: Record<
 
 /**
  * Book factory - matches BookDto schema
- * Note: libraryId is an extension for mock filtering (books are associated with libraries via series)
  */
-export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
+export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
   const seriesName =
     overrides.seriesName ||
     faker.helpers.arrayElement([
@@ -659,6 +638,7 @@ export const createBook = (overrides: Partial<MockBook> = {}): MockBook => {
     readProgress: null,
     readingDirection: "ltr",
     analyzed: true,
+    analysisError: null,
     deleted: false,
     ...overrides,
   };
@@ -674,6 +654,7 @@ export const createReadProgress = (
   userId: faker.string.uuid(),
   bookId: faker.string.uuid(),
   currentPage: faker.number.int({ min: 1, max: 30 }),
+  progressPercentage: null,
   completed: false,
   completedAt: null,
   startedAt: faker.date.past().toISOString(),
@@ -709,6 +690,8 @@ export const createSetting = (
     ]),
   valueType: "string",
   isSensitive: false,
+  minValue: null,
+  maxValue: null,
   updatedAt: faker.date.recent().toISOString(),
   updatedBy: faker.string.uuid(),
   version: faker.number.int({ min: 1, max: 10 }),

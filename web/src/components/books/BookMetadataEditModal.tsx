@@ -48,9 +48,7 @@ import {
   LockableTextarea,
 } from "@/components/forms/lockable";
 import { extractSourceFromUrl } from "@/components/series/ExternalLinks";
-import type { components } from "@/types";
-
-type BookTypeDto = components["schemas"]["BookTypeDto"];
+import type { BookTypeDto } from "@/types";
 
 const BOOK_TYPE_OPTIONS = [
   { value: "comic", label: "Comic" },
