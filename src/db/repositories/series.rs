@@ -639,11 +639,20 @@ impl SeriesRepository {
                 // Apply sort
                 let query = match sort.field {
                     SeriesSortField::Name => {
-                        // Sort by title_sort first (if set), then title from metadata
+                        // Use COALESCE(title_sort, title) so that series with NULL title_sort
+                        // are sorted by title rather than clustering at the start/end
+                        let sort_expr = Func::coalesce([
+                            Expr::col((
+                                series_metadata::Entity,
+                                series_metadata::Column::TitleSort,
+                            ))
+                            .into(),
+                            Expr::col((series_metadata::Entity, series_metadata::Column::Title))
+                                .into(),
+                        ]);
                         query
                             .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-                            .order_by(series_metadata::Column::TitleSort, order.clone())
-                            .order_by(series_metadata::Column::Title, order)
+                            .order_by(Expr::expr(sort_expr), order)
                     }
                     SeriesSortField::DateAdded => query.order_by(series::Column::CreatedAt, order),
                     SeriesSortField::DateUpdated => {
@@ -690,12 +699,16 @@ impl SeriesRepository {
 
         let series = match sort.field {
             SeriesSortField::Name => {
-                // Sort by title_sort first (if set), then title from metadata
+                // Use COALESCE(title_sort, title) so that series with NULL title_sort
+                // are sorted by title rather than clustering at the start/end
+                let sort_expr = Func::coalesce([
+                    Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
+                    Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
+                ]);
                 Series::find()
                     .filter(base_condition)
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-                    .order_by(series_metadata::Column::TitleSort, order.clone())
-                    .order_by(series_metadata::Column::Title, order)
+                    .order_by(Expr::expr(sort_expr), order)
                     .offset(offset)
                     .limit(limit)
                     .all(db)

@@ -4034,6 +4034,188 @@ async fn test_list_series_sort_with_pagination() {
 }
 
 // ============================================================================
+// NULL title_sort handling tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_sort_by_name_with_null_title_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series with names that would be sorted differently than insertion order.
+    // All have title_sort = NULL (the default), which is the common production case.
+    // Deliberately inserting out of alphabetical order to catch insertion-order bugs.
+    SeriesRepository::create(&db, library.id, "Kaiju No. 8", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "A Couple of Cuckoos", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Fairy Tail's Fairy Girls", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "+Anima", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Shinobi Life", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "01 Locke & Key", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Air Gear", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "ALIVE: The Final Evolution", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Sort by name ascending - with all NULL title_sort values,
+    // this should fall back to sorting by title alphabetically
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 8);
+
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        vec![
+            "+Anima",
+            "01 Locke & Key",
+            "A Couple of Cuckoos",
+            "ALIVE: The Final Evolution",
+            "Air Gear",
+            "Fairy Tail's Fairy Girls",
+            "Kaiju No. 8",
+            "Shinobi Life",
+        ],
+        "Series should be sorted alphabetically by title when title_sort is NULL"
+    );
+}
+
+#[tokio::test]
+async fn test_list_series_sort_by_name_mixed_null_and_set_title_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Series with NULL title_sort (default)
+    SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Daredevil", None)
+        .await
+        .unwrap();
+
+    // Series with explicit title_sort that differs from title
+    let series_the = SeriesRepository::create(&db, library.id, "The Amazing Spider-Man", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_title(
+        &db,
+        series_the.id,
+        "The Amazing Spider-Man".to_string(),
+        Some("Amazing Spider-Man, The".to_string()),
+    )
+    .await
+    .unwrap();
+
+    // Another series with NULL title_sort
+    SeriesRepository::create(&db, library.id, "Cable", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth("/api/v1/series?sort=name,asc", &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 4);
+
+    // Expected order:
+    // "The Amazing Spider-Man" (title_sort="Amazing Spider-Man, The" -> sorts under A)
+    // "Batman" (title_sort=NULL, falls back to title "Batman")
+    // "Cable" (title_sort=NULL, falls back to title "Cable")
+    // "Daredevil" (title_sort=NULL, falls back to title "Daredevil")
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        vec!["The Amazing Spider-Man", "Batman", "Cable", "Daredevil"],
+        "Series with title_sort should be interleaved with NULL title_sort series"
+    );
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_sort_by_name_with_null_title_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create series out of alphabetical order, all with NULL title_sort
+    SeriesRepository::create(&db, library.id, "Kaiju No. 8", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "A Couple of Cuckoos", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Fairy Tail's Fairy Girls", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Shinobi Life", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Use POST /series/list endpoint (exercises list_by_ids_sorted code path)
+    let request = post_request_with_auth_json(
+        "/api/v1/series/list?sort=name,asc",
+        &token,
+        r#"{"condition":null,"fullTextSearch":null}"#,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 4);
+
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        vec![
+            "A Couple of Cuckoos",
+            "Fairy Tail's Fairy Girls",
+            "Kaiju No. 8",
+            "Shinobi Life",
+        ],
+        "POST /series/list should sort alphabetically by title when title_sort is NULL"
+    );
+}
+
+// ============================================================================
 // Full Parameter Tests (full=true)
 // ============================================================================
 
