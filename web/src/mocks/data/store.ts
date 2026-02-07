@@ -7,13 +7,13 @@
 
 import { faker } from "@faker-js/faker";
 import {
+  type BookDto,
   createBook,
   createLibrary,
   createReadProgress,
   createSeries,
-  type MockBook,
-  type MockLibrary,
-  type MockSeries,
+  type LibraryDto,
+  type SeriesDto,
 } from "./factories";
 
 // Seed faker for consistent data
@@ -76,27 +76,26 @@ const seriesNamesByLibrary: Record<string, string[]> = {
 };
 
 // Create libraries
-export let mockLibraries: MockLibrary[] = libraryNames.map((name) =>
+export let mockLibraries: LibraryDto[] = libraryNames.map((name) =>
   createLibrary({ name }),
 );
 
 // Create series with proper library relationships
-export let mockSeries: MockSeries[] = [];
+export let mockSeries: SeriesDto[] = [];
 for (const library of mockLibraries) {
   const seriesNames = seriesNamesByLibrary[library.name] || [];
   for (const name of seriesNames) {
     const series = createSeries({
       libraryId: library.id,
+      libraryName: library.name,
       title: name,
     });
-    // Add library name for UI convenience (not in API schema)
-    series.libraryName = library.name;
     mockSeries.push(series);
   }
 }
 
 // Create books with proper series relationships
-export let mockBooks: MockBook[] = [];
+export let mockBooks: BookDto[] = [];
 for (let seriesIndex = 0; seriesIndex < mockSeries.length; seriesIndex++) {
   const series = mockSeries[seriesIndex];
   const bookCount = 8;
@@ -137,17 +136,17 @@ mockLibraries = mockLibraries.map((library) => {
 });
 
 // Helper functions
-export const getSeriesByLibrary = (libraryId: string): MockSeries[] =>
+export const getSeriesByLibrary = (libraryId: string): SeriesDto[] =>
   mockSeries.filter((s) => s.libraryId === libraryId);
 
-export const getBooksByLibrary = (libraryId: string): MockBook[] => {
+export const getBooksByLibrary = (libraryId: string): BookDto[] => {
   const librarySeries = getSeriesByLibrary(libraryId);
   return mockBooks.filter((b) =>
     librarySeries.some((s) => s.id === b.seriesId),
   );
 };
 
-export const getBooksBySeries = (seriesId: string): MockBook[] =>
+export const getBooksBySeries = (seriesId: string): BookDto[] =>
   mockBooks.filter((b) => b.seriesId === seriesId);
 
 // Reset function for testing
@@ -162,10 +161,9 @@ export const resetMockData = () => {
     for (const name of seriesNames) {
       const series = createSeries({
         libraryId: library.id,
+        libraryName: library.name,
         title: name,
       });
-      // Add library name for UI convenience (not in API schema)
-      series.libraryName = library.name;
       mockSeries.push(series);
     }
   }

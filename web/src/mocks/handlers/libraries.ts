@@ -3,12 +3,13 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
-import {
-  createLibrary,
-  createPaginatedResponse,
-  type MockLibrary,
-} from "../data/factories";
+import type { components } from "@/types/api.generated";
+import { createLibrary, createPaginatedResponse } from "../data/factories";
 import { mockLibraries } from "../data/store";
+
+type CreateLibraryRequest = components["schemas"]["CreateLibraryRequest"];
+type LibraryDto = components["schemas"]["LibraryDto"];
+type UpdateLibraryRequest = components["schemas"]["UpdateLibraryRequest"];
 
 export const libraryHandlers = [
   // List libraries (paginated, 1-indexed)
@@ -54,7 +55,7 @@ export const libraryHandlers = [
   // Create library
   http.post("/api/v1/libraries", async ({ request }) => {
     await delay(300);
-    const body = (await request.json()) as Partial<MockLibrary>;
+    const body = (await request.json()) as CreateLibraryRequest;
 
     const newLibrary = createLibrary({
       name: body.name,
@@ -71,7 +72,7 @@ export const libraryHandlers = [
   // Update library (PUT - full replace)
   http.put("/api/v1/libraries/:id", async ({ params, request }) => {
     await delay(200);
-    const body = (await request.json()) as Partial<MockLibrary>;
+    const body = (await request.json()) as UpdateLibraryRequest;
     const index = mockLibraries.findIndex((l) => l.id === params.id);
 
     if (index === -1) {
@@ -80,7 +81,7 @@ export const libraryHandlers = [
 
     mockLibraries[index] = {
       ...mockLibraries[index],
-      ...body,
+      ...(body as Partial<LibraryDto>),
       updatedAt: new Date().toISOString(),
     };
 
@@ -90,7 +91,7 @@ export const libraryHandlers = [
   // Update library (PATCH - partial update)
   http.patch("/api/v1/libraries/:id", async ({ params, request }) => {
     await delay(200);
-    const body = (await request.json()) as Partial<MockLibrary>;
+    const body = (await request.json()) as UpdateLibraryRequest;
     const index = mockLibraries.findIndex((l) => l.id === params.id);
 
     if (index === -1) {
@@ -99,7 +100,7 @@ export const libraryHandlers = [
 
     mockLibraries[index] = {
       ...mockLibraries[index],
-      ...body,
+      ...(body as Partial<LibraryDto>),
       updatedAt: new Date().toISOString(),
     };
 

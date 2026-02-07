@@ -23,17 +23,7 @@ export const cleanupHandlers = [
     const url = new URL(request.url);
     const includeFiles = url.searchParams.get("includeFiles") === "true";
 
-    const response: {
-      orphanedThumbnails: number;
-      orphanedCovers: number;
-      totalSizeBytes: number;
-      files?: Array<{
-        path: string;
-        entityId: string;
-        sizeBytes: number;
-        fileType: string;
-      }>;
-    } = {
+    const response: OrphanStatsDto = {
       ...mockOrphanStats,
     };
 

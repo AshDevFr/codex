@@ -1,63 +1,19 @@
+import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
 // =============================================================================
-// Types
+// Types (from generated OpenAPI types)
 // =============================================================================
 
-// Types defined manually until OpenAPI types are regenerated.
-// These match the backend DTOs in src/api/routes/v1/dto/user_plugins.rs
-
-/** User plugin instance (enabled by user) */
-export interface UserPluginDto {
-  id: string;
-  pluginId: string;
-  pluginName: string;
-  pluginDisplayName: string;
-  pluginType: string;
-  enabled: boolean;
-  connected: boolean;
-  healthStatus: string;
-  externalUsername?: string;
-  externalAvatarUrl?: string;
-  lastSyncAt?: string;
-  lastSuccessAt?: string;
-  requiresOauth: boolean;
-  description?: string;
-  config: Record<string, unknown>;
-  createdAt: string;
-}
-
-/** Available plugin (not yet enabled by user) */
-export interface AvailablePluginDto {
-  pluginId: string;
-  name: string;
-  displayName: string;
-  description?: string;
-  requiresOauth: boolean;
-  capabilities: UserPluginCapabilitiesDto;
-}
-
-/** Plugin capabilities (user plugin context) */
-export interface UserPluginCapabilitiesDto {
-  userSyncProvider: boolean;
-  recommendationProvider: boolean;
-}
-
-/** List response with enabled and available plugins */
-export interface UserPluginsListResponse {
-  enabled: UserPluginDto[];
-  available: AvailablePluginDto[];
-}
-
-/** OAuth start response */
-export interface OAuthStartResponse {
-  redirectUrl: string;
-}
-
-/** Update config request */
-export interface UpdateUserPluginConfigRequest {
-  config: Record<string, unknown>;
-}
+export type UserPluginDto = components["schemas"]["UserPluginDto"];
+export type AvailablePluginDto = components["schemas"]["AvailablePluginDto"];
+export type UserPluginCapabilitiesDto =
+  components["schemas"]["UserPluginCapabilitiesDto"];
+export type UserPluginsListResponse =
+  components["schemas"]["UserPluginsListResponse"];
+export type OAuthStartResponse = components["schemas"]["OAuthStartResponse"];
+export type UpdateUserPluginConfigRequest =
+  components["schemas"]["UpdateUserPluginConfigRequest"];
 
 // =============================================================================
 // API Client

@@ -30,17 +30,8 @@ export type AdjacentBooksResponse =
 export type BookCoverDto = components["schemas"]["BookCoverDto"];
 export type BookExternalIdDto = components["schemas"]["BookExternalIdDto"];
 
-// Book external link type (matches BookExternalLinkDto from backend)
-// Will be replaced with generated type after OpenAPI regeneration
-export interface BookExternalLinkDto {
-  id: string;
-  bookId: string;
-  sourceName: string;
-  url: string;
-  externalId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+// Book external link type (from generated OpenAPI types)
+export type BookExternalLinkDto = components["schemas"]["BookExternalLinkDto"];
 
 // Book metadata lock types (re-export from generated types)
 export type BookMetadataLocks = components["schemas"]["BookMetadataLocks"];

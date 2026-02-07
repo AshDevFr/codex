@@ -50,35 +50,14 @@ export type MetadataApplyRequest =
 export type MetadataApplyResponse =
   components["schemas"]["MetadataApplyResponse"];
 export type SkippedField = components["schemas"]["SkippedField"];
-// Auto-match types (defined manually until OpenAPI types are regenerated)
-export interface MetadataAutoMatchRequest {
-  pluginId: string;
-  query?: string;
-}
-
-export interface MetadataAutoMatchResponse {
-  success: boolean;
-  matchedResult?: PluginSearchResultDto;
-  appliedFields: string[];
-  skippedFields: SkippedField[];
-  message: string;
-  externalUrl?: string;
-}
-
-// Task-based auto-match response
-export interface EnqueueAutoMatchResponse {
-  success: boolean;
-  tasksEnqueued: number;
-  taskIds: string[];
-  message: string;
-}
-
-// Search title response (preprocessed title for metadata search)
-export interface SearchTitleResponse {
-  originalTitle: string;
-  searchTitle: string;
-  rulesApplied: number;
-}
+// Auto-match types (from generated OpenAPI types)
+export type MetadataAutoMatchRequest =
+  components["schemas"]["MetadataAutoMatchRequest"];
+export type MetadataAutoMatchResponse =
+  components["schemas"]["MetadataAutoMatchResponse"];
+export type EnqueueAutoMatchResponse =
+  components["schemas"]["EnqueueAutoMatchResponse"];
+export type SearchTitleResponse = components["schemas"]["SearchTitleResponse"];
 
 // Plugin Failure types
 export type PluginFailureDto = components["schemas"]["PluginFailureDto"];
