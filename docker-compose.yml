@@ -92,6 +92,8 @@ services:
       - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
       - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
       - ./plugins/metadata-openlibrary/dist:/opt/codex/plugins/metadata-openlibrary/dist:ro
+      - ./plugins/recommendations-anilist/dist:/opt/codex/plugins/recommendations-anilist/dist:ro
+      - ./plugins/sync-anilist/dist:/opt/codex/plugins/sync-anilist/dist:ro
     environment:
       RUST_BACKTRACE: 1
       # Email configuration for Mailhog
@@ -148,6 +150,8 @@ services:
       - ./plugins/metadata-mangabaka/dist:/opt/codex/plugins/metadata-mangabaka/dist:ro
       - ./plugins/metadata-echo/dist:/opt/codex/plugins/metadata-echo/dist:ro
       - ./plugins/metadata-openlibrary/dist:/opt/codex/plugins/metadata-openlibrary/dist:ro
+      - ./plugins/recommendations-anilist/dist:/opt/codex/plugins/recommendations-anilist/dist:ro
+      - ./plugins/sync-anilist/dist:/opt/codex/plugins/sync-anilist/dist:ro
     command:
       [
         "cargo",
@@ -207,6 +211,8 @@ services:
       - /plugins/metadata-echo/node_modules
       - /plugins/metadata-mangabaka/node_modules
       - /plugins/metadata-openlibrary/node_modules
+      - /plugins/recommendations-anilist/node_modules
+      - /plugins/sync-anilist/node_modules
     command:
       - sh
       - -c
@@ -216,13 +222,17 @@ services:
         cd /plugins/metadata-echo && npm install && npm run build &&
         cd /plugins/metadata-mangabaka && npm install && npm run build &&
         cd /plugins/metadata-openlibrary && npm install && npm run build &&
+        cd /plugins/recommendations-anilist && npm install && npm run build &&
+        cd /plugins/sync-anilist && npm install && npm run build &&
         echo 'Initial build complete. Watching for changes...' &&
         npm install -g concurrently &&
-        concurrently --names 'sdk,metadata-echo,metadata-mangabaka' --prefix-colors 'blue,green,yellow' \
+        concurrently --names 'sdk,echo,mangabaka,openlibrary,rec-anilist,sync-anilist' --prefix-colors 'blue,green,yellow,magenta,cyan,red' \
           "cd /plugins/sdk-typescript && npm run dev" \
           "cd /plugins/metadata-echo && npm run dev" \
           "cd /plugins/metadata-mangabaka && npm run dev" \
-          "cd /plugins/metadata-openlibrary && npm run dev"
+          "cd /plugins/metadata-openlibrary && npm run dev" \
+          "cd /plugins/recommendations-anilist && npm run dev" \
+          "cd /plugins/sync-anilist && npm run dev"
     networks:
       - codex-network
     profiles:
