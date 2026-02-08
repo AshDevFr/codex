@@ -6,17 +6,15 @@ import {
   Group,
   Modal,
   Paper,
+  SimpleGrid,
   Stack,
   Text,
   Tooltip,
 } from "@mantine/core";
-import {
-  IconCheck,
-  IconCopy,
-  IconExternalLink,
-  IconInfoCircle,
-} from "@tabler/icons-react";
+import { IconCheck, IconCopy, IconInfoCircle } from "@tabler/icons-react";
+
 import type { FullSeries } from "@/types";
+import { ExternalIds } from "./ExternalIds";
 
 export interface SeriesInfoModalProps {
   opened: boolean;
@@ -32,25 +30,6 @@ function formatDateTime(dateString: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function formatSourceName(source: string): string {
-  // Handle plugin sources: "plugin:mangabaka" -> "Mangabaka"
-  if (source.startsWith("plugin:")) {
-    const pluginName = source.slice(7);
-    return pluginName.charAt(0).toUpperCase() + pluginName.slice(1);
-  }
-  // Handle known sources
-  switch (source) {
-    case "comicinfo":
-      return "ComicInfo";
-    case "epub":
-      return "EPUB";
-    case "manual":
-      return "Manual";
-    default:
-      return source.charAt(0).toUpperCase() + source.slice(1);
-  }
 }
 
 interface InfoRowProps {
@@ -134,7 +113,7 @@ export function SeriesInfoModal({
           <Text fw={500}>Series Information</Text>
         </Group>
       }
-      size="lg"
+      size="xl"
       centered
       zIndex={1000}
       overlayProps={{
@@ -143,76 +122,142 @@ export function SeriesInfoModal({
       }}
     >
       <Stack gap="md">
-        {/* Basic Info */}
-        <Paper p="sm" radius="sm" withBorder>
-          <Stack gap="xs">
-            <Text size="sm" fw={600} c="dimmed" tt="uppercase">
-              Basic Information
-            </Text>
-            <InfoRow label="Title" value={metadata?.title} />
-            {metadata?.titleSort && (
-              <InfoRow label="Sort Title" value={metadata.titleSort} />
-            )}
-            <InfoRow label="Library" value={series.libraryName} />
-            <InfoRow label="Book Count" value={series.bookCount} />
-            {series.unreadCount !== null &&
-              series.unreadCount !== undefined && (
-                <InfoRow label="Unread" value={series.unreadCount} />
-              )}
-            {metadata?.year && <InfoRow label="Year" value={metadata.year} />}
-            {metadata?.status && (
-              <InfoRow
-                label="Status"
-                value={
-                  metadata.status.charAt(0).toUpperCase() +
-                  metadata.status.slice(1)
-                }
-              />
-            )}
-            {metadata?.readingDirection && (
-              <InfoRow
-                label="Reading Direction"
-                value={
-                  metadata.readingDirection === "ltr"
-                    ? "Left to Right"
-                    : metadata.readingDirection === "rtl"
-                      ? "Right to Left"
-                      : metadata.readingDirection === "ttb"
-                        ? "Top to Bottom"
-                        : metadata.readingDirection === "webtoon"
-                          ? "Webtoon"
-                          : metadata.readingDirection
-                }
-              />
-            )}
-          </Stack>
-        </Paper>
-
-        {/* Publishing Info */}
-        {(metadata?.publisher ||
-          metadata?.imprint ||
-          metadata?.language ||
-          metadata?.ageRating) && (
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+          {/* Basic Info */}
           <Paper p="sm" radius="sm" withBorder>
             <Stack gap="xs">
               <Text size="sm" fw={600} c="dimmed" tt="uppercase">
-                Publishing
+                Basic Information
               </Text>
-              {metadata?.publisher && (
-                <InfoRow label="Publisher" value={metadata.publisher} />
+              <InfoRow label="Title" value={metadata?.title} />
+              {metadata?.titleSort && (
+                <InfoRow label="Sort Title" value={metadata.titleSort} />
               )}
-              {metadata?.imprint && (
-                <InfoRow label="Imprint" value={metadata.imprint} />
+              <InfoRow label="Library" value={series.libraryName} />
+              <InfoRow label="Book Count" value={series.bookCount} />
+              {series.unreadCount !== null &&
+                series.unreadCount !== undefined && (
+                  <InfoRow label="Unread" value={series.unreadCount} />
+                )}
+              {metadata?.year && <InfoRow label="Year" value={metadata.year} />}
+              {metadata?.status && (
+                <InfoRow
+                  label="Status"
+                  value={
+                    metadata.status.charAt(0).toUpperCase() +
+                    metadata.status.slice(1)
+                  }
+                />
               )}
-              {metadata?.language && (
-                <InfoRow label="Language" value={metadata.language} />
-              )}
-              {metadata?.ageRating != null && (
-                <InfoRow label="Age Rating" value={`${metadata.ageRating}+`} />
+              {metadata?.readingDirection && (
+                <InfoRow
+                  label="Reading Direction"
+                  value={
+                    metadata.readingDirection === "ltr"
+                      ? "Left to Right"
+                      : metadata.readingDirection === "rtl"
+                        ? "Right to Left"
+                        : metadata.readingDirection === "ttb"
+                          ? "Top to Bottom"
+                          : metadata.readingDirection === "webtoon"
+                            ? "Webtoon"
+                            : metadata.readingDirection
+                  }
+                />
               )}
             </Stack>
           </Paper>
-        )}
+
+          {/* Right column: Publishing + Cover + Timestamps stacked */}
+          <Stack gap="md">
+            {/* Publishing Info */}
+            {(metadata?.publisher ||
+              metadata?.imprint ||
+              metadata?.language ||
+              metadata?.ageRating) && (
+              <Paper p="sm" radius="sm" withBorder>
+                <Stack gap="xs">
+                  <Text size="sm" fw={600} c="dimmed" tt="uppercase">
+                    Publishing
+                  </Text>
+                  {metadata?.publisher && (
+                    <InfoRow label="Publisher" value={metadata.publisher} />
+                  )}
+                  {metadata?.imprint && (
+                    <InfoRow label="Imprint" value={metadata.imprint} />
+                  )}
+                  {metadata?.language && (
+                    <InfoRow label="Language" value={metadata.language} />
+                  )}
+                  {metadata?.ageRating != null && (
+                    <InfoRow
+                      label="Age Rating"
+                      value={`${metadata.ageRating}+`}
+                    />
+                  )}
+                </Stack>
+              </Paper>
+            )}
+
+            {/* Timestamps */}
+            <Paper p="sm" radius="sm" withBorder>
+              <Stack gap="xs">
+                <Text size="sm" fw={600} c="dimmed" tt="uppercase">
+                  Timestamps
+                </Text>
+                <InfoRow
+                  label="Added"
+                  value={formatDateTime(series.createdAt)}
+                />
+                <InfoRow
+                  label="Updated"
+                  value={formatDateTime(series.updatedAt)}
+                />
+                {metadata?.createdAt && (
+                  <InfoRow
+                    label="Metadata Created"
+                    value={formatDateTime(metadata.createdAt)}
+                  />
+                )}
+                {metadata?.updatedAt && (
+                  <InfoRow
+                    label="Metadata Updated"
+                    value={formatDateTime(metadata.updatedAt)}
+                  />
+                )}
+              </Stack>
+            </Paper>
+
+            {/* Cover Info */}
+            <Paper p="sm" radius="sm" withBorder>
+              <Stack gap="xs">
+                <Text size="sm" fw={600} c="dimmed" tt="uppercase">
+                  Cover
+                </Text>
+                <Group justify="space-between" wrap="nowrap" gap="md">
+                  <Text size="sm" c="dimmed">
+                    Custom Cover
+                  </Text>
+                  <Badge
+                    color={series.hasCustomCover ? "green" : "gray"}
+                    variant="light"
+                    size="sm"
+                  >
+                    {series.hasCustomCover ? "Yes" : "No"}
+                  </Badge>
+                </Group>
+                {series.selectedCoverSource && (
+                  <InfoRow
+                    label="Cover Source"
+                    value={series.selectedCoverSource}
+                  />
+                )}
+              </Stack>
+            </Paper>
+          </Stack>
+        </SimpleGrid>
+
+        {/* Full-width sections below the grid */}
 
         {/* File System Info */}
         {series.path && (
@@ -226,56 +271,6 @@ export function SeriesInfoModal({
           </Paper>
         )}
 
-        {/* Timestamps */}
-        <Paper p="sm" radius="sm" withBorder>
-          <Stack gap="xs">
-            <Text size="sm" fw={600} c="dimmed" tt="uppercase">
-              Timestamps
-            </Text>
-            <InfoRow label="Added" value={formatDateTime(series.createdAt)} />
-            <InfoRow label="Updated" value={formatDateTime(series.updatedAt)} />
-            {metadata?.createdAt && (
-              <InfoRow
-                label="Metadata Created"
-                value={formatDateTime(metadata.createdAt)}
-              />
-            )}
-            {metadata?.updatedAt && (
-              <InfoRow
-                label="Metadata Updated"
-                value={formatDateTime(metadata.updatedAt)}
-              />
-            )}
-          </Stack>
-        </Paper>
-
-        {/* Cover Info */}
-        <Paper p="sm" radius="sm" withBorder>
-          <Stack gap="xs">
-            <Text size="sm" fw={600} c="dimmed" tt="uppercase">
-              Cover
-            </Text>
-            <Group justify="space-between" wrap="nowrap" gap="md">
-              <Text size="sm" c="dimmed">
-                Custom Cover
-              </Text>
-              <Badge
-                color={series.hasCustomCover ? "green" : "gray"}
-                variant="light"
-                size="sm"
-              >
-                {series.hasCustomCover ? "Yes" : "No"}
-              </Badge>
-            </Group>
-            {series.selectedCoverSource && (
-              <InfoRow
-                label="Cover Source"
-                value={series.selectedCoverSource}
-              />
-            )}
-          </Stack>
-        </Paper>
-
         {/* External Sources */}
         {series.externalIds && series.externalIds.length > 0 && (
           <Paper p="sm" radius="sm" withBorder>
@@ -283,67 +278,7 @@ export function SeriesInfoModal({
               <Text size="sm" fw={600} c="dimmed" tt="uppercase">
                 External Sources
               </Text>
-              {series.externalIds.map((extId) => (
-                <Group
-                  key={extId.id}
-                  justify="space-between"
-                  wrap="nowrap"
-                  gap="md"
-                >
-                  <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
-                    {formatSourceName(extId.source)}
-                  </Text>
-                  <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-                    <Code
-                      style={{
-                        wordBreak: "break-all",
-                        whiteSpace: "normal",
-                      }}
-                    >
-                      {extId.externalId}
-                    </Code>
-                    <CopyButton value={extId.externalId}>
-                      {({ copied, copy }) => (
-                        <Tooltip
-                          label={copied ? "Copied" : "Copy"}
-                          withArrow
-                          zIndex={1100}
-                        >
-                          <ActionIcon
-                            size="xs"
-                            variant="subtle"
-                            color={copied ? "teal" : "gray"}
-                            onClick={copy}
-                            style={{ flexShrink: 0 }}
-                          >
-                            {copied ? (
-                              <IconCheck size={14} />
-                            ) : (
-                              <IconCopy size={14} />
-                            )}
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                    </CopyButton>
-                    {extId.externalUrl && (
-                      <Tooltip label="Open in new tab" withArrow zIndex={1100}>
-                        <ActionIcon
-                          size="xs"
-                          variant="subtle"
-                          color="blue"
-                          component="a"
-                          href={extId.externalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ flexShrink: 0 }}
-                        >
-                          <IconExternalLink size={14} />
-                        </ActionIcon>
-                      </Tooltip>
-                    )}
-                  </Group>
-                </Group>
-              ))}
+              <ExternalIds externalIds={series.externalIds} />
             </Stack>
           </Paper>
         )}

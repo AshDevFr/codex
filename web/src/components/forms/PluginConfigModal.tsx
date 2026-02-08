@@ -5,23 +5,28 @@ import {
   Card,
   Chip,
   Code,
+  CopyButton,
   Divider,
   Group,
   Modal,
   MultiSelect,
   Paper,
+  PasswordInput,
   Stack,
   Switch,
   Tabs,
   Text,
   Textarea,
+  TextInput,
   Tooltip,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import {
   IconCode,
+  IconCopy,
   IconInfoCircle,
+  IconKey,
   IconSearch,
   IconSettings,
   IconShield,
@@ -51,6 +56,10 @@ function isMetadataProvider(plugin: PluginDto): boolean {
 
 function isSyncProvider(plugin: PluginDto): boolean {
   return plugin.manifest?.capabilities?.userReadSync === true;
+}
+
+function isOAuthPlugin(plugin: PluginDto): boolean {
+  return plugin.manifest?.oauth != null;
 }
 
 function hasManifest(plugin: PluginDto): boolean {
@@ -275,6 +284,9 @@ interface PluginConfigFormValues {
   searchQueryTemplate: string;
   useExistingExternalId: boolean;
   metadataTargets: MetadataTarget[];
+  // OAuth config (OAuth plugins only)
+  oauthClientId: string;
+  oauthClientSecret: string;
 }
 
 // =============================================================================
@@ -292,6 +304,7 @@ function PluginConfigContent({
 }) {
   const queryClient = useQueryClient();
   const isMeta = isMetadataProvider(plugin);
+  const isOAuth = isOAuthPlugin(plugin);
   const [activeTab, setActiveTab] = useState<string | null>("permissions");
 
   // Parse initial preprocessing rules from plugin
@@ -330,6 +343,17 @@ function PluginConfigContent({
         t === "series" ? canSeries : canBook,
       ) as MetadataTarget[]);
 
+  // Extract OAuth config from plugin.config JSON
+  const pluginConfig = plugin.config as Record<string, unknown> | null;
+  const initialOAuthClientId =
+    typeof pluginConfig?.oauth_client_id === "string"
+      ? pluginConfig.oauth_client_id
+      : "";
+  const initialOAuthClientSecret =
+    typeof pluginConfig?.oauth_client_secret === "string"
+      ? pluginConfig.oauth_client_secret
+      : "";
+
   // Form for all fields
   const form = useForm<PluginConfigFormValues>({
     initialValues: {
@@ -342,6 +366,9 @@ function PluginConfigContent({
       searchQueryTemplate: plugin.searchQueryTemplate ?? "",
       useExistingExternalId: plugin.useExistingExternalId ?? true,
       metadataTargets: initialMetadataTargets,
+      // OAuth config
+      oauthClientId: initialOAuthClientId,
+      oauthClientSecret: initialOAuthClientSecret,
     },
   });
 
@@ -372,6 +399,23 @@ function PluginConfigContent({
         payload.autoMatchConditions = autoMatchConditions;
         payload.useExistingExternalId = form.values.useExistingExternalId;
         payload.metadataTargets = form.values.metadataTargets;
+      }
+
+      // Merge OAuth config into plugin.config JSON
+      if (isOAuth) {
+        const existingConfig = (plugin.config as Record<string, unknown>) ?? {};
+        const config: Record<string, unknown> = { ...existingConfig };
+        if (form.values.oauthClientId.trim()) {
+          config.oauth_client_id = form.values.oauthClientId.trim();
+        } else {
+          delete config.oauth_client_id;
+        }
+        if (form.values.oauthClientSecret.trim()) {
+          config.oauth_client_secret = form.values.oauthClientSecret.trim();
+        } else {
+          delete config.oauth_client_secret;
+        }
+        payload.config = config;
       }
 
       return pluginsApi.update(plugin.id, payload);
@@ -406,6 +450,11 @@ function PluginConfigContent({
           <Tabs.Tab value="permissions" leftSection={<IconShield size={14} />}>
             Permissions
           </Tabs.Tab>
+          {isOAuth && (
+            <Tabs.Tab value="oauth" leftSection={<IconKey size={14} />}>
+              OAuth
+            </Tabs.Tab>
+          )}
           {isMeta && (
             <>
               <Tabs.Tab value="template" leftSection={<IconCode size={14} />}>
@@ -486,6 +535,113 @@ function PluginConfigContent({
               )}
             </Stack>
           </Tabs.Panel>
+
+          {/* ============================================================= */}
+          {/* OAuth Tab (OAuth plugins only)                                */}
+          {/* ============================================================= */}
+          {isOAuth && (
+            <Tabs.Panel value="oauth">
+              <Stack gap="md">
+                {plugin.manifest?.adminSetupInstructions && (
+                  <Alert
+                    icon={<IconInfoCircle size={16} />}
+                    color="blue"
+                    variant="light"
+                  >
+                    <Text size="sm" style={{ whiteSpace: "pre-line" }}>
+                      {plugin.manifest.adminSetupInstructions}
+                    </Text>
+                  </Alert>
+                )}
+
+                <Paper p="sm" withBorder>
+                  <Stack gap="xs">
+                    <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                      OAuth Callback URL
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Set this as the redirect URL in your OAuth provider
+                      settings.
+                    </Text>
+                    <Group gap="xs">
+                      <Code style={{ fontSize: 12, flex: 1 }}>
+                        {`${window.location.origin}/api/v1/user/plugins/oauth/callback`}
+                      </Code>
+                      <CopyButton
+                        value={`${window.location.origin}/api/v1/user/plugins/oauth/callback`}
+                      >
+                        {({ copied, copy }) => (
+                          <Tooltip label={copied ? "Copied" : "Copy"} withArrow>
+                            <Button
+                              size="compact-xs"
+                              variant="subtle"
+                              onClick={copy}
+                              leftSection={<IconCopy size={14} />}
+                            >
+                              {copied ? "Copied" : "Copy"}
+                            </Button>
+                          </Tooltip>
+                        )}
+                      </CopyButton>
+                    </Group>
+                  </Stack>
+                </Paper>
+
+                <TextInput
+                  label="OAuth Client ID"
+                  placeholder="Enter the client ID from your OAuth provider"
+                  description="Required for OAuth flow. Users cannot connect via OAuth without this."
+                  {...form.getInputProps("oauthClientId")}
+                />
+
+                <PasswordInput
+                  label="OAuth Client Secret"
+                  placeholder="Enter the client secret (optional for some providers)"
+                  description="Some providers require a client secret for token exchange."
+                  {...form.getInputProps("oauthClientSecret")}
+                />
+
+                {plugin.manifest?.oauth && (
+                  <Paper p="sm" withBorder bg="var(--mantine-color-dark-7)">
+                    <Stack gap="xs">
+                      <Text size="xs" fw={500}>
+                        OAuth Endpoints (from manifest)
+                      </Text>
+                      <Group gap="xl">
+                        <div>
+                          <Text size="xs" c="dimmed">
+                            Authorization URL
+                          </Text>
+                          <Text size="xs" ff="monospace">
+                            {plugin.manifest.oauth.authorizationUrl}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="xs" c="dimmed">
+                            Token URL
+                          </Text>
+                          <Text size="xs" ff="monospace">
+                            {plugin.manifest.oauth.tokenUrl}
+                          </Text>
+                        </div>
+                      </Group>
+                      {plugin.manifest.oauth.scopes &&
+                        plugin.manifest.oauth.scopes.length > 0 && (
+                          <div>
+                            <Text size="xs" c="dimmed">
+                              Scopes
+                            </Text>
+                            <Text size="xs" ff="monospace">
+                              {plugin.manifest.oauth.scopes.join(", ")}
+                            </Text>
+                          </div>
+                        )}
+                    </Stack>
+                  </Paper>
+                )}
+              </Stack>
+            </Tabs.Panel>
+          )}
 
           {/* ============================================================= */}
           {/* Search Template Tab (metadata providers only)                  */}

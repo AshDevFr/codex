@@ -12,7 +12,7 @@ use super::super::dto::{
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::entities::plugins::PluginPermission;
-use crate::db::repositories::{PluginFailuresRepository, PluginsRepository};
+use crate::db::repositories::{PluginFailuresRepository, PluginsRepository, UserPluginsRepository};
 use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::services::PluginHealthStatus;
 use crate::services::plugin::process::{allowed_commands_description, is_command_allowed};
@@ -88,8 +88,23 @@ pub async fn list_plugins(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get plugins: {}", e)))?;
 
+    let user_counts = UserPluginsRepository::count_users_per_plugin(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to count plugin users: {}", e)))?;
+
     let total = plugins.len();
-    let dtos: Vec<PluginDto> = plugins.into_iter().map(Into::into).collect();
+    let dtos: Vec<PluginDto> = plugins
+        .into_iter()
+        .map(|p| {
+            let id = p.id;
+            let is_user_plugin = p.plugin_type == "user";
+            let mut dto: PluginDto = p.into();
+            if is_user_plugin {
+                dto.user_count = Some(*user_counts.get(&id).unwrap_or(&0));
+            }
+            dto
+        })
+        .collect();
 
     Ok(Json(PluginsListResponse {
         plugins: dtos,

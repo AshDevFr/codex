@@ -1,3 +1,4 @@
+import type { TaskResponse } from "@/types";
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
@@ -14,6 +15,9 @@ export type UserPluginsListResponse =
 export type OAuthStartResponse = components["schemas"]["OAuthStartResponse"];
 export type UpdateUserPluginConfigRequest =
   components["schemas"]["UpdateUserPluginConfigRequest"];
+export type SyncTriggerResponse = components["schemas"]["SyncTriggerResponse"];
+export type SyncStatusDto = components["schemas"]["SyncStatusDto"];
+export type ConfigSchemaDto = components["schemas"]["ConfigSchemaDto"];
 
 // =============================================================================
 // API Client
@@ -88,6 +92,54 @@ export const userPluginsApi = {
     const response = await api.post<OAuthStartResponse>(
       `/user/plugins/${pluginId}/oauth/start`,
     );
+    return response.data;
+  },
+
+  /**
+   * Trigger a sync operation for a plugin
+   */
+  triggerSync: async (pluginId: string): Promise<SyncTriggerResponse> => {
+    const response = await api.post<SyncTriggerResponse>(
+      `/user/plugins/${pluginId}/sync`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Get sync status for a plugin
+   * Pass live=true to query the plugin process for real-time counts (more expensive)
+   */
+  getSyncStatus: async (
+    pluginId: string,
+    live = false,
+  ): Promise<SyncStatusDto> => {
+    const response = await api.get<SyncStatusDto>(
+      `/user/plugins/${pluginId}/sync/status`,
+      { params: live ? { live: true } : undefined },
+    );
+    return response.data;
+  },
+
+  /**
+   * Set user credentials (personal access token)
+   * Used when OAuth is not configured by admin
+   */
+  setCredentials: async (
+    pluginId: string,
+    accessToken: string,
+  ): Promise<UserPluginDto> => {
+    const response = await api.post<UserPluginDto>(
+      `/user/plugins/${pluginId}/credentials`,
+      { accessToken },
+    );
+    return response.data;
+  },
+
+  /**
+   * Get a task by ID (for polling sync task completion)
+   */
+  getTask: async (taskId: string): Promise<TaskResponse> => {
+    const response = await api.get<TaskResponse>(`/tasks/${taskId}`);
     return response.data;
   },
 };

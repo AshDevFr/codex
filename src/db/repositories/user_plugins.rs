@@ -92,6 +92,28 @@ impl UserPluginsRepository {
         Ok(instances)
     }
 
+    /// Count the number of users who have enabled each plugin.
+    /// Returns a map from plugin_id to user count (only includes plugins with at least one user).
+    pub async fn count_users_per_plugin(
+        db: &DatabaseConnection,
+    ) -> Result<std::collections::HashMap<Uuid, u64>> {
+        use sea_orm::QuerySelect;
+
+        let results: Vec<(Uuid, i64)> = UserPlugins::find()
+            .select_only()
+            .column(user_plugins::Column::PluginId)
+            .column_as(user_plugins::Column::Id.count(), "user_count")
+            .group_by(user_plugins::Column::PluginId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        Ok(results
+            .into_iter()
+            .map(|(plugin_id, count)| (plugin_id, count as u64))
+            .collect())
+    }
+
     // =========================================================================
     // Create Operations
     // =========================================================================

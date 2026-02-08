@@ -270,9 +270,13 @@ pub struct PluginManifest {
     #[serde(default)]
     pub required_credentials: Vec<CredentialField>,
 
-    /// JSON Schema for plugin-specific configuration
+    /// JSON Schema for plugin-specific configuration (admin-facing)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_schema: Option<Value>,
+
+    /// Configuration schema for per-user settings (user-facing)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_config_schema: Option<Value>,
 
     /// Plugin type: "system" (admin-only metadata) or "user" (per-user integrations)
     #[serde(default)]
@@ -286,9 +290,13 @@ pub struct PluginManifest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_description: Option<String>,
 
-    /// Setup instructions/help text for the OAuth flow
+    /// Admin-facing setup instructions (e.g., how to create OAuth app, set client ID)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub setup_instructions: Option<String>,
+    pub admin_setup_instructions: Option<String>,
+
+    /// User-facing setup instructions (e.g., how to connect or get a personal token)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_setup_instructions: Option<String>,
 }
 
 /// Content types that a metadata provider can support
@@ -1914,7 +1922,8 @@ mod tests {
                 "pkce": false
             },
             "userDescription": "Sync reading progress with AniList",
-            "setupInstructions": "Click Connect to link your AniList account"
+            "adminSetupInstructions": "Create an AniList app at ...",
+            "userSetupInstructions": "Click Connect to link your AniList account"
         });
 
         let manifest: PluginManifest = serde_json::from_value(json).unwrap();
@@ -1934,7 +1943,8 @@ mod tests {
             manifest.user_description.unwrap(),
             "Sync reading progress with AniList"
         );
-        assert!(manifest.setup_instructions.is_some());
+        assert!(manifest.admin_setup_instructions.is_some());
+        assert!(manifest.user_setup_instructions.is_some());
     }
 
     #[test]

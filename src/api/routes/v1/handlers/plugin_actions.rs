@@ -43,8 +43,9 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use sea_orm::prelude::Decimal;
 use serde::Deserialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
 use utoipa::OpenApi;
@@ -765,10 +766,15 @@ pub async fn preview_series_metadata(
     ));
 
     // Alternate Titles
-    let current_alt_titles: Vec<serde_json::Value> = current_alternate_titles
+    let mut current_alt_titles: Vec<serde_json::Value> = current_alternate_titles
         .iter()
         .map(|t| serde_json::json!({"label": t.label, "title": t.title}))
         .collect();
+    current_alt_titles.sort_by(|a, b| {
+        let a_title = a["title"].as_str().unwrap_or("");
+        let b_title = b["title"].as_str().unwrap_or("");
+        a_title.cmp(b_title)
+    });
     fields.push(build_field_preview(
         "alternateTitles",
         if current_alt_titles.is_empty() {
@@ -779,16 +785,36 @@ pub async fn preview_series_metadata(
         if plugin_metadata.alternate_titles.is_empty() {
             None
         } else {
-            let proposed_alt_titles: Vec<serde_json::Value> = plugin_metadata
+            // Generate labels matching the apply logic: language > title_type > "alternate",
+            // with dedup suffixes for duplicates (e.g., "en", "en-2", "en-3")
+            let mut label_counts: HashMap<String, u32> = HashMap::new();
+            let mut proposed_alt_titles: Vec<serde_json::Value> = plugin_metadata
                 .alternate_titles
                 .iter()
                 .map(|t| {
+                    let base_label = t
+                        .language
+                        .clone()
+                        .or_else(|| t.title_type.clone())
+                        .unwrap_or_else(|| "alternate".to_string());
+                    let count = label_counts.entry(base_label.clone()).or_insert(0);
+                    *count += 1;
+                    let label = if *count == 1 {
+                        base_label
+                    } else {
+                        format!("{}-{}", base_label, count)
+                    };
                     serde_json::json!({
-                        "label": t.title_type.as_deref().unwrap_or("Alternative"),
+                        "label": label,
                         "title": t.title
                     })
                 })
                 .collect();
+            proposed_alt_titles.sort_by(|a, b| {
+                let a_title = a["title"].as_str().unwrap_or("");
+                let b_title = b["title"].as_str().unwrap_or("");
+                a_title.cmp(b_title)
+            });
             Some(serde_json::json!(proposed_alt_titles))
         },
         current_metadata
@@ -889,14 +915,18 @@ pub async fn preview_series_metadata(
     ));
 
     // Genres
-    let current_genre_names: Vec<String> = current_genres.iter().map(|g| g.name.clone()).collect();
+    let mut current_genre_names: Vec<String> =
+        current_genres.iter().map(|g| g.name.clone()).collect();
+    current_genre_names.sort();
     fields.push(build_field_preview(
         "genres",
         Some(serde_json::json!(current_genre_names)),
         if plugin_metadata.genres.is_empty() {
             None
         } else {
-            Some(serde_json::json!(plugin_metadata.genres))
+            let mut proposed_genres = plugin_metadata.genres.clone();
+            proposed_genres.sort();
+            Some(serde_json::json!(proposed_genres))
         },
         current_metadata
             .as_ref()
@@ -911,14 +941,17 @@ pub async fn preview_series_metadata(
     ));
 
     // Tags
-    let current_tag_names: Vec<String> = current_tags.iter().map(|t| t.name.clone()).collect();
+    let mut current_tag_names: Vec<String> = current_tags.iter().map(|t| t.name.clone()).collect();
+    current_tag_names.sort();
     fields.push(build_field_preview(
         "tags",
         Some(serde_json::json!(current_tag_names)),
         if plugin_metadata.tags.is_empty() {
             None
         } else {
-            Some(serde_json::json!(plugin_metadata.tags))
+            let mut proposed_tags = plugin_metadata.tags.clone();
+            proposed_tags.sort();
+            Some(serde_json::json!(proposed_tags))
         },
         current_metadata
             .as_ref()
@@ -1021,21 +1054,46 @@ pub async fn preview_series_metadata(
     let current_links = ExternalLinkRepository::get_for_series(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get external links: {}", e)))?;
-    let current_link_sources: Vec<String> = current_links
+    // Build set of normalized source names the plugin provides, to filter current links
+    let proposed_link_sources: HashSet<String> = plugin_metadata
+        .external_links
         .iter()
-        .map(|l| l.source_name.clone())
+        .map(|l| l.label.to_lowercase().trim().to_string())
         .collect();
+    // Filter current links to only include sources the plugin provides
+    let mut current_link_values: Vec<serde_json::Value> = current_links
+        .iter()
+        .filter(|l| proposed_link_sources.contains(&l.source_name))
+        .map(|l| serde_json::json!({"label": l.source_name.clone(), "url": l.url.clone()}))
+        .collect();
+    current_link_values.sort_by(|a, b| {
+        let a_label = a["label"].as_str().unwrap_or("");
+        let b_label = b["label"].as_str().unwrap_or("");
+        a_label.cmp(b_label)
+    });
     fields.push(build_field_preview(
         "externalLinks",
-        Some(serde_json::json!(current_link_sources)),
+        if current_link_values.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(current_link_values))
+        },
         if plugin_metadata.external_links.is_empty() {
             None
         } else {
-            let proposed_links: Vec<serde_json::Value> = plugin_metadata
+            let mut proposed_links: Vec<serde_json::Value> = plugin_metadata
                 .external_links
                 .iter()
-                .map(|l| serde_json::json!({"label": l.label, "url": l.url}))
+                .map(|l| {
+                    // Normalize label to lowercase to match DB storage
+                    serde_json::json!({"label": l.label.to_lowercase().trim(), "url": l.url.trim()})
+                })
                 .collect();
+            proposed_links.sort_by(|a, b| {
+                let a_label = a["label"].as_str().unwrap_or("");
+                let b_label = b["label"].as_str().unwrap_or("");
+                a_label.cmp(b_label)
+            });
             Some(serde_json::json!(proposed_links))
         },
         false, // Links don't have a lock field
@@ -1054,7 +1112,10 @@ pub async fn preview_series_metadata(
     let current_rating_info: Option<serde_json::Value> = current_ratings
         .iter()
         .find(|r| r.source_name == plugin.name.to_lowercase())
-        .map(|r| serde_json::json!({"score": r.rating, "source": r.source_name}));
+        .map(|r| {
+            let score: f64 = Decimal::to_string(&r.rating).parse().unwrap_or(0.0);
+            serde_json::json!({"score": score, "voteCount": r.vote_count, "source": r.source_name})
+        });
     fields.push(build_field_preview(
         "rating",
         current_rating_info,
@@ -1076,12 +1137,27 @@ pub async fn preview_series_metadata(
 
     // External Ratings array (multiple sources like AniList, MAL, etc.)
     if !plugin_metadata.external_ratings.is_empty() {
-        // Build current ratings map for comparison
-        let current_ext_ratings: Vec<serde_json::Value> = current_ratings
+        // Build set of sources the plugin is providing, so we only compare those
+        let proposed_sources: HashSet<&str> = plugin_metadata
+            .external_ratings
             .iter()
-            .map(|r| serde_json::json!({"score": r.rating, "source": r.source_name}))
+            .map(|r| r.source.as_str())
             .collect();
-        let proposed_ext_ratings: Vec<serde_json::Value> = plugin_metadata
+        // Filter current ratings to only include sources the plugin provides
+        let mut current_ext_ratings: Vec<serde_json::Value> = current_ratings
+            .iter()
+            .filter(|r| proposed_sources.contains(r.source_name.as_str()))
+            .map(|r| {
+                let score: f64 = Decimal::to_string(&r.rating).parse().unwrap_or(0.0);
+                serde_json::json!({"score": score, "voteCount": r.vote_count, "source": r.source_name})
+            })
+            .collect();
+        current_ext_ratings.sort_by(|a, b| {
+            let a_src = a["source"].as_str().unwrap_or("");
+            let b_src = b["source"].as_str().unwrap_or("");
+            a_src.cmp(b_src)
+        });
+        let mut proposed_ext_ratings: Vec<serde_json::Value> = plugin_metadata
             .external_ratings
             .iter()
             .map(|r| {
@@ -1092,6 +1168,11 @@ pub async fn preview_series_metadata(
                 })
             })
             .collect();
+        proposed_ext_ratings.sort_by(|a, b| {
+            let a_src = a["source"].as_str().unwrap_or("");
+            let b_src = b["source"].as_str().unwrap_or("");
+            a_src.cmp(b_src)
+        });
         fields.push(build_field_preview(
             "externalRatings",
             if current_ext_ratings.is_empty() {
@@ -1129,6 +1210,65 @@ pub async fn preview_series_metadata(
         &mut unchanged,
         &mut not_provided,
     ));
+
+    // External IDs (cross-reference IDs from other services like AniList, MAL)
+    if !plugin_metadata.external_ids.is_empty() {
+        let current_ext_ids = SeriesExternalIdRepository::get_for_series(&state.db, series_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to get external IDs: {}", e)))?;
+        // Filter current external IDs to only include sources the plugin provides
+        let proposed_ext_id_sources: HashSet<&str> = plugin_metadata
+            .external_ids
+            .iter()
+            .map(|e| e.source.as_str())
+            .collect();
+        let mut current_ext_id_sources: Vec<serde_json::Value> = current_ext_ids
+            .iter()
+            .filter(|e| proposed_ext_id_sources.contains(e.source.as_str()))
+            .map(|e| {
+                serde_json::json!({
+                    "source": e.source,
+                    "externalId": e.external_id
+                })
+            })
+            .collect();
+        current_ext_id_sources.sort_by(|a, b| {
+            let a_src = a["source"].as_str().unwrap_or("");
+            let b_src = b["source"].as_str().unwrap_or("");
+            a_src.cmp(b_src)
+        });
+        let mut proposed_ext_ids: Vec<serde_json::Value> = plugin_metadata
+            .external_ids
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "source": e.source,
+                    "externalId": e.external_id
+                })
+            })
+            .collect();
+        proposed_ext_ids.sort_by(|a, b| {
+            let a_src = a["source"].as_str().unwrap_or("");
+            let b_src = b["source"].as_str().unwrap_or("");
+            a_src.cmp(b_src)
+        });
+        fields.push(build_field_preview(
+            "externalIds",
+            if current_ext_id_sources.is_empty() {
+                None
+            } else {
+                Some(serde_json::json!(current_ext_id_sources))
+            },
+            Some(serde_json::json!(proposed_ext_ids)),
+            false, // External IDs don't have a lock field
+            has_permission(PluginPermission::MetadataWriteExternalIds),
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        ));
+    }
 
     Ok(Json(MetadataPreviewResponse {
         fields,
@@ -2748,5 +2888,143 @@ mod tests {
 
         assert_eq!(preview.status, FieldApplyStatus::NotProvided);
         assert_eq!(not_provided, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_sorted_arrays_are_unchanged() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        // Simulate what happens after sorting: same genres in same order should match
+        let mut current = vec!["Drama".to_string(), "Action".to_string()];
+        current.sort();
+        let mut proposed = vec!["Action".to_string(), "Drama".to_string()];
+        proposed.sort();
+
+        let preview = build_field_preview(
+            "genres",
+            Some(serde_json::json!(current)),
+            Some(serde_json::json!(proposed)),
+            false,
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::Unchanged);
+        assert_eq!(unchanged, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_sorted_objects_are_unchanged() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        // Simulate sorted external links with same structure
+        let mut current = vec![
+            serde_json::json!({"label": "Kitsu", "url": "https://kitsu.app/manga/123"}),
+            serde_json::json!({"label": "AniList", "url": "https://anilist.co/manga/456"}),
+        ];
+        current.sort_by(|a, b| {
+            a["label"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["label"].as_str().unwrap_or(""))
+        });
+
+        let mut proposed = vec![
+            serde_json::json!({"label": "AniList", "url": "https://anilist.co/manga/456"}),
+            serde_json::json!({"label": "Kitsu", "url": "https://kitsu.app/manga/123"}),
+        ];
+        proposed.sort_by(|a, b| {
+            a["label"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["label"].as_str().unwrap_or(""))
+        });
+
+        let preview = build_field_preview(
+            "externalLinks",
+            Some(serde_json::json!(current)),
+            Some(serde_json::json!(proposed)),
+            false,
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::Unchanged);
+        assert_eq!(unchanged, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_ratings_with_same_structure_are_unchanged() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        // Both current and proposed use the same structure (score as f64, voteCount, source)
+        let current = serde_json::json!({"score": 79.5, "voteCount": 100, "source": "mangabaka"});
+        let proposed = serde_json::json!({"score": 79.5, "voteCount": 100, "source": "mangabaka"});
+
+        let preview = build_field_preview(
+            "rating",
+            Some(current),
+            Some(proposed),
+            false,
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        assert_eq!(preview.status, FieldApplyStatus::Unchanged);
+        assert_eq!(unchanged, 1);
+    }
+
+    #[test]
+    fn test_build_field_preview_mismatched_structure_shows_will_apply() {
+        let mut will_apply = 0;
+        let mut locked = 0;
+        let mut no_permission = 0;
+        let mut unchanged = 0;
+        let mut not_provided = 0;
+
+        // Old bug: current lacked voteCount, proposed had it — this should detect the difference
+        let current = serde_json::json!({"score": 79.5, "source": "mangabaka"});
+        let proposed = serde_json::json!({"score": 79.5, "voteCount": 100, "source": "mangabaka"});
+
+        let preview = build_field_preview(
+            "rating",
+            Some(current),
+            Some(proposed),
+            false,
+            true,
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        );
+
+        // These are structurally different, so it should detect a change
+        assert_eq!(preview.status, FieldApplyStatus::WillApply);
+        assert_eq!(will_apply, 1);
     }
 }

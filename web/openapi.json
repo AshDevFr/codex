@@ -11493,8 +11493,8 @@
           }
         ],
         "responses": {
-          "302": {
-            "description": "Redirect to frontend with result"
+          "200": {
+            "description": "HTML page that auto-closes the popup"
           },
           "400": {
             "description": "Invalid callback parameters"
@@ -11625,6 +11625,59 @@
         }
       }
     },
+    "/api/v1/user/plugins/{plugin_id}/credentials": {
+      "post": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Set user credentials (personal access token) for a plugin",
+        "description": "Allows users to authenticate by pasting a personal access token\ninstead of going through the OAuth flow.",
+        "operationId": "set_user_credentials",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to set credentials for",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUserCredentialsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Credentials stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPluginDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
+          }
+        }
+      }
+    },
     "/api/v1/user/plugins/{plugin_id}/disable": {
       "post": {
         "tags": [
@@ -11738,6 +11791,98 @@
           },
           "404": {
             "description": "Plugin not found or not enabled"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/{plugin_id}/sync": {
+      "post": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Trigger a sync operation for a user plugin",
+        "description": "Enqueues a background sync task that will push/pull reading progress\nbetween Codex and the external service.",
+        "operationId": "trigger_sync",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to sync",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync task enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Plugin is not a sync provider or not connected"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
+          }
+        }
+      }
+    },
+    "/api/v1/user/plugins/{plugin_id}/sync/status": {
+      "get": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Get sync status for a user plugin",
+        "description": "Returns the current sync status including last sync time, health, and failure count.\nPass `?live=true` to also query the plugin process for live sync state (pending push/pull,\nconflicts, external entry count). This spawns the plugin process and is more expensive.",
+        "operationId": "get_sync_status",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID to check sync status",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "live",
+            "in": "query",
+            "description": "If true, spawn the plugin process and query live sync state\n(external count, pending push/pull, conflicts).\nDefault: false (returns database-stored metadata only).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plugin not enabled for this user"
           }
         }
       }
@@ -15418,6 +15563,7 @@
           "name",
           "displayName",
           "requiresOauth",
+          "oauthConfigured",
           "capabilities"
         ],
         "properties": {
@@ -15440,6 +15586,10 @@
             "type": "string",
             "description": "Plugin name"
           },
+          "oauthConfigured": {
+            "type": "boolean",
+            "description": "Whether the admin has configured OAuth credentials (client_id set)"
+          },
           "pluginId": {
             "type": "string",
             "format": "uuid",
@@ -15448,6 +15598,13 @@
           "requiresOauth": {
             "type": "boolean",
             "description": "Whether this plugin requires OAuth authentication"
+          },
+          "userSetupInstructions": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "User-facing setup instructions for the plugin"
           }
         }
       },
@@ -23589,6 +23746,43 @@
           "smart"
         ]
       },
+      "OAuthConfigDto": {
+        "type": "object",
+        "description": "OAuth 2.0 configuration from plugin manifest",
+        "required": [
+          "authorizationUrl",
+          "tokenUrl",
+          "pkce"
+        ],
+        "properties": {
+          "authorizationUrl": {
+            "type": "string",
+            "description": "OAuth 2.0 authorization endpoint URL"
+          },
+          "pkce": {
+            "type": "boolean",
+            "description": "Whether to use PKCE (Proof Key for Code Exchange)"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required OAuth scopes"
+          },
+          "tokenUrl": {
+            "type": "string",
+            "description": "OAuth 2.0 token endpoint URL"
+          },
+          "userInfoUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional user info endpoint URL"
+          }
+        }
+      },
       "OAuthStartResponse": {
         "type": "object",
         "description": "OAuth initiation response",
@@ -25837,6 +26031,10 @@
           "userReadSync": {
             "type": "boolean",
             "description": "Can sync user reading progress"
+          },
+          "userRecommendationProvider": {
+            "type": "boolean",
+            "description": "Can provide personalized recommendations"
           }
         }
       },
@@ -26057,6 +26255,16 @@
             "description": "Whether to skip search when external ID exists for this plugin",
             "example": true
           },
+          "userCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Number of users who have enabled this plugin (only for user-type plugins)",
+            "example": 3,
+            "minimum": 0
+          },
           "workingDirectory": {
             "type": [
               "string",
@@ -26247,6 +26455,13 @@
           "contentTypes"
         ],
         "properties": {
+          "adminSetupInstructions": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Admin-facing setup instructions (e.g., how to create OAuth app, set client ID)"
+          },
           "author": {
             "type": [
               "string",
@@ -26298,6 +26513,17 @@
             "type": "string",
             "description": "Unique identifier"
           },
+          "oauth": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OAuthConfigDto",
+                "description": "OAuth 2.0 configuration (if plugin supports OAuth)"
+              }
+            ]
+          },
           "protocolVersion": {
             "type": "string",
             "description": "Protocol version"
@@ -26315,6 +26541,13 @@
               "type": "string"
             },
             "description": "Supported scopes"
+          },
+          "userSetupInstructions": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "User-facing setup instructions (e.g., how to connect or get a personal token)"
           },
           "version": {
             "type": "string",
@@ -29201,6 +29434,19 @@
           }
         }
       },
+      "SetUserCredentialsRequest": {
+        "type": "object",
+        "description": "Request to set user credentials (e.g., personal access token)",
+        "required": [
+          "accessToken"
+        ],
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "The access token or API key to store"
+          }
+        }
+      },
       "SetUserRatingRequest": {
         "type": "object",
         "description": "Request to create or update a user's rating for a series",
@@ -29575,6 +29821,142 @@
               "type": "string"
             },
             "description": "Additional patterns to consider as \"generic\" titles (beyond defaults)"
+          }
+        }
+      },
+      "SyncStatusDto": {
+        "type": "object",
+        "description": "Sync status response for a user plugin",
+        "required": [
+          "pluginId",
+          "pluginName",
+          "connected",
+          "healthStatus",
+          "failureCount",
+          "enabled"
+        ],
+        "properties": {
+          "conflicts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of entries with conflicts on both sides (only with `?live=true`)",
+            "minimum": 0
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the plugin is connected and ready to sync"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the plugin is currently enabled"
+          },
+          "externalCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of entries tracked on the external service (only with `?live=true`)",
+            "minimum": 0
+          },
+          "failureCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of consecutive failures"
+          },
+          "healthStatus": {
+            "type": "string",
+            "description": "Health status"
+          },
+          "lastFailureAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last failure timestamp"
+          },
+          "lastSuccessAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last successful operation timestamp"
+          },
+          "lastSyncAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last successful sync timestamp"
+          },
+          "liveError": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error message if `?live=true` was requested but the plugin could not be queried"
+          },
+          "pendingPull": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of external entries that need to be pulled (only with `?live=true`)",
+            "minimum": 0
+          },
+          "pendingPush": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of local entries that need to be pushed (only with `?live=true`)",
+            "minimum": 0
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin ID"
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Plugin name"
+          }
+        }
+      },
+      "SyncStatusQuery": {
+        "type": "object",
+        "description": "Query parameters for sync status endpoint",
+        "properties": {
+          "live": {
+            "type": "boolean",
+            "description": "If true, spawn the plugin process and query live sync state\n(external count, pending push/pull, conflicts).\nDefault: false (returns database-stored metadata only)."
+          }
+        }
+      },
+      "SyncTriggerResponse": {
+        "type": "object",
+        "description": "Response from triggering a sync operation",
+        "required": [
+          "taskId",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable status message"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task ID for tracking the sync operation"
           }
         }
       },
@@ -32025,10 +32407,16 @@
           "connected",
           "healthStatus",
           "requiresOauth",
+          "oauthConfigured",
           "config",
+          "capabilities",
           "createdAt"
         ],
         "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/UserPluginCapabilitiesDto",
+            "description": "Plugin capabilities (derived from manifest)"
+          },
           "config": {
             "description": "Per-user configuration"
           },
@@ -32091,6 +32479,13 @@
             "format": "date-time",
             "description": "Last sync timestamp"
           },
+          "lastSyncResult": {
+            "description": "Last sync result summary (stored in user_plugin_data)"
+          },
+          "oauthConfigured": {
+            "type": "boolean",
+            "description": "Whether the admin has configured OAuth credentials (client_id set)"
+          },
           "pluginDisplayName": {
             "type": "string",
             "description": "Plugin display name for UI"
@@ -32111,6 +32506,24 @@
           "requiresOauth": {
             "type": "boolean",
             "description": "Whether this plugin requires OAuth authentication"
+          },
+          "userConfigSchema": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConfigSchemaDto",
+                "description": "User-facing configuration schema (from plugin manifest)"
+              }
+            ]
+          },
+          "userSetupInstructions": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "User-facing setup instructions for the plugin"
           }
         }
       },

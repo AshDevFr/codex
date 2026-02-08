@@ -271,7 +271,10 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
 
   // Build external links, ratings, and cross-reference IDs from sources in a single pass
   const externalRatings: ExternalRating[] = [];
-  const externalIds: ExternalId[] = [];
+  const externalIds: ExternalId[] = [
+    // Always include the plugin's own API ID so other plugins can cross-reference
+    { source: "api:mangabaka", externalId: String(series.id) },
+  ];
 
   if (series.source) {
     for (const [key, info] of Object.entries(series.source)) {
@@ -333,6 +336,6 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     })(),
     externalRatings: externalRatings.length > 0 ? externalRatings : undefined,
     externalLinks,
-    externalIds: externalIds.length > 0 ? externalIds : undefined,
+    externalIds,
   };
 }

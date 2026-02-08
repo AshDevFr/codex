@@ -61,11 +61,24 @@ pub struct UserPluginDto {
     pub last_success_at: Option<DateTime<Utc>>,
     /// Whether this plugin requires OAuth authentication
     pub requires_oauth: bool,
+    /// Whether the admin has configured OAuth credentials (client_id set)
+    pub oauth_configured: bool,
     /// User-facing description of the plugin
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// User-facing setup instructions for the plugin
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_setup_instructions: Option<String>,
     /// Per-user configuration
     pub config: serde_json::Value,
+    /// Plugin capabilities (derived from manifest)
+    pub capabilities: UserPluginCapabilitiesDto,
+    /// User-facing configuration schema (from plugin manifest)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_config_schema: Option<super::plugins::ConfigSchemaDto>,
+    /// Last sync result summary (stored in user_plugin_data)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_sync_result: Option<serde_json::Value>,
     /// Created timestamp
     pub created_at: DateTime<Utc>,
 }
@@ -83,8 +96,13 @@ pub struct AvailablePluginDto {
     /// Plugin description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// User-facing setup instructions for the plugin
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_setup_instructions: Option<String>,
     /// Whether this plugin requires OAuth authentication
     pub requires_oauth: bool,
+    /// Whether the admin has configured OAuth credentials (client_id set)
+    pub oauth_configured: bool,
     /// Plugin capabilities
     pub capabilities: UserPluginCapabilitiesDto,
 }
@@ -105,6 +123,14 @@ pub struct UserPluginCapabilitiesDto {
 pub struct UpdateUserPluginConfigRequest {
     /// Configuration overrides for this plugin
     pub config: serde_json::Value,
+}
+
+/// Request to set user credentials (e.g., personal access token)
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetUserCredentialsRequest {
+    /// The access token or API key to store
+    pub access_token: String,
 }
 
 /// User plugins list response
@@ -276,5 +302,130 @@ mod tests {
         let query: SyncStatusQuery =
             serde_json::from_value(serde_json::json!({"live": true})).unwrap();
         assert!(query.live);
+    }
+
+    #[test]
+    fn test_user_plugin_dto_includes_capabilities() {
+        let dto = UserPluginDto {
+            id: Uuid::new_v4(),
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "sync-anilist".to_string(),
+            plugin_display_name: "AniList Sync".to_string(),
+            plugin_type: "user".to_string(),
+            enabled: true,
+            connected: true,
+            health_status: "healthy".to_string(),
+            external_username: None,
+            external_avatar_url: None,
+            last_sync_at: None,
+            last_success_at: None,
+            requires_oauth: true,
+            oauth_configured: true,
+            description: None,
+            user_setup_instructions: None,
+            config: serde_json::json!({}),
+            capabilities: UserPluginCapabilitiesDto {
+                read_sync: true,
+                user_recommendation_provider: false,
+            },
+            user_config_schema: None,
+            last_sync_result: None,
+            created_at: chrono::Utc::now(),
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["capabilities"]["readSync"], true);
+        assert_eq!(json["capabilities"]["userRecommendationProvider"], false);
+        assert!(!json.as_object().unwrap().contains_key("userConfigSchema"));
+        assert!(!json.as_object().unwrap().contains_key("lastSyncResult"));
+    }
+
+    #[test]
+    fn test_user_plugin_dto_includes_user_config_schema() {
+        let schema = super::super::plugins::ConfigSchemaDto {
+            description: Some("Test config".to_string()),
+            fields: vec![super::super::plugins::ConfigFieldDto {
+                key: "scoreFormat".to_string(),
+                label: "Score Format".to_string(),
+                description: Some("How scores are mapped".to_string()),
+                field_type: "string".to_string(),
+                required: false,
+                default: Some(serde_json::json!("POINT_10")),
+                example: None,
+            }],
+        };
+
+        let dto = UserPluginDto {
+            id: Uuid::new_v4(),
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "sync-anilist".to_string(),
+            plugin_display_name: "AniList Sync".to_string(),
+            plugin_type: "user".to_string(),
+            enabled: true,
+            connected: true,
+            health_status: "healthy".to_string(),
+            external_username: None,
+            external_avatar_url: None,
+            last_sync_at: None,
+            last_success_at: None,
+            requires_oauth: true,
+            oauth_configured: true,
+            description: None,
+            user_setup_instructions: None,
+            config: serde_json::json!({}),
+            capabilities: UserPluginCapabilitiesDto {
+                read_sync: true,
+                user_recommendation_provider: false,
+            },
+            user_config_schema: Some(schema),
+            last_sync_result: None,
+            created_at: chrono::Utc::now(),
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        let schema_json = &json["userConfigSchema"];
+        assert_eq!(schema_json["description"], "Test config");
+        assert_eq!(schema_json["fields"][0]["key"], "scoreFormat");
+        assert_eq!(schema_json["fields"][0]["label"], "Score Format");
+    }
+
+    #[test]
+    fn test_user_plugin_dto_includes_last_sync_result() {
+        let sync_result = serde_json::json!({
+            "pulled": 10,
+            "matched": 8,
+            "applied": 6,
+            "pushed": 5,
+            "pushFailures": 0,
+        });
+
+        let dto = UserPluginDto {
+            id: Uuid::new_v4(),
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "sync-anilist".to_string(),
+            plugin_display_name: "AniList Sync".to_string(),
+            plugin_type: "user".to_string(),
+            enabled: true,
+            connected: true,
+            health_status: "healthy".to_string(),
+            external_username: None,
+            external_avatar_url: None,
+            last_sync_at: None,
+            last_success_at: None,
+            requires_oauth: true,
+            oauth_configured: true,
+            description: None,
+            user_setup_instructions: None,
+            config: serde_json::json!({}),
+            capabilities: UserPluginCapabilitiesDto {
+                read_sync: true,
+                user_recommendation_provider: false,
+            },
+            user_config_schema: None,
+            last_sync_result: Some(sync_result.clone()),
+            created_at: chrono::Utc::now(),
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(json["lastSyncResult"]["pulled"], 10);
+        assert_eq!(json["lastSyncResult"]["applied"], 6);
+        assert_eq!(json["lastSyncResult"]["pushed"], 5);
     }
 }

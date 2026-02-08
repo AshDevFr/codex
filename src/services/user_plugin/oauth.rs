@@ -30,6 +30,8 @@ pub struct PendingOAuthFlow {
     /// PKCE code challenge (sent in auth URL, kept for debugging/logging)
     #[allow(dead_code)]
     pub pkce_challenge: Option<String>,
+    /// The redirect URI used in the authorization request (must match in token exchange)
+    pub redirect_uri: String,
     /// When this state was created
     pub created_at: DateTime<Utc>,
 }
@@ -148,6 +150,7 @@ impl OAuthStateManager {
             user_id,
             pkce_verifier,
             pkce_challenge,
+            redirect_uri: redirect_uri.to_string(),
             created_at: Utc::now(),
         };
 

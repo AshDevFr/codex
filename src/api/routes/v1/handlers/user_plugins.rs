@@ -4,20 +4,24 @@
 //! These endpoints allow users to enable/disable plugins, connect via OAuth,
 //! and manage their plugin integrations.
 
+use super::super::dto::plugins::ConfigSchemaDto;
 use super::super::dto::user_plugins::{
-    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SyncStatusDto, SyncStatusQuery,
-    SyncTriggerResponse, UpdateUserPluginConfigRequest, UserPluginCapabilitiesDto, UserPluginDto,
-    UserPluginsListResponse,
+    AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SetUserCredentialsRequest,
+    SyncStatusDto, SyncStatusQuery, SyncTriggerResponse, UpdateUserPluginConfigRequest,
+    UserPluginCapabilitiesDto, UserPluginDto, UserPluginsListResponse,
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::db::repositories::{PluginsRepository, TaskRepository, UserPluginsRepository};
+use crate::db::repositories::{
+    PluginsRepository, TaskRepository, UserPluginDataRepository, UserPluginsRepository,
+};
 use crate::services::plugin::protocol::{OAuthConfig, PluginManifest, methods};
 use crate::services::plugin::sync::SyncStatusResponse;
 use crate::tasks::types::TaskType;
 use axum::{
     Json,
     extract::{Path, Query, State},
+    http::HeaderMap,
 };
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -59,8 +63,34 @@ fn get_oauth_client_secret(plugin: &crate::db::entities::plugins::Model) -> Opti
         .map(|s| s.to_string())
 }
 
+/// Resolve the external base URL for OAuth redirect URIs.
+///
+/// Priority:
+/// 1. `redirect_uri_base` from OIDC config (explicit config)
+/// 2. `Origin` header from the request (reflects the user's browser URL)
+/// 3. Fallback to `http://localhost:3000`
+fn resolve_oauth_redirect_base(state: &AppState, headers: &HeaderMap) -> String {
+    // 1. Explicit config takes priority
+    if let Some(ref base) = state.auth_config.oidc.redirect_uri_base {
+        return base.clone();
+    }
+
+    // 2. Use Origin header from the request (browser's URL)
+    if let Some(origin) = headers
+        .get("origin")
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
+    {
+        return origin.trim_end_matches('/').to_string();
+    }
+
+    // 3. Fallback
+    "http://localhost:3000".to_string()
+}
+
 /// Build a UserPluginDto from a user plugin instance and its parent plugin definition
-fn build_user_plugin_dto(
+async fn build_user_plugin_dto(
+    db: &sea_orm::DatabaseConnection,
     instance: &crate::db::entities::user_plugins::Model,
     plugin: &crate::db::entities::plugins::Model,
 ) -> UserPluginDto {
@@ -69,6 +99,29 @@ fn build_user_plugin_dto(
         .manifest
         .as_ref()
         .and_then(|m| serde_json::from_value(m.clone()).ok());
+
+    let capabilities = UserPluginCapabilitiesDto {
+        read_sync: manifest
+            .as_ref()
+            .map(|m| m.capabilities.user_read_sync)
+            .unwrap_or(false),
+        user_recommendation_provider: manifest
+            .as_ref()
+            .map(|m| m.capabilities.user_recommendation_provider)
+            .unwrap_or(false),
+    };
+
+    let user_config_schema = manifest
+        .as_ref()
+        .and_then(|m| m.user_config_schema.clone())
+        .and_then(|v| serde_json::from_value::<ConfigSchemaDto>(v).ok());
+
+    // Fetch last sync result from user_plugin_data
+    let last_sync_result = UserPluginDataRepository::get(db, instance.id, "last_sync_result")
+        .await
+        .ok()
+        .flatten()
+        .map(|entry| entry.data);
 
     UserPluginDto {
         id: instance.id,
@@ -84,8 +137,13 @@ fn build_user_plugin_dto(
         last_sync_at: instance.last_sync_at,
         last_success_at: instance.last_success_at,
         requires_oauth: oauth_config.is_some(),
-        description: manifest.and_then(|m| m.user_description),
+        oauth_configured: get_oauth_client_id(plugin).is_some(),
+        description: manifest.as_ref().and_then(|m| m.user_description.clone()),
+        user_setup_instructions: manifest.and_then(|m| m.user_setup_instructions),
         config: instance.config.clone(),
+        capabilities,
+        user_config_schema,
+        last_sync_result,
         created_at: instance.created_at,
     }
 }
@@ -122,36 +180,12 @@ pub async fn list_user_plugins(
         .collect();
 
     // Build enabled plugins list
-    let enabled: Vec<UserPluginDto> = user_instances
-        .iter()
-        .filter_map(|instance| {
-            let plugin = user_plugins.iter().find(|p| p.id == instance.plugin_id)?;
-            let oauth_config = get_oauth_config_from_plugin(plugin);
-            let manifest: Option<PluginManifest> = plugin
-                .manifest
-                .as_ref()
-                .and_then(|m| serde_json::from_value(m.clone()).ok());
-
-            Some(UserPluginDto {
-                id: instance.id,
-                plugin_id: plugin.id,
-                plugin_name: plugin.name.clone(),
-                plugin_display_name: plugin.display_name.clone(),
-                plugin_type: plugin.plugin_type.clone(),
-                enabled: instance.enabled,
-                connected: instance.is_authenticated(),
-                health_status: instance.health_status.clone(),
-                external_username: instance.external_username.clone(),
-                external_avatar_url: instance.external_avatar_url.clone(),
-                last_sync_at: instance.last_sync_at,
-                last_success_at: instance.last_success_at,
-                requires_oauth: oauth_config.is_some(),
-                description: manifest.and_then(|m| m.user_description),
-                config: instance.config.clone(),
-                created_at: instance.created_at,
-            })
-        })
-        .collect();
+    let mut enabled: Vec<UserPluginDto> = Vec::new();
+    for instance in &user_instances {
+        if let Some(plugin) = user_plugins.iter().find(|p| p.id == instance.plugin_id) {
+            enabled.push(build_user_plugin_dto(&state.db, instance, plugin).await);
+        }
+    }
 
     // Build available plugins (not yet enabled by user)
     let enabled_plugin_ids: std::collections::HashSet<_> =
@@ -175,7 +209,11 @@ pub async fn list_user_plugins(
                     .as_ref()
                     .and_then(|m| m.user_description.clone())
                     .or_else(|| manifest.as_ref().and_then(|m| m.description.clone())),
+                user_setup_instructions: manifest
+                    .as_ref()
+                    .and_then(|m| m.user_setup_instructions.clone()),
                 requires_oauth: oauth_config.is_some(),
+                oauth_configured: get_oauth_client_id(plugin).is_some(),
                 capabilities: UserPluginCapabilitiesDto {
                     read_sync: manifest
                         .as_ref()
@@ -248,12 +286,6 @@ pub async fn enable_plugin(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enable plugin: {}", e)))?;
 
-    let oauth_config = get_oauth_config_from_plugin(&plugin);
-    let manifest: Option<PluginManifest> = plugin
-        .manifest
-        .as_ref()
-        .and_then(|m| serde_json::from_value(m.clone()).ok());
-
     info!(
         user_id = %auth.user_id,
         plugin_id = %plugin_id,
@@ -261,24 +293,9 @@ pub async fn enable_plugin(
         "User enabled plugin"
     );
 
-    Ok(Json(UserPluginDto {
-        id: instance.id,
-        plugin_id: plugin.id,
-        plugin_name: plugin.name,
-        plugin_display_name: plugin.display_name,
-        plugin_type: plugin.plugin_type,
-        enabled: instance.enabled,
-        connected: false,
-        health_status: instance.health_status,
-        external_username: None,
-        external_avatar_url: None,
-        last_sync_at: None,
-        last_success_at: None,
-        requires_oauth: oauth_config.is_some(),
-        description: manifest.and_then(|m| m.user_description),
-        config: instance.config,
-        created_at: instance.created_at,
-    }))
+    Ok(Json(
+        build_user_plugin_dto(&state.db, &instance, &plugin).await,
+    ))
 }
 
 /// Disable a plugin for the current user
@@ -379,6 +396,7 @@ pub async fn disconnect_plugin(
 pub async fn oauth_start(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
+    headers: HeaderMap,
     Path(plugin_id): Path<Uuid>,
 ) -> Result<Json<OAuthStartResponse>, ApiError> {
     // Get the plugin definition
@@ -421,14 +439,8 @@ pub async fn oauth_start(
             }
         };
 
-    // Build redirect URI for the callback
-    // Uses the OIDC redirect_uri_base as the server's external URL
-    let base_url = state
-        .auth_config
-        .oidc
-        .redirect_uri_base
-        .as_deref()
-        .unwrap_or("http://localhost:3000");
+    // Build redirect URI using config, request origin, or fallback
+    let base_url = resolve_oauth_redirect_base(&state, &headers);
     let redirect_uri = format!("{}/api/v1/user/plugins/oauth/callback", base_url);
 
     // Start the OAuth flow
@@ -467,7 +479,7 @@ pub async fn oauth_start(
         ("state" = String, Query, description = "State parameter for CSRF protection"),
     ),
     responses(
-        (status = 302, description = "Redirect to frontend with result"),
+        (status = 200, description = "HTML page that auto-closes the popup"),
         (status = 400, description = "Invalid callback parameters"),
     ),
     tag = "User Plugins"
@@ -475,7 +487,7 @@ pub async fn oauth_start(
 pub async fn oauth_callback(
     State(state): State<Arc<AppState>>,
     Query(query): Query<OAuthCallbackQuery>,
-) -> Result<axum::response::Redirect, ApiError> {
+) -> Result<axum::response::Html<String>, ApiError> {
     // Validate state and get pending flow info
     let pending = state
         .oauth_state_manager
@@ -509,13 +521,8 @@ pub async fn oauth_callback(
 
     let client_secret = get_oauth_client_secret(&plugin);
 
-    let base_url = state
-        .auth_config
-        .oidc
-        .redirect_uri_base
-        .as_deref()
-        .unwrap_or("http://localhost:3000");
-    let redirect_uri = format!("{}/api/v1/user/plugins/oauth/callback", base_url);
+    // Use the redirect_uri from the pending flow to ensure it matches the authorization request
+    let redirect_uri = pending.redirect_uri.clone();
 
     // Exchange code for tokens
     let oauth_result = state
@@ -569,11 +576,19 @@ pub async fn oauth_callback(
         "OAuth flow completed successfully"
     );
 
-    // Redirect to frontend with success indicator
-    // The frontend handles the popup close/state update
-    let redirect_url = format!("/settings/integrations?oauth=success&plugin={}", plugin_id);
+    // Return a minimal HTML page that closes the popup
+    let html = r#"<!DOCTYPE html>
+<html><head><title>Connected</title></head>
+<body style="background:#1a1b1e;color:#c1c2c5;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+<div style="text-align:center">
+<p style="font-size:1.2rem">Connected successfully!</p>
+<p style="color:#868e96;font-size:0.9rem">This window will close automatically...</p>
+</div>
+<script>window.close();</script>
+</body></html>"#
+        .to_string();
 
-    Ok(axum::response::Redirect::to(&redirect_url))
+    Ok(axum::response::Html(html))
 }
 
 /// Get a single user plugin instance
@@ -608,7 +623,9 @@ pub async fn get_user_plugin(
         .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
         .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
 
-    Ok(Json(build_user_plugin_dto(&instance, &plugin)))
+    Ok(Json(
+        build_user_plugin_dto(&state.db, &instance, &plugin).await,
+    ))
 }
 
 /// Update user plugin configuration
@@ -663,7 +680,9 @@ pub async fn update_user_plugin_config(
         "User updated plugin config"
     );
 
-    Ok(Json(build_user_plugin_dto(&updated, &plugin)))
+    Ok(Json(
+        build_user_plugin_dto(&state.db, &updated, &plugin).await,
+    ))
 }
 
 /// Trigger a sync operation for a user plugin
@@ -869,4 +888,76 @@ pub async fn get_sync_status(
         conflicts,
         live_error,
     }))
+}
+
+/// Set user credentials (personal access token) for a plugin
+///
+/// Allows users to authenticate by pasting a personal access token
+/// instead of going through the OAuth flow.
+#[utoipa::path(
+    post,
+    path = "/api/v1/user/plugins/{plugin_id}/credentials",
+    params(
+        ("plugin_id" = Uuid, Path, description = "Plugin ID to set credentials for")
+    ),
+    request_body = SetUserCredentialsRequest,
+    responses(
+        (status = 200, description = "Credentials stored", body = UserPluginDto),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plugin not enabled for this user"),
+    ),
+    tag = "User Plugins"
+)]
+pub async fn set_user_credentials(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+    Json(request): Json<SetUserCredentialsRequest>,
+) -> Result<Json<UserPluginDto>, ApiError> {
+    if request.access_token.trim().is_empty() {
+        return Err(ApiError::BadRequest(
+            "Access token cannot be empty".to_string(),
+        ));
+    }
+
+    let instance =
+        UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+            .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
+
+    // Store as credentials JSON (same format as required_credentials keys)
+    let credentials = serde_json::json!({
+        "access_token": request.access_token.trim()
+    });
+
+    let updated = UserPluginsRepository::update_credentials(&state.db, instance.id, &credentials)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to store credentials: {}", e)))?;
+
+    // Record success for health tracking
+    let _ = UserPluginsRepository::record_success(&state.db, updated.id).await;
+
+    let plugin = PluginsRepository::get_by_id(&state.db, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
+
+    info!(
+        user_id = %auth.user_id,
+        plugin_id = %plugin_id,
+        plugin_name = %plugin.name,
+        "User set personal access token"
+    );
+
+    // Re-fetch to get updated state after record_success
+    let updated = UserPluginsRepository::get_by_id(&state.db, instance.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::Internal("User plugin not found after update".to_string()))?;
+
+    Ok(Json(
+        build_user_plugin_dto(&state.db, &updated, &plugin).await,
+    ))
 }

@@ -1,22 +1,34 @@
 import {
+  ActionIcon,
+  Alert,
   Avatar,
   Badge,
   Button,
   Card,
+  Divider,
   Group,
+  PasswordInput,
   Text,
   Tooltip,
 } from "@mantine/core";
 import {
   IconCheck,
+  IconInfoCircle,
+  IconKey,
   IconLink,
   IconLinkOff,
+  IconPlayerPause,
   IconPlayerPlay,
   IconRefresh,
   IconSettings,
   IconX,
 } from "@tabler/icons-react";
-import type { AvailablePluginDto, UserPluginDto } from "@/api/userPlugins";
+import { useState } from "react";
+import type {
+  AvailablePluginDto,
+  SyncStatusDto,
+  UserPluginDto,
+} from "@/api/userPlugins";
 
 // =============================================================================
 // Helpers
@@ -54,6 +66,28 @@ function healthBadge(status: string): { color: string; label: string } {
   }
 }
 
+function formatSyncResult(result: Record<string, unknown>): string {
+  if (result.skippedReason) {
+    return `Skipped: ${String(result.skippedReason)}`;
+  }
+  const parts: string[] = [];
+  const pulled = result.pulled as number | undefined;
+  const matched = result.matched as number | undefined;
+  const applied = result.applied as number | undefined;
+  const pushed = result.pushed as number | undefined;
+  if (pulled != null) {
+    let pullPart = `Pulled ${pulled}`;
+    if (matched != null) pullPart += ` (${matched} matched`;
+    if (applied != null) pullPart += `, ${applied} applied`;
+    if (matched != null) pullPart += ")";
+    parts.push(pullPart);
+  }
+  if (pushed != null) {
+    parts.push(`pushed ${pushed}`);
+  }
+  return parts.join(", ") || "Sync completed";
+}
+
 // =============================================================================
 // Connected Plugin Card
 // =============================================================================
@@ -61,23 +95,39 @@ function healthBadge(status: string): { color: string; label: string } {
 interface ConnectedPluginCardProps {
   plugin: UserPluginDto;
   onDisconnect: (pluginId: string) => void;
+  onDisable: (pluginId: string) => void;
   onSync?: (pluginId: string) => void;
   onSettings?: (pluginId: string) => void;
   onConnect: (pluginId: string) => void;
+  onSaveToken?: (pluginId: string, token: string) => void;
+  onRefreshStatus?: (pluginId: string) => void;
+  syncStatus?: SyncStatusDto | null;
   disconnecting?: boolean;
+  disabling?: boolean;
   syncing?: boolean;
+  savingToken?: boolean;
+  refreshingStatus?: boolean;
 }
 
 export function ConnectedPluginCard({
   plugin,
   onDisconnect,
+  onDisable,
   onSync,
   onSettings,
   onConnect,
+  onSaveToken,
+  onRefreshStatus,
+  syncStatus,
   disconnecting,
+  disabling,
   syncing,
+  savingToken,
+  refreshingStatus,
 }: ConnectedPluginCardProps) {
   const health = healthBadge(plugin.healthStatus);
+  const [tokenValue, setTokenValue] = useState("");
+  const showTokenInput = !plugin.connected && plugin.requiresOauth;
 
   return (
     <Card withBorder padding="lg">
@@ -144,9 +194,126 @@ export function ConnectedPluginCard({
       )}
 
       {plugin.lastSyncAt && (
-        <Text size="sm" c="dimmed" mb="xs">
+        <Text size="sm" c="dimmed" mb={plugin.lastSyncResult ? 0 : "xs"}>
           Last sync: {formatTimeAgo(plugin.lastSyncAt)}
         </Text>
+      )}
+
+      {plugin.lastSyncResult != null ? (
+        <Text size="xs" c="dimmed" mb="xs">
+          {formatSyncResult(plugin.lastSyncResult as Record<string, unknown>)}
+        </Text>
+      ) : null}
+
+      {plugin.connected && plugin.capabilities?.readSync && (
+        <Group gap="md" mb="xs">
+          {syncStatus && syncStatus.failureCount > 0 && (
+            <Tooltip
+              label={
+                syncStatus.lastFailureAt
+                  ? `Last failure: ${formatTimeAgo(syncStatus.lastFailureAt)}`
+                  : "Recent failures detected"
+              }
+            >
+              <Badge color="red" variant="light" size="sm">
+                {syncStatus.failureCount} failure
+                {syncStatus.failureCount !== 1 ? "s" : ""}
+              </Badge>
+            </Tooltip>
+          )}
+          {syncStatus?.externalCount != null && (
+            <Text size="xs" c="dimmed">
+              {syncStatus.externalCount} external entries
+            </Text>
+          )}
+          {syncStatus?.pendingPull != null && syncStatus.pendingPull > 0 && (
+            <Text size="xs" c="dimmed">
+              {syncStatus.pendingPull} to pull
+            </Text>
+          )}
+          {syncStatus?.pendingPush != null && syncStatus.pendingPush > 0 && (
+            <Text size="xs" c="dimmed">
+              {syncStatus.pendingPush} to push
+            </Text>
+          )}
+          {onRefreshStatus && (
+            <Tooltip label="Fetch live sync status">
+              <ActionIcon
+                size="xs"
+                variant="subtle"
+                onClick={() => onRefreshStatus(plugin.pluginId)}
+                loading={refreshingStatus}
+              >
+                <IconRefresh size={12} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </Group>
+      )}
+
+      {plugin.userSetupInstructions && !plugin.connected && (
+        <Alert
+          icon={<IconInfoCircle size={16} />}
+          color="blue"
+          variant="light"
+          mt="xs"
+          mb="xs"
+        >
+          {plugin.userSetupInstructions}
+        </Alert>
+      )}
+
+      {!plugin.connected && plugin.requiresOauth && plugin.oauthConfigured && (
+        <Group mt="xs">
+          <Button
+            size="xs"
+            variant="filled"
+            leftSection={<IconLink size={14} />}
+            onClick={() => onConnect(plugin.pluginId)}
+          >
+            Connect with OAuth
+          </Button>
+        </Group>
+      )}
+
+      {showTokenInput && onSaveToken && (
+        <>
+          {plugin.oauthConfigured && (
+            <Divider
+              label="or use a personal access token"
+              labelPosition="center"
+              mt="sm"
+              mb="xs"
+            />
+          )}
+          <Group
+            gap="xs"
+            mt={plugin.oauthConfigured ? undefined : "xs"}
+            mb="xs"
+            align="end"
+          >
+            <PasswordInput
+              placeholder="Paste your personal access token"
+              size="xs"
+              style={{ flex: 1 }}
+              value={tokenValue}
+              onChange={(e) => setTokenValue(e.currentTarget.value)}
+            />
+            <Button
+              size="xs"
+              variant="filled"
+              leftSection={<IconKey size={14} />}
+              loading={savingToken}
+              disabled={!tokenValue.trim()}
+              onClick={() => {
+                onSaveToken(plugin.pluginId, tokenValue.trim());
+                setTokenValue("");
+              }}
+            >
+              Save Token
+            </Button>
+          </Group>
+        </>
       )}
 
       <Group gap="xs" mt="md">
@@ -161,16 +328,6 @@ export function ConnectedPluginCard({
             Sync Now
           </Button>
         )}
-        {!plugin.connected && plugin.requiresOauth && (
-          <Button
-            size="xs"
-            variant="filled"
-            leftSection={<IconLink size={14} />}
-            onClick={() => onConnect(plugin.pluginId)}
-          >
-            Connect
-          </Button>
-        )}
         {onSettings && (
           <Button
             size="xs"
@@ -181,16 +338,48 @@ export function ConnectedPluginCard({
             Settings
           </Button>
         )}
-        <Button
-          size="xs"
-          variant="subtle"
-          color="red"
-          leftSection={<IconLinkOff size={14} />}
-          loading={disconnecting}
-          onClick={() => onDisconnect(plugin.pluginId)}
-        >
-          Disconnect
-        </Button>
+        {plugin.connected && (
+          <Tooltip label="Unlink your external account and remove credentials">
+            <Button
+              size="xs"
+              variant="subtle"
+              color="red"
+              leftSection={<IconLinkOff size={14} />}
+              loading={disconnecting}
+              onClick={() => onDisconnect(plugin.pluginId)}
+            >
+              Disconnect
+            </Button>
+          </Tooltip>
+        )}
+        {!plugin.connected && plugin.enabled && (
+          <Tooltip label="Disable this integration">
+            <Button
+              size="xs"
+              variant="subtle"
+              color="orange"
+              leftSection={<IconPlayerPause size={14} />}
+              loading={disabling}
+              onClick={() => onDisable(plugin.pluginId)}
+            >
+              Disable
+            </Button>
+          </Tooltip>
+        )}
+        {!plugin.connected && !plugin.enabled && (
+          <Tooltip label="Remove this integration">
+            <Button
+              size="xs"
+              variant="subtle"
+              color="red"
+              leftSection={<IconLinkOff size={14} />}
+              loading={disconnecting}
+              onClick={() => onDisconnect(plugin.pluginId)}
+            >
+              Remove
+            </Button>
+          </Tooltip>
+        )}
       </Group>
     </Card>
   );
@@ -203,14 +392,12 @@ export function ConnectedPluginCard({
 interface AvailablePluginCardProps {
   plugin: AvailablePluginDto;
   onEnable: (pluginId: string) => void;
-  onConnect: (pluginId: string) => void;
   enabling?: boolean;
 }
 
 export function AvailablePluginCard({
   plugin,
   onEnable,
-  onConnect,
   enabling,
 }: AvailablePluginCardProps) {
   return (
@@ -245,28 +432,22 @@ export function AvailablePluginCard({
         </Group>
       </Group>
 
+      {plugin.userSetupInstructions && (
+        <Text size="sm" c="dimmed" mb="xs">
+          {plugin.userSetupInstructions}
+        </Text>
+      )}
+
       <Group gap="xs" mt="md">
-        {plugin.requiresOauth ? (
-          <Button
-            size="xs"
-            variant="filled"
-            leftSection={<IconLink size={14} />}
-            loading={enabling}
-            onClick={() => onConnect(plugin.pluginId)}
-          >
-            Connect with {plugin.displayName}
-          </Button>
-        ) : (
-          <Button
-            size="xs"
-            variant="filled"
-            leftSection={<IconPlayerPlay size={14} />}
-            loading={enabling}
-            onClick={() => onEnable(plugin.pluginId)}
-          >
-            Enable
-          </Button>
-        )}
+        <Button
+          size="xs"
+          variant="filled"
+          leftSection={<IconPlayerPlay size={14} />}
+          loading={enabling}
+          onClick={() => onEnable(plugin.pluginId)}
+        >
+          Enable
+        </Button>
       </Group>
     </Card>
   );

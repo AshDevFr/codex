@@ -39,6 +39,7 @@ import {
   IconRefresh,
   IconSettings,
   IconTrash,
+  IconUsers,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
@@ -877,6 +878,60 @@ function SyncManifestDetails({ plugin }: { plugin: PluginDto }) {
   );
 }
 
+// OAuth manifest details (right column)
+function OAuthManifestDetails({ plugin }: { plugin: PluginDto }) {
+  if (!plugin.manifest?.oauth) return null;
+
+  const { oauth } = plugin.manifest;
+  const pluginConfig = plugin.config as Record<string, unknown> | null;
+  const hasClientId =
+    typeof pluginConfig?.oauth_client_id === "string" &&
+    pluginConfig.oauth_client_id !== "";
+
+  return (
+    <Stack gap="xs">
+      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+        OAuth Configuration
+      </Text>
+      <Group gap="xs">
+        <Badge
+          variant="light"
+          size="sm"
+          color={hasClientId ? "green" : "yellow"}
+        >
+          {hasClientId ? "Client ID configured" : "Client ID not set"}
+        </Badge>
+        {oauth.pkce && (
+          <Badge variant="light" size="sm" color="blue">
+            PKCE
+          </Badge>
+        )}
+      </Group>
+      <Group gap="xl">
+        <div>
+          <Text size="xs" c="dimmed">
+            Auth URL
+          </Text>
+          <Code style={{ fontSize: 11 }}>{oauth.authorizationUrl}</Code>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            Token URL
+          </Text>
+          <Code style={{ fontSize: 11 }}>{oauth.tokenUrl}</Code>
+        </div>
+      </Group>
+      {plugin.manifest.adminSetupInstructions && (
+        <Alert variant="light" color="blue" p="xs">
+          <Text size="xs" style={{ whiteSpace: "pre-line" }}>
+            {plugin.manifest.adminSetupInstructions}
+          </Text>
+        </Alert>
+      )}
+    </Stack>
+  );
+}
+
 function PluginDetails({
   plugin,
   libraries,
@@ -921,6 +976,20 @@ function PluginDetails({
                   : "No limit"}
               </Text>
             </div>
+            {plugin.userCount != null && (
+              <div>
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                  Users
+                </Text>
+                <Group gap={6} mt={4}>
+                  <IconUsers size={14} color="var(--mantine-color-dimmed)" />
+                  <Text size="sm">
+                    {plugin.userCount}{" "}
+                    {plugin.userCount === 1 ? "user" : "users"}
+                  </Text>
+                </Group>
+              </div>
+            )}
           </Group>
 
           {plugin.args.length > 0 && (
@@ -1055,10 +1124,16 @@ function PluginDetails({
                   Reading Sync
                 </Badge>
               )}
+              {plugin.manifest.capabilities.userRecommendationProvider && (
+                <Badge color="orange" variant="light">
+                  Recommendation Provider
+                </Badge>
+              )}
             </Group>
 
             <MetadataManifestDetails plugin={plugin} />
             <SyncManifestDetails plugin={plugin} />
+            <OAuthManifestDetails plugin={plugin} />
 
             {plugin.manifest.configSchema && (
               <ConfigSchemaHelp schema={plugin.manifest.configSchema} />

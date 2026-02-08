@@ -79,6 +79,30 @@ export interface ConfigSchema {
 }
 
 /**
+ * OAuth 2.0 configuration for user plugins requiring external service authentication.
+ *
+ * Codex handles the full OAuth flow (authorization URL, code exchange, token storage).
+ * Plugins only need to declare their OAuth requirements here.
+ */
+export interface OAuthConfig {
+  /** OAuth 2.0 authorization endpoint URL */
+  authorizationUrl: string;
+  /** OAuth 2.0 token endpoint URL */
+  tokenUrl: string;
+  /** Required OAuth scopes */
+  scopes?: string[];
+  /**
+   * Whether to use PKCE (Proof Key for Code Exchange).
+   * Recommended for public clients. Defaults to true.
+   */
+  pkce?: boolean;
+  /** Optional user info endpoint URL (to fetch external identity after auth) */
+  userInfoUrl?: string;
+  /** Optional default OAuth client ID (can be overridden by admin in plugin config) */
+  clientId?: string;
+}
+
+/**
  * Plugin manifest returned by the `initialize` method
  */
 export interface PluginManifest {
@@ -108,9 +132,31 @@ export interface PluginManifest {
 
   /**
    * Configuration schema documenting available config options.
-   * This is displayed in the admin UI to help users configure the plugin.
+   * This is displayed in the admin UI to help administrators configure the plugin.
    */
   configSchema?: ConfigSchema;
+
+  /**
+   * Configuration schema for per-user settings.
+   * Displayed in the user-facing Integrations settings modal.
+   * Users can customize these fields per-account (stored in user_plugins.config).
+   */
+  userConfigSchema?: ConfigSchema;
+
+  /**
+   * OAuth 2.0 configuration for user plugins that require external service authentication.
+   * When present, the Integrations UI shows "Connect with {name}" instead of "Enable".
+   */
+  oauth?: OAuthConfig;
+
+  /** User-facing description shown when enabling the plugin */
+  userDescription?: string;
+
+  /** Admin-facing setup instructions (e.g., how to create OAuth app, configure client ID) */
+  adminSetupInstructions?: string;
+
+  /** User-facing setup instructions (e.g., how to connect or get a personal token) */
+  userSetupInstructions?: string;
 }
 
 // =============================================================================
