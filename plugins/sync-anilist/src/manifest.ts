@@ -72,6 +72,24 @@ export const manifest = {
         required: false,
         default: false,
       },
+      {
+        key: "pauseAfterDays",
+        label: "Auto-Pause After Days",
+        description:
+          "Automatically set in-progress series to Paused on AniList if no reading activity in this many days. Set to 0 to disable.",
+        type: "number" as const,
+        required: false,
+        default: 0,
+      },
+      {
+        key: "dropAfterDays",
+        label: "Auto-Drop After Days",
+        description:
+          "Automatically set in-progress series to Dropped on AniList if no reading activity in this many days. Set to 0 to disable. When both pause and drop are set, the shorter threshold fires first.",
+        type: "number" as const,
+        required: false,
+        default: 0,
+      },
     ],
   },
   oauth: {
