@@ -151,6 +151,26 @@ These options are available in the plugin settings:
 | Push Completed Series | On | Include series where all local books are read |
 | Push In-Progress Series | On | Include series where at least one book has been started |
 | Count In-Progress Books | Off | Whether partially-read books count toward the progress number |
+| Auto-Pause After Days | 0 (disabled) | Number of days without reading activity before an in-progress series is set to Paused on AniList |
+| Auto-Drop After Days | 0 (disabled) | Number of days without reading activity before an in-progress series is set to Dropped on AniList |
+
+### Auto-Pause & Auto-Drop
+
+You can configure automatic status changes for series you haven't read in a while:
+
+| Configuration | Behavior |
+|--------------|----------|
+| Pause=5, Drop=0 | Not read in 5 days -> Paused |
+| Pause=5, Drop=7 | Not read in 5 days -> Paused; not read in 7 days -> Dropped |
+| Pause=5, Drop=3 | Not read in 3 days -> Dropped (drop fires first since threshold is shorter) |
+| Pause=0, Drop=4 | Not read in 4 days -> Dropped (no pause step) |
+| Pause=0, Drop=0 | Disabled (default) |
+
+Key behaviors:
+
+- **Only affects in-progress series** — completed series are never auto-paused or auto-dropped.
+- **Based on last reading activity** — the timer resets every time you read any book in the series.
+- **Drop takes priority** — if both pause and drop thresholds are met, the series is dropped (not paused).
 
 ## Development
 
