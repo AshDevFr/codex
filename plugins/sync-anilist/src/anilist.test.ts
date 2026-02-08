@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   anilistStatusToSync,
+  convertScoreFromAnilist,
+  convertScoreToAnilist,
   fuzzyDateToIso,
   isoToFuzzyDate,
   syncStatusToAnilist,
@@ -153,5 +155,113 @@ describe("date roundtrip", () => {
     const iso = fuzzyDateToIso(original);
     const result = isoToFuzzyDate(iso);
     expect(result).toEqual(original);
+  });
+});
+
+// =============================================================================
+// Score Conversion Tests (1-100 Codex scale <-> AniList formats)
+// =============================================================================
+
+describe("convertScoreToAnilist (1-100 input)", () => {
+  it("POINT_100: pass-through", () => {
+    expect(convertScoreToAnilist(85, "POINT_100")).toBe(85);
+    expect(convertScoreToAnilist(100, "POINT_100")).toBe(100);
+    expect(convertScoreToAnilist(1, "POINT_100")).toBe(1);
+  });
+
+  it("POINT_10_DECIMAL: divides by 10", () => {
+    expect(convertScoreToAnilist(85, "POINT_10_DECIMAL")).toBe(8.5);
+    expect(convertScoreToAnilist(100, "POINT_10_DECIMAL")).toBe(10);
+    expect(convertScoreToAnilist(10, "POINT_10_DECIMAL")).toBe(1);
+  });
+
+  it("POINT_10: rounds to nearest integer after dividing", () => {
+    expect(convertScoreToAnilist(85, "POINT_10")).toBe(9);
+    expect(convertScoreToAnilist(84, "POINT_10")).toBe(8);
+    expect(convertScoreToAnilist(100, "POINT_10")).toBe(10);
+    expect(convertScoreToAnilist(10, "POINT_10")).toBe(1);
+  });
+
+  it("POINT_5: maps to 1-5 scale", () => {
+    expect(convertScoreToAnilist(100, "POINT_5")).toBe(5);
+    expect(convertScoreToAnilist(80, "POINT_5")).toBe(4);
+    expect(convertScoreToAnilist(50, "POINT_5")).toBe(3);
+    expect(convertScoreToAnilist(20, "POINT_5")).toBe(1);
+  });
+
+  it("POINT_3: maps to 1/2/3 based on thresholds", () => {
+    expect(convertScoreToAnilist(90, "POINT_3")).toBe(3);
+    expect(convertScoreToAnilist(70, "POINT_3")).toBe(3);
+    expect(convertScoreToAnilist(69, "POINT_3")).toBe(2);
+    expect(convertScoreToAnilist(40, "POINT_3")).toBe(2);
+    expect(convertScoreToAnilist(39, "POINT_3")).toBe(1);
+    expect(convertScoreToAnilist(1, "POINT_3")).toBe(1);
+  });
+
+  it("unknown format: defaults to POINT_10 behavior", () => {
+    expect(convertScoreToAnilist(80, "UNKNOWN")).toBe(8);
+  });
+});
+
+describe("convertScoreFromAnilist (to 1-100 output)", () => {
+  it("POINT_100: pass-through", () => {
+    expect(convertScoreFromAnilist(85, "POINT_100")).toBe(85);
+    expect(convertScoreFromAnilist(100, "POINT_100")).toBe(100);
+    expect(convertScoreFromAnilist(1, "POINT_100")).toBe(1);
+  });
+
+  it("POINT_10_DECIMAL: multiplies by 10", () => {
+    expect(convertScoreFromAnilist(8.5, "POINT_10_DECIMAL")).toBe(85);
+    expect(convertScoreFromAnilist(10, "POINT_10_DECIMAL")).toBe(100);
+    expect(convertScoreFromAnilist(1, "POINT_10_DECIMAL")).toBe(10);
+  });
+
+  it("POINT_10: multiplies by 10", () => {
+    expect(convertScoreFromAnilist(8, "POINT_10")).toBe(80);
+    expect(convertScoreFromAnilist(10, "POINT_10")).toBe(100);
+    expect(convertScoreFromAnilist(1, "POINT_10")).toBe(10);
+  });
+
+  it("POINT_5: multiplies by 20", () => {
+    expect(convertScoreFromAnilist(5, "POINT_5")).toBe(100);
+    expect(convertScoreFromAnilist(4, "POINT_5")).toBe(80);
+    expect(convertScoreFromAnilist(1, "POINT_5")).toBe(20);
+  });
+
+  it("POINT_3: multiplies by ~33.3", () => {
+    expect(convertScoreFromAnilist(3, "POINT_3")).toBe(100);
+    expect(convertScoreFromAnilist(2, "POINT_3")).toBe(67);
+    expect(convertScoreFromAnilist(1, "POINT_3")).toBe(33);
+  });
+
+  it("unknown format: defaults to POINT_10 behavior", () => {
+    expect(convertScoreFromAnilist(7, "UNKNOWN")).toBe(70);
+  });
+});
+
+describe("score roundtrip", () => {
+  it("POINT_100 roundtrips exactly", () => {
+    const codex = 85;
+    const anilist = convertScoreToAnilist(codex, "POINT_100");
+    expect(convertScoreFromAnilist(anilist, "POINT_100")).toBe(codex);
+  });
+
+  it("POINT_10_DECIMAL roundtrips exactly", () => {
+    const codex = 85;
+    const anilist = convertScoreToAnilist(codex, "POINT_10_DECIMAL");
+    expect(convertScoreFromAnilist(anilist, "POINT_10_DECIMAL")).toBe(codex);
+  });
+
+  it("POINT_10 roundtrips within ±5", () => {
+    // 85 -> 9 -> 90 (lossy due to rounding)
+    const codex = 80;
+    const anilist = convertScoreToAnilist(codex, "POINT_10");
+    expect(convertScoreFromAnilist(anilist, "POINT_10")).toBe(80);
+  });
+
+  it("POINT_5 roundtrips within ±10", () => {
+    const codex = 80;
+    const anilist = convertScoreToAnilist(codex, "POINT_5");
+    expect(convertScoreFromAnilist(anilist, "POINT_5")).toBe(80);
   });
 });
