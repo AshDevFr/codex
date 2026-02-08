@@ -178,7 +178,7 @@ interface PluginManifest {
   capabilities: {
     metadataProvider?: MetadataContentType[];  // Content types: ["series"] or ["series", "book"]
     syncProvider?: boolean;                     // Can sync reading progress (future)
-    recommendationProvider?: boolean;           // Can provide recommendations (future)
+    userRecommendationProvider?: boolean;       // Can provide recommendations (future)
   };
 
   // Optional

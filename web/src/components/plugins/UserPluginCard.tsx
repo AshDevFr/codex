@@ -237,7 +237,7 @@ export function AvailablePluginCard({
               Sync
             </Badge>
           )}
-          {plugin.capabilities.recommendationProvider && (
+          {plugin.capabilities.userRecommendationProvider && (
             <Badge variant="light" color="grape" size="sm">
               Recommendations
             </Badge>

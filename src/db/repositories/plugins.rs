@@ -469,7 +469,7 @@ impl PluginsRepository {
     /// Update cached manifest from plugin
     ///
     /// Also infers and syncs the `plugin_type` column from the manifest
-    /// capabilities (e.g. `userReadSync` or `recommendationProvider` → "user").
+    /// capabilities (e.g. `userReadSync` or `userRecommendationProvider` → "user").
     pub async fn update_manifest(
         db: &DatabaseConnection,
         id: Uuid,

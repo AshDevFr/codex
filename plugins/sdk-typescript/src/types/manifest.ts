@@ -45,7 +45,7 @@ export interface PluginCapabilities {
    */
   externalIdSource?: string;
   /** Can provide recommendations */
-  recommendationProvider?: boolean;
+  userRecommendationProvider?: boolean;
 }
 
 /**

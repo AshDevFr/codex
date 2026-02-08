@@ -31999,14 +31999,14 @@
         "description": "Plugin capabilities for display (user plugin context)",
         "required": [
           "readSync",
-          "recommendationProvider"
+          "userRecommendationProvider"
         ],
         "properties": {
           "readSync": {
             "type": "boolean",
             "description": "Can sync reading progress"
           },
-          "recommendationProvider": {
+          "userRecommendationProvider": {
             "type": "boolean",
             "description": "Can provide recommendations"
           }

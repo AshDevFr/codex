@@ -566,9 +566,9 @@ export function createSyncPlugin(options: SyncPluginOptions): void {
  * Options for creating a recommendation provider plugin
  */
 export interface RecommendationPluginOptions {
-  /** Plugin manifest - must have capabilities.recommendationProvider: true */
+  /** Plugin manifest - must have capabilities.userRecommendationProvider: true */
   manifest: PluginManifest & {
-    capabilities: { recommendationProvider: true };
+    capabilities: { userRecommendationProvider: true };
   };
   /** RecommendationProvider implementation */
   provider: RecommendationProvider;

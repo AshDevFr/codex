@@ -223,7 +223,7 @@ export interface SyncProvider {
  * Plugins implementing this capability generate personalized suggestions
  * based on a user's library and reading history.
  *
- * Declare this capability in the plugin manifest with `recommendationProvider: true`.
+ * Declare this capability in the plugin manifest with `userRecommendationProvider: true`.
  */
 export interface RecommendationProvider {
   /** Get personalized recommendations */

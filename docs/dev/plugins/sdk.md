@@ -191,7 +191,7 @@ interface PluginManifest {
 interface PluginCapabilities {
   seriesMetadataProvider?: boolean;
   syncProvider?: boolean;
-  recommendationProvider?: boolean;
+  userRecommendationProvider?: boolean;
 }
 
 interface CredentialField {

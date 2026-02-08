@@ -98,7 +98,7 @@ async fn create_recommendation_plugin(
         "protocolVersion": "1.0",
         "pluginType": "user",
         "capabilities": {
-            "recommendationProvider": true
+            "userRecommendationProvider": true
         },
         "userDescription": "Get personalized recommendations"
     });

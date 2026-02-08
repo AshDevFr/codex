@@ -14753,7 +14753,7 @@ export interface components {
             /** @description Can sync reading progress */
             readSync: boolean;
             /** @description Can provide recommendations */
-            recommendationProvider: boolean;
+            userRecommendationProvider: boolean;
         };
         /** @description User plugin instance status */
         UserPluginDto: {

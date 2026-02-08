@@ -96,7 +96,7 @@ pub struct UserPluginCapabilitiesDto {
     /// Can sync reading progress
     pub read_sync: bool,
     /// Can provide recommendations
-    pub recommendation_provider: bool,
+    pub user_recommendation_provider: bool,
 }
 
 /// Request to update user plugin configuration
