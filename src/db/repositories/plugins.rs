@@ -470,6 +470,11 @@ impl PluginsRepository {
     ///
     /// Also infers and syncs the `plugin_type` column from the manifest
     /// capabilities (e.g. `userReadSync` or `userRecommendationProvider` → "user").
+    ///
+    /// If the manifest declares `requiredCredentials` or `oauth`, the
+    /// `credential_delivery` column is set to `"init_message"` so that
+    /// credentials are passed in the JSON-RPC initialize message (which is
+    /// what SDK-based plugins expect).
     pub async fn update_manifest(
         db: &DatabaseConnection,
         id: Uuid,
@@ -481,12 +486,19 @@ impl PluginsRepository {
 
         let mut active_model: plugins::ActiveModel = existing.into();
 
-        // Infer plugin_type from manifest capabilities
         if let Some(ref manifest_json) = manifest
             && let Ok(parsed) = serde_json::from_value::<PluginManifest>(manifest_json.clone())
-            && let Some(inferred) = parsed.capabilities.inferred_plugin_type()
         {
-            active_model.plugin_type = Set(inferred.to_string());
+            // Infer plugin_type from manifest capabilities
+            if let Some(inferred) = parsed.capabilities.inferred_plugin_type() {
+                active_model.plugin_type = Set(inferred.to_string());
+            }
+
+            // If the plugin requires credentials or OAuth, ensure they are
+            // delivered via init_message (SDK plugins read from params.credentials)
+            if !parsed.required_credentials.is_empty() || parsed.oauth.is_some() {
+                active_model.credential_delivery = Set("init_message".to_string());
+            }
         }
 
         active_model.manifest = Set(manifest);

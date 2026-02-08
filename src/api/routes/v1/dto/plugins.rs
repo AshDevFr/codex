@@ -584,7 +584,7 @@ fn default_plugin_type() -> String {
 }
 
 fn default_credential_delivery() -> String {
-    "env".to_string()
+    "init_message".to_string()
 }
 
 /// Request to update a plugin
@@ -1435,7 +1435,7 @@ mod tests {
         let request: CreatePluginRequest = serde_json::from_value(json).unwrap();
         assert_eq!(request.name, "test");
         assert_eq!(request.plugin_type, "system");
-        assert_eq!(request.credential_delivery, "env");
+        assert_eq!(request.credential_delivery, "init_message");
         assert!(request.args.is_empty());
         assert!(request.permissions.is_empty());
         assert!(request.scopes.is_empty());

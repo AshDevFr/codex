@@ -36,6 +36,42 @@ export const manifest = {
         required: false,
         default: "POINT_10",
       },
+      {
+        key: "progressUnit",
+        label: "Progress Unit",
+        description:
+          "What each book in Codex represents in AniList. Use 'volumes' for manga volumes, 'chapters' for individual chapters",
+        type: "string" as const,
+        required: false,
+        default: "volumes",
+      },
+      {
+        key: "pushCompletedSeries",
+        label: "Push Completed Series",
+        description:
+          "Push series where all local books are marked as read",
+        type: "boolean" as const,
+        required: false,
+        default: true,
+      },
+      {
+        key: "pushInProgressSeries",
+        label: "Push In-Progress Series",
+        description:
+          "Push series where at least one book has been started",
+        type: "boolean" as const,
+        required: false,
+        default: true,
+      },
+      {
+        key: "pushInProgressVolumes",
+        label: "Count In-Progress Volumes",
+        description:
+          "Include partially-read volumes/chapters in the progress count (otherwise only fully read ones are counted)",
+        type: "boolean" as const,
+        required: false,
+        default: false,
+      },
     ],
   },
   oauth: {

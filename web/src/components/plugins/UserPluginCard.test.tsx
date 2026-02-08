@@ -339,6 +339,25 @@ describe("ConnectedPluginCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows 'Sync completed' when all counts are zero", () => {
+    const plugin: UserPluginDto = {
+      ...connectedPlugin,
+      lastSyncResult: {
+        pulled: 0,
+        matched: 0,
+        applied: 0,
+        pushed: 0,
+        pushFailures: 0,
+      },
+    } as UserPluginDto;
+
+    renderWithProviders(
+      <ConnectedPluginCard {...defaultProps} plugin={plugin} />,
+    );
+    expect(screen.getByText("Sync completed")).toBeInTheDocument();
+    expect(screen.queryByText(/Pulled/)).not.toBeInTheDocument();
+  });
+
   it("does not show sync result when absent", () => {
     renderWithProviders(<ConnectedPluginCard {...defaultProps} />);
     expect(screen.queryByText(/Pulled/)).not.toBeInTheDocument();

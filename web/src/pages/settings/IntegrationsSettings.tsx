@@ -81,9 +81,9 @@ export function IntegrationsSettings() {
         const pushed = result.pushed as number | undefined;
         const applied = result.applied as number | undefined;
         const parts: string[] = [];
-        if (pulled != null) parts.push(`pulled ${pulled}`);
-        if (applied != null) parts.push(`${applied} applied`);
-        if (pushed != null) parts.push(`pushed ${pushed}`);
+        if (pulled != null && pulled > 0) parts.push(`pulled ${pulled}`);
+        if (applied != null && applied > 0) parts.push(`${applied} applied`);
+        if (pushed != null && pushed > 0) parts.push(`pushed ${pushed}`);
         notifications.show({
           title: "Sync completed",
           message: parts.join(", ") || "Sync finished successfully",

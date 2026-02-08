@@ -14,8 +14,8 @@ use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{
-    BookRepository, ReadProgressRepository, SeriesExternalIdRepository, UserPluginDataRepository,
-    UserPluginsRepository,
+    BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
+    UserPluginDataRepository, UserPluginsRepository,
 };
 use crate::events::EventBroadcaster;
 use crate::services::plugin::PluginManager;
@@ -26,6 +26,45 @@ use crate::services::plugin::sync::{
 };
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+
+/// Configuration for push behavior, parsed from user plugin config.
+#[derive(Debug, Clone)]
+struct PushConfig {
+    /// Whether each Codex book counts as a "volume" or a "chapter" in the
+    /// external service. Defaults to `"volumes"`.
+    progress_unit: String,
+    /// Push series where all local books are marked as read. Default: true.
+    push_completed_series: bool,
+    /// Push series where at least one book has been started. Default: true.
+    push_in_progress_series: bool,
+    /// Count partially-read books in the progress count. Default: false.
+    push_in_progress_volumes: bool,
+}
+
+impl PushConfig {
+    /// Parse push configuration from the user plugin config JSON.
+    fn from_user_config(config: &serde_json::Value) -> Self {
+        Self {
+            progress_unit: config
+                .get("progressUnit")
+                .and_then(|v| v.as_str())
+                .unwrap_or("volumes")
+                .to_string(),
+            push_completed_series: config
+                .get("pushCompletedSeries")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
+            push_in_progress_series: config
+                .get("pushInProgressSeries")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
+            push_in_progress_volumes: config
+                .get("pushInProgressVolumes")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }
+    }
+}
 
 /// Result of a user plugin sync operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,17 +139,17 @@ impl TaskHandler for UserPluginSyncHandler {
                 task.id, plugin_id, user_id
             );
 
-            // Read syncMode from user plugin config (defaults to "both")
-            let sync_mode =
+            // Read user plugin config
+            let user_config =
                 match UserPluginsRepository::get_by_user_and_plugin(db, user_id, plugin_id).await {
-                    Ok(Some(instance)) => instance
-                        .config
-                        .get("syncMode")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("both")
-                        .to_string(),
-                    _ => "both".to_string(),
+                    Ok(Some(instance)) => instance.config.clone(),
+                    _ => serde_json::json!({}),
                 };
+            let sync_mode = user_config
+                .get("syncMode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("both")
+                .to_string();
             let do_pull = sync_mode == "both" || sync_mode == "pull";
             let do_push = sync_mode == "both" || sync_mode == "push";
 
@@ -247,9 +286,14 @@ impl TaskHandler for UserPluginSyncHandler {
 
             // Step 3: Push progress to external service
             let (pushed_count, push_failures) = if do_push {
+                let push_config = PushConfig::from_user_config(&user_config);
                 let entries = if let Some(ref source) = external_id_source {
-                    build_push_entries(db, user_id, source, task.id).await
+                    build_push_entries(db, user_id, source, task.id, &push_config).await
                 } else {
+                    warn!(
+                        "Task {}: Plugin has no externalIdSource in manifest — cannot build push entries",
+                        task.id
+                    );
                     vec![]
                 };
                 info!(
@@ -345,12 +389,14 @@ impl TaskHandler for UserPluginSyncHandler {
 ///
 /// For each series that has an external ID matching the given source,
 /// aggregates book-level reading progress into a single `SyncEntry`.
-/// Each book in a series is treated as one "chapter" for sync purposes.
+/// Behaviour is controlled by `PushConfig` (progress unit, which series
+/// to include, whether in-progress books count).
 async fn build_push_entries(
     db: &DatabaseConnection,
     user_id: Uuid,
     external_id_source: &str,
     task_id: Uuid,
+    config: &PushConfig,
 ) -> Vec<SyncEntry> {
     // Get all series that have external IDs for this source
     let external_ids =
@@ -365,11 +411,14 @@ async fn build_push_entries(
             }
         };
 
+    debug!(
+        "Task {}: Found {} series with external IDs for source {}",
+        task_id,
+        external_ids.len(),
+        external_id_source
+    );
+
     if external_ids.is_empty() {
-        debug!(
-            "Task {}: No series with external IDs for source {}",
-            task_id, external_id_source
-        );
         return vec![];
     }
 
@@ -394,9 +443,10 @@ async fn build_push_entries(
 
         // Check reading progress for each book
         let mut completed_count: i32 = 0;
+        let mut in_progress_count: i32 = 0;
         let mut has_any_progress = false;
         let mut earliest_started: Option<chrono::DateTime<chrono::Utc>> = None;
-        let mut latest_completed: Option<chrono::DateTime<chrono::Utc>> = None;
+        let mut latest_completed_at: Option<chrono::DateTime<chrono::Utc>> = None;
 
         for book in &books {
             match ReadProgressRepository::get_by_user_and_book(db, user_id, book.id).await {
@@ -404,13 +454,15 @@ async fn build_push_entries(
                     has_any_progress = true;
                     if progress.completed {
                         completed_count += 1;
-                        if let Some(completed_at) = progress.completed_at {
-                            latest_completed = Some(match latest_completed {
-                                Some(existing) if completed_at > existing => completed_at,
+                        if let Some(cat) = progress.completed_at {
+                            latest_completed_at = Some(match latest_completed_at {
+                                Some(existing) if cat > existing => cat,
                                 Some(existing) => existing,
-                                None => completed_at,
+                                None => cat,
                             });
                         }
+                    } else {
+                        in_progress_count += 1;
                     }
                     earliest_started = Some(match earliest_started {
                         Some(existing) if progress.started_at < existing => progress.started_at,
@@ -430,30 +482,98 @@ async fn build_push_entries(
 
         // Skip series with no progress at all
         if !has_any_progress {
+            debug!(
+                "Task {}: Skipping series {} (ext_id={}) — no reading progress",
+                task_id, ext_id.series_id, ext_id.external_id
+            );
             continue;
         }
 
-        let total_books = books.len() as i32;
-        let all_completed = completed_count == total_books && total_books > 0;
+        let all_completed = completed_count == books.len() as i32;
+        let is_in_progress = !all_completed;
 
+        // Apply push config filters
+        if all_completed && !config.push_completed_series {
+            debug!(
+                "Task {}: Skipping series {} (ext_id={}) — completed but pushCompletedSeries=false",
+                task_id, ext_id.series_id, ext_id.external_id
+            );
+            continue;
+        }
+        if is_in_progress && !config.push_in_progress_series {
+            debug!(
+                "Task {}: Skipping series {} (ext_id={}) — in-progress but pushInProgressSeries=false",
+                task_id, ext_id.series_id, ext_id.external_id
+            );
+            continue;
+        }
+
+        // Calculate progress count based on config
+        let progress_count = if config.push_in_progress_volumes {
+            completed_count + in_progress_count
+        } else {
+            completed_count
+        };
+
+        debug!(
+            "Task {}: Series {} (ext_id={}): {}/{} books completed, {} in-progress, progress_count={}",
+            task_id,
+            ext_id.series_id,
+            ext_id.external_id,
+            completed_count,
+            books.len(),
+            in_progress_count,
+            progress_count,
+        );
+
+        // Mark as Completed only when:
+        // 1. All local books are read, AND
+        // 2. The series has a known total_book_count in metadata, AND
+        // 3. completed_count >= total_book_count
+        // Otherwise default to Reading — we can't be sure the library is complete.
         let status = if all_completed {
-            SyncReadingStatus::Completed
+            let is_truly_complete =
+                match SeriesMetadataRepository::get_by_series_id(db, ext_id.series_id).await {
+                    Ok(Some(meta)) => meta
+                        .total_book_count
+                        .is_some_and(|total| total > 0 && completed_count >= total),
+                    _ => false,
+                };
+            if is_truly_complete {
+                SyncReadingStatus::Completed
+            } else {
+                SyncReadingStatus::Reading
+            }
         } else {
             SyncReadingStatus::Reading
         };
 
-        entries.push(SyncEntry {
-            external_id: ext_id.external_id.clone(),
-            status,
-            progress: Some(SyncProgress {
-                chapters: Some(completed_count),
+        // Use the configured progress unit (volumes or chapters).
+        // When using "volumes", we only send `progressVolumes` — sending
+        // `progress` (chapters) would be incorrect because AniList treats
+        // that as chapter count, causing misleading "Read chapter X" activity.
+        let progress = if config.progress_unit == "chapters" {
+            SyncProgress {
+                chapters: Some(progress_count),
                 volumes: None,
                 pages: None,
-            }),
+            }
+        } else {
+            SyncProgress {
+                chapters: None,
+                volumes: Some(progress_count),
+                pages: None,
+            }
+        };
+
+        entries.push(SyncEntry {
+            external_id: ext_id.external_id.clone(),
+            status: status.clone(),
+            progress: Some(progress),
             score: None,
             started_at: earliest_started.map(|dt| dt.to_rfc3339()),
-            completed_at: if all_completed {
-                latest_completed.map(|dt| dt.to_rfc3339())
+            completed_at: if status == SyncReadingStatus::Completed {
+                latest_completed_at.map(|dt| dt.to_rfc3339())
             } else {
                 None
             },
@@ -577,22 +697,23 @@ async fn apply_pulled_entry(
         return 0;
     }
 
-    let chapters_read = entry
+    // Use volumes if available, fall back to chapters
+    let units_read = entry
         .progress
         .as_ref()
-        .and_then(|p| p.chapters)
+        .and_then(|p| p.volumes.or(p.chapters))
         .unwrap_or(0);
 
     // Determine which books to mark as read
     let books_to_mark = if entry.status == SyncReadingStatus::Completed {
         // Mark all books as read
         &books[..]
-    } else if chapters_read > 0 {
-        // Mark first N books as read (each book = 1 chapter)
-        let n = (chapters_read as usize).min(books.len());
+    } else if units_read > 0 {
+        // Mark first N books as read (each book = 1 volume/chapter)
+        let n = (units_read as usize).min(books.len());
         &books[..n]
     } else {
-        // No chapters and not completed — nothing to apply
+        // No progress units and not completed — nothing to apply
         return 0;
     };
 
@@ -1070,6 +1191,16 @@ mod tests {
         assert_eq!(applied, 2);
     }
 
+    /// Default push config for tests (matches production defaults)
+    fn default_push_config() -> PushConfig {
+        PushConfig {
+            progress_unit: "volumes".to_string(),
+            push_completed_series: true,
+            push_in_progress_series: true,
+            push_in_progress_volumes: false,
+        }
+    }
+
     #[tokio::test]
     async fn test_build_push_entries_with_progress() {
         let (db, _temp_dir) = create_test_db().await;
@@ -1133,13 +1264,16 @@ mod tests {
             user_id,
             "api:anilist",
             Uuid::new_v4(),
+            &default_push_config(),
         )
         .await;
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].external_id, "777");
         assert_eq!(entries[0].status, SyncReadingStatus::Reading);
-        assert_eq!(entries[0].progress.as_ref().unwrap().chapters, Some(2));
+        // "volumes" mode sends only volumes (not chapters, to avoid misleading activity)
+        assert_eq!(entries[0].progress.as_ref().unwrap().volumes, Some(2));
+        assert!(entries[0].progress.as_ref().unwrap().chapters.is_none());
     }
 
     #[tokio::test]
@@ -1194,13 +1328,17 @@ mod tests {
             user_id,
             "api:anilist",
             Uuid::new_v4(),
+            &default_push_config(),
         )
         .await;
 
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].status, SyncReadingStatus::Completed);
-        assert_eq!(entries[0].progress.as_ref().unwrap().chapters, Some(2));
-        assert!(entries[0].completed_at.is_some());
+        // Always push as Reading — we can't know total chapter count from external service
+        assert_eq!(entries[0].status, SyncReadingStatus::Reading);
+        // "volumes" mode sends only volumes (not chapters, to avoid misleading activity)
+        assert_eq!(entries[0].progress.as_ref().unwrap().volumes, Some(2));
+        assert!(entries[0].progress.as_ref().unwrap().chapters.is_none());
+        assert!(entries[0].completed_at.is_none());
     }
 
     #[tokio::test]
@@ -1242,6 +1380,7 @@ mod tests {
             user_id,
             "api:anilist",
             Uuid::new_v4(),
+            &default_push_config(),
         )
         .await;
 
@@ -1346,5 +1485,382 @@ mod tests {
         .await;
         assert_eq!(matched, 0);
         assert_eq!(applied, 0);
+    }
+
+    #[test]
+    fn test_push_config_defaults() {
+        let config = serde_json::json!({});
+        let push_config = PushConfig::from_user_config(&config);
+        assert_eq!(push_config.progress_unit, "volumes");
+        assert!(push_config.push_completed_series);
+        assert!(push_config.push_in_progress_series);
+        assert!(!push_config.push_in_progress_volumes);
+    }
+
+    #[test]
+    fn test_push_config_from_user_config() {
+        let config = serde_json::json!({
+            "progressUnit": "chapters",
+            "pushCompletedSeries": false,
+            "pushInProgressSeries": true,
+            "pushInProgressVolumes": true,
+        });
+        let push_config = PushConfig::from_user_config(&config);
+        assert_eq!(push_config.progress_unit, "chapters");
+        assert!(!push_config.push_completed_series);
+        assert!(push_config.push_in_progress_series);
+        assert!(push_config.push_in_progress_volumes);
+    }
+
+    #[tokio::test]
+    async fn test_build_push_entries_chapters_unit() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Chapter Manga", None)
+                .await
+                .unwrap();
+
+        let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 100)
+            .await
+            .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "111",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let config = PushConfig {
+            progress_unit: "chapters".to_string(),
+            ..default_push_config()
+        };
+
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &config,
+        )
+        .await;
+
+        assert_eq!(entries.len(), 1);
+        // Should use chapters, not volumes
+        assert_eq!(entries[0].progress.as_ref().unwrap().chapters, Some(1));
+        assert!(entries[0].progress.as_ref().unwrap().volumes.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_build_push_entries_skip_completed_series() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Done Manga 2", None)
+                .await
+                .unwrap();
+
+        // Create 2 books, mark both as read (= completed)
+        let mut test_books = Vec::new();
+        for i in 1..=2 {
+            let book =
+                create_test_book(db.sea_orm_connection(), series.id, library.id, i, 50).await;
+            test_books.push(book);
+        }
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+        for book in &test_books {
+            ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 50)
+                .await
+                .unwrap();
+        }
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "222",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Disable pushing completed series
+        let config = PushConfig {
+            push_completed_series: false,
+            ..default_push_config()
+        };
+
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &config,
+        )
+        .await;
+
+        assert!(entries.is_empty(), "Completed series should be skipped");
+    }
+
+    #[tokio::test]
+    async fn test_build_push_entries_skip_in_progress_series() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "WIP Manga", None)
+                .await
+                .unwrap();
+
+        // Create 3 books, mark only 1 as read (= in-progress)
+        let mut test_books = Vec::new();
+        for i in 1..=3 {
+            let book =
+                create_test_book(db.sea_orm_connection(), series.id, library.id, i, 50).await;
+            test_books.push(book);
+        }
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+        ReadProgressRepository::mark_as_read(
+            db.sea_orm_connection(),
+            user.id,
+            test_books[0].id,
+            50,
+        )
+        .await
+        .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "333",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Disable pushing in-progress series
+        let config = PushConfig {
+            push_in_progress_series: false,
+            ..default_push_config()
+        };
+
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &config,
+        )
+        .await;
+
+        assert!(entries.is_empty(), "In-progress series should be skipped");
+    }
+
+    #[tokio::test]
+    async fn test_build_push_entries_count_in_progress_volumes() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "IP Manga", None)
+                .await
+                .unwrap();
+
+        // Create 4 books
+        let mut test_books = Vec::new();
+        for i in 1..=4 {
+            let book =
+                create_test_book(db.sea_orm_connection(), series.id, library.id, i, 100).await;
+            test_books.push(book);
+        }
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        // Mark book 1 as fully read
+        ReadProgressRepository::mark_as_read(
+            db.sea_orm_connection(),
+            user.id,
+            test_books[0].id,
+            100,
+        )
+        .await
+        .unwrap();
+
+        // Mark book 2 as partially read (in-progress)
+        ReadProgressRepository::upsert(
+            db.sea_orm_connection(),
+            user.id,
+            test_books[1].id,
+            50,    // current_page
+            false, // not completed
+        )
+        .await
+        .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "444",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Without in-progress volumes: should count only completed (1)
+        let config_no_ip = default_push_config();
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &config_no_ip,
+        )
+        .await;
+        assert_eq!(entries.len(), 1);
+        // "volumes" mode sends only volumes (not chapters, to avoid misleading activity)
+        assert_eq!(entries[0].progress.as_ref().unwrap().volumes, Some(1));
+        assert!(entries[0].progress.as_ref().unwrap().chapters.is_none());
+
+        // With in-progress volumes: should count completed + in-progress (2)
+        let config_with_ip = PushConfig {
+            push_in_progress_volumes: true,
+            ..default_push_config()
+        };
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &config_with_ip,
+        )
+        .await;
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].progress.as_ref().unwrap().volumes, Some(2));
+        assert!(entries[0].progress.as_ref().unwrap().chapters.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_apply_pulled_entry_uses_volumes() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Vol Manga", None)
+                .await
+                .unwrap();
+
+        // Create 5 books
+        for i in 1..=5 {
+            create_test_book(db.sea_orm_connection(), series.id, library.id, i, 100).await;
+        }
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        // Pull entry with volumes=2 (no chapters)
+        let entry = SyncEntry {
+            external_id: "55".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: Some(SyncProgress {
+                chapters: None,
+                volumes: Some(2),
+                pages: None,
+            }),
+            score: None,
+            started_at: None,
+            completed_at: None,
+            notes: None,
+        };
+
+        let applied = apply_pulled_entry(
+            db.sea_orm_connection(),
+            user.id,
+            series.id,
+            &entry,
+            Uuid::new_v4(),
+        )
+        .await;
+        assert_eq!(applied, 2);
+
+        // Verify first 2 books are marked as read
+        let books = BookRepository::list_by_series(db.sea_orm_connection(), series.id, false)
+            .await
+            .unwrap();
+        for (i, book) in books.iter().enumerate() {
+            let progress = ReadProgressRepository::get_by_user_and_book(
+                db.sea_orm_connection(),
+                user.id,
+                book.id,
+            )
+            .await
+            .unwrap();
+            if i < 2 {
+                assert!(progress.is_some(), "Book {} should have progress", i);
+                assert!(
+                    progress.unwrap().completed,
+                    "Book {} should be completed",
+                    i
+                );
+            } else {
+                assert!(progress.is_none(), "Book {} should have no progress", i);
+            }
+        }
     }
 }
