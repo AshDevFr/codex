@@ -7,10 +7,18 @@ Codex supports metadata plugins that can automatically fetch and enrich your lib
 
 ## Available Plugins
 
+### Metadata Plugins
+
 | Plugin | Description | Source |
 |--------|-------------|--------|
 | [Open Library](./open-library) | Fetch book metadata from Open Library using ISBN or title search | Free, no API key required |
 | Echo (built-in) | Development/testing plugin that echoes back sample metadata | Included with Codex |
+
+### Sync Plugins
+
+| Plugin | Description | Source |
+|--------|-------------|--------|
+| [AniList Sync](./anilist-sync) | Sync manga reading progress between Codex and AniList | Free, requires AniList account |
 
 ## Plugin Capabilities
 

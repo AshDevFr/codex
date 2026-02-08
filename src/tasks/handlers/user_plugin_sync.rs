@@ -92,6 +92,12 @@ pub struct UserPluginSyncResult {
     /// Pull had more pages (not all pulled)
     #[serde(default)]
     pub pull_incomplete: bool,
+    /// Error message if pull failed entirely
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_error: Option<String>,
+    /// Error message if push failed entirely
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub push_error: Option<String>,
     /// Reason for skipping, if sync was skipped
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skipped_reason: Option<String>,
@@ -188,6 +194,8 @@ impl TaskHandler for UserPluginSyncHandler {
                             applied: 0,
                             push_failures: 0,
                             pull_incomplete: false,
+                            pull_error: None,
+                            push_error: None,
                             skipped_reason: Some(reason.to_string()),
                         }),
                     ));
@@ -232,60 +240,61 @@ impl TaskHandler for UserPluginSyncHandler {
             }
 
             // Step 2: Pull progress from external service
-            let (pulled_count, pull_incomplete, matched_count, applied_count) = if do_pull {
-                let pull_request = SyncPullRequest {
-                    since: None, // Full pull for now; incremental can use last_sync_at
-                    limit: Some(500),
-                    cursor: None,
+            let (pulled_count, pull_incomplete, matched_count, applied_count, pull_error) =
+                if do_pull {
+                    let pull_request = SyncPullRequest {
+                        since: None, // Full pull for now; incremental can use last_sync_at
+                        limit: Some(500),
+                        cursor: None,
+                    };
+
+                    match handle
+                        .call_method::<SyncPullRequest, SyncPullResponse>(
+                            methods::SYNC_PULL_PROGRESS,
+                            pull_request,
+                        )
+                        .await
+                    {
+                        Ok(pull_response) => {
+                            let count = pull_response.entries.len() as u32;
+                            let has_more = pull_response.has_more;
+                            info!(
+                                "Task {}: Pulled {} entries from external service (has_more: {})",
+                                task.id, count, has_more
+                            );
+
+                            // Match pulled entries to Codex series and apply to reading progress
+                            let (matched, applied) = match_and_apply_pulled_entries(
+                                db,
+                                &pull_response.entries,
+                                external_id_source.as_deref(),
+                                user_id,
+                                task.id,
+                            )
+                            .await;
+
+                            if applied > 0 {
+                                info!(
+                                    "Task {}: Applied reading progress for {} books",
+                                    task.id, applied
+                                );
+                            }
+
+                            (count, has_more, matched, applied, None)
+                        }
+                        Err(e) => {
+                            error!("Task {}: Pull failed: {}", task.id, e);
+                            // Continue to push even if pull fails
+                            (0, false, 0, 0, Some(e.to_string()))
+                        }
+                    }
+                } else {
+                    info!("Task {}: Skipping pull (syncMode={})", task.id, sync_mode);
+                    (0, false, 0, 0, None)
                 };
 
-                match handle
-                    .call_method::<SyncPullRequest, SyncPullResponse>(
-                        methods::SYNC_PULL_PROGRESS,
-                        pull_request,
-                    )
-                    .await
-                {
-                    Ok(pull_response) => {
-                        let count = pull_response.entries.len() as u32;
-                        let has_more = pull_response.has_more;
-                        info!(
-                            "Task {}: Pulled {} entries from external service (has_more: {})",
-                            task.id, count, has_more
-                        );
-
-                        // Match pulled entries to Codex series and apply to reading progress
-                        let (matched, applied) = match_and_apply_pulled_entries(
-                            db,
-                            &pull_response.entries,
-                            external_id_source.as_deref(),
-                            user_id,
-                            task.id,
-                        )
-                        .await;
-
-                        if applied > 0 {
-                            info!(
-                                "Task {}: Applied reading progress for {} books",
-                                task.id, applied
-                            );
-                        }
-
-                        (count, has_more, matched, applied)
-                    }
-                    Err(e) => {
-                        error!("Task {}: Pull failed: {}", task.id, e);
-                        // Continue to push even if pull fails
-                        (0, false, 0, 0)
-                    }
-                }
-            } else {
-                info!("Task {}: Skipping pull (syncMode={})", task.id, sync_mode);
-                (0, false, 0, 0)
-            };
-
             // Step 3: Push progress to external service
-            let (pushed_count, push_failures) = if do_push {
+            let (pushed_count, push_failures, push_error) = if do_push {
                 let push_config = PushConfig::from_user_config(&user_config);
                 let entries = if let Some(ref source) = external_id_source {
                     build_push_entries(db, user_id, source, task.id, &push_config).await
@@ -324,25 +333,34 @@ impl TaskHandler for UserPluginSyncHandler {
                                 task.id, success_count
                             );
                         }
-                        (success_count, failure_count)
+                        (success_count, failure_count, None)
                     }
                     Err(e) => {
                         error!("Task {}: Push failed: {}", task.id, e);
-                        (0, 0)
+                        (0, 0, Some(e.to_string()))
                     }
                 }
             } else {
                 info!("Task {}: Skipping push (syncMode={})", task.id, sync_mode);
-                (0, 0)
+                (0, 0, None)
             };
+
+            let had_errors = pull_error.is_some() || push_error.is_some();
 
             // Record sync timestamp on the user plugin instance
             if let Err(e) = UserPluginsRepository::record_sync(db, context.user_plugin_id).await {
                 warn!("Task {}: Failed to record sync timestamp: {}", task.id, e);
             }
 
-            // Record success on the user plugin instance
-            if let Err(e) = UserPluginsRepository::record_success(db, context.user_plugin_id).await
+            // Record success or failure on the user plugin instance
+            if had_errors {
+                if let Err(e) =
+                    UserPluginsRepository::record_failure(db, context.user_plugin_id).await
+                {
+                    warn!("Task {}: Failed to record failure: {}", task.id, e);
+                }
+            } else if let Err(e) =
+                UserPluginsRepository::record_success(db, context.user_plugin_id).await
             {
                 warn!("Task {}: Failed to record success: {}", task.id, e);
             }
@@ -357,6 +375,8 @@ impl TaskHandler for UserPluginSyncHandler {
                 applied: applied_count,
                 push_failures,
                 pull_incomplete,
+                pull_error,
+                push_error,
                 skipped_reason: None,
             };
 
@@ -832,6 +852,8 @@ mod tests {
             applied: 6,
             push_failures: 1,
             pull_incomplete: false,
+            pull_error: None,
+            push_error: None,
             skipped_reason: None,
         };
 
@@ -844,6 +866,62 @@ mod tests {
         assert_eq!(json["pushFailures"], 1);
         assert!(!json["pullIncomplete"].as_bool().unwrap());
         assert!(!json.as_object().unwrap().contains_key("skippedReason"));
+        assert!(!json.as_object().unwrap().contains_key("pullError"));
+        assert!(!json.as_object().unwrap().contains_key("pushError"));
+    }
+
+    #[test]
+    fn test_sync_result_with_errors() {
+        let result = UserPluginSyncResult {
+            plugin_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            external_username: Some("user".to_string()),
+            pushed: 3,
+            pulled: 0,
+            matched: 0,
+            applied: 0,
+            push_failures: 0,
+            pull_incomplete: false,
+            pull_error: Some("AniList API error: 400 Bad Request".to_string()),
+            push_error: None,
+            skipped_reason: None,
+        };
+
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["pullError"], "AniList API error: 400 Bad Request");
+        assert!(!json.as_object().unwrap().contains_key("pushError"));
+        assert_eq!(json["pushed"], 3);
+        assert_eq!(json["pulled"], 0);
+
+        // Round-trip
+        let deserialized: UserPluginSyncResult = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            deserialized.pull_error,
+            Some("AniList API error: 400 Bad Request".to_string())
+        );
+        assert!(deserialized.push_error.is_none());
+    }
+
+    #[test]
+    fn test_sync_result_with_both_errors() {
+        let result = UserPluginSyncResult {
+            plugin_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            external_username: None,
+            pushed: 0,
+            pulled: 0,
+            matched: 0,
+            applied: 0,
+            push_failures: 0,
+            pull_incomplete: false,
+            pull_error: Some("Pull failed".to_string()),
+            push_error: Some("Push failed".to_string()),
+            skipped_reason: None,
+        };
+
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["pullError"], "Pull failed");
+        assert_eq!(json["pushError"], "Push failed");
     }
 
     #[test]
@@ -858,6 +936,8 @@ mod tests {
             applied: 0,
             push_failures: 0,
             pull_incomplete: false,
+            pull_error: None,
+            push_error: None,
             skipped_reason: Some("plugin_not_enabled".to_string()),
         };
 
@@ -906,6 +986,8 @@ mod tests {
             applied: 250,
             push_failures: 0,
             pull_incomplete: true,
+            pull_error: None,
+            push_error: None,
             skipped_reason: None,
         };
 
@@ -928,6 +1010,8 @@ mod tests {
             applied: 3,
             push_failures: 0,
             pull_incomplete: false,
+            pull_error: None,
+            push_error: None,
             skipped_reason: None,
         };
 

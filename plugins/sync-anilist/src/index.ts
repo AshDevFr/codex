@@ -156,16 +156,7 @@ const provider: SyncProvider = {
     const page = params.cursor ? Number.parseInt(params.cursor, 10) : 1;
     const perPage = params.limit ? Math.min(params.limit, 50) : 50;
 
-    // Convert since timestamp to unix seconds for AniList
-    let updatedSince: number | undefined;
-    if (params.since) {
-      const sinceDate = new Date(params.since);
-      if (!Number.isNaN(sinceDate.getTime())) {
-        updatedSince = Math.floor(sinceDate.getTime() / 1000);
-      }
-    }
-
-    const result = await client.getMangaList(viewerId, page, perPage, updatedSince);
+    const result = await client.getMangaList(viewerId, page, perPage);
 
     const entries: SyncEntry[] = result.entries.map((entry) => ({
       externalId: String(entry.mediaId),

@@ -7,7 +7,7 @@ A Codex plugin for syncing manga reading progress between Codex and [AniList](ht
 - Two-way sync of manga reading progress with AniList
 - Push reading status, chapters read, scores, and dates to AniList
 - Pull updates from AniList back to Codex
-- Conflict detection when both sides have changed
+- Highest-progress-wins conflict resolution (progress only moves forward)
 - External ID matching via AniList API IDs (`api:anilist`)
 
 ## Authentication
@@ -87,9 +87,62 @@ Once connected, the sync plugin works automatically:
 
 1. Go to **Settings** > **Integrations**
 2. Click **Sync Now** to trigger a manual sync
-3. View sync status including pending push/pull counts
+3. View sync status including pulled/pushed/applied counts
 
 The plugin matches Codex series to AniList entries using external IDs stored in the `series_external_ids` table with the `api:anilist` source.
+
+## Sync Behavior
+
+### Sync Modes
+
+You can configure which direction data flows in **Settings** > **Integrations** > **Settings**:
+
+| Mode | Description |
+|------|-------------|
+| **Pull & Push** (default) | Import progress from AniList, then export Codex progress to AniList |
+| **Pull Only** | Import progress from AniList without writing anything back |
+| **Push Only** | Export Codex progress to AniList without importing |
+
+### How Sync Works
+
+When sync runs in **Pull & Push** mode, it executes two phases in order:
+
+1. **Pull** — Fetches your reading list from AniList, matches entries to Codex series via external IDs, and marks the corresponding books as read in Codex.
+2. **Push** — Reads your current Codex reading progress and sends it to AniList, overwriting the remote entry.
+
+### Conflict Resolution
+
+Codex uses a **highest progress wins** strategy. There is no manual conflict resolution — instead, progress can only move forward:
+
+| Scenario | Result |
+|----------|--------|
+| AniList ahead (e.g., 5 vols read) and Codex behind (3 vols read) | Pull marks books 4–5 as read in Codex. Push sends 5 to AniList. Both agree. |
+| Codex ahead (5 vols read) and AniList behind (3 vols read) | Pull tries to mark first 3 as read — already completed, skipped. Push sends 5 to AniList. **Codex wins.** |
+| Both changed differently | Pull applies remote progress first (additive only), then Push sends local state to AniList. Effectively **Codex wins** because push runs last. |
+
+Key behaviors:
+
+- **Pull is additive only** — it marks unread books as read but never un-reads a book. If you lower your chapter count on AniList, that change is ignored.
+- **Push overwrites the remote** — after pulling, Codex sends its current state to AniList, which may overwrite changes made directly on AniList.
+- **Progress is monotonic** — once a book is marked as read, sync will not undo it. Progress only moves forward.
+
+### Completed Status
+
+The plugin is conservative about marking series as "Completed" on AniList:
+
+- A series is pushed as **Completed** only when all local books are read **and** the series metadata includes a `total_book_count` that matches.
+- Otherwise, the series is pushed as **Reading** — even if all local books are read — because Codex can't be sure the library contains the full series.
+
+### Push Configuration
+
+These options are available in the plugin settings:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| Progress Unit | Volumes | Whether each Codex book counts as a "volume" or "chapter" on AniList. Use "volumes" to avoid misleading "Read chapter X" activity on AniList. |
+| Push Completed Series | On | Include series where all local books are read |
+| Push In-Progress Series | On | Include series where at least one book has been started |
+| Count In-Progress Books | Off | Whether partially-read books count toward the progress number |
 
 ## Development
 

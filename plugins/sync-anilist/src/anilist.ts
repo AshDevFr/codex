@@ -34,7 +34,7 @@ const VIEWER_QUERY = `
 `;
 
 const MANGA_LIST_QUERY = `
-  query ($userId: Int!, $page: Int, $perPage: Int, $updatedSince: Int) {
+  query ($userId: Int!, $page: Int, $perPage: Int) {
     Page(page: $page, perPage: $perPage) {
       pageInfo {
         total
@@ -42,7 +42,7 @@ const MANGA_LIST_QUERY = `
         lastPage
         hasNextPage
       }
-      mediaList(userId: $userId, type: MANGA, sort: UPDATED_TIME_DESC, updatedAt_greater: $updatedSince) {
+      mediaList(userId: $userId, type: MANGA, sort: UPDATED_TIME_DESC) {
         id
         mediaId
         status
@@ -233,12 +233,8 @@ export class AniListClient {
     userId: number,
     page = 1,
     perPage = 50,
-    updatedSince?: number,
   ): Promise<{ pageInfo: AniListPageInfo; entries: AniListMediaListEntry[] }> {
     const variables: Record<string, unknown> = { userId, page, perPage };
-    if (updatedSince) {
-      variables.updatedSince = updatedSince;
-    }
 
     const data = await this.query<{
       Page: {
