@@ -41,7 +41,7 @@ const sidebars: SidebarsConfig = {
           type: "category",
           label: "Plugins",
           link: { type: "doc", id: "plugins/index" },
-          items: ["plugins/open-library"],
+          items: ["plugins/open-library", "plugins/anilist-sync"],
         },
         {
           type: "category",

@@ -101,11 +101,20 @@ function UserPluginSettingsContent({
       {isSyncPlugin && (
         <Select
           label="Sync Mode"
-          description="Choose which direction data flows during sync"
+          description="Choose which direction data flows during sync. In Pull & Push mode, remote progress is imported first (additive only — books are never un-read), then local progress is exported. The highest progress always wins."
           data={[
-            { value: "both", label: "Pull & Push" },
-            { value: "pull", label: "Pull Only" },
-            { value: "push", label: "Push Only" },
+            {
+              value: "both",
+              label: "Pull & Push (recommended)",
+            },
+            {
+              value: "pull",
+              label: "Pull Only",
+            },
+            {
+              value: "push",
+              label: "Push Only",
+            },
           ]}
           {...form.getInputProps("syncMode")}
         />

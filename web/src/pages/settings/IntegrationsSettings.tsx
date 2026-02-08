@@ -80,14 +80,29 @@ export function IntegrationsSettings() {
         const pulled = result.pulled as number | undefined;
         const pushed = result.pushed as number | undefined;
         const applied = result.applied as number | undefined;
+        const pullError = result.pullError as string | undefined;
+        const pushError = result.pushError as string | undefined;
+        const hasErrors = !!pullError || !!pushError;
+
         const parts: string[] = [];
-        if (pulled != null && pulled > 0) parts.push(`pulled ${pulled}`);
-        if (applied != null && applied > 0) parts.push(`${applied} applied`);
-        if (pushed != null && pushed > 0) parts.push(`pushed ${pushed}`);
+        if (pullError) {
+          parts.push(`Pull failed: ${pullError}`);
+        } else if (pulled != null && pulled > 0) {
+          parts.push(`pulled ${pulled}`);
+          if (applied != null && applied > 0) parts.push(`${applied} applied`);
+        }
+        if (pushError) {
+          parts.push(`Push failed: ${pushError}`);
+        } else if (pushed != null && pushed > 0) {
+          parts.push(`pushed ${pushed}`);
+        }
+
         notifications.show({
-          title: "Sync completed",
-          message: parts.join(", ") || "Sync finished successfully",
-          color: "green",
+          title: hasErrors ? "Sync completed with errors" : "Sync completed",
+          message:
+            parts.join(", ") ||
+            (hasErrors ? "Sync encountered errors" : "Sync finished successfully"),
+          color: hasErrors ? "orange" : "green",
         });
       }
     } else if (syncTask.status === "failed") {

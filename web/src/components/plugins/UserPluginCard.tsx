@@ -75,14 +75,20 @@ function formatSyncResult(result: Record<string, unknown>): string {
   const matched = result.matched as number | undefined;
   const applied = result.applied as number | undefined;
   const pushed = result.pushed as number | undefined;
-  if (pulled != null && pulled > 0) {
+  const pullError = result.pullError as string | undefined;
+  const pushError = result.pushError as string | undefined;
+  if (pullError) {
+    parts.push("Pull failed");
+  } else if (pulled != null && pulled > 0) {
     let pullPart = `Pulled ${pulled}`;
     if (matched != null) pullPart += ` (${matched} matched`;
     if (applied != null) pullPart += `, ${applied} applied`;
     if (matched != null) pullPart += ")";
     parts.push(pullPart);
   }
-  if (pushed != null && pushed > 0) {
+  if (pushError) {
+    parts.push("push failed");
+  } else if (pushed != null && pushed > 0) {
     parts.push(`pushed ${pushed}`);
   }
   return parts.join(", ") || "Sync completed";
