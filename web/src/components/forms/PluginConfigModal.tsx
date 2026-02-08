@@ -50,7 +50,7 @@ function isMetadataProvider(plugin: PluginDto): boolean {
 }
 
 function isSyncProvider(plugin: PluginDto): boolean {
-  return plugin.manifest?.capabilities?.userSyncProvider === true;
+  return plugin.manifest?.capabilities?.userReadSync === true;
 }
 
 function hasManifest(plugin: PluginDto): boolean {

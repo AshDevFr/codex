@@ -859,7 +859,7 @@ function MetadataManifestDetails({ plugin }: { plugin: PluginDto }) {
 
 // Sync provider manifest details (right column)
 function SyncManifestDetails({ plugin }: { plugin: PluginDto }) {
-  if (!plugin.manifest?.capabilities?.userSyncProvider) return null;
+  if (!plugin.manifest?.capabilities?.userReadSync) return null;
 
   const externalIdSource = plugin.manifest.capabilities.externalIdSource;
 
@@ -1050,7 +1050,7 @@ function PluginDetails({
                     Metadata Provider
                   </Badge>
                 )}
-              {plugin.manifest.capabilities.userSyncProvider && (
+              {plugin.manifest.capabilities.userReadSync && (
                 <Badge color="violet" variant="light">
                   Reading Sync
                 </Badge>

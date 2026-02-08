@@ -487,9 +487,9 @@ export function createMetadataPlugin(options: MetadataPluginOptions): void {
  * Options for creating a sync provider plugin
  */
 export interface SyncPluginOptions {
-  /** Plugin manifest - must have capabilities.userSyncProvider: true */
+  /** Plugin manifest - must have capabilities.userReadSync: true */
   manifest: PluginManifest & {
-    capabilities: { userSyncProvider: true };
+    capabilities: { userReadSync: true };
   };
   /** SyncProvider implementation */
   provider: SyncProvider;
@@ -529,7 +529,7 @@ export interface SyncPluginOptions {
  *     description: "Syncs reading progress",
  *     author: "Me",
  *     protocolVersion: "1.0",
- *     capabilities: { userSyncProvider: true },
+ *     capabilities: { userReadSync: true },
  *   },
  *   provider,
  * });

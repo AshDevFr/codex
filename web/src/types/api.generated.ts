@@ -11367,7 +11367,7 @@ export interface components {
             /** @description Content types this plugin can provide metadata for (e.g., ["series", "book"]) */
             metadataProvider?: string[];
             /** @description Can sync user reading progress */
-            userSyncProvider?: boolean;
+            userReadSync?: boolean;
         };
         /** @description A plugin (credentials are never exposed) */
         PluginDto: {
@@ -14750,10 +14750,10 @@ export interface components {
         };
         /** @description Plugin capabilities for display (user plugin context) */
         UserPluginCapabilitiesDto: {
+            /** @description Can sync reading progress */
+            readSync: boolean;
             /** @description Can provide recommendations */
             recommendationProvider: boolean;
-            /** @description Can sync reading progress */
-            syncProvider: boolean;
         };
         /** @description User plugin instance status */
         UserPluginDto: {

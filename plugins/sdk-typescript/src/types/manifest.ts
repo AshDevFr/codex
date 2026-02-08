@@ -34,14 +34,14 @@ export interface PluginCapabilities {
    */
   metadataProvider?: MetadataContentType[];
   /** Can sync reading progress with external service (per-user) */
-  userSyncProvider?: boolean;
+  userReadSync?: boolean;
   /**
    * External ID source used to match sync entries to Codex series.
    * When set, pulled sync entries are matched to series via the
    * `series_external_ids` table using this source string.
    *
    * Should use the `api:<service>` convention, e.g. "api:anilist".
-   * Only meaningful when `userSyncProvider` is true.
+   * Only meaningful when `userReadSync` is true.
    */
   externalIdSource?: string;
   /** Can provide recommendations */

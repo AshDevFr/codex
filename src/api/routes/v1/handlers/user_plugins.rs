@@ -177,9 +177,9 @@ pub async fn list_user_plugins(
                     .or_else(|| manifest.as_ref().and_then(|m| m.description.clone())),
                 requires_oauth: oauth_config.is_some(),
                 capabilities: UserPluginCapabilitiesDto {
-                    sync_provider: manifest
+                    read_sync: manifest
                         .as_ref()
-                        .map(|m| m.capabilities.user_sync_provider)
+                        .map(|m| m.capabilities.user_read_sync)
                         .unwrap_or(false),
                     recommendation_provider: manifest
                         .as_ref()
@@ -713,14 +713,14 @@ pub async fn trigger_sync(
         .as_ref()
         .and_then(|m| serde_json::from_value(m.clone()).ok());
 
-    let is_sync_provider = manifest
+    let is_read_sync = manifest
         .as_ref()
-        .map(|m| m.capabilities.user_sync_provider)
+        .map(|m| m.capabilities.user_read_sync)
         .unwrap_or(false);
 
-    if !is_sync_provider {
+    if !is_read_sync {
         return Err(ApiError::BadRequest(
-            "Plugin is not a sync provider".to_string(),
+            "Plugin does not support reading sync".to_string(),
         ));
     }
 

@@ -76,7 +76,7 @@ const mockPlugins: PluginDto[] = [
       author: "Codex Team",
       capabilities: {
         metadataProvider: ["series"],
-        userSyncProvider: false,
+        userReadSync: false,
       },
       contentTypes: ["series"],
       requiredCredentials: [

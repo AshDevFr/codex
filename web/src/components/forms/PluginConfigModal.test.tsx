@@ -121,7 +121,7 @@ describe("PluginConfigModal", () => {
         description: "A metadata plugin",
         capabilities: {
           metadataProvider: ["series"],
-          userSyncProvider: false,
+          userReadSync: false,
         },
         contentTypes: ["series"],
         requiredCredentials: [],
@@ -158,7 +158,7 @@ describe("PluginConfigModal", () => {
         description: "A sync plugin",
         capabilities: {
           metadataProvider: [],
-          userSyncProvider: true,
+          userReadSync: true,
         },
         contentTypes: [],
         requiredCredentials: [],
@@ -244,7 +244,7 @@ describe("PluginConfigModal", () => {
         description: "A metadata plugin",
         capabilities: {
           metadataProvider: ["series"],
-          userSyncProvider: false,
+          userReadSync: false,
         },
         contentTypes: ["series"],
         requiredCredentials: [],
