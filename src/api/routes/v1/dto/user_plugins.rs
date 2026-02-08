@@ -94,7 +94,7 @@ pub struct AvailablePluginDto {
 #[serde(rename_all = "camelCase")]
 pub struct UserPluginCapabilitiesDto {
     /// Can sync reading progress
-    pub sync_provider: bool,
+    pub read_sync: bool,
     /// Can provide recommendations
     pub recommendation_provider: bool,
 }

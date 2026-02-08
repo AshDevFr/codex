@@ -311,12 +311,12 @@ pub struct PluginCapabilities {
     pub metadata_provider: Vec<MetadataContentType>,
     /// Can sync user reading progress (v2)
     #[serde(default)]
-    pub user_sync_provider: bool,
+    pub user_read_sync: bool,
     /// External ID source used to match sync entries to Codex series.
     /// When set, pulled sync entries are matched to series via the
     /// `series_external_ids` table using this source string.
     /// Uses the `api:<service>` convention, e.g. "api:anilist".
-    /// Only meaningful when `user_sync_provider` is true.
+    /// Only meaningful when `user_read_sync` is true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external_id_source: Option<String>,
     /// Can provide personalized recommendations (v2)
@@ -1839,7 +1839,7 @@ mod tests {
             "protocolVersion": "1.0",
             "pluginType": "user",
             "capabilities": {
-                "userSyncProvider": true
+                "userReadSync": true
             },
             "oauth": {
                 "authorizationUrl": "https://anilist.co/api/v2/oauth/authorize",
@@ -1854,7 +1854,7 @@ mod tests {
         let manifest: PluginManifest = serde_json::from_value(json).unwrap();
         assert_eq!(manifest.name, "sync-anilist");
         assert_eq!(manifest.plugin_type, PluginManifestType::User);
-        assert!(manifest.capabilities.user_sync_provider);
+        assert!(manifest.capabilities.user_read_sync);
         assert!(!manifest.capabilities.recommendation_provider);
 
         let oauth = manifest.oauth.unwrap();
@@ -1904,7 +1904,7 @@ mod tests {
 
         let manifest: PluginManifest = serde_json::from_value(json).unwrap();
         assert!(manifest.capabilities.recommendation_provider);
-        assert!(!manifest.capabilities.user_sync_provider);
+        assert!(!manifest.capabilities.user_read_sync);
         assert!(manifest.capabilities.metadata_provider.is_empty());
     }
 

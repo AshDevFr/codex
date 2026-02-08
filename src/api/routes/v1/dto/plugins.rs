@@ -335,7 +335,7 @@ pub struct PluginCapabilitiesDto {
     pub metadata_provider: Vec<String>,
     /// Can sync user reading progress
     #[serde(default)]
-    pub user_sync_provider: bool,
+    pub user_read_sync: bool,
     /// External ID source for matching sync entries to series (e.g., "api:anilist")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external_id_source: Option<String>,
@@ -349,7 +349,7 @@ impl From<PluginCapabilities> for PluginCapabilitiesDto {
                 .iter()
                 .map(content_type_to_string)
                 .collect(),
-            user_sync_provider: c.user_sync_provider,
+            user_read_sync: c.user_read_sync,
             external_id_source: c.external_id_source,
         }
     }

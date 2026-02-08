@@ -144,7 +144,7 @@ export interface BookMetadataProvider {
  * Plugins implementing this capability can push and pull reading progress
  * between Codex and external services (e.g., AniList, MyAnimeList).
  *
- * Declare this capability in the plugin manifest with `userSyncProvider: true`.
+ * Declare this capability in the plugin manifest with `userReadSync: true`.
  *
  * @example
  * ```typescript

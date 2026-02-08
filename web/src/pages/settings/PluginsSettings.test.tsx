@@ -78,7 +78,7 @@ function createMockPlugin(overrides: Record<string, unknown> = {}) {
       author: "Test",
       capabilities: {
         metadataProvider: ["series"],
-        userSyncProvider: false,
+        userReadSync: false,
       },
       contentTypes: ["series"],
       requiredCredentials: [],
@@ -146,7 +146,7 @@ describe("PluginDetails - Metadata Targets", () => {
         protocolVersion: "1.0",
         capabilities: {
           metadataProvider: ["series", "book"],
-          userSyncProvider: false,
+          userReadSync: false,
         },
         contentTypes: ["series", "book"],
         requiredCredentials: [],
@@ -191,7 +191,7 @@ describe("PluginDetails - Metadata Targets", () => {
         protocolVersion: "1.0",
         capabilities: {
           metadataProvider: ["series", "book"],
-          userSyncProvider: false,
+          userReadSync: false,
         },
         contentTypes: ["series", "book"],
         requiredCredentials: [],

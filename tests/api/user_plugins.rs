@@ -147,7 +147,7 @@ async fn create_sync_plugin(
         "protocolVersion": "1.0",
         "pluginType": "user",
         "capabilities": {
-            "userSyncProvider": true
+            "userReadSync": true
         },
         "userDescription": "Sync reading progress"
     });

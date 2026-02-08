@@ -11,7 +11,7 @@ export const manifest = {
   homepage: "https://github.com/AshDevFr/codex",
   protocolVersion: "1.0",
   capabilities: {
-    userSyncProvider: true,
+    userReadSync: true,
     externalIdSource: "api:anilist",
   },
   requiredCredentials: [
@@ -39,5 +39,5 @@ export const manifest = {
     ],
   },
 } as const satisfies PluginManifest & {
-  capabilities: { userSyncProvider: true };
+  capabilities: { userReadSync: true };
 };

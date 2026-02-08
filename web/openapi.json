@@ -25834,7 +25834,7 @@
             },
             "description": "Content types this plugin can provide metadata for (e.g., [\"series\", \"book\"])"
           },
-          "userSyncProvider": {
+          "userReadSync": {
             "type": "boolean",
             "description": "Can sync user reading progress"
           }
@@ -31998,17 +31998,17 @@
         "type": "object",
         "description": "Plugin capabilities for display (user plugin context)",
         "required": [
-          "syncProvider",
+          "readSync",
           "recommendationProvider"
         ],
         "properties": {
+          "readSync": {
+            "type": "boolean",
+            "description": "Can sync reading progress"
+          },
           "recommendationProvider": {
             "type": "boolean",
             "description": "Can provide recommendations"
-          },
-          "syncProvider": {
-            "type": "boolean",
-            "description": "Can sync reading progress"
           }
         }
       },
