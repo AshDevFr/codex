@@ -16,7 +16,7 @@
 
 use crate::db::entities::plugins::{self, Entity as Plugins, PluginPermission};
 use crate::services::CredentialEncryption;
-use crate::services::plugin::protocol::PluginScope;
+use crate::services::plugin::protocol::{PluginManifest, PluginScope};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
@@ -467,6 +467,9 @@ impl PluginsRepository {
     }
 
     /// Update cached manifest from plugin
+    ///
+    /// Also infers and syncs the `plugin_type` column from the manifest
+    /// capabilities (e.g. `userReadSync` or `recommendationProvider` → "user").
     pub async fn update_manifest(
         db: &DatabaseConnection,
         id: Uuid,
@@ -477,6 +480,15 @@ impl PluginsRepository {
             .ok_or_else(|| anyhow!("Plugin not found: {}", id))?;
 
         let mut active_model: plugins::ActiveModel = existing.into();
+
+        // Infer plugin_type from manifest capabilities
+        if let Some(ref manifest_json) = manifest
+            && let Ok(parsed) = serde_json::from_value::<PluginManifest>(manifest_json.clone())
+            && let Some(inferred) = parsed.capabilities.inferred_plugin_type()
+        {
+            active_model.plugin_type = Set(inferred.to_string());
+        }
+
         active_model.manifest = Set(manifest);
         active_model.updated_at = Set(Utc::now());
 
@@ -1159,6 +1171,105 @@ mod tests {
 
         assert!(updated.manifest.is_some());
         assert_eq!(updated.manifest.unwrap()["version"], "1.0.0");
+        // No user capabilities → plugin_type stays "system"
+        assert_eq!(updated.plugin_type, "system");
+    }
+
+    #[tokio::test]
+    async fn test_update_manifest_infers_user_plugin_type() {
+        setup_test_encryption_key();
+        let db = setup_test_db().await;
+
+        let plugin = PluginsRepository::create(
+            &db,
+            "sync-test",
+            "Sync Test",
+            None,
+            "system", // starts as system
+            "node",
+            vec![],
+            vec![],
+            None,
+            vec![],
+            vec![],
+            vec![],
+            None,
+            "env",
+            None,
+            false,
+            None,
+            Some(60),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(plugin.plugin_type, "system");
+
+        // Manifest with userReadSync capability should flip plugin_type to "user"
+        let manifest = serde_json::json!({
+            "name": "sync-test",
+            "displayName": "Sync Test",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "userReadSync": true
+            }
+        });
+
+        let updated = PluginsRepository::update_manifest(&db, plugin.id, Some(manifest))
+            .await
+            .unwrap();
+
+        assert_eq!(updated.plugin_type, "user");
+    }
+
+    #[tokio::test]
+    async fn test_update_manifest_infers_system_plugin_type() {
+        setup_test_encryption_key();
+        let db = setup_test_db().await;
+
+        // Start as "user" to verify it gets corrected
+        let plugin = PluginsRepository::create(
+            &db,
+            "metadata-test",
+            "Metadata Test",
+            None,
+            "user",
+            "node",
+            vec![],
+            vec![],
+            None,
+            vec![],
+            vec![],
+            vec![],
+            None,
+            "env",
+            None,
+            false,
+            None,
+            Some(60),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(plugin.plugin_type, "user");
+
+        // Manifest with metadataProvider capability should set plugin_type to "system"
+        let manifest = serde_json::json!({
+            "name": "metadata-test",
+            "displayName": "Metadata Test",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "metadataProvider": ["series"]
+            }
+        });
+
+        let updated = PluginsRepository::update_manifest(&db, plugin.id, Some(manifest))
+            .await
+            .unwrap();
+
+        assert_eq!(updated.plugin_type, "system");
     }
 
     #[tokio::test]

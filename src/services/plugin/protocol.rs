@@ -335,6 +335,21 @@ impl PluginCapabilities {
     pub fn can_provide_book_metadata(&self) -> bool {
         self.metadata_provider.contains(&MetadataContentType::Book)
     }
+
+    /// Infer the plugin type from capabilities.
+    ///
+    /// User-facing capabilities (`user_read_sync`, `recommendation_provider`)
+    /// indicate a "user" plugin. Metadata provider capabilities indicate a
+    /// "system" plugin. Returns `None` when capabilities are empty.
+    pub fn inferred_plugin_type(&self) -> Option<PluginManifestType> {
+        if self.user_read_sync || self.recommendation_provider {
+            Some(PluginManifestType::User)
+        } else if !self.metadata_provider.is_empty() {
+            Some(PluginManifestType::System)
+        } else {
+            None
+        }
+    }
 }
 
 /// Plugin manifest type (declared by the plugin in its manifest)
@@ -346,6 +361,15 @@ pub enum PluginManifestType {
     System,
     /// User plugin: per-user integrations (sync, recommendations)
     User,
+}
+
+impl std::fmt::Display for PluginManifestType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::System => write!(f, "system"),
+            Self::User => write!(f, "user"),
+        }
+    }
 }
 
 /// OAuth 2.0 configuration for user plugins
@@ -1710,6 +1734,48 @@ mod tests {
         let user: PluginManifestType = serde_json::from_value(json!("user")).unwrap();
         assert_eq!(system, PluginManifestType::System);
         assert_eq!(user, PluginManifestType::User);
+    }
+
+    #[test]
+    fn test_plugin_manifest_type_display() {
+        assert_eq!(PluginManifestType::System.to_string(), "system");
+        assert_eq!(PluginManifestType::User.to_string(), "user");
+    }
+
+    #[test]
+    fn test_inferred_plugin_type_from_user_read_sync() {
+        let caps = PluginCapabilities {
+            user_read_sync: true,
+            ..Default::default()
+        };
+        assert_eq!(caps.inferred_plugin_type(), Some(PluginManifestType::User));
+    }
+
+    #[test]
+    fn test_inferred_plugin_type_from_recommendation_provider() {
+        let caps = PluginCapabilities {
+            recommendation_provider: true,
+            ..Default::default()
+        };
+        assert_eq!(caps.inferred_plugin_type(), Some(PluginManifestType::User));
+    }
+
+    #[test]
+    fn test_inferred_plugin_type_from_metadata_provider() {
+        let caps = PluginCapabilities {
+            metadata_provider: vec![MetadataContentType::Series],
+            ..Default::default()
+        };
+        assert_eq!(
+            caps.inferred_plugin_type(),
+            Some(PluginManifestType::System)
+        );
+    }
+
+    #[test]
+    fn test_inferred_plugin_type_empty_capabilities() {
+        let caps = PluginCapabilities::default();
+        assert_eq!(caps.inferred_plugin_type(), None);
     }
 
     #[test]
