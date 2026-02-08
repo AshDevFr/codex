@@ -3937,6 +3937,27 @@ export interface paths {
         patch: operations["update_user_plugin_config"];
         trace?: never;
     };
+    "/api/v1/user/plugins/{plugin_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set user credentials (personal access token) for a plugin
+         * @description Allows users to authenticate by pasting a personal access token
+         *     instead of going through the OAuth flow.
+         */
+        post: operations["set_user_credentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/plugins/{plugin_id}/disable": {
         parameters: {
             query?: never;
@@ -3986,6 +4007,49 @@ export interface paths {
          *     The client should open this URL in a popup or redirect the user.
          */
         post: operations["oauth_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/plugins/{plugin_id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a sync operation for a user plugin
+         * @description Enqueues a background sync task that will push/pull reading progress
+         *     between Codex and the external service.
+         */
+        post: operations["trigger_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/plugins/{plugin_id}/sync/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get sync status for a user plugin
+         * @description Returns the current sync status including last sync time, health, and failure count.
+         *     Pass `?live=true` to also query the plugin process for live sync state (pending push/pull,
+         *     conflicts, external entry count). This spawns the plugin process and is more expensive.
+         */
+        get: operations["get_sync_status"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5635,6 +5699,8 @@ export interface components {
             displayName: string;
             /** @description Plugin name */
             name: string;
+            /** @description Whether the admin has configured OAuth credentials (client_id set) */
+            oauthConfigured: boolean;
             /**
              * Format: uuid
              * @description Plugin definition ID
@@ -5642,6 +5708,8 @@ export interface components {
             pluginId: string;
             /** @description Whether this plugin requires OAuth authentication */
             requiresOauth: boolean;
+            /** @description User-facing setup instructions for the plugin */
+            userSetupInstructions?: string | null;
         };
         /** @description Series membership information */
         BelongsTo: {
@@ -9985,6 +10053,19 @@ export interface components {
          * @enum {string}
          */
         NumberStrategy: "file_order" | "metadata" | "filename" | "smart";
+        /** @description OAuth 2.0 configuration from plugin manifest */
+        OAuthConfigDto: {
+            /** @description OAuth 2.0 authorization endpoint URL */
+            authorizationUrl: string;
+            /** @description Whether to use PKCE (Proof Key for Code Exchange) */
+            pkce: boolean;
+            /** @description Required OAuth scopes */
+            scopes?: string[];
+            /** @description OAuth 2.0 token endpoint URL */
+            tokenUrl: string;
+            /** @description Optional user info endpoint URL */
+            userInfoUrl?: string | null;
+        };
         /** @description OAuth initiation response */
         OAuthStartResponse: {
             /**
@@ -11368,6 +11449,8 @@ export interface components {
             metadataProvider?: string[];
             /** @description Can sync user reading progress */
             userReadSync?: boolean;
+            /** @description Can provide personalized recommendations */
+            userRecommendationProvider?: boolean;
         };
         /** @description A plugin (credentials are never exposed) */
         PluginDto: {
@@ -11509,6 +11592,12 @@ export interface components {
              * @example true
              */
             useExistingExternalId: boolean;
+            /**
+             * Format: int64
+             * @description Number of users who have enabled this plugin (only for user-type plugins)
+             * @example 3
+             */
+            userCount?: number | null;
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
         };
@@ -11612,6 +11701,8 @@ export interface components {
         };
         /** @description Plugin manifest from the plugin itself */
         PluginManifestDto: {
+            /** @description Admin-facing setup instructions (e.g., how to create OAuth app, set client ID) */
+            adminSetupInstructions?: string | null;
             /** @description Author */
             author?: string | null;
             /** @description Plugin capabilities */
@@ -11627,12 +11718,15 @@ export interface components {
             homepage?: string | null;
             /** @description Unique identifier */
             name: string;
+            oauth?: null | components["schemas"]["OAuthConfigDto"];
             /** @description Protocol version */
             protocolVersion: string;
             /** @description Required credentials */
             requiredCredentials?: components["schemas"]["CredentialFieldDto"][];
             /** @description Supported scopes */
             scopes?: string[];
+            /** @description User-facing setup instructions (e.g., how to connect or get a personal token) */
+            userSetupInstructions?: string | null;
             /** @description Semantic version */
             version: string;
         };
@@ -13308,6 +13402,11 @@ export interface components {
              */
             tags: string[];
         };
+        /** @description Request to set user credentials (e.g., personal access token) */
+        SetUserCredentialsRequest: {
+            /** @description The access token or API key to store */
+            accessToken: string;
+        };
         /** @description Request to create or update a user's rating for a series */
         SetUserRatingRequest: {
             /**
@@ -13553,6 +13652,83 @@ export interface components {
         SmartBookConfig: {
             /** @description Additional patterns to consider as "generic" titles (beyond defaults) */
             additionalGenericPatterns?: string[];
+        };
+        /** @description Sync status response for a user plugin */
+        SyncStatusDto: {
+            /**
+             * Format: int32
+             * @description Number of entries with conflicts on both sides (only with `?live=true`)
+             */
+            conflicts?: number | null;
+            /** @description Whether the plugin is connected and ready to sync */
+            connected: boolean;
+            /** @description Whether the plugin is currently enabled */
+            enabled: boolean;
+            /**
+             * Format: int32
+             * @description Number of entries tracked on the external service (only with `?live=true`)
+             */
+            externalCount?: number | null;
+            /**
+             * Format: int32
+             * @description Number of consecutive failures
+             */
+            failureCount: number;
+            /** @description Health status */
+            healthStatus: string;
+            /**
+             * Format: date-time
+             * @description Last failure timestamp
+             */
+            lastFailureAt?: string | null;
+            /**
+             * Format: date-time
+             * @description Last successful operation timestamp
+             */
+            lastSuccessAt?: string | null;
+            /**
+             * Format: date-time
+             * @description Last successful sync timestamp
+             */
+            lastSyncAt?: string | null;
+            /** @description Error message if `?live=true` was requested but the plugin could not be queried */
+            liveError?: string | null;
+            /**
+             * Format: int32
+             * @description Number of external entries that need to be pulled (only with `?live=true`)
+             */
+            pendingPull?: number | null;
+            /**
+             * Format: int32
+             * @description Number of local entries that need to be pushed (only with `?live=true`)
+             */
+            pendingPush?: number | null;
+            /**
+             * Format: uuid
+             * @description Plugin ID
+             */
+            pluginId: string;
+            /** @description Plugin name */
+            pluginName: string;
+        };
+        /** @description Query parameters for sync status endpoint */
+        SyncStatusQuery: {
+            /**
+             * @description If true, spawn the plugin process and query live sync state
+             *     (external count, pending push/pull, conflicts).
+             *     Default: false (returns database-stored metadata only).
+             */
+            live?: boolean;
+        };
+        /** @description Response from triggering a sync operation */
+        SyncTriggerResponse: {
+            /** @description Human-readable status message */
+            message: string;
+            /**
+             * Format: uuid
+             * @description Task ID for tracking the sync operation
+             */
+            taskId: string;
         };
         /** @description Tag data transfer object */
         TagDto: {
@@ -14757,6 +14933,8 @@ export interface components {
         };
         /** @description User plugin instance status */
         UserPluginDto: {
+            /** @description Plugin capabilities (derived from manifest) */
+            capabilities: components["schemas"]["UserPluginCapabilitiesDto"];
             /** @description Per-user configuration */
             config: unknown;
             /** @description Whether the plugin is connected (has valid credentials/OAuth) */
@@ -14791,6 +14969,10 @@ export interface components {
              * @description Last sync timestamp
              */
             lastSyncAt?: string | null;
+            /** @description Last sync result summary (stored in user_plugin_data) */
+            lastSyncResult?: unknown;
+            /** @description Whether the admin has configured OAuth credentials (client_id set) */
+            oauthConfigured: boolean;
             /** @description Plugin display name for UI */
             pluginDisplayName: string;
             /**
@@ -14804,6 +14986,9 @@ export interface components {
             pluginType: string;
             /** @description Whether this plugin requires OAuth authentication */
             requiresOauth: boolean;
+            userConfigSchema?: null | components["schemas"]["ConfigSchemaDto"];
+            /** @description User-facing setup instructions for the plugin */
+            userSetupInstructions?: string | null;
         };
         /** @description User plugins list response */
         UserPluginsListResponse: {
@@ -23514,8 +23699,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to frontend with result */
-            302: {
+            /** @description HTML page that auto-closes the popup */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23628,6 +23813,54 @@ export interface operations {
                 };
             };
             /** @description Invalid configuration */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_user_credentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to set credentials for */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetUserCredentialsRequest"];
+            };
+        };
+        responses: {
+            /** @description Credentials stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginDto"];
+                };
+            };
+            /** @description Invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23765,6 +23998,94 @@ export interface operations {
                 content?: never;
             };
             /** @description Plugin not found or not enabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin ID to sync */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync task enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncTriggerResponse"];
+                };
+            };
+            /** @description Plugin is not a sync provider or not connected */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_sync_status: {
+        parameters: {
+            query?: {
+                /**
+                 * @description If true, spawn the plugin process and query live sync state
+                 *     (external count, pending push/pull, conflicts).
+                 *     Default: false (returns database-stored metadata only).
+                 */
+                live?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Plugin ID to check sync status */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatusDto"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plugin not enabled for this user */
             404: {
                 headers: {
                     [name: string]: unknown;

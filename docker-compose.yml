@@ -104,6 +104,9 @@ services:
       CODEX_ENCRYPTION_KEY: "pjImnrzPzSmuvBKkzWAlTzrfyZ9O3pU/9IKuRT94Y/w="
       # Disable workers in web container (workers run in separate container)
       CODEX_DISABLE_WORKERS: "true"
+      # OAuth redirect URI base (must match the externally-facing URL users see in their browser)
+      # In dev, the Vite frontend on :5173 proxies API calls to the backend
+      CODEX_AUTH_OIDC_REDIRECT_URI_BASE: "http://localhost:5173"
       # Configuration overrides (optional - uses CODEX_ prefix)
       # Uncomment and modify as needed to override config.docker.yaml values
       # Database connection

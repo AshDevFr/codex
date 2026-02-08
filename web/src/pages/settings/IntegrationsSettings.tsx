@@ -12,13 +12,14 @@ import {
 import { notifications } from "@mantine/notifications";
 import { IconAlertCircle, IconPlugConnected } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { userPluginsApi } from "@/api/userPlugins";
 import { useOAuthCallback, useOAuthFlow } from "@/components/plugins/OAuthFlow";
 import {
   AvailablePluginCard,
   ConnectedPluginCard,
 } from "@/components/plugins/UserPluginCard";
+import { UserPluginSettingsModal } from "@/components/plugins/UserPluginSettingsModal";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export function IntegrationsSettings() {
@@ -30,6 +31,12 @@ export function IntegrationsSettings() {
   const { startOAuthFlow } = useOAuthFlow();
   const queryClient = useQueryClient();
   const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
+  const [settingsTarget, setSettingsTarget] = useState<string | null>(null);
+  const [liveStatusPluginId, setLiveStatusPluginId] = useState<string | null>(
+    null,
+  );
+  const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
+  const syncTaskNotifiedRef = useRef<string | null>(null);
 
   // Fetch user's plugins
   const {
@@ -39,6 +46,70 @@ export function IntegrationsSettings() {
   } = useQuery({
     queryKey: ["user-plugins"],
     queryFn: userPluginsApi.list,
+  });
+
+  // Poll sync task until completed/failed
+  const { data: syncTask } = useQuery({
+    queryKey: ["sync-task", syncTaskId],
+    queryFn: () => userPluginsApi.getTask(syncTaskId ?? ""),
+    enabled: syncTaskId !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "completed" || status === "failed") return false;
+      return 2000;
+    },
+  });
+
+  // Handle sync task completion
+  useEffect(() => {
+    if (!syncTask || !syncTaskId) return;
+    if (syncTaskNotifiedRef.current === syncTaskId) return;
+
+    if (syncTask.status === "completed") {
+      syncTaskNotifiedRef.current = syncTaskId;
+      setSyncTaskId(null);
+      queryClient.invalidateQueries({ queryKey: ["user-plugins"] });
+      const result = syncTask.result as Record<string, unknown> | undefined;
+      if (result?.skippedReason) {
+        notifications.show({
+          title: "Sync skipped",
+          message: String(result.skippedReason),
+          color: "yellow",
+        });
+      } else if (result) {
+        const pulled = result.pulled as number | undefined;
+        const pushed = result.pushed as number | undefined;
+        const applied = result.applied as number | undefined;
+        const parts: string[] = [];
+        if (pulled != null) parts.push(`pulled ${pulled}`);
+        if (applied != null) parts.push(`${applied} applied`);
+        if (pushed != null) parts.push(`pushed ${pushed}`);
+        notifications.show({
+          title: "Sync completed",
+          message: parts.join(", ") || "Sync finished successfully",
+          color: "green",
+        });
+      }
+    } else if (syncTask.status === "failed") {
+      syncTaskNotifiedRef.current = syncTaskId;
+      setSyncTaskId(null);
+      notifications.show({
+        title: "Sync failed",
+        message: syncTask.lastError || "An unknown error occurred",
+        color: "red",
+      });
+    }
+  }, [syncTask, syncTaskId, queryClient]);
+
+  // On-demand live sync status query (only when user clicks refresh)
+  const { data: liveStatus, isFetching: fetchingLiveStatus } = useQuery({
+    queryKey: ["sync-status", liveStatusPluginId],
+    queryFn: () =>
+      liveStatusPluginId
+        ? userPluginsApi.getSyncStatus(liveStatusPluginId, true)
+        : Promise.reject(),
+    enabled: liveStatusPluginId !== null,
+    staleTime: 30_000,
   });
 
   // Enable mutation
@@ -56,6 +127,26 @@ export function IntegrationsSettings() {
       notifications.show({
         title: "Error",
         message: error.message || "Failed to enable integration",
+        color: "red",
+      });
+    },
+  });
+
+  // Disable mutation
+  const disableMutation = useMutation({
+    mutationFn: (pluginId: string) => userPluginsApi.disable(pluginId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-plugins"] });
+      notifications.show({
+        title: "Integration disabled",
+        message: "The integration has been disabled.",
+        color: "green",
+      });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to disable integration",
         color: "red",
       });
     },
@@ -82,6 +173,48 @@ export function IntegrationsSettings() {
     },
   });
 
+  // Save token mutation
+  const saveTokenMutation = useMutation({
+    mutationFn: ({ pluginId, token }: { pluginId: string; token: string }) =>
+      userPluginsApi.setCredentials(pluginId, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-plugins"] });
+      notifications.show({
+        title: "Token saved",
+        message: "Your access token has been saved and encrypted.",
+        color: "green",
+      });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to save token",
+        color: "red",
+      });
+    },
+  });
+
+  // Sync mutation
+  const syncMutation = useMutation({
+    mutationFn: (pluginId: string) => userPluginsApi.triggerSync(pluginId),
+    onSuccess: (data) => {
+      syncTaskNotifiedRef.current = null;
+      setSyncTaskId(data.taskId);
+      notifications.show({
+        title: "Sync started",
+        message: data.message,
+        color: "blue",
+      });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Error",
+        message: error.message || "Failed to start sync",
+        color: "red",
+      });
+    },
+  });
+
   const handleDisconnect = (pluginId: string) => {
     setDisconnectTarget(pluginId);
   };
@@ -98,6 +231,27 @@ export function IntegrationsSettings() {
 
   const handleEnable = (pluginId: string) => {
     enableMutation.mutate(pluginId);
+  };
+
+  const handleDisable = (pluginId: string) => {
+    disableMutation.mutate(pluginId);
+  };
+
+  const handleSaveToken = (pluginId: string, token: string) => {
+    saveTokenMutation.mutate({ pluginId, token });
+  };
+
+  const handleSync = (pluginId: string) => {
+    syncMutation.mutate(pluginId);
+  };
+
+  const handleSettings = (pluginId: string) => {
+    setSettingsTarget(pluginId);
+  };
+
+  const handleRefreshStatus = (pluginId: string) => {
+    setLiveStatusPluginId(pluginId);
+    queryClient.invalidateQueries({ queryKey: ["sync-status", pluginId] });
   };
 
   if (isLoading) {
@@ -129,6 +283,7 @@ export function IntegrationsSettings() {
 
   const { enabled = [], available = [] } = pluginData ?? {};
   const hasNoPlugins = enabled.length === 0 && available.length === 0;
+  const settingsPlugin = enabled.find((p) => p.pluginId === settingsTarget);
 
   return (
     <Box py="xl" px="md">
@@ -147,19 +302,44 @@ export function IntegrationsSettings() {
           </Alert>
         )}
 
-        {/* Connected Integrations */}
+        {/* Enabled Integrations */}
         {enabled.length > 0 && (
           <Stack gap="md">
-            <Title order={3}>Connected</Title>
+            <Title order={3}>Enabled</Title>
             {enabled.map((plugin) => (
               <ConnectedPluginCard
                 key={plugin.id}
                 plugin={plugin}
                 onDisconnect={handleDisconnect}
+                onDisable={handleDisable}
                 onConnect={handleConnect}
+                onSaveToken={handleSaveToken}
+                onSync={handleSync}
+                onSettings={handleSettings}
+                onRefreshStatus={handleRefreshStatus}
+                syncStatus={
+                  liveStatusPluginId === plugin.pluginId
+                    ? (liveStatus ?? null)
+                    : null
+                }
+                syncing={
+                  syncMutation.isPending &&
+                  syncMutation.variables === plugin.pluginId
+                }
                 disconnecting={
                   disconnectMutation.isPending &&
                   disconnectTarget === plugin.pluginId
+                }
+                disabling={
+                  disableMutation.isPending &&
+                  disableMutation.variables === plugin.pluginId
+                }
+                savingToken={
+                  saveTokenMutation.isPending &&
+                  saveTokenMutation.variables?.pluginId === plugin.pluginId
+                }
+                refreshingStatus={
+                  fetchingLiveStatus && liveStatusPluginId === plugin.pluginId
                 }
               />
             ))}
@@ -179,7 +359,6 @@ export function IntegrationsSettings() {
                 key={plugin.pluginId}
                 plugin={plugin}
                 onEnable={handleEnable}
-                onConnect={handleConnect}
                 enabling={
                   enableMutation.isPending &&
                   enableMutation.variables === plugin.pluginId
@@ -216,6 +395,15 @@ export function IntegrationsSettings() {
           </Group>
         </Stack>
       </Modal>
+
+      {/* User Plugin Settings Modal */}
+      {settingsPlugin && (
+        <UserPluginSettingsModal
+          plugin={settingsPlugin}
+          opened={settingsTarget !== null}
+          onClose={() => setSettingsTarget(null)}
+        />
+      )}
     </Box>
   );
 }

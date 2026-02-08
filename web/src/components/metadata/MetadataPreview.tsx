@@ -97,6 +97,7 @@ const FIELD_LABELS: Record<string, string> = {
   externalLinks: "External Links",
   rating: "Rating",
   externalRatings: "External Ratings",
+  externalIds: "External IDs",
   coverUrl: "Cover",
   // Book-specific fields
   bookType: "Book Type",
@@ -540,6 +541,33 @@ function ValueDisplay({
             {ratings.length > 3 && (
               <Text size="xs" c="dimmed">
                 +{ratings.length - 3}
+              </Text>
+            )}
+          </Group>
+        );
+      }
+
+      // Check if it's external IDs (has source and externalId properties)
+      if ("source" in firstItem && "externalId" in firstItem) {
+        const extIds = value as Array<{
+          source: string;
+          externalId: string;
+        }>;
+        return (
+          <Group gap={4} wrap="wrap">
+            {extIds.slice(0, 5).map((item, idx) => (
+              <Badge
+                key={`${item.source}-${idx}`}
+                size="xs"
+                variant={highlight ? "filled" : "light"}
+                color="blue"
+              >
+                {item.source}: {item.externalId}
+              </Badge>
+            ))}
+            {extIds.length > 5 && (
+              <Text size="xs" c="dimmed">
+                +{extIds.length - 5}
               </Text>
             )}
           </Group>

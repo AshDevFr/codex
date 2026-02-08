@@ -8,28 +8,49 @@ interface ExternalIdsProps {
   externalIds: SeriesExternalId[];
 }
 
-// Map source prefixes to display names and colors
+// Map source keys to display names and colors.
+// Keys with a prefix (plugin:, api:) will show the prefix in the badge.
 const SOURCE_CONFIG: Record<
   string,
   { name: string; color: string; abbrev?: string }
 > = {
+  // Plugin sources (provenance from a plugin's match)
   "plugin:myanimelist": {
-    name: "MyAnimeList",
+    name: "plugin: MyAnimeList",
     color: "#2e51a2",
-    abbrev: "MAL",
+    abbrev: "plugin: MAL",
   },
-  "plugin:anilist": { name: "AniList", color: "#02a9ff" },
-  "plugin:mangabaka": { name: "MangaBaka", color: "#ff6b35" },
-  "plugin:mangadex": { name: "MangaDex", color: "#ff6740" },
-  "plugin:kitsu": { name: "Kitsu", color: "#f75239" },
+  "plugin:anilist": { name: "plugin: AniList", color: "#02a9ff" },
+  "plugin:mangabaka": { name: "plugin: MangaBaka", color: "#ff6b35" },
+  "plugin:mangadex": { name: "plugin: MangaDex", color: "#ff6740" },
+  "plugin:kitsu": { name: "plugin: Kitsu", color: "#f75239" },
   "plugin:mangaupdates": {
-    name: "MangaUpdates",
+    name: "plugin: MangaUpdates",
     color: "#2a4a6d",
-    abbrev: "MU",
+    abbrev: "plugin: MU",
   },
-  "plugin:comicvine": { name: "Comic Vine", color: "#e41d25" },
-  "plugin:goodreads": { name: "Goodreads", color: "#553b08" },
-  "plugin:amazon": { name: "Amazon", color: "#ff9900" },
+  "plugin:comicvine": { name: "plugin: Comic Vine", color: "#e41d25" },
+  "plugin:goodreads": { name: "plugin: Goodreads", color: "#553b08" },
+  "plugin:amazon": { name: "plugin: Amazon", color: "#ff9900" },
+  // API sources (cross-reference IDs from external services)
+  "api:anilist": { name: "api: AniList", color: "#02a9ff" },
+  "api:myanimelist": {
+    name: "api: MyAnimeList",
+    color: "#2e51a2",
+    abbrev: "api: MAL",
+  },
+  "api:mangabaka": { name: "api: MangaBaka", color: "#ff6b35" },
+  "api:mangadex": { name: "api: MangaDex", color: "#ff6740" },
+  "api:kitsu": { name: "api: Kitsu", color: "#f75239" },
+  "api:mangaupdates": {
+    name: "api: MangaUpdates",
+    color: "#2a4a6d",
+    abbrev: "api: MU",
+  },
+  "api:comicvine": { name: "api: Comic Vine", color: "#e41d25" },
+  "api:goodreads": { name: "api: Goodreads", color: "#553b08" },
+  "api:amazon": { name: "api: Amazon", color: "#ff9900" },
+  // Unprefixed sources (file-based or user-set)
   comicinfo: { name: "ComicInfo", color: "gray" },
   epub: { name: "EPUB", color: "teal" },
   pdf: { name: "PDF", color: "red" },
@@ -38,7 +59,7 @@ const SOURCE_CONFIG: Record<
 
 /**
  * Format the source name for display.
- * Handles plugin: prefix and known sources.
+ * Handles prefixed sources (plugin:, api:) and unprefixed sources.
  */
 function getSourceConfig(source: string): {
   name: string;
@@ -52,18 +73,13 @@ function getSourceConfig(source: string): {
     return SOURCE_CONFIG[lowerSource];
   }
 
-  // Check if it's a plugin source with a known plugin name
-  if (lowerSource.startsWith("plugin:")) {
-    const pluginName = lowerSource.replace("plugin:", "");
-    // Check if there's a config for this plugin name without the prefix
-    for (const [key, config] of Object.entries(SOURCE_CONFIG)) {
-      if (key === `plugin:${pluginName}` || key === pluginName) {
-        return config;
-      }
-    }
-    // Fallback: capitalize the plugin name
+  // For any prefixed source (plugin:xxx, api:xxx, etc.), show prefix: Name
+  const colonIdx = lowerSource.indexOf(":");
+  if (colonIdx > 0) {
+    const prefix = lowerSource.slice(0, colonIdx);
+    const name = lowerSource.slice(colonIdx + 1);
     return {
-      name: pluginName.charAt(0).toUpperCase() + pluginName.slice(1),
+      name: `${prefix}: ${name.charAt(0).toUpperCase() + name.slice(1)}`,
       color: "blue",
     };
   }
@@ -109,6 +125,7 @@ export function ExternalIds({ externalIds }: ExternalIdsProps) {
         const lastSynced = formatLastSynced(extId.lastSyncedAt);
 
         const tooltipContent = [
+          `Source: ${extId.source}`,
           `ID: ${extId.externalId}`,
           lastSynced ? `Last synced: ${lastSynced}` : null,
         ]

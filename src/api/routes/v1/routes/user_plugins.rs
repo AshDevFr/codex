@@ -47,6 +47,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/user/plugins/:plugin_id/config",
             patch(handlers::user_plugins::update_user_plugin_config),
         )
+        // User credentials (personal access token)
+        .route(
+            "/user/plugins/:plugin_id/credentials",
+            post(handlers::user_plugins::set_user_credentials),
+        )
         // Sync operations
         .route(
             "/user/plugins/:plugin_id/sync",

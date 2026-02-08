@@ -146,6 +146,11 @@ pub struct PluginDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = json!(["series", "book"]))]
     pub metadata_targets: Option<Vec<String>>,
+
+    /// Number of users who have enabled this plugin (only for user-type plugins)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 3)]
+    pub user_count: Option<u64>,
 }
 
 impl From<plugins::Model> for PluginDto {
@@ -204,6 +209,7 @@ impl From<plugins::Model> for PluginDto {
             metadata_targets: model
                 .metadata_targets
                 .and_then(|s| serde_json::from_str(&s).ok()),
+            user_count: None,
         }
     }
 }
@@ -244,6 +250,36 @@ pub struct ConfigSchemaDto {
     pub fields: Vec<ConfigFieldDto>,
 }
 
+/// OAuth 2.0 configuration from plugin manifest
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthConfigDto {
+    /// OAuth 2.0 authorization endpoint URL
+    pub authorization_url: String,
+    /// OAuth 2.0 token endpoint URL
+    pub token_url: String,
+    /// Required OAuth scopes
+    #[serde(default)]
+    pub scopes: Vec<String>,
+    /// Whether to use PKCE (Proof Key for Code Exchange)
+    pub pkce: bool,
+    /// Optional user info endpoint URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_info_url: Option<String>,
+}
+
+impl From<crate::services::plugin::protocol::OAuthConfig> for OAuthConfigDto {
+    fn from(o: crate::services::plugin::protocol::OAuthConfig) -> Self {
+        Self {
+            authorization_url: o.authorization_url,
+            token_url: o.token_url,
+            scopes: o.scopes,
+            pkce: o.pkce,
+            user_info_url: o.user_info_url,
+        }
+    }
+}
+
 /// Plugin manifest from the plugin itself
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -278,6 +314,15 @@ pub struct PluginManifestDto {
     /// Configuration schema documenting available config options
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_schema: Option<ConfigSchemaDto>,
+    /// OAuth 2.0 configuration (if plugin supports OAuth)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<OAuthConfigDto>,
+    /// Admin-facing setup instructions (e.g., how to create OAuth app, set client ID)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admin_setup_instructions: Option<String>,
+    /// User-facing setup instructions (e.g., how to connect or get a personal token)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_setup_instructions: Option<String>,
 }
 
 impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestDto {
@@ -322,6 +367,9 @@ impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestD
                 .collect(),
             scopes,
             config_schema,
+            oauth: m.oauth.map(OAuthConfigDto::from),
+            admin_setup_instructions: m.admin_setup_instructions,
+            user_setup_instructions: m.user_setup_instructions,
         }
     }
 }
@@ -339,6 +387,9 @@ pub struct PluginCapabilitiesDto {
     /// External ID source for matching sync entries to series (e.g., "api:anilist")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external_id_source: Option<String>,
+    /// Can provide personalized recommendations
+    #[serde(default)]
+    pub user_recommendation_provider: bool,
 }
 
 impl From<PluginCapabilities> for PluginCapabilitiesDto {
@@ -351,6 +402,7 @@ impl From<PluginCapabilities> for PluginCapabilitiesDto {
                 .collect(),
             user_read_sync: c.user_read_sync,
             external_id_source: c.external_id_source,
+            user_recommendation_provider: c.user_recommendation_provider,
         }
     }
 }

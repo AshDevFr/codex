@@ -421,6 +421,9 @@ The following paths are exempt from rate limiting:
         v1::handlers::user_plugins::update_user_plugin_config,
         v1::handlers::user_plugins::oauth_start,
         v1::handlers::user_plugins::oauth_callback,
+        v1::handlers::user_plugins::set_user_credentials,
+        v1::handlers::user_plugins::trigger_sync,
+        v1::handlers::user_plugins::get_sync_status,
 
         // Sharing Tags endpoints
         v1::handlers::sharing_tags::list_sharing_tags,
@@ -765,6 +768,7 @@ The following paths are exempt from rate limiting:
             v1::dto::UpdatePluginRequest,
             v1::dto::EnvVarDto,
             v1::dto::PluginManifestDto,
+            v1::dto::OAuthConfigDto,
             v1::dto::PluginCapabilitiesDto,
             v1::dto::CredentialFieldDto,
             v1::dto::PluginTestResult,
@@ -781,6 +785,10 @@ The following paths are exempt from rate limiting:
             v1::dto::UserPluginsListResponse,
             v1::dto::OAuthStartResponse,
             v1::dto::UpdateUserPluginConfigRequest,
+            v1::dto::SetUserCredentialsRequest,
+            v1::dto::SyncTriggerResponse,
+            v1::dto::SyncStatusDto,
+            v1::dto::SyncStatusQuery,
 
             // Plugin Actions DTOs
             v1::dto::PluginActionDto,
