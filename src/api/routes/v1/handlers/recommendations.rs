@@ -52,7 +52,7 @@ async fn find_recommendation_plugin(
                 .manifest
                 .as_ref()
                 .and_then(|m| serde_json::from_value::<PluginManifest>(m.clone()).ok())
-                .map(|m| m.capabilities.recommendation_provider)
+                .map(|m| m.capabilities.user_recommendation_provider)
                 .unwrap_or(false);
 
             if is_rec_provider {

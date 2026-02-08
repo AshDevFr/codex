@@ -50,7 +50,7 @@ const availablePlugin: AvailablePluginDto = {
   requiresOauth: false,
   capabilities: {
     readSync: false,
-    recommendationProvider: true,
+    userRecommendationProvider: true,
   },
 };
 
@@ -62,7 +62,7 @@ const availableOAuthPlugin: AvailablePluginDto = {
   requiresOauth: true,
   capabilities: {
     readSync: true,
-    recommendationProvider: false,
+    userRecommendationProvider: false,
   },
 };
 

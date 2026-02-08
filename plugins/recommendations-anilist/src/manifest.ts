@@ -11,7 +11,7 @@ export const manifest = {
   homepage: "https://github.com/AshDevFr/codex",
   protocolVersion: "1.0",
   capabilities: {
-    recommendationProvider: true,
+    userRecommendationProvider: true,
   },
   requiredCredentials: [
     {
@@ -37,5 +37,5 @@ export const manifest = {
     ],
   },
 } as const satisfies PluginManifest & {
-  capabilities: { recommendationProvider: true };
+  capabilities: { userRecommendationProvider: true };
 };

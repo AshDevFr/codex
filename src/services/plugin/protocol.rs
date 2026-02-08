@@ -321,7 +321,7 @@ pub struct PluginCapabilities {
     pub external_id_source: Option<String>,
     /// Can provide personalized recommendations (v2)
     #[serde(default)]
-    pub recommendation_provider: bool,
+    pub user_recommendation_provider: bool,
 }
 
 impl PluginCapabilities {
@@ -338,11 +338,11 @@ impl PluginCapabilities {
 
     /// Infer the plugin type from capabilities.
     ///
-    /// User-facing capabilities (`user_read_sync`, `recommendation_provider`)
+    /// User-facing capabilities (`user_read_sync`, `user_recommendation_provider`)
     /// indicate a "user" plugin. Metadata provider capabilities indicate a
     /// "system" plugin. Returns `None` when capabilities are empty.
     pub fn inferred_plugin_type(&self) -> Option<PluginManifestType> {
-        if self.user_read_sync || self.recommendation_provider {
+        if self.user_read_sync || self.user_recommendation_provider {
             Some(PluginManifestType::User)
         } else if !self.metadata_provider.is_empty() {
             Some(PluginManifestType::System)
@@ -1754,7 +1754,7 @@ mod tests {
     #[test]
     fn test_inferred_plugin_type_from_recommendation_provider() {
         let caps = PluginCapabilities {
-            recommendation_provider: true,
+            user_recommendation_provider: true,
             ..Default::default()
         };
         assert_eq!(caps.inferred_plugin_type(), Some(PluginManifestType::User));
@@ -1921,7 +1921,7 @@ mod tests {
         assert_eq!(manifest.name, "sync-anilist");
         assert_eq!(manifest.plugin_type, PluginManifestType::User);
         assert!(manifest.capabilities.user_read_sync);
-        assert!(!manifest.capabilities.recommendation_provider);
+        assert!(!manifest.capabilities.user_recommendation_provider);
 
         let oauth = manifest.oauth.unwrap();
         assert_eq!(
@@ -1964,12 +1964,12 @@ mod tests {
             "protocolVersion": "1.0",
             "pluginType": "user",
             "capabilities": {
-                "recommendationProvider": true
+                "userRecommendationProvider": true
             }
         });
 
         let manifest: PluginManifest = serde_json::from_value(json).unwrap();
-        assert!(manifest.capabilities.recommendation_provider);
+        assert!(manifest.capabilities.user_recommendation_provider);
         assert!(!manifest.capabilities.user_read_sync);
         assert!(manifest.capabilities.metadata_provider.is_empty());
     }

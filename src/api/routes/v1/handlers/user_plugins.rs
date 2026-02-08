@@ -181,9 +181,9 @@ pub async fn list_user_plugins(
                         .as_ref()
                         .map(|m| m.capabilities.user_read_sync)
                         .unwrap_or(false),
-                    recommendation_provider: manifest
+                    user_recommendation_provider: manifest
                         .as_ref()
-                        .map(|m| m.capabilities.recommendation_provider)
+                        .map(|m| m.capabilities.user_recommendation_provider)
                         .unwrap_or(false),
                 },
             }
