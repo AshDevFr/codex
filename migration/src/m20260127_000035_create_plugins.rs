@@ -94,7 +94,7 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(Plugins::CredentialDelivery)
                             .string_len(20)
                             .not_null()
-                            .default("env"),
+                            .default("init_message"),
                     )
                     // Plugin configuration
                     .col(

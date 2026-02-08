@@ -75,14 +75,14 @@ function formatSyncResult(result: Record<string, unknown>): string {
   const matched = result.matched as number | undefined;
   const applied = result.applied as number | undefined;
   const pushed = result.pushed as number | undefined;
-  if (pulled != null) {
+  if (pulled != null && pulled > 0) {
     let pullPart = `Pulled ${pulled}`;
     if (matched != null) pullPart += ` (${matched} matched`;
     if (applied != null) pullPart += `, ${applied} applied`;
     if (matched != null) pullPart += ")";
     parts.push(pullPart);
   }
-  if (pushed != null) {
+  if (pushed != null && pushed > 0) {
     parts.push(`pushed ${pushed}`);
   }
   return parts.join(", ") || "Sync completed";
@@ -194,9 +194,24 @@ export function ConnectedPluginCard({
       )}
 
       {plugin.lastSyncAt && (
-        <Text size="sm" c="dimmed" mb={plugin.lastSyncResult ? 0 : "xs"}>
-          Last sync: {formatTimeAgo(plugin.lastSyncAt)}
-        </Text>
+        <Group gap={4} mb={plugin.lastSyncResult ? 0 : "xs"}>
+          <Text size="sm" c="dimmed">
+            Last sync: {formatTimeAgo(plugin.lastSyncAt)}
+          </Text>
+          {onRefreshStatus && (
+            <Tooltip label="Refresh sync status">
+              <ActionIcon
+                size="xs"
+                variant="subtle"
+                color="dimmed"
+                onClick={() => onRefreshStatus(plugin.pluginId)}
+                loading={refreshingStatus}
+              >
+                <IconRefresh size={14} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </Group>
       )}
 
       {plugin.lastSyncResult != null ? (
@@ -235,18 +250,6 @@ export function ConnectedPluginCard({
             <Text size="xs" c="dimmed">
               {syncStatus.pendingPush} to push
             </Text>
-          )}
-          {onRefreshStatus && (
-            <Tooltip label="Fetch live sync status">
-              <ActionIcon
-                size="xs"
-                variant="subtle"
-                onClick={() => onRefreshStatus(plugin.pluginId)}
-                loading={refreshingStatus}
-              >
-                <IconRefresh size={12} />
-              </ActionIcon>
-            </Tooltip>
           )}
         </Group>
       )}

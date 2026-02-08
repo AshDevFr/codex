@@ -220,9 +220,9 @@ impl std::fmt::Display for PluginHealthStatus {
 #[serde(rename_all = "snake_case")]
 pub enum CredentialDelivery {
     /// Pass credentials as environment variables
-    #[default]
     Env,
     /// Pass credentials in the initialize message
+    #[default]
     InitMessage,
     /// Pass credentials both ways
     Both,

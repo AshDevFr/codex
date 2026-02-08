@@ -719,9 +719,16 @@ impl PluginManager {
 
         // Start the plugin
         match handle.start().await {
-            Ok(_manifest) => {
+            Ok(manifest) => {
                 // Record success for the user's instance
                 let _ = UserPluginsRepository::record_success(&self.db, user_plugin.id).await;
+
+                // Persist manifest to DB so that userConfigSchema and
+                // capabilities are available on the UserPluginDto.
+                let manifest_json = serde_json::to_value(&manifest).unwrap_or_default();
+                let _ =
+                    PluginsRepository::update_manifest(&self.db, plugin_id, Some(manifest_json))
+                        .await;
 
                 Ok((Arc::new(handle), context))
             }
@@ -763,7 +770,13 @@ impl PluginManager {
         }
 
         // Inject per-user credentials
+        //
+        // For user plugins we always deliver credentials via init_message
+        // (the JSON-RPC initialize params) because SDK-based plugins read
+        // from `params.credentials`. We also honour the legacy env-var path
+        // when credential_delivery is "env" or "both".
         let mut credentials: Option<SecretValue> = None;
+        let delivery = plugin.credential_delivery.as_str();
 
         // Try OAuth tokens first, then fall back to simple credentials
         if user_plugin.has_oauth_tokens() {
@@ -775,44 +788,30 @@ impl PluginManager {
                     "access_token": access_token,
                 });
 
-                match plugin.credential_delivery.as_str() {
-                    "env" | "both" => {
-                        process_config = process_config.env("ACCESS_TOKEN", &access_token);
-                    }
-                    _ => {}
+                if matches!(delivery, "env" | "both") {
+                    process_config = process_config.env("ACCESS_TOKEN", &access_token);
                 }
 
-                match plugin.credential_delivery.as_str() {
-                    "init_message" | "both" => {
-                        credentials = Some(SecretValue::new(cred_value));
-                    }
-                    _ => {}
-                }
+                // Always include in init_message for user plugins
+                credentials = Some(SecretValue::new(cred_value));
             }
         } else if user_plugin.has_credentials() {
             // Decrypt simple credentials for the user
             if let Ok(Some(decrypted)) =
                 UserPluginsRepository::get_credentials(&self.db, user_plugin.id).await
             {
-                match plugin.credential_delivery.as_str() {
-                    "env" | "both" => {
-                        if let Some(obj) = decrypted.as_object() {
-                            for (key, value) in obj {
-                                if let Some(v) = value.as_str() {
-                                    process_config = process_config.env(key.to_uppercase(), v);
-                                }
-                            }
+                if matches!(delivery, "env" | "both")
+                    && let Some(obj) = decrypted.as_object()
+                {
+                    for (key, value) in obj {
+                        if let Some(v) = value.as_str() {
+                            process_config = process_config.env(key.to_uppercase(), v);
                         }
                     }
-                    _ => {}
                 }
 
-                match plugin.credential_delivery.as_str() {
-                    "init_message" | "both" => {
-                        credentials = Some(SecretValue::new(decrypted));
-                    }
-                    _ => {}
-                }
+                // Always include in init_message for user plugins
+                credentials = Some(SecretValue::new(decrypted));
             }
         }
 

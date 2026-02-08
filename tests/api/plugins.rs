@@ -164,7 +164,7 @@ async fn test_create_plugin_minimal() {
     let response = response.expect("Expected response body");
     assert_eq!(response.plugin.name, "minimal-plugin");
     assert_eq!(response.plugin.plugin_type, "system");
-    assert_eq!(response.plugin.credential_delivery, "env");
+    assert_eq!(response.plugin.credential_delivery, "init_message");
 }
 
 #[tokio::test]
