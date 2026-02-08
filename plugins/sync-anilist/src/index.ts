@@ -29,6 +29,8 @@ import {
   AniListClient,
   type AniListFuzzyDate,
   anilistStatusToSync,
+  convertScoreFromAnilist,
+  convertScoreToAnilist,
   fuzzyDateToIso,
   isoToFuzzyDate,
   syncStatusToAnilist,
@@ -108,7 +110,7 @@ const provider: SyncProvider = {
           saveParams.progressVolumes = entry.progress.volumes;
         }
 
-        // Map score (convert from 1-10 scale to AniList format)
+        // Map score (convert from 1-100 scale to AniList format)
         if (entry.score !== undefined) {
           saveParams.score = convertScoreToAnilist(entry.score, scoreFormat);
         }
@@ -204,52 +206,6 @@ const provider: SyncProvider = {
 };
 
 // =============================================================================
-// Score Conversion Helpers
-// =============================================================================
-
-/**
- * Convert a score from 1-10 scale to AniList's format
- */
-function convertScoreToAnilist(score: number, format: string): number {
-  switch (format) {
-    case "POINT_100":
-      return Math.round(score * 10);
-    case "POINT_10_DECIMAL":
-      return score;
-    case "POINT_10":
-      return Math.round(score);
-    case "POINT_5":
-      return Math.round(score / 2);
-    case "POINT_3":
-      if (score >= 7) return 3;
-      if (score >= 4) return 2;
-      return 1;
-    default:
-      return Math.round(score);
-  }
-}
-
-/**
- * Convert a score from AniList's format to 1-10 scale
- */
-function convertScoreFromAnilist(score: number, format: string): number {
-  switch (format) {
-    case "POINT_100":
-      return score / 10;
-    case "POINT_10_DECIMAL":
-      return score;
-    case "POINT_10":
-      return score;
-    case "POINT_5":
-      return score * 2;
-    case "POINT_3":
-      return score * 3.33;
-    default:
-      return score;
-  }
-}
-
-// =============================================================================
 // Plugin Initialization
 // =============================================================================
 
@@ -267,11 +223,6 @@ createSyncPlugin({
       logger.warn("No access token provided - sync operations will fail");
     }
 
-    // Read config
-    if (params.config?.scoreFormat) {
-      scoreFormat = params.config.scoreFormat as string;
-      logger.info(`Score format set to: ${scoreFormat}`);
-    }
   },
 });
 

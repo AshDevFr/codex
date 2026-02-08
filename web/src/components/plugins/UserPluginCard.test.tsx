@@ -319,7 +319,7 @@ describe("ConnectedPluginCard", () => {
       <ConnectedPluginCard {...defaultProps} plugin={plugin} />,
     );
     expect(
-      screen.getByText("Pulled 10 (8 matched, 6 applied), pushed 5"),
+      screen.getByText("Pulled 10 (8 matched, 6 applied), Pushed 5"),
     ).toBeInTheDocument();
   });
 

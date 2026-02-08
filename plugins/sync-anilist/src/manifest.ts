@@ -28,13 +28,13 @@ export const manifest = {
     description: "AniList sync settings",
     fields: [
       {
-        key: "scoreFormat",
-        label: "Score Format",
+        key: "syncRatings",
+        label: "Sync Ratings & Notes",
         description:
-          "How scores are mapped. AniList supports POINT_100, POINT_10_DECIMAL, POINT_10, POINT_5, POINT_3",
-        type: "string" as const,
+          "Include user ratings and notes in sync. When off, only reading progress is synced.",
+        type: "boolean" as const,
         required: false,
-        default: "POINT_10",
+        default: false,
       },
       {
         key: "progressUnit",

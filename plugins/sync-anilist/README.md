@@ -79,7 +79,7 @@ Without OAuth configured, users can still connect by pasting a personal access t
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `scoreFormat` | string | `POINT_10` | How scores are mapped. AniList supports `POINT_100`, `POINT_10_DECIMAL`, `POINT_10`, `POINT_5`, `POINT_3` |
+| `syncRatings` | boolean | `false` | Include user ratings and notes in sync. When off, only reading progress is synced. |
 
 ## Using the Plugin
 
@@ -132,6 +132,14 @@ The plugin is conservative about marking series as "Completed" on AniList:
 
 - A series is pushed as **Completed** only when all local books are read **and** the series metadata includes a `total_book_count` that matches.
 - Otherwise, the series is pushed as **Reading** — even if all local books are read — because Codex can't be sure the library contains the full series.
+
+### Rating & Notes Sync
+
+When **Sync Ratings & Notes** is enabled in plugin settings:
+
+- **Push**: Codex ratings (1-100 scale) and notes are sent to AniList, converted to the user's chosen AniList score format (auto-detected from their profile).
+- **Pull**: AniList scores and notes are imported into Codex, but only when Codex has **no existing rating** for that series. Existing Codex ratings are never overwritten (**Codex wins**).
+- Notes without a score are skipped on pull (Codex requires a rating to store notes).
 
 ### Push Configuration
 

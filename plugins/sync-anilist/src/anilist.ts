@@ -342,3 +342,49 @@ export function isoToFuzzyDate(iso: string | undefined): AniListFuzzyDate | unde
     day: d.getUTCDate(),
   };
 }
+
+// =============================================================================
+// Score Conversion
+// =============================================================================
+
+/**
+ * Convert a score from Codex's 1-100 scale to AniList's format
+ */
+export function convertScoreToAnilist(score: number, format: string): number {
+  switch (format) {
+    case "POINT_100":
+      return Math.round(score);
+    case "POINT_10_DECIMAL":
+      return score / 10;
+    case "POINT_10":
+      return Math.round(score / 10);
+    case "POINT_5":
+      return Math.round(score / 20);
+    case "POINT_3":
+      if (score >= 70) return 3;
+      if (score >= 40) return 2;
+      return 1;
+    default:
+      return Math.round(score / 10);
+  }
+}
+
+/**
+ * Convert a score from AniList's format to Codex's 1-100 scale
+ */
+export function convertScoreFromAnilist(score: number, format: string): number {
+  switch (format) {
+    case "POINT_100":
+      return score;
+    case "POINT_10_DECIMAL":
+      return score * 10;
+    case "POINT_10":
+      return score * 10;
+    case "POINT_5":
+      return score * 20;
+    case "POINT_3":
+      return Math.round(score * 33.3);
+    default:
+      return score * 10;
+  }
+}

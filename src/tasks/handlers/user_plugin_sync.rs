@@ -8,6 +8,7 @@ use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -15,7 +16,7 @@ use uuid::Uuid;
 use crate::db::entities::tasks;
 use crate::db::repositories::{
     BookRepository, ReadProgressRepository, SeriesExternalIdRepository, SeriesMetadataRepository,
-    UserPluginDataRepository, UserPluginsRepository,
+    UserPluginDataRepository, UserPluginsRepository, UserSeriesRatingRepository,
 };
 use crate::events::EventBroadcaster;
 use crate::services::plugin::PluginManager;
@@ -39,6 +40,8 @@ struct PushConfig {
     push_in_progress_series: bool,
     /// Count partially-read books in the progress count. Default: false.
     push_in_progress_volumes: bool,
+    /// Include scores and notes in push/pull. Default: false.
+    sync_ratings: bool,
 }
 
 impl PushConfig {
@@ -60,6 +63,10 @@ impl PushConfig {
                 .unwrap_or(true),
             push_in_progress_volumes: config
                 .get("pushInProgressVolumes")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            sync_ratings: config
+                .get("syncRatings")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
         }
@@ -158,6 +165,10 @@ impl TaskHandler for UserPluginSyncHandler {
                 .to_string();
             let do_pull = sync_mode == "both" || sync_mode == "pull";
             let do_push = sync_mode == "both" || sync_mode == "push";
+            let sync_ratings = user_config
+                .get("syncRatings")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             debug!(
                 "Task {}: syncMode={} (pull={}, push={})",
@@ -270,6 +281,7 @@ impl TaskHandler for UserPluginSyncHandler {
                                 external_id_source.as_deref(),
                                 user_id,
                                 task.id,
+                                sync_ratings,
                             )
                             .await;
 
@@ -442,6 +454,23 @@ async fn build_push_entries(
         return vec![];
     }
 
+    // Batch-fetch all user ratings for efficient O(1) lookup per series
+    let ratings_map: HashMap<Uuid, crate::db::entities::user_series_ratings::Model> =
+        if config.sync_ratings {
+            match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
+                Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),
+                Err(e) => {
+                    warn!(
+                        "Task {}: Failed to fetch user ratings for push: {}",
+                        task_id, e
+                    );
+                    HashMap::new()
+                }
+            }
+        } else {
+            HashMap::new()
+        };
+
     let mut entries = Vec::new();
 
     for ext_id in &external_ids {
@@ -586,18 +615,28 @@ async fn build_push_entries(
             }
         };
 
+        // Look up rating/notes if sync_ratings is enabled
+        let (score, notes) = if config.sync_ratings {
+            match ratings_map.get(&ext_id.series_id) {
+                Some(r) => (Some(r.rating as f64), r.notes.clone()),
+                None => (None, None),
+            }
+        } else {
+            (None, None)
+        };
+
         entries.push(SyncEntry {
             external_id: ext_id.external_id.clone(),
             status: status.clone(),
             progress: Some(progress),
-            score: None,
+            score,
             started_at: earliest_started.map(|dt| dt.to_rfc3339()),
             completed_at: if status == SyncReadingStatus::Completed {
                 latest_completed_at.map(|dt| dt.to_rfc3339())
             } else {
                 None
             },
-            notes: None,
+            notes,
         });
     }
 
@@ -626,6 +665,7 @@ async fn match_and_apply_pulled_entries(
     external_id_source: Option<&str>,
     user_id: Uuid,
     task_id: Uuid,
+    sync_ratings: bool,
 ) -> (u32, u32) {
     let Some(source) = external_id_source else {
         debug!(
@@ -662,6 +702,47 @@ async fn match_and_apply_pulled_entries(
                 let books_applied =
                     apply_pulled_entry(db, user_id, ext_id.series_id, entry, task_id).await;
                 applied += books_applied;
+
+                // Apply pulled rating/notes if enabled and Codex has no existing rating
+                if sync_ratings && let Some(pulled_score) = entry.score {
+                    let score_i32 = (pulled_score.round() as i32).clamp(1, 100);
+                    match UserSeriesRatingRepository::get_by_user_and_series(
+                        db,
+                        user_id,
+                        ext_id.series_id,
+                    )
+                    .await
+                    {
+                        Ok(None) => {
+                            if let Err(e) = UserSeriesRatingRepository::upsert(
+                                db,
+                                user_id,
+                                ext_id.series_id,
+                                score_i32,
+                                entry.notes.clone(),
+                            )
+                            .await
+                            {
+                                warn!(
+                                    "Task {}: Failed to apply pulled rating for series {}: {}",
+                                    task_id, ext_id.series_id, e
+                                );
+                            }
+                        }
+                        Ok(Some(_)) => {
+                            debug!(
+                                "Task {}: Skipping pulled rating for series {} — Codex already has a rating",
+                                task_id, ext_id.series_id
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Task {}: Failed to check existing rating for series {}: {}",
+                                task_id, ext_id.series_id, e
+                            );
+                        }
+                    }
+                }
             }
             Ok(None) => {
                 unmatched += 1;
@@ -779,6 +860,7 @@ mod tests {
     use crate::db::entities::{books, users};
     use crate::db::repositories::{
         BookRepository, LibraryRepository, SeriesRepository, UserRepository,
+        UserSeriesRatingRepository,
     };
     use crate::db::test_helpers::create_test_db;
     use crate::services::plugin::sync::{SyncProgress, SyncReadingStatus};
@@ -1044,6 +1126,7 @@ mod tests {
             None,
             user_id,
             Uuid::new_v4(),
+            false,
         )
         .await;
         assert_eq!(matched, 0);
@@ -1109,6 +1192,7 @@ mod tests {
             Some("api:anilist"),
             user_id,
             Uuid::new_v4(),
+            false,
         )
         .await;
         assert_eq!(matched, 1);
@@ -1172,6 +1256,7 @@ mod tests {
             Some("api:anilist"),
             user_id,
             Uuid::new_v4(),
+            false,
         )
         .await;
         assert_eq!(matched, 1);
@@ -1268,6 +1353,7 @@ mod tests {
             Some("api:anilist"),
             user_id,
             Uuid::new_v4(),
+            false,
         )
         .await;
         assert_eq!(matched, 1);
@@ -1282,6 +1368,7 @@ mod tests {
             push_completed_series: true,
             push_in_progress_series: true,
             push_in_progress_volumes: false,
+            sync_ratings: false,
         }
     }
 
@@ -1565,6 +1652,7 @@ mod tests {
             Some("api:anilist"),
             Uuid::new_v4(),
             Uuid::new_v4(),
+            false,
         )
         .await;
         assert_eq!(matched, 0);
@@ -1946,5 +2034,427 @@ mod tests {
                 assert!(progress.is_none(), "Book {} should have no progress", i);
             }
         }
+    }
+
+    // =========================================================================
+    // Rating sync tests
+    // =========================================================================
+
+    #[test]
+    fn test_push_config_sync_ratings_default() {
+        let config = serde_json::json!({});
+        let push_config = PushConfig::from_user_config(&config);
+        assert!(!push_config.sync_ratings);
+    }
+
+    #[test]
+    fn test_push_config_sync_ratings_enabled() {
+        let config = serde_json::json!({"syncRatings": true});
+        let push_config = PushConfig::from_user_config(&config);
+        assert!(push_config.sync_ratings);
+    }
+
+    #[tokio::test]
+    async fn test_build_push_entries_includes_rating() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Rated Manga", None)
+                .await
+                .unwrap();
+
+        let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 100)
+            .await
+            .unwrap();
+
+        // Create a rating for this series
+        UserSeriesRatingRepository::create(
+            db.sea_orm_connection(),
+            user.id,
+            series.id,
+            85,
+            Some("Excellent manga!".to_string()),
+        )
+        .await
+        .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "555",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let config = PushConfig {
+            sync_ratings: true,
+            ..default_push_config()
+        };
+
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &config,
+        )
+        .await;
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].score, Some(85.0));
+        assert_eq!(entries[0].notes, Some("Excellent manga!".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_build_push_entries_no_rating_when_disabled() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Rated Manga 2", None)
+                .await
+                .unwrap();
+
+        let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 100)
+            .await
+            .unwrap();
+
+        // Create a rating, but sync_ratings is false
+        UserSeriesRatingRepository::create(db.sea_orm_connection(), user.id, series.id, 85, None)
+            .await
+            .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "556",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &default_push_config(), // sync_ratings=false
+        )
+        .await;
+
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].score.is_none());
+        assert!(entries[0].notes.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_build_push_entries_no_rating_for_unrated() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Unrated Manga", None)
+                .await
+                .unwrap();
+
+        let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 100)
+            .await
+            .unwrap();
+
+        // No rating created
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "557",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let config = PushConfig {
+            sync_ratings: true,
+            ..default_push_config()
+        };
+
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &config,
+        )
+        .await;
+
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].score.is_none());
+        assert!(entries[0].notes.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_apply_pulled_rating_no_existing() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Pull Manga", None)
+                .await
+                .unwrap();
+
+        create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "600",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let entries = vec![SyncEntry {
+            external_id: "600".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: Some(SyncProgress {
+                chapters: Some(1),
+                volumes: None,
+                pages: None,
+            }),
+            score: Some(75.0),
+            started_at: None,
+            completed_at: None,
+            notes: Some("Good so far".to_string()),
+        }];
+
+        let (matched, _applied) = match_and_apply_pulled_entries(
+            db.sea_orm_connection(),
+            &entries,
+            Some("api:anilist"),
+            user.id,
+            Uuid::new_v4(),
+            true, // sync_ratings=true
+        )
+        .await;
+
+        assert_eq!(matched, 1);
+
+        // Verify rating was created
+        let rating = UserSeriesRatingRepository::get_by_user_and_series(
+            db.sea_orm_connection(),
+            user.id,
+            series.id,
+        )
+        .await
+        .unwrap();
+        assert!(rating.is_some());
+        let rating = rating.unwrap();
+        assert_eq!(rating.rating, 75);
+        assert_eq!(rating.notes, Some("Good so far".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_apply_pulled_rating_existing_not_overwritten() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Rated Manga 3", None)
+                .await
+                .unwrap();
+
+        create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        // Pre-create a Codex rating
+        UserSeriesRatingRepository::create(
+            db.sea_orm_connection(),
+            user.id,
+            series.id,
+            90,
+            Some("My notes".to_string()),
+        )
+        .await
+        .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "601",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Pull entry with different score
+        let entries = vec![SyncEntry {
+            external_id: "601".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: Some(SyncProgress {
+                chapters: Some(1),
+                volumes: None,
+                pages: None,
+            }),
+            score: Some(60.0),
+            started_at: None,
+            completed_at: None,
+            notes: Some("AniList notes".to_string()),
+        }];
+
+        let (_matched, _applied) = match_and_apply_pulled_entries(
+            db.sea_orm_connection(),
+            &entries,
+            Some("api:anilist"),
+            user.id,
+            Uuid::new_v4(),
+            true,
+        )
+        .await;
+
+        // Verify Codex rating was NOT overwritten
+        let rating = UserSeriesRatingRepository::get_by_user_and_series(
+            db.sea_orm_connection(),
+            user.id,
+            series.id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(rating.rating, 90); // Original Codex rating preserved
+        assert_eq!(rating.notes, Some("My notes".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_apply_pulled_rating_disabled() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "No Sync Manga", None)
+                .await
+                .unwrap();
+
+        create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+        let user = create_test_user(db.sea_orm_connection()).await;
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "602",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let entries = vec![SyncEntry {
+            external_id: "602".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: Some(SyncProgress {
+                chapters: Some(1),
+                volumes: None,
+                pages: None,
+            }),
+            score: Some(80.0),
+            started_at: None,
+            completed_at: None,
+            notes: Some("Should not be stored".to_string()),
+        }];
+
+        let (_matched, _applied) = match_and_apply_pulled_entries(
+            db.sea_orm_connection(),
+            &entries,
+            Some("api:anilist"),
+            user.id,
+            Uuid::new_v4(),
+            false, // sync_ratings=false
+        )
+        .await;
+
+        // Verify no rating was created
+        let rating = UserSeriesRatingRepository::get_by_user_and_series(
+            db.sea_orm_connection(),
+            user.id,
+            series.id,
+        )
+        .await
+        .unwrap();
+        assert!(rating.is_none());
     }
 }

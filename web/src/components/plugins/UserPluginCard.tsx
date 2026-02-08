@@ -87,9 +87,9 @@ function formatSyncResult(result: Record<string, unknown>): string {
     parts.push(pullPart);
   }
   if (pushError) {
-    parts.push("push failed");
+    parts.push("Push failed");
   } else if (pushed != null && pushed > 0) {
-    parts.push(`pushed ${pushed}`);
+    parts.push(`Pushed ${pushed}`);
   }
   return parts.join(", ") || "Sync completed";
 }
