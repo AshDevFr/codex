@@ -438,7 +438,7 @@ async fn build_push_entries(
     task_id: Uuid,
     settings: &CodexSyncSettings,
 ) -> Vec<SyncEntry> {
-    // Get all series that have external IDs for this source
+    // 1. Get all series that have external IDs for this source (1 query)
     let external_ids =
         match SeriesExternalIdRepository::find_by_source(db, external_id_source).await {
             Ok(ids) => ids,
@@ -462,7 +462,52 @@ async fn build_push_entries(
         return vec![];
     }
 
-    // Batch-fetch all user ratings for efficient O(1) lookup per series
+    // Collect all series IDs for batch queries
+    let series_ids: Vec<Uuid> = external_ids.iter().map(|e| e.series_id).collect();
+
+    // 2. Batch-fetch all books grouped by series (1 query instead of N)
+    let books_map = match BookRepository::get_by_series_ids(db, &series_ids).await {
+        Ok(map) => map,
+        Err(e) => {
+            warn!(
+                "Task {}: Failed to batch-fetch books for {} series: {}",
+                task_id,
+                series_ids.len(),
+                e
+            );
+            return vec![];
+        }
+    };
+
+    // Collect all book IDs for batch progress lookup
+    let all_book_ids: Vec<Uuid> = books_map.values().flatten().map(|b| b.id).collect();
+
+    // 3. Batch-fetch all reading progress for these books (1 query instead of N*M)
+    let progress_map =
+        match ReadProgressRepository::get_for_user_books(db, user_id, &all_book_ids).await {
+            Ok(map) => map,
+            Err(e) => {
+                warn!(
+                    "Task {}: Failed to batch-fetch reading progress: {}",
+                    task_id, e
+                );
+                HashMap::new()
+            }
+        };
+
+    // 4. Batch-fetch all series metadata (1 query instead of N)
+    let metadata_map = match SeriesMetadataRepository::get_by_series_ids(db, &series_ids).await {
+        Ok(map) => map,
+        Err(e) => {
+            warn!(
+                "Task {}: Failed to batch-fetch series metadata: {}",
+                task_id, e
+            );
+            HashMap::new()
+        }
+    };
+
+    // 5. Batch-fetch all user ratings (1 query — already batched)
     let ratings_map: HashMap<Uuid, crate::db::entities::user_series_ratings::Model> =
         if settings.sync_ratings {
             match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
@@ -479,26 +524,16 @@ async fn build_push_entries(
             HashMap::new()
         };
 
+    // Now iterate using in-memory lookups only — zero additional queries
     let mut entries = Vec::new();
 
     for ext_id in &external_ids {
-        // Get ordered books for this series
-        let books = match BookRepository::list_by_series(db, ext_id.series_id, false).await {
-            Ok(b) => b,
-            Err(e) => {
-                warn!(
-                    "Task {}: Failed to list books for series {}: {}",
-                    task_id, ext_id.series_id, e
-                );
-                continue;
-            }
+        let books = match books_map.get(&ext_id.series_id) {
+            Some(b) if !b.is_empty() => b,
+            _ => continue,
         };
 
-        if books.is_empty() {
-            continue;
-        }
-
-        // Check reading progress for each book
+        // Check reading progress for each book using the pre-fetched map
         let mut completed_count: i32 = 0;
         let mut in_progress_count: i32 = 0;
         let mut has_any_progress = false;
@@ -506,40 +541,31 @@ async fn build_push_entries(
         let mut latest_completed_at: Option<chrono::DateTime<chrono::Utc>> = None;
         let mut latest_updated_at: Option<chrono::DateTime<chrono::Utc>> = None;
 
-        for book in &books {
-            match ReadProgressRepository::get_by_user_and_book(db, user_id, book.id).await {
-                Ok(Some(progress)) => {
-                    has_any_progress = true;
-                    if progress.completed {
-                        completed_count += 1;
-                        if let Some(cat) = progress.completed_at {
-                            latest_completed_at = Some(match latest_completed_at {
-                                Some(existing) if cat > existing => cat,
-                                Some(existing) => existing,
-                                None => cat,
-                            });
-                        }
-                    } else {
-                        in_progress_count += 1;
+        for book in books {
+            if let Some(progress) = progress_map.get(&book.id) {
+                has_any_progress = true;
+                if progress.completed {
+                    completed_count += 1;
+                    if let Some(cat) = progress.completed_at {
+                        latest_completed_at = Some(match latest_completed_at {
+                            Some(existing) if cat > existing => cat,
+                            Some(existing) => existing,
+                            None => cat,
+                        });
                     }
-                    earliest_started = Some(match earliest_started {
-                        Some(existing) if progress.started_at < existing => progress.started_at,
-                        Some(existing) => existing,
-                        None => progress.started_at,
-                    });
-                    latest_updated_at = Some(match latest_updated_at {
-                        Some(existing) if progress.updated_at > existing => progress.updated_at,
-                        Some(existing) => existing,
-                        None => progress.updated_at,
-                    });
+                } else {
+                    in_progress_count += 1;
                 }
-                Ok(None) => {}
-                Err(e) => {
-                    warn!(
-                        "Task {}: Failed to get progress for book {}: {}",
-                        task_id, book.id, e
-                    );
-                }
+                earliest_started = Some(match earliest_started {
+                    Some(existing) if progress.started_at < existing => progress.started_at,
+                    Some(existing) => existing,
+                    None => progress.started_at,
+                });
+                latest_updated_at = Some(match latest_updated_at {
+                    Some(existing) if progress.updated_at > existing => progress.updated_at,
+                    Some(existing) => existing,
+                    None => progress.updated_at,
+                });
             }
         }
 
@@ -589,12 +615,9 @@ async fn build_push_entries(
             progress_count,
         );
 
-        // Fetch series metadata (for total_book_count)
-        let series_meta = SeriesMetadataRepository::get_by_series_id(db, ext_id.series_id).await;
-        let total_book_count = series_meta
-            .as_ref()
-            .ok()
-            .and_then(|m| m.as_ref())
+        // Use pre-fetched series metadata (for total_book_count)
+        let total_book_count = metadata_map
+            .get(&ext_id.series_id)
             .and_then(|m| m.total_book_count)
             .filter(|&total| total > 0);
 
@@ -692,79 +715,122 @@ async fn match_and_apply_pulled_entries(
         return (0, 0);
     }
 
+    // 1. Batch-fetch all external ID → series mappings (1 query instead of N)
+    let entry_external_ids: Vec<String> = entries.iter().map(|e| e.external_id.clone()).collect();
+    let ext_id_map = match SeriesExternalIdRepository::find_by_external_ids_and_source(
+        db,
+        &entry_external_ids,
+        source,
+    )
+    .await
+    {
+        Ok(map) => map,
+        Err(e) => {
+            warn!(
+                "Task {}: Failed to batch-fetch external IDs for source {}: {}",
+                task_id, source, e
+            );
+            return (0, 0);
+        }
+    };
+
+    // 2. Batch-fetch books for all matched series (1 query instead of N)
+    let matched_series_ids: Vec<Uuid> = ext_id_map.values().map(|e| e.series_id).collect();
+    let books_map = match BookRepository::get_by_series_ids(db, &matched_series_ids).await {
+        Ok(map) => map,
+        Err(e) => {
+            warn!(
+                "Task {}: Failed to batch-fetch books for pull apply: {}",
+                task_id, e
+            );
+            return (0, 0);
+        }
+    };
+
+    // 3. Batch-fetch reading progress for all books in matched series (1 query instead of N*M)
+    let all_book_ids: Vec<Uuid> = books_map.values().flatten().map(|b| b.id).collect();
+    let progress_map =
+        match ReadProgressRepository::get_for_user_books(db, user_id, &all_book_ids).await {
+            Ok(map) => map,
+            Err(e) => {
+                warn!(
+                    "Task {}: Failed to batch-fetch reading progress for pull: {}",
+                    task_id, e
+                );
+                HashMap::new()
+            }
+        };
+
+    // 4. Batch-fetch existing ratings if sync_ratings is enabled (1 query instead of N)
+    let existing_ratings: HashMap<Uuid, crate::db::entities::user_series_ratings::Model> =
+        if sync_ratings {
+            match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
+                Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),
+                Err(e) => {
+                    warn!(
+                        "Task {}: Failed to batch-fetch existing ratings: {}",
+                        task_id, e
+                    );
+                    HashMap::new()
+                }
+            }
+        } else {
+            HashMap::new()
+        };
+
     let mut matched: u32 = 0;
     let mut unmatched: u32 = 0;
     let mut applied: u32 = 0;
 
     for entry in entries {
-        match SeriesExternalIdRepository::find_by_external_id_and_source(
-            db,
-            &entry.external_id,
-            source,
-        )
-        .await
-        {
-            Ok(Some(ext_id)) => {
+        match ext_id_map.get(&entry.external_id) {
+            Some(ext_id) => {
                 debug!(
                     "Task {}: Matched entry {} -> series {} (source: {})",
                     task_id, entry.external_id, ext_id.series_id, source
                 );
                 matched += 1;
 
-                // Apply reading progress to the matched series
-                let books_applied =
-                    apply_pulled_entry(db, user_id, ext_id.series_id, entry, task_id).await;
+                // Apply reading progress using pre-fetched data
+                let books_applied = apply_pulled_entry(
+                    db,
+                    user_id,
+                    ext_id.series_id,
+                    entry,
+                    task_id,
+                    &books_map,
+                    &progress_map,
+                )
+                .await;
                 applied += books_applied;
 
                 // Apply pulled rating/notes if enabled and Codex has no existing rating
                 if sync_ratings && let Some(pulled_score) = entry.score {
-                    let score_i32 = (pulled_score.round() as i32).clamp(1, 100);
-                    match UserSeriesRatingRepository::get_by_user_and_series(
-                        db,
-                        user_id,
-                        ext_id.series_id,
-                    )
-                    .await
-                    {
-                        Ok(None) => {
-                            if let Err(e) = UserSeriesRatingRepository::upsert(
-                                db,
-                                user_id,
-                                ext_id.series_id,
-                                score_i32,
-                                entry.notes.clone(),
-                            )
-                            .await
-                            {
-                                warn!(
-                                    "Task {}: Failed to apply pulled rating for series {}: {}",
-                                    task_id, ext_id.series_id, e
-                                );
-                            }
-                        }
-                        Ok(Some(_)) => {
-                            debug!(
-                                "Task {}: Skipping pulled rating for series {} — Codex already has a rating",
-                                task_id, ext_id.series_id
-                            );
-                        }
-                        Err(e) => {
+                    if !existing_ratings.contains_key(&ext_id.series_id) {
+                        let score_i32 = (pulled_score.round() as i32).clamp(1, 100);
+                        if let Err(e) = UserSeriesRatingRepository::upsert(
+                            db,
+                            user_id,
+                            ext_id.series_id,
+                            score_i32,
+                            entry.notes.clone(),
+                        )
+                        .await
+                        {
                             warn!(
-                                "Task {}: Failed to check existing rating for series {}: {}",
+                                "Task {}: Failed to apply pulled rating for series {}: {}",
                                 task_id, ext_id.series_id, e
                             );
                         }
+                    } else {
+                        debug!(
+                            "Task {}: Skipping pulled rating for series {} — Codex already has a rating",
+                            task_id, ext_id.series_id
+                        );
                     }
                 }
             }
-            Ok(None) => {
-                unmatched += 1;
-            }
-            Err(e) => {
-                warn!(
-                    "Task {}: Failed to look up external ID {} (source: {}): {}",
-                    task_id, entry.external_id, source, e
-                );
+            None => {
                 unmatched += 1;
             }
         }
@@ -788,28 +854,22 @@ async fn match_and_apply_pulled_entries(
 ///
 /// Only marks books that aren't already completed. Returns the number of
 /// books newly marked as read.
+///
+/// Uses pre-fetched `books_map` and `progress_map` to avoid N+1 queries.
+/// Only issues write queries (`mark_as_read`) for books that actually need updating.
 async fn apply_pulled_entry(
     db: &DatabaseConnection,
     user_id: Uuid,
     series_id: Uuid,
     entry: &SyncEntry,
     task_id: Uuid,
+    books_map: &HashMap<Uuid, Vec<crate::db::entities::books::Model>>,
+    progress_map: &HashMap<Uuid, crate::db::entities::read_progress::Model>,
 ) -> u32 {
-    // Get ordered books for this series
-    let books = match BookRepository::list_by_series(db, series_id, false).await {
-        Ok(b) => b,
-        Err(e) => {
-            warn!(
-                "Task {}: Failed to list books for series {} during pull apply: {}",
-                task_id, series_id, e
-            );
-            return 0;
-        }
+    let books = match books_map.get(&series_id) {
+        Some(b) if !b.is_empty() => b,
+        _ => return 0,
     };
-
-    if books.is_empty() {
-        return 0;
-    }
 
     // Use volumes if available, fall back to chapters
     let units_read = entry
@@ -819,37 +879,30 @@ async fn apply_pulled_entry(
         .unwrap_or(0);
 
     // Determine which books to mark as read
-    let books_to_mark = if entry.status == SyncReadingStatus::Completed {
-        // Mark all books as read
-        &books[..]
-    } else if units_read > 0 {
-        // Mark first N books as read (each book = 1 volume/chapter)
-        let n = (units_read as usize).min(books.len());
-        &books[..n]
-    } else {
-        // No progress units and not completed — nothing to apply
-        return 0;
-    };
+    let books_to_mark: &[crate::db::entities::books::Model] =
+        if entry.status == SyncReadingStatus::Completed {
+            // Mark all books as read
+            books
+        } else if units_read > 0 {
+            // Mark first N books as read (each book = 1 volume/chapter)
+            let n = (units_read as usize).min(books.len());
+            &books[..n]
+        } else {
+            // No progress units and not completed — nothing to apply
+            return 0;
+        };
 
     let mut newly_applied: u32 = 0;
 
     for book in books_to_mark {
-        // Check if already completed — skip if so
-        match ReadProgressRepository::get_by_user_and_book(db, user_id, book.id).await {
-            Ok(Some(progress)) if progress.completed => {
-                continue; // Already read, skip
-            }
-            Ok(_) => {} // Not completed or no record — will mark
-            Err(e) => {
-                warn!(
-                    "Task {}: Failed to check progress for book {}: {}",
-                    task_id, book.id, e
-                );
-                continue;
-            }
+        // Check if already completed using pre-fetched progress — skip if so
+        if let Some(progress) = progress_map.get(&book.id)
+            && progress.completed
+        {
+            continue; // Already read, skip
         }
 
-        // Mark as read
+        // Mark as read (this is a write — must be a real query)
         match ReadProgressRepository::mark_as_read(db, user_id, book.id, book.page_count).await {
             Ok(_) => {
                 newly_applied += 1;
@@ -1970,12 +2023,27 @@ mod tests {
             latest_updated_at: None,
         };
 
+        // Build pre-fetched maps for apply_pulled_entry
+        let books_map = BookRepository::get_by_series_ids(db.sea_orm_connection(), &[series.id])
+            .await
+            .unwrap();
+        let all_book_ids: Vec<Uuid> = books_map.values().flatten().map(|b| b.id).collect();
+        let progress_map = ReadProgressRepository::get_for_user_books(
+            db.sea_orm_connection(),
+            user.id,
+            &all_book_ids,
+        )
+        .await
+        .unwrap();
+
         let applied = apply_pulled_entry(
             db.sea_orm_connection(),
             user.id,
             series.id,
             &entry,
             Uuid::new_v4(),
+            &books_map,
+            &progress_map,
         )
         .await;
         assert_eq!(applied, 2);

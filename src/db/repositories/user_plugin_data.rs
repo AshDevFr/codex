@@ -18,6 +18,7 @@ use crate::db::entities::user_plugin_data::{self, Entity as UserPluginData};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use sea_orm::*;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub struct UserPluginDataRepository;
@@ -68,6 +69,34 @@ impl UserPluginDataRepository {
             .all(db)
             .await?;
         Ok(entries)
+    }
+
+    /// Get values by key for multiple user plugin instances
+    ///
+    /// Returns a HashMap keyed by user_plugin_id for efficient lookups.
+    /// Excludes expired entries (but does NOT auto-delete them — use
+    /// `cleanup_expired` for that).
+    pub async fn get_by_key_for_user_plugin_ids(
+        db: &DatabaseConnection,
+        user_plugin_ids: &[Uuid],
+        key: &str,
+    ) -> Result<HashMap<Uuid, user_plugin_data::Model>> {
+        if user_plugin_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let results = UserPluginData::find()
+            .filter(user_plugin_data::Column::UserPluginId.is_in(user_plugin_ids.to_vec()))
+            .filter(user_plugin_data::Column::Key.eq(key))
+            .filter(
+                Condition::any()
+                    .add(user_plugin_data::Column::ExpiresAt.is_null())
+                    .add(user_plugin_data::Column::ExpiresAt.gt(Utc::now())),
+            )
+            .all(db)
+            .await?;
+
+        Ok(results.into_iter().map(|e| (e.user_plugin_id, e)).collect())
     }
 
     // =========================================================================
@@ -518,5 +547,113 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(data2.data, serde_json::json!({"owner": "user2"}));
+    }
+
+    #[tokio::test]
+    async fn test_get_by_key_for_user_plugin_ids_empty_input() {
+        let db = setup_test_db().await;
+
+        let result = UserPluginDataRepository::get_by_key_for_user_plugin_ids(&db, &[], "some_key")
+            .await
+            .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_by_key_for_user_plugin_ids_multiple_plugins() {
+        let db = setup_test_db().await;
+        let (_, _, up1) = create_test_user_plugin(&db).await;
+        let (_, _, up2) = create_test_user_plugin(&db).await;
+        let (_, _, up3) = create_test_user_plugin(&db).await;
+
+        // Set data for up1 and up2 with the target key
+        let data1 = serde_json::json!({"value": 1});
+        let data2 = serde_json::json!({"value": 2});
+
+        UserPluginDataRepository::set(&db, up1.id, "sync_state", data1.clone(), None)
+            .await
+            .unwrap();
+        UserPluginDataRepository::set(&db, up2.id, "sync_state", data2.clone(), None)
+            .await
+            .unwrap();
+        // up3 doesn't have this key set
+
+        let result = UserPluginDataRepository::get_by_key_for_user_plugin_ids(
+            &db,
+            &[up1.id, up2.id, up3.id],
+            "sync_state",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key(&up1.id));
+        assert!(result.contains_key(&up2.id));
+        assert!(!result.contains_key(&up3.id));
+        assert_eq!(result.get(&up1.id).unwrap().data, data1);
+        assert_eq!(result.get(&up2.id).unwrap().data, data2);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_key_for_user_plugin_ids_excludes_expired() {
+        let db = setup_test_db().await;
+        let (_, _, up1) = create_test_user_plugin(&db).await;
+        let (_, _, up2) = create_test_user_plugin(&db).await;
+
+        // up1: non-expired data
+        let data1 = serde_json::json!({"status": "fresh"});
+        let future_expiry = Utc::now() + Duration::hours(24);
+        UserPluginDataRepository::set(&db, up1.id, "cache", data1.clone(), Some(future_expiry))
+            .await
+            .unwrap();
+
+        // up2: already-expired data
+        let data2 = serde_json::json!({"status": "stale"});
+        let past_expiry = Utc::now() - Duration::hours(1);
+        UserPluginDataRepository::set(&db, up2.id, "cache", data2, Some(past_expiry))
+            .await
+            .unwrap();
+
+        let result = UserPluginDataRepository::get_by_key_for_user_plugin_ids(
+            &db,
+            &[up1.id, up2.id],
+            "cache",
+        )
+        .await
+        .unwrap();
+
+        // Only up1 should be included (up2's entry is expired)
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key(&up1.id));
+        assert!(!result.contains_key(&up2.id));
+        assert_eq!(result.get(&up1.id).unwrap().data, data1);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_key_for_user_plugin_ids_filters_by_key() {
+        let db = setup_test_db().await;
+        let (_, _, up1) = create_test_user_plugin(&db).await;
+
+        // Set multiple keys for the same plugin
+        UserPluginDataRepository::set(&db, up1.id, "key_a", serde_json::json!({"a": 1}), None)
+            .await
+            .unwrap();
+        UserPluginDataRepository::set(&db, up1.id, "key_b", serde_json::json!({"b": 2}), None)
+            .await
+            .unwrap();
+
+        // Query for only key_b
+        let result =
+            UserPluginDataRepository::get_by_key_for_user_plugin_ids(&db, &[up1.id], "key_b")
+                .await
+                .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get(&up1.id).unwrap().key, "key_b");
+        assert_eq!(
+            result.get(&up1.id).unwrap().data,
+            serde_json::json!({"b": 2})
+        );
     }
 }

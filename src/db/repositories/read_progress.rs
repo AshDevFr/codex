@@ -223,6 +223,28 @@ impl ReadProgressRepository {
         Self::delete(db, user_id, book_id).await
     }
 
+    /// Get reading progress for a user across multiple books
+    ///
+    /// Returns a HashMap keyed by book_id for efficient lookups.
+    /// Only returns books that have progress records for the given user.
+    pub async fn get_for_user_books(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, read_progress::Model>> {
+        if book_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = ReadProgress::find()
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::BookId.is_in(book_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        Ok(results.into_iter().map(|p| (p.book_id, p)).collect())
+    }
+
     /// Mark all books in a series as read for a user
     /// Returns the number of books marked as read
     pub async fn mark_series_as_read(
@@ -634,5 +656,51 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(all_progress.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_for_user_books_empty_input() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+
+        let result = ReadProgressRepository::get_for_user_books(&db, user.id, &[])
+            .await
+            .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_for_user_books_multiple_books() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db).await;
+        let book1 = create_test_book(&db).await;
+        let book2 = create_test_book(&db).await;
+        let book3 = create_test_book(&db).await;
+
+        // Create progress for book1 and book2 only
+        ReadProgressRepository::upsert(&db, user.id, book1.id, 10, false)
+            .await
+            .unwrap();
+        ReadProgressRepository::upsert(&db, user.id, book2.id, 25, true)
+            .await
+            .unwrap();
+
+        // Query for all three books — only two should have progress
+        let result = ReadProgressRepository::get_for_user_books(
+            &db,
+            user.id,
+            &[book1.id, book2.id, book3.id],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key(&book1.id));
+        assert!(result.contains_key(&book2.id));
+        assert!(!result.contains_key(&book3.id));
+        assert_eq!(result.get(&book1.id).unwrap().current_page, 10);
+        assert_eq!(result.get(&book2.id).unwrap().current_page, 25);
+        assert!(result.get(&book2.id).unwrap().completed);
     }
 }
