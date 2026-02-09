@@ -14,6 +14,7 @@ import {
   createLogger,
   createRecommendationPlugin,
   type InitializeParams,
+  type PluginStorage,
   type Recommendation,
   type RecommendationClearResponse,
   type RecommendationDismissRequest,
@@ -37,9 +38,49 @@ const logger = createLogger({ name: "recommendations-anilist", level: "debug" })
 let client: AniListRecommendationClient | null = null;
 let viewerId: number | null = null;
 let maxRecommendations = 20;
+let storage: PluginStorage | null = null;
 
-// Dismissed recommendations (in-memory per process lifetime)
+/** Storage key for persisted dismissed recommendation IDs */
+const DISMISSED_STORAGE_KEY = "dismissed_ids";
+
+// In-memory cache of dismissed IDs (synced with storage).
+// Loaded from storage on initialize, updated on dismiss/clear.
 const dismissedIds = new Set<string>();
+
+/**
+ * Load dismissed IDs from persistent storage into the in-memory cache.
+ */
+async function loadDismissedIds(): Promise<void> {
+  if (!storage) return;
+  try {
+    const result = await storage.get(DISMISSED_STORAGE_KEY);
+    if (Array.isArray(result.data)) {
+      dismissedIds.clear();
+      for (const id of result.data) {
+        if (typeof id === "string") {
+          dismissedIds.add(id);
+        }
+      }
+      logger.debug(`Loaded ${dismissedIds.size} dismissed IDs from storage`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.warn(`Failed to load dismissed IDs from storage: ${msg}`);
+  }
+}
+
+/**
+ * Persist the current dismissed IDs set to storage.
+ */
+async function saveDismissedIds(): Promise<void> {
+  if (!storage) return;
+  try {
+    await storage.set(DISMISSED_STORAGE_KEY, [...dismissedIds]);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.warn(`Failed to save dismissed IDs to storage: ${msg}`);
+  }
+}
 
 // =============================================================================
 // Recommendation Generation
@@ -239,6 +280,7 @@ const provider: RecommendationProvider = {
     logger.debug(
       `Dismissed recommendation: ${params.externalId} (reason: ${params.reason ?? "none"})`,
     );
+    await saveDismissedIds();
     return { dismissed: true };
   },
 
@@ -246,6 +288,7 @@ const provider: RecommendationProvider = {
     const count = dismissedIds.size;
     dismissedIds.clear();
     logger.info(`Cleared ${count} dismissed recommendations`);
+    await saveDismissedIds();
     return { cleared: true };
   },
 };
@@ -258,7 +301,7 @@ createRecommendationPlugin({
   manifest,
   provider,
   logLevel: "debug",
-  onInitialize(params: InitializeParams) {
+  async onInitialize(params: InitializeParams) {
     const accessToken = params.credentials?.access_token;
     if (accessToken) {
       client = new AniListRecommendationClient(accessToken);
@@ -273,6 +316,10 @@ createRecommendationPlugin({
       maxRecommendations = Math.max(1, Math.min(Math.round(rawMax), 50));
       logger.info(`Max recommendations set to: ${maxRecommendations}`);
     }
+
+    // Capture the storage client and restore persisted dismissed IDs
+    storage = params.storage;
+    await loadDismissedIds();
   },
 });
 

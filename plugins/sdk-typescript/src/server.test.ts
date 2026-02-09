@@ -5,6 +5,8 @@
  * - Parameter validation for search, get, and match methods
  * - Error handling for invalid requests
  * - Request handling flow
+ * - JSON-RPC response detection (isJsonRpcResponse)
+ * - Storage response routing in handleLine
  */
 
 import { describe, expect, it } from "vitest";
@@ -210,5 +212,126 @@ describe("JSON-RPC Error Codes", () => {
 
   it("should have correct INTERNAL_ERROR code", () => {
     expect(JSON_RPC_ERROR_CODES.INTERNAL_ERROR).toBe(-32603);
+  });
+});
+
+// =============================================================================
+// isJsonRpcResponse Tests
+// (Mirrors the internal isJsonRpcResponse function in server.ts)
+// =============================================================================
+
+/**
+ * Detect whether a parsed JSON object is a JSON-RPC response (not a request).
+ * This mirrors the internal function in server.ts for testing.
+ */
+function isJsonRpcResponse(obj: Record<string, unknown>): boolean {
+  if (obj.method !== undefined) return false;
+  if (obj.id === undefined || obj.id === null) return false;
+  return "result" in obj || "error" in obj;
+}
+
+describe("isJsonRpcResponse", () => {
+  it("should detect a success response", () => {
+    const obj = { jsonrpc: "2.0", id: 1, result: { data: "hello" } };
+    expect(isJsonRpcResponse(obj)).toBe(true);
+  });
+
+  it("should detect an error response", () => {
+    const obj = { jsonrpc: "2.0", id: 1, error: { code: -32603, message: "Internal error" } };
+    expect(isJsonRpcResponse(obj)).toBe(true);
+  });
+
+  it("should detect a response with null result", () => {
+    const obj = { jsonrpc: "2.0", id: 1, result: null };
+    expect(isJsonRpcResponse(obj)).toBe(true);
+  });
+
+  it("should detect a response with string id", () => {
+    const obj = { jsonrpc: "2.0", id: "abc-123", result: "pong" };
+    expect(isJsonRpcResponse(obj)).toBe(true);
+  });
+
+  it("should detect a response with numeric id 0", () => {
+    const obj = { jsonrpc: "2.0", id: 0, result: {} };
+    expect(isJsonRpcResponse(obj)).toBe(true);
+  });
+
+  it("should reject a request (has method field)", () => {
+    const obj = { jsonrpc: "2.0", id: 1, method: "initialize", params: {} };
+    expect(isJsonRpcResponse(obj)).toBe(false);
+  });
+
+  it("should reject a notification (has method, no id)", () => {
+    const obj = { jsonrpc: "2.0", method: "shutdown" };
+    expect(isJsonRpcResponse(obj)).toBe(false);
+  });
+
+  it("should reject when id is null", () => {
+    const obj = { jsonrpc: "2.0", id: null, result: {} };
+    expect(isJsonRpcResponse(obj)).toBe(false);
+  });
+
+  it("should reject when id is undefined (missing)", () => {
+    const obj = { jsonrpc: "2.0", result: {} };
+    expect(isJsonRpcResponse(obj)).toBe(false);
+  });
+
+  it("should reject an empty object", () => {
+    const obj = {};
+    expect(isJsonRpcResponse(obj)).toBe(false);
+  });
+
+  it("should reject when object has id but neither result nor error", () => {
+    const obj = { jsonrpc: "2.0", id: 1 };
+    expect(isJsonRpcResponse(obj)).toBe(false);
+  });
+
+  it("should reject when both method and result are present (treat as request)", () => {
+    // This should be treated as a request because it has method
+    const obj = { jsonrpc: "2.0", id: 1, method: "storage/get", result: {} };
+    expect(isJsonRpcResponse(obj)).toBe(false);
+  });
+
+  it("should accept a response with result: undefined (key present)", () => {
+    // "result" key is present but value is undefined — still a response shape
+    const obj: Record<string, unknown> = { jsonrpc: "2.0", id: 1 };
+    // Explicitly set result key
+    Object.defineProperty(obj, "result", { value: undefined, enumerable: true });
+    expect(isJsonRpcResponse(obj)).toBe(true);
+  });
+});
+
+// =============================================================================
+// Storage Routing in handleLine
+// =============================================================================
+
+describe("Storage Response Routing", () => {
+  it("should distinguish a storage response from a host request", () => {
+    // A storage response: has id + result, no method
+    const storageResponse = { jsonrpc: "2.0", id: 42, result: { data: "cached_value" } };
+    expect(isJsonRpcResponse(storageResponse)).toBe(true);
+
+    // A host request: has method field
+    const hostRequest = { jsonrpc: "2.0", id: 1, method: "recommendations/get", params: {} };
+    expect(isJsonRpcResponse(hostRequest)).toBe(false);
+  });
+
+  it("should distinguish a storage error response from a host request", () => {
+    const storageError = {
+      jsonrpc: "2.0",
+      id: 5,
+      error: { code: -32002, message: "Key not found" },
+    };
+    expect(isJsonRpcResponse(storageError)).toBe(true);
+  });
+
+  it("should not misclassify a parse error response (null id) as a storage response", () => {
+    // Parse errors have id: null — these should NOT be routed to storage
+    const parseError = {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32700, message: "Parse error" },
+    };
+    expect(isJsonRpcResponse(parseError)).toBe(false);
   });
 });
