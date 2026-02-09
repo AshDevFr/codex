@@ -250,6 +250,31 @@ impl SeriesExternalIdRepository {
         Ok(map)
     }
 
+    /// Find series external IDs by multiple external ID values and source
+    ///
+    /// Returns a HashMap keyed by external_id for efficient reverse lookups.
+    /// Used during pull sync to batch-match pulled entries to Codex series.
+    pub async fn find_by_external_ids_and_source(
+        db: &DatabaseConnection,
+        external_ids: &[String],
+        source: &str,
+    ) -> Result<HashMap<String, SeriesExternalId>> {
+        if external_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let results = SeriesExternalIds::find()
+            .filter(series_external_ids::Column::ExternalId.is_in(external_ids.to_vec()))
+            .filter(series_external_ids::Column::Source.eq(source))
+            .all(db)
+            .await?;
+
+        Ok(results
+            .into_iter()
+            .map(|e| (e.external_id.clone(), e))
+            .collect())
+    }
+
     /// Check if an external ID record belongs to a specific series
     pub async fn belongs_to_series(
         db: &DatabaseConnection,
@@ -1126,5 +1151,174 @@ mod tests {
         .unwrap();
         assert!(found_mal.is_some());
         assert_eq!(found_mal.unwrap().series_id, series1.id);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_external_ids_and_source_empty_input() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let result = SeriesExternalIdRepository::find_by_external_ids_and_source(
+            db.sea_orm_connection(),
+            &[],
+            "plugin:mangabaka",
+        )
+        .await
+        .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_external_ids_and_source_multiple_ids() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1", None)
+                .await
+                .unwrap();
+        let series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2", None)
+                .await
+                .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series1.id,
+            "api:anilist",
+            "ext_1",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series2.id,
+            "api:anilist",
+            "ext_2",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let result = SeriesExternalIdRepository::find_by_external_ids_and_source(
+            db.sea_orm_connection(),
+            &["ext_1".to_string(), "ext_2".to_string()],
+            "api:anilist",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get("ext_1").unwrap().series_id, series1.id);
+        assert_eq!(result.get("ext_2").unwrap().series_id, series2.id);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_external_ids_and_source_filters_by_source() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Same external_id but different sources
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "12345",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:myanimelist",
+            "12345",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let result = SeriesExternalIdRepository::find_by_external_ids_and_source(
+            db.sea_orm_connection(),
+            &["12345".to_string()],
+            "api:anilist",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get("12345").unwrap().source, "api:anilist");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_external_ids_and_source_partial_match() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        // Only one external ID exists
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "111",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Query for multiple IDs — only one should match
+        let result = SeriesExternalIdRepository::find_by_external_ids_and_source(
+            db.sea_orm_connection(),
+            &["111".to_string(), "222".to_string(), "333".to_string()],
+            "api:anilist",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("111"));
+        assert!(!result.contains_key("222"));
     }
 }

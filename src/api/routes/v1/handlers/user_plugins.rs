@@ -88,11 +88,15 @@ fn resolve_oauth_redirect_base(state: &AppState, headers: &HeaderMap) -> String 
     "http://localhost:3000".to_string()
 }
 
-/// Build a UserPluginDto from a user plugin instance and its parent plugin definition
+/// Build a UserPluginDto from a user plugin instance and its parent plugin definition.
+///
+/// If `prefetched_sync_result` is `Some`, uses that value directly.
+/// If `None`, fetches the last sync result from the database (1 query).
 async fn build_user_plugin_dto(
     db: &sea_orm::DatabaseConnection,
     instance: &crate::db::entities::user_plugins::Model,
     plugin: &crate::db::entities::plugins::Model,
+    prefetched_sync_result: Option<Option<serde_json::Value>>,
 ) -> UserPluginDto {
     let oauth_config = get_oauth_config_from_plugin(plugin);
     let manifest: Option<PluginManifest> = plugin
@@ -116,12 +120,15 @@ async fn build_user_plugin_dto(
         .and_then(|m| m.user_config_schema.clone())
         .and_then(|v| serde_json::from_value::<ConfigSchemaDto>(v).ok());
 
-    // Fetch last sync result from user_plugin_data
-    let last_sync_result = UserPluginDataRepository::get(db, instance.id, "last_sync_result")
-        .await
-        .ok()
-        .flatten()
-        .map(|entry| entry.data);
+    // Use pre-fetched value or fetch from DB
+    let last_sync_result = match prefetched_sync_result {
+        Some(value) => value,
+        None => UserPluginDataRepository::get(db, instance.id, "last_sync_result")
+            .await
+            .ok()
+            .flatten()
+            .map(|entry| entry.data),
+    };
 
     UserPluginDto {
         id: instance.id,
@@ -179,11 +186,25 @@ pub async fn list_user_plugins(
         .filter(|p| p.plugin_type == "user" && p.enabled)
         .collect();
 
-    // Build enabled plugins list
+    // Batch-fetch all last_sync_result entries (1 query instead of N)
+    let user_plugin_ids: Vec<Uuid> = user_instances.iter().map(|i| i.id).collect();
+    let sync_results_map = UserPluginDataRepository::get_by_key_for_user_plugin_ids(
+        &state.db,
+        &user_plugin_ids,
+        "last_sync_result",
+    )
+    .await
+    .unwrap_or_default();
+
+    // Build enabled plugins list using pre-fetched sync results
     let mut enabled: Vec<UserPluginDto> = Vec::new();
     for instance in &user_instances {
         if let Some(plugin) = user_plugins.iter().find(|p| p.id == instance.plugin_id) {
-            enabled.push(build_user_plugin_dto(&state.db, instance, plugin).await);
+            let prefetched = sync_results_map
+                .get(&instance.id)
+                .map(|entry| entry.data.clone());
+            enabled
+                .push(build_user_plugin_dto(&state.db, instance, plugin, Some(prefetched)).await);
         }
     }
 
@@ -294,7 +315,7 @@ pub async fn enable_plugin(
     );
 
     Ok(Json(
-        build_user_plugin_dto(&state.db, &instance, &plugin).await,
+        build_user_plugin_dto(&state.db, &instance, &plugin, None).await,
     ))
 }
 
@@ -624,7 +645,7 @@ pub async fn get_user_plugin(
         .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
 
     Ok(Json(
-        build_user_plugin_dto(&state.db, &instance, &plugin).await,
+        build_user_plugin_dto(&state.db, &instance, &plugin, None).await,
     ))
 }
 
@@ -681,7 +702,7 @@ pub async fn update_user_plugin_config(
     );
 
     Ok(Json(
-        build_user_plugin_dto(&state.db, &updated, &plugin).await,
+        build_user_plugin_dto(&state.db, &updated, &plugin, None).await,
     ))
 }
 
@@ -958,6 +979,6 @@ pub async fn set_user_credentials(
         .ok_or_else(|| ApiError::Internal("User plugin not found after update".to_string()))?;
 
     Ok(Json(
-        build_user_plugin_dto(&state.db, &updated, &plugin).await,
+        build_user_plugin_dto(&state.db, &updated, &plugin, None).await,
     ))
 }

@@ -552,6 +552,34 @@ impl BookRepository {
             .context("Failed to list books by series IDs")
     }
 
+    /// Get all books in multiple series, grouped by series ID
+    ///
+    /// Returns a HashMap keyed by series_id for efficient lookups.
+    /// Each value is a Vec of non-deleted books belonging to that series.
+    pub async fn get_by_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<books::Model>>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let results = Books::find()
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to list books by series IDs")?;
+
+        let mut map: std::collections::HashMap<Uuid, Vec<books::Model>> =
+            std::collections::HashMap::new();
+        for book in results {
+            map.entry(book.series_id).or_default().push(book);
+        }
+
+        Ok(map)
+    }
+
     /// Count books in a series (excluding deleted)
     pub async fn count_by_series(db: &DatabaseConnection, series_id: Uuid) -> Result<u64> {
         Books::find()
@@ -3799,5 +3827,104 @@ mod tests {
         assert_eq!(counts.get(&BookErrorType::Parser), Some(&2));
         assert_eq!(counts.get(&BookErrorType::Thumbnail), Some(&2));
         assert_eq!(counts.get(&BookErrorType::Metadata), None);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_series_ids_empty_input() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let result = BookRepository::get_by_series_ids(db.sea_orm_connection(), &[])
+            .await
+            .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_by_series_ids_multiple_series() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series1 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 1", None)
+                .await
+                .unwrap();
+        let series2 =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Series 2", None)
+                .await
+                .unwrap();
+
+        let book1 = create_book_model(series1.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let book2 = create_book_model(series1.id, library.id, "/test/book2.cbz", "book2.cbz");
+        let book3 = create_book_model(series2.id, library.id, "/test/book3.cbz", "book3.cbz");
+        let book4 = create_book_model(series2.id, library.id, "/test/book4.cbz", "book4.cbz");
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book3, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book4, None)
+            .await
+            .unwrap();
+
+        let result =
+            BookRepository::get_by_series_ids(db.sea_orm_connection(), &[series1.id, series2.id])
+                .await
+                .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get(&series1.id).unwrap().len(), 2);
+        assert_eq!(result.get(&series2.id).unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_by_series_ids_excludes_deleted_books() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book1 = create_book_model(series.id, library.id, "/test/book1.cbz", "book1.cbz");
+        let mut book2 = create_book_model(series.id, library.id, "/test/book2.cbz", "book2.cbz");
+        book2.deleted = true;
+
+        BookRepository::create(db.sea_orm_connection(), &book1, None)
+            .await
+            .unwrap();
+        BookRepository::create(db.sea_orm_connection(), &book2, None)
+            .await
+            .unwrap();
+
+        let result = BookRepository::get_by_series_ids(db.sea_orm_connection(), &[series.id])
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get(&series.id).unwrap().len(), 1);
+        assert_eq!(result.get(&series.id).unwrap()[0].id, book1.id);
     }
 }
