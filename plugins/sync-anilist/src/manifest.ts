@@ -25,17 +25,8 @@ export const manifest = {
     },
   ],
   userConfigSchema: {
-    description: "AniList sync settings",
+    description: "AniList-specific sync settings",
     fields: [
-      {
-        key: "syncRatings",
-        label: "Sync Ratings & Notes",
-        description:
-          "Include user ratings and notes in sync. When off, only reading progress is synced.",
-        type: "boolean" as const,
-        required: false,
-        default: false,
-      },
       {
         key: "progressUnit",
         label: "Progress Unit",
@@ -44,31 +35,6 @@ export const manifest = {
         type: "string" as const,
         required: false,
         default: "volumes",
-      },
-      {
-        key: "pushCompletedSeries",
-        label: "Push Completed Series",
-        description: "Push series where all local books are marked as read",
-        type: "boolean" as const,
-        required: false,
-        default: true,
-      },
-      {
-        key: "pushInProgressSeries",
-        label: "Push In-Progress Series",
-        description: "Push series where at least one book has been started",
-        type: "boolean" as const,
-        required: false,
-        default: true,
-      },
-      {
-        key: "pushInProgressVolumes",
-        label: "Count In-Progress Volumes",
-        description:
-          "Include partially-read volumes/chapters in the progress count (otherwise only fully read ones are counted)",
-        type: "boolean" as const,
-        required: false,
-        default: false,
       },
       {
         key: "pauseAfterDays",

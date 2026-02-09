@@ -159,6 +159,102 @@ describe("UserPluginSettingsModal", () => {
     expect(screen.getByText("Pull Only")).toBeInTheDocument();
   });
 
+  it("shows Codex sync settings for sync plugins", () => {
+    const plugin = makePlugin({
+      capabilities: { readSync: true, userRecommendationProvider: false },
+    });
+
+    renderWithProviders(
+      <UserPluginSettingsModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Include completed series")).toBeInTheDocument();
+    expect(screen.getByText("Include in-progress series")).toBeInTheDocument();
+    expect(screen.getByText("Count partially-read books")).toBeInTheDocument();
+    expect(screen.getByText("Sync ratings & notes")).toBeInTheDocument();
+    expect(screen.getByText("Sync Settings")).toBeInTheDocument();
+  });
+
+  it("does not show Codex sync settings for non-sync plugins", () => {
+    const plugin = makePlugin({
+      capabilities: { readSync: false, userRecommendationProvider: true },
+    });
+
+    renderWithProviders(
+      <UserPluginSettingsModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Include completed series"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Sync Settings")).not.toBeInTheDocument();
+  });
+
+  it("initialises Codex sync settings from _codex namespace", () => {
+    const plugin = makePlugin({
+      config: {
+        _codex: {
+          includeCompleted: false,
+          includeInProgress: true,
+          countPartialProgress: true,
+          syncRatings: false,
+        },
+      },
+      capabilities: { readSync: true, userRecommendationProvider: false },
+    });
+
+    renderWithProviders(
+      <UserPluginSettingsModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Check that the switches reflect the stored values
+    const switches = screen.getAllByRole("switch");
+    // Order: includeCompleted, includeInProgress, countPartialProgress, syncRatings
+    expect(switches[0]).not.toBeChecked(); // includeCompleted = false
+    expect(switches[1]).toBeChecked(); // includeInProgress = true
+    expect(switches[2]).toBeChecked(); // countPartialProgress = true
+    expect(switches[3]).not.toBeChecked(); // syncRatings = false
+  });
+
+  it("shows Plugin Settings divider when plugin has config fields", () => {
+    const plugin = makePlugin({
+      capabilities: { readSync: true, userRecommendationProvider: false },
+      userConfigSchema: {
+        fields: [
+          {
+            key: "progressUnit",
+            label: "Progress Unit",
+            type: "string",
+            required: false,
+          },
+        ],
+      },
+    });
+
+    renderWithProviders(
+      <UserPluginSettingsModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Plugin Settings")).toBeInTheDocument();
+    expect(screen.getByText("Progress Unit")).toBeInTheDocument();
+  });
+
   it("calls onClose when Cancel is clicked", async () => {
     const onClose = vi.fn();
     const plugin = makePlugin();

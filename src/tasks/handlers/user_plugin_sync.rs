@@ -28,59 +28,59 @@ use crate::services::plugin::sync::{
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 
-/// Configuration for push behavior, parsed from user plugin config.
+/// Codex generic sync settings — server-interpreted preferences that control
+/// which entries to build and send to the plugin. Stored in the user plugin
+/// config under the `_codex` namespace (e.g. `config._codex.includeCompleted`).
+///
+/// These are NOT plugin config — the plugin never reads them. They control
+/// the server's data-source behavior: filtering, progress counting, ratings.
 #[derive(Debug, Clone)]
-struct PushConfig {
-    /// Whether each Codex book counts as a "volume" or a "chapter" in the
-    /// external service. Defaults to `"volumes"`.
-    progress_unit: String,
-    /// Push series where all local books are marked as read. Default: true.
-    push_completed_series: bool,
-    /// Push series where at least one book has been started. Default: true.
-    push_in_progress_series: bool,
+struct CodexSyncSettings {
+    /// Include series where all local books are marked as read. Default: true.
+    include_completed: bool,
+    /// Include series where at least one book has been started. Default: true.
+    include_in_progress: bool,
     /// Count partially-read books in the progress count. Default: false.
-    push_in_progress_volumes: bool,
-    /// Include scores and notes in push/pull. Default: false.
+    count_partial_progress: bool,
+    /// Include scores and notes in push/pull. Default: true.
     sync_ratings: bool,
-    /// Auto-pause in-progress series after this many days of inactivity. 0 = disabled.
-    pause_after_days: u64,
-    /// Auto-drop in-progress series after this many days of inactivity. 0 = disabled.
-    drop_after_days: u64,
 }
 
-impl PushConfig {
-    /// Parse push configuration from the user plugin config JSON.
+impl CodexSyncSettings {
+    /// Parse Codex sync settings from the `_codex` namespace in user plugin config.
+    ///
+    /// Example config shape:
+    /// ```json
+    /// {
+    ///   "_codex": {
+    ///     "includeCompleted": true,
+    ///     "includeInProgress": true,
+    ///     "countPartialProgress": false,
+    ///     "syncRatings": true
+    ///   },
+    ///   "progressUnit": "volumes",
+    ///   ...
+    /// }
+    /// ```
     fn from_user_config(config: &serde_json::Value) -> Self {
+        let codex = config.get("_codex").unwrap_or(&serde_json::Value::Null);
         Self {
-            progress_unit: config
-                .get("progressUnit")
-                .and_then(|v| v.as_str())
-                .unwrap_or("volumes")
-                .to_string(),
-            push_completed_series: config
-                .get("pushCompletedSeries")
+            include_completed: codex
+                .get("includeCompleted")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true),
-            push_in_progress_series: config
-                .get("pushInProgressSeries")
+            include_in_progress: codex
+                .get("includeInProgress")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true),
-            push_in_progress_volumes: config
-                .get("pushInProgressVolumes")
+            count_partial_progress: codex
+                .get("countPartialProgress")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
-            sync_ratings: config
+            sync_ratings: codex
                 .get("syncRatings")
                 .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            pause_after_days: config
-                .get("pauseAfterDays")
-                .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
-                .unwrap_or(0),
-            drop_after_days: config
-                .get("dropAfterDays")
-                .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
-                .unwrap_or(0),
+                .unwrap_or(true),
         }
     }
 }
@@ -177,10 +177,7 @@ impl TaskHandler for UserPluginSyncHandler {
                 .to_string();
             let do_pull = sync_mode == "both" || sync_mode == "pull";
             let do_push = sync_mode == "both" || sync_mode == "push";
-            let sync_ratings = user_config
-                .get("syncRatings")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let codex_settings = CodexSyncSettings::from_user_config(&user_config);
 
             debug!(
                 "Task {}: syncMode={} (pull={}, push={})",
@@ -293,7 +290,7 @@ impl TaskHandler for UserPluginSyncHandler {
                                 external_id_source.as_deref(),
                                 user_id,
                                 task.id,
-                                sync_ratings,
+                                codex_settings.sync_ratings,
                             )
                             .await;
 
@@ -319,9 +316,8 @@ impl TaskHandler for UserPluginSyncHandler {
 
             // Step 3: Push progress to external service
             let (pushed_count, push_failures, push_error) = if do_push {
-                let push_config = PushConfig::from_user_config(&user_config);
                 let entries = if let Some(ref source) = external_id_source {
-                    build_push_entries(db, user_id, source, task.id, &push_config).await
+                    build_push_entries(db, user_id, source, task.id, &codex_settings).await
                 } else {
                     warn!(
                         "Task {}: Plugin has no externalIdSource in manifest — cannot build push entries",
@@ -429,57 +425,18 @@ impl TaskHandler for UserPluginSyncHandler {
     }
 }
 
-/// Determine if an in-progress series should be auto-paused or auto-dropped
-/// based on how many days since the last reading activity.
-///
-/// Rules:
-/// - Both 0: disabled, returns the original status
-/// - pause > 0, drop == 0: pause only (no drop)
-/// - pause == 0, drop > 0: drop only (skip pause)
-/// - drop fires at its threshold; pause fires at its threshold
-/// - Drop is checked first (stronger action takes priority)
-fn apply_staleness_status(
-    current_status: &SyncReadingStatus,
-    latest_updated_at: Option<chrono::DateTime<chrono::Utc>>,
-    pause_after_days: u64,
-    drop_after_days: u64,
-) -> SyncReadingStatus {
-    if pause_after_days == 0 && drop_after_days == 0 {
-        return current_status.clone();
-    }
-
-    let Some(last_activity) = latest_updated_at else {
-        return current_status.clone();
-    };
-
-    let now = chrono::Utc::now();
-    let days_inactive = (now - last_activity).num_days().max(0) as u64;
-
-    // Check drop first (stronger action takes priority)
-    if drop_after_days > 0 && days_inactive >= drop_after_days {
-        return SyncReadingStatus::Dropped;
-    }
-
-    // Then check pause
-    if pause_after_days > 0 && days_inactive >= pause_after_days {
-        return SyncReadingStatus::OnHold;
-    }
-
-    current_status.clone()
-}
-
 /// Build push entries from a user's Codex reading progress.
 ///
 /// For each series that has an external ID matching the given source,
 /// aggregates book-level reading progress into a single `SyncEntry`.
-/// Behaviour is controlled by `PushConfig` (progress unit, which series
-/// to include, whether in-progress books count).
+/// Behaviour is controlled by `CodexSyncSettings` (which series to
+/// include, whether partial-progress books count, ratings).
 async fn build_push_entries(
     db: &DatabaseConnection,
     user_id: Uuid,
     external_id_source: &str,
     task_id: Uuid,
-    config: &PushConfig,
+    settings: &CodexSyncSettings,
 ) -> Vec<SyncEntry> {
     // Get all series that have external IDs for this source
     let external_ids =
@@ -507,7 +464,7 @@ async fn build_push_entries(
 
     // Batch-fetch all user ratings for efficient O(1) lookup per series
     let ratings_map: HashMap<Uuid, crate::db::entities::user_series_ratings::Model> =
-        if config.sync_ratings {
+        if settings.sync_ratings {
             match UserSeriesRatingRepository::get_all_for_user(db, user_id).await {
                 Ok(ratings) => ratings.into_iter().map(|r| (r.series_id, r)).collect(),
                 Err(e) => {
@@ -598,24 +555,24 @@ async fn build_push_entries(
         let all_completed = completed_count == books.len() as i32;
         let is_in_progress = !all_completed;
 
-        // Apply push config filters
-        if all_completed && !config.push_completed_series {
+        // Apply Codex sync settings filters
+        if all_completed && !settings.include_completed {
             debug!(
-                "Task {}: Skipping series {} (ext_id={}) — completed but pushCompletedSeries=false",
+                "Task {}: Skipping series {} (ext_id={}) — completed but includeCompleted=false",
                 task_id, ext_id.series_id, ext_id.external_id
             );
             continue;
         }
-        if is_in_progress && !config.push_in_progress_series {
+        if is_in_progress && !settings.include_in_progress {
             debug!(
-                "Task {}: Skipping series {} (ext_id={}) — in-progress but pushInProgressSeries=false",
+                "Task {}: Skipping series {} (ext_id={}) — in-progress but includeInProgress=false",
                 task_id, ext_id.series_id, ext_id.external_id
             );
             continue;
         }
 
-        // Calculate progress count based on config
-        let progress_count = if config.push_in_progress_volumes {
+        // Calculate progress count based on settings
+        let progress_count = if settings.count_partial_progress {
             completed_count + in_progress_count
         } else {
             completed_count
@@ -632,19 +589,22 @@ async fn build_push_entries(
             progress_count,
         );
 
+        // Fetch series metadata (for total_book_count)
+        let series_meta = SeriesMetadataRepository::get_by_series_id(db, ext_id.series_id).await;
+        let total_book_count = series_meta
+            .as_ref()
+            .ok()
+            .and_then(|m| m.as_ref())
+            .and_then(|m| m.total_book_count)
+            .filter(|&total| total > 0);
+
         // Mark as Completed only when:
         // 1. All local books are read, AND
         // 2. The series has a known total_book_count in metadata, AND
         // 3. completed_count >= total_book_count
         // Otherwise default to Reading — we can't be sure the library is complete.
         let status = if all_completed {
-            let is_truly_complete =
-                match SeriesMetadataRepository::get_by_series_id(db, ext_id.series_id).await {
-                    Ok(Some(meta)) => meta
-                        .total_book_count
-                        .is_some_and(|total| total > 0 && completed_count >= total),
-                    _ => false,
-                };
+            let is_truly_complete = total_book_count.is_some_and(|total| completed_count >= total);
             if is_truly_complete {
                 SyncReadingStatus::Completed
             } else {
@@ -654,61 +614,21 @@ async fn build_push_entries(
             SyncReadingStatus::Reading
         };
 
-        // Apply auto-pause/auto-drop for stale series that aren't truly completed.
-        // A series with status=Reading may have all local books read but no
-        // total_book_count match — it should still be eligible for staleness.
-        let status = if status == SyncReadingStatus::Reading {
-            let new_status = apply_staleness_status(
-                &status,
-                latest_updated_at,
-                config.pause_after_days,
-                config.drop_after_days,
-            );
-            if new_status != status {
-                debug!(
-                    "Task {}: Series {} (ext_id={}) auto-{} after {} days of inactivity",
-                    task_id,
-                    ext_id.series_id,
-                    ext_id.external_id,
-                    if new_status == SyncReadingStatus::Dropped {
-                        "dropped"
-                    } else {
-                        "paused"
-                    },
-                    latest_updated_at
-                        .map(|dt| (chrono::Utc::now() - dt).num_days())
-                        .unwrap_or(0),
-                );
-            }
-            new_status
-        } else {
-            status
-        };
-
-        // Use the configured progress unit (volumes or chapters).
-        // When using "volumes", we only send `progressVolumes` — sending
-        // `progress` (chapters) would be incorrect because AniList treats
-        // that as chapter count, causing misleading "Read chapter X" activity.
-        let progress = if config.progress_unit == "chapters" {
-            SyncProgress {
-                chapters: Some(progress_count),
-                volumes: None,
-                pages: None,
-                total_chapters: None,
-                total_volumes: None,
-            }
-        } else {
-            SyncProgress {
-                chapters: None,
-                volumes: Some(progress_count),
-                pages: None,
-                total_chapters: None,
-                total_volumes: None,
-            }
+        // Server always sends books-read as `volumes`. Codex tracks books
+        // (each file = 1 volume), not chapters. `chapters` is left `None`.
+        // The plugin decides how to map this to service-specific fields
+        // (e.g. AniList's `progress` vs `progressVolumes` based on its own
+        // `progressUnit` config).
+        let progress = SyncProgress {
+            chapters: None,
+            volumes: Some(progress_count),
+            pages: None,
+            total_chapters: None,
+            total_volumes: total_book_count,
         };
 
         // Look up rating/notes if sync_ratings is enabled
-        let (score, notes) = if config.sync_ratings {
+        let (score, notes) = if settings.sync_ratings {
             match ratings_map.get(&ext_id.series_id) {
                 Some(r) => (Some(r.rating as f64), r.notes.clone()),
                 None => (None, None),
@@ -1463,16 +1383,13 @@ mod tests {
         assert_eq!(applied, 2);
     }
 
-    /// Default push config for tests (matches production defaults)
-    fn default_push_config() -> PushConfig {
-        PushConfig {
-            progress_unit: "volumes".to_string(),
-            push_completed_series: true,
-            push_in_progress_series: true,
-            push_in_progress_volumes: false,
-            sync_ratings: false,
-            pause_after_days: 0,
-            drop_after_days: 0,
+    /// Default Codex sync settings for tests (matches production defaults)
+    fn default_codex_settings() -> CodexSyncSettings {
+        CodexSyncSettings {
+            include_completed: true,
+            include_in_progress: true,
+            count_partial_progress: false,
+            sync_ratings: true,
         }
     }
 
@@ -1539,7 +1456,7 @@ mod tests {
             user_id,
             "api:anilist",
             Uuid::new_v4(),
-            &default_push_config(),
+            &default_codex_settings(),
         )
         .await;
 
@@ -1603,7 +1520,7 @@ mod tests {
             user_id,
             "api:anilist",
             Uuid::new_v4(),
-            &default_push_config(),
+            &default_codex_settings(),
         )
         .await;
 
@@ -1655,7 +1572,7 @@ mod tests {
             user_id,
             "api:anilist",
             Uuid::new_v4(),
-            &default_push_config(),
+            &default_codex_settings(),
         )
         .await;
 
@@ -1764,85 +1681,30 @@ mod tests {
     }
 
     #[test]
-    fn test_push_config_defaults() {
+    fn test_codex_settings_defaults() {
         let config = serde_json::json!({});
-        let push_config = PushConfig::from_user_config(&config);
-        assert_eq!(push_config.progress_unit, "volumes");
-        assert!(push_config.push_completed_series);
-        assert!(push_config.push_in_progress_series);
-        assert!(!push_config.push_in_progress_volumes);
+        let settings = CodexSyncSettings::from_user_config(&config);
+        assert!(settings.include_completed);
+        assert!(settings.include_in_progress);
+        assert!(!settings.count_partial_progress);
+        assert!(settings.sync_ratings); // default is now true
     }
 
     #[test]
-    fn test_push_config_from_user_config() {
+    fn test_codex_settings_from_user_config() {
         let config = serde_json::json!({
-            "progressUnit": "chapters",
-            "pushCompletedSeries": false,
-            "pushInProgressSeries": true,
-            "pushInProgressVolumes": true,
+            "_codex": {
+                "includeCompleted": false,
+                "includeInProgress": true,
+                "countPartialProgress": true,
+                "syncRatings": false,
+            }
         });
-        let push_config = PushConfig::from_user_config(&config);
-        assert_eq!(push_config.progress_unit, "chapters");
-        assert!(!push_config.push_completed_series);
-        assert!(push_config.push_in_progress_series);
-        assert!(push_config.push_in_progress_volumes);
-    }
-
-    #[tokio::test]
-    async fn test_build_push_entries_chapters_unit() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Chapter Manga", None)
-                .await
-                .unwrap();
-
-        let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
-
-        let user = create_test_user(db.sea_orm_connection()).await;
-
-        ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 100)
-            .await
-            .unwrap();
-
-        SeriesExternalIdRepository::create(
-            db.sea_orm_connection(),
-            series.id,
-            "api:anilist",
-            "111",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        let config = PushConfig {
-            progress_unit: "chapters".to_string(),
-            ..default_push_config()
-        };
-
-        let entries = build_push_entries(
-            db.sea_orm_connection(),
-            user.id,
-            "api:anilist",
-            Uuid::new_v4(),
-            &config,
-        )
-        .await;
-
-        assert_eq!(entries.len(), 1);
-        // Should use chapters, not volumes
-        assert_eq!(entries[0].progress.as_ref().unwrap().chapters, Some(1));
-        assert!(entries[0].progress.as_ref().unwrap().volumes.is_none());
+        let settings = CodexSyncSettings::from_user_config(&config);
+        assert!(!settings.include_completed);
+        assert!(settings.include_in_progress);
+        assert!(settings.count_partial_progress);
+        assert!(!settings.sync_ratings);
     }
 
     #[tokio::test]
@@ -1889,10 +1751,10 @@ mod tests {
         .await
         .unwrap();
 
-        // Disable pushing completed series
-        let config = PushConfig {
-            push_completed_series: false,
-            ..default_push_config()
+        // Disable including completed series
+        let settings = CodexSyncSettings {
+            include_completed: false,
+            ..default_codex_settings()
         };
 
         let entries = build_push_entries(
@@ -1900,7 +1762,7 @@ mod tests {
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config,
+            &settings,
         )
         .await;
 
@@ -1954,10 +1816,10 @@ mod tests {
         .await
         .unwrap();
 
-        // Disable pushing in-progress series
-        let config = PushConfig {
-            push_in_progress_series: false,
-            ..default_push_config()
+        // Disable including in-progress series
+        let settings = CodexSyncSettings {
+            include_in_progress: false,
+            ..default_codex_settings()
         };
 
         let entries = build_push_entries(
@@ -1965,7 +1827,7 @@ mod tests {
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config,
+            &settings,
         )
         .await;
 
@@ -2032,32 +1894,32 @@ mod tests {
         .await
         .unwrap();
 
-        // Without in-progress volumes: should count only completed (1)
-        let config_no_ip = default_push_config();
+        // Without partial progress: should count only completed (1)
+        let settings = default_codex_settings();
         let entries = build_push_entries(
             db.sea_orm_connection(),
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config_no_ip,
+            &settings,
         )
         .await;
         assert_eq!(entries.len(), 1);
-        // "volumes" mode sends only volumes (not chapters, to avoid misleading activity)
+        // Server always sends volumes (not chapters)
         assert_eq!(entries[0].progress.as_ref().unwrap().volumes, Some(1));
         assert!(entries[0].progress.as_ref().unwrap().chapters.is_none());
 
-        // With in-progress volumes: should count completed + in-progress (2)
-        let config_with_ip = PushConfig {
-            push_in_progress_volumes: true,
-            ..default_push_config()
+        // With partial progress: should count completed + in-progress (2)
+        let settings_with_partial = CodexSyncSettings {
+            count_partial_progress: true,
+            ..default_codex_settings()
         };
         let entries = build_push_entries(
             db.sea_orm_connection(),
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config_with_ip,
+            &settings_with_partial,
         )
         .await;
         assert_eq!(entries.len(), 1);
@@ -2148,17 +2010,17 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn test_push_config_sync_ratings_default() {
+    fn test_codex_settings_sync_ratings_default() {
         let config = serde_json::json!({});
-        let push_config = PushConfig::from_user_config(&config);
-        assert!(!push_config.sync_ratings);
+        let settings = CodexSyncSettings::from_user_config(&config);
+        assert!(settings.sync_ratings); // default is now true
     }
 
     #[test]
-    fn test_push_config_sync_ratings_enabled() {
-        let config = serde_json::json!({"syncRatings": true});
-        let push_config = PushConfig::from_user_config(&config);
-        assert!(push_config.sync_ratings);
+    fn test_codex_settings_sync_ratings_disabled() {
+        let config = serde_json::json!({"_codex": {"syncRatings": false}});
+        let settings = CodexSyncSettings::from_user_config(&config);
+        assert!(!settings.sync_ratings);
     }
 
     #[tokio::test]
@@ -2209,17 +2071,14 @@ mod tests {
         .await
         .unwrap();
 
-        let config = PushConfig {
-            sync_ratings: true,
-            ..default_push_config()
-        };
+        let settings = default_codex_settings(); // sync_ratings=true by default
 
         let entries = build_push_entries(
             db.sea_orm_connection(),
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config,
+            &settings,
         )
         .await;
 
@@ -2270,12 +2129,17 @@ mod tests {
         .await
         .unwrap();
 
+        let settings = CodexSyncSettings {
+            sync_ratings: false,
+            ..default_codex_settings()
+        };
+
         let entries = build_push_entries(
             db.sea_orm_connection(),
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &default_push_config(), // sync_ratings=false
+            &settings,
         )
         .await;
 
@@ -2323,17 +2187,14 @@ mod tests {
         .await
         .unwrap();
 
-        let config = PushConfig {
-            sync_ratings: true,
-            ..default_push_config()
-        };
+        let settings = default_codex_settings(); // sync_ratings=true by default
 
         let entries = build_push_entries(
             db.sea_orm_connection(),
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config,
+            &settings,
         )
         .await;
 
@@ -2575,190 +2436,64 @@ mod tests {
     }
 
     // =========================================================================
-    // Staleness auto-pause/auto-drop tests
+    // New tests: latestUpdatedAt, totalVolumes, always-sends-volumes
     // =========================================================================
 
-    #[test]
-    fn test_staleness_both_disabled() {
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(30)),
-            0,
-            0,
-        );
-        assert_eq!(status, SyncReadingStatus::Reading);
-    }
+    #[tokio::test]
+    async fn test_build_push_entries_populates_latest_updated_at() {
+        let (db, _temp_dir) = create_test_db().await;
 
-    #[test]
-    fn test_staleness_pause_only_triggers() {
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(6)),
-            5,
-            0,
-        );
-        assert_eq!(status, SyncReadingStatus::OnHold);
-    }
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
 
-    #[test]
-    fn test_staleness_pause_only_not_stale_enough() {
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(3)),
-            5,
-            0,
-        );
-        assert_eq!(status, SyncReadingStatus::Reading);
-    }
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Updated Manga", None)
+                .await
+                .unwrap();
 
-    #[test]
-    fn test_staleness_drop_only_triggers() {
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(5)),
-            0,
-            4,
-        );
-        assert_eq!(status, SyncReadingStatus::Dropped);
-    }
+        let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
 
-    #[test]
-    fn test_staleness_drop_before_pause() {
-        // pause=5, drop=3: at 5 days -> dropped (drop fires at 3)
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(5)),
-            5,
-            3,
-        );
-        assert_eq!(status, SyncReadingStatus::Dropped);
-    }
+        let user = create_test_user(db.sea_orm_connection()).await;
 
-    #[test]
-    fn test_staleness_pause_then_drop() {
-        // pause=5, drop=7: at 5 days -> paused
-        let status_5 = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(5)),
-            5,
-            7,
-        );
-        assert_eq!(status_5, SyncReadingStatus::OnHold);
-
-        // pause=5, drop=7: at 8 days -> dropped
-        let status_8 = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(8)),
-            5,
-            7,
-        );
-        assert_eq!(status_8, SyncReadingStatus::Dropped);
-    }
-
-    #[test]
-    fn test_staleness_no_updated_at() {
-        let status = apply_staleness_status(&SyncReadingStatus::Reading, None, 5, 7);
-        assert_eq!(status, SyncReadingStatus::Reading);
-    }
-
-    #[test]
-    fn test_staleness_exact_threshold() {
-        // Exactly at the pause threshold
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(5)),
-            5,
-            0,
-        );
-        assert_eq!(status, SyncReadingStatus::OnHold);
-
-        // Exactly at the drop threshold
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(7)),
-            5,
-            7,
-        );
-        assert_eq!(status, SyncReadingStatus::Dropped);
-    }
-
-    #[test]
-    fn test_staleness_drop_equal_to_pause() {
-        // pause=5, drop=5: at 5 days -> drop takes priority
-        let status = apply_staleness_status(
-            &SyncReadingStatus::Reading,
-            Some(Utc::now() - chrono::Duration::days(5)),
-            5,
-            5,
-        );
-        assert_eq!(status, SyncReadingStatus::Dropped);
-    }
-
-    // =========================================================================
-    // PushConfig pause/drop parsing tests
-    // =========================================================================
-
-    #[test]
-    fn test_push_config_pause_drop_defaults() {
-        let config = serde_json::json!({});
-        let push_config = PushConfig::from_user_config(&config);
-        assert_eq!(push_config.pause_after_days, 0);
-        assert_eq!(push_config.drop_after_days, 0);
-    }
-
-    #[test]
-    fn test_push_config_pause_drop_from_config() {
-        let config = serde_json::json!({
-            "pauseAfterDays": 5,
-            "dropAfterDays": 10,
-        });
-        let push_config = PushConfig::from_user_config(&config);
-        assert_eq!(push_config.pause_after_days, 5);
-        assert_eq!(push_config.drop_after_days, 10);
-    }
-
-    #[test]
-    fn test_push_config_pause_drop_from_string_values() {
-        // Frontend may store number fields as strings
-        let config = serde_json::json!({
-            "pauseAfterDays": "3",
-            "dropAfterDays": "7",
-        });
-        let push_config = PushConfig::from_user_config(&config);
-        assert_eq!(push_config.pause_after_days, 3);
-        assert_eq!(push_config.drop_after_days, 7);
-    }
-
-    // =========================================================================
-    // Integration tests: build_push_entries with staleness
-    // =========================================================================
-
-    /// Test helper: set the `updated_at` timestamp on a reading progress record
-    /// to simulate stale activity.
-    async fn set_progress_updated_at(
-        db: &DatabaseConnection,
-        user_id: Uuid,
-        book_id: Uuid,
-        updated_at: chrono::DateTime<chrono::Utc>,
-    ) {
-        use crate::db::entities::read_progress;
-        use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
-
-        let progress = read_progress::Entity::find()
-            .filter(read_progress::Column::UserId.eq(user_id))
-            .filter(read_progress::Column::BookId.eq(book_id))
-            .one(db)
+        ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 100)
             .await
-            .unwrap()
             .unwrap();
 
-        let mut active: read_progress::ActiveModel = progress.into();
-        active.updated_at = Set(updated_at);
-        active.update(db).await.unwrap();
+        SeriesExternalIdRepository::create(
+            db.sea_orm_connection(),
+            series.id,
+            "api:anilist",
+            "800",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let entries = build_push_entries(
+            db.sea_orm_connection(),
+            user.id,
+            "api:anilist",
+            Uuid::new_v4(),
+            &default_codex_settings(),
+        )
+        .await;
+
+        assert_eq!(entries.len(), 1);
+        assert!(
+            entries[0].latest_updated_at.is_some(),
+            "latestUpdatedAt should be populated when there is reading progress"
+        );
     }
 
     #[tokio::test]
-    async fn test_build_push_entries_auto_pause() {
+    async fn test_build_push_entries_populates_total_volumes() {
         let (db, _temp_dir) = create_test_db().await;
 
         let library = LibraryRepository::create(
@@ -2771,233 +2506,69 @@ mod tests {
         .unwrap();
 
         let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Stale Manga", None)
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Total Manga", None)
                 .await
                 .unwrap();
 
-        // Create 3 books, mark only first as read (in-progress series)
-        let mut test_books = Vec::new();
-        for i in 1..=3 {
-            let book =
-                create_test_book(db.sea_orm_connection(), series.id, library.id, i, 100).await;
-            test_books.push(book);
-        }
-
-        let user = create_test_user(db.sea_orm_connection()).await;
-
-        ReadProgressRepository::mark_as_read(
-            db.sea_orm_connection(),
-            user.id,
-            test_books[0].id,
-            100,
-        )
-        .await
-        .unwrap();
-
-        // Set updated_at to 10 days ago
-        set_progress_updated_at(
-            db.sea_orm_connection(),
-            user.id,
-            test_books[0].id,
-            Utc::now() - chrono::Duration::days(10),
-        )
-        .await;
-
-        SeriesExternalIdRepository::create(
-            db.sea_orm_connection(),
-            series.id,
-            "api:anilist",
-            "700",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        let config = PushConfig {
-            pause_after_days: 7,
-            drop_after_days: 0,
-            ..default_push_config()
-        };
-
-        let entries = build_push_entries(
-            db.sea_orm_connection(),
-            user.id,
-            "api:anilist",
-            Uuid::new_v4(),
-            &config,
-        )
-        .await;
-
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].status, SyncReadingStatus::OnHold);
-    }
-
-    #[tokio::test]
-    async fn test_build_push_entries_auto_drop() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Drop Manga", None)
-                .await
-                .unwrap();
-
-        let mut test_books = Vec::new();
-        for i in 1..=3 {
-            let book =
-                create_test_book(db.sea_orm_connection(), series.id, library.id, i, 100).await;
-            test_books.push(book);
-        }
-
-        let user = create_test_user(db.sea_orm_connection()).await;
-
-        ReadProgressRepository::mark_as_read(
-            db.sea_orm_connection(),
-            user.id,
-            test_books[0].id,
-            100,
-        )
-        .await
-        .unwrap();
-
-        // Set updated_at to 10 days ago
-        set_progress_updated_at(
-            db.sea_orm_connection(),
-            user.id,
-            test_books[0].id,
-            Utc::now() - chrono::Duration::days(10),
-        )
-        .await;
-
-        SeriesExternalIdRepository::create(
-            db.sea_orm_connection(),
-            series.id,
-            "api:anilist",
-            "701",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        let config = PushConfig {
-            pause_after_days: 0,
-            drop_after_days: 7,
-            ..default_push_config()
-        };
-
-        let entries = build_push_entries(
-            db.sea_orm_connection(),
-            user.id,
-            "api:anilist",
-            Uuid::new_v4(),
-            &config,
-        )
-        .await;
-
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].status, SyncReadingStatus::Dropped);
-    }
-
-    #[tokio::test]
-    async fn test_build_push_entries_completed_not_auto_paused() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Test Library",
-            "/test/path",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let series = SeriesRepository::create(
-            db.sea_orm_connection(),
-            library.id,
-            "Done Stale Manga",
-            None,
-        )
-        .await
-        .unwrap();
-
-        // Create 2 books, mark both as read (all-completed series)
+        // Create 2 books
         let mut test_books = Vec::new();
         for i in 1..=2 {
             let book =
-                create_test_book(db.sea_orm_connection(), series.id, library.id, i, 50).await;
+                create_test_book(db.sea_orm_connection(), series.id, library.id, i, 100).await;
             test_books.push(book);
         }
 
-        // Set total_book_count so series is truly Completed (not just Reading)
+        // Set total_book_count=3 in metadata (more than the 2 local books)
         SeriesMetadataRepository::update_total_book_count(
             db.sea_orm_connection(),
             series.id,
-            Some(2),
+            Some(3),
         )
         .await
         .unwrap();
 
         let user = create_test_user(db.sea_orm_connection()).await;
-        for book in &test_books {
-            ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 50)
-                .await
-                .unwrap();
-        }
 
-        // Set updated_at to 30 days ago for both books
-        for book in &test_books {
-            set_progress_updated_at(
-                db.sea_orm_connection(),
-                user.id,
-                book.id,
-                Utc::now() - chrono::Duration::days(30),
-            )
-            .await;
-        }
+        // Mark 1 book as read
+        ReadProgressRepository::mark_as_read(
+            db.sea_orm_connection(),
+            user.id,
+            test_books[0].id,
+            100,
+        )
+        .await
+        .unwrap();
 
         SeriesExternalIdRepository::create(
             db.sea_orm_connection(),
             series.id,
             "api:anilist",
-            "702",
+            "801",
             None,
             None,
         )
         .await
         .unwrap();
-
-        let config = PushConfig {
-            pause_after_days: 5,
-            drop_after_days: 10,
-            ..default_push_config()
-        };
 
         let entries = build_push_entries(
             db.sea_orm_connection(),
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config,
+            &default_codex_settings(),
         )
         .await;
 
         assert_eq!(entries.len(), 1);
-        // Truly completed series should never be auto-paused or auto-dropped
-        assert_eq!(entries[0].status, SyncReadingStatus::Completed);
+        assert_eq!(
+            entries[0].progress.as_ref().unwrap().total_volumes,
+            Some(3),
+            "totalVolumes should come from series metadata total_book_count"
+        );
     }
 
     #[tokio::test]
-    async fn test_build_push_entries_not_stale_stays_reading() {
+    async fn test_build_push_entries_always_sends_volumes() {
         let (db, _temp_dir) = create_test_db().await;
 
         let library = LibraryRepository::create(
@@ -3010,7 +2581,7 @@ mod tests {
         .unwrap();
 
         let series =
-            SeriesRepository::create(db.sea_orm_connection(), library.id, "Fresh Manga", None)
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Volumes Manga", None)
                 .await
                 .unwrap();
 
@@ -3031,36 +2602,45 @@ mod tests {
         )
         .await
         .unwrap();
-
-        // updated_at is "now" (just created) — not stale
+        ReadProgressRepository::mark_as_read(
+            db.sea_orm_connection(),
+            user.id,
+            test_books[1].id,
+            100,
+        )
+        .await
+        .unwrap();
 
         SeriesExternalIdRepository::create(
             db.sea_orm_connection(),
             series.id,
             "api:anilist",
-            "703",
+            "802",
             None,
             None,
         )
         .await
         .unwrap();
 
-        let config = PushConfig {
-            pause_after_days: 5,
-            drop_after_days: 10,
-            ..default_push_config()
-        };
-
         let entries = build_push_entries(
             db.sea_orm_connection(),
             user.id,
             "api:anilist",
             Uuid::new_v4(),
-            &config,
+            &default_codex_settings(),
         )
         .await;
 
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].status, SyncReadingStatus::Reading);
+        let progress = entries[0].progress.as_ref().unwrap();
+        assert_eq!(
+            progress.volumes,
+            Some(2),
+            "Server should always send books-read as volumes"
+        );
+        assert!(
+            progress.chapters.is_none(),
+            "chapters should be None — server always sends volumes"
+        );
     }
 }
