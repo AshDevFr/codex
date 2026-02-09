@@ -815,22 +815,23 @@ impl PluginManager {
             }
         }
 
-        // Merge user config with base plugin config
-        let mut config = plugin.config.clone();
-        if let (Some(base_obj), Some(user_obj)) =
-            (config.as_object_mut(), user_plugin.config.as_object())
+        // Send admin config and user config separately
+        let admin_config = Some(plugin.config.clone());
+        let user_config = if user_plugin.config.is_object()
+            && !user_plugin.config.as_object().is_none_or(|o| o.is_empty())
         {
-            for (key, value) in user_obj {
-                base_obj.insert(key.clone(), value.clone());
-            }
-        }
+            Some(user_plugin.config.clone())
+        } else {
+            None
+        };
 
         Ok(PluginConfig {
             process: process_config,
             request_timeout: self.config.default_request_timeout,
             shutdown_timeout: self.config.default_shutdown_timeout,
             max_failures: self.config.failure_threshold,
-            config: Some(config),
+            admin_config,
+            user_config,
             credentials,
         })
     }
@@ -1501,7 +1502,8 @@ impl PluginManager {
             request_timeout: self.config.default_request_timeout,
             shutdown_timeout: self.config.default_shutdown_timeout,
             max_failures: self.config.failure_threshold,
-            config: Some(plugin.config.clone()),
+            admin_config: Some(plugin.config.clone()),
+            user_config: None,
             credentials,
         })
     }

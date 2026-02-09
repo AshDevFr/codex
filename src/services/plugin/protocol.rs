@@ -1185,9 +1185,15 @@ pub enum UserReadingStatus {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
-    /// Plugin configuration from Codex
+    /// Plugin configuration from Codex (merged admin + user, deprecated)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config: Option<Value>,
+    /// Admin-level plugin configuration (from plugin settings)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admin_config: Option<Value>,
+    /// Per-user plugin configuration (from user plugin settings)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_config: Option<Value>,
     /// Credentials passed via init message (alternative to env vars)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credentials: Option<Value>,
@@ -2172,5 +2178,74 @@ mod tests {
         assert_eq!(ids.len(), 2);
         assert_eq!(ids[0]["source"], "anilist");
         assert_eq!(ids[1]["source"], "myanimelist");
+    }
+
+    // =========================================================================
+    // InitializeParams Tests
+    // =========================================================================
+
+    #[test]
+    fn test_initialize_params_with_split_config() {
+        let params = InitializeParams {
+            config: None,
+            admin_config: Some(json!({"clientId": "abc"})),
+            user_config: Some(json!({"progressUnit": "chapters"})),
+            credentials: Some(json!({"access_token": "secret"})),
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["adminConfig"]["clientId"], "abc");
+        assert_eq!(json["userConfig"]["progressUnit"], "chapters");
+        assert_eq!(json["credentials"]["access_token"], "secret");
+        assert!(!json.as_object().unwrap().contains_key("config"));
+    }
+
+    #[test]
+    fn test_initialize_params_with_legacy_config() {
+        let params = InitializeParams {
+            config: Some(json!({"merged": true})),
+            admin_config: None,
+            user_config: None,
+            credentials: None,
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["config"]["merged"], true);
+        let obj = json.as_object().unwrap();
+        assert!(!obj.contains_key("adminConfig"));
+        assert!(!obj.contains_key("userConfig"));
+        assert!(!obj.contains_key("credentials"));
+    }
+
+    #[test]
+    fn test_initialize_params_deserialization_with_split_config() {
+        let json = json!({
+            "adminConfig": {"clientId": "abc"},
+            "userConfig": {"progressUnit": "chapters"},
+            "credentials": {"access_token": "secret"}
+        });
+        let params: InitializeParams = serde_json::from_value(json).unwrap();
+        assert!(params.config.is_none());
+        assert_eq!(params.admin_config.unwrap()["clientId"], "abc");
+        assert_eq!(params.user_config.unwrap()["progressUnit"], "chapters");
+        assert_eq!(params.credentials.unwrap()["access_token"], "secret");
+    }
+
+    #[test]
+    fn test_initialize_params_deserialization_backward_compat() {
+        // Old format: only config field (no adminConfig/userConfig)
+        let json = json!({
+            "config": {"clientId": "abc", "progressUnit": "chapters"},
+            "credentials": {"access_token": "secret"}
+        });
+        let params: InitializeParams = serde_json::from_value(json).unwrap();
+        assert_eq!(params.config.unwrap()["clientId"], "abc");
+        assert!(params.admin_config.is_none());
+        assert!(params.user_config.is_none());
+    }
+
+    #[test]
+    fn test_initialize_params_empty() {
+        let params = InitializeParams::default();
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json, json!({}));
     }
 }

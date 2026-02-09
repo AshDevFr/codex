@@ -83,6 +83,10 @@ export interface SyncProgress {
   volumes?: number;
   /** Number of pages read (for single-volume works) */
   pages?: number;
+  /** Total number of chapters in the series (if known) */
+  totalChapters?: number;
+  /** Total number of volumes in the series (if known) */
+  totalVolumes?: number;
 }
 
 // =============================================================================
@@ -110,6 +114,12 @@ export interface SyncEntry {
   completedAt?: string;
   /** User notes */
   notes?: string;
+  /**
+   * When the series was most recently updated (ISO 8601).
+   * Populated from the most recent read_progress.updated_at for the series.
+   * Plugins can use this for time-based logic (e.g., pause/drop stale series).
+   */
+  latestUpdatedAt?: string;
 }
 
 // =============================================================================

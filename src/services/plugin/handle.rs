@@ -70,8 +70,10 @@ pub struct PluginConfig {
     pub shutdown_timeout: Duration,
     /// Maximum consecutive failures before disabling
     pub max_failures: u32,
-    /// Initial configuration to pass to plugin
-    pub config: Option<Value>,
+    /// Admin-level configuration (from plugin settings)
+    pub admin_config: Option<Value>,
+    /// Per-user configuration (from user plugin settings)
+    pub user_config: Option<Value>,
     /// Credentials to pass to plugin (via init message)
     /// Uses SecretValue to prevent logging of sensitive data
     pub credentials: Option<SecretValue>,
@@ -84,7 +86,8 @@ impl std::fmt::Debug for PluginConfig {
             .field("request_timeout", &self.request_timeout)
             .field("shutdown_timeout", &self.shutdown_timeout)
             .field("max_failures", &self.max_failures)
-            .field("config", &self.config)
+            .field("admin_config", &self.admin_config)
+            .field("user_config", &self.user_config)
             .field("credentials", &self.credentials) // SecretValue shows [REDACTED]
             .finish()
     }
@@ -97,7 +100,8 @@ impl Default for PluginConfig {
             request_timeout: Duration::from_secs(30),
             shutdown_timeout: Duration::from_secs(5),
             max_failures: 3,
-            config: None,
+            admin_config: None,
+            user_config: None,
             credentials: None,
         }
     }
@@ -253,14 +257,30 @@ impl PluginHandle {
         debug!("RPC client created, sending initialize request");
 
         // Initialize the plugin
-        // Convert SecretValue to Value for the init message
+        // Build merged config for backward compat, and send split configs
+        let merged_config = match (&self.config.admin_config, &self.config.user_config) {
+            (Some(admin), Some(user)) => {
+                let mut merged = admin.clone();
+                if let (Some(base), Some(overlay)) = (merged.as_object_mut(), user.as_object()) {
+                    for (k, v) in overlay {
+                        base.insert(k.clone(), v.clone());
+                    }
+                }
+                Some(merged)
+            }
+            (Some(c), None) | (None, Some(c)) => Some(c.clone()),
+            (None, None) => None,
+        };
         let init_params = InitializeParams {
-            config: self.config.config.clone(),
+            config: merged_config,
+            admin_config: self.config.admin_config.clone(),
+            user_config: self.config.user_config.clone(),
             credentials: self.config.credentials.as_ref().map(|s| s.inner().clone()),
         };
 
         debug!(
-            has_config = init_params.config.is_some(),
+            has_admin_config = init_params.admin_config.is_some(),
+            has_user_config = init_params.user_config.is_some(),
             has_credentials = init_params.credentials.is_some(),
             "Sending initialize request to plugin"
         );

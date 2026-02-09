@@ -64,7 +64,7 @@ async function resolveAniListIds(
     );
 
     if (anilistExt) {
-      const id = Number.parseInt(anilistExt.id, 10);
+      const id = Number.parseInt(anilistExt.externalId, 10);
       if (!Number.isNaN(id)) {
         resolved.set(entry.seriesId, {
           anilistId: id,
