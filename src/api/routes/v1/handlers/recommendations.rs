@@ -11,6 +11,7 @@ use super::super::dto::recommendations::{
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
 use crate::db::repositories::{PluginsRepository, TaskRepository, UserPluginsRepository};
+use crate::services::plugin::library::build_user_library;
 use crate::services::plugin::protocol::{PluginManifest, methods};
 use crate::services::plugin::recommendations::{
     RecommendationDismissRequest, RecommendationRequest, RecommendationResponse,
@@ -107,9 +108,26 @@ pub async fn get_recommendations(
             ApiError::Internal(format!("Failed to start recommendation plugin: {}", e))
         })?;
 
-    // Build request with empty library for now (plugin uses its cached taste profile)
+    // Build user's library data to seed recommendations
+    let library = build_user_library(&state.db, auth.user_id)
+        .await
+        .map_err(|e| {
+            warn!(
+                user_id = %auth.user_id,
+                error = %e,
+                "Failed to build user library for recommendations"
+            );
+            ApiError::Internal(format!("Failed to build library data: {}", e))
+        })?;
+
+    debug!(
+        user_id = %auth.user_id,
+        library_entries = library.len(),
+        "Sending library data to recommendation plugin"
+    );
+
     let request = RecommendationRequest {
-        library: vec![],
+        library,
         limit: Some(20),
         exclude_ids: vec![],
     };

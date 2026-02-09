@@ -71,6 +71,7 @@
 pub mod encryption;
 pub mod handle;
 pub mod health;
+pub mod library;
 pub mod manager;
 pub mod process;
 pub mod protocol;
