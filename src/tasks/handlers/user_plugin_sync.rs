@@ -694,12 +694,16 @@ async fn build_push_entries(
                 chapters: Some(progress_count),
                 volumes: None,
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }
         } else {
             SyncProgress {
                 chapters: None,
                 volumes: Some(progress_count),
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }
         };
 
@@ -725,6 +729,7 @@ async fn build_push_entries(
                 None
             },
             notes,
+            latest_updated_at: latest_updated_at.map(|dt| dt.to_rfc3339()),
         });
     }
 
@@ -1206,6 +1211,7 @@ mod tests {
             started_at: None,
             completed_at: None,
             notes: None,
+            latest_updated_at: None,
         }];
 
         let (matched, applied) = match_and_apply_pulled_entries(
@@ -1262,6 +1268,7 @@ mod tests {
                 started_at: None,
                 completed_at: None,
                 notes: None,
+                latest_updated_at: None,
             },
             SyncEntry {
                 external_id: "99999".to_string(), // no match
@@ -1271,6 +1278,7 @@ mod tests {
                 started_at: None,
                 completed_at: None,
                 notes: None,
+                latest_updated_at: None,
             },
         ];
 
@@ -1331,11 +1339,14 @@ mod tests {
                 chapters: Some(3),
                 volumes: None,
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }),
             score: None,
             started_at: None,
             completed_at: None,
             notes: None,
+            latest_updated_at: None,
         }];
 
         let (matched, applied) = match_and_apply_pulled_entries(
@@ -1428,11 +1439,14 @@ mod tests {
                 chapters: Some(3),
                 volumes: None,
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }),
             score: None,
             started_at: None,
             completed_at: None,
             notes: None,
+            latest_updated_at: None,
         }];
 
         let (matched, applied) = match_and_apply_pulled_entries(
@@ -2084,11 +2098,14 @@ mod tests {
                 chapters: None,
                 volumes: Some(2),
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }),
             score: None,
             started_at: None,
             completed_at: None,
             notes: None,
+            latest_updated_at: None,
         };
 
         let applied = apply_pulled_entry(
@@ -2365,11 +2382,14 @@ mod tests {
                 chapters: Some(1),
                 volumes: None,
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }),
             score: Some(75.0),
             started_at: None,
             completed_at: None,
             notes: Some("Good so far".to_string()),
+            latest_updated_at: None,
         }];
 
         let (matched, _applied) = match_and_apply_pulled_entries(
@@ -2450,11 +2470,14 @@ mod tests {
                 chapters: Some(1),
                 volumes: None,
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }),
             score: Some(60.0),
             started_at: None,
             completed_at: None,
             notes: Some("AniList notes".to_string()),
+            latest_updated_at: None,
         }];
 
         let (_matched, _applied) = match_and_apply_pulled_entries(
@@ -2520,11 +2543,14 @@ mod tests {
                 chapters: Some(1),
                 volumes: None,
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }),
             score: Some(80.0),
             started_at: None,
             completed_at: None,
             notes: Some("Should not be stored".to_string()),
+            latest_updated_at: None,
         }];
 
         let (_matched, _applied) = match_and_apply_pulled_entries(

@@ -92,6 +92,11 @@ pub struct SyncEntry {
     /// User notes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// When the series was most recently updated (ISO 8601).
+    /// Populated from the most recent read_progress.updated_at for the series.
+    /// Plugins can use this for time-based logic (e.g., pause/drop stale series).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_updated_at: Option<String>,
 }
 
 /// Reading progress details
@@ -107,6 +112,12 @@ pub struct SyncProgress {
     /// Number of pages read (for single-volume works)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pages: Option<i32>,
+    /// Total number of chapters in the series (if known)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_chapters: Option<i32>,
+    /// Total number of volumes in the series (if known)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_volumes: Option<i32>,
 }
 
 // =============================================================================
@@ -344,11 +355,14 @@ mod tests {
                 chapters: Some(42),
                 volumes: Some(5),
                 pages: None,
+                total_chapters: None,
+                total_volumes: None,
             }),
             score: Some(8.5),
             started_at: Some("2026-01-15T00:00:00Z".to_string()),
             completed_at: None,
             notes: Some("Great series!".to_string()),
+            latest_updated_at: Some("2026-02-01T12:00:00Z".to_string()),
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["externalId"], "12345");
@@ -360,6 +374,7 @@ mod tests {
         assert_eq!(json["startedAt"], "2026-01-15T00:00:00Z");
         assert!(!json.as_object().unwrap().contains_key("completedAt"));
         assert_eq!(json["notes"], "Great series!");
+        assert_eq!(json["latestUpdatedAt"], "2026-02-01T12:00:00Z");
     }
 
     #[test]
@@ -384,6 +399,8 @@ mod tests {
             chapters: Some(100),
             volumes: Some(10),
             pages: Some(3200),
+            total_chapters: None,
+            total_volumes: None,
         };
         let json = serde_json::to_value(&progress).unwrap();
         assert_eq!(json["chapters"], 100);
@@ -397,11 +414,45 @@ mod tests {
             chapters: Some(50),
             volumes: None,
             pages: None,
+            total_chapters: None,
+            total_volumes: None,
         };
         let json = serde_json::to_value(&progress).unwrap();
         assert_eq!(json["chapters"], 50);
         assert!(!json.as_object().unwrap().contains_key("volumes"));
         assert!(!json.as_object().unwrap().contains_key("pages"));
+    }
+
+    #[test]
+    fn test_sync_progress_with_totals() {
+        let progress = SyncProgress {
+            chapters: Some(42),
+            volumes: Some(5),
+            pages: None,
+            total_chapters: Some(200),
+            total_volumes: Some(20),
+        };
+        let json = serde_json::to_value(&progress).unwrap();
+        assert_eq!(json["chapters"], 42);
+        assert_eq!(json["volumes"], 5);
+        assert_eq!(json["totalChapters"], 200);
+        assert_eq!(json["totalVolumes"], 20);
+        assert!(!json.as_object().unwrap().contains_key("pages"));
+    }
+
+    #[test]
+    fn test_sync_progress_totals_deserialization() {
+        let json = json!({
+            "chapters": 10,
+            "totalChapters": 100,
+            "totalVolumes": 10
+        });
+        let progress: SyncProgress = serde_json::from_value(json).unwrap();
+        assert_eq!(progress.chapters, Some(10));
+        assert_eq!(progress.total_chapters, Some(100));
+        assert_eq!(progress.total_volumes, Some(10));
+        assert!(progress.volumes.is_none());
+        assert!(progress.pages.is_none());
     }
 
     // =========================================================================
@@ -419,11 +470,14 @@ mod tests {
                         chapters: Some(10),
                         volumes: None,
                         pages: None,
+                        total_chapters: None,
+                        total_volumes: None,
                     }),
                     score: None,
                     started_at: None,
                     completed_at: None,
                     notes: None,
+                    latest_updated_at: None,
                 },
                 SyncEntry {
                     external_id: "2".to_string(),
@@ -433,6 +487,7 @@ mod tests {
                     started_at: None,
                     completed_at: Some("2026-02-01T00:00:00Z".to_string()),
                     notes: None,
+                    latest_updated_at: None,
                 },
             ],
         };
@@ -550,11 +605,14 @@ mod tests {
                     chapters: Some(25),
                     volumes: None,
                     pages: None,
+                    total_chapters: None,
+                    total_volumes: None,
                 }),
                 score: Some(7.0),
                 started_at: None,
                 completed_at: None,
                 notes: None,
+                latest_updated_at: None,
             }],
             next_cursor: Some("page2".to_string()),
             has_more: true,

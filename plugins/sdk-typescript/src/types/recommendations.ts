@@ -40,7 +40,7 @@ export interface UserLibraryEntry {
   /** Total number of books in the series */
   totalBookCount?: number;
   /** External IDs from metadata providers */
-  externalIds: Array<{ source: string; id: string }>;
+  externalIds: Array<{ source: string; externalId: string }>;
   /** User's reading status */
   readingStatus?: string;
   /** Number of books the user has read */

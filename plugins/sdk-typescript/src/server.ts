@@ -151,8 +151,16 @@ function invalidParamsError(id: string | number | null, error: ValidationError):
  * Initialize parameters received from Codex
  */
 export interface InitializeParams {
-  /** Plugin configuration */
+  /**
+   * Plugin configuration (merged admin + user config).
+   * @deprecated Use `adminConfig` and `userConfig` instead.
+   * This field is populated for backward compatibility as `{...adminConfig, ...userConfig}`.
+   */
   config?: Record<string, unknown>;
+  /** Admin-level plugin configuration (from plugin settings) */
+  adminConfig?: Record<string, unknown>;
+  /** Per-user plugin configuration (from user plugin settings) */
+  userConfig?: Record<string, unknown>;
   /** Plugin credentials (API keys, tokens, etc.) */
   credentials?: Record<string, string>;
 }
@@ -275,16 +283,25 @@ async function handleRequest(
   onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
   router: MethodRouter,
   logger: Logger,
-): Promise<JsonRpcResponse> {
+): Promise<JsonRpcResponse | null> {
   const { method, params, id } = request;
 
   // Common lifecycle methods
   switch (method) {
-    case "initialize":
+    case "initialize": {
+      const initParams = params as InitializeParams;
+      // Populate deprecated `config` as merged adminConfig + userConfig for backward compat
+      if (initParams && !initParams.config && (initParams.adminConfig || initParams.userConfig)) {
+        initParams.config = {
+          ...initParams.adminConfig,
+          ...initParams.userConfig,
+        };
+      }
       if (onInitialize) {
-        await onInitialize(params as InitializeParams);
+        await onInitialize(initParams);
       }
       return { jsonrpc: "2.0", id, result: manifest };
+    }
 
     case "ping":
       return { jsonrpc: "2.0", id, result: "pong" };
@@ -295,7 +312,8 @@ async function handleRequest(
       process.stdout.write(`${JSON.stringify(response)}\n`, () => {
         process.exit(0);
       });
-      return null as unknown as JsonRpcResponse;
+      // Response already written above; return null so handleLine skips the write
+      return null;
     }
   }
 

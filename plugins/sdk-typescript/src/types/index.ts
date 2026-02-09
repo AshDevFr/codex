@@ -21,6 +21,7 @@ export type {
   ConfigField,
   ConfigSchema,
   CredentialField,
+  OAuthConfig,
   PluginCapabilities,
   PluginManifest,
 } from "./manifest.js";
