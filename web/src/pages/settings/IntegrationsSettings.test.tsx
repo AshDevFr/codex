@@ -42,6 +42,7 @@ const responseWithAvailable: UserPluginsListResponse = {
       displayName: "AniList Sync",
       description: "Sync reading progress with AniList",
       requiresOauth: true,
+      oauthConfigured: true,
       capabilities: { readSync: true, userRecommendationProvider: false },
     },
     {
@@ -50,6 +51,7 @@ const responseWithAvailable: UserPluginsListResponse = {
       displayName: "Smart Recommendations",
       description: "Get personalized recommendations",
       requiresOauth: false,
+      oauthConfigured: false,
       capabilities: { readSync: false, userRecommendationProvider: true },
     },
   ],
@@ -70,6 +72,8 @@ const responseWithEnabled: UserPluginsListResponse = {
       lastSyncAt: new Date().toISOString(),
       lastSuccessAt: new Date().toISOString(),
       requiresOauth: true,
+      oauthConfigured: true,
+      capabilities: { readSync: true, userRecommendationProvider: false },
       description: "Sync reading progress with AniList",
       config: {},
       createdAt: new Date().toISOString(),
@@ -124,8 +128,9 @@ describe("IntegrationsSettings", () => {
 
     await waitFor(() => {
       expect(screen.getByText("AniList Sync")).toBeInTheDocument();
-      // Section title "Connected" + badge "Connected" should both be present
-      expect(screen.getAllByText("Connected").length).toBeGreaterThanOrEqual(2);
+      // Section title is "Enabled" and badge shows "Connected"
+      expect(screen.getByText("Enabled")).toBeInTheDocument();
+      expect(screen.getByText("Connected")).toBeInTheDocument();
     });
   });
 

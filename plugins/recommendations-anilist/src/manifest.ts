@@ -42,8 +42,7 @@ export const manifest = {
     scopes: [],
     pkce: false,
   },
-  userDescription:
-    "Personalized manga recommendations powered by AniList community data",
+  userDescription: "Personalized manga recommendations powered by AniList community data",
   adminSetupInstructions:
     "To enable OAuth login, create an AniList API client at https://anilist.co/settings/developer. Set the redirect URL to {your-codex-url}/api/v1/user/plugins/oauth/callback. Enter the Client ID below. Without OAuth configured, users can still connect by pasting a personal access token.",
   userSetupInstructions:
