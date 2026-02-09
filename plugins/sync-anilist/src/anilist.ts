@@ -171,9 +171,18 @@ export class AniListClient {
   }
 
   /**
-   * Execute a GraphQL query against the AniList API
+   * Execute a GraphQL query against the AniList API.
+   * On rate limit (429), waits the requested duration and retries once.
    */
   private async query<T>(queryStr: string, variables?: Record<string, unknown>): Promise<T> {
+    return this.executeQuery<T>(queryStr, variables, true);
+  }
+
+  private async executeQuery<T>(
+    queryStr: string,
+    variables: Record<string, unknown> | undefined,
+    allowRetry: boolean,
+  ): Promise<T> {
     const response = await fetch(ANILIST_API_URL, {
       method: "POST",
       headers: {
@@ -191,10 +200,14 @@ export class AniListClient {
     if (response.status === 429) {
       const retryAfter = response.headers.get("Retry-After");
       const retrySeconds = retryAfter ? Number.parseInt(retryAfter, 10) : 60;
-      throw new RateLimitError(
-        Number.isNaN(retrySeconds) ? 60 : retrySeconds,
-        "AniList rate limit exceeded",
-      );
+      const waitSeconds = Number.isNaN(retrySeconds) ? 60 : retrySeconds;
+
+      if (allowRetry) {
+        await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
+        return this.executeQuery<T>(queryStr, variables, false);
+      }
+
+      throw new RateLimitError(waitSeconds, "AniList rate limit exceeded");
     }
 
     if (!response.ok) {

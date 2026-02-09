@@ -232,11 +232,32 @@ export function getBestTitle(title: { romaji?: string; english?: string }): stri
   return title.english || title.romaji || "Unknown";
 }
 
-/** Strip HTML tags from a string */
+/** Common HTML entities to decode */
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&apos;": "'",
+  "&nbsp;": " ",
+  "&mdash;": "\u2014",
+  "&ndash;": "\u2013",
+  "&hellip;": "\u2026",
+};
+
+const ENTITY_PATTERN = /&(?:#(\d+)|#x([0-9a-fA-F]+)|[a-zA-Z]+);/g;
+
+/** Strip HTML tags and decode HTML entities */
 export function stripHtml(html: string | null): string | undefined {
   if (!html) return undefined;
   return html
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]*>/g, "")
+    .replace(ENTITY_PATTERN, (match, decimal, hex) => {
+      if (decimal) return String.fromCharCode(Number.parseInt(decimal, 10));
+      if (hex) return String.fromCharCode(Number.parseInt(hex, 16));
+      return HTML_ENTITIES[match] ?? match;
+    })
     .trim();
 }

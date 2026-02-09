@@ -41,4 +41,24 @@ describe("stripHtml", () => {
   it("handles complex HTML", () => {
     expect(stripHtml('<i>A story about <a href="#">heroes</a></i>')).toBe("A story about heroes");
   });
+
+  it("decodes named HTML entities", () => {
+    expect(stripHtml("Tom &amp; Jerry")).toBe("Tom & Jerry");
+    expect(stripHtml("a &lt; b &gt; c")).toBe("a < b > c");
+    expect(stripHtml("&quot;quoted&quot;")).toBe('"quoted"');
+    expect(stripHtml("it&#39;s")).toBe("it's");
+  });
+
+  it("decodes numeric HTML entities", () => {
+    expect(stripHtml("&#169; 2026")).toBe("\u00A9 2026");
+    expect(stripHtml("&#x2764;")).toBe("\u2764");
+  });
+
+  it("decodes entities inside HTML", () => {
+    expect(stripHtml("<p>Rock &amp; Roll</p>")).toBe("Rock & Roll");
+  });
+
+  it("preserves unknown entities as-is", () => {
+    expect(stripHtml("&unknown;")).toBe("&unknown;");
+  });
 });

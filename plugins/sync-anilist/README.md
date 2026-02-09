@@ -1,12 +1,15 @@
 # @ashdev/codex-plugin-sync-anilist
 
-A Codex plugin for syncing manga reading progress between Codex and [AniList](https://anilist.co). Supports push/pull of reading status, chapters read, scores, and dates.
+A Codex plugin for syncing manga reading progress between Codex and [AniList](https://anilist.co). Supports push/pull of reading status, volumes/chapters read, scores, dates, and notes.
 
 ## Features
 
 - Two-way sync of manga reading progress with AniList
-- Push reading status, chapters read, scores, and dates to AniList
+- Push reading status, progress, scores, dates, and notes to AniList
 - Pull updates from AniList back to Codex
+- Configurable progress unit (volumes or chapters)
+- Auto-pause/auto-drop stale series based on reading inactivity
+- Rate limit handling with automatic retry
 - Highest-progress-wins conflict resolution (progress only moves forward)
 - External ID matching via AniList API IDs (`api:anilist`)
 
@@ -75,11 +78,26 @@ Without OAuth configured, users can still connect by pasting a personal access t
 
 ## Configuration
 
-### Plugin Config
+### Codex Sync Settings
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `syncRatings` | boolean | `false` | Include user ratings and notes in sync. When off, only reading progress is synced. |
+These settings are managed in the **Sync Settings** section of the plugin settings modal. They control which data the Codex server sends to the plugin and are shared across all sync plugins.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Include completed series | On | Include series where all local books are read |
+| Include in-progress series | On | Include series where at least one book has been started |
+| Count partially-read books | Off | Whether partially-read books count toward the progress number |
+| Sync ratings & notes | On | Include user ratings and notes in sync |
+
+### Plugin-Specific Settings
+
+These settings are specific to the AniList plugin and appear under **Plugin Settings** in the settings modal.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| Progress Unit | string | `volumes` | Whether each Codex book counts as a "volume" or "chapter" on AniList. Use "volumes" to avoid misleading "Read chapter X" activity on AniList. |
+| Auto-Pause After Days | number | `0` (disabled) | Number of days without reading activity before an in-progress series is set to Paused on AniList |
+| Auto-Drop After Days | number | `0` (disabled) | Number of days without reading activity before an in-progress series is set to Dropped on AniList |
 
 ## Using the Plugin
 
@@ -141,19 +159,6 @@ When **Sync Ratings & Notes** is enabled in plugin settings:
 - **Pull**: AniList scores and notes are imported into Codex, but only when Codex has **no existing rating** for that series. Existing Codex ratings are never overwritten (**Codex wins**).
 - Notes without a score are skipped on pull (Codex requires a rating to store notes).
 
-### Push Configuration
-
-These options are available in the plugin settings:
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| Progress Unit | Volumes | Whether each Codex book counts as a "volume" or "chapter" on AniList. Use "volumes" to avoid misleading "Read chapter X" activity on AniList. |
-| Push Completed Series | On | Include series where all local books are read |
-| Push In-Progress Series | On | Include series where at least one book has been started |
-| Count In-Progress Books | Off | Whether partially-read books count toward the progress number |
-| Auto-Pause After Days | 0 (disabled) | Number of days without reading activity before an in-progress series is set to Paused on AniList |
-| Auto-Drop After Days | 0 (disabled) | Number of days without reading activity before an in-progress series is set to Dropped on AniList |
-
 ### Auto-Pause & Auto-Drop
 
 You can configure automatic status changes for series you haven't read in a while:
@@ -196,10 +201,11 @@ npm run lint
 ```
 plugins/sync-anilist/
 ├── src/
-│   ├── index.ts          # Plugin entry point
+│   ├── index.ts          # Plugin entry point & staleness logic
+│   ├── index.test.ts     # Staleness logic tests
 │   ├── manifest.ts       # Plugin manifest
-│   ├── anilist.ts        # AniList API client
-│   └── anilist.test.ts   # API client tests
+│   ├── anilist.ts        # AniList API client & utility functions
+│   └── anilist.test.ts   # API client & utility tests
 ├── dist/
 │   └── index.js          # Built bundle (excluded from git)
 ├── package.json
