@@ -27,13 +27,20 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+/// Parse a plugin's manifest JSON into a typed PluginManifest.
+/// Deserializes once and caches the result for callers that need multiple fields.
+fn parse_manifest(plugin: &crate::db::entities::plugins::Model) -> Option<PluginManifest> {
+    plugin
+        .manifest
+        .as_ref()
+        .and_then(|m| serde_json::from_value(m.clone()).ok())
+}
+
 /// Helper to extract OAuth config from a plugin's stored manifest
 fn get_oauth_config_from_plugin(
     plugin: &crate::db::entities::plugins::Model,
 ) -> Option<OAuthConfig> {
-    let manifest_json = plugin.manifest.as_ref()?;
-    let manifest: PluginManifest = serde_json::from_value(manifest_json.clone()).ok()?;
-    manifest.oauth
+    parse_manifest(plugin).and_then(|m| m.oauth)
 }
 
 /// Helper to get the OAuth client_id for a plugin.
@@ -98,11 +105,8 @@ async fn build_user_plugin_dto(
     plugin: &crate::db::entities::plugins::Model,
     prefetched_sync_result: Option<Option<serde_json::Value>>,
 ) -> UserPluginDto {
-    let oauth_config = get_oauth_config_from_plugin(plugin);
-    let manifest: Option<PluginManifest> = plugin
-        .manifest
-        .as_ref()
-        .and_then(|m| serde_json::from_value(m.clone()).ok());
+    let manifest = parse_manifest(plugin);
+    let oauth_config = manifest.as_ref().and_then(|m| m.oauth.clone());
 
     let capabilities = UserPluginCapabilitiesDto {
         read_sync: manifest
@@ -216,11 +220,8 @@ pub async fn list_user_plugins(
         .iter()
         .filter(|p| !enabled_plugin_ids.contains(&p.id))
         .map(|plugin| {
-            let manifest: Option<PluginManifest> = plugin
-                .manifest
-                .as_ref()
-                .and_then(|m| serde_json::from_value(m.clone()).ok());
-            let oauth_config = get_oauth_config_from_plugin(plugin);
+            let manifest = parse_manifest(plugin);
+            let oauth_config = manifest.as_ref().and_then(|m| m.oauth.clone());
 
             AvailablePluginDto {
                 plugin_id: plugin.id,
@@ -748,11 +749,7 @@ pub async fn trigger_sync(
         .map_err(|e| ApiError::Internal(format!("Failed to get plugin: {}", e)))?
         .ok_or_else(|| ApiError::Internal("Plugin definition not found".to_string()))?;
 
-    let manifest: Option<PluginManifest> = plugin
-        .manifest
-        .as_ref()
-        .and_then(|m| serde_json::from_value(m.clone()).ok());
-
+    let manifest = parse_manifest(&plugin);
     let is_read_sync = manifest
         .as_ref()
         .map(|m| m.capabilities.user_read_sync)

@@ -6,6 +6,7 @@ import { userPluginsApi } from "@/api/userPlugins";
 
 const OAUTH_POPUP_WIDTH = 600;
 const OAUTH_POPUP_HEIGHT = 700;
+const OAUTH_POPUP_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Hook to handle OAuth flow for user plugins.
@@ -58,6 +59,8 @@ export function useOAuthFlow() {
 
         popupRef.current = popup;
 
+        const startedAt = Date.now();
+
         // Poll for popup close (OAuth callback will redirect back and close)
         pollIntervalRef.current = setInterval(() => {
           if (popup.closed) {
@@ -69,6 +72,21 @@ export function useOAuthFlow() {
 
             // Refresh the plugin list - the OAuth callback stored tokens server-side
             queryClient.invalidateQueries({ queryKey: ["user-plugins"] });
+          } else if (Date.now() - startedAt > OAUTH_POPUP_TIMEOUT_MS) {
+            // Timeout — stop polling and close the popup
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            popup.close();
+            popupRef.current = null;
+
+            notifications.show({
+              title: "OAuth Timeout",
+              message:
+                "The authentication window was open too long. Please try again.",
+              color: "orange",
+            });
           }
         }, 500);
       } catch (error) {

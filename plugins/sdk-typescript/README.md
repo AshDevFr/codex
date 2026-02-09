@@ -75,7 +75,6 @@ const provider: MetadataProvider = {
   async match(params) {
     const result = await this.search({
       query: params.title,
-      contentType: params.contentType,
     });
 
     return {

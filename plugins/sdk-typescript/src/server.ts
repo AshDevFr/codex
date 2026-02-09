@@ -13,6 +13,7 @@
 import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
 import { createLogger, type Logger } from "./logger.js";
+import { PluginStorage } from "./storage.js";
 import type {
   BookMetadataProvider,
   MetadataContentType,
@@ -33,12 +34,7 @@ import type {
   RecommendationDismissRequest,
   RecommendationRequest,
 } from "./types/recommendations.js";
-import {
-  JSON_RPC_ERROR_CODES,
-  type JsonRpcError,
-  type JsonRpcRequest,
-  type JsonRpcResponse,
-} from "./types/rpc.js";
+import { JSON_RPC_ERROR_CODES, type JsonRpcRequest, type JsonRpcResponse } from "./types/rpc.js";
 import type { SyncPullRequest, SyncPushRequest } from "./types/sync.js";
 
 // =============================================================================
@@ -139,7 +135,7 @@ function invalidParamsError(id: string | number | null, error: ValidationError):
       code: JSON_RPC_ERROR_CODES.INVALID_PARAMS,
       message: `Invalid params: ${error.message}`,
       data: { field: error.field },
-    } as JsonRpcError,
+    },
   };
 }
 
@@ -163,6 +159,14 @@ export interface InitializeParams {
   userConfig?: Record<string, unknown>;
   /** Plugin credentials (API keys, tokens, etc.) */
   credentials?: Record<string, string>;
+  /**
+   * Per-user key-value storage client.
+   *
+   * Use this to persist data across plugin restarts (e.g., dismissed IDs,
+   * cached profiles, user preferences). Storage is scoped per user-plugin
+   * instance — the host resolves the user context automatically.
+   */
+  storage: PluginStorage;
 }
 
 /**
@@ -197,6 +201,7 @@ function createPluginServer(options: PluginServerOptions): void {
   const { manifest, onInitialize, logLevel = "info", label, router } = options;
   const logger = createLogger({ name: manifest.name, level: logLevel });
   const prefix = label ? `${label} plugin` : "plugin";
+  const storage = new PluginStorage();
 
   logger.info(`Starting ${prefix}: ${manifest.displayName} v${manifest.version}`);
 
@@ -206,11 +211,12 @@ function createPluginServer(options: PluginServerOptions): void {
   });
 
   rl.on("line", (line) => {
-    void handleLine(line, manifest, onInitialize, router, logger);
+    void handleLine(line, manifest, onInitialize, router, logger, storage);
   });
 
   rl.on("close", () => {
     logger.info("stdin closed, shutting down");
+    storage.cancelAll();
     process.exit(0);
   });
 
@@ -224,25 +230,54 @@ function createPluginServer(options: PluginServerOptions): void {
   });
 }
 
+/**
+ * Detect whether a parsed JSON object is a JSON-RPC response (not a request).
+ *
+ * A response has `id` and either `result` or `error`, but no `method`.
+ * A request always has `method`.
+ */
+function isJsonRpcResponse(obj: Record<string, unknown>): boolean {
+  if (obj.method !== undefined) return false;
+  if (obj.id === undefined || obj.id === null) return false;
+  return "result" in obj || "error" in obj;
+}
+
 async function handleLine(
   line: string,
   manifest: PluginManifest,
   onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
   router: MethodRouter,
   logger: Logger,
+  storage: PluginStorage,
 ): Promise<void> {
   const trimmed = line.trim();
   if (!trimmed) return;
 
+  // Try to detect storage responses before full request handling.
+  // Storage responses come from the host on stdin — they have id + (result|error)
+  // but no method field.
+  let parsed: Record<string, unknown> | undefined;
+  try {
+    parsed = JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    // Will be handled as a parse error below
+  }
+
+  if (parsed && isJsonRpcResponse(parsed)) {
+    logger.debug("Routing storage response", { id: parsed.id });
+    storage.handleResponse(trimmed);
+    return;
+  }
+
   let id: string | number | null = null;
 
   try {
-    const request = JSON.parse(trimmed) as JsonRpcRequest;
+    const request = (parsed ?? JSON.parse(trimmed)) as JsonRpcRequest;
     id = request.id;
 
     logger.debug(`Received request: ${request.method}`, { id: request.id });
 
-    const response = await handleRequest(request, manifest, onInitialize, router, logger);
+    const response = await handleRequest(request, manifest, onInitialize, router, logger, storage);
     if (response !== null) {
       writeResponse(response);
     }
@@ -283,13 +318,14 @@ async function handleRequest(
   onInitialize: ((params: InitializeParams) => void | Promise<void>) | undefined,
   router: MethodRouter,
   logger: Logger,
+  storage: PluginStorage,
 ): Promise<JsonRpcResponse | null> {
   const { method, params, id } = request;
 
   // Common lifecycle methods
   switch (method) {
     case "initialize": {
-      const initParams = params as InitializeParams;
+      const initParams = (params ?? {}) as InitializeParams;
       // Populate deprecated `config` as merged adminConfig + userConfig for backward compat
       if (initParams && !initParams.config && (initParams.adminConfig || initParams.userConfig)) {
         initParams.config = {
@@ -297,6 +333,8 @@ async function handleRequest(
           ...initParams.userConfig,
         };
       }
+      // Inject the storage client so plugins can persist data
+      initParams.storage = storage;
       if (onInitialize) {
         await onInitialize(initParams);
       }
@@ -308,6 +346,7 @@ async function handleRequest(
 
     case "shutdown": {
       logger.info("Shutdown requested");
+      storage.cancelAll();
       const response: JsonRpcResponse = { jsonrpc: "2.0", id, result: null };
       process.stdout.write(`${JSON.stringify(response)}\n`, () => {
         process.exit(0);

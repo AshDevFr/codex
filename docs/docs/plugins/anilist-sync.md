@@ -107,20 +107,36 @@ The plugin is conservative about marking series as "Completed" on AniList:
 
 This prevents incorrectly marking a series as finished when you may simply not have all volumes in your library yet.
 
-## Push Configuration
+## Sync Settings
 
-These options are available in **Settings** > **Integrations** > **Settings**:
+Sync settings are split into two categories: **Codex Sync Settings** (shared across all sync plugins) and **Plugin-Specific Settings** (AniList-only).
+
+### Codex Sync Settings
+
+These settings control which entries Codex sends to the plugin. They apply to all sync plugins, not just AniList. Configure them in **Settings** > **Integrations** > **Sync Settings**:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| **Progress Unit** | Volumes | Whether each Codex book counts as a "volume" or "chapter" on AniList. Use "volumes" (default) to avoid misleading "Read chapter X" activity entries on AniList. |
-| **Push Completed Series** | On | Include series where all local books are marked as read |
-| **Push In-Progress Series** | On | Include series where at least one book has been started |
-| **Count In-Progress Books** | Off | Whether partially-read books (started but not finished) count toward the progress number |
+| **Include Completed Series** | On | Include series where all local books are marked as read |
+| **Include In-Progress Series** | On | Include series where at least one book has been started |
+| **Count Partially-Read Books** | Off | Whether partially-read books (started but not finished) count toward the progress number |
+| **Sync Ratings** | On | Include scores and notes in push/pull operations |
+
+These settings are stored in the user plugin config under the `_codex` namespace (e.g., `_codex.includeCompleted`). The server reads them to filter which entries to build and send — this is the server's only role. The plugin never reads these settings.
+
+### Plugin-Specific Settings
+
+These settings are specific to the AniList plugin and control how it interprets the data from Codex. Configure them in **Settings** > **Integrations** > **Plugin Settings**:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| **Progress Unit** | Volumes | Whether each Codex book counts as a "volume" or "chapter" on AniList |
+| **Pause After Days** | Disabled | Mark series as "Paused" on AniList if no reading progress for this many days |
+| **Drop After Days** | Disabled | Mark series as "Dropped" on AniList if no reading progress for this many days |
 
 ### Progress Unit: Volumes vs Chapters
 
-AniList tracks both volume and chapter progress separately. Because each Codex book typically represents one physical volume:
+AniList tracks both volume and chapter progress separately. Codex always sends books-read as `volumes` in the sync data. The plugin then maps this to the correct AniList field based on your `progressUnit` setting:
 
 - **Volumes** (default) — sends progress as `progressVolumes`, which is the natural mapping for manga volumes. AniList displays this as "Read Vol. X".
 - **Chapters** — sends progress as `progress` (chapter count). Only use this if your Codex books represent individual chapters rather than collected volumes. AniList displays this as "Read Ch. X".
@@ -128,6 +144,13 @@ AniList tracks both volume and chapter progress separately. Because each Codex b
 :::warning
 Using "chapters" when your books are volumes can create misleading activity on your AniList profile (e.g., showing "Read chapter 3" when you actually read volume 3, which may contain chapters 20–30).
 :::
+
+### Staleness Detection
+
+When `pauseAfterDays` or `dropAfterDays` is configured, the plugin checks each entry's `latestUpdatedAt` timestamp (the most recent reading progress update in Codex). If the elapsed time exceeds the threshold, the plugin overrides the entry's status before pushing to AniList:
+
+- **Drop takes priority** — if both thresholds are met, the entry is marked as "Dropped"
+- Only applies during push — staleness is not checked during pull
 
 ## Sync Results
 

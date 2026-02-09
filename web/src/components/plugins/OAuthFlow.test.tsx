@@ -1,10 +1,10 @@
-import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { notifications } from "@mantine/notifications";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { userPluginsApi } from "@/api/userPlugins";
-import { useOAuthFlow, useOAuthCallback } from "./OAuthFlow";
+import { useOAuthCallback, useOAuthFlow } from "./OAuthFlow";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -192,6 +192,47 @@ describe("useOAuthFlow", () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: ["user-plugins"] }),
+    );
+
+    openSpy.mockRestore();
+  });
+
+  it("shows timeout notification and closes popup after 5 minutes", async () => {
+    vi.mocked(userPluginsApi.startOAuth).mockResolvedValue({
+      redirectUrl: "https://example.com/oauth",
+    });
+
+    const mockPopup = { closed: false, close: vi.fn() };
+    const openSpy = vi
+      .spyOn(window, "open")
+      .mockReturnValue(mockPopup as unknown as Window);
+
+    const { result } = renderHook(() => useOAuthFlow(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.startOAuthFlow("sync-anilist");
+    });
+
+    // Popup is still open after 4 minutes — no timeout yet
+    await act(async () => {
+      vi.advanceTimersByTime(4 * 60 * 1000);
+    });
+    expect(mockPopup.close).not.toHaveBeenCalled();
+    expect(notifications.show).not.toHaveBeenCalled();
+
+    // After 5+ minutes total — timeout fires
+    await act(async () => {
+      vi.advanceTimersByTime(1 * 60 * 1000 + 500);
+    });
+
+    expect(mockPopup.close).toHaveBeenCalled();
+    expect(notifications.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "OAuth Timeout",
+        color: "orange",
+      }),
     );
 
     openSpy.mockRestore();

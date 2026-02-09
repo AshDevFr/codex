@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { UserLibraryEntry } from "@ashdev/codex-plugin-sdk";
+import { describe, expect, it } from "vitest";
 import { pickSeedEntries } from "./index.js";
 
 // =============================================================================

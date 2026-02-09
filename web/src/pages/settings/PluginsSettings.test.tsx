@@ -192,9 +192,7 @@ describe("PluginsSettings - loading state", () => {
     const { container } = renderWithProviders(<PluginsSettings />);
 
     // Mantine Loader renders a span with the mantine-Loader-root class
-    expect(
-      container.querySelector(".mantine-Loader-root"),
-    ).toBeInTheDocument();
+    expect(container.querySelector(".mantine-Loader-root")).toBeInTheDocument();
   });
 });
 
@@ -208,9 +206,7 @@ describe("PluginsSettings - error state", () => {
     renderWithProviders(<PluginsSettings />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Failed to load plugins/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Failed to load plugins/i)).toBeInTheDocument();
     });
   });
 });
@@ -315,21 +311,20 @@ describe("PluginsSettings - health status badges", () => {
     { status: "unknown" },
   ];
 
-  it.each(healthStatuses)(
-    "renders a badge with text '$status'",
-    async ({ status }) => {
-      const plugin = createMockPlugin({
-        healthStatus: status,
-      });
-      mockGetAll.mockResolvedValue({ plugins: [plugin], total: 1 });
+  it.each(healthStatuses)("renders a badge with text '$status'", async ({
+    status,
+  }) => {
+    const plugin = createMockPlugin({
+      healthStatus: status,
+    });
+    mockGetAll.mockResolvedValue({ plugins: [plugin], total: 1 });
 
-      renderWithProviders(<PluginsSettings />);
+    renderWithProviders(<PluginsSettings />);
 
-      await waitFor(() => {
-        expect(screen.getByText(status)).toBeInTheDocument();
-      });
-    },
-  );
+    await waitFor(() => {
+      expect(screen.getByText(status)).toBeInTheDocument();
+    });
+  });
 });
 
 // ===========================================================================
@@ -595,9 +590,7 @@ describe("PluginsSettings - delete confirmation", () => {
     });
 
     // Click the "Delete Plugin" confirm button inside the modal
-    await user.click(
-      screen.getByRole("button", { name: /^Delete Plugin$/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /^Delete Plugin$/i }));
 
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith("del-1", expect.anything());
@@ -664,10 +657,7 @@ describe("PluginsSettings - test connection", () => {
       expect(screen.getByText("Test Plugin")).toBeInTheDocument();
     });
 
-    const testBtn = getActionButtonByIcon(
-      container,
-      "tabler-icon-player-play",
-    );
+    const testBtn = getActionButtonByIcon(container, "tabler-icon-player-play");
     await user.click(testBtn);
 
     await waitFor(() => {
@@ -691,10 +681,7 @@ describe("PluginsSettings - test connection", () => {
       expect(screen.getByText("Test Plugin")).toBeInTheDocument();
     });
 
-    const testBtn = getActionButtonByIcon(
-      container,
-      "tabler-icon-player-play",
-    );
+    const testBtn = getActionButtonByIcon(container, "tabler-icon-player-play");
     await user.click(testBtn);
 
     await waitFor(() => {
@@ -724,10 +711,7 @@ describe("PluginsSettings - test connection", () => {
       expect(screen.getByText("Test Plugin")).toBeInTheDocument();
     });
 
-    const testBtn = getActionButtonByIcon(
-      container,
-      "tabler-icon-player-play",
-    );
+    const testBtn = getActionButtonByIcon(container, "tabler-icon-player-play");
     await user.click(testBtn);
 
     await waitFor(() => {
@@ -753,10 +737,7 @@ describe("PluginsSettings - test connection", () => {
       expect(screen.getByText("Test Plugin")).toBeInTheDocument();
     });
 
-    const testBtn = getActionButtonByIcon(
-      container,
-      "tabler-icon-player-play",
-    );
+    const testBtn = getActionButtonByIcon(container, "tabler-icon-player-play");
     await user.click(testBtn);
 
     await waitFor(() => {
@@ -815,7 +796,10 @@ describe("PluginsSettings - row expansion", () => {
     });
 
     // Second click: collapse (icon is now chevron-down after expanding)
-    const collapseBtn = getActionButtonByIcon(container, "tabler-icon-chevron-down");
+    const collapseBtn = getActionButtonByIcon(
+      container,
+      "tabler-icon-chevron-down",
+    );
     await user.click(collapseBtn);
 
     // The collapse is animated, so the content may eventually be hidden.
@@ -1177,9 +1161,7 @@ describe("PluginsSettings - edit plugin modal", () => {
     await user.click(editBtn);
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Edit Plugin: MangaBaka"),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Edit Plugin: MangaBaka")).toBeInTheDocument();
     });
 
     // The edit form should have Save Changes instead of Create Plugin
@@ -1203,10 +1185,7 @@ describe("PluginsSettings - configure plugin button", () => {
       expect(screen.getByText("Test Plugin")).toBeInTheDocument();
     });
 
-    const configBtn = getActionButtonByIcon(
-      container,
-      "tabler-icon-settings",
-    );
+    const configBtn = getActionButtonByIcon(container, "tabler-icon-settings");
     expect(configBtn).toBeInTheDocument();
   });
 });
@@ -1548,7 +1527,10 @@ describe("PluginsSettings - reset failures", () => {
     await user.click(resetBtn);
 
     await waitFor(() => {
-      expect(mockResetFailures).toHaveBeenCalledWith("reset-1", expect.anything());
+      expect(mockResetFailures).toHaveBeenCalledWith(
+        "reset-1",
+        expect.anything(),
+      );
     });
   });
 
@@ -1715,9 +1697,7 @@ describe("PluginsSettings - recommendation provider badge", () => {
     await clickExpandButton(container, user);
 
     await waitFor(() => {
-      expect(
-        screen.getByText("Recommendation Provider"),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Recommendation Provider")).toBeInTheDocument();
     });
   });
 });
