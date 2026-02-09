@@ -48,8 +48,7 @@ export const manifest = {
       {
         key: "pushCompletedSeries",
         label: "Push Completed Series",
-        description:
-          "Push series where all local books are marked as read",
+        description: "Push series where all local books are marked as read",
         type: "boolean" as const,
         required: false,
         default: true,
@@ -57,8 +56,7 @@ export const manifest = {
       {
         key: "pushInProgressSeries",
         label: "Push In-Progress Series",
-        description:
-          "Push series where at least one book has been started",
+        description: "Push series where at least one book has been started",
         type: "boolean" as const,
         required: false,
         default: true,
@@ -98,8 +96,7 @@ export const manifest = {
     scopes: [],
     pkce: false,
   },
-  userDescription:
-    "Sync manga reading progress between Codex and AniList",
+  userDescription: "Sync manga reading progress between Codex and AniList",
   adminSetupInstructions:
     "To enable OAuth login, create an AniList API client at https://anilist.co/settings/developer. Set the redirect URL to {your-codex-url}/api/v1/user/plugins/oauth/callback. Enter the Client ID below. Without OAuth configured, users can still connect by pasting a personal access token.",
   userSetupInstructions:

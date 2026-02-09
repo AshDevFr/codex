@@ -101,7 +101,9 @@ export function IntegrationsSettings() {
           title: hasErrors ? "Sync completed with errors" : "Sync completed",
           message:
             parts.join(", ") ||
-            (hasErrors ? "Sync encountered errors" : "Sync finished successfully"),
+            (hasErrors
+              ? "Sync encountered errors"
+              : "Sync finished successfully"),
           color: hasErrors ? "orange" : "green",
         });
       }

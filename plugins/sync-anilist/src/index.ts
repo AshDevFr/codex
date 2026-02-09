@@ -222,7 +222,6 @@ createSyncPlugin({
     } else {
       logger.warn("No access token provided - sync operations will fail");
     }
-
   },
 });
 

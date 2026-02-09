@@ -9,7 +9,11 @@ import { Recommendations } from "./Recommendations";
 // MSW Setup
 // =============================================================================
 
-const server = setupServer();
+const server = setupServer(
+  http.get("/api/v1/settings/branding", () => {
+    return HttpResponse.json({ applicationName: "Codex" });
+  }),
+);
 
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
