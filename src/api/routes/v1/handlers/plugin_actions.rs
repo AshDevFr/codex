@@ -2360,6 +2360,14 @@ fn sanitize_plugin_error(error: &PluginManagerError) -> String {
             format!("Plugin {} requires authentication", id)
         }
 
+        // OAuth token errors - user-actionable
+        PluginManagerError::ReauthRequired(_) => {
+            "OAuth session expired. Please reconnect the plugin.".to_string()
+        }
+        PluginManagerError::TokenRefreshFailed(_) => {
+            "Failed to refresh OAuth token. Please try again or reconnect.".to_string()
+        }
+
         // Internal errors - don't expose details
         PluginManagerError::Database(_) | PluginManagerError::Encryption(_) => {
             "An internal plugin error occurred".to_string()

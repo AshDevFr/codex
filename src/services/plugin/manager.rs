@@ -58,12 +58,14 @@ use crate::db::repositories::{
 };
 use crate::services::PluginMetricsService;
 
+use crate::services::user_plugin::token_refresh::{self, RefreshResult};
+
 use super::handle::{PluginConfig, PluginError, PluginHandle};
 use super::process::PluginProcessConfig;
 use super::protocol::{
     BookMatchParams, BookSearchParams, MetadataGetParams, MetadataMatchParams,
-    MetadataSearchParams, MetadataSearchResponse, PluginBookMetadata, PluginScope,
-    PluginSeriesMetadata, SearchResult,
+    MetadataSearchParams, MetadataSearchResponse, OAuthConfig, PluginBookMetadata, PluginManifest,
+    PluginScope, PluginSeriesMetadata, SearchResult,
 };
 use super::secrets::SecretValue;
 use super::storage_handler::StorageRequestHandler;
@@ -97,6 +99,12 @@ pub enum PluginManagerError {
 
     #[error("User plugin not found for user {user_id} and plugin {plugin_id}")]
     UserPluginNotFound { user_id: Uuid, plugin_id: Uuid },
+
+    #[error("OAuth token refresh failed: {0}")]
+    TokenRefreshFailed(String),
+
+    #[error("OAuth re-authentication required for user plugin {0}")]
+    ReauthRequired(Uuid),
 
     #[error("User plugin not authenticated: {0}")]
     UserPluginNotAuthenticated(Uuid),
@@ -780,21 +788,19 @@ impl PluginManager {
 
         // Try OAuth tokens first, then fall back to simple credentials
         if user_plugin.has_oauth_tokens() {
-            // Decrypt OAuth access token for the user
-            if let Ok(Some(access_token)) =
-                UserPluginsRepository::get_oauth_access_token(&self.db, user_plugin.id).await
-            {
-                let cred_value = serde_json::json!({
-                    "access_token": access_token,
-                });
+            // Ensure the OAuth token is still valid, refreshing if needed
+            let access_token = self.ensure_fresh_oauth_token(&plugin, user_plugin).await?;
 
-                if matches!(delivery, "env" | "both") {
-                    process_config = process_config.env("ACCESS_TOKEN", &access_token);
-                }
+            let cred_value = serde_json::json!({
+                "access_token": access_token,
+            });
 
-                // Always include in init_message for user plugins
-                credentials = Some(SecretValue::new(cred_value));
+            if matches!(delivery, "env" | "both") {
+                process_config = process_config.env("ACCESS_TOKEN", &access_token);
             }
+
+            // Always include in init_message for user plugins
+            credentials = Some(SecretValue::new(cred_value));
         } else if user_plugin.has_credentials() {
             // Decrypt simple credentials for the user
             if let Ok(Some(decrypted)) =
@@ -834,6 +840,97 @@ impl PluginManager {
             user_config,
             credentials,
         })
+    }
+
+    /// Ensure the user's OAuth access token is fresh, refreshing it if needed.
+    ///
+    /// Returns the valid access token (either the existing one or a freshly refreshed one).
+    /// Returns an error if re-authentication is required or the refresh fails.
+    async fn ensure_fresh_oauth_token(
+        &self,
+        plugin: &plugins::Model,
+        user_plugin: &user_plugins::Model,
+    ) -> Result<String, PluginManagerError> {
+        // Extract OAuth config from the plugin manifest
+        let oauth_config = Self::get_oauth_config(plugin);
+        let client_id = Self::get_oauth_client_id(plugin);
+
+        // If OAuth config or client_id is missing, skip refresh and just return the
+        // current access token (some plugins use non-standard OAuth flows)
+        if let (Some(oauth_config), Some(client_id)) = (&oauth_config, &client_id) {
+            let client_secret = Self::get_oauth_client_secret(plugin);
+
+            match token_refresh::ensure_valid_token(
+                &self.db,
+                user_plugin,
+                oauth_config,
+                client_id,
+                client_secret.as_deref(),
+            )
+            .await
+            {
+                Ok(RefreshResult::Refreshed { access_token }) => {
+                    info!(
+                        user_plugin_id = %user_plugin.id,
+                        "Using refreshed OAuth token"
+                    );
+                    return Ok(access_token);
+                }
+                Ok(RefreshResult::StillValid) => {
+                    // Fall through to return the existing token
+                }
+                Ok(RefreshResult::ReauthRequired) => {
+                    return Err(PluginManagerError::ReauthRequired(user_plugin.id));
+                }
+                Ok(RefreshResult::Failed(reason)) => {
+                    return Err(PluginManagerError::TokenRefreshFailed(reason));
+                }
+                Err(e) => {
+                    return Err(PluginManagerError::TokenRefreshFailed(e.to_string()));
+                }
+            }
+        }
+
+        // Token is still valid (or no OAuth config to check against) — decrypt and return
+        UserPluginsRepository::get_oauth_access_token(&self.db, user_plugin.id)
+            .await
+            .map_err(PluginManagerError::Database)?
+            .ok_or_else(|| {
+                PluginManagerError::TokenRefreshFailed(
+                    "Failed to decrypt OAuth access token".to_string(),
+                )
+            })
+    }
+
+    /// Extract OAuth config from a plugin's stored manifest
+    fn get_oauth_config(plugin: &plugins::Model) -> Option<OAuthConfig> {
+        let manifest_json = plugin.manifest.as_ref()?;
+        let manifest: PluginManifest = serde_json::from_value(manifest_json.clone()).ok()?;
+        manifest.oauth
+    }
+
+    /// Get the OAuth client_id for a plugin (config override > manifest default)
+    fn get_oauth_client_id(plugin: &plugins::Model) -> Option<String> {
+        // Check plugin config for client_id override
+        if let Some(client_id) = plugin
+            .config
+            .get("oauth_client_id")
+            .and_then(|v| v.as_str())
+        {
+            return Some(client_id.to_string());
+        }
+
+        // Fall back to manifest's default client_id
+        Self::get_oauth_config(plugin)?.client_id
+    }
+
+    /// Get OAuth client_secret from plugin config
+    fn get_oauth_client_secret(plugin: &plugins::Model) -> Option<String> {
+        plugin
+            .config
+            .get("oauth_client_secret")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 
     /// Check rate limit for a plugin. Returns Ok(plugin_name) if allowed, Err if rate limited.
@@ -1793,6 +1890,143 @@ mod tests {
             "Rate limiter should be Some when rate_limit is positive"
         );
         assert_eq!(entry.rate_limiter.as_ref().unwrap().capacity(), 60);
+    }
+
+    fn create_test_plugin(
+        config: serde_json::Value,
+        manifest: Option<serde_json::Value>,
+    ) -> plugins::Model {
+        use chrono::Utc;
+
+        plugins::Model {
+            id: Uuid::new_v4(),
+            name: "test-plugin".to_string(),
+            display_name: "Test Plugin".to_string(),
+            description: None,
+            plugin_type: "user".to_string(),
+            command: "node".to_string(),
+            args: serde_json::json!([]),
+            env: serde_json::json!({}),
+            working_directory: None,
+            permissions: serde_json::json!([]),
+            scopes: serde_json::json!([]),
+            library_ids: serde_json::json!([]),
+            credentials: None,
+            credential_delivery: "init_message".to_string(),
+            config,
+            manifest,
+            enabled: true,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            disabled_reason: None,
+            rate_limit_requests_per_minute: None,
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
+            metadata_targets: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            updated_by: None,
+        }
+    }
+
+    fn create_manifest_with_oauth(client_id: Option<&str>) -> serde_json::Value {
+        serde_json::json!({
+            "name": "test-plugin",
+            "displayName": "Test Plugin",
+            "version": "1.0.0",
+            "description": "Test",
+            "protocolVersion": "1.0",
+            "capabilities": {},
+            "oauth": {
+                "authorizationUrl": "https://example.com/auth",
+                "tokenUrl": "https://example.com/token",
+                "clientId": client_id,
+                "scopes": ["read"]
+            }
+        })
+    }
+
+    #[test]
+    fn test_get_oauth_config_from_manifest() {
+        let manifest = create_manifest_with_oauth(Some("manifest-client"));
+        let plugin = create_test_plugin(serde_json::json!({}), Some(manifest));
+
+        let oauth = PluginManager::get_oauth_config(&plugin);
+        assert!(oauth.is_some());
+
+        let oauth = oauth.unwrap();
+        assert_eq!(oauth.token_url, "https://example.com/token");
+        assert_eq!(oauth.authorization_url, "https://example.com/auth");
+        assert_eq!(oauth.client_id.as_deref(), Some("manifest-client"));
+    }
+
+    #[test]
+    fn test_get_oauth_config_no_manifest() {
+        let plugin = create_test_plugin(serde_json::json!({}), None);
+        assert!(PluginManager::get_oauth_config(&plugin).is_none());
+    }
+
+    #[test]
+    fn test_get_oauth_config_manifest_without_oauth() {
+        let manifest = serde_json::json!({
+            "name": "test-plugin",
+            "displayName": "Test Plugin",
+            "version": "1.0.0",
+            "description": "Test",
+            "protocolVersion": "1.0",
+            "capabilities": {}
+        });
+        let plugin = create_test_plugin(serde_json::json!({}), Some(manifest));
+        assert!(PluginManager::get_oauth_config(&plugin).is_none());
+    }
+
+    #[test]
+    fn test_get_oauth_client_id_from_config_override() {
+        let manifest = create_manifest_with_oauth(Some("manifest-client"));
+        let plugin = create_test_plugin(
+            serde_json::json!({"oauth_client_id": "config-override"}),
+            Some(manifest),
+        );
+
+        let client_id = PluginManager::get_oauth_client_id(&plugin);
+        assert_eq!(client_id.as_deref(), Some("config-override"));
+    }
+
+    #[test]
+    fn test_get_oauth_client_id_falls_back_to_manifest() {
+        let manifest = create_manifest_with_oauth(Some("manifest-client"));
+        let plugin = create_test_plugin(serde_json::json!({}), Some(manifest));
+
+        let client_id = PluginManager::get_oauth_client_id(&plugin);
+        assert_eq!(client_id.as_deref(), Some("manifest-client"));
+    }
+
+    #[test]
+    fn test_get_oauth_client_id_none_when_no_config_or_manifest() {
+        let plugin = create_test_plugin(serde_json::json!({}), None);
+        assert!(PluginManager::get_oauth_client_id(&plugin).is_none());
+    }
+
+    #[test]
+    fn test_get_oauth_client_secret_from_config() {
+        let plugin = create_test_plugin(
+            serde_json::json!({"oauth_client_secret": "my-secret"}),
+            None,
+        );
+
+        let secret = PluginManager::get_oauth_client_secret(&plugin);
+        assert_eq!(secret.as_deref(), Some("my-secret"));
+    }
+
+    #[test]
+    fn test_get_oauth_client_secret_none_when_missing() {
+        let plugin = create_test_plugin(serde_json::json!({}), None);
+        assert!(PluginManager::get_oauth_client_secret(&plugin).is_none());
     }
 
     // Integration tests require a database connection
