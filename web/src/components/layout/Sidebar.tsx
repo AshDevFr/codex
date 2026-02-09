@@ -40,6 +40,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
+import { userPluginsApi } from "@/api/userPlugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
 import { LibraryActionsMenu } from "@/components/library/LibraryActionsMenu";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
@@ -89,6 +90,15 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
     queryKey: ["libraries"],
     queryFn: librariesApi.getAll,
   });
+
+  const { data: pluginData } = useQuery({
+    queryKey: ["user-plugins"],
+    queryFn: userPluginsApi.list,
+    staleTime: 5 * 60_000,
+  });
+  const hasRecommendationPlugin = pluginData?.enabled?.some(
+    (p) => p.connected && p.capabilities?.userRecommendationProvider === true,
+  );
 
   // Mutations for "All Libraries" actions
   const scanAllMutation = useMutation({
@@ -322,13 +332,15 @@ export function Sidebar({ currentPath = "/" }: SidebarProps) {
               leftSection={<IconHome size={20} />}
               active={currentPath === "/"}
             />
-            <NavLink
-              component={Link}
-              to="/recommendations"
-              label="Recommendations"
-              leftSection={<IconSparkles size={20} />}
-              active={currentPath === "/recommendations"}
-            />
+            {hasRecommendationPlugin && (
+              <NavLink
+                component={Link}
+                to="/recommendations"
+                label="Recommendations"
+                leftSection={<IconSparkles size={20} />}
+                active={currentPath === "/recommendations"}
+              />
+            )}
             <NavLink
               component={Link}
               to={`/libraries/all/${getLastTab("all") || "series"}`}

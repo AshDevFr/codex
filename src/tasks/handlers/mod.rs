@@ -22,6 +22,7 @@ pub mod plugin_auto_match;
 pub mod purge_deleted;
 pub mod reprocess_series_titles;
 pub mod scan_library;
+pub mod user_plugin_recommendations;
 pub mod user_plugin_sync;
 
 pub use analyze_book::AnalyzeBookHandler;
@@ -40,6 +41,7 @@ pub use plugin_auto_match::PluginAutoMatchHandler;
 pub use purge_deleted::PurgeDeletedHandler;
 pub use reprocess_series_titles::{ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler};
 pub use scan_library::ScanLibraryHandler;
+pub use user_plugin_recommendations::UserPluginRecommendationsHandler;
 pub use user_plugin_sync::UserPluginSyncHandler;
 
 use std::future::Future;

@@ -21,9 +21,11 @@ import {
   IconPlayerPlay,
   IconRefresh,
   IconSettings,
+  IconSparkles,
   IconX,
 } from "@tabler/icons-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type {
   AvailablePluginDto,
   SyncStatusDto,
@@ -134,6 +136,12 @@ export function ConnectedPluginCard({
   const health = healthBadge(plugin.healthStatus);
   const [tokenValue, setTokenValue] = useState("");
   const showTokenInput = !plugin.connected && plugin.requiresOauth;
+  const isSyncPlugin = plugin.capabilities?.readSync === true;
+  const isRecommendationPlugin =
+    plugin.capabilities?.userRecommendationProvider === true;
+  const configFields =
+    (plugin.userConfigSchema?.fields as { key: string }[] | undefined) ?? [];
+  const hasSettings = isSyncPlugin || configFields.length > 0;
 
   return (
     <Card withBorder padding="lg">
@@ -260,6 +268,23 @@ export function ConnectedPluginCard({
         </Group>
       )}
 
+      {plugin.connected && isRecommendationPlugin && (
+        <Group gap="xs" mb="xs">
+          <Badge variant="light" color="grape" size="sm">
+            Recommendations
+          </Badge>
+          <Button
+            component={Link}
+            to="/recommendations"
+            size="compact-xs"
+            variant="subtle"
+            leftSection={<IconSparkles size={14} />}
+          >
+            View Recommendations
+          </Button>
+        </Group>
+      )}
+
       {plugin.userSetupInstructions && !plugin.connected && (
         <Alert
           icon={<IconInfoCircle size={16} />}
@@ -326,7 +351,7 @@ export function ConnectedPluginCard({
       )}
 
       <Group gap="xs" mt="md">
-        {plugin.connected && onSync && (
+        {plugin.connected && plugin.capabilities?.readSync && onSync && (
           <Button
             size="xs"
             variant="light"
@@ -337,7 +362,7 @@ export function ConnectedPluginCard({
             Sync Now
           </Button>
         )}
-        {onSettings && (
+        {hasSettings && onSettings && (
           <Button
             size="xs"
             variant="subtle"

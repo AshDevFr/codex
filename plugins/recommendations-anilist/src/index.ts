@@ -15,6 +15,7 @@ import {
   createRecommendationPlugin,
   type InitializeParams,
   type Recommendation,
+  type RecommendationClearResponse,
   type RecommendationDismissRequest,
   type RecommendationDismissResponse,
   type RecommendationProvider,
@@ -233,6 +234,13 @@ const provider: RecommendationProvider = {
       `Dismissed recommendation: ${params.externalId} (reason: ${params.reason ?? "none"})`,
     );
     return { dismissed: true };
+  },
+
+  async clear(): Promise<RecommendationClearResponse> {
+    const count = dismissedIds.size;
+    dismissedIds.clear();
+    logger.info(`Cleared ${count} dismissed recommendations`);
+    return { cleared: true };
   },
 };
 

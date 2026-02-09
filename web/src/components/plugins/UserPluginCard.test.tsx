@@ -50,6 +50,26 @@ const enabledNotConnected: UserPluginDto = {
   createdAt: new Date().toISOString(),
 } as UserPluginDto;
 
+const connectedRecommendationPlugin: UserPluginDto = {
+  id: "inst-3",
+  pluginId: "plugin-5",
+  pluginName: "anilist-recommendation",
+  pluginDisplayName: "Anilist-Recommendation",
+  pluginType: "user",
+  enabled: true,
+  connected: true,
+  healthStatus: "healthy",
+  externalUsername: "@testuser",
+  externalAvatarUrl: "https://example.com/avatar.png",
+  requiresOauth: true,
+  oauthConfigured: true,
+  description:
+    "Personalized manga recommendations powered by AniList community data",
+  config: {},
+  capabilities: { readSync: false, userRecommendationProvider: true },
+  createdAt: new Date().toISOString(),
+} as UserPluginDto;
+
 const availablePlugin: AvailablePluginDto = {
   pluginId: "plugin-3",
   name: "smart-recs",
@@ -168,6 +188,24 @@ describe("ConnectedPluginCard", () => {
 
     await user.click(screen.getByRole("button", { name: /sync now/i }));
     expect(onSync).toHaveBeenCalledWith("plugin-1");
+  });
+
+  it("does not show Sync Now button for non-sync plugins", () => {
+    const nonSyncPlugin: UserPluginDto = {
+      ...connectedPlugin,
+      capabilities: { readSync: false, userRecommendationProvider: true },
+    } as UserPluginDto;
+    const onSync = vi.fn();
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={nonSyncPlugin}
+        onSync={onSync}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /sync now/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows health badge", () => {
@@ -362,6 +400,88 @@ describe("ConnectedPluginCard", () => {
     renderWithProviders(<ConnectedPluginCard {...defaultProps} />);
     expect(screen.queryByText(/Pulled/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Skipped/)).not.toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Settings button visibility
+  // ---------------------------------------------------------------------------
+
+  it("does not show Settings button for recommendation-only plugin without config", () => {
+    const onSettings = vi.fn();
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={connectedRecommendationPlugin}
+        onSettings={onSettings}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /settings/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Settings button for non-sync plugin with config fields", () => {
+    const pluginWithConfig: UserPluginDto = {
+      ...connectedRecommendationPlugin,
+      userConfigSchema: {
+        fields: [{ key: "maxResults", label: "Max Results", type: "number" }],
+      },
+    } as UserPluginDto;
+    const onSettings = vi.fn();
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={pluginWithConfig}
+        onSettings={onSettings}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /settings/i }),
+    ).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Recommendation plugin display
+  // ---------------------------------------------------------------------------
+
+  it("shows Recommendations badge for connected recommendation plugin", () => {
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={connectedRecommendationPlugin}
+      />,
+    );
+    expect(screen.getByText("Recommendations")).toBeInTheDocument();
+  });
+
+  it("shows View Recommendations link for connected recommendation plugin", () => {
+    renderWithProviders(
+      <ConnectedPluginCard
+        {...defaultProps}
+        plugin={connectedRecommendationPlugin}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /view recommendations/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/recommendations");
+  });
+
+  it("does not show Recommendations badge for sync-only plugin", () => {
+    renderWithProviders(<ConnectedPluginCard {...defaultProps} />);
+    expect(screen.queryByText("Recommendations")).not.toBeInTheDocument();
+  });
+
+  it("does not show View Recommendations for disconnected recommendation plugin", () => {
+    const disconnected: UserPluginDto = {
+      ...connectedRecommendationPlugin,
+      connected: false,
+    } as UserPluginDto;
+    renderWithProviders(
+      <ConnectedPluginCard {...defaultProps} plugin={disconnected} />,
+    );
+    expect(
+      screen.queryByRole("link", { name: /view recommendations/i }),
+    ).not.toBeInTheDocument();
   });
 });
 

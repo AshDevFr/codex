@@ -29,7 +29,7 @@ use crate::tasks::handlers::{
     FindDuplicatesHandler, GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler,
     GenerateThumbnailHandler, GenerateThumbnailsHandler, PluginAutoMatchHandler,
     PurgeDeletedHandler, ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler,
-    ScanLibraryHandler, TaskHandler, UserPluginSyncHandler,
+    ScanLibraryHandler, TaskHandler, UserPluginRecommendationsHandler, UserPluginSyncHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -210,6 +210,13 @@ impl TaskWorker {
         self.handlers.insert(
             "user_plugin_sync".to_string(),
             Arc::new(UserPluginSyncHandler::new(plugin_manager.clone())),
+        );
+        // Register user plugin recommendations handler
+        self.handlers.insert(
+            "user_plugin_recommendations".to_string(),
+            Arc::new(UserPluginRecommendationsHandler::new(
+                plugin_manager.clone(),
+            )),
         );
         self.plugin_manager = Some(plugin_manager);
         self
