@@ -1,5 +1,6 @@
 import {
   Button,
+  Divider,
   Group,
   Modal,
   NumberInput,
@@ -28,6 +29,13 @@ interface ConfigField {
   default?: unknown;
 }
 
+interface CodexSyncValues {
+  includeCompleted: boolean;
+  includeInProgress: boolean;
+  countPartialProgress: boolean;
+  syncRatings: boolean;
+}
+
 // =============================================================================
 // Inner content component (keyed by plugin.id for clean remounts)
 // =============================================================================
@@ -44,6 +52,7 @@ function UserPluginSettingsContent({
   const configFields: ConfigField[] =
     (plugin.userConfigSchema?.fields as ConfigField[] | undefined) ?? [];
   const currentConfig = (plugin.config ?? {}) as Record<string, unknown>;
+  const codexConfig = (currentConfig._codex ?? {}) as Record<string, unknown>;
 
   // Build initial values from current config + schema defaults
   const initialValues: Record<string, unknown> = {};
@@ -53,6 +62,24 @@ function UserPluginSettingsContent({
       typeof currentConfig.syncMode === "string"
         ? currentConfig.syncMode
         : "both";
+
+    // Codex generic sync settings (stored in config._codex.*)
+    initialValues._codex_includeCompleted =
+      typeof codexConfig.includeCompleted === "boolean"
+        ? codexConfig.includeCompleted
+        : true;
+    initialValues._codex_includeInProgress =
+      typeof codexConfig.includeInProgress === "boolean"
+        ? codexConfig.includeInProgress
+        : true;
+    initialValues._codex_countPartialProgress =
+      typeof codexConfig.countPartialProgress === "boolean"
+        ? codexConfig.countPartialProgress
+        : false;
+    initialValues._codex_syncRatings =
+      typeof codexConfig.syncRatings === "boolean"
+        ? codexConfig.syncRatings
+        : true;
   }
 
   for (const field of configFields) {
@@ -63,11 +90,27 @@ function UserPluginSettingsContent({
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      // Merge form values into a single config object
+      // Build config object: preserve existing keys, update from form
       const config: Record<string, unknown> = { ...currentConfig };
-      for (const [key, value] of Object.entries(form.values)) {
-        config[key] = value;
+
+      // Extract Codex sync settings into _codex namespace
+      if (isSyncPlugin) {
+        const codex: CodexSyncValues = {
+          includeCompleted: !!form.values._codex_includeCompleted,
+          includeInProgress: !!form.values._codex_includeInProgress,
+          countPartialProgress: !!form.values._codex_countPartialProgress,
+          syncRatings: !!form.values._codex_syncRatings,
+        };
+        config._codex = codex;
       }
+
+      // Write non-codex form values at top level
+      for (const [key, value] of Object.entries(form.values)) {
+        if (!key.startsWith("_codex_")) {
+          config[key] = value;
+        }
+      }
+
       return userPluginsApi.updateConfig(plugin.pluginId, config);
     },
     onSuccess: () => {
@@ -118,6 +161,57 @@ function UserPluginSettingsContent({
           ]}
           {...form.getInputProps("syncMode")}
         />
+      )}
+
+      {isSyncPlugin && (
+        <>
+          <Divider label="Sync Settings" labelPosition="left" mt="xs" />
+          <Switch
+            label="Include completed series"
+            description="Push series where all local books are marked as read"
+            checked={!!form.values._codex_includeCompleted}
+            onChange={(e) =>
+              form.setFieldValue(
+                "_codex_includeCompleted",
+                e.currentTarget.checked,
+              )
+            }
+          />
+          <Switch
+            label="Include in-progress series"
+            description="Push series where at least one book has been started"
+            checked={!!form.values._codex_includeInProgress}
+            onChange={(e) =>
+              form.setFieldValue(
+                "_codex_includeInProgress",
+                e.currentTarget.checked,
+              )
+            }
+          />
+          <Switch
+            label="Count partially-read books"
+            description="Include partially-read books in the progress count (otherwise only fully-read books are counted)"
+            checked={!!form.values._codex_countPartialProgress}
+            onChange={(e) =>
+              form.setFieldValue(
+                "_codex_countPartialProgress",
+                e.currentTarget.checked,
+              )
+            }
+          />
+          <Switch
+            label="Sync ratings & notes"
+            description="Include user ratings and notes in sync. When off, only reading progress is synced."
+            checked={!!form.values._codex_syncRatings}
+            onChange={(e) =>
+              form.setFieldValue("_codex_syncRatings", e.currentTarget.checked)
+            }
+          />
+        </>
+      )}
+
+      {isSyncPlugin && configFields.length > 0 && (
+        <Divider label="Plugin Settings" labelPosition="left" mt="xs" />
       )}
 
       {configFields.map((field) => {
