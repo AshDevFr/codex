@@ -9,7 +9,6 @@
 //! per-user aspects of plugin management.
 
 pub mod oauth;
-#[allow(dead_code)]
 pub mod token_refresh;
 
 pub use oauth::OAuthStateManager;
