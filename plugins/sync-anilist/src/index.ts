@@ -44,6 +44,49 @@ let client: AniListClient | null = null;
 let viewerId: number | null = null;
 let scoreFormat = "POINT_10";
 
+// Plugin-specific config (from userConfig, set during initialization)
+let progressUnit: "volumes" | "chapters" = "volumes";
+let pauseAfterDays = 0;
+let dropAfterDays = 0;
+
+// =============================================================================
+// Staleness Logic
+// =============================================================================
+
+/**
+ * Apply auto-pause/auto-drop for stale in-progress entries.
+ *
+ * Only applies to "reading" entries. Drop takes priority over pause
+ * when both thresholds are met. A threshold of 0 means disabled.
+ */
+export function applyStaleness(
+  status: SyncEntry["status"],
+  latestUpdatedAt: string | undefined,
+  pauseDays: number,
+  dropDays: number,
+  now?: number,
+): SyncEntry["status"] {
+  if (status !== "reading") return status;
+  if (pauseDays === 0 && dropDays === 0) return status;
+  if (!latestUpdatedAt) return status;
+
+  const lastActivity = new Date(latestUpdatedAt).getTime();
+  if (Number.isNaN(lastActivity)) return status;
+
+  const currentTime = now ?? Date.now();
+  const daysInactive = Math.max(0, (currentTime - lastActivity) / (1000 * 60 * 60 * 24));
+
+  // Drop takes priority (stronger action)
+  if (dropDays > 0 && daysInactive >= dropDays) {
+    return "dropped";
+  }
+  if (pauseDays > 0 && daysInactive >= pauseDays) {
+    return "on_hold";
+  }
+
+  return status;
+}
+
 // =============================================================================
 // Sync Provider Implementation
 // =============================================================================
@@ -69,8 +112,21 @@ const provider: SyncProvider = {
   },
 
   async pushProgress(params: SyncPushRequest): Promise<SyncPushResponse> {
-    if (!client) {
-      throw new Error("Plugin not initialized - no AniList client");
+    if (!client || viewerId === null) {
+      throw new Error("Plugin not initialized - call getUserInfo first");
+    }
+
+    // Pre-fetch existing media IDs to distinguish "created" vs "updated"
+    const existingMediaIds = new Set<number>();
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const result = await client.getMangaList(viewerId, page, 50);
+      for (const entry of result.entries) {
+        existingMediaIds.add(entry.mediaId);
+      }
+      hasMore = result.pageInfo.hasNextPage;
+      page++;
     }
 
     const success: SyncEntryResult[] = [];
@@ -88,6 +144,19 @@ const provider: SyncProvider = {
           continue;
         }
 
+        // Apply staleness logic: auto-pause or auto-drop stale in-progress entries
+        const effectiveStatus = applyStaleness(
+          entry.status,
+          entry.latestUpdatedAt,
+          pauseAfterDays,
+          dropAfterDays,
+        );
+        if (effectiveStatus !== entry.status) {
+          logger.debug(
+            `Entry ${entry.externalId}: auto-${effectiveStatus === "dropped" ? "dropped" : "paused"} (was ${entry.status})`,
+          );
+        }
+
         const saveParams: {
           mediaId: number;
           status?: string;
@@ -99,15 +168,20 @@ const provider: SyncProvider = {
           notes?: string;
         } = {
           mediaId,
-          status: syncStatusToAnilist(entry.status),
+          status: syncStatusToAnilist(effectiveStatus),
         };
 
-        // Map progress
-        if (entry.progress?.chapters !== undefined) {
-          saveParams.progress = entry.progress.chapters;
-        }
-        if (entry.progress?.volumes !== undefined) {
-          saveParams.progressVolumes = entry.progress.volumes;
+        // Map progress using the configured progressUnit.
+        // Server always sends books-read as `volumes`. Based on
+        // progressUnit, we map to AniList's `progress` (chapters)
+        // or `progressVolumes` (volumes) field.
+        const count = entry.progress?.volumes ?? entry.progress?.chapters;
+        if (count !== undefined) {
+          if (progressUnit === "chapters") {
+            saveParams.progress = count;
+          } else {
+            saveParams.progressVolumes = count;
+          }
         }
 
         // Map score (convert from 1-100 scale to AniList format)
@@ -128,12 +202,16 @@ const provider: SyncProvider = {
           saveParams.notes = entry.notes;
         }
 
+        const existed = existingMediaIds.has(mediaId);
         const result = await client.saveEntry(saveParams);
         logger.debug(`Pushed entry ${entry.externalId}: status=${result.status}`);
 
+        // Track newly created entries for subsequent pushes in the same batch
+        existingMediaIds.add(mediaId);
+
         success.push({
           externalId: entry.externalId,
-          status: "updated",
+          status: existed ? "updated" : "created",
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
@@ -221,6 +299,24 @@ createSyncPlugin({
       logger.info("AniList client initialized with access token");
     } else {
       logger.warn("No access token provided - sync operations will fail");
+    }
+
+    // Read plugin-specific config from userConfig
+    const uc = params.userConfig;
+    if (uc) {
+      const unit = uc.progressUnit;
+      if (unit === "chapters" || unit === "volumes") {
+        progressUnit = unit;
+      }
+      if (typeof uc.pauseAfterDays === "number" && uc.pauseAfterDays >= 0) {
+        pauseAfterDays = uc.pauseAfterDays;
+      }
+      if (typeof uc.dropAfterDays === "number" && uc.dropAfterDays >= 0) {
+        dropAfterDays = uc.dropAfterDays;
+      }
+      logger.info(
+        `Plugin config: progressUnit=${progressUnit}, pauseAfterDays=${pauseAfterDays}, dropAfterDays=${dropAfterDays}`,
+      );
     }
   },
 });

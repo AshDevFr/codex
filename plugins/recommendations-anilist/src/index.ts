@@ -93,7 +93,7 @@ async function resolveAniListIds(
  * Pick the best entries from the user's library to seed recommendations.
  * Prioritizes highly-rated, recently-read titles.
  */
-function pickSeedEntries(entries: UserLibraryEntry[], maxSeeds: number): UserLibraryEntry[] {
+export function pickSeedEntries(entries: UserLibraryEntry[], maxSeeds: number): UserLibraryEntry[] {
   // Sort by rating (desc), then by recency
   const sorted = [...entries].sort((a, b) => {
     const ratingDiff = (b.userRating ?? 0) - (a.userRating ?? 0);
@@ -167,6 +167,12 @@ const provider: RecommendationProvider = {
     const { library, limit, excludeIds: rawExcludeIds = [] } = params;
     const effectiveLimit = Math.min(limit ?? maxRecommendations, 50);
     const excludeIds = new Set(rawExcludeIds);
+
+    // Return early if library is empty — no seeds to work with
+    if (!library || library.length === 0) {
+      logger.info("Empty library — returning no recommendations");
+      return { recommendations: [], generatedAt: new Date().toISOString(), cached: false };
+    }
 
     // Get user's existing manga IDs for dedup
     const userMangaIds = await client.getUserMangaIds(viewerId);
@@ -261,8 +267,10 @@ createRecommendationPlugin({
       logger.warn("No access token provided - recommendation operations will fail");
     }
 
-    if (params.config?.maxRecommendations) {
-      maxRecommendations = params.config.maxRecommendations as number;
+    // Read maxRecommendations from adminConfig (defined in configSchema)
+    const rawMax = params.adminConfig?.maxRecommendations ?? params.config?.maxRecommendations;
+    if (typeof rawMax === "number") {
+      maxRecommendations = Math.max(1, Math.min(Math.round(rawMax), 50));
       logger.info(`Max recommendations set to: ${maxRecommendations}`);
     }
   },
