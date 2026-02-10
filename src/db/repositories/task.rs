@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, DbBackend, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set, Statement, TransactionTrait, entity::prelude::*,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait,
+    QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait, entity::prelude::*,
 };
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -275,30 +275,47 @@ impl TaskRepository {
     /// Check if a pending or processing task exists with matching params.
     ///
     /// Used for task types that store their identity in JSON params rather than
-    /// FK columns (e.g., UserPluginSync, UserPluginRecommendations). Loads all
-    /// pending/processing tasks of the given type and checks params in Rust.
+    /// FK columns (e.g., UserPluginSync, UserPluginRecommendations). Uses
+    /// database-level JSON filtering to avoid loading all tasks into memory.
     pub async fn has_pending_or_processing(
         db: &DatabaseConnection,
         task_type: &str,
         plugin_id: Uuid,
         user_id: Uuid,
     ) -> Result<bool> {
-        let tasks = Tasks::find()
-            .filter(tasks::Column::TaskType.eq(task_type))
-            .filter(tasks::Column::Status.is_in(["pending", "processing"]))
-            .all(db)
+        let plugin_id_str = plugin_id.to_string();
+        let user_id_str = user_id.to_string();
+        let backend = db.get_database_backend();
+
+        let stmt = match backend {
+            DbBackend::Postgres => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"SELECT 1 FROM tasks
+                   WHERE task_type = $1
+                     AND status IN ('pending', 'processing')
+                     AND params->>'plugin_id' = $2
+                     AND params->>'user_id' = $3
+                   LIMIT 1"#,
+                vec![task_type.into(), plugin_id_str.into(), user_id_str.into()],
+            ),
+            _ => Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"SELECT 1 FROM tasks
+                   WHERE task_type = ?
+                     AND status IN ('pending', 'processing')
+                     AND json_extract(params, '$.plugin_id') = ?
+                     AND json_extract(params, '$.user_id') = ?
+                   LIMIT 1"#,
+                vec![task_type.into(), plugin_id_str.into(), user_id_str.into()],
+            ),
+        };
+
+        let result = db
+            .query_one(stmt)
             .await
             .context("Failed to check for existing tasks")?;
 
-        let plugin_id_str = plugin_id.to_string();
-        let user_id_str = user_id.to_string();
-
-        Ok(tasks.iter().any(|task| {
-            task.params.as_ref().is_some_and(|params| {
-                params.get("plugin_id").and_then(|v| v.as_str()) == Some(&plugin_id_str)
-                    && params.get("user_id").and_then(|v| v.as_str()) == Some(&user_id_str)
-            })
-        }))
+        Ok(result.is_some())
     }
 
     /// Claim next available task (atomic operation using SKIP LOCKED for Postgres, transaction for SQLite)
