@@ -2109,3 +2109,210 @@ async fn test_plugin_rate_limit_none_means_unlimited() {
         );
     }
 }
+
+// ============================================================================
+// has_pending_or_processing tests (database-level JSON filtering)
+// ============================================================================
+
+/// Test that has_pending_or_processing returns false when no tasks exist
+#[tokio::test]
+async fn test_has_pending_or_processing_no_tasks() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    let result =
+        TaskRepository::has_pending_or_processing(&db, "user_plugin_sync", plugin_id, user_id)
+            .await
+            .expect("Failed to check for pending tasks");
+
+    assert!(!result, "Should return false when no tasks exist");
+}
+
+/// Test that has_pending_or_processing detects a pending task with matching params
+#[tokio::test]
+async fn test_has_pending_or_processing_finds_pending_task() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    // Enqueue a sync task
+    let task_type = TaskType::UserPluginSync { plugin_id, user_id };
+    TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    let result =
+        TaskRepository::has_pending_or_processing(&db, "user_plugin_sync", plugin_id, user_id)
+            .await
+            .expect("Failed to check for pending tasks");
+
+    assert!(result, "Should find the pending sync task");
+}
+
+/// Test that has_pending_or_processing detects a processing task with matching params
+#[tokio::test]
+async fn test_has_pending_or_processing_finds_processing_task() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    // Enqueue and claim (transitions to processing)
+    let task_type = TaskType::UserPluginSync { plugin_id, user_id };
+    TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    TaskRepository::claim_next(&db, "worker-1", 300, false)
+        .await
+        .expect("Failed to claim task");
+
+    let result =
+        TaskRepository::has_pending_or_processing(&db, "user_plugin_sync", plugin_id, user_id)
+            .await
+            .expect("Failed to check for pending tasks");
+
+    assert!(result, "Should find the processing sync task");
+}
+
+/// Test that has_pending_or_processing ignores completed tasks
+#[tokio::test]
+async fn test_has_pending_or_processing_ignores_completed_tasks() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    // Enqueue, claim, and complete
+    let task_type = TaskType::UserPluginSync { plugin_id, user_id };
+    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    TaskRepository::claim_next(&db, "worker-1", 300, false)
+        .await
+        .expect("Failed to claim task");
+
+    TaskRepository::mark_completed(&db, task_id, None)
+        .await
+        .expect("Failed to mark completed");
+
+    let result =
+        TaskRepository::has_pending_or_processing(&db, "user_plugin_sync", plugin_id, user_id)
+            .await
+            .expect("Failed to check for pending tasks");
+
+    assert!(!result, "Should not find the completed task");
+}
+
+/// Test that has_pending_or_processing does not match different plugin_id
+#[tokio::test]
+async fn test_has_pending_or_processing_different_plugin_id() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let other_plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    // Enqueue task for one plugin
+    let task_type = TaskType::UserPluginSync { plugin_id, user_id };
+    TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Check with a different plugin_id
+    let result = TaskRepository::has_pending_or_processing(
+        &db,
+        "user_plugin_sync",
+        other_plugin_id,
+        user_id,
+    )
+    .await
+    .expect("Failed to check for pending tasks");
+
+    assert!(!result, "Should not match task with different plugin_id");
+}
+
+/// Test that has_pending_or_processing does not match different user_id
+#[tokio::test]
+async fn test_has_pending_or_processing_different_user_id() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+    let other_user_id = Uuid::new_v4();
+
+    // Enqueue task for one user
+    let task_type = TaskType::UserPluginSync { plugin_id, user_id };
+    TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Check with a different user_id
+    let result = TaskRepository::has_pending_or_processing(
+        &db,
+        "user_plugin_sync",
+        plugin_id,
+        other_user_id,
+    )
+    .await
+    .expect("Failed to check for pending tasks");
+
+    assert!(!result, "Should not match task with different user_id");
+}
+
+/// Test that has_pending_or_processing does not match different task_type
+#[tokio::test]
+async fn test_has_pending_or_processing_different_task_type() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    // Enqueue a sync task
+    let task_type = TaskType::UserPluginSync { plugin_id, user_id };
+    TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    // Check for recommendations type instead
+    let result = TaskRepository::has_pending_or_processing(
+        &db,
+        "user_plugin_recommendations",
+        plugin_id,
+        user_id,
+    )
+    .await
+    .expect("Failed to check for pending tasks");
+
+    assert!(!result, "Should not match different task_type");
+}
+
+/// Test has_pending_or_processing with recommendations task type
+#[tokio::test]
+async fn test_has_pending_or_processing_recommendations_task() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let plugin_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+
+    // Enqueue a recommendations task
+    let task_type = TaskType::UserPluginRecommendations { plugin_id, user_id };
+    TaskRepository::enqueue(&db, task_type, 0, None)
+        .await
+        .expect("Failed to enqueue task");
+
+    let result = TaskRepository::has_pending_or_processing(
+        &db,
+        "user_plugin_recommendations",
+        plugin_id,
+        user_id,
+    )
+    .await
+    .expect("Failed to check for pending tasks");
+
+    assert!(result, "Should find the pending recommendations task");
+}
