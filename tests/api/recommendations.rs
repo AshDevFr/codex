@@ -421,3 +421,66 @@ async fn test_recommendations_disabled_plugin_returns_404() {
 
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+// =============================================================================
+// Task Deduplication Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_refresh_recommendations_deduplication() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id =
+        create_recommendation_plugin(&db, "recommendations-anilist", "AniList Recommendations")
+            .await;
+
+    // Enable the plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Simulate being connected by setting oauth tokens
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        &db,
+        instance.id,
+        "fake_access_token",
+        Some("fake_refresh_token"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // First refresh — should succeed
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth("/api/v1/user/recommendations/refresh", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+    assert!(body.get("taskId").is_some());
+
+    // Second refresh — should return 409 Conflict
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth("/api/v1/user/recommendations/refresh", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body = response.expect("Expected error body");
+    assert_eq!(
+        body["message"],
+        "Recommendation refresh already in progress"
+    );
+}

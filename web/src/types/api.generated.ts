@@ -24048,6 +24048,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Sync already in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     get_sync_status: {

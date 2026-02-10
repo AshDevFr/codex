@@ -272,6 +272,35 @@ impl TaskRepository {
         query.one(db).await.context("Failed to find existing task")
     }
 
+    /// Check if a pending or processing task exists with matching params.
+    ///
+    /// Used for task types that store their identity in JSON params rather than
+    /// FK columns (e.g., UserPluginSync, UserPluginRecommendations). Loads all
+    /// pending/processing tasks of the given type and checks params in Rust.
+    pub async fn has_pending_or_processing(
+        db: &DatabaseConnection,
+        task_type: &str,
+        plugin_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool> {
+        let tasks = Tasks::find()
+            .filter(tasks::Column::TaskType.eq(task_type))
+            .filter(tasks::Column::Status.is_in(["pending", "processing"]))
+            .all(db)
+            .await
+            .context("Failed to check for existing tasks")?;
+
+        let plugin_id_str = plugin_id.to_string();
+        let user_id_str = user_id.to_string();
+
+        Ok(tasks.iter().any(|task| {
+            task.params.as_ref().is_some_and(|params| {
+                params.get("plugin_id").and_then(|v| v.as_str()) == Some(&plugin_id_str)
+                    && params.get("user_id").and_then(|v| v.as_str()) == Some(&user_id_str)
+            })
+        }))
+    }
+
     /// Claim next available task (atomic operation using SKIP LOCKED for Postgres, transaction for SQLite)
     ///
     /// # Arguments

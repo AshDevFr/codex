@@ -734,6 +734,7 @@ pub async fn update_user_plugin_config(
         (status = 400, description = "Plugin is not a sync provider or not connected"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Plugin not enabled for this user"),
+        (status = 409, description = "Sync already in progress"),
     ),
     tag = "User Plugins"
 )]
@@ -778,6 +779,20 @@ pub async fn trigger_sync(
         return Err(ApiError::BadRequest(
             "Plugin is not connected. Complete authentication before syncing.".to_string(),
         ));
+    }
+
+    // Check for duplicate pending/processing sync task
+    let has_existing = TaskRepository::has_pending_or_processing(
+        &state.db,
+        "user_plugin_sync",
+        plugin_id,
+        auth.user_id,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to check existing tasks: {}", e)))?;
+
+    if has_existing {
+        return Err(ApiError::Conflict("Sync already in progress".to_string()));
     }
 
     // Enqueue sync task

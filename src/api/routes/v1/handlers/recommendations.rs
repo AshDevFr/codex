@@ -186,6 +186,7 @@ pub async fn get_recommendations(
         (status = 200, description = "Refresh task enqueued", body = RecommendationsRefreshResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "No recommendation plugin enabled"),
+        (status = 409, description = "Recommendation refresh already in progress"),
     ),
     tag = "Recommendations"
 )]
@@ -194,6 +195,22 @@ pub async fn refresh_recommendations(
     auth: AuthContext,
 ) -> Result<Json<RecommendationsRefreshResponse>, ApiError> {
     let (plugin, _instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
+
+    // Check for duplicate pending/processing recommendation task
+    let has_existing = TaskRepository::has_pending_or_processing(
+        &state.db,
+        "user_plugin_recommendations",
+        plugin.id,
+        auth.user_id,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to check existing tasks: {}", e)))?;
+
+    if has_existing {
+        return Err(ApiError::Conflict(
+            "Recommendation refresh already in progress".to_string(),
+        ));
+    }
 
     let task_type = TaskType::UserPluginRecommendations {
         plugin_id: plugin.id,

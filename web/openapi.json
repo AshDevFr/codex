@@ -11834,6 +11834,9 @@
           },
           "404": {
             "description": "Plugin not enabled for this user"
+          },
+          "409": {
+            "description": "Sync already in progress"
           }
         }
       }

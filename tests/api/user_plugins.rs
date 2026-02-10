@@ -1145,3 +1145,119 @@ async fn test_sync_status_live_degrades_gracefully() {
     let error_msg = body["liveError"].as_str().unwrap();
     assert!(!error_msg.is_empty());
 }
+
+// =============================================================================
+// Task Deduplication Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_trigger_sync_deduplication() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
+
+    // Enable the plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Simulate being connected by setting oauth tokens
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        &db,
+        instance.id,
+        "fake_access_token",
+        Some("fake_refresh_token"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // First sync trigger — should succeed
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_request_with_auth(&format!("/api/v1/user/plugins/{}/sync", plugin_id), &token);
+    let (status, response): (StatusCode, Option<SyncTriggerResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let resp = response.expect("Expected response body");
+    assert!(!resp.task_id.is_nil());
+
+    // Second sync trigger — should return 409 Conflict
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_request_with_auth(&format!("/api/v1/user/plugins/{}/sync", plugin_id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body = response.expect("Expected error body");
+    assert_eq!(body["message"], "Sync already in progress");
+}
+
+#[tokio::test]
+async fn test_trigger_sync_deduplication_different_users() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_a_id, token_a) = create_user_and_token(&db, &state, "usera").await;
+    let (user_b_id, token_b) = create_user_and_token(&db, &state, "userb").await;
+
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
+
+    // Enable plugin for both users
+    for (user_id, token) in [(user_a_id, &token_a), (user_b_id, &token_b)] {
+        let app = create_test_router(state.clone()).await;
+        let request =
+            post_request_with_auth(&format!("/api/v1/user/plugins/{}/enable", plugin_id), token);
+        let (status, _): (StatusCode, Option<UserPluginDto>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+
+        // Set credentials
+        let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+            .await
+            .unwrap()
+            .unwrap();
+        UserPluginsRepository::update_oauth_tokens(
+            &db,
+            instance.id,
+            "fake_token",
+            Some("fake_refresh"),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+
+    // User A triggers sync
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync", plugin_id),
+        &token_a,
+    );
+    let (status, _): (StatusCode, Option<SyncTriggerResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // User B triggers sync — should also succeed (different user)
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync", plugin_id),
+        &token_b,
+    );
+    let (status, _): (StatusCode, Option<SyncTriggerResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+}
