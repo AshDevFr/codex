@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { applyStaleness } from "./index.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AniListClient } from "./anilist.js";
+import { applyStaleness, provider, setClient, setSearchFallback, setViewerId } from "./index.js";
 
 // =============================================================================
 // applyStaleness Tests
@@ -98,5 +99,169 @@ describe("applyStaleness", () => {
       const veryOld = new Date(Date.now() - 1000 * 24 * 60 * 60 * 1000).toISOString();
       expect(applyStaleness("reading", veryOld, 1, 0)).toBe("on_hold");
     });
+  });
+});
+
+// =============================================================================
+// pushProgress — searchFallback toggle Tests
+// =============================================================================
+
+describe("pushProgress searchFallback", () => {
+  function makeMockClient(overrides?: {
+    searchManga?: AniListClient["searchManga"];
+    saveEntry?: AniListClient["saveEntry"];
+    getMangaList?: AniListClient["getMangaList"];
+  }) {
+    return {
+      getViewer: vi.fn(),
+      getMangaList:
+        overrides?.getMangaList ??
+        vi.fn().mockResolvedValue({
+          pageInfo: { total: 0, currentPage: 1, lastPage: 1, hasNextPage: false },
+          entries: [],
+        }),
+      saveEntry:
+        overrides?.saveEntry ??
+        vi.fn().mockResolvedValue({
+          id: 1,
+          mediaId: 42,
+          status: "CURRENT",
+          score: 0,
+          progress: 0,
+          progressVolumes: 1,
+        }),
+      searchManga: overrides?.searchManga ?? vi.fn().mockResolvedValue(null),
+    } as unknown as AniListClient;
+  }
+
+  afterEach(() => {
+    setClient(null);
+    setViewerId(null);
+    setSearchFallback(false); // restore default
+  });
+
+  it("resolves entry via searchManga when searchFallback=true and externalId is empty", async () => {
+    setSearchFallback(true);
+    const mockClient = makeMockClient({
+      searchManga: vi.fn().mockResolvedValue({ id: 42, title: { english: "One Piece" } }),
+    });
+    setClient(mockClient);
+    setViewerId(1);
+
+    const result = await provider.pushProgress({
+      entries: [
+        {
+          externalId: "",
+          title: "One Piece",
+          status: "reading",
+          progress: { volumes: 5 },
+        },
+      ],
+    });
+
+    expect(result.success).toHaveLength(1);
+    expect(result.failed).toHaveLength(0);
+    expect(result.success[0].externalId).toBe("42");
+    expect(result.success[0].status).toBe("created");
+    expect(mockClient.searchManga).toHaveBeenCalledWith("One Piece");
+  });
+
+  it("fails entry when searchFallback=false and externalId is empty", async () => {
+    setSearchFallback(false);
+    const mockClient = makeMockClient({
+      searchManga: vi.fn().mockResolvedValue({ id: 42, title: { english: "One Piece" } }),
+    });
+    setClient(mockClient);
+    setViewerId(1);
+
+    const result = await provider.pushProgress({
+      entries: [
+        {
+          externalId: "",
+          title: "One Piece",
+          status: "reading",
+          progress: { volumes: 5 },
+        },
+      ],
+    });
+
+    expect(result.success).toHaveLength(0);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].status).toBe("failed");
+    expect(result.failed[0].error).toContain("Invalid media ID");
+    expect(mockClient.searchManga).not.toHaveBeenCalled();
+  });
+
+  it("fails entry when searchFallback=true but search returns no result", async () => {
+    setSearchFallback(true);
+    const mockClient = makeMockClient({
+      searchManga: vi.fn().mockResolvedValue(null),
+    });
+    setClient(mockClient);
+    setViewerId(1);
+
+    const result = await provider.pushProgress({
+      entries: [
+        {
+          externalId: "",
+          title: "Obscure Manga",
+          status: "reading",
+          progress: { volumes: 1 },
+        },
+      ],
+    });
+
+    expect(result.success).toHaveLength(0);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].error).toContain("No AniList match found");
+    expect(mockClient.searchManga).toHaveBeenCalledWith("Obscure Manga");
+  });
+
+  it("does not call searchManga when externalId is a valid number", async () => {
+    setSearchFallback(true);
+    const mockClient = makeMockClient();
+    setClient(mockClient);
+    setViewerId(1);
+
+    const result = await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 3 },
+        },
+      ],
+    });
+
+    expect(result.success).toHaveLength(1);
+    expect(result.success[0].externalId).toBe("42");
+    expect(mockClient.searchManga).not.toHaveBeenCalled();
+  });
+
+  it("reports 'updated' when mediaId already exists in user list", async () => {
+    setSearchFallback(true);
+    const mockClient = makeMockClient({
+      searchManga: vi.fn().mockResolvedValue({ id: 100, title: { english: "Known" } }),
+      getMangaList: vi.fn().mockResolvedValue({
+        pageInfo: { total: 1, currentPage: 1, lastPage: 1, hasNextPage: false },
+        entries: [{ mediaId: 100 }],
+      }),
+    });
+    setClient(mockClient);
+    setViewerId(1);
+
+    const result = await provider.pushProgress({
+      entries: [
+        {
+          externalId: "",
+          title: "Known",
+          status: "reading",
+          progress: { volumes: 2 },
+        },
+      ],
+    });
+
+    expect(result.success).toHaveLength(1);
+    expect(result.success[0].status).toBe("updated");
   });
 });

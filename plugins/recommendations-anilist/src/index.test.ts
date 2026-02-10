@@ -7,6 +7,7 @@ import {
   pickSeedEntries,
   resolveAniListIds,
   setClient,
+  setSearchFallback,
 } from "./index.js";
 
 // =============================================================================
@@ -460,6 +461,101 @@ describe("resolveAniListIds", () => {
     expect(result.get("s2")?.anilistId).toBe(77);
     expect(result.get("s3")?.anilistId).toBe(77);
     expect(mockClient.searchManga).toHaveBeenCalledTimes(2);
+  });
+});
+
+// =============================================================================
+// resolveAniListIds — searchFallback toggle Tests
+// =============================================================================
+
+describe("resolveAniListIds searchFallback toggle", () => {
+  afterEach(() => {
+    setClient(null);
+    setSearchFallback(true); // restore default
+  });
+
+  function makeMockClient(overrides: {
+    searchManga?: (
+      title: string,
+    ) => Promise<{ id: number; title: { romaji?: string; english?: string } } | null>;
+  }) {
+    return {
+      getViewerId: vi.fn(),
+      getRecommendationsForMedia: vi.fn(),
+      getUserMangaIds: vi.fn(),
+      searchManga: overrides.searchManga ?? vi.fn().mockResolvedValue(null),
+    } as unknown as Parameters<typeof setClient>[0];
+  }
+
+  it("calls searchManga when searchFallback is true and no external ID", async () => {
+    setSearchFallback(true);
+    const mockClient = makeMockClient({
+      searchManga: vi.fn().mockResolvedValue({ id: 42, title: { english: "Berserk" } }),
+    });
+    setClient(mockClient);
+
+    const entries = [makeEntry({ seriesId: "s1", title: "Berserk", userRating: 75 })];
+    const result = await resolveAniListIds(entries);
+
+    expect(result.size).toBe(1);
+    expect(result.get("s1")?.anilistId).toBe(42);
+    expect(mockClient.searchManga).toHaveBeenCalledWith("Berserk");
+  });
+
+  it("skips searchManga when searchFallback is false and no external ID", async () => {
+    setSearchFallback(false);
+    const mockClient = makeMockClient({
+      searchManga: vi.fn().mockResolvedValue({ id: 42, title: { english: "Berserk" } }),
+    });
+    setClient(mockClient);
+
+    const entries = [makeEntry({ seriesId: "s1", title: "Berserk", userRating: 75 })];
+    const result = await resolveAniListIds(entries);
+
+    expect(result.size).toBe(0);
+    expect(mockClient.searchManga).not.toHaveBeenCalled();
+  });
+
+  it("still resolves via external ID when searchFallback is false", async () => {
+    setSearchFallback(false);
+    const mockClient = makeMockClient({});
+    setClient(mockClient);
+
+    const entries = [
+      makeEntry({
+        seriesId: "s1",
+        title: "Berserk",
+        externalIds: [{ source: EXTERNAL_ID_SOURCE_ANILIST, externalId: "21" }],
+      }),
+    ];
+    const result = await resolveAniListIds(entries);
+
+    expect(result.size).toBe(1);
+    expect(result.get("s1")?.anilistId).toBe(21);
+    expect(mockClient.searchManga).not.toHaveBeenCalled();
+  });
+
+  it("mixes matched and unmatched entries with searchFallback disabled", async () => {
+    setSearchFallback(false);
+    const mockClient = makeMockClient({
+      searchManga: vi.fn().mockResolvedValue({ id: 99, title: { english: "Found" } }),
+    });
+    setClient(mockClient);
+
+    const entries = [
+      makeEntry({
+        seriesId: "s1",
+        title: "Has ID",
+        externalIds: [{ source: EXTERNAL_ID_SOURCE_ANILIST, externalId: "10" }],
+      }),
+      makeEntry({ seriesId: "s2", title: "No ID" }),
+    ];
+    const result = await resolveAniListIds(entries);
+
+    expect(result.size).toBe(1);
+    expect(result.has("s1")).toBe(true);
+    expect(result.has("s2")).toBe(false);
+    expect(mockClient.searchManga).not.toHaveBeenCalled();
   });
 });
 
