@@ -262,6 +262,7 @@ async fn test_match_and_apply_no_source() {
         completed_at: None,
         notes: None,
         latest_updated_at: None,
+        title: None,
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -318,6 +319,7 @@ async fn test_match_and_apply_with_matches() {
             completed_at: None,
             notes: None,
             latest_updated_at: None,
+            title: None,
         },
         SyncEntry {
             external_id: "99999".to_string(), // no match
@@ -328,6 +330,7 @@ async fn test_match_and_apply_with_matches() {
             completed_at: None,
             notes: None,
             latest_updated_at: None,
+            title: None,
         },
     ];
 
@@ -395,6 +398,7 @@ async fn test_match_and_apply_pulled_entries_applies_progress() {
         completed_at: None,
         notes: None,
         latest_updated_at: None,
+        title: None,
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -490,6 +494,7 @@ async fn test_match_and_apply_skips_already_read() {
         completed_at: None,
         notes: None,
         latest_updated_at: None,
+        title: None,
     }];
 
     let (matched, applied) = pull::match_and_apply_pulled_entries(
@@ -513,6 +518,7 @@ fn default_codex_settings() -> CodexSyncSettings {
         include_in_progress: true,
         count_partial_progress: false,
         sync_ratings: true,
+        search_fallback: false,
     }
 }
 
@@ -1061,6 +1067,7 @@ async fn test_apply_pulled_entry_uses_volumes() {
         completed_at: None,
         notes: None,
         latest_updated_at: None,
+        title: None,
     };
 
     // Build pre-fetched maps for apply_pulled_entry (via match_and_apply which calls it)
@@ -1354,6 +1361,7 @@ async fn test_apply_pulled_rating_no_existing() {
         completed_at: None,
         notes: Some("Good so far".to_string()),
         latest_updated_at: None,
+        title: None,
     }];
 
     let (matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1442,6 +1450,7 @@ async fn test_apply_pulled_rating_existing_not_overwritten() {
         completed_at: None,
         notes: Some("AniList notes".to_string()),
         latest_updated_at: None,
+        title: None,
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(
@@ -1515,6 +1524,7 @@ async fn test_apply_pulled_rating_disabled() {
         completed_at: None,
         notes: Some("Should not be stored".to_string()),
         latest_updated_at: None,
+        title: None,
     }];
 
     let (_matched, _applied) = pull::match_and_apply_pulled_entries(

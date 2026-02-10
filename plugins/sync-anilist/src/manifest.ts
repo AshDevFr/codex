@@ -54,6 +54,15 @@ export const manifest = {
         required: false,
         default: 0,
       },
+      {
+        key: "searchFallback",
+        label: "Search Fallback",
+        description:
+          "When a series has no AniList ID, search by title to find a match and sync progress. Disable for strict matching only.",
+        type: "boolean" as const,
+        required: false,
+        default: false,
+      },
     ],
   },
   oauth: {
