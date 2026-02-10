@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { getBestTitle, stripHtml } from "./anilist.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AniListRecommendationClient, getBestTitle, stripHtml } from "./anilist.js";
 
 describe("getBestTitle", () => {
   it("prefers English title", () => {
@@ -60,5 +60,175 @@ describe("stripHtml", () => {
 
   it("preserves unknown entities as-is", () => {
     expect(stripHtml("&unknown;")).toBe("&unknown;");
+  });
+});
+
+// =============================================================================
+// AniListRecommendationClient Fetch Behavior Tests
+// =============================================================================
+
+describe("AniListRecommendationClient fetch behavior", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes AbortSignal.timeout to fetch", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { Viewer: { id: 1, name: "test" } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const client = new AniListRecommendationClient("test-token");
+    await client.getViewerId();
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeDefined();
+  });
+
+  it("wraps timeout errors with descriptive message", async () => {
+    const timeoutError = new DOMException(
+      "The operation was aborted due to timeout",
+      "TimeoutError",
+    );
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(timeoutError);
+
+    const client = new AniListRecommendationClient("test-token");
+    await expect(client.getViewerId()).rejects.toThrow(
+      "AniList API request timed out after 30 seconds",
+    );
+  });
+
+  it("re-throws non-timeout fetch errors as-is", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network failure"));
+
+    const client = new AniListRecommendationClient("test-token");
+    await expect(client.getViewerId()).rejects.toThrow("Network failure");
+  });
+
+  it("retries once on 429 then succeeds", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("", { status: 429, headers: { "Retry-After": "0" } }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { Viewer: { id: 42, name: "test" } } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    const client = new AniListRecommendationClient("test-token");
+    const id = await client.getViewerId();
+
+    expect(id).toBe(42);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws RateLimitError after retry exhausted on 429", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("", { status: 429, headers: { "Retry-After": "0" } }),
+    );
+
+    const client = new AniListRecommendationClient("test-token");
+    await expect(client.getViewerId()).rejects.toThrow("AniList rate limit exceeded");
+  });
+});
+
+// =============================================================================
+// Recommendation Pagination Tests
+// =============================================================================
+
+describe("AniListRecommendationClient pagination", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeRecommendationResponse(nodes: Array<{ id: number }>, hasNextPage: boolean) {
+    return {
+      data: {
+        Media: {
+          id: 1,
+          title: { romaji: "Test", english: "Test" },
+          recommendations: {
+            pageInfo: { hasNextPage },
+            nodes: nodes.map((n) => ({
+              rating: 10,
+              mediaRecommendation: {
+                id: n.id,
+                title: { romaji: `Rec ${n.id}` },
+                coverImage: { large: null },
+                description: null,
+                genres: [],
+                averageScore: 80,
+                siteUrl: `https://anilist.co/manga/${n.id}`,
+              },
+            })),
+          },
+        },
+      },
+    };
+  }
+
+  it("fetches multiple pages when hasNextPage is true", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(makeRecommendationResponse([{ id: 1 }, { id: 2 }], true)), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(makeRecommendationResponse([{ id: 3 }], false)), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    const client = new AniListRecommendationClient("test-token");
+    const nodes = await client.getRecommendationsForMedia(1, 10, 3);
+
+    expect(nodes).toHaveLength(3);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops at maxPages even if hasNextPage is true", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(makeRecommendationResponse([{ id: 1 }], true)), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(makeRecommendationResponse([{ id: 2 }], true)), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    const client = new AniListRecommendationClient("test-token");
+    const nodes = await client.getRecommendationsForMedia(1, 10, 2);
+
+    expect(nodes).toHaveLength(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetches single page when hasNextPage is false", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(makeRecommendationResponse([{ id: 1 }], false)), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const client = new AniListRecommendationClient("test-token");
+    const nodes = await client.getRecommendationsForMedia(1, 10, 3);
+
+    expect(nodes).toHaveLength(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

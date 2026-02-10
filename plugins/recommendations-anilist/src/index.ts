@@ -38,6 +38,7 @@ const logger = createLogger({ name: "recommendations-anilist", level: "debug" })
 let client: AniListRecommendationClient | null = null;
 let viewerId: number | null = null;
 let maxRecommendations = 20;
+let maxSeeds = 10;
 let storage: PluginStorage | null = null;
 
 /** Storage key for persisted dismissed recommendation IDs */
@@ -220,7 +221,6 @@ const provider: RecommendationProvider = {
     logger.debug(`User has ${userMangaIds.size} manga in AniList list`);
 
     // Pick seed entries (top-rated from user's library)
-    const maxSeeds = 10;
     const seeds = pickSeedEntries(library, maxSeeds);
     logger.debug(`Using ${seeds.length} seed entries from library of ${library.length}`);
 
@@ -315,6 +315,13 @@ createRecommendationPlugin({
     if (typeof rawMax === "number") {
       maxRecommendations = Math.max(1, Math.min(Math.round(rawMax), 50));
       logger.info(`Max recommendations set to: ${maxRecommendations}`);
+    }
+
+    // Read maxSeeds from adminConfig (defined in configSchema)
+    const rawSeeds = params.adminConfig?.maxSeeds ?? params.config?.maxSeeds;
+    if (typeof rawSeeds === "number") {
+      maxSeeds = Math.max(1, Math.min(Math.round(rawSeeds), 25));
+      logger.info(`Max seeds set to: ${maxSeeds}`);
     }
 
     // Capture the storage client and restore persisted dismissed IDs

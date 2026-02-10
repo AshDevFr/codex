@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  AniListClient,
   anilistStatusToSync,
   convertScoreFromAnilist,
   convertScoreToAnilist,
@@ -263,5 +264,98 @@ describe("score roundtrip", () => {
     const codex = 80;
     const anilist = convertScoreToAnilist(codex, "POINT_5");
     expect(convertScoreFromAnilist(anilist, "POINT_5")).toBe(80);
+  });
+});
+
+// =============================================================================
+// AniListClient Fetch Behavior Tests
+// =============================================================================
+
+describe("AniListClient fetch behavior", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes AbortSignal.timeout to fetch", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { Viewer: { id: 1, name: "test" } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const client = new AniListClient("test-token");
+    await client.getViewer();
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const callArgs = fetchSpy.mock.calls[0];
+    const init = callArgs[1] as RequestInit;
+    expect(init.signal).toBeDefined();
+  });
+
+  it("wraps timeout errors with descriptive message", async () => {
+    const timeoutError = new DOMException(
+      "The operation was aborted due to timeout",
+      "TimeoutError",
+    );
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(timeoutError);
+
+    const client = new AniListClient("test-token");
+    await expect(client.getViewer()).rejects.toThrow(
+      "AniList API request timed out after 30 seconds",
+    );
+  });
+
+  it("re-throws non-timeout fetch errors as-is", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network failure"));
+
+    const client = new AniListClient("test-token");
+    await expect(client.getViewer()).rejects.toThrow("Network failure");
+  });
+
+  it("retries once on 429 then succeeds", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response("", {
+          status: 429,
+          headers: { "Retry-After": "0" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              Viewer: {
+                id: 1,
+                name: "test",
+                avatar: {},
+                siteUrl: "",
+                options: { displayAdultContent: false },
+                mediaListOptions: { scoreFormat: "POINT_10" },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    const client = new AniListClient("test-token");
+    const viewer = await client.getViewer();
+
+    expect(viewer.id).toBe(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws RateLimitError after retry exhausted on 429", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("", {
+        status: 429,
+        headers: { "Retry-After": "0" },
+      }),
+    );
+
+    const client = new AniListClient("test-token");
+    await expect(client.getViewer()).rejects.toThrow("AniList rate limit exceeded");
   });
 });

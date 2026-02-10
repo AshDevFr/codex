@@ -183,15 +183,24 @@ export class AniListClient {
     variables: Record<string, unknown> | undefined,
     allowRetry: boolean,
   ): Promise<T> {
-    const response = await fetch(ANILIST_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${this.accessToken}`,
-      },
-      body: JSON.stringify({ query: queryStr, variables }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(ANILIST_API_URL, {
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({ query: queryStr, variables }),
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        throw new ApiError("AniList API request timed out after 30 seconds");
+      }
+      throw error;
+    }
 
     if (response.status === 401) {
       throw new AuthError("AniList access token is invalid or expired");

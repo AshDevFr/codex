@@ -34,6 +34,14 @@ export const manifest = {
         required: false,
         default: 20,
       },
+      {
+        key: "maxSeeds",
+        label: "Maximum Seed Titles",
+        description: "Number of top-rated library titles used to generate recommendations (1-25)",
+        type: "number" as const,
+        required: false,
+        default: 10,
+      },
     ],
   },
   oauth: {

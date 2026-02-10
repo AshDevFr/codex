@@ -32,6 +32,9 @@ const MEDIA_RECOMMENDATIONS_QUERY = `
         english
       }
       recommendations(page: $page, perPage: $perPage, sort: RATING_DESC) {
+        pageInfo {
+          hasNextPage
+        }
         nodes {
           rating
           mediaRecommendation {
@@ -116,15 +119,32 @@ export class AniListRecommendationClient {
   }
 
   private async query<T>(queryStr: string, variables?: Record<string, unknown>): Promise<T> {
-    const response = await fetch(ANILIST_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${this.accessToken}`,
-      },
-      body: JSON.stringify({ query: queryStr, variables }),
-    });
+    return this.executeQuery<T>(queryStr, variables, true);
+  }
+
+  private async executeQuery<T>(
+    queryStr: string,
+    variables: Record<string, unknown> | undefined,
+    allowRetry: boolean,
+  ): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(ANILIST_API_URL, {
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({ query: queryStr, variables }),
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        throw new ApiError("AniList API request timed out after 30 seconds");
+      }
+      throw error;
+    }
 
     if (response.status === 401) {
       throw new AuthError("AniList access token is invalid or expired");
@@ -133,10 +153,14 @@ export class AniListRecommendationClient {
     if (response.status === 429) {
       const retryAfter = response.headers.get("Retry-After");
       const retrySeconds = retryAfter ? Number.parseInt(retryAfter, 10) : 60;
-      throw new RateLimitError(
-        Number.isNaN(retrySeconds) ? 60 : retrySeconds,
-        "AniList rate limit exceeded",
-      );
+      const waitSeconds = Number.isNaN(retrySeconds) ? 60 : retrySeconds;
+
+      if (allowRetry) {
+        await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
+        return this.executeQuery<T>(queryStr, variables, false);
+      }
+
+      throw new RateLimitError(waitSeconds, "AniList rate limit exceeded");
     }
 
     if (!response.ok) {
@@ -181,20 +205,34 @@ export class AniListRecommendationClient {
     }
   }
 
-  /** Get community recommendations for a specific manga */
+  /** Get community recommendations for a specific manga (up to maxPages pages) */
   async getRecommendationsForMedia(
     mediaId: number,
     perPage = 10,
+    maxPages = 3,
   ): Promise<AniListRecommendationNode[]> {
-    const data = await this.query<{
-      Media: {
-        id: number;
-        title: { romaji?: string; english?: string };
-        recommendations: { nodes: AniListRecommendationNode[] };
-      };
-    }>(MEDIA_RECOMMENDATIONS_QUERY, { mediaId, page: 1, perPage });
+    const allNodes: AniListRecommendationNode[] = [];
+    let page = 1;
+    let hasMore = true;
 
-    return data.Media.recommendations.nodes;
+    while (hasMore && page <= maxPages) {
+      const data = await this.query<{
+        Media: {
+          id: number;
+          title: { romaji?: string; english?: string };
+          recommendations: {
+            pageInfo: { hasNextPage: boolean };
+            nodes: AniListRecommendationNode[];
+          };
+        };
+      }>(MEDIA_RECOMMENDATIONS_QUERY, { mediaId, page, perPage });
+
+      allNodes.push(...data.Media.recommendations.nodes);
+      hasMore = data.Media.recommendations.pageInfo.hasNextPage;
+      page++;
+    }
+
+    return allNodes;
   }
 
   /** Get all manga IDs in the user's list (for deduplication) */
