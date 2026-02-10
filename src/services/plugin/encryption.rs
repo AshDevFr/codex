@@ -25,7 +25,6 @@ pub struct CredentialEncryption {
     cipher: Aes256Gcm,
 }
 
-#[allow(dead_code)]
 impl CredentialEncryption {
     /// Create a new encryption service with the given 256-bit key
     pub fn new(key: &[u8; 32]) -> Self {
@@ -140,6 +139,7 @@ impl CredentialEncryption {
     }
 
     /// Generate a new random encryption key (32 bytes)
+    #[allow(dead_code)] // Operational utility: used by administrators for key generation
     pub fn generate_key() -> [u8; 32] {
         let mut key = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut key);
@@ -147,6 +147,7 @@ impl CredentialEncryption {
     }
 
     /// Generate a new random encryption key and encode as base64
+    #[allow(dead_code)] // Operational utility: used by administrators for key generation
     pub fn generate_key_base64() -> String {
         BASE64.encode(Self::generate_key())
     }

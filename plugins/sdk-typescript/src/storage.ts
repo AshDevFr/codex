@@ -35,7 +35,7 @@
  * ```
  */
 
-import type { JsonRpcErrorResponse, JsonRpcRequest, JsonRpcSuccessResponse } from "./types/rpc.js";
+import type { JsonRpcError, JsonRpcRequest } from "./types/rpc.js";
 
 // =============================================================================
 // Storage Types
@@ -227,10 +227,10 @@ export class PluginStorage {
     this.pendingRequests.delete(id as string | number);
 
     if ("error" in obj && obj.error) {
-      const err = (obj as unknown as JsonRpcErrorResponse).error;
+      const err = obj.error as JsonRpcError;
       pending.reject(new StorageError(err.message, err.code, err.data));
     } else {
-      pending.resolve((obj as unknown as JsonRpcSuccessResponse).result);
+      pending.resolve(obj.result);
     }
   }
 

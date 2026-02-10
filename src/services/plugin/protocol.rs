@@ -7,10 +7,6 @@
 //! are designed for serialization/deserialization. They may not all be used internally
 //! yet, but form the complete API contract for plugin communication.
 
-// Allow dead code for protocol types that are part of the API contract but not yet used internally.
-// These types are essential for the complete plugin protocol specification.
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -18,6 +14,7 @@ use serde_json::Value;
 pub const JSONRPC_VERSION: &str = "2.0";
 
 /// Plugin protocol version
+#[allow(dead_code)] // Protocol contract: sent to plugins during initialize
 pub const PROTOCOL_VERSION: &str = "1.0";
 
 // =============================================================================
@@ -62,6 +59,7 @@ pub struct JsonRpcRequest {
 
 impl JsonRpcRequest {
     /// Create a new JSON-RPC request
+    #[allow(dead_code)] // Protocol contract: used by plugins and tests
     pub fn new(id: impl Into<RequestId>, method: impl Into<String>, params: Option<Value>) -> Self {
         Self {
             jsonrpc: JSONRPC_VERSION.to_string(),
@@ -72,6 +70,7 @@ impl JsonRpcRequest {
     }
 
     /// Create a request without parameters
+    #[allow(dead_code)] // Protocol contract: convenience constructor
     pub fn without_params(id: impl Into<RequestId>, method: impl Into<String>) -> Self {
         Self::new(id, method, None)
     }
@@ -111,6 +110,7 @@ impl JsonRpcResponse {
     }
 
     /// Check if the response is an error
+    #[allow(dead_code)] // Protocol contract: response inspection utility
     pub fn is_error(&self) -> bool {
         self.error.is_some()
     }
@@ -134,6 +134,7 @@ impl JsonRpcError {
         }
     }
 
+    #[allow(dead_code)] // Protocol contract: error constructor with payload
     pub fn with_data(code: i32, message: impl Into<String>, data: Value) -> Self {
         Self {
             code,
@@ -150,8 +151,10 @@ impl JsonRpcError {
 /// Standard JSON-RPC error codes
 pub mod error_codes {
     /// Invalid JSON was received
+    #[allow(dead_code)] // Standard JSON-RPC error code
     pub const PARSE_ERROR: i32 = -32700;
     /// The JSON sent is not a valid Request object
+    #[allow(dead_code)] // Standard JSON-RPC error code
     pub const INVALID_REQUEST: i32 = -32600;
     /// The method does not exist / is not available
     pub const METHOD_NOT_FOUND: i32 = -32601;
@@ -229,6 +232,7 @@ pub mod methods {
     /// Get personalized recommendations
     pub const RECOMMENDATIONS_GET: &str = "recommendations/get";
     /// Update taste profile from new user activity
+    #[allow(dead_code)] // Protocol contract: method available for future use
     pub const RECOMMENDATIONS_UPDATE_PROFILE: &str = "recommendations/updateProfile";
     /// Clear cached recommendations
     pub const RECOMMENDATIONS_CLEAR: &str = "recommendations/clear";
@@ -413,6 +417,7 @@ fn default_true() -> bool {
 
 impl OAuthConfig {
     /// Validate that the OAuth config has all required fields
+    #[allow(dead_code)] // Protocol contract: validation for plugin registration
     pub fn validate(&self) -> Result<(), String> {
         if self.authorization_url.is_empty() {
             return Err("OAuth authorization_url is required".to_string());
@@ -535,6 +540,7 @@ impl PluginScope {
     }
 
     /// Get scopes available for book metadata providers
+    #[allow(dead_code)] // Protocol contract: scope helpers for book metadata plugins
     pub fn book_scopes() -> Vec<Self> {
         vec![
             Self::BookDetail,
@@ -545,6 +551,7 @@ impl PluginScope {
     }
 
     /// Get all scopes (series + book + library)
+    #[allow(dead_code)] // Protocol contract: scope helpers for multi-content plugins
     pub fn all_scopes() -> Vec<Self> {
         vec![
             Self::SeriesDetail,
@@ -688,11 +695,13 @@ pub struct BookSearchParams {
 
 impl BookSearchParams {
     /// Check if this is an ISBN search
+    #[allow(dead_code)] // Protocol contract: query type inspection
     pub fn is_isbn_search(&self) -> bool {
         self.isbn.is_some()
     }
 
     /// Check if this is a query-based search
+    #[allow(dead_code)] // Protocol contract: query type inspection
     pub fn is_query_search(&self) -> bool {
         self.query.is_some()
     }
@@ -1204,6 +1213,7 @@ pub struct InitializeParams {
 // =============================================================================
 
 /// Data included with rate limit errors
+#[allow(dead_code)] // Protocol contract: rate limit error payload schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RateLimitErrorData {
