@@ -75,7 +75,9 @@ Codex applies multiple layers of security to ensure plugins operate safely and u
 
 ### Credential & Token Encryption
 
-All sensitive data — OAuth tokens, API keys, and plugin credentials — is encrypted at rest using **AES-256-GCM** (authenticated encryption). Each value is encrypted with a random 96-bit nonce, ensuring identical plaintext produces different ciphertext. The encryption key is derived from the `CODEX_ENCRYPTION_KEY` environment variable (a base64-encoded 32-byte key).
+All sensitive data — OAuth tokens, API keys, and plugin credentials — is encrypted at rest using **AES-256-GCM** (authenticated encryption). Each value is encrypted with a random 96-bit nonce, ensuring identical plaintext produces different ciphertext. The encryption key is provided via the `CODEX_ENCRYPTION_KEY` environment variable (a base64-encoded 32-byte key).
+
+For key generation instructions, rotation procedures, and requirements, see the [Plugin Credential Encryption](../configuration#plugin-credential-encryption) section in the Configuration guide.
 
 ### Data Isolation
 

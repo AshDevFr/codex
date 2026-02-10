@@ -537,6 +537,75 @@ CODEX_RATE_LIMIT_ENABLED=false
 Disabling rate limiting may expose your server to abuse. Only disable for trusted networks or development environments.
 :::
 
+## Plugin Credential Encryption
+
+Codex encrypts sensitive plugin data at rest — including OAuth tokens, refresh tokens, and plugin credentials — using **AES-256-GCM** authenticated encryption. This section covers setting up and managing the encryption key.
+
+### Setting Up the Encryption Key
+
+The encryption key is provided via the `CODEX_ENCRYPTION_KEY` environment variable. It must be a **base64-encoded 32-byte (256-bit) key**.
+
+Generate a key using OpenSSL:
+
+```bash
+openssl rand -base64 32
+```
+
+Then set it as an environment variable:
+
+```bash
+export CODEX_ENCRYPTION_KEY="your-generated-base64-key-here"
+```
+
+Or in a Docker Compose file:
+
+```yaml
+environment:
+  CODEX_ENCRYPTION_KEY: "your-generated-base64-key-here"
+```
+
+:::danger Required for Plugins
+The encryption key is **required** when using sync or recommendation plugins that store OAuth tokens. Without it, plugin connection attempts will fail with a "Service Unavailable" error. Metadata-only plugins (like Open Library) do not require an encryption key.
+:::
+
+### What the Key Protects
+
+| Data | When Encrypted |
+|------|----------------|
+| OAuth access tokens | When a user connects a sync/recommendation plugin |
+| OAuth refresh tokens | When the external service issues a refresh token |
+| Plugin credentials | When a plugin stores API keys or secrets |
+
+All encrypted values use a random 96-bit nonce, so encrypting the same token twice produces different ciphertext. Decryption requires the exact same key that was used for encryption.
+
+### Key Requirements
+
+- **Length**: Exactly 32 bytes (256 bits) before base64 encoding
+- **Encoding**: Standard base64 (RFC 4648)
+- **Persistence**: Must remain the same across Codex restarts — changing the key without re-encrypting data will make existing tokens undecryptable
+
+### Key Rotation
+
+Codex does not currently support automatic key rotation. If you need to rotate the encryption key, follow this manual procedure:
+
+1. **Stop Codex** — ensure no requests are in flight
+2. **Have all users disconnect their plugins** — go to **Settings > Integrations** and click **Disconnect** on each plugin connection. This deletes the encrypted tokens from the database
+3. **Update the encryption key** — set `CODEX_ENCRYPTION_KEY` to the new key
+4. **Start Codex**
+5. **Have users reconnect their plugins** — each user re-authorizes via OAuth, and new tokens are encrypted with the new key
+
+:::tip Simpler Alternative
+Since disconnecting and reconnecting plugins re-issues fresh OAuth tokens encrypted with the current key, this is the simplest and safest rotation method. No data migration or scripting is required.
+:::
+
+:::caution Lost Key
+If you lose the encryption key, all stored OAuth tokens become undecryptable. Users will need to disconnect and reconnect their plugins to issue new tokens. No plugin configuration or storage data is lost — only the encrypted credentials.
+:::
+
+### Future Enhancement
+
+Automatic key rotation with key versioning (storing the key version alongside encrypted data for seamless re-encryption) is planned for a future release.
+
 ## Environment Variables
 
 All configuration options can be overridden with environment variables using the `CODEX_` prefix.
@@ -602,6 +671,9 @@ CODEX_PDF_CACHE_DIR=data/cache
 CODEX_KOMGA_API_ENABLED=true
 CODEX_KOMGA_API_PREFIX=komga
 
+# Plugin Credential Encryption
+CODEX_ENCRYPTION_KEY=your-base64-encoded-32-byte-key
+
 # Rate Limiting
 CODEX_RATE_LIMIT_ENABLED=true
 CODEX_RATE_LIMIT_ANONYMOUS_RPS=10
@@ -638,6 +710,7 @@ These settings are read from the config file at startup:
 - Server host/port
 - PDF rendering settings (DPI, cache directory, PDFium library path)
 - Rate limiting settings
+- Plugin encryption key (`CODEX_ENCRYPTION_KEY`)
 
 ## Example Configurations
 
@@ -725,6 +798,7 @@ CODEX_DATABASE_POSTGRES_USERNAME=<from secret>
 CODEX_DATABASE_POSTGRES_PASSWORD=<from secret>
 CODEX_DATABASE_POSTGRES_DATABASE_NAME=codex
 CODEX_AUTH_JWT_SECRET=<from secret>
+CODEX_ENCRYPTION_KEY=<from secret>
 ```
 
 ## Configuration Validation
@@ -816,10 +890,11 @@ For detailed configuration, see the [Preprocessing Rules Guide](./preprocessing-
 ## Security Best Practices
 
 1. **Use strong JWT secrets** - Generate with `openssl rand -base64 32`
-2. **Never commit secrets** - Use environment variables or secret managers
-3. **Use SSL for PostgreSQL** - Set `ssl_mode: verify-full` in production
-4. **Restrict bind address** - Use `127.0.0.1` unless needed externally
-5. **Disable API docs in production** - Set `enable_api_docs: false`
+2. **Set a plugin encryption key** - Required for sync/recommendation plugins; generate with `openssl rand -base64 32`
+3. **Never commit secrets** - Use environment variables or secret managers
+4. **Use SSL for PostgreSQL** - Set `ssl_mode: verify-full` in production
+5. **Restrict bind address** - Use `127.0.0.1` unless needed externally
+6. **Disable API docs in production** - Set `enable_api_docs: false`
 
 ## Next Steps
 
