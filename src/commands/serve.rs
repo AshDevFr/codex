@@ -288,6 +288,9 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     plugin_manager.start_health_checks().await;
     info!("  Plugin health checks started (60s interval)");
 
+    // Initialize OAuth state manager (shared between API and workers for cleanup)
+    let oauth_state_manager = Arc::new(crate::services::user_plugin::OAuthStateManager::new());
+
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
     let mut worker_shutdown_channels = Vec::new();
@@ -321,6 +324,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             config.files.clone(),
             Some(pdf_page_cache.clone()),
             Some(plugin_manager.clone()),
+            Some(oauth_state_manager.clone()),
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
@@ -358,7 +362,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         plugin_manager: plugin_manager.clone(),
         plugin_metrics_service,
         oidc_service,
-        oauth_state_manager: Arc::new(crate::services::user_plugin::OAuthStateManager::new()),
+        oauth_state_manager: oauth_state_manager.clone(),
     });
 
     // Build router using API module

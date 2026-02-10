@@ -267,7 +267,6 @@ impl OAuthStateManager {
     }
 
     /// Clean up expired pending flows
-    #[allow(dead_code)]
     pub fn cleanup_expired(&self) -> usize {
         let now = Utc::now();
         let ttl = Duration::seconds(OAUTH_STATE_TTL_SECS);
@@ -288,10 +287,17 @@ impl OAuthStateManager {
         removed
     }
 
-    /// Get the number of pending flows (for testing/monitoring)
-    #[allow(dead_code)]
+    /// Get the total number of pending flows (used in tests and monitoring)
     pub fn pending_count(&self) -> usize {
         self.pending_flows.len()
+    }
+
+    /// Get the number of pending flows for a specific user (for rate-limiting)
+    pub fn pending_count_for_user(&self, user_id: Uuid) -> usize {
+        self.pending_flows
+            .iter()
+            .filter(|entry| entry.value().user_id == user_id)
+            .count()
     }
 }
 
@@ -532,5 +538,49 @@ mod tests {
         assert_eq!(manager.pending_count(), 1);
         assert!(manager.validate_state(&state2).is_ok());
         assert_eq!(manager.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_pending_count_for_user() {
+        let manager = OAuthStateManager::new();
+        let config = test_oauth_config();
+        let user_a = Uuid::new_v4();
+        let user_b = Uuid::new_v4();
+
+        // Start flows for user_a
+        manager
+            .start_oauth_flow(
+                Uuid::new_v4(),
+                user_a,
+                &config,
+                "client-id",
+                "https://codex.local/callback",
+            )
+            .unwrap();
+        manager
+            .start_oauth_flow(
+                Uuid::new_v4(),
+                user_a,
+                &config,
+                "client-id",
+                "https://codex.local/callback",
+            )
+            .unwrap();
+
+        // Start a flow for user_b
+        manager
+            .start_oauth_flow(
+                Uuid::new_v4(),
+                user_b,
+                &config,
+                "client-id",
+                "https://codex.local/callback",
+            )
+            .unwrap();
+
+        assert_eq!(manager.pending_count(), 3);
+        assert_eq!(manager.pending_count_for_user(user_a), 2);
+        assert_eq!(manager.pending_count_for_user(user_b), 1);
+        assert_eq!(manager.pending_count_for_user(Uuid::new_v4()), 0);
     }
 }

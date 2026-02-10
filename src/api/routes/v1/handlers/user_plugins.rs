@@ -433,6 +433,18 @@ pub async fn oauth_start(
         ));
     }
 
+    // Rate-limit OAuth flow initiation: max 3 pending flows per user
+    const MAX_PENDING_OAUTH_FLOWS_PER_USER: usize = 3;
+    let pending = state
+        .oauth_state_manager
+        .pending_count_for_user(auth.user_id);
+    if pending >= MAX_PENDING_OAUTH_FLOWS_PER_USER {
+        return Err(ApiError::TooManyRequests(format!(
+            "Too many pending OAuth flows (max {}). Please complete or wait for existing flows to expire.",
+            MAX_PENDING_OAUTH_FLOWS_PER_USER
+        )));
+    }
+
     // Get OAuth config from manifest
     let oauth_config = get_oauth_config_from_plugin(&plugin).ok_or_else(|| {
         ApiError::BadRequest("Plugin does not have OAuth configuration".to_string())
