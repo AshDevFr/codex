@@ -423,6 +423,199 @@ async fn test_recommendations_disabled_plugin_returns_404() {
 }
 
 // =============================================================================
+// Get Recommendations Tests (connected plugin, error handling)
+// =============================================================================
+
+#[tokio::test]
+async fn test_get_recommendations_connected_plugin_graceful_error() {
+    // When a recommendation plugin is enabled and "connected" (has OAuth tokens),
+    // but the plugin process can't actually be spawned (because the command is "echo"),
+    // the endpoint should return a 500 error (not crash) with a meaningful message.
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id =
+        create_recommendation_plugin(&db, "recommendations-anilist", "AniList Recommendations")
+            .await;
+
+    // Enable the plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Simulate being connected by setting oauth tokens
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        &db,
+        instance.id,
+        "fake_access_token",
+        Some("fake_refresh_token"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // GET recommendations — plugin process will fail to spawn (command is "echo")
+    // but the endpoint should handle this gracefully
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/user/recommendations", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    // Should return 500 with an error message, not panic or hang
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    let body = response.expect("Expected error response body");
+    assert!(body.get("message").is_some());
+}
+
+#[tokio::test]
+async fn test_get_recommendations_enabled_but_not_connected() {
+    // When a recommendation plugin is enabled but not connected (no OAuth tokens),
+    // the GET endpoint should still attempt to call the plugin.
+    // This tests that the API layer doesn't require connected status for GET.
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id =
+        create_recommendation_plugin(&db, "recommendations-anilist", "AniList Recommendations")
+            .await;
+
+    // Enable the plugin but don't set OAuth tokens
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // GET recommendations — should fail gracefully (plugin spawn will fail)
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/user/recommendations", &token);
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    // Plugin spawn will fail, should get 500 not a panic
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+// =============================================================================
+// Dismiss Recommendation Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_dismiss_recommendation_connected_plugin_graceful_error() {
+    // When a recommendation plugin is enabled and connected, but the plugin
+    // process can't actually be spawned, dismiss should return an error gracefully.
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id =
+        create_recommendation_plugin(&db, "recommendations-anilist", "AniList Recommendations")
+            .await;
+
+    // Enable and connect the plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        &db,
+        instance.id,
+        "fake_access_token",
+        Some("fake_refresh_token"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Dismiss a recommendation — plugin will fail to spawn
+    let body = json!({"reason": "not_interested"});
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_json_request_with_auth("/api/v1/user/recommendations/12345/dismiss", &body, &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    // Should return 500 with error message, not panic
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    let body = response.expect("Expected error response body");
+    assert!(body.get("message").is_some());
+}
+
+#[tokio::test]
+async fn test_dismiss_recommendation_without_reason() {
+    // Dismiss should accept an empty body (reason is optional)
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    // No plugin enabled — should return 404, but validates the request is accepted
+    let body = json!({});
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_json_request_with_auth("/api/v1/user/recommendations/12345/dismiss", &body, &token);
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_dismiss_recommendation_various_reasons() {
+    // Verify all valid reason strings are accepted by the endpoint
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    for reason in &["not_interested", "already_read", "already_owned"] {
+        let body = json!({"reason": reason});
+        let app = create_test_router(state.clone()).await;
+        let request = post_json_request_with_auth(
+            "/api/v1/user/recommendations/test-id/dismiss",
+            &body,
+            &token,
+        );
+        let (status, _): (StatusCode, Option<serde_json::Value>) =
+            make_json_request(app, request).await;
+
+        // Will be 404 since no plugin enabled, but validates request parsing
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "reason '{}' should be accepted",
+            reason
+        );
+    }
+}
+
+// =============================================================================
 // Task Deduplication Tests
 // =============================================================================
 

@@ -151,19 +151,7 @@ pub async fn get_recommendations(
     let recommendations = response
         .recommendations
         .into_iter()
-        .map(|r| RecommendationDto {
-            external_id: r.external_id,
-            external_url: r.external_url,
-            title: r.title,
-            cover_url: r.cover_url,
-            summary: r.summary,
-            genres: r.genres,
-            score: r.score,
-            reason: r.reason,
-            based_on: r.based_on,
-            codex_series_id: r.codex_series_id,
-            in_library: r.in_library,
-        })
+        .map(to_recommendation_dto)
         .collect();
 
     Ok(Json(RecommendationsResponse {
@@ -234,6 +222,28 @@ pub async fn refresh_recommendations(
         task_id,
         message: format!("Refreshing recommendations from {}", plugin.display_name),
     }))
+}
+
+/// Convert a plugin Recommendation to an API RecommendationDto
+///
+/// This is extracted for testability — the handler maps the plugin's response
+/// into the API response type field-by-field.
+fn to_recommendation_dto(
+    r: crate::services::plugin::recommendations::Recommendation,
+) -> RecommendationDto {
+    RecommendationDto {
+        external_id: r.external_id,
+        external_url: r.external_url,
+        title: r.title,
+        cover_url: r.cover_url,
+        summary: r.summary,
+        genres: r.genres,
+        score: r.score,
+        reason: r.reason,
+        based_on: r.based_on,
+        codex_series_id: r.codex_series_id,
+        in_library: r.in_library,
+    }
 }
 
 /// Dismiss a recommendation
@@ -310,4 +320,166 @@ pub async fn dismiss_recommendation(
     Ok(Json(DismissRecommendationResponse {
         dismissed: response.dismissed,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::plugin::recommendations::Recommendation;
+
+    /// Verify that the Recommendation → RecommendationDto mapping preserves all fields
+    /// when all optional fields are populated.
+    #[test]
+    fn test_to_recommendation_dto_full_fields() {
+        let rec = Recommendation {
+            external_id: "12345".to_string(),
+            external_url: Some("https://anilist.co/manga/12345".to_string()),
+            title: "Vinland Saga".to_string(),
+            cover_url: Some("https://img.anilist.co/cover.jpg".to_string()),
+            summary: Some("A Viking epic about revenge and redemption".to_string()),
+            genres: vec!["Action".to_string(), "Historical".to_string()],
+            score: 0.95,
+            reason: "Because you rated Berserk 10/10".to_string(),
+            based_on: vec!["Berserk".to_string(), "Vagabond".to_string()],
+            codex_series_id: Some("codex-uuid-abc".to_string()),
+            in_library: true,
+        };
+
+        let dto = to_recommendation_dto(rec);
+
+        assert_eq!(dto.external_id, "12345");
+        assert_eq!(
+            dto.external_url.as_deref(),
+            Some("https://anilist.co/manga/12345")
+        );
+        assert_eq!(dto.title, "Vinland Saga");
+        assert_eq!(
+            dto.cover_url.as_deref(),
+            Some("https://img.anilist.co/cover.jpg")
+        );
+        assert_eq!(
+            dto.summary.as_deref(),
+            Some("A Viking epic about revenge and redemption")
+        );
+        assert_eq!(dto.genres, vec!["Action", "Historical"]);
+        assert!((dto.score - 0.95).abs() < f64::EPSILON);
+        assert_eq!(dto.reason, "Because you rated Berserk 10/10");
+        assert_eq!(dto.based_on, vec!["Berserk", "Vagabond"]);
+        assert_eq!(dto.codex_series_id.as_deref(), Some("codex-uuid-abc"));
+        assert!(dto.in_library);
+    }
+
+    /// Verify that the mapping handles minimal recommendations (None/empty optional fields).
+    #[test]
+    fn test_to_recommendation_dto_minimal_fields() {
+        let rec = Recommendation {
+            external_id: "99".to_string(),
+            external_url: None,
+            title: "Some Manga".to_string(),
+            cover_url: None,
+            summary: None,
+            genres: vec![],
+            score: 0.5,
+            reason: "You might like it".to_string(),
+            based_on: vec![],
+            codex_series_id: None,
+            in_library: false,
+        };
+
+        let dto = to_recommendation_dto(rec);
+
+        assert_eq!(dto.external_id, "99");
+        assert!(dto.external_url.is_none());
+        assert_eq!(dto.title, "Some Manga");
+        assert!(dto.cover_url.is_none());
+        assert!(dto.summary.is_none());
+        assert!(dto.genres.is_empty());
+        assert!((dto.score - 0.5).abs() < f64::EPSILON);
+        assert_eq!(dto.reason, "You might like it");
+        assert!(dto.based_on.is_empty());
+        assert!(dto.codex_series_id.is_none());
+        assert!(!dto.in_library);
+    }
+
+    /// Verify the full RecommendationsResponse can be serialized with the expected JSON shape.
+    #[test]
+    fn test_recommendations_response_json_shape() {
+        let recs = vec![
+            to_recommendation_dto(Recommendation {
+                external_id: "1".to_string(),
+                external_url: Some("https://example.com/1".to_string()),
+                title: "Manga A".to_string(),
+                cover_url: Some("https://img.example.com/a.jpg".to_string()),
+                summary: Some("Description A".to_string()),
+                genres: vec!["Action".to_string()],
+                score: 0.9,
+                reason: "Based on your library".to_string(),
+                based_on: vec!["Source A".to_string()],
+                codex_series_id: None,
+                in_library: false,
+            }),
+            to_recommendation_dto(Recommendation {
+                external_id: "2".to_string(),
+                external_url: None,
+                title: "Manga B".to_string(),
+                cover_url: None,
+                summary: None,
+                genres: vec![],
+                score: 0.7,
+                reason: "Popular in your genre".to_string(),
+                based_on: vec![],
+                codex_series_id: Some("series-id".to_string()),
+                in_library: true,
+            }),
+        ];
+
+        let plugin_id = Uuid::new_v4();
+        let response = RecommendationsResponse {
+            recommendations: recs,
+            plugin_id,
+            plugin_name: "AniList Recommendations".to_string(),
+            generated_at: Some("2026-02-09T12:00:00Z".to_string()),
+            cached: true,
+        };
+
+        let json = serde_json::to_value(&response).unwrap();
+
+        // Top-level fields
+        assert_eq!(json["pluginId"], plugin_id.to_string());
+        assert_eq!(json["pluginName"], "AniList Recommendations");
+        assert_eq!(json["generatedAt"], "2026-02-09T12:00:00Z");
+        assert!(json["cached"].as_bool().unwrap());
+
+        // Recommendations array
+        let recs_arr = json["recommendations"].as_array().unwrap();
+        assert_eq!(recs_arr.len(), 2);
+
+        // First recommendation (full fields)
+        let rec0 = &recs_arr[0];
+        assert_eq!(rec0["externalId"], "1");
+        assert_eq!(rec0["externalUrl"], "https://example.com/1");
+        assert_eq!(rec0["title"], "Manga A");
+        assert_eq!(rec0["coverUrl"], "https://img.example.com/a.jpg");
+        assert_eq!(rec0["summary"], "Description A");
+        assert_eq!(rec0["genres"].as_array().unwrap().len(), 1);
+        assert_eq!(rec0["score"], 0.9);
+        assert_eq!(rec0["reason"], "Based on your library");
+        assert_eq!(rec0["basedOn"].as_array().unwrap().len(), 1);
+        assert!(!rec0["inLibrary"].as_bool().unwrap());
+        // codexSeriesId should be absent (None)
+        assert!(rec0.get("codexSeriesId").is_none());
+
+        // Second recommendation (minimal fields — optional fields absent)
+        let rec1 = &recs_arr[1];
+        assert_eq!(rec1["externalId"], "2");
+        assert!(rec1.get("externalUrl").is_none());
+        assert_eq!(rec1["title"], "Manga B");
+        assert!(rec1.get("coverUrl").is_none());
+        assert!(rec1.get("summary").is_none());
+        assert!(rec1.get("genres").is_none()); // empty vec is skipped
+        assert_eq!(rec1["score"], 0.7);
+        assert!(rec1.get("basedOn").is_none()); // empty vec is skipped
+        assert_eq!(rec1["codexSeriesId"], "series-id");
+        assert!(rec1["inLibrary"].as_bool().unwrap());
+    }
 }
