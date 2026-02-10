@@ -1734,3 +1734,237 @@ async fn test_build_push_entries_always_sends_volumes() {
         "chapters should be None — server always sends volumes"
     );
 }
+
+// =========================================================================
+// search_fallback settings and unmatched entries tests
+// =========================================================================
+
+#[test]
+fn test_codex_settings_search_fallback_default() {
+    let config = serde_json::json!({});
+    let settings = CodexSyncSettings::from_user_config(&config);
+    assert!(
+        !settings.search_fallback,
+        "search_fallback should default to false"
+    );
+}
+
+#[test]
+fn test_codex_settings_search_fallback_enabled() {
+    let config = serde_json::json!({"_codex": {"searchFallback": true}});
+    let settings = CodexSyncSettings::from_user_config(&config);
+    assert!(settings.search_fallback);
+}
+
+#[test]
+fn test_codex_settings_search_fallback_disabled() {
+    let config = serde_json::json!({"_codex": {"searchFallback": false}});
+    let settings = CodexSyncSettings::from_user_config(&config);
+    assert!(!settings.search_fallback);
+}
+
+#[tokio::test]
+async fn test_build_push_entries_includes_unmatched_with_search_fallback() {
+    let (db, _temp_dir) = create_test_db().await;
+
+    let library = LibraryRepository::create(
+        db.sea_orm_connection(),
+        "Test Library",
+        "/test/path",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Series A: has external ID
+    let series_a =
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Matched Manga", None)
+            .await
+            .unwrap();
+
+    SeriesExternalIdRepository::create(
+        db.sea_orm_connection(),
+        series_a.id,
+        "api:anilist",
+        "100",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let book_a = create_test_book(db.sea_orm_connection(), series_a.id, library.id, 1, 50).await;
+
+    // Series B: NO external ID, but has metadata title and reading progress
+    let series_b =
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Unmatched Manga", None)
+            .await
+            .unwrap();
+
+    let book_b = create_test_book(db.sea_orm_connection(), series_b.id, library.id, 1, 100).await;
+
+    let user = create_test_user(db.sea_orm_connection()).await;
+
+    // Mark books as read in both series
+    ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book_a.id, 50)
+        .await
+        .unwrap();
+    ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book_b.id, 100)
+        .await
+        .unwrap();
+
+    // With search_fallback=false: only matched series
+    let settings_no_fallback = default_codex_settings();
+    let entries = push::build_push_entries(
+        db.sea_orm_connection(),
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &settings_no_fallback,
+    )
+    .await;
+    assert_eq!(
+        entries.len(),
+        1,
+        "Only matched series without search_fallback"
+    );
+    assert_eq!(entries[0].external_id, "100");
+
+    // With search_fallback=true: matched + unmatched series
+    let settings_with_fallback = CodexSyncSettings {
+        search_fallback: true,
+        ..default_codex_settings()
+    };
+    let entries = push::build_push_entries(
+        db.sea_orm_connection(),
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &settings_with_fallback,
+    )
+    .await;
+    assert_eq!(
+        entries.len(),
+        2,
+        "Both matched and unmatched with search_fallback"
+    );
+
+    // Check the unmatched entry
+    let unmatched = entries.iter().find(|e| e.external_id.is_empty());
+    assert!(
+        unmatched.is_some(),
+        "Unmatched entry should have empty external_id"
+    );
+    let unmatched = unmatched.unwrap();
+    assert_eq!(
+        unmatched.title,
+        Some("Unmatched Manga".to_string()),
+        "Unmatched entry should have title from metadata"
+    );
+    assert!(unmatched.progress.is_some());
+    assert_eq!(unmatched.progress.as_ref().unwrap().volumes, Some(1));
+}
+
+#[tokio::test]
+async fn test_build_push_entries_unmatched_skips_no_metadata() {
+    let (db, _temp_dir) = create_test_db().await;
+
+    let library = LibraryRepository::create(
+        db.sea_orm_connection(),
+        "Test Library",
+        "/test/path",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // Series with NO external ID and reading progress but also no series metadata title
+    // Note: SeriesRepository::create auto-creates metadata with the series name,
+    // so this series will have metadata. We test that it shows up.
+    let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Has Title", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 50).await;
+
+    let user = create_test_user(db.sea_orm_connection()).await;
+    ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 50)
+        .await
+        .unwrap();
+
+    let settings = CodexSyncSettings {
+        search_fallback: true,
+        ..default_codex_settings()
+    };
+
+    let entries = push::build_push_entries(
+        db.sea_orm_connection(),
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &settings,
+    )
+    .await;
+
+    // Should include the unmatched entry since it has metadata (from series creation)
+    assert_eq!(entries.len(), 1);
+    assert!(entries[0].external_id.is_empty());
+    assert_eq!(entries[0].title, Some("Has Title".to_string()));
+}
+
+#[tokio::test]
+async fn test_build_push_entries_populates_title_for_matched() {
+    let (db, _temp_dir) = create_test_db().await;
+
+    let library = LibraryRepository::create(
+        db.sea_orm_connection(),
+        "Test Library",
+        "/test/path",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(
+        db.sea_orm_connection(),
+        library.id,
+        "Title Test Manga",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let book = create_test_book(db.sea_orm_connection(), series.id, library.id, 1, 100).await;
+
+    let user = create_test_user(db.sea_orm_connection()).await;
+    ReadProgressRepository::mark_as_read(db.sea_orm_connection(), user.id, book.id, 100)
+        .await
+        .unwrap();
+
+    SeriesExternalIdRepository::create(
+        db.sea_orm_connection(),
+        series.id,
+        "api:anilist",
+        "900",
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let entries = push::build_push_entries(
+        db.sea_orm_connection(),
+        user.id,
+        "api:anilist",
+        Uuid::new_v4(),
+        &default_codex_settings(),
+    )
+    .await;
+
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].title,
+        Some("Title Test Manga".to_string()),
+        "Matched entries should also have title populated from metadata"
+    );
+}

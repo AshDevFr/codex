@@ -50,6 +50,21 @@ let pauseAfterDays = 0;
 let dropAfterDays = 0;
 let searchFallback = false;
 
+/** Set the AniList client (exported for testing) */
+export function setClient(c: AniListClient | null): void {
+  client = c;
+}
+
+/** Set the viewer ID (exported for testing) */
+export function setViewerId(id: number | null): void {
+  viewerId = id;
+}
+
+/** Set the searchFallback flag (exported for testing) */
+export function setSearchFallback(enabled: boolean): void {
+  searchFallback = enabled;
+}
+
 // =============================================================================
 // Staleness Logic
 // =============================================================================
@@ -92,7 +107,8 @@ export function applyStaleness(
 // Sync Provider Implementation
 // =============================================================================
 
-const provider: SyncProvider = {
+/** Exported for testing */
+export const provider: SyncProvider = {
   async getUserInfo(): Promise<ExternalUserInfo> {
     if (!client) {
       throw new Error("Plugin not initialized - no AniList client");

@@ -359,3 +359,70 @@ describe("AniListClient fetch behavior", () => {
     await expect(client.getViewer()).rejects.toThrow("AniList rate limit exceeded");
   });
 });
+
+// =============================================================================
+// searchManga Tests
+// =============================================================================
+
+describe("AniListClient.searchManga", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns search result when found", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            Media: { id: 42, title: { romaji: "Berserk", english: "Berserk" } },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const client = new AniListClient("test-token");
+    const result = await client.searchManga("Berserk");
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe(42);
+    expect(result?.title.english).toBe("Berserk");
+  });
+
+  it("returns null when Media is null", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { Media: null } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const client = new AniListClient("test-token");
+    const result = await client.searchManga("Nonexistent Manga");
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null on API error (swallows exceptions)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ errors: [{ message: "Not found" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const client = new AniListClient("test-token");
+    const result = await client.searchManga("Error Manga");
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null on network error", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("Network failure"));
+
+    const client = new AniListClient("test-token");
+    const result = await client.searchManga("Network Manga");
+
+    expect(result).toBeNull();
+  });
+});

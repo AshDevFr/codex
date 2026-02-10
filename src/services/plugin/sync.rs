@@ -694,6 +694,73 @@ mod tests {
     }
 
     // =========================================================================
+    // SyncEntry title field Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sync_entry_with_title() {
+        let entry = SyncEntry {
+            external_id: "".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: Some(SyncProgress {
+                chapters: None,
+                volumes: Some(3),
+                pages: None,
+                total_chapters: None,
+                total_volumes: None,
+            }),
+            score: None,
+            started_at: None,
+            completed_at: None,
+            notes: None,
+            latest_updated_at: None,
+            title: Some("Berserk".to_string()),
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["title"], "Berserk");
+        assert_eq!(json["externalId"], "");
+    }
+
+    #[test]
+    fn test_sync_entry_title_omitted_when_none() {
+        let entry = SyncEntry {
+            external_id: "42".to_string(),
+            status: SyncReadingStatus::Reading,
+            progress: None,
+            score: None,
+            started_at: None,
+            completed_at: None,
+            notes: None,
+            latest_updated_at: None,
+            title: None,
+        };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert!(!json.as_object().unwrap().contains_key("title"));
+    }
+
+    #[test]
+    fn test_sync_entry_title_deserialization() {
+        let json = json!({
+            "externalId": "",
+            "status": "reading",
+            "title": "One Piece"
+        });
+        let entry: SyncEntry = serde_json::from_value(json).unwrap();
+        assert_eq!(entry.title, Some("One Piece".to_string()));
+        assert_eq!(entry.external_id, "");
+    }
+
+    #[test]
+    fn test_sync_entry_title_absent_deserializes_to_none() {
+        let json = json!({
+            "externalId": "42",
+            "status": "completed"
+        });
+        let entry: SyncEntry = serde_json::from_value(json).unwrap();
+        assert!(entry.title.is_none());
+    }
+
+    // =========================================================================
     // is_sync_method Tests
     // =========================================================================
 
