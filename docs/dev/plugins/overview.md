@@ -219,9 +219,15 @@ For detailed configuration options, see the [Preprocessing Rules Guide](/docs/pr
 ## Security
 
 - **RBAC**: Plugins have configurable permissions (what metadata they can write)
-- **Process Isolation**: Plugins run as separate processes
-- **Health Monitoring**: Failing plugins are automatically disabled
-- **Credential Encryption**: API keys are encrypted at rest
+- **Process Isolation**: Plugins run as separate child processes with a command allowlist and environment variable blocklist
+- **Health Monitoring**: Failing plugins are automatically disabled after repeated failures
+- **Credential Encryption**: API keys and OAuth tokens are encrypted at rest using AES-256-GCM
+- **Data Isolation**: All plugin storage is scoped per user-plugin connection (`user_plugin_id`)
+- **Request Timeouts**: JSON-RPC requests have a 30-second timeout to prevent hangs
+- **OAuth Protection**: CSRF state tokens (single-use, 5-minute TTL) and PKCE S256 challenge
+- **Storage Quotas**: 100 keys and 1 MB per value per user-plugin connection
+
+For full details, see the [Plugin Security Model](/docs/plugins#security-model) in the user documentation.
 
 ## Next Steps
 

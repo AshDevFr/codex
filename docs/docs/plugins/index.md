@@ -69,6 +69,120 @@ The settings are stored in the user's plugin config under the `_codex` namespace
 
 These are **server-interpreted** — the server reads them to filter and build sync entries. Plugins never read `_codex` keys. Plugin-specific settings (like `progressUnit` for AniList) live in the plugin's own `userConfigSchema` and are only read by the plugin.
 
+## Security Model
+
+Codex applies multiple layers of security to ensure plugins operate safely and user data is protected.
+
+### Credential & Token Encryption
+
+All sensitive data — OAuth tokens, API keys, and plugin credentials — is encrypted at rest using **AES-256-GCM** (authenticated encryption). Each value is encrypted with a random 96-bit nonce, ensuring identical plaintext produces different ciphertext. The encryption key is derived from the `CODEX_ENCRYPTION_KEY` environment variable (a base64-encoded 32-byte key).
+
+### Data Isolation
+
+Plugin data is isolated per user. Each user-plugin connection has a unique `user_plugin_id`, and all storage operations — reads, writes, and deletes — are scoped to that ID at the database level. A plugin connected by one user cannot access another user's storage, tokens, or configuration.
+
+### Plugin Process Sandboxing
+
+Plugins run as **child processes** spawned by Codex, communicating over stdin/stdout via JSON-RPC. This provides process-level isolation:
+
+- **Command allowlist**: Only approved commands can be used to launch plugins (`node`, `npx`, `python`, `python3`, `uv`, `uvx`, and paths under `/opt/codex/plugins/`). Custom commands can be allowed via the `CODEX_PLUGIN_ALLOWED_COMMANDS` environment variable.
+- **Environment variable blocklist**: Dangerous environment variables are stripped before spawning plugins, including `LD_*`, `DYLD_*`, `PATH`, `HOME`, `PYTHONPATH`, `NODE_PATH`, and others that could enable library injection or path manipulation.
+- **Request timeout**: Every JSON-RPC request has a **30-second timeout**. If a plugin hangs or becomes unresponsive, the request fails gracefully rather than blocking the server.
+- **Health monitoring**: Failed requests are tracked, and plugins that fail repeatedly are automatically disabled.
+
+### OAuth Security
+
+OAuth connections (used by sync and recommendation plugins) are protected by:
+
+- **CSRF state tokens**: Each OAuth flow generates a cryptographically random 32-byte state parameter. State tokens are single-use (consumed on callback) and expire after **5 minutes**.
+- **PKCE (S256)**: When the external service supports it, Codex uses Proof Key for Code Exchange with SHA-256 challenge method to prevent authorization code interception.
+- **Rate limiting**: Each user is limited to **3 concurrent pending OAuth flows**. Additional attempts return HTTP 429 until existing flows complete or expire.
+- **Automatic cleanup**: Expired OAuth state entries are periodically removed from memory by a background cleanup task.
+
+### Storage Quotas
+
+Plugin storage is subject to per-plugin limits to prevent abuse:
+
+- **Maximum 100 keys** per user-plugin connection
+- **Maximum 1 MB** per stored value
+
+These limits are enforced on writes only — existing data is not affected. Updating an existing key (upsert) does not count against the key limit.
+
+## Privacy & Data Handling
+
+### What Data Leaves Codex
+
+The data sent to external services depends on the plugin type:
+
+| Plugin Type | Data Sent | Destination |
+|-------------|-----------|-------------|
+| **Metadata** | Series titles, ISBNs, search queries | Metadata provider API (e.g., Open Library) |
+| **Sync** | Series titles, reading progress (books read), scores, dates, reading status | Tracking service API (e.g., AniList) |
+| **Recommendations** | Library series titles (used as "seed" entries) | Recommendation service API (e.g., AniList) |
+
+Codex never sends file contents, file paths, or raw images to external services.
+
+### What Data Is Stored Locally
+
+- **OAuth tokens**: Encrypted at rest in the Codex database (AES-256-GCM)
+- **API keys / credentials**: Encrypted at rest in the Codex database
+- **Plugin configuration**: Stored in the database, scoped per user-plugin connection
+- **Plugin storage**: Key-value data stored by plugins (e.g., sync state, caches), scoped per user-plugin connection
+- **Cached recommendations**: Stored locally in the database, refreshed on demand
+
+### Disconnecting a Plugin
+
+To remove all data associated with a plugin connection:
+
+1. Go to **Settings** > **Integrations**
+2. Click **Disconnect** on the plugin
+3. This deletes: OAuth tokens, stored credentials, plugin configuration, and all plugin storage data
+
+The external service retains any data already synced to it (e.g., your AniList reading list). To remove that data, use the external service's own settings.
+
+## Troubleshooting OAuth Connections
+
+### Popup Blocked
+
+**Symptom**: Clicking "Connect" opens nothing, or the browser blocks the popup.
+
+**Fix**: Allow popups for your Codex URL in your browser settings, then try again.
+
+### Redirect URI Mismatch
+
+**Symptom**: The external service shows "redirect_uri mismatch" or a similar error.
+
+**Fix**: Ensure the OAuth redirect URI configured in the external service matches your Codex URL exactly. For AniList, the redirect URL should be set in your [AniList Developer Settings](https://anilist.co/settings/developer). The correct redirect URL is shown in the plugin's OAuth configuration panel in **Settings** > **Plugins**.
+
+### Token Expired / "Not Connected"
+
+**Symptom**: A plugin that was previously connected now shows as disconnected or fails with authentication errors.
+
+**Fix**: OAuth tokens can expire. Click **Connect** again to re-authorize. Your plugin configuration and storage data are preserved — only the token is refreshed.
+
+### Rate Limited by External Service
+
+**Symptom**: Sync or recommendations fail with errors mentioning "rate limit", "429", or "too many requests".
+
+**Fix**: Wait a few minutes before retrying. AniList has a rate limit of approximately 90 requests per minute. If syncing a large library, the plugin automatically retries once on rate-limit responses. Repeated failures may require waiting longer.
+
+### "Connection Failed" or Timeout
+
+**Symptom**: OAuth flow completes but Codex shows "Connection failed", or the popup hangs.
+
+**Fix**:
+
+1. Check that your Codex server can reach the external service (network/firewall).
+2. Ensure you completed the OAuth flow within 5 minutes — state tokens expire after that.
+3. Try disconnecting and reconnecting the plugin.
+4. Check the Codex server logs for detailed error messages.
+
+### Too Many Connection Attempts
+
+**Symptom**: Clicking "Connect" returns a "Too Many Requests" error.
+
+**Fix**: You have 3 or more pending OAuth flows. Wait for them to expire (5 minutes) or complete one of them, then try again.
+
 ## Plugin Development
 
 Codex provides a TypeScript SDK for building metadata plugins. Plugins implement a JSON-RPC interface with methods for searching, matching, and retrieving metadata.
