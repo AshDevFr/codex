@@ -21,6 +21,12 @@ use super::storage::{
 };
 use crate::db::repositories::UserPluginDataRepository;
 
+/// Maximum number of storage keys allowed per plugin instance
+const MAX_KEYS_PER_PLUGIN: usize = 100;
+
+/// Maximum serialized size of a single storage value (1 MB)
+const MAX_VALUE_SIZE_BYTES: usize = 1_048_576;
+
 /// Handles storage requests from plugins.
 ///
 /// This handler is created per-connection with a specific `user_plugin_id`,
@@ -105,6 +111,81 @@ impl StorageRequestHandler {
             Ok(p) => p,
             Err(resp) => return resp.with_id(id),
         };
+
+        // Enforce value size limit
+        let serialized_size = serde_json::to_string(&params.data)
+            .map(|s| s.len())
+            .unwrap_or(0);
+        if serialized_size > MAX_VALUE_SIZE_BYTES {
+            warn!(
+                user_plugin_id = %self.user_plugin_id,
+                key = %params.key,
+                size = serialized_size,
+                max = MAX_VALUE_SIZE_BYTES,
+                "Storage value exceeds maximum size"
+            );
+            return JsonRpcResponse::error(
+                Some(id),
+                JsonRpcError::new(
+                    error_codes::INVALID_PARAMS,
+                    format!(
+                        "Storage value exceeds maximum size of {}MB",
+                        MAX_VALUE_SIZE_BYTES / 1_048_576
+                    ),
+                ),
+            );
+        }
+
+        // Enforce key count limit (only for new keys, not upserts)
+        let is_new_key =
+            match UserPluginDataRepository::get(&self.db, self.user_plugin_id, &params.key).await {
+                Ok(existing) => existing.is_none(),
+                Err(e) => {
+                    error!(error = %e, "Storage key existence check failed");
+                    return JsonRpcResponse::error(
+                        Some(id),
+                        JsonRpcError::new(
+                            error_codes::INTERNAL_ERROR,
+                            format!("Storage error: {}", e),
+                        ),
+                    );
+                }
+            };
+
+        if is_new_key {
+            match UserPluginDataRepository::list_keys(&self.db, self.user_plugin_id).await {
+                Ok(keys) => {
+                    if keys.len() >= MAX_KEYS_PER_PLUGIN {
+                        warn!(
+                            user_plugin_id = %self.user_plugin_id,
+                            key_count = keys.len(),
+                            max = MAX_KEYS_PER_PLUGIN,
+                            "Storage key limit exceeded"
+                        );
+                        return JsonRpcResponse::error(
+                            Some(id),
+                            JsonRpcError::new(
+                                error_codes::INVALID_PARAMS,
+                                format!(
+                                    "Storage key limit exceeded (max {} keys)",
+                                    MAX_KEYS_PER_PLUGIN
+                                ),
+                            ),
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!(error = %e, "Storage key count check failed");
+                    return JsonRpcResponse::error(
+                        Some(id),
+                        JsonRpcError::new(
+                            error_codes::INTERNAL_ERROR,
+                            format!("Storage error: {}", e),
+                        ),
+                    );
+                }
+            }
+        }
 
         // Parse optional expires_at
         let expires_at: Option<DateTime<Utc>> = match &params.expires_at {
@@ -585,5 +666,99 @@ mod tests {
         let request2 = JsonRpcRequest::new("abc".to_string(), "storage/list", None);
         let response2 = handler.handle_request(&request2).await;
         assert_eq!(response2.id, Some(RequestId::String("abc".to_string())));
+    }
+
+    #[tokio::test]
+    async fn test_storage_set_value_size_limit() {
+        let db = setup_test_db().await;
+        let (handler, _) = setup_handler(&db).await;
+
+        // Create a value that exceeds 1MB when serialized
+        let large_value = "x".repeat(MAX_VALUE_SIZE_BYTES + 1);
+        let req = make_request(
+            "storage/set",
+            Some(json!({"key": "big", "data": large_value})),
+        );
+        let resp = handler.handle_request(&req).await;
+
+        assert!(resp.is_error());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, error_codes::INVALID_PARAMS);
+        assert!(err.message.contains("maximum size"));
+    }
+
+    #[tokio::test]
+    async fn test_storage_set_value_at_limit_succeeds() {
+        let db = setup_test_db().await;
+        let (handler, _) = setup_handler(&db).await;
+
+        // A small value should work fine
+        let req = make_request(
+            "storage/set",
+            Some(json!({"key": "small", "data": "hello world"})),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error());
+    }
+
+    #[tokio::test]
+    async fn test_storage_set_key_count_limit() {
+        let db = setup_test_db().await;
+        let (handler, _) = setup_handler(&db).await;
+
+        // Fill up to the key limit
+        for i in 0..MAX_KEYS_PER_PLUGIN {
+            let req = make_request(
+                "storage/set",
+                Some(json!({"key": format!("key_{}", i), "data": i})),
+            );
+            let resp = handler.handle_request(&req).await;
+            assert!(
+                !resp.is_error(),
+                "Failed to set key_{}: {:?}",
+                i,
+                resp.error
+            );
+        }
+
+        // Attempting to add one more new key should fail
+        let req = make_request(
+            "storage/set",
+            Some(json!({"key": "one_too_many", "data": "overflow"})),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(resp.is_error());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, error_codes::INVALID_PARAMS);
+        assert!(err.message.contains("key limit exceeded"));
+    }
+
+    #[tokio::test]
+    async fn test_storage_upsert_at_key_limit_succeeds() {
+        let db = setup_test_db().await;
+        let (handler, _) = setup_handler(&db).await;
+
+        // Fill up to the key limit
+        for i in 0..MAX_KEYS_PER_PLUGIN {
+            let req = make_request(
+                "storage/set",
+                Some(json!({"key": format!("key_{}", i), "data": i})),
+            );
+            handler.handle_request(&req).await;
+        }
+
+        // Upsert an existing key should succeed even at the limit
+        let req = make_request(
+            "storage/set",
+            Some(json!({"key": "key_0", "data": "updated"})),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error(), "Upsert at key limit should succeed");
+
+        // Verify the value was updated
+        let get_req = make_request("storage/get", Some(json!({"key": "key_0"})));
+        let get_resp = handler.handle_request(&get_req).await;
+        let result: StorageGetResponse = serde_json::from_value(get_resp.result.unwrap()).unwrap();
+        assert_eq!(result.data.unwrap(), json!("updated"));
     }
 }

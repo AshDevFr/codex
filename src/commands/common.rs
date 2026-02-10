@@ -408,6 +408,7 @@ pub fn spawn_workers(
     files_config: crate::config::FilesConfig,
     pdf_page_cache: Option<Arc<crate::services::PdfPageCache>>,
     plugin_manager: Option<Arc<crate::services::plugin::PluginManager>>,
+    oauth_state_manager: Option<Arc<crate::services::user_plugin::OAuthStateManager>>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -444,6 +445,11 @@ pub fn spawn_workers(
         // Add plugin manager if available (for plugin auto-match tasks)
         if let Some(ref pm) = plugin_manager {
             task_worker = task_worker.with_plugin_manager(pm.clone());
+        }
+
+        // Add OAuth state manager if available (for cleaning up expired OAuth flows)
+        if let Some(ref osm) = oauth_state_manager {
+            task_worker = task_worker.with_oauth_state_manager(osm.clone());
         }
 
         let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();

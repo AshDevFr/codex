@@ -143,6 +143,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         config.files.clone(),
         Some(pdf_page_cache),
         Some(plugin_manager),
+        None, // No OAuth state manager in standalone worker (no API state to clean)
     );
 
     info!("All {} task workers started successfully", worker_count);

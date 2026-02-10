@@ -21,6 +21,7 @@ use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use crate::services::PdfPageCache;
 use crate::services::plugin::PluginManager;
+use crate::services::user_plugin::OAuthStateManager;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
@@ -122,6 +123,18 @@ impl TaskWorker {
     /// Set the event broadcaster for task progress events
     pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
         self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Set the OAuth state manager for cleaning up expired OAuth flows
+    ///
+    /// This re-registers the `CleanupPluginDataHandler` with the manager so it
+    /// can clean up expired in-memory OAuth state alongside expired storage data.
+    pub fn with_oauth_state_manager(mut self, manager: Arc<OAuthStateManager>) -> Self {
+        self.handlers.insert(
+            "cleanup_plugin_data".to_string(),
+            Arc::new(CleanupPluginDataHandler::new().with_oauth_state_manager(manager)),
+        );
         self
     }
 

@@ -15,6 +15,8 @@ pub enum ApiError {
     Conflict(String),
     /// Resource exists but cannot be processed (e.g., PDF without PDFium)
     UnprocessableEntity(String),
+    /// Too many requests — rate limit exceeded
+    TooManyRequests(String),
     /// Service is unavailable due to missing configuration or dependencies
     ServiceUnavailable(String),
     Internal(String),
@@ -62,6 +64,10 @@ impl IntoResponse for ApiError {
                 // Log at debug level - validation failures or unsupported operations
                 tracing::debug!(error = "UnprocessableEntity", message = %msg, "Unprocessable entity");
                 (StatusCode::UNPROCESSABLE_ENTITY, "UnprocessableEntity", msg)
+            }
+            ApiError::TooManyRequests(msg) => {
+                tracing::debug!(error = "TooManyRequests", message = %msg, "Rate limit exceeded");
+                (StatusCode::TOO_MANY_REQUESTS, "TooManyRequests", msg)
             }
             ApiError::ServiceUnavailable(msg) => {
                 // Log at warn level - server configuration issue
