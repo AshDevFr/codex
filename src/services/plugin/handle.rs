@@ -2,13 +2,6 @@
 //!
 //! This module provides the `PluginHandle` which manages a single plugin's lifecycle,
 //! including initialization, request handling, health tracking, and shutdown.
-//!
-//! Note: Some methods and error variants are designed for the complete plugin API
-//! but may not be called from external code yet.
-
-// Allow dead code for plugin API methods and error variants that are part of the
-// complete API surface but not yet called from external code.
-#![allow(dead_code)]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +12,7 @@ use serde_json::Value;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
-use super::health::{HealthState, HealthTracker};
+use super::health::HealthTracker;
 use super::process::{PluginProcess, PluginProcessConfig, ProcessError};
 use super::protocol::{
     InitializeParams, MetadataGetParams, MetadataMatchParams, MetadataSearchParams,
@@ -45,14 +38,8 @@ pub enum PluginError {
     #[error("Plugin is disabled: {reason}")]
     Disabled { reason: String },
 
-    #[error("Plugin health check failed: {0}")]
-    HealthCheckFailed(String),
-
     #[error("Plugin spawn failed: {0}")]
     SpawnFailed(String),
-
-    #[error("Invalid manifest: {0}")]
-    InvalidManifest(String),
 }
 
 /// Configuration for a plugin handle
@@ -176,21 +163,6 @@ impl PluginHandle {
     /// Get the cached manifest (if initialized)
     pub async fn manifest(&self) -> Option<PluginManifest> {
         self.manifest.read().await.clone()
-    }
-
-    /// Get the health state
-    pub async fn health_state(&self) -> HealthState {
-        self.health.state().await
-    }
-
-    /// Check if the plugin is currently running
-    pub async fn is_running(&self) -> bool {
-        matches!(*self.state.read().await, PluginState::Running)
-    }
-
-    /// Check if the plugin is disabled
-    pub async fn is_disabled(&self) -> bool {
-        matches!(*self.state.read().await, PluginState::Disabled { .. })
     }
 
     /// Spawn the plugin process and initialize it
@@ -364,12 +336,6 @@ impl PluginHandle {
         }
 
         Ok(())
-    }
-
-    /// Restart the plugin
-    pub async fn restart(&self) -> Result<PluginManifest, PluginError> {
-        self.stop().await?;
-        self.start().await
     }
 
     /// Send a ping to check if the plugin is responsive
@@ -557,23 +523,6 @@ impl PluginHandle {
         }
     }
 
-    /// Re-enable a disabled plugin
-    pub async fn enable(&self) -> Result<(), PluginError> {
-        let current_state = self.state.read().await.clone();
-
-        if let PluginState::Disabled { reason: _ } = current_state {
-            self.health.reset().await;
-            {
-                let mut state = self.state.write().await;
-                *state = PluginState::Idle;
-            }
-            info!("Plugin re-enabled");
-            Ok(())
-        } else {
-            Ok(()) // Already enabled
-        }
-    }
-
     /// Ensure the plugin is in a running state
     async fn ensure_running(&self) -> Result<(), PluginError> {
         let state = self.state.read().await.clone();
@@ -641,21 +590,6 @@ mod tests {
         let handle = PluginHandle::new(config);
 
         assert_eq!(handle.state().await, PluginState::Idle);
-        assert!(!handle.is_running().await);
-        assert!(!handle.is_disabled().await);
         assert!(handle.manifest().await.is_none());
     }
-
-    #[tokio::test]
-    async fn test_plugin_handle_enable_when_not_disabled() {
-        let config = PluginConfig::default();
-        let handle = PluginHandle::new(config);
-
-        // Should be a no-op when not disabled
-        handle.enable().await.unwrap();
-        assert_eq!(handle.state().await, PluginState::Idle);
-    }
-
-    // Integration tests would require a mock plugin process
-    // See tests/integration/plugin_handle.rs for full integration tests
 }

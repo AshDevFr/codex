@@ -1,14 +1,6 @@
 //! JSON-RPC Client for Plugin Communication
 //!
 //! This module provides a JSON-RPC client that communicates with plugins over stdio.
-//!
-//! Note: This module provides complete JSON-RPC client infrastructure.
-//! Some methods may not be called from external code yet but are part of
-//! the complete API for plugin RPC communication.
-
-// Allow dead code for RPC client infrastructure that is part of the
-// complete API surface but not yet fully integrated.
-#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,7 +12,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::{Mutex, oneshot};
 use tokio::time::timeout;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, warn};
 
 use super::process::{PluginProcess, ProcessError};
 use super::protocol::{
@@ -293,44 +285,6 @@ impl RpcClient {
         R: DeserializeOwned,
     {
         self.call::<(), R>(method, ()).await
-    }
-
-    /// Send a notification (no response expected)
-    pub async fn notify<P>(&self, method: &str, params: P) -> Result<(), RpcError>
-    where
-        P: Serialize,
-    {
-        let params_value = serde_json::to_value(params)?;
-
-        // Notifications don't have an id
-        let request = serde_json::json!({
-            "jsonrpc": JSONRPC_VERSION,
-            "method": method,
-            "params": params_value,
-        });
-
-        let request_json = serde_json::to_string(&request)?;
-        trace!(method, "Sending RPC notification");
-
-        let process = self.process.lock().await;
-        process.write_line(&request_json).await?;
-        Ok(())
-    }
-
-    /// Check if the underlying process is still running
-    pub async fn is_running(&self) -> bool {
-        // First check the fast atomic flag - if marked dead, don't bother checking process
-        if !self.process_alive.load(Ordering::Acquire) {
-            return false;
-        }
-        let mut process = self.process.lock().await;
-        process.is_running()
-    }
-
-    /// Get the process ID
-    pub async fn pid(&self) -> Option<u32> {
-        let process = self.process.lock().await;
-        process.pid()
     }
 
     /// Shutdown the RPC client and kill the process

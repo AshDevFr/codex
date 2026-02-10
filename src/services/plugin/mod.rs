@@ -89,7 +89,7 @@ pub mod sync;
 #[allow(unused_imports)]
 pub use handle::PluginHandle;
 #[allow(unused_imports)]
-pub use health::{HealthMonitor, HealthState, HealthTracker};
+pub use health::HealthTracker;
 #[allow(unused_imports)]
 pub use manager::{PluginManager, PluginManagerConfig, PluginManagerError};
 #[allow(unused_imports)]
