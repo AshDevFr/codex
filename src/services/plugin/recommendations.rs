@@ -17,8 +17,6 @@
 //! - `recommendations/updateProfile` - Update taste profile from new activity
 //! - `recommendations/clear` - Clear cached recommendations
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 
 use super::protocol::UserLibraryEntry;
@@ -110,6 +108,7 @@ pub struct Recommendation {
 ///
 /// Notifies the plugin of new user activity so it can update the
 /// taste profile used for generating recommendations.
+#[allow(dead_code)] // Protocol contract: updateProfile method not yet invoked by host
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileUpdateRequest {
@@ -118,6 +117,7 @@ pub struct ProfileUpdateRequest {
 }
 
 /// Response from `recommendations/updateProfile` method
+#[allow(dead_code)] // Protocol contract: updateProfile method not yet invoked by host
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileUpdateResponse {
@@ -185,7 +185,7 @@ pub struct RecommendationDismissResponse {
 // =============================================================================
 
 /// Check if a method name is a recommendation method
-#[allow(dead_code)] // Will be used for recommendation method routing/validation
+#[allow(dead_code)] // Protocol contract: mirrors is_storage_method() for recommendation methods
 pub fn is_recommendation_method(method: &str) -> bool {
     matches!(
         method,

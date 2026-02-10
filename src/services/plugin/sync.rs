@@ -239,7 +239,7 @@ pub struct SyncStatusResponse {
 // =============================================================================
 
 /// Check if a method name is a sync method
-#[allow(dead_code)] // Will be used for sync method routing/validation
+#[allow(dead_code)] // Protocol contract: mirrors is_storage_method() for sync methods
 pub fn is_sync_method(method: &str) -> bool {
     matches!(
         method,
