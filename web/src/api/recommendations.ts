@@ -1,51 +1,16 @@
+import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
-// =============================================================================
-// Types
-// =============================================================================
-
-// Types defined manually until OpenAPI types are regenerated.
-// These match the backend DTOs in src/api/routes/v1/dto/recommendations.rs
-
-/** A single recommendation */
-export interface RecommendationDto {
-  externalId: string;
-  externalUrl?: string;
-  title: string;
-  coverUrl?: string;
-  summary?: string;
-  genres?: string[];
-  score: number;
-  reason: string;
-  basedOn?: string[];
-  codexSeriesId?: string;
-  inLibrary: boolean;
-}
-
-/** Recommendations list response */
-export interface RecommendationsResponse {
-  recommendations: RecommendationDto[];
-  pluginId: string;
-  pluginName: string;
-  generatedAt?: string;
-  cached: boolean;
-}
-
-/** Refresh recommendations response */
-export interface RecommendationsRefreshResponse {
-  taskId: string;
-  message: string;
-}
-
-/** Dismiss recommendation request */
-export interface DismissRecommendationRequest {
-  reason?: string;
-}
-
-/** Dismiss recommendation response */
-export interface DismissRecommendationResponse {
-  dismissed: boolean;
-}
+// Re-export generated types for convenience
+export type RecommendationDto = components["schemas"]["RecommendationDto"];
+export type RecommendationsResponse =
+  components["schemas"]["RecommendationsResponse"];
+export type RecommendationsRefreshResponse =
+  components["schemas"]["RecommendationsRefreshResponse"];
+export type DismissRecommendationRequest =
+  components["schemas"]["DismissRecommendationRequest"];
+export type DismissRecommendationResponse =
+  components["schemas"]["DismissRecommendationResponse"];
 
 // =============================================================================
 // API Client

@@ -425,6 +425,11 @@ The following paths are exempt from rate limiting:
         v1::handlers::user_plugins::trigger_sync,
         v1::handlers::user_plugins::get_sync_status,
 
+        // Recommendation endpoints
+        v1::handlers::recommendations::get_recommendations,
+        v1::handlers::recommendations::refresh_recommendations,
+        v1::handlers::recommendations::dismiss_recommendation,
+
         // Sharing Tags endpoints
         v1::handlers::sharing_tags::list_sharing_tags,
         v1::handlers::sharing_tags::get_sharing_tag,
@@ -790,6 +795,13 @@ The following paths are exempt from rate limiting:
             v1::dto::SyncStatusDto,
             v1::dto::SyncStatusQuery,
 
+            // Recommendation DTOs
+            v1::dto::recommendations::RecommendationDto,
+            v1::dto::recommendations::RecommendationsResponse,
+            v1::dto::recommendations::RecommendationsRefreshResponse,
+            v1::dto::recommendations::DismissRecommendationRequest,
+            v1::dto::recommendations::DismissRecommendationResponse,
+
             // Plugin Actions DTOs
             v1::dto::PluginActionDto,
             v1::dto::PluginActionsResponse,
@@ -931,6 +943,7 @@ The following paths are exempt from rate limiting:
         (name = "Plugins", description = "Admin-managed external plugin processes"),
         (name = "Plugin Actions", description = "Plugin action discovery and execution for metadata fetching"),
         (name = "User Plugins", description = "User-facing plugin management, OAuth, and configuration"),
+        (name = "Recommendations", description = "Personalized recommendation endpoints"),
         (name = "Metrics", description = "Application metrics and statistics"),
         (name = "Filesystem", description = "Filesystem browsing for library paths"),
         (name = "Duplicates", description = "Duplicate book detection and management"),
@@ -1055,7 +1068,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "User Features",
-                "tags": ["Users", "User Preferences", "User Plugins", "Reading Progress"]
+                "tags": ["Users", "User Preferences", "User Plugins", "Recommendations", "Reading Progress"]
             },
             {
                 "name": "Background Jobs",

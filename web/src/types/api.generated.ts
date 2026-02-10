@@ -4110,6 +4110,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get personalized recommendations
+         * @description Returns recommendations from the user's enabled recommendation plugin.
+         *     The plugin may return cached results or generate fresh recommendations.
+         */
+        get: operations["get_recommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/recommendations/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh recommendations
+         * @description Enqueues a background task to regenerate recommendations by clearing
+         *     the cache and updating the taste profile.
+         */
+        post: operations["refresh_recommendations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/recommendations/{external_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a recommendation
+         * @description Tells the recommendation plugin that the user is not interested in a
+         *     particular recommendation, so it can be excluded from future results.
+         */
+        post: operations["dismiss_recommendation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/sharing-tags": {
         parameters: {
             query?: never;
@@ -7652,6 +7715,16 @@ export interface components {
             author?: string | null;
             /** @description Publisher (for publisher_hierarchy strategy) */
             publisher?: string | null;
+        };
+        /** @description Request body for POST /api/v1/user/recommendations/:id/dismiss */
+        DismissRecommendationRequest: {
+            /** @description Reason for dismissal */
+            reason?: string | null;
+        };
+        /** @description Response from POST /api/v1/user/recommendations/:id/dismiss */
+        DismissRecommendationResponse: {
+            /** @description Whether the dismissal was recorded */
+            dismissed: boolean;
         };
         /** @description A group of duplicate books */
         DuplicateGroup: {
@@ -12237,6 +12310,60 @@ export interface components {
              * @description Total number of pages in the book
              */
             totalPages: number;
+        };
+        /** @description A single recommendation for the user */
+        RecommendationDto: {
+            /** @description Titles that influenced this recommendation */
+            basedOn?: string[];
+            /** @description Codex series ID if matched to an existing series */
+            codexSeriesId?: string | null;
+            /** @description Cover image URL */
+            coverUrl?: string | null;
+            /** @description External ID on the source service */
+            externalId: string;
+            /** @description URL to the entry on the external service */
+            externalUrl?: string | null;
+            /** @description Genres */
+            genres?: string[];
+            /** @description Whether this series is already in the user's library */
+            inLibrary?: boolean;
+            /** @description Human-readable reason for this recommendation */
+            reason: string;
+            /**
+             * Format: double
+             * @description Confidence/relevance score (0.0 to 1.0)
+             */
+            score: number;
+            /** @description Summary/description */
+            summary?: string | null;
+            /** @description Title of the recommended series/book */
+            title: string;
+        };
+        /** @description Response from POST /api/v1/user/recommendations/refresh */
+        RecommendationsRefreshResponse: {
+            /** @description Human-readable status message */
+            message: string;
+            /**
+             * Format: uuid
+             * @description Task ID for tracking the refresh operation
+             */
+            taskId: string;
+        };
+        /** @description Response from GET /api/v1/user/recommendations */
+        RecommendationsResponse: {
+            /** @description Whether these are cached results */
+            cached?: boolean;
+            /** @description When these recommendations were generated */
+            generatedAt?: string | null;
+            /**
+             * Format: uuid
+             * @description Plugin that provided these recommendations
+             */
+            pluginId: string;
+            /** @description Plugin display name */
+            pluginName: string;
+            /** @description Personalized recommendations */
+            recommendations: components["schemas"]["RecommendationDto"][];
         };
         /** @description Register request */
         RegisterRequest: {
@@ -24294,6 +24421,122 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_recommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personalized recommendations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No recommendation plugin enabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_recommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refresh task enqueued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationsRefreshResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No recommendation plugin enabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recommendation refresh already in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_recommendation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description External ID of the recommendation to dismiss */
+                external_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissRecommendationRequest"];
+            };
+        };
+        responses: {
+            /** @description Recommendation dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissRecommendationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No recommendation plugin enabled */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
