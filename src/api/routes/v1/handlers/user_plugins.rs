@@ -17,6 +17,7 @@ use crate::db::repositories::{
 };
 use crate::services::plugin::protocol::{OAuthConfig, PluginManifest, methods};
 use crate::services::plugin::sync::SyncStatusResponse;
+use crate::tasks::handlers::user_plugin_sync::LAST_SYNC_RESULT_KEY;
 use crate::tasks::types::TaskType;
 use axum::{
     Json,
@@ -127,7 +128,7 @@ async fn build_user_plugin_dto(
     // Use pre-fetched value or fetch from DB
     let last_sync_result = match prefetched_sync_result {
         Some(value) => value,
-        None => UserPluginDataRepository::get(db, instance.id, "last_sync_result")
+        None => UserPluginDataRepository::get(db, instance.id, LAST_SYNC_RESULT_KEY)
             .await
             .ok()
             .flatten()
@@ -195,7 +196,7 @@ pub async fn list_user_plugins(
     let sync_results_map = UserPluginDataRepository::get_by_key_for_user_plugin_ids(
         &state.db,
         &user_plugin_ids,
-        "last_sync_result",
+        LAST_SYNC_RESULT_KEY,
     )
     .await
     .unwrap_or_default();

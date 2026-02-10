@@ -147,12 +147,6 @@ function invalidParamsError(id: string | number | null, error: ValidationError):
  * Initialize parameters received from Codex
  */
 export interface InitializeParams {
-  /**
-   * Plugin configuration (merged admin + user config).
-   * @deprecated Use `adminConfig` and `userConfig` instead.
-   * This field is populated for backward compatibility as `{...adminConfig, ...userConfig}`.
-   */
-  config?: Record<string, unknown>;
   /** Admin-level plugin configuration (from plugin settings) */
   adminConfig?: Record<string, unknown>;
   /** Per-user plugin configuration (from user plugin settings) */
@@ -326,13 +320,6 @@ async function handleRequest(
   switch (method) {
     case "initialize": {
       const initParams = (params ?? {}) as InitializeParams;
-      // Populate deprecated `config` as merged adminConfig + userConfig for backward compat
-      if (initParams && !initParams.config && (initParams.adminConfig || initParams.userConfig)) {
-        initParams.config = {
-          ...initParams.adminConfig,
-          ...initParams.userConfig,
-        };
-      }
       // Inject the storage client so plugins can persist data
       initParams.storage = storage;
       if (onInitialize) {
@@ -671,41 +658,4 @@ export function createRecommendationPlugin(options: RecommendationPluginOptions)
   };
 
   createPluginServer({ manifest, onInitialize, logLevel, label: "recommendation", router });
-}
-
-// =============================================================================
-// Backwards Compatibility (deprecated)
-// =============================================================================
-
-/**
- * @deprecated Use createMetadataPlugin instead
- */
-export function createSeriesMetadataPlugin(options: SeriesMetadataPluginOptions): void {
-  const newOptions: MetadataPluginOptions = {
-    ...options,
-    manifest: {
-      ...options.manifest,
-      capabilities: {
-        ...options.manifest.capabilities,
-        metadataProvider: ["series"] as MetadataContentType[],
-      },
-    },
-  };
-  createMetadataPlugin(newOptions);
-}
-
-/**
- * @deprecated Use MetadataPluginOptions instead
- */
-export interface SeriesMetadataPluginOptions {
-  /** Plugin manifest - must have capabilities.seriesMetadataProvider: true */
-  manifest: PluginManifest & {
-    capabilities: { seriesMetadataProvider: true };
-  };
-  /** SeriesMetadataProvider implementation */
-  provider: MetadataProvider;
-  /** Called when plugin receives initialize with credentials/config */
-  onInitialize?: (params: InitializeParams) => void | Promise<void>;
-  /** Log level (default: "info") */
-  logLevel?: "debug" | "info" | "warn" | "error";
 }

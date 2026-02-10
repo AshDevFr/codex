@@ -1,4 +1,4 @@
-import type { PluginManifest } from "@ashdev/codex-plugin-sdk";
+import { EXTERNAL_ID_SOURCE_ANILIST, type PluginManifest } from "@ashdev/codex-plugin-sdk";
 import packageJson from "../package.json" with { type: "json" };
 
 export const manifest = {
@@ -12,7 +12,7 @@ export const manifest = {
   protocolVersion: "1.0",
   capabilities: {
     userReadSync: true,
-    externalIdSource: "api:anilist",
+    externalIdSource: EXTERNAL_ID_SOURCE_ANILIST,
   },
   requiredCredentials: [
     {

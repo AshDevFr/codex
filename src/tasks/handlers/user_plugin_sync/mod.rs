@@ -37,6 +37,10 @@ use crate::tasks::types::TaskResult;
 
 pub(crate) use settings::CodexSyncSettings;
 
+/// Storage key under which the last sync result is persisted in `user_plugin_data`.
+/// Used by the sync handler to write the result and by API handlers to read it.
+pub const LAST_SYNC_RESULT_KEY: &str = "last_sync_result";
+
 /// Result of a user plugin sync operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -356,7 +360,7 @@ impl TaskHandler for UserPluginSyncHandler {
             if let Err(e) = UserPluginDataRepository::set(
                 db,
                 context.user_plugin_id,
-                "last_sync_result",
+                LAST_SYNC_RESULT_KEY,
                 json!(result),
                 None,
             )

@@ -62,7 +62,7 @@ createMetadataPlugin({
     }
 
     // Get optional timeout from config (in seconds)
-    const timeout = params.config?.timeout as number | undefined;
+    const timeout = params.adminConfig?.timeout as number | undefined;
 
     client = new MangaBakaClient(apiKey, { timeout });
     logger.info(`MangaBaka client initialized (timeout: ${timeout ?? "default"}s)`);

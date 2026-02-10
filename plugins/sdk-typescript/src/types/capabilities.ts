@@ -251,17 +251,3 @@ export type PartialMetadataProvider = Partial<MetadataProvider>;
  * Use this for testing or gradual implementation
  */
 export type PartialBookMetadataProvider = Partial<BookMetadataProvider>;
-
-// =============================================================================
-// Backwards Compatibility (deprecated)
-// =============================================================================
-
-/**
- * @deprecated Use MetadataProvider instead
- */
-export type SeriesMetadataProvider = MetadataProvider;
-
-/**
- * @deprecated Use PartialMetadataProvider instead
- */
-export type PartialSeriesMetadataProvider = PartialMetadataProvider;
