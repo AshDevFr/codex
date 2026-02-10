@@ -13,6 +13,7 @@
 import {
   createLogger,
   createRecommendationPlugin,
+  EXTERNAL_ID_SOURCE_ANILIST,
   type InitializeParams,
   type PluginStorage,
   type Recommendation,
@@ -102,7 +103,8 @@ async function resolveAniListIds(
     // Check if we already have an AniList external ID
     // Prefer api:anilist (new convention), fall back to legacy source names
     const anilistExt = entry.externalIds?.find(
-      (e) => e.source === "api:anilist" || e.source === "anilist" || e.source === "AniList",
+      (e) =>
+        e.source === EXTERNAL_ID_SOURCE_ANILIST || e.source === "anilist" || e.source === "AniList",
     );
 
     if (anilistExt) {
@@ -311,14 +313,14 @@ createRecommendationPlugin({
     }
 
     // Read maxRecommendations from adminConfig (defined in configSchema)
-    const rawMax = params.adminConfig?.maxRecommendations ?? params.config?.maxRecommendations;
+    const rawMax = params.adminConfig?.maxRecommendations;
     if (typeof rawMax === "number") {
       maxRecommendations = Math.max(1, Math.min(Math.round(rawMax), 50));
       logger.info(`Max recommendations set to: ${maxRecommendations}`);
     }
 
     // Read maxSeeds from adminConfig (defined in configSchema)
-    const rawSeeds = params.adminConfig?.maxSeeds ?? params.config?.maxSeeds;
+    const rawSeeds = params.adminConfig?.maxSeeds;
     if (typeof rawSeeds === "number") {
       maxSeeds = Math.max(1, Math.min(Math.round(rawSeeds), 25));
       logger.info(`Max seeds set to: ${maxSeeds}`);

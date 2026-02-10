@@ -248,7 +248,7 @@ createMetadataPlugin({
   logLevel: "info",
   onInitialize(params: InitializeParams) {
     // Read config from initialization params
-    const maxResults = params.config?.maxResults as number | undefined;
+    const maxResults = params.adminConfig?.maxResults as number | undefined;
     if (maxResults !== undefined) {
       config.maxResults = Math.min(Math.max(1, maxResults), 50); // Clamp 1-50
     }

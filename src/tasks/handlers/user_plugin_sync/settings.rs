@@ -1,6 +1,13 @@
 //! Codex generic sync settings — server-interpreted preferences that control
 //! which entries to build and send to the plugin.
 
+/// JSON key for the Codex-reserved namespace in user plugin config.
+///
+/// User plugin config objects may contain a `_codex` key whose value holds
+/// server-interpreted preferences (e.g. `includeCompleted`, `syncRatings`).
+/// The plugin itself never reads this namespace — it controls server behavior.
+pub(crate) const CODEX_CONFIG_NAMESPACE: &str = "_codex";
+
 /// Codex generic sync settings — server-interpreted preferences that control
 /// which entries to build and send to the plugin. Stored in the user plugin
 /// config under the `_codex` namespace (e.g. `config._codex.includeCompleted`).
@@ -36,7 +43,9 @@ impl CodexSyncSettings {
     /// }
     /// ```
     pub fn from_user_config(config: &serde_json::Value) -> Self {
-        let codex = config.get("_codex").unwrap_or(&serde_json::Value::Null);
+        let codex = config
+            .get(CODEX_CONFIG_NAMESPACE)
+            .unwrap_or(&serde_json::Value::Null);
         Self {
             include_completed: codex
                 .get("includeCompleted")

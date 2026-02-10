@@ -9,10 +9,7 @@ export type {
   MetadataProvider,
   PartialBookMetadataProvider,
   PartialMetadataProvider,
-  // Deprecated aliases
-  PartialSeriesMetadataProvider,
   RecommendationProvider,
-  SeriesMetadataProvider,
   SyncProvider,
 } from "./capabilities.js";
 
@@ -25,7 +22,11 @@ export type {
   PluginCapabilities,
   PluginManifest,
 } from "./manifest.js";
-export { hasBookMetadataProvider, hasSeriesMetadataProvider } from "./manifest.js";
+export {
+  EXTERNAL_ID_SOURCE_ANILIST,
+  hasBookMetadataProvider,
+  hasSeriesMetadataProvider,
+} from "./manifest.js";
 
 // From protocol - metadata protocol types (these match Rust exactly)
 export type {

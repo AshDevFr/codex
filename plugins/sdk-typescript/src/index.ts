@@ -70,12 +70,10 @@ export { createLogger, Logger, type LoggerOptions, type LogLevel } from "./logge
 export {
   createMetadataPlugin,
   createRecommendationPlugin,
-  createSeriesMetadataPlugin,
   createSyncPlugin,
   type InitializeParams,
   type MetadataPluginOptions,
   type RecommendationPluginOptions,
-  type SeriesMetadataPluginOptions,
   type SyncPluginOptions,
 } from "./server.js";
 
