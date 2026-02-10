@@ -24,6 +24,10 @@ pub(crate) struct CodexSyncSettings {
     pub count_partial_progress: bool,
     /// Include scores and notes in push/pull. Default: true.
     pub sync_ratings: bool,
+    /// Include series without external IDs (for title-based search fallback).
+    /// When enabled, entries with `external_id: ""` and `title` populated are
+    /// sent so the plugin can search the external service by title. Default: false.
+    pub search_fallback: bool,
 }
 
 impl CodexSyncSettings {
@@ -63,6 +67,10 @@ impl CodexSyncSettings {
                 .get("syncRatings")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true),
+            search_fallback: codex
+                .get("searchFallback")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
         }
     }
 }

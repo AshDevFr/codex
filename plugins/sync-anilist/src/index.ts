@@ -48,6 +48,7 @@ let scoreFormat = "POINT_10";
 let progressUnit: "volumes" | "chapters" = "volumes";
 let pauseAfterDays = 0;
 let dropAfterDays = 0;
+let searchFallback = false;
 
 // =============================================================================
 // Staleness Logic
@@ -134,14 +135,27 @@ const provider: SyncProvider = {
 
     for (const entry of params.entries) {
       try {
-        const mediaId = Number.parseInt(entry.externalId, 10);
+        let mediaId = Number.parseInt(entry.externalId, 10);
         if (Number.isNaN(mediaId)) {
-          failed.push({
-            externalId: entry.externalId,
-            status: "failed",
-            error: `Invalid media ID: ${entry.externalId}`,
-          });
-          continue;
+          // Try search fallback if enabled and entry has a title
+          if (searchFallback && entry.title) {
+            const result = await client.searchManga(entry.title);
+            if (result) {
+              mediaId = result.id;
+              logger.info(`Search fallback resolved "${entry.title}" → AniList ID ${mediaId}`);
+            }
+          }
+
+          if (Number.isNaN(mediaId)) {
+            failed.push({
+              externalId: entry.externalId,
+              status: "failed",
+              error: searchFallback
+                ? `No AniList match found for "${entry.title || entry.externalId}"`
+                : `Invalid media ID: ${entry.externalId}`,
+            });
+            continue;
+          }
         }
 
         // Apply staleness logic: auto-pause or auto-drop stale in-progress entries
@@ -202,15 +216,16 @@ const provider: SyncProvider = {
           saveParams.notes = entry.notes;
         }
 
+        const resolvedExternalId = String(mediaId);
         const existed = existingMediaIds.has(mediaId);
         const result = await client.saveEntry(saveParams);
-        logger.debug(`Pushed entry ${entry.externalId}: status=${result.status}`);
+        logger.debug(`Pushed entry ${resolvedExternalId}: status=${result.status}`);
 
         // Track newly created entries for subsequent pushes in the same batch
         existingMediaIds.add(mediaId);
 
         success.push({
-          externalId: entry.externalId,
+          externalId: resolvedExternalId,
           status: existed ? "updated" : "created",
         });
       } catch (error) {
@@ -314,8 +329,11 @@ createSyncPlugin({
       if (typeof uc.dropAfterDays === "number" && uc.dropAfterDays >= 0) {
         dropAfterDays = uc.dropAfterDays;
       }
+      if (typeof uc.searchFallback === "boolean") {
+        searchFallback = uc.searchFallback;
+      }
       logger.info(
-        `Plugin config: progressUnit=${progressUnit}, pauseAfterDays=${pauseAfterDays}, dropAfterDays=${dropAfterDays}`,
+        `Plugin config: progressUnit=${progressUnit}, pauseAfterDays=${pauseAfterDays}, dropAfterDays=${dropAfterDays}, searchFallback=${searchFallback}`,
       );
     }
   },

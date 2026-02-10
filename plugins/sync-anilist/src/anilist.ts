@@ -75,6 +75,19 @@ const MANGA_LIST_QUERY = `
   }
 `;
 
+/** Search for a manga by title to find its AniList ID */
+const SEARCH_MANGA_QUERY = `
+  query ($search: String!) {
+    Media(search: $search, type: MANGA) {
+      id
+      title {
+        romaji
+        english
+      }
+    }
+  }
+`;
+
 const UPDATE_ENTRY_MUTATION = `
   mutation (
     $mediaId: Int!,
@@ -117,6 +130,11 @@ export interface AniListViewer {
   siteUrl: string;
   options: { displayAdultContent: boolean };
   mediaListOptions: { scoreFormat: string };
+}
+
+export interface AniListSearchResult {
+  id: number;
+  title: { romaji?: string; english?: string };
 }
 
 export interface AniListFuzzyDate {
@@ -289,6 +307,21 @@ export class AniListClient {
       variables,
     );
     return data.SaveMediaListEntry;
+  }
+
+  /**
+   * Search for a manga by title and return its AniList ID.
+   * Returns null if no result found or an error occurs.
+   */
+  async searchManga(title: string): Promise<AniListSearchResult | null> {
+    try {
+      const data = await this.query<{ Media: AniListSearchResult | null }>(SEARCH_MANGA_QUERY, {
+        search: title,
+      });
+      return data.Media;
+    } catch {
+      return null;
+    }
   }
 }
 

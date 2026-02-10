@@ -97,6 +97,11 @@ pub struct SyncEntry {
     /// Plugins can use this for time-based logic (e.g., pause/drop stale series).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_updated_at: Option<String>,
+    /// Series title (for plugins that support title-based search fallback).
+    /// Populated when the backend knows the series name. Plugins can use this
+    /// to search the external service by title when no external ID is present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 /// Reading progress details
@@ -363,6 +368,7 @@ mod tests {
             completed_at: None,
             notes: Some("Great series!".to_string()),
             latest_updated_at: Some("2026-02-01T12:00:00Z".to_string()),
+            title: None,
         };
         let json = serde_json::to_value(&entry).unwrap();
         assert_eq!(json["externalId"], "12345");
@@ -478,6 +484,7 @@ mod tests {
                     completed_at: None,
                     notes: None,
                     latest_updated_at: None,
+                    title: None,
                 },
                 SyncEntry {
                     external_id: "2".to_string(),
@@ -488,6 +495,7 @@ mod tests {
                     completed_at: Some("2026-02-01T00:00:00Z".to_string()),
                     notes: None,
                     latest_updated_at: None,
+                    title: None,
                 },
             ],
         };
@@ -613,6 +621,7 @@ mod tests {
                 completed_at: None,
                 notes: None,
                 latest_updated_at: None,
+                title: None,
             }],
             next_cursor: Some("page2".to_string()),
             has_more: true,

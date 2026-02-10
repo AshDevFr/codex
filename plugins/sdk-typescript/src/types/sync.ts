@@ -120,6 +120,12 @@ export interface SyncEntry {
    * Plugins can use this for time-based logic (e.g., pause/drop stale series).
    */
   latestUpdatedAt?: string;
+  /**
+   * Series title (for plugins that support title-based search fallback).
+   * Populated when the backend knows the series name. Plugins can use this
+   * to search the external service by title when no external ID is present.
+   */
+  title?: string;
 }
 
 // =============================================================================
