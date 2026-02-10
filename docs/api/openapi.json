@@ -12138,6 +12138,114 @@
         ]
       }
     },
+    "/api/v1/user/recommendations": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get personalized recommendations",
+        "description": "Returns recommendations from the user's enabled recommendation plugin.\nThe plugin may return cached results or generate fresh recommendations.",
+        "operationId": "get_recommendations",
+        "responses": {
+          "200": {
+            "description": "Personalized recommendations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "No recommendation plugin enabled"
+          }
+        }
+      }
+    },
+    "/api/v1/user/recommendations/refresh": {
+      "post": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Refresh recommendations",
+        "description": "Enqueues a background task to regenerate recommendations by clearing\nthe cache and updating the taste profile.",
+        "operationId": "refresh_recommendations",
+        "responses": {
+          "200": {
+            "description": "Refresh task enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationsRefreshResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "No recommendation plugin enabled"
+          },
+          "409": {
+            "description": "Recommendation refresh already in progress"
+          }
+        }
+      }
+    },
+    "/api/v1/user/recommendations/{external_id}/dismiss": {
+      "post": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Dismiss a recommendation",
+        "description": "Tells the recommendation plugin that the user is not interested in a\nparticular recommendation, so it can be excluded from future results.",
+        "operationId": "dismiss_recommendation",
+        "parameters": [
+          {
+            "name": "external_id",
+            "in": "path",
+            "description": "External ID of the recommendation to dismiss",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissRecommendationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Recommendation dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DismissRecommendationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "No recommendation plugin enabled"
+          }
+        }
+      }
+    },
     "/api/v1/user/sharing-tags": {
       "get": {
         "tags": [
@@ -18929,6 +19037,32 @@
               "null"
             ],
             "description": "Publisher (for publisher_hierarchy strategy)"
+          }
+        }
+      },
+      "DismissRecommendationRequest": {
+        "type": "object",
+        "description": "Request body for POST /api/v1/user/recommendations/:id/dismiss",
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reason for dismissal"
+          }
+        }
+      },
+      "DismissRecommendationResponse": {
+        "type": "object",
+        "description": "Response from POST /api/v1/user/recommendations/:id/dismiss",
+        "required": [
+          "dismissed"
+        ],
+        "properties": {
+          "dismissed": {
+            "type": "boolean",
+            "description": "Whether the dismissal was recorded"
           }
         }
       },
@@ -27493,6 +27627,138 @@
           }
         }
       },
+      "RecommendationDto": {
+        "type": "object",
+        "description": "A single recommendation for the user",
+        "required": [
+          "externalId",
+          "title",
+          "score",
+          "reason"
+        ],
+        "properties": {
+          "basedOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Titles that influenced this recommendation"
+          },
+          "codexSeriesId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Codex series ID if matched to an existing series"
+          },
+          "coverUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cover image URL"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "External ID on the source service"
+          },
+          "externalUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL to the entry on the external service"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genres"
+          },
+          "inLibrary": {
+            "type": "boolean",
+            "description": "Whether this series is already in the user's library"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Human-readable reason for this recommendation"
+          },
+          "score": {
+            "type": "number",
+            "format": "double",
+            "description": "Confidence/relevance score (0.0 to 1.0)"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Summary/description"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the recommended series/book"
+          }
+        }
+      },
+      "RecommendationsRefreshResponse": {
+        "type": "object",
+        "description": "Response from POST /api/v1/user/recommendations/refresh",
+        "required": [
+          "taskId",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable status message"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task ID for tracking the refresh operation"
+          }
+        }
+      },
+      "RecommendationsResponse": {
+        "type": "object",
+        "description": "Response from GET /api/v1/user/recommendations",
+        "required": [
+          "recommendations",
+          "pluginId",
+          "pluginName"
+        ],
+        "properties": {
+          "cached": {
+            "type": "boolean",
+            "description": "Whether these are cached results"
+          },
+          "generatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When these recommendations were generated"
+          },
+          "pluginId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Plugin that provided these recommendations"
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Plugin display name"
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecommendationDto"
+            },
+            "description": "Personalized recommendations"
+          }
+        }
+      },
       "RegisterRequest": {
         "type": "object",
         "description": "Register request",
@@ -32947,6 +33213,10 @@
       "description": "User-facing plugin management, OAuth, and configuration"
     },
     {
+      "name": "Recommendations",
+      "description": "Personalized recommendation endpoints"
+    },
+    {
       "name": "Metrics",
       "description": "Application metrics and statistics"
     },
@@ -33017,6 +33287,7 @@
         "Users",
         "User Preferences",
         "User Plugins",
+        "Recommendations",
         "Reading Progress"
       ]
     },
