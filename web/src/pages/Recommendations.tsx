@@ -16,7 +16,10 @@ import {
   IconSparkles,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { recommendationsApi } from "@/api/recommendations";
+import {
+  type RecommendationsResponse,
+  recommendationsApi,
+} from "@/api/recommendations";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { ApiError } from "@/types";
@@ -31,7 +34,7 @@ export function Recommendations() {
     data: recData,
     isLoading,
     error,
-  } = useQuery({
+  } = useQuery<RecommendationsResponse, ApiError>({
     queryKey: ["recommendations"],
     queryFn: recommendationsApi.get,
     retry: false,
@@ -95,8 +98,7 @@ export function Recommendations() {
 
   // No plugin enabled (404 from backend)
   if (error) {
-    const apiError = error as unknown as ApiError;
-    const isNoPlugin = apiError.error === "No recommendation plugin enabled";
+    const isNoPlugin = error.error === "No recommendation plugin enabled";
 
     if (isNoPlugin) {
       return (
@@ -133,7 +135,7 @@ export function Recommendations() {
           title="Error loading recommendations"
           color="red"
         >
-          {apiError.message || apiError.error || "An unexpected error occurred"}
+          {error.message || error.error || "An unexpected error occurred"}
         </Alert>
       </Box>
     );

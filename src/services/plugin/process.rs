@@ -14,13 +14,8 @@
 //! - `CODEX_PLUGIN_ALLOWED_COMMANDS` env var (comma-separated list)
 //! - Absolute paths starting with `/opt/codex/plugins/` are always allowed
 //!
-//! Note: This module provides complete process management infrastructure.
-//! Some methods and error variants may not be called from external code yet
-//! but are part of the complete API for plugin process management.
-
-// Allow dead code for process management infrastructure that is part of the
-// complete API surface but not yet fully integrated.
-#![allow(dead_code)]
+//! Note: Some builder methods and error variants are part of the complete API
+//! surface but not yet called from external code.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -338,6 +333,7 @@ impl PluginProcessConfig {
     }
 
     /// Add an argument
+    #[cfg(test)]
     pub fn arg(mut self, arg: impl Into<String>) -> Self {
         self.args.push(arg.into());
         self
@@ -352,17 +348,6 @@ impl PluginProcessConfig {
     /// Set an environment variable
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
-        self
-    }
-
-    /// Set multiple environment variables
-    pub fn envs(
-        mut self,
-        vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
-    ) -> Self {
-        for (k, v) in vars {
-            self.env.insert(k.into(), v.into());
-        }
         self
     }
 
@@ -397,12 +382,6 @@ pub enum ProcessError {
     #[error("Command '{command}' is not in the plugin allowlist. Allowed: {allowed}")]
     CommandNotAllowed { command: String, allowed: String },
 
-    #[error("Plugin output line too long ({length} bytes, max {max} bytes)")]
-    LineTooLong { length: usize, max: usize },
-
-    #[error("Plugin output exceeded size limit ({total} bytes, max {max} bytes)")]
-    OutputTooLarge { total: usize, max: usize },
-
     #[error("Process stdin not available")]
     StdinUnavailable,
 
@@ -412,17 +391,8 @@ pub enum ProcessError {
     #[error("Process stderr not available")]
     StderrUnavailable,
 
-    #[error("Failed to write to process stdin: {0}")]
-    WriteFailed(std::io::Error),
-
-    #[error("Failed to read from process stdout: {0}")]
-    ReadFailed(std::io::Error),
-
     #[error("Process terminated unexpectedly")]
     ProcessTerminated,
-
-    #[error("Process exited with code {0}")]
-    ExitCode(i32),
 
     #[error("Channel closed")]
     ChannelClosed,
@@ -534,59 +504,6 @@ impl PluginProcess {
             .recv()
             .await
             .ok_or(ProcessError::ProcessTerminated)
-    }
-
-    /// Check if the process is still running
-    pub fn is_running(&mut self) -> bool {
-        match self.child.try_wait() {
-            Ok(None) => true, // Still running
-            Ok(Some(status)) => {
-                // Process exited - log details for debugging
-                let pid = self.child.id();
-                if let Some(code) = status.code() {
-                    debug!(
-                        pid = ?pid,
-                        exit_code = code,
-                        "Plugin process has exited with code"
-                    );
-                } else {
-                    // On Unix, this means the process was killed by a signal
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::process::ExitStatusExt;
-                        if let Some(signal) = status.signal() {
-                            warn!(
-                                pid = ?pid,
-                                signal = signal,
-                                "Plugin process was killed by signal"
-                            );
-                        } else {
-                            debug!(pid = ?pid, "Plugin process exited without code or signal");
-                        }
-                    }
-                    #[cfg(not(unix))]
-                    {
-                        debug!(pid = ?pid, "Plugin process exited without code");
-                    }
-                }
-                false
-            }
-            Err(e) => {
-                warn!(error = %e, "Error checking plugin process status");
-                false
-            }
-        }
-    }
-
-    /// Get the process ID
-    pub fn pid(&self) -> Option<u32> {
-        self.child.id()
-    }
-
-    /// Wait for the process to exit and return the exit code
-    pub async fn wait(&mut self) -> Result<i32, ProcessError> {
-        let status = self.child.wait().await?;
-        Ok(status.code().unwrap_or(-1))
     }
 
     /// Kill the process
@@ -1170,26 +1087,6 @@ mod tests {
 
         // MAX_TOTAL_OUTPUT should be larger than MAX_LINE_LENGTH (compile-time check)
         const _: () = assert!(MAX_TOTAL_OUTPUT > MAX_LINE_LENGTH);
-    }
-
-    #[test]
-    fn test_error_variants() {
-        // Test that the error variants format correctly
-        let err = ProcessError::LineTooLong {
-            length: 2_000_000,
-            max: MAX_LINE_LENGTH,
-        };
-        let msg = err.to_string();
-        assert!(msg.contains("2000000"));
-        assert!(msg.contains("1048576"));
-
-        let err = ProcessError::OutputTooLarge {
-            total: 200_000_000,
-            max: MAX_TOTAL_OUTPUT,
-        };
-        let msg = err.to_string();
-        assert!(msg.contains("200000000"));
-        assert!(msg.contains("104857600"));
     }
 
     // =========================================================================

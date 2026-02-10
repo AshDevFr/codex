@@ -2342,9 +2342,6 @@ fn sanitize_plugin_error(error: &PluginManagerError) -> String {
         // User-actionable errors - return sanitized messages
         PluginManagerError::PluginNotFound(id) => format!("Plugin {} not found", id),
         PluginManagerError::PluginNotEnabled(id) => format!("Plugin {} is not enabled", id),
-        PluginManagerError::NoPluginsForScope(_) => {
-            "No plugins available for this operation".to_string()
-        }
         PluginManagerError::RateLimited { .. } => {
             "Plugin rate limit exceeded, please try again later".to_string()
         }
@@ -2355,9 +2352,6 @@ fn sanitize_plugin_error(error: &PluginManagerError) -> String {
         // User plugin errors
         PluginManagerError::UserPluginNotFound { .. } => {
             "User plugin connection not found".to_string()
-        }
-        PluginManagerError::UserPluginNotAuthenticated(id) => {
-            format!("Plugin {} requires authentication", id)
         }
 
         // OAuth token errors - user-actionable
@@ -2386,11 +2380,9 @@ fn sanitize_nested_plugin_error(error: &crate::services::plugin::handle::PluginE
     match error {
         PluginError::NotInitialized => "Plugin is not ready, please try again".to_string(),
         PluginError::Disabled { .. } => "Plugin is disabled".to_string(),
-        PluginError::HealthCheckFailed(_) => "Plugin is temporarily unavailable".to_string(),
         PluginError::SpawnFailed(_) => {
             "Failed to start plugin, please contact an administrator".to_string()
         }
-        PluginError::InvalidManifest(_) => "Plugin configuration error".to_string(),
 
         // RPC errors - these may contain more detail
         PluginError::Rpc(rpc_error) => match rpc_error {

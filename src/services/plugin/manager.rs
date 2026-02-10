@@ -33,13 +33,8 @@
 //! └───────────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! Note: This module provides complete plugin management infrastructure.
-//! Some methods and error variants may not be called from external code yet
-//! but are part of the complete API for plugin lifecycle management.
-
-// Allow dead code for plugin management infrastructure that is part of the
-// complete API surface but not yet fully integrated.
-#![allow(dead_code)]
+//! Note: Some methods and error variants are part of the complete API
+//! surface but not yet called from external code.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -60,7 +55,7 @@ use crate::services::PluginMetricsService;
 
 use crate::services::user_plugin::token_refresh::{self, RefreshResult};
 
-use super::handle::{PluginConfig, PluginError, PluginHandle};
+use super::handle::{PluginConfig, PluginError, PluginHandle, PluginState};
 use super::process::PluginProcessConfig;
 use super::protocol::{
     BookMatchParams, BookSearchParams, MetadataGetParams, MetadataMatchParams,
@@ -88,9 +83,6 @@ pub enum PluginManagerError {
     #[error("Encryption error: {0}")]
     Encryption(String),
 
-    #[error("No plugins available for scope: {0:?}")]
-    NoPluginsForScope(PluginScope),
-
     #[error("Rate limit exceeded for plugin {plugin_id}: {requests_per_minute} requests/minute")]
     RateLimited {
         plugin_id: Uuid,
@@ -105,9 +97,6 @@ pub enum PluginManagerError {
 
     #[error("OAuth re-authentication required for user plugin {0}")]
     ReauthRequired(Uuid),
-
-    #[error("User plugin not authenticated: {0}")]
-    UserPluginNotAuthenticated(Uuid),
 }
 
 /// Context for a user plugin operation
@@ -118,10 +107,6 @@ pub enum PluginManagerError {
 pub struct UserPluginContext {
     /// The user plugin instance ID (from `user_plugins` table)
     pub user_plugin_id: Uuid,
-    /// The plugin definition ID (from `plugins` table)
-    pub plugin_id: Uuid,
-    /// The user ID
-    pub user_id: Uuid,
 }
 
 /// Configuration for the plugin manager
@@ -359,11 +344,6 @@ impl PluginManager {
         self
     }
 
-    /// Get a reference to the metrics service if configured
-    pub fn metrics_service(&self) -> Option<&Arc<PluginMetricsService>> {
-        self.metrics_service.as_ref()
-    }
-
     /// Load all enabled plugins from database
     pub async fn load_all(&self) -> Result<usize, PluginManagerError> {
         debug!("Loading enabled plugins from database...");
@@ -524,7 +504,7 @@ impl PluginManager {
             }
 
             if let Some(ref handle) = entry.handle
-                && handle.is_running().await
+                && handle.state().await == PluginState::Running
             {
                 return Ok(Arc::clone(handle));
             }
@@ -559,7 +539,7 @@ impl PluginManager {
             }
 
             if let Some(ref handle) = entry.handle
-                && handle.is_running().await
+                && handle.state().await == PluginState::Running
             {
                 return Ok(Arc::clone(handle));
             }
@@ -672,18 +652,6 @@ impl PluginManager {
             .collect()
     }
 
-    /// Get a specific plugin's database configuration
-    pub async fn get_plugin(&self, plugin_id: Uuid) -> Option<plugins::Model> {
-        let plugins = self.plugins.read().await;
-        plugins.get(&plugin_id).map(|e| e.db_config.clone())
-    }
-
-    /// Get all managed plugin configurations
-    pub async fn all_plugins(&self) -> Vec<plugins::Model> {
-        let plugins = self.plugins.read().await;
-        plugins.values().map(|e| e.db_config.clone()).collect()
-    }
-
     // =========================================================================
     // User Plugin Methods
     // =========================================================================
@@ -712,8 +680,6 @@ impl PluginManager {
 
         let context = UserPluginContext {
             user_plugin_id: user_plugin.id,
-            plugin_id,
-            user_id,
         };
 
         // Create a plugin config with user-specific credentials
@@ -1467,12 +1433,6 @@ impl PluginManager {
         }
     }
 
-    /// Check if health checks are running
-    pub async fn health_checks_running(&self) -> bool {
-        let handle = self.health_check_handle.read().await;
-        handle.as_ref().is_some_and(|h| !h.is_finished())
-    }
-
     /// Record a plugin failure and check if it should be auto-disabled
     ///
     /// This uses time-windowed failure tracking instead of consecutive failure counts.
@@ -1612,9 +1572,7 @@ impl PluginManager {
             PluginError::Rpc(_) => "RPC_ERROR",
             PluginError::NotInitialized => "NOT_INITIALIZED",
             PluginError::Disabled { .. } => "DISABLED",
-            PluginError::HealthCheckFailed(_) => "HEALTH_CHECK_FAILED",
             PluginError::SpawnFailed(_) => "SPAWN_FAILED",
-            PluginError::InvalidManifest(_) => "INVALID_MANIFEST",
         }
     }
 }
