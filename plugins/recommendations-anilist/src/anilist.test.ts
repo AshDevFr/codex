@@ -61,6 +61,14 @@ describe("stripHtml", () => {
   it("preserves unknown entities as-is", () => {
     expect(stripHtml("&unknown;")).toBe("&unknown;");
   });
+
+  it("strips nested tags", () => {
+    expect(stripHtml("<div><p><b><i>deep</i></b></p></div>")).toBe("deep");
+  });
+
+  it("handles br with space before slash", () => {
+    expect(stripHtml("A<br />B")).toBe("A\nB");
+  });
 });
 
 // =============================================================================

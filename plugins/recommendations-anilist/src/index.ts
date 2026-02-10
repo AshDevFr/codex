@@ -42,12 +42,17 @@ let maxRecommendations = 20;
 let maxSeeds = 10;
 let storage: PluginStorage | null = null;
 
+/** Set the AniList client (exported for testing) */
+export function setClient(c: AniListRecommendationClient | null): void {
+  client = c;
+}
+
 /** Storage key for persisted dismissed recommendation IDs */
 const DISMISSED_STORAGE_KEY = "dismissed_ids";
 
 // In-memory cache of dismissed IDs (synced with storage).
 // Loaded from storage on initialize, updated on dismiss/clear.
-const dismissedIds = new Set<string>();
+export const dismissedIds = new Set<string>();
 
 /**
  * Load dismissed IDs from persistent storage into the in-memory cache.
@@ -92,7 +97,7 @@ async function saveDismissedIds(): Promise<void> {
  * Find AniList IDs for library entries.
  * Tries external_ids first, falls back to title search.
  */
-async function resolveAniListIds(
+export async function resolveAniListIds(
   entries: UserLibraryEntry[],
 ): Promise<Map<string, { anilistId: number; title: string; rating: number }>> {
   if (!client) throw new Error("Plugin not initialized");
@@ -152,7 +157,7 @@ export function pickSeedEntries(entries: UserLibraryEntry[], maxSeeds: number): 
 /**
  * Convert AniList recommendation nodes into Recommendation objects.
  */
-function convertRecommendations(
+export function convertRecommendations(
   nodes: AniListRecommendationNode[],
   basedOnTitle: string,
   userMangaIds: Set<number>,
