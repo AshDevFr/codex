@@ -40,11 +40,17 @@ let client: AniListRecommendationClient | null = null;
 let viewerId: number | null = null;
 let maxRecommendations = 20;
 let maxSeeds = 10;
+let searchFallback = true;
 let storage: PluginStorage | null = null;
 
 /** Set the AniList client (exported for testing) */
 export function setClient(c: AniListRecommendationClient | null): void {
   client = c;
+}
+
+/** Set the searchFallback flag (exported for testing) */
+export function setSearchFallback(enabled: boolean): void {
+  searchFallback = enabled;
 }
 
 /** Storage key for persisted dismissed recommendation IDs */
@@ -124,14 +130,16 @@ export async function resolveAniListIds(
       }
     }
 
-    // Fall back to title search
-    const result = await client.searchManga(entry.title);
-    if (result) {
-      resolved.set(entry.seriesId, {
-        anilistId: result.id,
-        title: entry.title,
-        rating: entry.userRating ?? 0,
-      });
+    // Fall back to title search (when enabled)
+    if (searchFallback) {
+      const result = await client.searchManga(entry.title);
+      if (result) {
+        resolved.set(entry.seriesId, {
+          anilistId: result.id,
+          title: entry.title,
+          rating: entry.userRating ?? 0,
+        });
+      }
     }
   }
 
@@ -329,6 +337,13 @@ createRecommendationPlugin({
     if (typeof rawSeeds === "number") {
       maxSeeds = Math.max(1, Math.min(Math.round(rawSeeds), 25));
       logger.info(`Max seeds set to: ${maxSeeds}`);
+    }
+
+    // Read searchFallback from userConfig (default: true — preserve existing behavior)
+    const uc = params.userConfig;
+    if (uc && typeof uc.searchFallback === "boolean") {
+      searchFallback = uc.searchFallback;
+      logger.info(`Search fallback set to: ${searchFallback}`);
     }
 
     // Capture the storage client and restore persisted dismissed IDs

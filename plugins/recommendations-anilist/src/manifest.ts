@@ -44,6 +44,20 @@ export const manifest = {
       },
     ],
   },
+  userConfigSchema: {
+    description: "Per-user recommendation settings",
+    fields: [
+      {
+        key: "searchFallback",
+        label: "Search Fallback",
+        description:
+          "When a series has no AniList ID, search by title to find a match. Disable for strict matching only.",
+        type: "boolean" as const,
+        required: false,
+        default: true,
+      },
+    ],
+  },
   oauth: {
     authorizationUrl: "https://anilist.co/api/v2/oauth/authorize",
     tokenUrl: "https://anilist.co/api/v2/oauth/token",
