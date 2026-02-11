@@ -160,6 +160,18 @@ pub enum TaskType {
         #[serde(rename = "userId")]
         user_id: Uuid,
     },
+
+    /// Notify a plugin that a recommendation was dismissed
+    UserPluginRecommendationDismiss {
+        #[serde(rename = "pluginId")]
+        plugin_id: Uuid,
+        #[serde(rename = "userId")]
+        user_id: Uuid,
+        #[serde(rename = "externalId")]
+        external_id: String,
+        #[serde(default)]
+        reason: Option<String>,
+    },
 }
 
 fn default_mode() -> String {
@@ -190,6 +202,9 @@ impl TaskType {
             TaskType::CleanupPluginData => "cleanup_plugin_data",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
             TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",
+            TaskType::UserPluginRecommendationDismiss { .. } => {
+                "user_plugin_recommendation_dismiss"
+            }
         }
     }
 
@@ -266,6 +281,19 @@ impl TaskType {
             }
             TaskType::UserPluginRecommendations { plugin_id, user_id } => {
                 serde_json::json!({ "plugin_id": plugin_id, "user_id": user_id })
+            }
+            TaskType::UserPluginRecommendationDismiss {
+                plugin_id,
+                user_id,
+                external_id,
+                reason,
+            } => {
+                serde_json::json!({
+                    "plugin_id": plugin_id,
+                    "user_id": user_id,
+                    "external_id": external_id,
+                    "reason": reason,
+                })
             }
             _ => serde_json::json!({}),
         }
@@ -754,5 +782,76 @@ mod tests {
 
         let deserialized: TaskType = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.type_string(), "cleanup_orphaned_files");
+    }
+
+    #[test]
+    fn test_user_plugin_recommendation_dismiss_extraction() {
+        let plugin_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+
+        let task = TaskType::UserPluginRecommendationDismiss {
+            plugin_id,
+            user_id,
+            external_id: "12345".to_string(),
+            reason: Some("not_interested".to_string()),
+        };
+
+        assert_eq!(task.type_string(), "user_plugin_recommendation_dismiss");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+
+        let params = task.params();
+        assert_eq!(params["plugin_id"], plugin_id.to_string());
+        assert_eq!(params["user_id"], user_id.to_string());
+        assert_eq!(params["external_id"], "12345");
+        assert_eq!(params["reason"], "not_interested");
+    }
+
+    #[test]
+    fn test_user_plugin_recommendation_dismiss_extract_fields() {
+        let plugin_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+
+        let task = TaskType::UserPluginRecommendationDismiss {
+            plugin_id,
+            user_id,
+            external_id: "99".to_string(),
+            reason: None,
+        };
+
+        let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "user_plugin_recommendation_dismiss");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(book_id, None);
+        assert!(params.is_some());
+        let params = params.unwrap();
+        assert_eq!(params["external_id"], "99");
+        assert!(params["reason"].is_null());
+    }
+
+    #[test]
+    fn test_user_plugin_recommendation_dismiss_serialization() {
+        let plugin_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+
+        let task = TaskType::UserPluginRecommendationDismiss {
+            plugin_id,
+            user_id,
+            external_id: "12345".to_string(),
+            reason: Some("already_read".to_string()),
+        };
+
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("user_plugin_recommendation_dismiss"));
+        assert!(json.contains(&plugin_id.to_string()));
+        assert!(json.contains("12345"));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            deserialized.type_string(),
+            "user_plugin_recommendation_dismiss"
+        );
     }
 }

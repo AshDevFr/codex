@@ -57,6 +57,12 @@ pub struct RecommendationsResponse {
     /// Whether these are cached results
     #[serde(default)]
     pub cached: bool,
+    /// Status of a running/pending background task ("pending" or "running"), if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_status: Option<String>,
+    /// ID of the running/pending background task, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<Uuid>,
 }
 
 /// Response from POST /api/v1/user/recommendations/refresh
@@ -123,11 +129,16 @@ mod tests {
             plugin_name: "AniList Recs".to_string(),
             generated_at: Some("2026-02-06T12:00:00Z".to_string()),
             cached: true,
+            task_status: None,
+            task_id: None,
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert!(json["recommendations"].as_array().unwrap().is_empty());
         assert!(json["cached"].as_bool().unwrap());
         assert_eq!(json["pluginName"], "AniList Recs");
+        // task_status and task_id should be absent when None
+        assert!(json.get("taskStatus").is_none());
+        assert!(json.get("taskId").is_none());
     }
 
     #[test]
@@ -142,5 +153,40 @@ mod tests {
         let json = serde_json::json!({});
         let req: DismissRecommendationRequest = serde_json::from_value(json).unwrap();
         assert!(req.reason.is_none());
+    }
+
+    #[test]
+    fn test_recommendations_response_with_task_status() {
+        let task_id = Uuid::new_v4();
+        let resp = RecommendationsResponse {
+            recommendations: vec![],
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "AniList Recs".to_string(),
+            generated_at: None,
+            cached: false,
+            task_status: Some("pending".to_string()),
+            task_id: Some(task_id),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["taskStatus"], "pending");
+        assert_eq!(json["taskId"], task_id.to_string());
+    }
+
+    #[test]
+    fn test_recommendations_response_with_running_status() {
+        let task_id = Uuid::new_v4();
+        let resp = RecommendationsResponse {
+            recommendations: vec![],
+            plugin_id: Uuid::new_v4(),
+            plugin_name: "Test Plugin".to_string(),
+            generated_at: Some("2026-02-11T10:00:00Z".to_string()),
+            cached: true,
+            task_status: Some("running".to_string()),
+            task_id: Some(task_id),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["taskStatus"], "running");
+        assert_eq!(json["taskId"], task_id.to_string());
+        assert!(json["cached"].as_bool().unwrap());
     }
 }

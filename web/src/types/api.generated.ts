@@ -4119,8 +4119,10 @@ export interface paths {
         };
         /**
          * Get personalized recommendations
-         * @description Returns recommendations from the user's enabled recommendation plugin.
-         *     The plugin may return cached results or generate fresh recommendations.
+         * @description Returns cached recommendations from the database. If no cached data exists
+         *     or the data is stale, an empty list is returned and a background refresh
+         *     task is auto-triggered. The frontend should use SSE task progress events
+         *     to know when fresh data is ready.
          */
         get: operations["get_recommendations"];
         put?: never;
@@ -4163,8 +4165,8 @@ export interface paths {
         put?: never;
         /**
          * Dismiss a recommendation
-         * @description Tells the recommendation plugin that the user is not interested in a
-         *     particular recommendation, so it can be excluded from future results.
+         * @description Removes the recommendation from the cached list immediately and enqueues
+         *     a background task to notify the plugin asynchronously. Returns instantly.
          */
         post: operations["dismiss_recommendation"];
         delete?: never;
@@ -12387,6 +12389,13 @@ export interface components {
             pluginName: string;
             /** @description Personalized recommendations */
             recommendations: components["schemas"]["RecommendationDto"][];
+            /**
+             * Format: uuid
+             * @description ID of the running/pending background task, if any
+             */
+            taskId?: string | null;
+            /** @description Status of a running/pending background task ("pending" or "running"), if any */
+            taskStatus?: string | null;
         };
         /** @description Register request */
         RegisterRequest: {
@@ -14345,6 +14354,15 @@ export interface components {
             pluginId: string;
             /** @enum {string} */
             type: "user_plugin_recommendations";
+            /** Format: uuid */
+            userId: string;
+        } | {
+            externalId: string;
+            /** Format: uuid */
+            pluginId: string;
+            reason?: string | null;
+            /** @enum {string} */
+            type: "user_plugin_recommendation_dismiss";
             /** Format: uuid */
             userId: string;
         };

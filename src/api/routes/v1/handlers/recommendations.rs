@@ -10,20 +10,17 @@ use super::super::dto::recommendations::{
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::db::repositories::{PluginsRepository, TaskRepository, UserPluginsRepository};
-use crate::services::plugin::handle::PluginError;
-use crate::services::plugin::library::build_user_library;
-use crate::services::plugin::manager::PluginManagerError;
-use crate::services::plugin::protocol::{PluginManifest, methods};
-use crate::services::plugin::recommendations::{
-    RecommendationDismissRequest, RecommendationRequest, RecommendationResponse,
+use crate::db::repositories::{
+    PluginsRepository, TaskRepository, UserPluginDataRepository, UserPluginsRepository,
 };
-use crate::services::plugin::rpc::RpcError;
+use crate::services::plugin::protocol::PluginManifest;
+use crate::services::plugin::recommendations::RecommendationResponse;
 use crate::tasks::types::TaskType;
 use axum::{
     Json,
     extract::{Path, State},
 };
+use chrono::Utc;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -71,82 +68,15 @@ async fn find_recommendation_plugin(
     ))
 }
 
-/// Map a `PluginError` to the appropriate `ApiError` with proper HTTP status codes.
-///
-/// Instead of returning blanket 500 Internal Server Error for all plugin failures,
-/// this maps specific error types to meaningful HTTP status codes:
-/// - Rate limited → 429 Too Many Requests
-/// - Timeout / Process terminated / Config error → 503 Service Unavailable
-/// - Auth failed → 401 Unauthorized
-/// - Other errors → 500 Internal Server Error
-fn plugin_error_to_api_error(err: PluginError) -> ApiError {
-    match &err {
-        PluginError::Rpc(rpc_err) => match rpc_err {
-            RpcError::RateLimited {
-                retry_after_seconds,
-            } => ApiError::TooManyRequests(format!(
-                "Plugin rate limited. Retry after {} seconds",
-                retry_after_seconds
-            )),
-            RpcError::Timeout(duration) => ApiError::ServiceUnavailable(format!(
-                "Plugin request timed out after {:.0}s",
-                duration.as_secs_f64()
-            )),
-            RpcError::AuthFailed(msg) => {
-                ApiError::Unauthorized(format!("Plugin authentication failed: {}", msg))
-            }
-            RpcError::ConfigError(msg) => {
-                ApiError::ServiceUnavailable(format!("Plugin configuration error: {}", msg))
-            }
-            RpcError::Process(_) => ApiError::ServiceUnavailable(format!(
-                "Plugin process terminated unexpectedly: {}",
-                rpc_err
-            )),
-            _ => ApiError::Internal(format!("Plugin error: {}", err)),
-        },
-        PluginError::Process(_) => {
-            ApiError::ServiceUnavailable(format!("Plugin process error: {}", err))
-        }
-        PluginError::Disabled { reason } => {
-            ApiError::ServiceUnavailable(format!("Plugin disabled: {}", reason))
-        }
-        _ => ApiError::Internal(format!("Plugin error: {}", err)),
-    }
-}
-
-/// Map a `PluginManagerError` to the appropriate `ApiError`.
-///
-/// Delegates to `plugin_error_to_api_error` for wrapped `PluginError` variants,
-/// and maps manager-specific errors to appropriate HTTP status codes.
-fn plugin_manager_error_to_api_error(err: PluginManagerError) -> ApiError {
-    match err {
-        PluginManagerError::Plugin(plugin_err) => plugin_error_to_api_error(plugin_err),
-        PluginManagerError::RateLimited { .. } => {
-            ApiError::TooManyRequests(format!("Plugin rate limited: {}", err))
-        }
-        PluginManagerError::Encryption(_) => {
-            ApiError::ServiceUnavailable(format!("Plugin encryption error: {}", err))
-        }
-        PluginManagerError::TokenRefreshFailed(_) => {
-            ApiError::Unauthorized(format!("Plugin authentication error: {}", err))
-        }
-        PluginManagerError::ReauthRequired(_) => {
-            ApiError::Unauthorized(format!("Plugin re-authentication required: {}", err))
-        }
-        PluginManagerError::PluginNotFound(_) | PluginManagerError::UserPluginNotFound { .. } => {
-            ApiError::NotFound(err.to_string())
-        }
-        PluginManagerError::PluginNotEnabled(_) => ApiError::NotFound(err.to_string()),
-        PluginManagerError::Database(_) => {
-            ApiError::Internal(format!("Plugin database error: {}", err))
-        }
-    }
-}
+/// Default max age for recommendations in hours before considered stale
+const DEFAULT_RECOMMENDATIONS_MAX_AGE_HOURS: i64 = 24;
 
 /// Get personalized recommendations
 ///
-/// Returns recommendations from the user's enabled recommendation plugin.
-/// The plugin may return cached results or generate fresh recommendations.
+/// Returns cached recommendations from the database. If no cached data exists
+/// or the data is stale, an empty list is returned and a background refresh
+/// task is auto-triggered. The frontend should use SSE task progress events
+/// to know when fresh data is ready.
 #[utoipa::path(
     get,
     path = "/api/v1/user/recommendations",
@@ -161,94 +91,137 @@ pub async fn get_recommendations(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
 ) -> Result<Json<RecommendationsResponse>, ApiError> {
-    let (plugin, _instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
+    let (plugin, instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
 
     debug!(
         user_id = %auth.user_id,
         plugin_id = %plugin.id,
-        "Fetching recommendations from plugin"
+        "Reading cached recommendations from DB"
     );
 
-    // Spawn plugin and call recommendations/get
-    let (handle, _context) = state
-        .plugin_manager
-        .get_user_plugin_handle(plugin.id, auth.user_id, None)
+    // Read cached recommendations from user_plugin_data
+    let cached_entry = UserPluginDataRepository::get(&state.db, instance.id, "recommendations")
         .await
-        .map_err(|e| {
-            warn!(
-                plugin_id = %plugin.id,
-                error = %e,
-                "Failed to spawn recommendation plugin"
-            );
-            plugin_manager_error_to_api_error(e)
-        })?;
+        .map_err(|e| ApiError::Internal(format!("Failed to read cached recommendations: {}", e)))?;
 
-    // Build user's library data to seed recommendations
-    let library = match build_user_library(&state.db, auth.user_id).await {
-        Ok(lib) => lib,
-        Err(e) => {
-            warn!(
-                user_id = %auth.user_id,
-                error = %e,
-                "Failed to build user library for recommendations"
-            );
-            // Stop the handle before returning the error
-            if let Err(stop_err) = handle.stop().await {
-                warn!(plugin_id = %plugin.id, error = %stop_err, "Failed to stop recommendation plugin handle");
+    // Try to deserialize cached data
+    let cached_response = cached_entry.as_ref().and_then(|entry| {
+        serde_json::from_value::<RecommendationResponse>(entry.data.clone()).ok()
+    });
+
+    // Check staleness
+    let max_age_hours = plugin
+        .config
+        .get("recommendations_max_age_hours")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(DEFAULT_RECOMMENDATIONS_MAX_AGE_HOURS);
+
+    let is_stale = cached_entry.as_ref().is_none_or(|entry| {
+        let age = Utc::now() - entry.updated_at;
+        age.num_hours() >= max_age_hours
+    });
+
+    let has_data = cached_response.is_some();
+
+    // Check for active task
+    let active_task = TaskRepository::find_pending_or_processing_task(
+        &state.db,
+        "user_plugin_recommendations",
+        plugin.id,
+        auth.user_id,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to check task status: {}", e)))?;
+
+    // Auto-trigger refresh if empty or stale and no task already running
+    if is_stale && active_task.is_none() {
+        debug!(
+            user_id = %auth.user_id,
+            plugin_id = %plugin.id,
+            has_data = has_data,
+            "Recommendations empty or stale, auto-triggering refresh task"
+        );
+
+        let task_type = TaskType::UserPluginRecommendations {
+            plugin_id: plugin.id,
+            user_id: auth.user_id,
+        };
+
+        match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+            Ok(task_id) => {
+                info!(
+                    user_id = %auth.user_id,
+                    plugin_id = %plugin.id,
+                    task_id = %task_id,
+                    "Auto-enqueued recommendations refresh task"
+                );
+                // Return response with the newly created task info
+                let (recommendations, generated_at, cached) = match cached_response {
+                    Some(resp) => (
+                        resp.recommendations
+                            .into_iter()
+                            .map(to_recommendation_dto)
+                            .collect(),
+                        resp.generated_at,
+                        true,
+                    ),
+                    None => (vec![], None, false),
+                };
+
+                return Ok(Json(RecommendationsResponse {
+                    recommendations,
+                    plugin_id: plugin.id,
+                    plugin_name: plugin.display_name.clone(),
+                    generated_at,
+                    cached,
+                    task_status: Some("pending".to_string()),
+                    task_id: Some(task_id),
+                }));
             }
-            return Err(ApiError::Internal(format!(
-                "Failed to build library data: {}",
-                e
-            )));
+            Err(e) => {
+                warn!(
+                    user_id = %auth.user_id,
+                    plugin_id = %plugin.id,
+                    error = %e,
+                    "Failed to auto-enqueue refresh task"
+                );
+            }
         }
-    };
-
-    debug!(
-        user_id = %auth.user_id,
-        library_entries = library.len(),
-        "Sending library data to recommendation plugin"
-    );
-
-    let request = RecommendationRequest {
-        library,
-        limit: Some(20),
-        exclude_ids: vec![],
-    };
-
-    let result = handle
-        .call_method::<RecommendationRequest, RecommendationResponse>(
-            methods::RECOMMENDATIONS_GET,
-            request,
-        )
-        .await;
-
-    // Always stop the user plugin handle to clean up the spawned process
-    if let Err(e) = handle.stop().await {
-        warn!(plugin_id = %plugin.id, error = %e, "Failed to stop recommendation plugin handle");
     }
 
-    let response = result.map_err(|e| {
-        warn!(
-            plugin_id = %plugin.id,
-            error = %e,
-            "Failed to get recommendations from plugin"
-        );
-        plugin_error_to_api_error(e)
-    })?;
+    // Map DB status "processing" → API "running" for frontend consistency
+    let (task_status, task_id) = match active_task {
+        Some((id, status)) => {
+            let api_status = match status.as_str() {
+                "processing" => "running",
+                other => other,
+            };
+            (Some(api_status.to_string()), Some(id))
+        }
+        None => (None, None),
+    };
 
-    // Convert plugin response to API DTO
-    let recommendations = response
-        .recommendations
-        .into_iter()
-        .map(to_recommendation_dto)
-        .collect();
+    // Build response from cached data
+    let (recommendations, generated_at, cached) = match cached_response {
+        Some(resp) => (
+            resp.recommendations
+                .into_iter()
+                .map(to_recommendation_dto)
+                .collect(),
+            resp.generated_at,
+            true,
+        ),
+        None => (vec![], None, false),
+    };
 
     Ok(Json(RecommendationsResponse {
         recommendations,
         plugin_id: plugin.id,
         plugin_name: plugin.display_name.clone(),
-        generated_at: response.generated_at,
-        cached: response.cached,
+        generated_at,
+        cached,
+        task_status,
+        task_id,
     }))
 }
 
@@ -337,8 +310,8 @@ fn to_recommendation_dto(
 
 /// Dismiss a recommendation
 ///
-/// Tells the recommendation plugin that the user is not interested in a
-/// particular recommendation, so it can be excluded from future results.
+/// Removes the recommendation from the cached list immediately and enqueues
+/// a background task to notify the plugin asynchronously. Returns instantly.
 #[utoipa::path(
     post,
     path = "/api/v1/user/recommendations/{external_id}/dismiss",
@@ -359,77 +332,121 @@ pub async fn dismiss_recommendation(
     Path(external_id): Path<String>,
     Json(request): Json<DismissRecommendationRequest>,
 ) -> Result<Json<DismissRecommendationResponse>, ApiError> {
-    let (plugin, _instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
+    let (plugin, instance) = find_recommendation_plugin(&state.db, auth.user_id).await?;
 
     debug!(
         user_id = %auth.user_id,
         plugin_id = %plugin.id,
         external_id = %external_id,
-        "Dismissing recommendation"
+        "Dismissing recommendation (non-blocking)"
     );
 
-    // Spawn plugin and call recommendations/dismiss
-    let (handle, _context) = state
-        .plugin_manager
-        .get_user_plugin_handle(plugin.id, auth.user_id, None)
+    // 1. Read cached recommendations from DB
+    let cached_entry = UserPluginDataRepository::get(&state.db, instance.id, "recommendations")
         .await
-        .map_err(|e| {
-            warn!(
-                plugin_id = %plugin.id,
-                error = %e,
-                "Failed to spawn recommendation plugin for dismiss"
-            );
-            plugin_manager_error_to_api_error(e)
-        })?;
+        .map_err(|e| ApiError::Internal(format!("Failed to read cached recommendations: {}", e)))?;
 
-    let dismiss_request = RecommendationDismissRequest {
-        external_id: external_id.clone(),
-        reason: request.reason.and_then(|r| match r.as_str() {
-            "not_interested" => {
-                Some(crate::services::plugin::recommendations::DismissReason::NotInterested)
-            }
-            "already_read" => {
-                Some(crate::services::plugin::recommendations::DismissReason::AlreadyRead)
-            }
-            "already_owned" => {
-                Some(crate::services::plugin::recommendations::DismissReason::AlreadyOwned)
-            }
-            _ => None,
-        }),
-    };
+    // 2. Filter out the dismissed entry and write back
+    if let Some(entry) = cached_entry
+        && let Ok(mut cached) = serde_json::from_value::<RecommendationResponse>(entry.data.clone())
+    {
+        let before_count = cached.recommendations.len();
+        cached
+            .recommendations
+            .retain(|r| r.external_id != external_id);
 
-    let result = handle
-        .call_method::<RecommendationDismissRequest, crate::services::plugin::recommendations::RecommendationDismissResponse>(
-            methods::RECOMMENDATIONS_DISMISS,
-            dismiss_request,
-        )
-        .await;
+        if cached.recommendations.len() < before_count {
+            let updated_data = serde_json::to_value(&cached).map_err(|e| {
+                ApiError::Internal(format!("Failed to serialize recommendations: {}", e))
+            })?;
 
-    // Always stop the user plugin handle to clean up the spawned process
-    if let Err(e) = handle.stop().await {
-        warn!(plugin_id = %plugin.id, error = %e, "Failed to stop recommendation plugin handle");
+            UserPluginDataRepository::set(
+                &state.db,
+                instance.id,
+                "recommendations",
+                updated_data,
+                None,
+            )
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to update cached recommendations: {}", e))
+            })?;
+        }
     }
 
-    let response = result.map_err(|e| {
+    // 3. Parse dismiss reason
+    let reason = request.reason.and_then(|r| match r.as_str() {
+        "not_interested" => Some("not_interested".to_string()),
+        "already_read" => Some("already_read".to_string()),
+        "already_owned" => Some("already_owned".to_string()),
+        _ => None,
+    });
+
+    // 4. Enqueue async task to notify plugin
+    let task_type = TaskType::UserPluginRecommendationDismiss {
+        plugin_id: plugin.id,
+        user_id: auth.user_id,
+        external_id: external_id.clone(),
+        reason,
+    };
+
+    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, 0, None).await {
         warn!(
             plugin_id = %plugin.id,
+            external_id = %external_id,
             error = %e,
-            "Failed to dismiss recommendation"
+            "Failed to enqueue dismiss task (dismissal from cache still succeeded)"
         );
-        plugin_error_to_api_error(e)
-    })?;
+    }
 
-    Ok(Json(DismissRecommendationResponse {
-        dismissed: response.dismissed,
-    }))
+    Ok(Json(DismissRecommendationResponse { dismissed: true }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::error::ApiError;
+    use crate::services::plugin::handle::PluginError;
     use crate::services::plugin::process::ProcessError;
     use crate::services::plugin::recommendations::Recommendation;
+    use crate::services::plugin::rpc::RpcError;
     use std::time::Duration;
+
+    /// Map a `PluginError` to the appropriate `ApiError` with proper HTTP status codes.
+    fn plugin_error_to_api_error(err: PluginError) -> ApiError {
+        match &err {
+            PluginError::Rpc(rpc_err) => match rpc_err {
+                RpcError::RateLimited {
+                    retry_after_seconds,
+                } => ApiError::TooManyRequests(format!(
+                    "Plugin rate limited. Retry after {} seconds",
+                    retry_after_seconds
+                )),
+                RpcError::Timeout(duration) => ApiError::ServiceUnavailable(format!(
+                    "Plugin request timed out after {:.0}s",
+                    duration.as_secs_f64()
+                )),
+                RpcError::AuthFailed(msg) => {
+                    ApiError::Unauthorized(format!("Plugin authentication failed: {}", msg))
+                }
+                RpcError::ConfigError(msg) => {
+                    ApiError::ServiceUnavailable(format!("Plugin configuration error: {}", msg))
+                }
+                RpcError::Process(_) => ApiError::ServiceUnavailable(format!(
+                    "Plugin process terminated unexpectedly: {}",
+                    rpc_err
+                )),
+                _ => ApiError::Internal(format!("Plugin error: {}", err)),
+            },
+            PluginError::Process(_) => {
+                ApiError::ServiceUnavailable(format!("Plugin process error: {}", err))
+            }
+            PluginError::Disabled { reason } => {
+                ApiError::ServiceUnavailable(format!("Plugin disabled: {}", reason))
+            }
+            _ => ApiError::Internal(format!("Plugin error: {}", err)),
+        }
+    }
 
     /// Verify that the Recommendation → RecommendationDto mapping preserves all fields
     /// when all optional fields are populated.
@@ -544,6 +561,8 @@ mod tests {
             plugin_name: "AniList Recommendations".to_string(),
             generated_at: Some("2026-02-09T12:00:00Z".to_string()),
             cached: true,
+            task_status: None,
+            task_id: None,
         };
 
         let json = serde_json::to_value(&response).unwrap();

@@ -4,7 +4,12 @@ import { api } from "./client";
 // Re-export generated types for convenience
 export type RecommendationDto = components["schemas"]["RecommendationDto"];
 export type RecommendationsResponse =
-  components["schemas"]["RecommendationsResponse"];
+  components["schemas"]["RecommendationsResponse"] & {
+    /** Status of a running/pending background task ("pending" | "running"), if any */
+    taskStatus?: "pending" | "running";
+    /** ID of the running/pending background task, if any */
+    taskId?: string;
+  };
 export type RecommendationsRefreshResponse =
   components["schemas"]["RecommendationsRefreshResponse"];
 export type DismissRecommendationRequest =

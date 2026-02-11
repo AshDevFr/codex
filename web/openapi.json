@@ -12144,7 +12144,7 @@
           "Recommendations"
         ],
         "summary": "Get personalized recommendations",
-        "description": "Returns recommendations from the user's enabled recommendation plugin.\nThe plugin may return cached results or generate fresh recommendations.",
+        "description": "Returns cached recommendations from the database. If no cached data exists\nor the data is stale, an empty list is returned and a background refresh\ntask is auto-triggered. The frontend should use SSE task progress events\nto know when fresh data is ready.",
         "operationId": "get_recommendations",
         "responses": {
           "200": {
@@ -12203,7 +12203,7 @@
           "Recommendations"
         ],
         "summary": "Dismiss a recommendation",
-        "description": "Tells the recommendation plugin that the user is not interested in a\nparticular recommendation, so it can be excluded from future results.",
+        "description": "Removes the recommendation from the cached list immediately and enqueues\na background task to notify the plugin asynchronously. Returns instantly.",
         "operationId": "dismiss_recommendation",
         "parameters": [
           {
@@ -27810,6 +27810,21 @@
               "$ref": "#/components/schemas/RecommendationDto"
             },
             "description": "Personalized recommendations"
+          },
+          "taskId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "ID of the running/pending background task, if any"
+          },
+          "taskStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Status of a running/pending background task (\"pending\" or \"running\"), if any"
           }
         }
       },
@@ -31343,6 +31358,41 @@
                 "type": "string",
                 "enum": [
                   "user_plugin_recommendations"
+                ]
+              },
+              "userId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Notify a plugin that a recommendation was dismissed",
+            "required": [
+              "pluginId",
+              "userId",
+              "externalId",
+              "type"
+            ],
+            "properties": {
+              "externalId": {
+                "type": "string"
+              },
+              "pluginId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_plugin_recommendation_dismiss"
                 ]
               },
               "userId": {

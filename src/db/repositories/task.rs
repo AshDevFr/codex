@@ -318,6 +318,59 @@ impl TaskRepository {
         Ok(result.is_some())
     }
 
+    /// Find a pending or processing task with matching params, returning its ID and status.
+    ///
+    /// Like `has_pending_or_processing` but returns the task ID and status string
+    /// so callers can expose task progress to the frontend.
+    pub async fn find_pending_or_processing_task(
+        db: &DatabaseConnection,
+        task_type: &str,
+        plugin_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<(Uuid, String)>> {
+        let plugin_id_str = plugin_id.to_string();
+        let user_id_str = user_id.to_string();
+        let backend = db.get_database_backend();
+
+        let stmt = match backend {
+            DbBackend::Postgres => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"SELECT id, status FROM tasks
+                   WHERE task_type = $1
+                     AND status IN ('pending', 'processing')
+                     AND params->>'plugin_id' = $2
+                     AND params->>'user_id' = $3
+                   LIMIT 1"#,
+                vec![task_type.into(), plugin_id_str.into(), user_id_str.into()],
+            ),
+            _ => Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"SELECT id, status FROM tasks
+                   WHERE task_type = ?
+                     AND status IN ('pending', 'processing')
+                     AND json_extract(params, '$.plugin_id') = ?
+                     AND json_extract(params, '$.user_id') = ?
+                   LIMIT 1"#,
+                vec![task_type.into(), plugin_id_str.into(), user_id_str.into()],
+            ),
+        };
+
+        let result = db
+            .query_one(stmt)
+            .await
+            .context("Failed to find pending/processing task")?;
+
+        match result {
+            Some(row) => {
+                let id: String = row.try_get("", "id")?;
+                let status: String = row.try_get("", "status")?;
+                let task_id = Uuid::parse_str(&id)?;
+                Ok(Some((task_id, status)))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Claim next available task (atomic operation using SKIP LOCKED for Postgres, transaction for SQLite)
     ///
     /// # Arguments

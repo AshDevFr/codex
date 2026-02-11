@@ -423,14 +423,13 @@ async fn test_recommendations_disabled_plugin_returns_404() {
 }
 
 // =============================================================================
-// Get Recommendations Tests (connected plugin, error handling)
+// Get Recommendations Tests (pure DB read, task auto-triggering)
 // =============================================================================
 
 #[tokio::test]
-async fn test_get_recommendations_connected_plugin_graceful_error() {
-    // When a recommendation plugin is enabled and "connected" (has OAuth tokens),
-    // but the plugin process can't actually be spawned (because the command is "echo"),
-    // the endpoint should return a 500 error (not crash) with a meaningful message.
+async fn test_get_recommendations_returns_empty_and_triggers_task() {
+    // When a recommendation plugin is enabled and connected but no cached data exists,
+    // GET should return 200 with empty recommendations and auto-trigger a refresh task.
     ensure_test_encryption_key();
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
@@ -466,24 +465,87 @@ async fn test_get_recommendations_connected_plugin_graceful_error() {
     .await
     .unwrap();
 
-    // GET recommendations — plugin process will fail to spawn (command is "echo")
-    // but the endpoint should handle this gracefully
+    // GET recommendations — no cached data, should return empty list with task status
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth("/api/v1/user/recommendations", &token);
     let (status, response): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
-    // Should return 500 with an error message, not panic or hang
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    let body = response.expect("Expected error response body");
-    assert!(body.get("message").is_some());
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+    assert!(body["recommendations"].as_array().unwrap().is_empty());
+    assert_eq!(body["pluginName"], "AniList Recommendations");
+    // Should have auto-triggered a task
+    assert_eq!(body["taskStatus"], "pending");
+    assert!(body.get("taskId").is_some());
+}
+
+#[tokio::test]
+async fn test_get_recommendations_returns_cached_data() {
+    // When cached recommendation data exists in user_plugin_data, GET returns it.
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id =
+        create_recommendation_plugin(&db, "recommendations-anilist", "AniList Recommendations")
+            .await;
+
+    // Enable the plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Store cached recommendations in user_plugin_data
+    let cached_data = json!({
+        "recommendations": [{
+            "externalId": "99",
+            "title": "Cached Manga",
+            "score": 0.8,
+            "reason": "From cache"
+        }],
+        "generatedAt": "2026-02-11T10:00:00Z",
+        "cached": true
+    });
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance.id,
+        "recommendations",
+        cached_data,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // GET recommendations — should return cached data
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/user/recommendations", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+    let recs = body["recommendations"].as_array().unwrap();
+    assert_eq!(recs.len(), 1);
+    assert_eq!(recs[0]["title"], "Cached Manga");
+    assert!(body["cached"].as_bool().unwrap());
 }
 
 #[tokio::test]
 async fn test_get_recommendations_enabled_but_not_connected() {
     // When a recommendation plugin is enabled but not connected (no OAuth tokens),
-    // the GET endpoint should still attempt to call the plugin.
-    // This tests that the API layer doesn't require connected status for GET.
+    // GET should still return 200 with empty list (pure DB read, no plugin spawn).
     ensure_test_encryption_key();
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
@@ -503,14 +565,15 @@ async fn test_get_recommendations_enabled_but_not_connected() {
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
 
-    // GET recommendations — should fail gracefully (plugin spawn will fail)
+    // GET recommendations — returns empty list (no cached data), auto-triggers task
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth("/api/v1/user/recommendations", &token);
-    let (status, _): (StatusCode, Option<serde_json::Value>) =
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
-    // Plugin spawn will fail, should get 500 not a panic
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+    assert!(body["recommendations"].as_array().unwrap().is_empty());
 }
 
 // =============================================================================
@@ -518,9 +581,9 @@ async fn test_get_recommendations_enabled_but_not_connected() {
 // =============================================================================
 
 #[tokio::test]
-async fn test_dismiss_recommendation_connected_plugin_graceful_error() {
-    // When a recommendation plugin is enabled and connected, but the plugin
-    // process can't actually be spawned, dismiss should return an error gracefully.
+async fn test_dismiss_recommendation_non_blocking() {
+    // When a recommendation plugin is enabled and connected, dismiss should
+    // return 200 immediately (non-blocking) and enqueue an async task.
     ensure_test_encryption_key();
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
@@ -555,7 +618,36 @@ async fn test_dismiss_recommendation_connected_plugin_graceful_error() {
     .await
     .unwrap();
 
-    // Dismiss a recommendation — plugin will fail to spawn
+    // Store some cached recommendations first
+    let cached_data = json!({
+        "recommendations": [
+            {
+                "externalId": "12345",
+                "title": "To Dismiss",
+                "score": 0.8,
+                "reason": "test"
+            },
+            {
+                "externalId": "67890",
+                "title": "To Keep",
+                "score": 0.7,
+                "reason": "test"
+            }
+        ],
+        "generatedAt": "2026-02-11T10:00:00Z",
+        "cached": true
+    });
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance.id,
+        "recommendations",
+        cached_data,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Dismiss recommendation 12345 — should return 200 immediately
     let body = json!({"reason": "not_interested"});
     let app = create_test_router(state.clone()).await;
     let request =
@@ -563,10 +655,19 @@ async fn test_dismiss_recommendation_connected_plugin_graceful_error() {
     let (status, response): (StatusCode, Option<serde_json::Value>) =
         make_json_request(app, request).await;
 
-    // Should return 500 with error message, not panic
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    let body = response.expect("Expected error response body");
-    assert!(body.get("message").is_some());
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+    assert!(body["dismissed"].as_bool().unwrap());
+
+    // Verify the cached data was updated (12345 removed, 67890 still there)
+    let cached =
+        codex::db::repositories::UserPluginDataRepository::get(&db, instance.id, "recommendations")
+            .await
+            .unwrap()
+            .expect("Cached data should still exist");
+    let recs = cached.data["recommendations"].as_array().unwrap();
+    assert_eq!(recs.len(), 1);
+    assert_eq!(recs[0]["externalId"], "67890");
 }
 
 #[tokio::test]

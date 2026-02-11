@@ -30,7 +30,8 @@ use crate::tasks::handlers::{
     FindDuplicatesHandler, GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler,
     GenerateThumbnailHandler, GenerateThumbnailsHandler, PluginAutoMatchHandler,
     PurgeDeletedHandler, ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler,
-    ScanLibraryHandler, TaskHandler, UserPluginRecommendationsHandler, UserPluginSyncHandler,
+    ScanLibraryHandler, TaskHandler, UserPluginRecommendationDismissHandler,
+    UserPluginRecommendationsHandler, UserPluginSyncHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -234,6 +235,16 @@ impl TaskWorker {
         self.handlers.insert(
             "user_plugin_recommendations".to_string(),
             Arc::new(recs_handler),
+        );
+        // Register user plugin recommendation dismiss handler
+        let mut dismiss_handler =
+            UserPluginRecommendationDismissHandler::new(plugin_manager.clone());
+        if let Some(ref settings_service) = self.settings_service {
+            dismiss_handler = dismiss_handler.with_settings_service(settings_service.clone());
+        }
+        self.handlers.insert(
+            "user_plugin_recommendation_dismiss".to_string(),
+            Arc::new(dismiss_handler),
         );
         self.plugin_manager = Some(plugin_manager);
         self

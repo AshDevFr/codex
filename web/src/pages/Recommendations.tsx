@@ -16,18 +16,42 @@ import {
   IconSparkles,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import {
   type RecommendationsResponse,
   recommendationsApi,
 } from "@/api/recommendations";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { ApiError } from "@/types";
 
 export function Recommendations() {
   useDocumentTitle("Recommendations");
 
   const queryClient = useQueryClient();
+  const { activeTasks } = useTaskProgress();
+
+  // Track whether we have an active recommendation task (via SSE)
+  const recTask = activeTasks.find(
+    (t) => t.taskType === "user_plugin_recommendations",
+  );
+  const prevRecTaskRef = useRef(recTask);
+
+  // When a recommendation task completes, invalidate the query to fetch fresh data
+  useEffect(() => {
+    const prev = prevRecTaskRef.current;
+    prevRecTaskRef.current = recTask;
+
+    // If previous task existed and was running/pending, but now it's gone or completed
+    if (
+      prev &&
+      (prev.status === "running" || prev.status === "pending") &&
+      (!recTask || recTask.status === "completed")
+    ) {
+      queryClient.invalidateQueries({ queryKey: ["recommendations"] });
+    }
+  }, [recTask, queryClient]);
 
   // Fetch recommendations
   const {
@@ -40,6 +64,13 @@ export function Recommendations() {
     retry: false,
   });
 
+  // Determine if a task is active (from response or SSE)
+  const isTaskActive =
+    recData?.taskStatus === "pending" ||
+    recData?.taskStatus === "running" ||
+    (recTask != null &&
+      (recTask.status === "running" || recTask.status === "pending"));
+
   // Refresh mutation
   const refreshMutation = useMutation({
     mutationFn: recommendationsApi.refresh,
@@ -49,10 +80,8 @@ export function Recommendations() {
         message: data.message,
         color: "blue",
       });
-      // Invalidate after a short delay to allow the task to start
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["recommendations"] });
-      }, 2000);
+      // Invalidate to pick up the new task status
+      queryClient.invalidateQueries({ queryKey: ["recommendations"] });
     },
     onError: (error: Error) => {
       notifications.show({
@@ -157,14 +186,25 @@ export function Recommendations() {
               </Text>
             )}
           </Group>
-          <Button
-            leftSection={<IconRefresh size={16} />}
-            variant="light"
-            onClick={() => refreshMutation.mutate()}
-            loading={refreshMutation.isPending}
-          >
-            Refresh
-          </Button>
+          <Group gap="sm">
+            {isTaskActive && (
+              <Group gap={4}>
+                <Loader size={14} />
+                <Text size="sm" c="dimmed">
+                  Generating...
+                </Text>
+              </Group>
+            )}
+            <Button
+              leftSection={<IconRefresh size={16} />}
+              variant="light"
+              onClick={() => refreshMutation.mutate()}
+              loading={refreshMutation.isPending}
+              disabled={isTaskActive}
+            >
+              Refresh
+            </Button>
+          </Group>
         </Group>
 
         {/* Plugin info */}
@@ -177,7 +217,7 @@ export function Recommendations() {
         )}
 
         {/* Empty state */}
-        {isEmpty && (
+        {isEmpty && !isTaskActive && (
           <Alert
             icon={<IconSparkles size={16} />}
             title="No recommendations yet"
@@ -187,6 +227,17 @@ export function Recommendations() {
             Your recommendation plugin hasn&apos;t generated any suggestions
             yet. Try clicking Refresh to generate recommendations based on your
             library.
+          </Alert>
+        )}
+        {isEmpty && isTaskActive && (
+          <Alert
+            icon={<Loader size={16} />}
+            title="Generating recommendations"
+            color="blue"
+            variant="light"
+          >
+            Your recommendations are being generated. This page will update
+            automatically when they&apos;re ready.
           </Alert>
         )}
 
