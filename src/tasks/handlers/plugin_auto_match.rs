@@ -267,7 +267,8 @@ impl PluginAutoMatchHandler {
                 {
                     Ok(response) => response,
                     Err(e) => {
-                        let is_rate_limited = matches!(&e, PluginManagerError::RateLimited { .. });
+                        let is_rate_limited = matches!(&e, PluginManagerError::RateLimited { .. })
+                            || e.rpc_retry_after_seconds().is_some();
                         if is_rate_limited {
                             debug!(
                                 "Task {}: Book {} rate-limited during search",
@@ -787,7 +788,8 @@ impl TaskHandler for PluginAutoMatchHandler {
                     }
                     Err(e) => {
                         // Check if this is a rate limit error (expected, not an error)
-                        let is_rate_limited = matches!(&e, PluginManagerError::RateLimited { .. });
+                        let is_rate_limited = matches!(&e, PluginManagerError::RateLimited { .. })
+                            || e.rpc_retry_after_seconds().is_some();
 
                         if is_rate_limited {
                             debug!(

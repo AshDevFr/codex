@@ -42,6 +42,20 @@ pub enum PluginError {
     SpawnFailed(String),
 }
 
+impl PluginError {
+    /// Check if this error is a rate limit from the plugin's RPC layer.
+    ///
+    /// Returns the `retry_after_seconds` value if this is an RPC rate limit error.
+    pub fn rpc_retry_after_seconds(&self) -> Option<u64> {
+        match self {
+            PluginError::Rpc(RpcError::RateLimited {
+                retry_after_seconds,
+            }) => Some(*retry_after_seconds),
+            _ => None,
+        }
+    }
+}
+
 /// Configuration for a plugin handle
 ///
 /// Note: The `credentials` field uses `SecretValue` which implements `Debug`

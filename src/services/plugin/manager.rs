@@ -99,6 +99,19 @@ pub enum PluginManagerError {
     ReauthRequired(Uuid),
 }
 
+impl PluginManagerError {
+    /// Check if this error is a rate limit from the plugin's RPC layer
+    /// (i.e., the external API returned a rate limit, not our local token bucket)
+    ///
+    /// Returns the `retry_after_seconds` value if this is an RPC rate limit error.
+    pub fn rpc_retry_after_seconds(&self) -> Option<u64> {
+        match self {
+            PluginManagerError::Plugin(e) => e.rpc_retry_after_seconds(),
+            _ => None,
+        }
+    }
+}
+
 /// Context for a user plugin operation
 ///
 /// Tracks the user and their plugin instance, used for scoping
@@ -1013,19 +1026,32 @@ impl PluginManager {
                 }
             }
             Err(e) => {
-                error!(
-                    plugin_id = %plugin_id,
-                    plugin_name = %plugin_name,
-                    query = %params.query,
-                    duration_ms = duration_ms,
-                    timeout_ms = timeout_ms,
-                    error = %e,
-                    error_debug = ?e,
-                    "Plugin search failed"
-                );
+                if e.rpc_retry_after_seconds().is_some() {
+                    warn!(
+                        plugin_id = %plugin_id,
+                        plugin_name = %plugin_name,
+                        query = %params.query,
+                        duration_ms = duration_ms,
+                        error = %e,
+                        "Plugin search rate limited by external API"
+                    );
+                } else {
+                    error!(
+                        plugin_id = %plugin_id,
+                        plugin_name = %plugin_name,
+                        query = %params.query,
+                        duration_ms = duration_ms,
+                        timeout_ms = timeout_ms,
+                        error = %e,
+                        error_debug = ?e,
+                        "Plugin search failed"
+                    );
+                }
 
-                // Record failure in metrics
-                if let Some(ref metrics) = self.metrics_service {
+                // Don't record RPC rate limits as failures — the plugin is healthy
+                if e.rpc_retry_after_seconds().is_none()
+                    && let Some(ref metrics) = self.metrics_service
+                {
                     let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
@@ -1072,8 +1098,10 @@ impl PluginManager {
                 }
             }
             Err(e) => {
-                // Record failure in metrics
-                if let Some(ref metrics) = self.metrics_service {
+                // Don't record RPC rate limits as failures — the plugin is healthy
+                if e.rpc_retry_after_seconds().is_none()
+                    && let Some(ref metrics) = self.metrics_service
+                {
                     let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
@@ -1120,8 +1148,10 @@ impl PluginManager {
                 }
             }
             Err(e) => {
-                // Record failure in metrics
-                if let Some(ref metrics) = self.metrics_service {
+                // Don't record RPC rate limits as failures — the plugin is healthy
+                if e.rpc_retry_after_seconds().is_none()
+                    && let Some(ref metrics) = self.metrics_service
+                {
                     let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
@@ -1181,17 +1211,30 @@ impl PluginManager {
                 }
             }
             Err(e) => {
-                warn!(
-                    plugin_id = %plugin_id,
-                    isbn = ?params.isbn,
-                    query = ?params.query,
-                    error = %e,
-                    duration_ms = duration_ms,
-                    "Book search failed"
-                );
+                if e.rpc_retry_after_seconds().is_some() {
+                    warn!(
+                        plugin_id = %plugin_id,
+                        isbn = ?params.isbn,
+                        query = ?params.query,
+                        duration_ms = duration_ms,
+                        error = %e,
+                        "Book search rate limited by external API"
+                    );
+                } else {
+                    warn!(
+                        plugin_id = %plugin_id,
+                        isbn = ?params.isbn,
+                        query = ?params.query,
+                        error = %e,
+                        duration_ms = duration_ms,
+                        "Book search failed"
+                    );
+                }
 
-                // Record failure in metrics
-                if let Some(ref metrics) = self.metrics_service {
+                // Don't record RPC rate limits as failures — the plugin is healthy
+                if e.rpc_retry_after_seconds().is_none()
+                    && let Some(ref metrics) = self.metrics_service
+                {
                     let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
@@ -1238,8 +1281,10 @@ impl PluginManager {
                 }
             }
             Err(e) => {
-                // Record failure in metrics
-                if let Some(ref metrics) = self.metrics_service {
+                // Don't record RPC rate limits as failures — the plugin is healthy
+                if e.rpc_retry_after_seconds().is_none()
+                    && let Some(ref metrics) = self.metrics_service
+                {
                     let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
@@ -1286,8 +1331,10 @@ impl PluginManager {
                 }
             }
             Err(e) => {
-                // Record failure in metrics
-                if let Some(ref metrics) = self.metrics_service {
+                // Don't record RPC rate limits as failures — the plugin is healthy
+                if e.rpc_retry_after_seconds().is_none()
+                    && let Some(ref metrics) = self.metrics_service
+                {
                     let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
