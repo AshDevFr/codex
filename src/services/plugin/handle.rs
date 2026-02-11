@@ -549,13 +549,9 @@ impl PluginHandle {
     }
 }
 
-// Note: We need a custom impl because RpcClient contains tokio tasks
-impl Drop for PluginHandle {
-    fn drop(&mut self) {
-        // The RpcClient will clean up its tasks when dropped
-        // The process will be killed due to kill_on_drop(true)
-    }
-}
+// Note: PluginHandle doesn't need special Drop logic because RpcClient::Drop
+// aborts the reader task, releasing the Arc<PluginProcess>. This allows the
+// PluginProcess to drop and kill_on_drop(true) to fire, cleaning up the OS process.
 
 #[cfg(test)]
 mod tests {

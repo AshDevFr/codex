@@ -109,16 +109,24 @@ pub async fn get_recommendations(
         })?;
 
     // Build user's library data to seed recommendations
-    let library = build_user_library(&state.db, auth.user_id)
-        .await
-        .map_err(|e| {
+    let library = match build_user_library(&state.db, auth.user_id).await {
+        Ok(lib) => lib,
+        Err(e) => {
             warn!(
                 user_id = %auth.user_id,
                 error = %e,
                 "Failed to build user library for recommendations"
             );
-            ApiError::Internal(format!("Failed to build library data: {}", e))
-        })?;
+            // Stop the handle before returning the error
+            if let Err(stop_err) = handle.stop().await {
+                warn!(plugin_id = %plugin.id, error = %stop_err, "Failed to stop recommendation plugin handle");
+            }
+            return Err(ApiError::Internal(format!(
+                "Failed to build library data: {}",
+                e
+            )));
+        }
+    };
 
     debug!(
         user_id = %auth.user_id,
@@ -132,20 +140,26 @@ pub async fn get_recommendations(
         exclude_ids: vec![],
     };
 
-    let response = handle
+    let result = handle
         .call_method::<RecommendationRequest, RecommendationResponse>(
             methods::RECOMMENDATIONS_GET,
             request,
         )
-        .await
-        .map_err(|e| {
-            warn!(
-                plugin_id = %plugin.id,
-                error = %e,
-                "Failed to get recommendations from plugin"
-            );
-            ApiError::Internal(format!("Recommendation plugin error: {}", e))
-        })?;
+        .await;
+
+    // Always stop the user plugin handle to clean up the spawned process
+    if let Err(e) = handle.stop().await {
+        warn!(plugin_id = %plugin.id, error = %e, "Failed to stop recommendation plugin handle");
+    }
+
+    let response = result.map_err(|e| {
+        warn!(
+            plugin_id = %plugin.id,
+            error = %e,
+            "Failed to get recommendations from plugin"
+        );
+        ApiError::Internal(format!("Recommendation plugin error: {}", e))
+    })?;
 
     // Convert plugin response to API DTO
     let recommendations = response
@@ -302,20 +316,26 @@ pub async fn dismiss_recommendation(
         }),
     };
 
-    let response = handle
+    let result = handle
         .call_method::<RecommendationDismissRequest, crate::services::plugin::recommendations::RecommendationDismissResponse>(
             methods::RECOMMENDATIONS_DISMISS,
             dismiss_request,
         )
-        .await
-        .map_err(|e| {
-            warn!(
-                plugin_id = %plugin.id,
-                error = %e,
-                "Failed to dismiss recommendation"
-            );
-            ApiError::Internal(format!("Recommendation plugin error: {}", e))
-        })?;
+        .await;
+
+    // Always stop the user plugin handle to clean up the spawned process
+    if let Err(e) = handle.stop().await {
+        warn!(plugin_id = %plugin.id, error = %e, "Failed to stop recommendation plugin handle");
+    }
+
+    let response = result.map_err(|e| {
+        warn!(
+            plugin_id = %plugin.id,
+            error = %e,
+            "Failed to dismiss recommendation"
+        );
+        ApiError::Internal(format!("Recommendation plugin error: {}", e))
+    })?;
 
     Ok(Json(DismissRecommendationResponse {
         dismissed: response.dismissed,

@@ -321,6 +321,11 @@ impl TaskHandler for UserPluginSyncHandler {
                 (0, 0, None)
             };
 
+            // Stop the user plugin handle to clean up the spawned process
+            if let Err(e) = handle.stop().await {
+                warn!("Task {}: Failed to stop plugin handle: {}", task.id, e);
+            }
+
             let had_errors = pull_error.is_some() || push_error.is_some();
 
             // Record sync timestamp on the user plugin instance

@@ -869,13 +869,19 @@ pub async fn get_sync_status(
             .await
         {
             Ok((handle, _context)) => {
-                match handle
+                let result = handle
                     .call_method::<serde_json::Value, SyncStatusResponse>(
                         methods::SYNC_STATUS,
                         serde_json::json!({}),
                     )
-                    .await
-                {
+                    .await;
+
+                // Always stop the user plugin handle to clean up the spawned process
+                if let Err(e) = handle.stop().await {
+                    warn!(plugin_id = %plugin_id, error = %e, "Failed to stop plugin handle");
+                }
+
+                match result {
                     Ok(resp) => (
                         resp.external_count,
                         Some(resp.pending_push),

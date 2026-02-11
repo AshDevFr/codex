@@ -115,19 +115,25 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 exclude_ids: vec![],
             };
 
-            let response = handle
+            let result = handle
                 .call_method::<RecommendationRequest, RecommendationResponse>(
                     methods::RECOMMENDATIONS_GET,
                     request,
                 )
-                .await
-                .map_err(|e| {
-                    warn!(
-                        "Task {}: Failed to generate recommendations: {}",
-                        task.id, e
-                    );
-                    anyhow::anyhow!("Failed to generate recommendations: {}", e)
-                })?;
+                .await;
+
+            // Always stop the user plugin handle to clean up the spawned process
+            if let Err(e) = handle.stop().await {
+                warn!("Task {}: Failed to stop plugin handle: {}", task.id, e);
+            }
+
+            let response = result.map_err(|e| {
+                warn!(
+                    "Task {}: Failed to generate recommendations: {}",
+                    task.id, e
+                );
+                anyhow::anyhow!("Failed to generate recommendations: {}", e)
+            })?;
 
             let count = response.recommendations.len();
             info!(

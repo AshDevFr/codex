@@ -317,6 +317,18 @@ impl RpcClient {
     }
 }
 
+impl Drop for RpcClient {
+    fn drop(&mut self) {
+        // Abort the reader task to release its Arc<Mutex<PluginProcess>> reference.
+        // Without this, the reader task keeps the Arc alive indefinitely, preventing
+        // the PluginProcess from being dropped and its kill_on_drop(true) from firing.
+        // This is the fix for the plugin process leak bug.
+        if let Some(handle) = self.reader_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
 /// Task that reads lines from the plugin process and dispatches them.
 ///
 /// Handles two types of messages:
@@ -526,6 +538,7 @@ async fn response_reader_task(
 
 #[cfg(test)]
 mod tests {
+    use super::super::process::PluginProcessConfig;
     use super::*;
     use serde_json::json;
 
@@ -642,6 +655,40 @@ mod tests {
             }
             _ => panic!("Expected ConfigError"),
         }
+    }
+
+    /// Verify that dropping an RpcClient aborts the reader task, releasing the
+    /// Arc<Mutex<PluginProcess>> so kill_on_drop(true) can fire on the child process.
+    #[tokio::test]
+    async fn test_rpc_client_drop_aborts_reader_task() {
+        // Use `cat` as a trivial long-running process (reads stdin forever).
+        // We need to allow "cat" for the test by setting the env var.
+        unsafe { std::env::set_var("CODEX_PLUGIN_ALLOWED_COMMANDS", "cat") };
+
+        let config = PluginProcessConfig::new("cat");
+        let process = PluginProcess::spawn(&config).await.unwrap();
+
+        // Create RpcClient — this spawns the reader task
+        let client = RpcClient::new(process, Duration::from_secs(5));
+
+        // Grab a clone of the reader task's Arc to verify it gets released
+        let process_arc = Arc::clone(&client.process);
+
+        // Before drop: the Arc has at least 2 strong refs (client + reader task)
+        assert!(Arc::strong_count(&process_arc) >= 2);
+
+        // Drop the client — this should abort the reader task
+        drop(client);
+
+        // Give the abort a moment to propagate
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // After drop: only our local clone of the Arc should remain
+        assert_eq!(
+            Arc::strong_count(&process_arc),
+            1,
+            "Reader task should have been aborted, releasing its Arc reference"
+        );
     }
 
     // Integration test with actual process would look like:
