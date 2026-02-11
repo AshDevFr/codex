@@ -690,6 +690,7 @@ async fn scan_batched(
     let cleanup_start = Instant::now();
     let mut deleted_count = 0;
     let mut restored_count = 0;
+    let mut affected_series_ids: HashSet<Uuid> = HashSet::new();
 
     for (path, (_, book)) in &existing_books_with_hash {
         if !seen_paths.contains(path) {
@@ -700,6 +701,7 @@ async fn scan_batched(
                 match BookRepository::mark_deleted(db, book.id, true, event_broadcaster).await {
                     Ok(_) => {
                         deleted_count += 1;
+                        affected_series_ids.insert(book.series_id);
                     }
                     Err(e) => {
                         let error_msg = format!("Failed to mark book as deleted {}: {}", path, e);
@@ -714,6 +716,7 @@ async fn scan_batched(
             match BookRepository::mark_deleted(db, book.id, false, event_broadcaster).await {
                 Ok(_) => {
                     restored_count += 1;
+                    affected_series_ids.insert(book.series_id);
                 }
                 Err(e) => {
                     let error_msg = format!("Failed to restore book {}: {}", path, e);
@@ -733,6 +736,27 @@ async fn scan_batched(
         );
         shared_state.add_deleted(deleted_count).await;
         shared_state.add_restored(restored_count).await;
+    }
+
+    // Renumber books in series affected by deletions or restorations
+    // This ensures book numbers stay contiguous and deleted books get cleared
+    for series_id in &affected_series_ids {
+        match super::renumber_series_books(db, *series_id, library.id).await {
+            Ok(count) => {
+                if count > 0 {
+                    debug!(
+                        "Renumbered {} books in series {} after delete/restore cleanup",
+                        count, series_id
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to renumber books in series {} after cleanup: {}",
+                    series_id, e
+                );
+            }
+        }
     }
 
     // Extract final results

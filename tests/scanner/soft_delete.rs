@@ -1,7 +1,9 @@
 #[path = "../common/mod.rs"]
 mod common;
 
-use codex::db::repositories::{BookRepository, LibraryRepository, SeriesRepository};
+use codex::db::repositories::{
+    BookMetadataRepository, BookRepository, LibraryRepository, SeriesRepository,
+};
 use codex::models::ScanningStrategy;
 use codex::scanner::{ScanMode, scan_library};
 use common::*;
@@ -395,6 +397,269 @@ async fn test_purge_deleted_on_scan_config() {
         2,
         "Should only have 2 active books remaining"
     );
+
+    db_wrapper.close().await;
+}
+
+// ============================================================================
+// Renumbering on Delete/Restore Tests
+// ============================================================================
+
+use sea_orm::prelude::Decimal;
+
+/// Helper to create metadata with a number for all books in a series
+async fn create_metadata_for_books(db: &sea_orm::DatabaseConnection, series_id: uuid::Uuid) {
+    let books = BookRepository::list_by_series(db, series_id, true)
+        .await
+        .unwrap();
+
+    // Sort by filename using natural sort to assign numbers consistently
+    let mut sorted_books: Vec<_> = books.iter().collect();
+    sorted_books.sort_by(|a, b| a.file_name.cmp(&b.file_name));
+
+    for (i, book) in sorted_books.iter().enumerate() {
+        let number = if book.deleted {
+            None
+        } else {
+            Some(Decimal::from((i + 1) as i64))
+        };
+        BookMetadataRepository::create_with_title_and_number(
+            db,
+            book.id,
+            Some(book.file_name.clone()),
+            number,
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn test_deleted_books_have_number_cleared() {
+    let (db_wrapper, temp_dir) = setup_test_db_wrapper().await;
+    let db = db_wrapper.sea_orm_connection();
+
+    // Create library with 3 files
+    let library = setup_library_with_files(db, &temp_dir, 3).await;
+
+    // Run initial scan to create books
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+        .await
+        .unwrap();
+    assert_eq!(result.books_created, 3);
+
+    let series_list = SeriesRepository::list_by_library(db, library.id)
+        .await
+        .unwrap();
+    let series_id = series_list[0].id;
+
+    // Manually create metadata with numbers (analysis tasks run asynchronously)
+    create_metadata_for_books(db, series_id).await;
+
+    // Verify all books have numbers assigned
+    let books = BookRepository::list_by_series(db, series_id, false)
+        .await
+        .unwrap();
+    assert_eq!(books.len(), 3);
+    for book in &books {
+        let metadata = BookMetadataRepository::get_by_book_id(db, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            metadata.number.is_some(),
+            "Book '{}' should have a number before deletion",
+            book.file_name
+        );
+    }
+
+    // Delete one file from filesystem
+    let series_path = temp_dir.path().join("test_library/Test Series");
+    fs::remove_file(series_path.join("book2.cbz")).unwrap();
+
+    // Run scan - should mark as deleted AND clear number on deleted book
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+        .await
+        .unwrap();
+    assert_eq!(result.books_deleted, 1);
+
+    // Verify deleted book has number cleared
+    let all_books = BookRepository::list_by_series(db, series_id, true)
+        .await
+        .unwrap();
+    let deleted_book = all_books.iter().find(|b| b.deleted).unwrap();
+    let deleted_metadata = BookMetadataRepository::get_by_book_id(db, deleted_book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        deleted_metadata.number.is_none(),
+        "Deleted book '{}' should have number cleared, got {:?}",
+        deleted_book.file_name,
+        deleted_metadata.number
+    );
+
+    // Verify active books still have valid numbers
+    let active_books = BookRepository::list_by_series(db, series_id, false)
+        .await
+        .unwrap();
+    assert_eq!(active_books.len(), 2);
+    for book in &active_books {
+        let metadata = BookMetadataRepository::get_by_book_id(db, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            metadata.number.is_some(),
+            "Active book '{}' should still have a number",
+            book.file_name
+        );
+    }
+
+    db_wrapper.close().await;
+}
+
+#[tokio::test]
+async fn test_restored_books_get_renumbered() {
+    let (db_wrapper, temp_dir) = setup_test_db_wrapper().await;
+    let db = db_wrapper.sea_orm_connection();
+
+    // Create library with 3 files
+    let library = setup_library_with_files(db, &temp_dir, 3).await;
+
+    // Run initial scan and create metadata
+    scan_library(db, library.id, ScanMode::Normal, None, None)
+        .await
+        .unwrap();
+
+    let series_list = SeriesRepository::list_by_library(db, library.id)
+        .await
+        .unwrap();
+    let series_id = series_list[0].id;
+    let series_path = temp_dir.path().join("test_library/Test Series");
+
+    create_metadata_for_books(db, series_id).await;
+
+    // Delete a file and scan to mark it deleted
+    let backup_path = temp_dir.path().join("backup_book2.cbz");
+    fs::rename(series_path.join("book2.cbz"), &backup_path).unwrap();
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+        .await
+        .unwrap();
+    assert_eq!(result.books_deleted, 1);
+
+    // Verify deleted book has number cleared
+    let all_books = BookRepository::list_by_series(db, series_id, true)
+        .await
+        .unwrap();
+    let deleted_book = all_books.iter().find(|b| b.deleted).unwrap();
+    let deleted_metadata = BookMetadataRepository::get_by_book_id(db, deleted_book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        deleted_metadata.number.is_none(),
+        "Deleted book should have number cleared"
+    );
+
+    // Restore the file
+    fs::rename(&backup_path, series_path.join("book2.cbz")).unwrap();
+
+    // Scan again - should restore and renumber
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+        .await
+        .unwrap();
+    assert_eq!(result.books_restored, 1);
+
+    // Verify all active books have numbers (restored book gets renumbered)
+    let active_books = BookRepository::list_by_series(db, series_id, false)
+        .await
+        .unwrap();
+    assert_eq!(active_books.len(), 3);
+    for book in &active_books {
+        let metadata = BookMetadataRepository::get_by_book_id(db, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            metadata.number.is_some(),
+            "Book '{}' should have a number after restore",
+            book.file_name
+        );
+    }
+
+    db_wrapper.close().await;
+}
+
+#[tokio::test]
+async fn test_remaining_books_renumbered_contiguously_after_deletion() {
+    let (db_wrapper, temp_dir) = setup_test_db_wrapper().await;
+    let db = db_wrapper.sea_orm_connection();
+
+    // Create library with 4 files
+    let library = setup_library_with_files(db, &temp_dir, 4).await;
+
+    // Run initial scan and create metadata
+    scan_library(db, library.id, ScanMode::Normal, None, None)
+        .await
+        .unwrap();
+
+    let series_list = SeriesRepository::list_by_library(db, library.id)
+        .await
+        .unwrap();
+    let series_id = series_list[0].id;
+    let series_path = temp_dir.path().join("test_library/Test Series");
+
+    create_metadata_for_books(db, series_id).await;
+
+    // Delete books 1 and 3 (leaving gaps)
+    fs::remove_file(series_path.join("book1.cbz")).unwrap();
+    fs::remove_file(series_path.join("book3.cbz")).unwrap();
+
+    // Scan - should delete 2 books and renumber remaining
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+        .await
+        .unwrap();
+    assert_eq!(result.books_deleted, 2);
+
+    // Verify active books are renumbered contiguously (1, 2) not (2, 4)
+    let active_books = BookRepository::list_by_series(db, series_id, false)
+        .await
+        .unwrap();
+    assert_eq!(active_books.len(), 2);
+
+    let mut numbers: Vec<i64> = Vec::new();
+    for book in &active_books {
+        let metadata = BookMetadataRepository::get_by_book_id(db, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        if let Some(num) = metadata.number {
+            numbers.push(num.to_string().parse::<i64>().unwrap());
+        }
+    }
+    numbers.sort();
+    assert_eq!(
+        numbers,
+        vec![1, 2],
+        "Remaining books should be renumbered contiguously as 1, 2"
+    );
+
+    // Verify deleted books have cleared numbers
+    let all_books = BookRepository::list_by_series(db, series_id, true)
+        .await
+        .unwrap();
+    for book in all_books.iter().filter(|b| b.deleted) {
+        let metadata = BookMetadataRepository::get_by_book_id(db, book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            metadata.number.is_none(),
+            "Deleted book '{}' should have number cleared",
+            book.file_name
+        );
+    }
 
     db_wrapper.close().await;
 }

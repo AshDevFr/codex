@@ -1303,16 +1303,22 @@ pub async fn renumber_series_books(
     let number_config_str = library.number_config.as_ref().map(|v| v.to_string());
     let strategy = create_number_strategy(number_strategy, number_config_str.as_deref());
 
-    // Get all non-deleted books in the series
-    let books = BookRepository::list_by_series(db, series_id, false).await?;
-    if books.is_empty() {
+    // Get ALL books in the series (including deleted) so we can:
+    // 1. Renumber non-deleted books based on their natural sort position
+    // 2. Clear numbers on deleted books so they don't display stale values
+    let all_books = BookRepository::list_by_series(db, series_id, true).await?;
+    if all_books.is_empty() {
         return Ok(0);
     }
 
-    let total_books = books.len();
+    let (active_books, deleted_books): (Vec<_>, Vec<_>) =
+        all_books.iter().partition(|b| !b.deleted);
 
-    // Sort filenames using natural sort to determine positions
-    let mut sorted_filenames: Vec<&str> = books.iter().map(|b| b.file_name.as_str()).collect();
+    let total_active = active_books.len();
+
+    // Sort active filenames using natural sort to determine positions
+    let mut sorted_filenames: Vec<&str> =
+        active_books.iter().map(|b| b.file_name.as_str()).collect();
     sorted_filenames.sort_by(|a, b| crate::utils::natural_cmp(a, b));
 
     // Build a position map: filename -> 1-indexed position
@@ -1322,13 +1328,36 @@ pub async fn renumber_series_books(
         .map(|(i, name)| (*name, i + 1))
         .collect();
 
-    // Get metadata for all books
-    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
-    let metadata_map = BookMetadataRepository::get_by_book_ids(db, &book_ids).await?;
+    // Get metadata for all books (active + deleted)
+    let all_book_ids: Vec<Uuid> = all_books.iter().map(|b| b.id).collect();
+    let metadata_map = BookMetadataRepository::get_by_book_ids(db, &all_book_ids).await?;
 
     let mut updated_count = 0;
 
-    for book in &books {
+    // Clear numbers on deleted books
+    for book in &deleted_books {
+        let Some(metadata) = metadata_map.get(&book.id) else {
+            continue;
+        };
+
+        if metadata.number_lock {
+            continue;
+        }
+
+        if metadata.number.is_some() {
+            let mut updated_metadata = metadata.clone();
+            updated_metadata.number = None;
+            BookMetadataRepository::update(db, &updated_metadata).await?;
+            updated_count += 1;
+            debug!(
+                "Cleared number on deleted book '{}': {:?} -> None",
+                book.file_name, metadata.number
+            );
+        }
+    }
+
+    // Renumber active books
+    for book in &active_books {
         let Some(metadata) = metadata_map.get(&book.id) else {
             // No metadata yet — will be created during analysis
             continue;
@@ -1344,7 +1373,7 @@ pub async fn renumber_series_books(
             .copied()
             .unwrap_or(1);
 
-        let context = NumberContext::new(file_order_position, total_books);
+        let context = NumberContext::new(file_order_position, total_active);
 
         // We pass None for embedded metadata number since we don't have the raw
         // ComicInfo.xml data. This is fine because:
@@ -1372,8 +1401,11 @@ pub async fn renumber_series_books(
 
     if updated_count > 0 {
         info!(
-            "Renumbered {}/{} books in series {}",
-            updated_count, total_books, series_id
+            "Renumbered {}/{} books in series {} ({} deleted books cleared)",
+            updated_count,
+            total_active,
+            series_id,
+            deleted_books.len()
         );
     }
 
