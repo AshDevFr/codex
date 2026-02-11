@@ -49,6 +49,7 @@ fn create_test_plugin() -> plugins::Model {
         auto_match_conditions: None,
         use_existing_external_id: true,
         metadata_targets: None,
+        internal_config: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
         created_by: None,

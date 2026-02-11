@@ -13,7 +13,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconSearch, IconUser, IconX } from "@tabler/icons-react";
+import { IconHash, IconSearch, IconUser, IconX } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -58,8 +58,10 @@ export function MetadataSearchModal({
 }: MetadataSearchModalProps) {
   const [query, setQuery] = useState(initialQuery);
   const [authorQuery, setAuthorQuery] = useState(initialAuthor ?? "");
+  const [externalId, setExternalId] = useState("");
   const [debouncedQuery] = useDebouncedValue(query, 400);
   const [debouncedAuthor] = useDebouncedValue(authorQuery, 400);
+  const [debouncedExternalId] = useDebouncedValue(externalId, 400);
   const [results, setResults] = useState<PluginSearchResultDto[]>([]);
 
   // Track request ID to prevent race conditions in debounced search.
@@ -106,11 +108,75 @@ export function MetadataSearchModal({
     [plugin.pluginId, contentType],
   );
 
+  // Perform lookup by external ID (get instead of search)
+  const performLookup = useCallback(
+    async (id: string) => {
+      const currentRequestId = ++requestIdRef.current;
+
+      try {
+        const response = await pluginsApi.getMetadata(
+          plugin.pluginId,
+          id,
+          contentType,
+        );
+
+        if (currentRequestId !== requestIdRef.current) return;
+
+        if (!response.success || !response.result) {
+          throw new Error(response.error || "Lookup failed");
+        }
+
+        // Convert get response to a search result for uniform display
+        const metadata = response.result as Record<string, unknown>;
+        const result: PluginSearchResultDto = {
+          externalId: (metadata.externalId as string) ?? id,
+          title: (metadata.title as string) ?? id,
+          alternateTitles: Array.isArray(metadata.alternateTitles)
+            ? metadata.alternateTitles.map((t: unknown) =>
+                typeof t === "string" ? t : (t as { title: string }).title,
+              )
+            : [],
+          year: (metadata.year as number) ?? undefined,
+          coverUrl: (metadata.coverUrl as string) ?? undefined,
+          preview: {
+            status: metadata.status as string | undefined,
+            genres: Array.isArray(metadata.genres)
+              ? (metadata.genres as string[])
+              : [],
+            bookCount:
+              contentType === "series"
+                ? (metadata.totalBookCount as number | undefined)
+                : undefined,
+            authors: Array.isArray(metadata.authors)
+              ? (metadata.authors as unknown[]).map((a: unknown) =>
+                  typeof a === "string" ? a : (a as { name: string }).name,
+                )
+              : [],
+          },
+        };
+        setResults([result]);
+      } catch (error) {
+        if (currentRequestId !== requestIdRef.current) return;
+        throw error;
+      }
+    },
+    [plugin.pluginId, contentType],
+  );
+
   // Search mutation with race condition protection
   const searchMutation = useMutation({
-    mutationFn: (params: { query: string; author?: string }) =>
-      performSearch(params.query, params.author),
+    mutationFn: (params: {
+      query: string;
+      author?: string;
+      externalId?: string;
+    }) =>
+      params.externalId
+        ? performLookup(params.externalId)
+        : performSearch(params.query, params.author),
   });
+
+  // Whether external ID mode is active (ID takes priority over title)
+  const isIdMode = debouncedExternalId.trim().length > 0;
 
   // Reset state and trigger search when modal opens
   // biome-ignore lint/correctness/useExhaustiveDependencies: mutate is stable, only trigger on open/query change
@@ -118,6 +184,7 @@ export function MetadataSearchModal({
     if (opened) {
       setQuery(initialQuery);
       setAuthorQuery(initialAuthor ?? "");
+      setExternalId("");
       setResults([]);
       // Reset request tracking
       lastSearchedQueryRef.current = null;
@@ -133,10 +200,17 @@ export function MetadataSearchModal({
   }, [opened, initialQuery, initialAuthor]);
 
   // Auto-search when debounced query or author changes (for user typing)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on query/author change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only trigger on query/author/externalId change
   useEffect(() => {
     // Skip if modal just opened (handled by the effect above)
     if (!opened) return;
+
+    // External ID takes priority over title search
+    const trimmedId = debouncedExternalId.trim();
+    if (trimmedId.length > 0) {
+      searchMutation.mutate({ query: "", externalId: trimmedId });
+      return;
+    }
 
     const trimmedQuery = debouncedQuery.trim();
     if (trimmedQuery.length >= 2) {
@@ -155,7 +229,7 @@ export function MetadataSearchModal({
     } else {
       setResults([]);
     }
-  }, [debouncedQuery, debouncedAuthor]);
+  }, [debouncedQuery, debouncedAuthor, debouncedExternalId]);
 
   const handleSelect = (result: PluginSearchResultDto) => {
     onSelect(result);
@@ -178,6 +252,24 @@ export function MetadataSearchModal({
         {/* Search inputs */}
         <Stack gap="xs">
           <TextInput
+            label="External ID"
+            description="Paste a provider ID to look up directly (takes priority over title)"
+            placeholder="e.g. 12345"
+            value={externalId}
+            onChange={(e) => setExternalId(e.currentTarget.value)}
+            leftSection={<IconHash size={16} />}
+            rightSection={
+              externalId && (
+                <IconX
+                  size={16}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setExternalId("")}
+                />
+              )
+            }
+          />
+
+          <TextInput
             label="Title"
             placeholder={`Search for ${contentType}...`}
             value={query}
@@ -192,7 +284,8 @@ export function MetadataSearchModal({
                 />
               )
             }
-            autoFocus
+            disabled={isIdMode}
+            autoFocus={!isIdMode}
           />
 
           {/* Author filter (for book searches) */}
@@ -212,6 +305,7 @@ export function MetadataSearchModal({
                   />
                 )
               }
+              disabled={isIdMode}
             />
           )}
         </Stack>
@@ -249,11 +343,13 @@ export function MetadataSearchModal({
         {/* No results */}
         {!searchMutation.isPending &&
           !searchMutation.isError &&
-          debouncedQuery.trim().length >= 2 &&
+          (isIdMode || debouncedQuery.trim().length >= 2) &&
           results.length === 0 && (
             <Center py="xl">
               <Text c="dimmed" size="sm">
-                No results found for "{debouncedQuery}"
+                {isIdMode
+                  ? `No results found for ID: ${debouncedExternalId.trim()}`
+                  : `No results found for "${debouncedQuery}"`}
               </Text>
             </Center>
           )}
@@ -277,11 +373,12 @@ export function MetadataSearchModal({
         {/* Initial state hint */}
         {!searchMutation.isPending &&
           !searchMutation.isError &&
+          !isIdMode &&
           debouncedQuery.trim().length < 2 &&
           results.length === 0 && (
             <Center py="xl">
               <Text c="dimmed" size="sm">
-                Enter at least 2 characters to search
+                Enter at least 2 characters to search, or paste an external ID
               </Text>
             </Center>
           )}

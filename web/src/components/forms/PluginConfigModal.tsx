@@ -99,6 +99,7 @@ function PluginConfigContent({
       allLibraries: plugin.libraryIds.length === 0,
       libraryIds: plugin.libraryIds,
       searchQueryTemplate: plugin.searchQueryTemplate ?? "",
+      searchResultsLimit: plugin.internalConfig?.searchResultsLimit ?? null,
       useExistingExternalId: plugin.useExistingExternalId ?? true,
       metadataTargets: initialMetadataTargets,
       oauthClientId: initialOAuthClientId,
@@ -121,6 +122,9 @@ function PluginConfigContent({
         payload.autoMatchConditions = autoMatchConditions;
         payload.useExistingExternalId = form.values.useExistingExternalId;
         payload.metadataTargets = form.values.metadataTargets;
+        payload.internalConfig = {
+          searchResultsLimit: form.values.searchResultsLimit || null,
+        };
       }
 
       if (isOAuth) {

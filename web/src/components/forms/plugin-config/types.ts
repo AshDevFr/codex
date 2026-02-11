@@ -37,6 +37,7 @@ export interface PluginConfigFormValues {
   libraryIds: string[];
   // Search config (metadata providers only)
   searchQueryTemplate: string;
+  searchResultsLimit: number | null;
   useExistingExternalId: boolean;
   metadataTargets: MetadataTarget[];
   // OAuth config (OAuth plugins only)

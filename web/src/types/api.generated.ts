@@ -8660,6 +8660,22 @@ export interface components {
             /** @description Created user information */
             user: components["schemas"]["UserInfo"];
         };
+        /**
+         * @description Server-side per-plugin configuration (not sent to the plugin process).
+         *
+         *     This is distinct from `config` which is plugin-facing. `InternalPluginConfig`
+         *     stores settings that Codex uses internally to control its own behavior when
+         *     interacting with the plugin.
+         *
+         *     Uses `#[serde(default)]` on all fields so missing/new fields are backward-compatible.
+         */
+        InternalPluginConfig: {
+            /**
+             * Format: int32
+             * @description Maximum results returned by metadata search (None = plugin default)
+             */
+            searchResultsLimit?: number | null;
+        };
         /** @description Komga age restriction DTO */
         KomgaAgeRestrictionDto: {
             /**
@@ -11619,6 +11635,7 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             id: string;
+            internalConfig?: null | components["schemas"]["InternalPluginConfig"];
             /**
              * Format: date-time
              * @description When the last failure occurred
@@ -14855,6 +14872,11 @@ export interface components {
             displayName?: string | null;
             /** @description Updated environment variables */
             env?: components["schemas"]["EnvVarDto"][] | null;
+            /**
+             * @description Internal server-side configuration (not sent to plugin)
+             *     Validated as InternalPluginConfig on the server
+             */
+            internalConfig?: unknown;
             /** @description Updated library IDs (empty = all libraries) */
             libraryIds?: string[] | null;
             /**

@@ -19,6 +19,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
@@ -111,6 +112,11 @@ pub struct Model {
     /// NULL means auto-detect from plugin capabilities
     #[sea_orm(column_type = "Text")]
     pub metadata_targets: Option<String>,
+
+    /// Internal server-side configuration as JSON (not sent to plugin)
+    /// Stores settings Codex uses to control its own behavior per-plugin
+    #[sea_orm(column_type = "Text")]
+    pub internal_config: Option<String>,
 
     // Timestamps
     pub created_at: DateTime<Utc>,
@@ -603,6 +609,25 @@ impl std::fmt::Display for PluginPermission {
 }
 
 // =============================================================================
+// Internal Plugin Configuration
+// =============================================================================
+
+/// Server-side per-plugin configuration (not sent to the plugin process).
+///
+/// This is distinct from `config` which is plugin-facing. `InternalPluginConfig`
+/// stores settings that Codex uses internally to control its own behavior when
+/// interacting with the plugin.
+///
+/// Uses `#[serde(default)]` on all fields so missing/new fields are backward-compatible.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InternalPluginConfig {
+    /// Maximum results returned by metadata search (None = plugin default)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search_results_limit: Option<u32>,
+}
+
+// =============================================================================
 // Helper Methods
 // =============================================================================
 
@@ -776,6 +801,15 @@ impl Model {
         self.manifest
             .as_ref()
             .and_then(|m| serde_json::from_value(m.clone()).ok())
+    }
+
+    /// Parse the internal_config JSON into an `InternalPluginConfig`.
+    /// Returns `Default::default()` if NULL or malformed.
+    pub fn internal_config_parsed(&self) -> InternalPluginConfig {
+        self.internal_config
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default()
     }
 }
 
@@ -1047,6 +1081,7 @@ mod tests {
             auto_match_conditions: None,
             use_existing_external_id: true,
             metadata_targets: None,
+            internal_config: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1095,6 +1130,7 @@ mod tests {
             auto_match_conditions: None,
             use_existing_external_id: true,
             metadata_targets: None,
+            internal_config: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             created_by: None,
@@ -1110,5 +1146,116 @@ mod tests {
         assert!(model.applies_to_library(lib1));
         assert!(model.applies_to_library(lib2));
         assert!(!model.applies_to_library(lib3)); // Not in the list
+    }
+
+    #[test]
+    fn test_internal_config_parsed_with_valid_json() {
+        let config = InternalPluginConfig {
+            search_results_limit: Some(20),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: InternalPluginConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.search_results_limit, Some(20));
+    }
+
+    #[test]
+    fn test_internal_config_parsed_with_null() {
+        use chrono::Utc;
+        let model = Model {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            display_name: "Test".to_string(),
+            description: None,
+            plugin_type: "system".to_string(),
+            command: "node".to_string(),
+            args: serde_json::json!([]),
+            env: serde_json::json!({}),
+            working_directory: None,
+            permissions: serde_json::json!([]),
+            scopes: serde_json::json!([]),
+            library_ids: serde_json::json!([]),
+            credentials: None,
+            credential_delivery: "env".to_string(),
+            config: serde_json::json!({}),
+            manifest: None,
+            enabled: true,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            disabled_reason: None,
+            rate_limit_requests_per_minute: Some(60),
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
+            metadata_targets: None,
+            internal_config: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            updated_by: None,
+        };
+        let parsed = model.internal_config_parsed();
+        assert_eq!(parsed, InternalPluginConfig::default());
+        assert_eq!(parsed.search_results_limit, None);
+    }
+
+    #[test]
+    fn test_internal_config_parsed_with_malformed_json() {
+        use chrono::Utc;
+        let model = Model {
+            id: Uuid::new_v4(),
+            name: "test".to_string(),
+            display_name: "Test".to_string(),
+            description: None,
+            plugin_type: "system".to_string(),
+            command: "node".to_string(),
+            args: serde_json::json!([]),
+            env: serde_json::json!({}),
+            working_directory: None,
+            permissions: serde_json::json!([]),
+            scopes: serde_json::json!([]),
+            library_ids: serde_json::json!([]),
+            credentials: None,
+            credential_delivery: "env".to_string(),
+            config: serde_json::json!({}),
+            manifest: None,
+            enabled: true,
+            health_status: "healthy".to_string(),
+            failure_count: 0,
+            last_failure_at: None,
+            last_success_at: None,
+            disabled_reason: None,
+            rate_limit_requests_per_minute: Some(60),
+            search_query_template: None,
+            search_preprocessing_rules: None,
+            auto_match_conditions: None,
+            use_existing_external_id: true,
+            metadata_targets: None,
+            internal_config: Some("not valid json".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            updated_by: None,
+        };
+        // Malformed JSON should return defaults
+        let parsed = model.internal_config_parsed();
+        assert_eq!(parsed, InternalPluginConfig::default());
+    }
+
+    #[test]
+    fn test_internal_config_parsed_with_extra_fields() {
+        // Future-proofing: extra unknown fields should be ignored
+        let json = r#"{"searchResultsLimit": 50, "unknownField": true}"#;
+        let parsed: InternalPluginConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.search_results_limit, Some(50));
+    }
+
+    #[test]
+    fn test_internal_config_parsed_with_empty_object() {
+        let json = "{}";
+        let parsed: InternalPluginConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed, InternalPluginConfig::default());
     }
 }

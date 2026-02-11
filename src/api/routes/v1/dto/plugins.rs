@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::db::entities::plugin_failures;
-use crate::db::entities::plugins::{self, PluginPermission};
+use crate::db::entities::plugins::{self, InternalPluginConfig, PluginPermission};
 use crate::db::repositories::PluginsRepository;
 use crate::services::plugin::protocol::{
     CredentialField, MetadataContentType, PluginCapabilities, PluginScope,
@@ -147,6 +147,10 @@ pub struct PluginDto {
     #[schema(example = json!(["series", "book"]))]
     pub metadata_targets: Option<Vec<String>>,
 
+    /// Internal server-side configuration (not sent to plugin)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub internal_config: Option<InternalPluginConfig>,
+
     /// Number of users who have enabled this plugin (only for user-type plugins)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 3)]
@@ -209,6 +213,10 @@ impl From<plugins::Model> for PluginDto {
             metadata_targets: model
                 .metadata_targets
                 .and_then(|s| serde_json::from_str(&s).ok()),
+            internal_config: model
+                .internal_config
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok()),
             user_count: None,
         }
     }
@@ -673,6 +681,11 @@ pub struct UpdatePluginRequest {
         deserialize_with = "deserialize_optional_nullable"
     )]
     pub metadata_targets: Option<serde_json::Value>,
+
+    /// Internal server-side configuration (not sent to plugin)
+    /// Validated as InternalPluginConfig on the server
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub internal_config: Option<serde_json::Value>,
 }
 
 // =============================================================================

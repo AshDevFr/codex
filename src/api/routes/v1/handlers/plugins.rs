@@ -11,7 +11,7 @@ use super::super::dto::{
     parse_permission, parse_scope,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::entities::plugins::PluginPermission;
+use crate::db::entities::plugins::{InternalPluginConfig, PluginPermission};
 use crate::db::repositories::{PluginFailuresRepository, PluginsRepository, UserPluginsRepository};
 use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::services::PluginHealthStatus;
@@ -284,6 +284,7 @@ pub async fn create_plugin(
             auto_match_conditions,
             Some(request.use_existing_external_id),
             metadata_targets,
+            None, // internal_config: handled separately below
             Some(auth.user_id),
         )
         .await
@@ -538,7 +539,8 @@ pub async fn update_plugin(
         || request.search_preprocessing_rules.is_some()
         || request.auto_match_conditions.is_some()
         || request.use_existing_external_id.is_some()
-        || request.metadata_targets.is_some();
+        || request.metadata_targets.is_some()
+        || request.internal_config.is_some();
 
     if has_search_config_updates {
         // Convert JSON values to strings for storage
@@ -584,6 +586,22 @@ pub async fn update_plugin(
             }
         });
 
+        // Handle internal_config: validate by deserializing, then re-serialize to string
+        let internal_config = request
+            .internal_config
+            .map(|v| {
+                if v.is_null() {
+                    Ok(None)
+                } else {
+                    serde_json::from_value::<InternalPluginConfig>(v.clone())
+                        .map(|_| Some(serde_json::to_string(&v).unwrap_or_default()))
+                        .map_err(|e| {
+                            ApiError::BadRequest(format!("Invalid internal_config: {}", e))
+                        })
+                }
+            })
+            .transpose()?;
+
         PluginsRepository::update_search_config(
             &state.db,
             id,
@@ -592,6 +610,7 @@ pub async fn update_plugin(
             auto_match_conditions,
             request.use_existing_external_id,
             metadata_targets,
+            internal_config,
             Some(auth.user_id),
         )
         .await

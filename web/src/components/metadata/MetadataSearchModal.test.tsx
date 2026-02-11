@@ -100,7 +100,9 @@ describe("MetadataSearchModal", () => {
     );
 
     expect(
-      screen.getByText("Enter at least 2 characters to search"),
+      screen.getByText(
+        "Enter at least 2 characters to search, or paste an external ID",
+      ),
     ).toBeInTheDocument();
   });
 

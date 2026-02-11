@@ -21051,6 +21051,21 @@
           }
         }
       },
+      "InternalPluginConfig": {
+        "type": "object",
+        "description": "Server-side per-plugin configuration (not sent to the plugin process).\n\nThis is distinct from `config` which is plugin-facing. `InternalPluginConfig`\nstores settings that Codex uses internally to control its own behavior when\ninteracting with the plugin.\n\nUses `#[serde(default)]` on all fields so missing/new fields are backward-compatible.",
+        "properties": {
+          "searchResultsLimit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Maximum results returned by metadata search (None = plugin default)",
+            "minimum": 0
+          }
+        }
+      },
       "KomgaAgeRestrictionDto": {
         "type": "object",
         "description": "Komga age restriction DTO",
@@ -26334,6 +26349,17 @@
             "format": "uuid",
             "description": "Plugin ID",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "internalConfig": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InternalPluginConfig",
+                "description": "Internal server-side configuration (not sent to plugin)"
+              }
+            ]
           },
           "lastFailureAt": {
             "type": [
@@ -32339,6 +32365,9 @@
               "$ref": "#/components/schemas/EnvVarDto"
             },
             "description": "Updated environment variables"
+          },
+          "internalConfig": {
+            "description": "Internal server-side configuration (not sent to plugin)\nValidated as InternalPluginConfig on the server"
           },
           "libraryIds": {
             "type": [

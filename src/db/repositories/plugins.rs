@@ -290,6 +290,7 @@ impl PluginsRepository {
             auto_match_conditions: Set(None),
             use_existing_external_id: Set(true),
             metadata_targets: Set(None),
+            internal_config: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
             created_by: Set(created_by),
@@ -405,6 +406,7 @@ impl PluginsRepository {
         auto_match_conditions: Option<Option<String>>,
         use_existing_external_id: Option<bool>,
         metadata_targets: Option<Option<String>>,
+        internal_config: Option<Option<String>>,
         updated_by: Option<Uuid>,
     ) -> Result<plugins::Model> {
         let existing = Self::get_by_id(db, id)
@@ -433,6 +435,10 @@ impl PluginsRepository {
 
         if let Some(targets) = metadata_targets {
             active_model.metadata_targets = Set(targets);
+        }
+
+        if let Some(config) = internal_config {
+            active_model.internal_config = Set(config);
         }
 
         let result = active_model.update(db).await?;

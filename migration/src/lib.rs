@@ -102,6 +102,9 @@ mod m20260205_000052_create_user_plugins;
 // Plugin task timeout setting
 mod m20260211_000053_seed_plugin_task_timeout;
 
+// Plugin internal config (server-side per-plugin settings)
+mod m20260211_000054_add_plugin_internal_config;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -184,6 +187,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260205_000052_create_user_plugins::Migration),
             // Plugin task timeout setting
             Box::new(m20260211_000053_seed_plugin_task_timeout::Migration),
+            // Plugin internal config (server-side per-plugin settings)
+            Box::new(m20260211_000054_add_plugin_internal_config::Migration),
         ]
     }
 }

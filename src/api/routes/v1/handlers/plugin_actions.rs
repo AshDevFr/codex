@@ -294,6 +294,9 @@ pub async fn execute_plugin(
         }));
     }
 
+    // Read internal config for server-side settings
+    let internal_config = plugin.internal_config_parsed();
+
     // Execute based on action type
     // Backend owns the protocol method strings - frontend only knows about typed actions
     match request.action {
@@ -301,7 +304,18 @@ pub async fn execute_plugin(
             action,
             content_type,
             params,
-        } => execute_metadata_action(&state, plugin_id, action, content_type, params, start).await,
+        } => {
+            execute_metadata_action(
+                &state,
+                plugin_id,
+                action,
+                content_type,
+                params,
+                internal_config.search_results_limit,
+                start,
+            )
+            .await
+        }
         PluginActionRequest::Ping => match state.plugin_manager.ping(plugin_id).await {
             Ok(()) => Ok(Json(ExecutePluginResponse {
                 success: true,
@@ -326,12 +340,18 @@ async fn execute_metadata_action(
     action: MetadataAction,
     content_type: MetadataContentType,
     params: serde_json::Value,
+    search_results_limit: Option<u32>,
     start: Instant,
 ) -> Result<Json<ExecutePluginResponse>, ApiError> {
     match (action, content_type) {
         (MetadataAction::Search, MetadataContentType::Series) => {
-            let params: MetadataSearchParams = serde_json::from_value(params)
+            let mut params: MetadataSearchParams = serde_json::from_value(params)
                 .map_err(|e| ApiError::BadRequest(format!("Invalid search params: {}", e)))?;
+
+            // Apply server-side search results limit if client didn't set one
+            if params.limit.is_none() {
+                params.limit = search_results_limit;
+            }
 
             match state.plugin_manager.search_series(plugin_id, params).await {
                 Ok(response) => {
@@ -407,8 +427,13 @@ async fn execute_metadata_action(
         }
         // Book metadata actions
         (MetadataAction::Search, MetadataContentType::Book) => {
-            let params: BookSearchParams = serde_json::from_value(params)
+            let mut params: BookSearchParams = serde_json::from_value(params)
                 .map_err(|e| ApiError::BadRequest(format!("Invalid book search params: {}", e)))?;
+
+            // Apply server-side search results limit if client didn't set one
+            if params.limit.is_none() {
+                params.limit = search_results_limit;
+            }
 
             // Validate that at least one of isbn or query is provided
             if !params.is_valid() {
@@ -1493,9 +1518,13 @@ pub async fn auto_match_series_metadata(
     }
 
     // Search for metadata using the plugin
+    let auto_match_limit = plugin
+        .internal_config_parsed()
+        .search_results_limit
+        .unwrap_or(10);
     let search_params = MetadataSearchParams {
         query: search_query.clone(),
-        limit: Some(10), // Only need a few results to find the best match
+        limit: Some(auto_match_limit),
         cursor: None,
     };
 
