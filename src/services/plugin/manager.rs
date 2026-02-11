@@ -667,6 +667,7 @@ impl PluginManager {
         &self,
         plugin_id: Uuid,
         user_id: Uuid,
+        request_timeout: Option<Duration>,
     ) -> Result<(Arc<PluginHandle>, UserPluginContext), PluginManagerError> {
         // Look up the user's plugin instance
         let user_plugin =
@@ -683,9 +684,14 @@ impl PluginManager {
         };
 
         // Create a plugin config with user-specific credentials
-        let handle_config = self
+        let mut handle_config = self
             .create_user_plugin_config(plugin_id, &user_plugin)
             .await?;
+
+        // Override request timeout if caller specified one (e.g. background tasks use longer timeouts)
+        if let Some(timeout) = request_timeout {
+            handle_config.request_timeout = timeout;
+        }
 
         // Create handle with storage support for user plugins
         let storage_handler = StorageRequestHandler::new(self.db.as_ref().clone(), user_plugin.id);

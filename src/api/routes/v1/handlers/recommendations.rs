@@ -172,7 +172,7 @@ pub async fn get_recommendations(
     // Spawn plugin and call recommendations/get
     let (handle, _context) = state
         .plugin_manager
-        .get_user_plugin_handle(plugin.id, auth.user_id)
+        .get_user_plugin_handle(plugin.id, auth.user_id, None)
         .await
         .map_err(|e| {
             warn!(
@@ -371,7 +371,7 @@ pub async fn dismiss_recommendation(
     // Spawn plugin and call recommendations/dismiss
     let (handle, _context) = state
         .plugin_manager
-        .get_user_plugin_handle(plugin.id, auth.user_id)
+        .get_user_plugin_handle(plugin.id, auth.user_id, None)
         .await
         .map_err(|e| {
             warn!(

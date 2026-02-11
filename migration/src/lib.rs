@@ -99,6 +99,9 @@ pub mod m20260205_000051_create_oidc_connections;
 // User plugin system (per-user plugin instances and data storage)
 mod m20260205_000052_create_user_plugins;
 
+// Plugin task timeout setting
+mod m20260211_000053_seed_plugin_task_timeout;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -179,6 +182,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260205_000051_create_oidc_connections::Migration),
             // User plugin system
             Box::new(m20260205_000052_create_user_plugins::Migration),
+            // Plugin task timeout setting
+            Box::new(m20260211_000053_seed_plugin_task_timeout::Migration),
         ]
     }
 }

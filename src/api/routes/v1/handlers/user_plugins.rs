@@ -865,7 +865,7 @@ pub async fn get_sync_status(
         );
         match state
             .plugin_manager
-            .get_user_plugin_handle(plugin_id, auth.user_id)
+            .get_user_plugin_handle(plugin_id, auth.user_id, None)
             .await
         {
             Ok((handle, _context)) => {

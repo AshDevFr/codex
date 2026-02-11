@@ -219,17 +219,21 @@ impl TaskWorker {
         }
         self.handlers
             .insert("plugin_auto_match".to_string(), Arc::new(handler));
-        // Register user plugin sync handler
-        self.handlers.insert(
-            "user_plugin_sync".to_string(),
-            Arc::new(UserPluginSyncHandler::new(plugin_manager.clone())),
-        );
-        // Register user plugin recommendations handler
+        // Register user plugin sync handler (with settings service for configurable timeout)
+        let mut sync_handler = UserPluginSyncHandler::new(plugin_manager.clone());
+        if let Some(ref settings_service) = self.settings_service {
+            sync_handler = sync_handler.with_settings_service(settings_service.clone());
+        }
+        self.handlers
+            .insert("user_plugin_sync".to_string(), Arc::new(sync_handler));
+        // Register user plugin recommendations handler (with settings service for configurable timeout)
+        let mut recs_handler = UserPluginRecommendationsHandler::new(plugin_manager.clone());
+        if let Some(ref settings_service) = self.settings_service {
+            recs_handler = recs_handler.with_settings_service(settings_service.clone());
+        }
         self.handlers.insert(
             "user_plugin_recommendations".to_string(),
-            Arc::new(UserPluginRecommendationsHandler::new(
-                plugin_manager.clone(),
-            )),
+            Arc::new(recs_handler),
         );
         self.plugin_manager = Some(plugin_manager);
         self

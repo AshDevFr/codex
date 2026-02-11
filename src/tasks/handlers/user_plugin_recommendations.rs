@@ -9,11 +9,13 @@ use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::events::EventBroadcaster;
+use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::library::build_user_library;
 use crate::services::plugin::protocol::methods;
@@ -23,14 +25,42 @@ use crate::services::plugin::recommendations::{
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 
+/// Default plugin task timeout in seconds (5 minutes)
+const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
+
 /// Handler for user plugin recommendation refresh tasks
 pub struct UserPluginRecommendationsHandler {
     plugin_manager: Arc<PluginManager>,
+    settings_service: Option<Arc<SettingsService>>,
 }
 
 impl UserPluginRecommendationsHandler {
     pub fn new(plugin_manager: Arc<PluginManager>) -> Self {
-        Self { plugin_manager }
+        Self {
+            plugin_manager,
+            settings_service: None,
+        }
+    }
+
+    pub fn with_settings_service(mut self, settings_service: Arc<SettingsService>) -> Self {
+        self.settings_service = Some(settings_service);
+        self
+    }
+
+    /// Read the configured plugin task timeout from settings
+    async fn task_request_timeout(&self) -> Option<Duration> {
+        if let Some(ref settings) = self.settings_service {
+            let secs = settings
+                .get_uint(
+                    "plugin.task_request_timeout_seconds",
+                    DEFAULT_TASK_TIMEOUT_SECS,
+                )
+                .await
+                .unwrap_or(DEFAULT_TASK_TIMEOUT_SECS);
+            Some(Duration::from_secs(secs))
+        } else {
+            None
+        }
     }
 }
 
@@ -64,10 +94,13 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 task.id, plugin_id, user_id
             );
 
+            // Read configured task timeout from settings
+            let request_timeout = self.task_request_timeout().await;
+
             // Get user plugin handle (spawns process with per-user credentials)
             let (handle, _context) = self
                 .plugin_manager
-                .get_user_plugin_handle(plugin_id, user_id)
+                .get_user_plugin_handle(plugin_id, user_id, request_timeout)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to spawn recommendation plugin: {}", e))?;
 

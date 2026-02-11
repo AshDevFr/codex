@@ -21,12 +21,14 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{UserPluginDataRepository, UserPluginsRepository};
 use crate::events::EventBroadcaster;
+use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::protocol::methods;
 use crate::services::plugin::sync::{
@@ -78,14 +80,42 @@ pub struct UserPluginSyncResult {
     pub skipped_reason: Option<String>,
 }
 
+/// Default plugin task timeout in seconds (5 minutes)
+const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
+
 /// Handler for user plugin sync tasks
 pub struct UserPluginSyncHandler {
     plugin_manager: Arc<PluginManager>,
+    settings_service: Option<Arc<SettingsService>>,
 }
 
 impl UserPluginSyncHandler {
     pub fn new(plugin_manager: Arc<PluginManager>) -> Self {
-        Self { plugin_manager }
+        Self {
+            plugin_manager,
+            settings_service: None,
+        }
+    }
+
+    pub fn with_settings_service(mut self, settings_service: Arc<SettingsService>) -> Self {
+        self.settings_service = Some(settings_service);
+        self
+    }
+
+    /// Read the configured plugin task timeout from settings
+    async fn task_request_timeout(&self) -> Option<Duration> {
+        if let Some(ref settings) = self.settings_service {
+            let secs = settings
+                .get_uint(
+                    "plugin.task_request_timeout_seconds",
+                    DEFAULT_TASK_TIMEOUT_SECS,
+                )
+                .await
+                .unwrap_or(DEFAULT_TASK_TIMEOUT_SECS);
+            Some(Duration::from_secs(secs))
+        } else {
+            None
+        }
     }
 }
 
@@ -140,10 +170,13 @@ impl TaskHandler for UserPluginSyncHandler {
                 task.id, sync_mode, do_pull, do_push
             );
 
+            // Read configured task timeout from settings
+            let request_timeout = self.task_request_timeout().await;
+
             // Get user plugin handle (spawns process with per-user credentials)
             let (handle, context) = match self
                 .plugin_manager
-                .get_user_plugin_handle(plugin_id, user_id)
+                .get_user_plugin_handle(plugin_id, user_id, request_timeout)
                 .await
             {
                 Ok(result) => result,
