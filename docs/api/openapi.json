@@ -12794,6 +12794,60 @@
         ]
       }
     },
+    "/opds/books/{book_id}/pages/{page_number}": {
+      "get": {
+        "tags": [
+          "OPDS"
+        ],
+        "summary": "OPDS-PSE: Get a page image with reading progress tracking",
+        "description": "Serves the page image (delegating to the v1 handler) and records reading\nprogress via the batching service. This is the endpoint used by OPDS PSE\nclients that read page-by-page and need implicit progress tracking, since\nthey don't have a JavaScript frontend to send explicit progress updates.",
+        "operationId": "opds_book_page_image",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page_number",
+            "in": "path",
+            "description": "Page number (1-indexed)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page image (also records reading progress)",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Book or page not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/opds/libraries": {
       "get": {
         "tags": [

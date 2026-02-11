@@ -78,12 +78,6 @@ pub async fn get_page_image(
     // This handles cases where PDFs were scanned before page metadata population was implemented,
     // or where page analysis failed. PDF pages are rendered on-demand by PDFium.
     if book.format.eq_ignore_ascii_case("pdf") {
-        // Update reading progress
-        state
-            .read_progress_service
-            .record_progress(auth.user_id, book_id, page_number, book.page_count)
-            .await;
-
         // PDFs render to JPEG
         return serve_pdf_page_with_streaming(
             &state,
@@ -95,14 +89,6 @@ pub async fn get_page_image(
         )
         .await;
     }
-
-    // Update reading progress via batching service (PSE-style tracking)
-    // Progress updates are buffered in memory and flushed periodically
-    // to reduce database load during high-traffic page viewing
-    state
-        .read_progress_service
-        .record_progress(auth.user_id, book_id, page_number, book.page_count)
-        .await;
 
     // Try to fetch page metadata for content type detection
     let page = PageRepository::get_by_book_and_number(&state.db, book_id, page_number)

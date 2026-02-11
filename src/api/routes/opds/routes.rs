@@ -3,8 +3,8 @@
 //! Defines all OPDS 1.2 catalog routes.
 
 use super::handlers::{
-    book_pages, library_series, list_libraries, opensearch_descriptor, root_catalog, search,
-    series_books,
+    book_page_image, book_pages, library_series, list_libraries, opensearch_descriptor,
+    root_catalog, search, series_books,
 };
 use crate::api::extractors::AppState;
 use axum::{Router, routing::get};
@@ -18,6 +18,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/libraries/:library_id", get(library_series))
         .route("/series/:series_id", get(series_books))
         .route("/books/:book_id/pages", get(book_pages))
+        .route("/books/:book_id/pages/:page_number", get(book_page_image))
         .route("/search.xml", get(opensearch_descriptor))
         .route("/search", get(search))
         .with_state(state)

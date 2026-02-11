@@ -4,7 +4,8 @@ mod common;
 use codex::api::error::ErrorResponse;
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, PageRepository, SeriesRepository, UserRepository,
+    BookRepository, LibraryRepository, PageRepository, ReadProgressRepository, SeriesRepository,
+    UserRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -559,4 +560,142 @@ async fn test_list_book_pages_requires_auth() {
     let (status, _body) = make_raw_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+// ============================================================================
+// Reading Progress Tracking Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_v1_page_fetch_does_not_record_progress() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let cbz_temp_dir = TempDir::new().unwrap();
+    let cbz_path = create_test_cbz(&cbz_temp_dir, 5, true);
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        cbz_temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        cbz_path.to_str().unwrap(),
+        "test_comic.cbz",
+        "cbz",
+        true,
+        5,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let password_hash = password::hash_password("admin123").unwrap();
+    let user = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let created_user = UserRepository::create(&db, &user).await.unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = state
+        .jwt_service
+        .generate_token(
+            created_user.id,
+            created_user.username.clone(),
+            created_user.get_role(),
+        )
+        .unwrap();
+
+    // Fetch multiple pages via v1 API (simulating frontend preloading)
+    for page in 1..=3 {
+        let app = create_test_router_with_app_state(state.clone());
+        let request =
+            get_request_with_auth(&format!("/api/v1/books/{}/pages/{}", book.id, page), &token);
+        let (status, _, _) = make_full_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // Flush the read progress service to ensure any buffered updates are written
+    state.read_progress_service.flush().await.unwrap();
+
+    // Verify NO progress was recorded — v1 page handler should not track progress
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, created_user.id, book.id)
+        .await
+        .unwrap();
+    assert!(
+        progress.is_none(),
+        "Expected no progress to be recorded when fetching pages via v1 API, but found: {:?}",
+        progress
+    );
+}
+
+#[tokio::test]
+async fn test_opds_page_fetch_records_progress() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let cbz_temp_dir = TempDir::new().unwrap();
+    let cbz_path = create_test_cbz(&cbz_temp_dir, 5, true);
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        cbz_temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        cbz_path.to_str().unwrap(),
+        "test_comic.cbz",
+        "cbz",
+        true,
+        5,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let password_hash = password::hash_password("admin123").unwrap();
+    let user = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let created_user = UserRepository::create(&db, &user).await.unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+
+    // Fetch page via OPDS endpoint using Basic Auth (how OPDS clients authenticate)
+    let app = create_test_router_with_app_state(state.clone());
+    let request = get_request_with_basic_auth(
+        &format!("/opds/books/{}/pages/3", book.id),
+        "admin",
+        "admin123",
+    );
+    let (status, _, _) = make_full_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Flush the read progress service to write buffered updates to DB
+    state.read_progress_service.flush().await.unwrap();
+
+    // Verify progress WAS recorded by the OPDS page handler
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, created_user.id, book.id)
+        .await
+        .unwrap();
+    assert!(
+        progress.is_some(),
+        "Expected progress to be recorded when fetching pages via OPDS endpoint"
+    );
+    let progress = progress.unwrap();
+    assert_eq!(
+        progress.current_page, 3,
+        "Expected progress to be at page 3, got {}",
+        progress.current_page
+    );
 }

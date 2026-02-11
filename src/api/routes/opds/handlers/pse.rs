@@ -1,14 +1,15 @@
 use super::super::dto::{OpdsEntry, OpdsFeed, OpdsLink};
+use crate::api::routes::v1::handlers::get_page_image;
 use crate::api::{
     error::ApiError,
-    extractors::{AuthContext, AuthState},
+    extractors::{AuthContext, AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
 use crate::db::repositories::{BookMetadataRepository, BookRepository, SettingsRepository};
 use crate::require_permission;
 use axum::{
     extract::{Path, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
@@ -105,7 +106,7 @@ pub async fn book_pages(
         .add_link(
             OpdsLink::new(
                 "http://vaemendis.net/opds-pse/page",
-                format!("/api/v1/books/{}/pages/{}", book_id, page_num),
+                format!("/opds/books/{}/pages/{}", book_id, page_num),
             )
             .with_type("image/jpeg"),
         ); // Default to JPEG, actual format determined by page handler
@@ -118,4 +119,57 @@ pub async fn book_pages(
         .map_err(|e| ApiError::Internal(format!("Failed to serialize OPDS feed: {}", e)))?;
 
     Ok(OpdsPseResponse(xml))
+}
+
+/// OPDS-PSE: Get a page image with reading progress tracking
+///
+/// Serves the page image (delegating to the v1 handler) and records reading
+/// progress via the batching service. This is the endpoint used by OPDS PSE
+/// clients that read page-by-page and need implicit progress tracking, since
+/// they don't have a JavaScript frontend to send explicit progress updates.
+#[utoipa::path(
+    get,
+    path = "/opds/books/{book_id}/pages/{page_number}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("page_number" = i32, Path, description = "Page number (1-indexed)")
+    ),
+    responses(
+        (status = 200, description = "Page image (also records reading progress)", content_type = "image/jpeg"),
+        (status = 404, description = "Book or page not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "OPDS"
+)]
+pub async fn book_page_image(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    Path((book_id, page_number)): Path<(Uuid, i32)>,
+) -> Result<Response, ApiError> {
+    require_permission!(auth, Permission::PagesRead)?;
+
+    // Record reading progress for OPDS clients.
+    // Fetch book to get page_count for the progress service.
+    if page_number >= 1
+        && let Ok(Some(book)) = BookRepository::get_by_id(&state.db, book_id).await
+    {
+        state
+            .read_progress_service
+            .record_progress(auth.user_id, book_id, page_number, book.page_count)
+            .await;
+    }
+
+    // Delegate to the v1 page image handler for actual image serving
+    get_page_image(
+        State(state),
+        FlexibleAuthContext(auth),
+        headers,
+        Path((book_id, page_number)),
+    )
+    .await
 }

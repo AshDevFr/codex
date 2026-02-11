@@ -472,6 +472,7 @@ The following paths are exempt from rate limiting:
         opds::handlers::search::opensearch_descriptor,
         opds::handlers::search::search,
         opds::handlers::pse::book_pages,
+        opds::handlers::pse::book_page_image,
 
         // OPDS 2.0 catalog endpoints (JSON format)
         opds2::handlers::catalog::root,
