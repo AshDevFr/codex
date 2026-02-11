@@ -2,6 +2,18 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.1] - 2026-02-11
+
+### 🚀 Features
+
+- *(mangabaka)* Sort search results by title similarity scoring
+
+### 🐛 Bug Fixes
+
+- Stop recording reading progress on v1 page fetch, move to OPDS-only endpoint
+- *(ui)* Swap sort by and page size positions in library toolbar
+- Use natural sort order for book numbering
+
 ## [1.10.0] - 2026-02-11
 
 ### 🚀 Features
