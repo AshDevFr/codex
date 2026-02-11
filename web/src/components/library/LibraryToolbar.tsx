@@ -60,6 +60,36 @@ export function LibraryToolbar({
 
       {showControls && (
         <Group gap="xs" wrap="nowrap">
+          {/* Page Size Menu */}
+          <Menu shadow="md" width={120} position="bottom-end">
+            <Menu.Target>
+              <ActionIcon
+                variant="subtle"
+                size="lg"
+                title="Page size"
+                aria-label="Page size options"
+              >
+                <IconGridDots size={20} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Page size</Menu.Label>
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <Menu.Item
+                  key={option.value}
+                  onClick={() => onPageSizeChange?.(option.value)}
+                  bg={
+                    pageSize === option.value
+                      ? "var(--mantine-color-blue-light)"
+                      : undefined
+                  }
+                >
+                  {option.label}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+
           {/* Sort Menu */}
           <Menu shadow="md" width={200} position="bottom-end">
             <Menu.Target>
@@ -121,36 +151,6 @@ export function LibraryToolbar({
                   </Menu.Item>
                 );
               })}
-            </Menu.Dropdown>
-          </Menu>
-
-          {/* Page Size Menu */}
-          <Menu shadow="md" width={120} position="bottom-end">
-            <Menu.Target>
-              <ActionIcon
-                variant="subtle"
-                size="lg"
-                title="Page size"
-                aria-label="Page size options"
-              >
-                <IconGridDots size={20} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Label>Page size</Menu.Label>
-              {PAGE_SIZE_OPTIONS.map((option) => (
-                <Menu.Item
-                  key={option.value}
-                  onClick={() => onPageSizeChange?.(option.value)}
-                  bg={
-                    pageSize === option.value
-                      ? "var(--mantine-color-blue-light)"
-                      : undefined
-                  }
-                >
-                  {option.label}
-                </Menu.Item>
-              ))}
             </Menu.Dropdown>
           </Menu>
 
