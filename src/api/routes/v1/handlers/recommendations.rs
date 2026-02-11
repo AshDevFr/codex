@@ -11,11 +11,14 @@ use super::super::dto::recommendations::{
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
 use crate::db::repositories::{PluginsRepository, TaskRepository, UserPluginsRepository};
+use crate::services::plugin::handle::PluginError;
 use crate::services::plugin::library::build_user_library;
+use crate::services::plugin::manager::PluginManagerError;
 use crate::services::plugin::protocol::{PluginManifest, methods};
 use crate::services::plugin::recommendations::{
     RecommendationDismissRequest, RecommendationRequest, RecommendationResponse,
 };
+use crate::services::plugin::rpc::RpcError;
 use crate::tasks::types::TaskType;
 use axum::{
     Json,
@@ -68,6 +71,78 @@ async fn find_recommendation_plugin(
     ))
 }
 
+/// Map a `PluginError` to the appropriate `ApiError` with proper HTTP status codes.
+///
+/// Instead of returning blanket 500 Internal Server Error for all plugin failures,
+/// this maps specific error types to meaningful HTTP status codes:
+/// - Rate limited → 429 Too Many Requests
+/// - Timeout / Process terminated / Config error → 503 Service Unavailable
+/// - Auth failed → 401 Unauthorized
+/// - Other errors → 500 Internal Server Error
+fn plugin_error_to_api_error(err: PluginError) -> ApiError {
+    match &err {
+        PluginError::Rpc(rpc_err) => match rpc_err {
+            RpcError::RateLimited {
+                retry_after_seconds,
+            } => ApiError::TooManyRequests(format!(
+                "Plugin rate limited. Retry after {} seconds",
+                retry_after_seconds
+            )),
+            RpcError::Timeout(duration) => ApiError::ServiceUnavailable(format!(
+                "Plugin request timed out after {:.0}s",
+                duration.as_secs_f64()
+            )),
+            RpcError::AuthFailed(msg) => {
+                ApiError::Unauthorized(format!("Plugin authentication failed: {}", msg))
+            }
+            RpcError::ConfigError(msg) => {
+                ApiError::ServiceUnavailable(format!("Plugin configuration error: {}", msg))
+            }
+            RpcError::Process(_) => ApiError::ServiceUnavailable(format!(
+                "Plugin process terminated unexpectedly: {}",
+                rpc_err
+            )),
+            _ => ApiError::Internal(format!("Plugin error: {}", err)),
+        },
+        PluginError::Process(_) => {
+            ApiError::ServiceUnavailable(format!("Plugin process error: {}", err))
+        }
+        PluginError::Disabled { reason } => {
+            ApiError::ServiceUnavailable(format!("Plugin disabled: {}", reason))
+        }
+        _ => ApiError::Internal(format!("Plugin error: {}", err)),
+    }
+}
+
+/// Map a `PluginManagerError` to the appropriate `ApiError`.
+///
+/// Delegates to `plugin_error_to_api_error` for wrapped `PluginError` variants,
+/// and maps manager-specific errors to appropriate HTTP status codes.
+fn plugin_manager_error_to_api_error(err: PluginManagerError) -> ApiError {
+    match err {
+        PluginManagerError::Plugin(plugin_err) => plugin_error_to_api_error(plugin_err),
+        PluginManagerError::RateLimited { .. } => {
+            ApiError::TooManyRequests(format!("Plugin rate limited: {}", err))
+        }
+        PluginManagerError::Encryption(_) => {
+            ApiError::ServiceUnavailable(format!("Plugin encryption error: {}", err))
+        }
+        PluginManagerError::TokenRefreshFailed(_) => {
+            ApiError::Unauthorized(format!("Plugin authentication error: {}", err))
+        }
+        PluginManagerError::ReauthRequired(_) => {
+            ApiError::Unauthorized(format!("Plugin re-authentication required: {}", err))
+        }
+        PluginManagerError::PluginNotFound(_) | PluginManagerError::UserPluginNotFound { .. } => {
+            ApiError::NotFound(err.to_string())
+        }
+        PluginManagerError::PluginNotEnabled(_) => ApiError::NotFound(err.to_string()),
+        PluginManagerError::Database(_) => {
+            ApiError::Internal(format!("Plugin database error: {}", err))
+        }
+    }
+}
+
 /// Get personalized recommendations
 ///
 /// Returns recommendations from the user's enabled recommendation plugin.
@@ -105,7 +180,7 @@ pub async fn get_recommendations(
                 error = %e,
                 "Failed to spawn recommendation plugin"
             );
-            ApiError::Internal(format!("Failed to start recommendation plugin: {}", e))
+            plugin_manager_error_to_api_error(e)
         })?;
 
     // Build user's library data to seed recommendations
@@ -158,7 +233,7 @@ pub async fn get_recommendations(
             error = %e,
             "Failed to get recommendations from plugin"
         );
-        ApiError::Internal(format!("Recommendation plugin error: {}", e))
+        plugin_error_to_api_error(e)
     })?;
 
     // Convert plugin response to API DTO
@@ -298,7 +373,14 @@ pub async fn dismiss_recommendation(
         .plugin_manager
         .get_user_plugin_handle(plugin.id, auth.user_id)
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to start recommendation plugin: {}", e)))?;
+        .map_err(|e| {
+            warn!(
+                plugin_id = %plugin.id,
+                error = %e,
+                "Failed to spawn recommendation plugin for dismiss"
+            );
+            plugin_manager_error_to_api_error(e)
+        })?;
 
     let dismiss_request = RecommendationDismissRequest {
         external_id: external_id.clone(),
@@ -334,7 +416,7 @@ pub async fn dismiss_recommendation(
             error = %e,
             "Failed to dismiss recommendation"
         );
-        ApiError::Internal(format!("Recommendation plugin error: {}", e))
+        plugin_error_to_api_error(e)
     })?;
 
     Ok(Json(DismissRecommendationResponse {
@@ -345,7 +427,9 @@ pub async fn dismiss_recommendation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::plugin::process::ProcessError;
     use crate::services::plugin::recommendations::Recommendation;
+    use std::time::Duration;
 
     /// Verify that the Recommendation → RecommendationDto mapping preserves all fields
     /// when all optional fields are populated.
@@ -501,5 +585,110 @@ mod tests {
         assert!(rec1.get("basedOn").is_none()); // empty vec is skipped
         assert_eq!(rec1["codexSeriesId"], "series-id");
         assert!(rec1["inLibrary"].as_bool().unwrap());
+    }
+
+    // --- plugin_error_to_api_error mapping tests ---
+
+    #[test]
+    fn test_rate_limited_maps_to_429() {
+        let err = PluginError::Rpc(RpcError::RateLimited {
+            retry_after_seconds: 60,
+        });
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::TooManyRequests(ref msg) if msg.contains("60")),
+            "Expected TooManyRequests, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_timeout_maps_to_503() {
+        let err = PluginError::Rpc(RpcError::Timeout(Duration::from_secs(30)));
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::ServiceUnavailable(ref msg) if msg.contains("30")),
+            "Expected ServiceUnavailable, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_auth_failed_maps_to_401() {
+        let err = PluginError::Rpc(RpcError::AuthFailed("Invalid API key".to_string()));
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::Unauthorized(ref msg) if msg.contains("Invalid API key")),
+            "Expected Unauthorized, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_config_error_maps_to_503() {
+        let err = PluginError::Rpc(RpcError::ConfigError("API key is required".to_string()));
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::ServiceUnavailable(ref msg) if msg.contains("API key is required")),
+            "Expected ServiceUnavailable, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_process_terminated_maps_to_503() {
+        let err = PluginError::Rpc(RpcError::Process(ProcessError::ProcessTerminated));
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::ServiceUnavailable(_)),
+            "Expected ServiceUnavailable, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_plugin_process_error_maps_to_503() {
+        let err = PluginError::Process(ProcessError::ProcessTerminated);
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::ServiceUnavailable(_)),
+            "Expected ServiceUnavailable, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_plugin_disabled_maps_to_503() {
+        let err = PluginError::Disabled {
+            reason: "Too many failures".to_string(),
+        };
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::ServiceUnavailable(ref msg) if msg.contains("Too many failures")),
+            "Expected ServiceUnavailable, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_not_initialized_maps_to_500() {
+        let err = PluginError::NotInitialized;
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::Internal(_)),
+            "Expected Internal, got {:?}",
+            api_err
+        );
+    }
+
+    #[test]
+    fn test_generic_rpc_error_maps_to_500() {
+        let err = PluginError::Rpc(RpcError::Cancelled);
+        let api_err = plugin_error_to_api_error(err);
+        assert!(
+            matches!(api_err, ApiError::Internal(_)),
+            "Expected Internal, got {:?}",
+            api_err
+        );
     }
 }
