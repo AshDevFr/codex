@@ -850,12 +850,29 @@ impl From<crate::db::entities::series_external_ids::Model> for SeriesExternalIdD
 }
 
 /// Response containing a list of external IDs
-#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SeriesExternalIdListResponse {
     /// List of external IDs
     pub external_ids: Vec<SeriesExternalIdDto>,
+}
+
+/// Request to create or update a series external ID
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSeriesExternalIdRequest {
+    /// Source identifier (e.g., "plugin:anilist", "manual", "comicinfo")
+    #[schema(example = "manual")]
+    pub source: String,
+
+    /// External ID value from the source
+    #[schema(example = "12345")]
+    pub external_id: String,
+
+    /// URL to the external source (optional)
+    #[serde(default)]
+    #[schema(example = "https://anilist.co/manga/12345")]
+    pub external_url: Option<String>,
 }
 
 /// Request to create or update an external link for a series

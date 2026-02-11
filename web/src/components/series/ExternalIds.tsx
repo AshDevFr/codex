@@ -1,11 +1,12 @@
-import { Badge, Group, Tooltip } from "@mantine/core";
-import { IconExternalLink, IconId } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Tooltip } from "@mantine/core";
+import { IconEdit, IconExternalLink, IconId } from "@tabler/icons-react";
 import type { components } from "@/types/api.generated";
 
 type SeriesExternalId = components["schemas"]["SeriesExternalIdDto"];
 
 interface ExternalIdsProps {
   externalIds: SeriesExternalId[];
+  onEdit?: () => void;
 }
 
 // Map source keys to display names and colors.
@@ -112,8 +113,8 @@ function formatLastSynced(
   return `${Math.floor(diffDays / 365)} years ago`;
 }
 
-export function ExternalIds({ externalIds }: ExternalIdsProps) {
-  if (externalIds.length === 0) {
+export function ExternalIds({ externalIds, onEdit }: ExternalIdsProps) {
+  if (externalIds.length === 0 && !onEdit) {
     return null;
   }
 
@@ -158,6 +159,13 @@ export function ExternalIds({ externalIds }: ExternalIdsProps) {
           </Tooltip>
         );
       })}
+      {onEdit && (
+        <Tooltip label="Edit external IDs" withArrow>
+          <ActionIcon variant="subtle" color="gray" size="xs" onClick={onEdit}>
+            <IconEdit size={12} />
+          </ActionIcon>
+        </Tooltip>
+      )}
     </Group>
   );
 }

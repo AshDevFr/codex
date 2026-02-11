@@ -44,6 +44,7 @@ import {
 import { seriesApi } from "@/api/series";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
+import { ExternalIdEditModal } from "@/components/common";
 import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MetadataApplyFlow } from "@/components/metadata";
 import {
@@ -109,6 +110,10 @@ export function SeriesDetail() {
   const [
     metadataFlowOpened,
     { open: openMetadataFlow, close: closeMetadataFlow },
+  ] = useDisclosure(false);
+  const [
+    externalIdModalOpened,
+    { open: openExternalIdModal, close: closeExternalIdModal },
   ] = useDisclosure(false);
 
   // Fetch full series data (includes metadata, genres, tags, etc.)
@@ -800,12 +805,15 @@ export function SeriesDetail() {
           )}
 
           {/* External IDs */}
-          {series.externalIds && series.externalIds.length > 0 && (
+          {(series.externalIds?.length > 0 || canEditSeries) && (
             <Group gap="md" align="flex-start">
               <Text size="sm" c="dimmed" w={100}>
                 EXTERNAL IDS
               </Text>
-              <ExternalIds externalIds={series.externalIds} />
+              <ExternalIds
+                externalIds={series.externalIds ?? []}
+                onEdit={canEditSeries ? openExternalIdModal : undefined}
+              />
             </Group>
           )}
 
@@ -887,6 +895,14 @@ export function SeriesDetail() {
         opened={infoModalOpened}
         onClose={closeInfoModal}
         series={series}
+      />
+
+      {/* External ID Edit Modal */}
+      <ExternalIdEditModal
+        entityType="series"
+        entityId={series.id}
+        opened={externalIdModalOpened}
+        onClose={closeExternalIdModal}
       />
     </Box>
   );

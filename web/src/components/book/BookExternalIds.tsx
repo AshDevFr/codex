@@ -1,9 +1,10 @@
-import { Badge, Group, Tooltip } from "@mantine/core";
-import { IconExternalLink, IconId } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Tooltip } from "@mantine/core";
+import { IconEdit, IconExternalLink, IconId } from "@tabler/icons-react";
 import type { BookExternalId } from "@/types/book-metadata";
 
 interface BookExternalIdsProps {
   externalIds: BookExternalId[];
+  onEdit?: () => void;
 }
 
 // Map source prefixes to display names and colors
@@ -109,8 +110,8 @@ function formatLastSynced(
  * Display external IDs for a book.
  * Shows source badges with links to external sources.
  */
-export function BookExternalIds({ externalIds }: BookExternalIdsProps) {
-  if (externalIds.length === 0) {
+export function BookExternalIds({ externalIds, onEdit }: BookExternalIdsProps) {
+  if (externalIds.length === 0 && !onEdit) {
     return null;
   }
 
@@ -154,6 +155,13 @@ export function BookExternalIds({ externalIds }: BookExternalIdsProps) {
           </Tooltip>
         );
       })}
+      {onEdit && (
+        <Tooltip label="Edit external IDs" withArrow>
+          <ActionIcon variant="subtle" color="gray" size="xs" onClick={onEdit}>
+            <IconEdit size={12} />
+          </ActionIcon>
+        </Tooltip>
+      )}
     </Group>
   );
 }

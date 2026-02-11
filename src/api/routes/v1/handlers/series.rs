@@ -8,15 +8,16 @@ use super::super::dto::{
     series::{
         AddSeriesGenreRequest, AddSeriesTagRequest, AlphabeticalGroupDto, AlternateTitleDto,
         AlternateTitleListResponse, CreateAlternateTitleRequest, CreateExternalLinkRequest,
-        CreateExternalRatingRequest, ExternalLinkDto, ExternalLinkListResponse, ExternalRatingDto,
-        ExternalRatingListResponse, FullSeriesListResponse, FullSeriesMetadataResponse,
-        FullSeriesResponse, GenreDto, GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest,
-        PatchSeriesRequest, ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse,
-        SeriesCoverDto, SeriesCoverListResponse, SeriesExternalIdDto, SeriesFullMetadata,
-        SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse, SetSeriesGenresRequest,
-        SetSeriesTagsRequest, SetUserRatingRequest, TagDto, TagListResponse,
-        TaxonomyCleanupResponse, UpdateAlternateTitleRequest, UpdateMetadataLocksRequest,
-        UserRatingsListResponse, UserSeriesRatingDto,
+        CreateExternalRatingRequest, CreateSeriesExternalIdRequest, ExternalLinkDto,
+        ExternalLinkListResponse, ExternalRatingDto, ExternalRatingListResponse,
+        FullSeriesListResponse, FullSeriesMetadataResponse, FullSeriesResponse, GenreDto,
+        GenreListResponse, MetadataLocks, PatchSeriesMetadataRequest, PatchSeriesRequest,
+        ReplaceSeriesMetadataRequest, SeriesAverageRatingResponse, SeriesCoverDto,
+        SeriesCoverListResponse, SeriesExternalIdDto, SeriesExternalIdListResponse,
+        SeriesFullMetadata, SeriesMetadataResponse, SeriesSortParam, SeriesUpdateResponse,
+        SetSeriesGenresRequest, SetSeriesTagsRequest, SetUserRatingRequest, TagDto,
+        TagListResponse, TaxonomyCleanupResponse, UpdateAlternateTitleRequest,
+        UpdateMetadataLocksRequest, UserRatingsListResponse, UserSeriesRatingDto,
     },
 };
 use super::paginated_response;
@@ -4676,6 +4677,173 @@ pub async fn delete_external_link(
             series_id,
             library_id: series.library_id,
             fields: Some(vec!["external_links".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Series External IDs Endpoints
+// ============================================================================
+
+/// List all external IDs for a series
+#[utoipa::path(
+    get,
+    path = "/api/v1/series/{series_id}/external-ids",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "List of external IDs", body = SeriesExternalIdListResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Series"
+)]
+pub async fn list_series_external_ids(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<SeriesExternalIdListResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesRead)?;
+
+    // Verify series exists
+    SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let external_ids = SeriesExternalIdRepository::get_for_series(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external IDs: {}", e)))?;
+
+    let dtos: Vec<SeriesExternalIdDto> = external_ids.into_iter().map(|e| e.into()).collect();
+
+    Ok(Json(SeriesExternalIdListResponse { external_ids: dtos }))
+}
+
+/// Create or update an external ID for a series
+///
+/// Upserts by series_id + source: if an external ID with the same source already exists,
+/// it will be updated instead of creating a duplicate.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{series_id}/external-ids",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    request_body = CreateSeriesExternalIdRequest,
+    responses(
+        (status = 200, description = "External ID created or updated", body = SeriesExternalIdDto),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Series"
+)]
+pub async fn create_series_external_id(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+    Json(request): Json<CreateSeriesExternalIdRequest>,
+) -> Result<Json<SeriesExternalIdDto>, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    // Verify series exists and get library_id
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let external_id = SeriesExternalIdRepository::upsert(
+        &state.db,
+        series_id,
+        &request.source,
+        &request.external_id,
+        request.external_url.as_deref(),
+        None, // metadata_hash
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to create external ID: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::SeriesUpdated {
+            series_id,
+            library_id: series.library_id,
+            fields: Some(vec!["external_ids".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(external_id.into()))
+}
+
+/// Delete an external ID from a series
+#[utoipa::path(
+    delete,
+    path = "/api/v1/series/{series_id}/external-ids/{external_id_id}",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID"),
+        ("external_id_id" = Uuid, Path, description = "External ID record ID")
+    ),
+    responses(
+        (status = 204, description = "External ID deleted"),
+        (status = 404, description = "Series or external ID not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Series"
+)]
+pub async fn delete_series_external_id(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path((series_id, external_id_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    // Verify series exists and get library_id
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Verify external ID belongs to this series
+    let belongs =
+        SeriesExternalIdRepository::belongs_to_series(&state.db, external_id_id, series_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to verify external ID: {}", e)))?;
+
+    if !belongs {
+        return Err(ApiError::NotFound("External ID not found".to_string()));
+    }
+
+    SeriesExternalIdRepository::delete(&state.db, external_id_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to delete external ID: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::SeriesUpdated {
+            series_id,
+            library_id: series.library_id,
+            fields: Some(vec!["external_ids".to_string()]),
         },
         timestamp: Utc::now(),
         user_id: Some(auth.user_id),

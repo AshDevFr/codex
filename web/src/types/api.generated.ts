@@ -3066,6 +3066,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{series_id}/external-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all external IDs for a series */
+        get: operations["list_series_external_ids"];
+        put?: never;
+        /**
+         * Create or update an external ID for a series
+         * @description Upserts by series_id + source: if an external ID with the same source already exists,
+         *     it will be updated instead of creating a duplicate.
+         */
+        post: operations["create_series_external_id"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/external-ids/{external_id_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an external ID from a series */
+        delete: operations["delete_series_external_id"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/external-links": {
         parameters: {
             query?: never;
@@ -7618,6 +7657,24 @@ export interface components {
             useExistingExternalId?: boolean;
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
+        };
+        /** @description Request to create or update a series external ID */
+        CreateSeriesExternalIdRequest: {
+            /**
+             * @description External ID value from the source
+             * @example 12345
+             */
+            externalId: string;
+            /**
+             * @description URL to the external source (optional)
+             * @example https://anilist.co/manga/12345
+             */
+            externalUrl?: string | null;
+            /**
+             * @description Source identifier (e.g., "plugin:anilist", "manual", "comicinfo")
+             * @example manual
+             */
+            source: string;
         };
         /** @description Create sharing tag request */
         CreateSharingTagRequest: {
@@ -13303,6 +13360,11 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+        };
+        /** @description Response containing a list of external IDs */
+        SeriesExternalIdListResponse: {
+            /** @description List of external IDs */
+            externalIds: components["schemas"]["SeriesExternalIdDto"][];
         };
         /** @description Nested metadata object for FullSeriesResponse */
         SeriesFullMetadata: {
@@ -21940,6 +22002,121 @@ export interface operations {
                 content?: never;
             };
             /** @description Series not found or has no books */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_series_external_ids: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of external IDs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesExternalIdListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_series_external_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSeriesExternalIdRequest"];
+            };
+        };
+        responses: {
+            /** @description External ID created or updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesExternalIdDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_series_external_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+                /** @description External ID record ID */
+                external_id_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description External ID deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or external ID not found */
             404: {
                 headers: {
                     [name: string]: unknown;

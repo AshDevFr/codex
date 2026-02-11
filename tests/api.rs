@@ -34,6 +34,7 @@ mod api {
     mod recommendations;
     mod scan;
     mod series;
+    mod series_external_ids;
     mod settings;
     mod setup;
     mod sse;

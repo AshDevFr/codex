@@ -53,6 +53,7 @@ import {
   BookTypeBadge,
 } from "@/components/book";
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
+import { ExternalIdEditModal } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
 import { ExternalLinks } from "@/components/series";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -108,6 +109,10 @@ export function BookDetail() {
   const [
     metadataFlowOpened,
     { open: openMetadataFlow, close: closeMetadataFlow },
+  ] = useDisclosure(false);
+  const [
+    externalIdModalOpened,
+    { open: openExternalIdModal, close: closeExternalIdModal },
   ] = useDisclosure(false);
 
   // Fetch book details
@@ -865,12 +870,15 @@ export function BookDetail() {
           )}
 
           {/* External IDs */}
-          {externalIds && externalIds.length > 0 && (
+          {((externalIds && externalIds.length > 0) || canEditBook) && (
             <Group gap="md" align="flex-start">
               <Text size="sm" c="dimmed" w={100}>
                 EXTERNAL IDS
               </Text>
-              <BookExternalIds externalIds={externalIds} />
+              <BookExternalIds
+                externalIds={externalIds ?? []}
+                onEdit={canEditBook ? openExternalIdModal : undefined}
+              />
             </Group>
           )}
 
@@ -973,6 +981,14 @@ export function BookDetail() {
           onApplySuccess={handleMetadataApplySuccess}
         />
       )}
+
+      {/* External ID Edit Modal */}
+      <ExternalIdEditModal
+        entityType="book"
+        entityId={book.id}
+        opened={externalIdModalOpened}
+        onClose={closeExternalIdModal}
+      />
     </Box>
   );
 }

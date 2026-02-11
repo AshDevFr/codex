@@ -12,6 +12,7 @@ export type AlternateTitle = components["schemas"]["AlternateTitleDto"];
 export type ExternalRating = components["schemas"]["ExternalRatingDto"];
 export type ExternalLink = components["schemas"]["ExternalLinkDto"];
 export type SeriesCover = components["schemas"]["SeriesCoverDto"];
+export type SeriesExternalId = components["schemas"]["SeriesExternalIdDto"];
 
 export const seriesMetadataApi = {
   /**
@@ -171,6 +172,32 @@ export const seriesMetadataApi = {
     linkId: string,
   ): Promise<void> => {
     await api.delete(`/series/${seriesId}/external-links/${linkId}`);
+  },
+
+  // External IDs
+  listExternalIds: async (seriesId: string): Promise<SeriesExternalId[]> => {
+    const response = await api.get<{ externalIds: SeriesExternalId[] }>(
+      `/series/${seriesId}/external-ids`,
+    );
+    return response.data.externalIds;
+  },
+
+  createExternalId: async (
+    seriesId: string,
+    data: { source: string; externalId: string; externalUrl?: string },
+  ): Promise<SeriesExternalId> => {
+    const response = await api.post<SeriesExternalId>(
+      `/series/${seriesId}/external-ids`,
+      data,
+    );
+    return response.data;
+  },
+
+  deleteExternalId: async (
+    seriesId: string,
+    externalIdId: string,
+  ): Promise<void> => {
+    await api.delete(`/series/${seriesId}/external-ids/${externalIdId}`);
   },
 
   // Cover management

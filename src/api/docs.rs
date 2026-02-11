@@ -241,6 +241,10 @@ The following paths are exempt from rate limiting:
         v1::handlers::get_series_external_links,
         v1::handlers::create_external_link,
         v1::handlers::delete_external_link,
+        // Series external ID endpoints
+        v1::handlers::list_series_external_ids,
+        v1::handlers::create_series_external_id,
+        v1::handlers::delete_series_external_id,
 
         // Cover management endpoints
         v1::handlers::list_series_covers,

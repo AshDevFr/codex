@@ -8967,6 +8967,159 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/external-ids": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "List all external IDs for a series",
+        "operationId": "list_series_external_ids",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of external IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesExternalIdListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Create or update an external ID for a series",
+        "description": "Upserts by series_id + source: if an external ID with the same source already exists,\nit will be updated instead of creating a duplicate.",
+        "operationId": "create_series_external_id",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSeriesExternalIdRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "External ID created or updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesExternalIdDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/external-ids/{external_id_id}": {
+      "delete": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Delete an external ID from a series",
+        "operationId": "delete_series_external_id",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "external_id_id",
+            "in": "path",
+            "description": "External ID record ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "External ID deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or external ID not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/external-links": {
       "get": {
         "tags": [
@@ -18848,6 +19001,34 @@
               "null"
             ],
             "description": "Working directory for the plugin process"
+          }
+        }
+      },
+      "CreateSeriesExternalIdRequest": {
+        "type": "object",
+        "description": "Request to create or update a series external ID",
+        "required": [
+          "source",
+          "externalId"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "description": "External ID value from the source",
+            "example": "12345"
+          },
+          "externalUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL to the external source (optional)",
+            "example": "https://anilist.co/manga/12345"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source identifier (e.g., \"plugin:anilist\", \"manual\", \"comicinfo\")",
+            "example": "manual"
           }
         }
       },
@@ -29338,6 +29519,22 @@
             "format": "date-time",
             "description": "When the external ID was last updated",
             "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "SeriesExternalIdListResponse": {
+        "type": "object",
+        "description": "Response containing a list of external IDs",
+        "required": [
+          "externalIds"
+        ],
+        "properties": {
+          "externalIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesExternalIdDto"
+            },
+            "description": "List of external IDs"
           }
         }
       },

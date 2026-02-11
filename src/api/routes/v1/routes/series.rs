@@ -226,6 +226,19 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/:series_id/external-links/:source",
             delete(handlers::delete_external_link),
         )
+        // Series external IDs routes
+        .route(
+            "/series/:series_id/external-ids",
+            get(handlers::list_series_external_ids),
+        )
+        .route(
+            "/series/:series_id/external-ids",
+            post(handlers::create_series_external_id),
+        )
+        .route(
+            "/series/:series_id/external-ids/:external_id_id",
+            delete(handlers::delete_series_external_id),
+        )
         // Mark series as read/unread routes
         .route(
             "/series/:series_id/read",
