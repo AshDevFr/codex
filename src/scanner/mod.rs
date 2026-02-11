@@ -6,7 +6,7 @@ pub mod strategies;
 mod types;
 
 pub use analyzer::analyze_file;
-pub use analyzer_queue::{AnalysisResult, analyze_book};
+pub use analyzer_queue::{AnalysisResult, analyze_book, renumber_series_books};
 pub use detector::detect_format;
 pub use library_scanner::scan_library;
 pub use types::{ScanMode, ScanProgress, ScanningConfig};

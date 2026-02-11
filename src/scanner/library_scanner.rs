@@ -1041,6 +1041,29 @@ async fn process_series_batched(
         result.errors.extend(errors);
     }
 
+    // Renumber all books in the series when the series composition changed
+    // (new books added to an existing series).
+    // This ensures book numbers reflect the correct natural sort order
+    // even for books that weren't re-analyzed in this scan.
+    if result.books_created > 0 && !is_new_series {
+        match super::renumber_series_books(db, series_model.id, library.id).await {
+            Ok(count) => {
+                if count > 0 {
+                    debug!(
+                        "Renumbered {} books in series '{}' after adding new books",
+                        count, series_model.name
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to renumber books in series '{}': {}",
+                    series_model.name, e
+                );
+            }
+        }
+    }
+
     Ok((result, is_new_series))
 }
 

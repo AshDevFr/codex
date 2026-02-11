@@ -1235,7 +1235,7 @@ async fn resolve_book_number(
     strategy.resolve_number(&book.file_name, Some(&number_metadata), &context)
 }
 
-/// Get the position of a book within its series (sorted alphabetically by filename)
+/// Get the position of a book within its series (sorted by filename using natural sort order)
 async fn get_book_position_in_series(
     db: &DatabaseConnection,
     series_id: Uuid,
@@ -1246,9 +1246,9 @@ async fn get_book_position_in_series(
 
     let total = books.len();
 
-    // Sort by filename to match file_order strategy behavior
+    // Sort by filename using natural sort order so "Vol. 2" comes before "Vol. 10"
     let mut sorted_names: Vec<&str> = books.iter().map(|b| b.file_name.as_str()).collect();
-    sorted_names.sort();
+    sorted_names.sort_by(|a, b| crate::utils::natural_cmp(a, b));
 
     // Find position of this book (1-indexed)
     let position = sorted_names
@@ -1258,6 +1258,126 @@ async fn get_book_position_in_series(
         .unwrap_or(1); // Fallback to 1 if not found
 
     Ok((position, total))
+}
+
+/// Renumber all books in a series using the library's number strategy
+///
+/// This recalculates the `number` field for all books in a series based on the
+/// current set of books and their filenames (sorted using natural sort order).
+/// Respects `number_lock` — locked books keep their existing numbers.
+///
+/// Only applies to strategies that can be evaluated without re-parsing files:
+/// - `FileOrder`: uses position in naturally-sorted file list
+/// - `Filename`: parses number from filename (no file I/O needed)
+/// - `Smart`: falls back through metadata → filename → file order
+///
+/// Skipped for `Metadata` strategy since it requires re-parsing ComicInfo.xml.
+///
+/// Should be called when the composition of a series changes (books added/removed)
+/// to ensure all book numbers reflect the correct natural sort order.
+pub async fn renumber_series_books(
+    db: &DatabaseConnection,
+    series_id: Uuid,
+    library_id: Uuid,
+) -> Result<usize> {
+    // Get the library to determine number strategy
+    let library = LibraryRepository::get_by_id(db, library_id)
+        .await?
+        .context("Library not found for renumbering")?;
+
+    let number_strategy = library
+        .number_strategy
+        .parse::<NumberStrategy>()
+        .unwrap_or(NumberStrategy::FileOrder);
+
+    // Skip renumbering for Metadata strategy — it requires re-parsing files
+    // to extract ComicInfo.xml numbers, which is too expensive for a quick renumber.
+    if number_strategy == NumberStrategy::Metadata {
+        debug!(
+            "Skipping renumbering for series {} — Metadata strategy requires file re-parsing",
+            series_id
+        );
+        return Ok(0);
+    }
+
+    let number_config_str = library.number_config.as_ref().map(|v| v.to_string());
+    let strategy = create_number_strategy(number_strategy, number_config_str.as_deref());
+
+    // Get all non-deleted books in the series
+    let books = BookRepository::list_by_series(db, series_id, false).await?;
+    if books.is_empty() {
+        return Ok(0);
+    }
+
+    let total_books = books.len();
+
+    // Sort filenames using natural sort to determine positions
+    let mut sorted_filenames: Vec<&str> = books.iter().map(|b| b.file_name.as_str()).collect();
+    sorted_filenames.sort_by(|a, b| crate::utils::natural_cmp(a, b));
+
+    // Build a position map: filename -> 1-indexed position
+    let position_map: std::collections::HashMap<&str, usize> = sorted_filenames
+        .iter()
+        .enumerate()
+        .map(|(i, name)| (*name, i + 1))
+        .collect();
+
+    // Get metadata for all books
+    let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
+    let metadata_map = BookMetadataRepository::get_by_book_ids(db, &book_ids).await?;
+
+    let mut updated_count = 0;
+
+    for book in &books {
+        let Some(metadata) = metadata_map.get(&book.id) else {
+            // No metadata yet — will be created during analysis
+            continue;
+        };
+
+        // Respect number lock
+        if metadata.number_lock {
+            continue;
+        }
+
+        let file_order_position = position_map
+            .get(book.file_name.as_str())
+            .copied()
+            .unwrap_or(1);
+
+        let context = NumberContext::new(file_order_position, total_books);
+
+        // We pass None for embedded metadata number since we don't have the raw
+        // ComicInfo.xml data. This is fine because:
+        // - FileOrder: ignores metadata, uses position only
+        // - Filename: ignores metadata, parses from filename only
+        // - Smart: will skip metadata (None), try filename, then fall back to position
+        let number_metadata = NumberMetadata { number: None };
+
+        let new_number = strategy.resolve_number(&book.file_name, Some(&number_metadata), &context);
+        let new_number_decimal =
+            new_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
+
+        // Only update if the number actually changed
+        if new_number_decimal != metadata.number {
+            let mut updated_metadata = metadata.clone();
+            updated_metadata.number = new_number_decimal;
+            BookMetadataRepository::update(db, &updated_metadata).await?;
+            updated_count += 1;
+            debug!(
+                "Renumbered book '{}': {:?} -> {:?}",
+                book.file_name, metadata.number, new_number_decimal
+            );
+        }
+    }
+
+    if updated_count > 0 {
+        info!(
+            "Renumbered {}/{} books in series {}",
+            updated_count, total_books, series_id
+        );
+    }
+
+    Ok(updated_count)
 }
 
 /// Helper function to count non-null fields in metadata for logging
