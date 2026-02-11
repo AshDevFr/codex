@@ -8,7 +8,13 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
-import { IconCheck, IconExternalLink, IconX } from "@tabler/icons-react";
+import {
+  IconCheck,
+  IconExternalLink,
+  IconLibrary,
+  IconX,
+} from "@tabler/icons-react";
+import { Link } from "react-router-dom";
 import type { RecommendationDto } from "@/api/recommendations";
 
 // =============================================================================
@@ -46,6 +52,7 @@ export function RecommendationCard({
     reason,
     basedOn = [],
     inLibrary,
+    codexSeriesId,
   } = recommendation;
 
   return (
@@ -151,8 +158,20 @@ export function RecommendationCard({
           )}
 
           {/* Actions */}
-          {!inLibrary && (
-            <Group gap="xs" mt="xs">
+          <Group gap="xs" mt="xs">
+            {codexSeriesId && (
+              <Button
+                size="xs"
+                variant="light"
+                color="blue"
+                leftSection={<IconLibrary size={14} />}
+                component={Link}
+                to={`/series/${codexSeriesId}`}
+              >
+                View in Library
+              </Button>
+            )}
+            {!inLibrary && (
               <Button
                 size="xs"
                 variant="subtle"
@@ -163,8 +182,8 @@ export function RecommendationCard({
               >
                 Not Interested
               </Button>
-            </Group>
-          )}
+            )}
+          </Group>
         </Stack>
       </Group>
     </Card>

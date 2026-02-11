@@ -151,4 +151,23 @@ describe("RecommendationCard", () => {
     );
     expect(screen.queryByText(/Based on:/)).not.toBeInTheDocument();
   });
+
+  it("shows View in Library button when codexSeriesId is present", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{
+          ...inLibraryRecommendation,
+          codexSeriesId: "abc-123",
+        }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    const link = screen.getByRole("link", { name: "View in Library" });
+    expect(link).toHaveAttribute("href", "/series/abc-123");
+  });
+
+  it("does not show View in Library button when codexSeriesId is absent", () => {
+    renderWithProviders(<RecommendationCard {...defaultProps} />);
+    expect(screen.queryByText("View in Library")).not.toBeInTheDocument();
+  });
 });

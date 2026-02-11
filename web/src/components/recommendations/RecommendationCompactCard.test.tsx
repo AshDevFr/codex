@@ -90,4 +90,36 @@ describe("RecommendationCompactCard", () => {
     );
     expect(screen.getByText("88%")).toBeInTheDocument();
   });
+
+  it("links to series detail when codexSeriesId is present", () => {
+    renderWithProviders(
+      <RecommendationCompactCard
+        recommendation={{
+          ...baseRec,
+          codexSeriesId: "abc-123",
+          externalUrl: "https://anilist.co/manga/1",
+        }}
+      />,
+    );
+    const card = screen.getByTestId("recommendation-compact-card");
+    expect(card.tagName).toBe("A");
+    expect(card).toHaveAttribute("href", "/series/abc-123");
+    // Should NOT open in new tab since it's an internal link
+    expect(card).not.toHaveAttribute("target", "_blank");
+  });
+
+  it("prefers library link over external URL", () => {
+    renderWithProviders(
+      <RecommendationCompactCard
+        recommendation={{
+          ...baseRec,
+          codexSeriesId: "abc-123",
+          externalUrl: "https://anilist.co/manga/1",
+        }}
+      />,
+    );
+    const card = screen.getByTestId("recommendation-compact-card");
+    // Should link to internal series page, not external URL
+    expect(card).toHaveAttribute("href", "/series/abc-123");
+  });
 });
