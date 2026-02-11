@@ -6,6 +6,7 @@
 //! `recommendations/get` to pre-generate fresh results.
 
 use anyhow::Result;
+use chrono::Utc;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::tasks;
+use crate::db::repositories::UserPluginDataRepository;
 use crate::events::EventBroadcaster;
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
@@ -98,7 +100,7 @@ impl TaskHandler for UserPluginRecommendationsHandler {
             let request_timeout = self.task_request_timeout().await;
 
             // Get user plugin handle (spawns process with per-user credentials)
-            let (handle, _context) = self
+            let (handle, context) = self
                 .plugin_manager
                 .get_user_plugin_handle(plugin_id, user_id, request_timeout)
                 .await
@@ -160,7 +162,7 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 warn!("Task {}: Failed to stop plugin handle: {}", task.id, e);
             }
 
-            let response = result.map_err(|e| {
+            let mut response = result.map_err(|e| {
                 warn!(
                     "Task {}: Failed to generate recommendations: {}",
                     task.id, e
@@ -169,8 +171,23 @@ impl TaskHandler for UserPluginRecommendationsHandler {
             })?;
 
             let count = response.recommendations.len();
+
+            // Stamp generation time and persist to user_plugin_data for the GET endpoint
+            response.generated_at = Some(Utc::now().to_rfc3339());
+            let cached_data = serde_json::to_value(&response)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize recommendations: {}", e))?;
+            UserPluginDataRepository::set(
+                db,
+                context.user_plugin_id,
+                "recommendations",
+                cached_data,
+                None,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to persist recommendations: {}", e))?;
+
             info!(
-                "Task {}: Generated {} fresh recommendations for plugin {} / user {}",
+                "Task {}: Generated and persisted {} recommendations for plugin {} / user {}",
                 task.id, count, plugin_id, user_id
             );
 

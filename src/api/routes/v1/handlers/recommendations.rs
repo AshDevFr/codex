@@ -606,6 +606,69 @@ mod tests {
         assert!(rec1["inLibrary"].as_bool().unwrap());
     }
 
+    /// Verify that RecommendationResponse round-trips through serde_json::Value.
+    /// This is the exact path used by the task handler (serialize to Value → write to DB)
+    /// and the GET endpoint (read from DB → deserialize from Value).
+    #[test]
+    fn test_recommendation_response_round_trip_through_json_value() {
+        use crate::services::plugin::recommendations::RecommendationResponse;
+
+        let original = RecommendationResponse {
+            recommendations: vec![Recommendation {
+                external_id: "42".to_string(),
+                external_url: Some("https://anilist.co/manga/42".to_string()),
+                title: "Test Manga".to_string(),
+                cover_url: Some("https://img.example.com/42.jpg".to_string()),
+                summary: Some("A test manga".to_string()),
+                genres: vec!["Action".to_string()],
+                score: 0.85,
+                reason: "Because you liked testing".to_string(),
+                based_on: vec!["Unit Tests".to_string()],
+                codex_series_id: None,
+                in_library: false,
+            }],
+            generated_at: Some("2026-02-11T16:00:00Z".to_string()),
+            cached: false,
+        };
+
+        // Serialize to Value (what the task handler does before writing to DB)
+        let value = serde_json::to_value(&original).unwrap();
+
+        // Deserialize from Value (what the GET endpoint does when reading from DB)
+        let restored: RecommendationResponse = serde_json::from_value(value).unwrap();
+
+        assert_eq!(restored.recommendations.len(), 1);
+        assert_eq!(restored.recommendations[0].external_id, "42");
+        assert_eq!(restored.recommendations[0].title, "Test Manga");
+        assert_eq!(
+            restored.generated_at.as_deref(),
+            Some("2026-02-11T16:00:00Z")
+        );
+        assert!(!restored.cached);
+    }
+
+    /// Verify that an empty RecommendationResponse round-trips correctly.
+    /// This covers the case where a plugin returns zero recommendations.
+    #[test]
+    fn test_empty_recommendation_response_round_trip() {
+        use crate::services::plugin::recommendations::RecommendationResponse;
+
+        let original = RecommendationResponse {
+            recommendations: vec![],
+            generated_at: Some("2026-02-11T16:00:00Z".to_string()),
+            cached: false,
+        };
+
+        let value = serde_json::to_value(&original).unwrap();
+        let restored: RecommendationResponse = serde_json::from_value(value).unwrap();
+
+        assert!(restored.recommendations.is_empty());
+        assert_eq!(
+            restored.generated_at.as_deref(),
+            Some("2026-02-11T16:00:00Z")
+        );
+    }
+
     // --- plugin_error_to_api_error mapping tests ---
 
     #[test]
