@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-metadata-echo",
-  "version": "1.9.3",
+  "version": "1.10.0",
   "description": "Echo metadata plugin for testing Codex plugin protocol",
   "main": "dist/index.js",
   "bin": "dist/index.js",

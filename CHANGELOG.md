@@ -2,6 +2,80 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.0] - 2026-02-11
+
+### 🚀 Features
+
+- *(plugins)* Add user plugin system database schema and core infrastructure
+- *(plugins)* Add OAuth authentication flow and user plugin API endpoints
+- *(plugins)* Add plugin storage system with bidirectional RPC and SDK support
+- *(plugins)* Add user plugin settings UI, management API, and OpenAPI registration
+- *(plugins)* Add sync provider protocol, background task, and AniList reference plugin
+- *(plugins)* Add recommendation engine protocol, API, UI, and AniList reference plugin
+- *(plugins)* Add cross-reference external IDs to metadata protocol
+- *(plugins)* Match sync-pulled entries to series via externalIdSource
+- *(plugins)* Add bidirectional sync, personal access tokens, and user plugin settings
+- *(plugins)* Add configurable push with volumes/chapters and fix credential delivery
+- *(plugins)* Add sync error reporting, improve AniList docs, and simplify pull query
+- *(plugins)* Add rating and notes sync to AniList plugin
+- *(plugins)* Add auto-pause and auto-drop for stale AniList series
+- *(plugins)* Add recommendation plugin UI, task handler, and library data builder
+- *(plugins)* Split InitializeParams config and enrich sync protocol
+- *(plugins)* Replace PushConfig with CodexSyncSettings and separate server/plugin concerns
+- *(plugins)* Make reference plugins showcase-quality with tests and hardening
+- *(plugins)* Add batch query methods and eliminate N+1 patterns in sync
+- *(plugins)* Wire OAuth token refresh into plugin manager
+- *(plugins)* Structural cleanup — split large files, wire PluginStorage, add OAuth timeout
+- *(plugins)* Add security hardening — OAuth cleanup scheduling, storage quotas, and rate limiting
+- *(plugins)* Deduplicate sync and recommendation tasks per user+plugin
+- *(plugins)* Add fetch timeouts, rate-limit retry, pagination, and configurable seeds
+- *(plugins)* Add searchFallback user config toggle to recommendations-anilist
+- *(plugins)* Add search fallback support to sync-anilist plugin
+
+### 🐛 Bug Fixes
+
+- *(mangabaka)* Prioritize exact title matches in auto-match scoring
+- *(plugins)* Use consistent "integration" terminology in user-facing strings
+- *(docker)* Add missing recommendations-anilist and sync-anilist plugins
+- *(plugins)* Only show Metadata Provider badge when capability is non-empty
+- *(web)* Improve plugin form placeholders
+- *(plugins)* Infer plugin_type from manifest capabilities on manifest sync
+- *(plugins)* Fix IntegrationsSettings test and apply formatting
+- *(plugins)* Replace string matching with structured OAuth error classification and add circuit breaker
+
+### 🚜 Refactor
+
+- *(plugins)* Consolidate SDK types and deduplicate server boilerplate
+- *(plugins)* Remove deprecated syncProvider in favor of userSyncProvider
+- *(web)* Replace manual type definitions with generated OpenAPI types
+- *(web)* Move plugin permissions to capability-aware configure modal
+- *(plugins)* Rename userSyncProvider to userReadSync across codebase
+- *(plugins)* Rename recommendationProvider to userRecommendationProvider across codebase
+- *(plugins)* Split PluginConfigModal into sub-components and generate OpenAPI recommendation types
+- *(plugins)* Remove deprecated SDK exports and replace magic strings with constants
+- *(plugins)* Replace blanket dead_code suppressions with targeted annotations
+- *(plugins)* Remove ~540 lines of dead code and fix unsafe ApiError type cast
+
+### 📚 Documentation
+
+- *(plugins)* Add security model, privacy, and OAuth troubleshooting documentation
+- *(plugins)* Rewrite developer documentation to reflect current plugin system
+- *(plugins)* Document encryption key setup and rotation procedure
+
+### ⚡ Performance
+
+- *(plugins)* Use database-level JSON filtering for task deduplication
+
+### 🧪 Testing
+
+- *(plugins)* Add recommendation API data transformation and error path tests
+- *(plugins)* Add recommendation scoring, ID resolution, and merge logic tests
+- *(plugins)* Add searchFallback toggle and title-based search tests
+
+### ⚙️ Miscellaneous Tasks
+
+- *(plugins)* Auto-discover plugins in Makefile, add new plugins to CI
+
 ## [1.9.3] - 2026-02-07
 
 ### 🐛 Bug Fixes

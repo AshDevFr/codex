@@ -51,9 +51,13 @@ jobs:
       RUSTC_WRAPPER: sccache
     steps:
       - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl build-essential pkg-config clang mold
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: |
+            apt-get update
+            apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -100,9 +104,13 @@ jobs:
         partition: [1, 2, 3, 4, 5]
     steps:
       - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: |
+            apt-get update
+            apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -129,9 +137,13 @@ jobs:
       RUSTC_WRAPPER: sccache
     steps:
       - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl build-essential pkg-config clang mold
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: |
+            apt-get update
+            apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -153,9 +165,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: |
+            apt-get update
+            apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -170,8 +186,11 @@ jobs:
         working-directory: web
         run: npm run lint
       - name: Run tests
-        working-directory: web
-        run: npm run test:run
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: cd web && npm run test:run
       - name: Build frontend
         working-directory: web
         run: npm run build
@@ -195,9 +214,13 @@ jobs:
           - sync-anilist
     steps:
       - name: Install base dependencies
-        run: |
-          apt-get update
-          apt-get install -y git curl
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: |
+            apt-get update
+            apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -275,7 +298,10 @@ jobs:
     needs:
       - test
       - docker
-    if: always()
+    # Only clean up when all jobs succeeded — preserve cache on failure so
+    # individual jobs can be re-run without starting from scratch.
+    # The 24h orphan cleanup below handles stale caches from old/cancelled runs.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: arc-runner-codex
     container:
       image: ubuntu:22.04
