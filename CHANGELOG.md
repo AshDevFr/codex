@@ -2,6 +2,19 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.2] - 2026-02-11
+
+### 🚀 Features
+
+- *(plugins)* Add configurable task timeout via DB settings
+- *(plugins)* Add private and hiddenFromStatusLists visibility controls to AniList sync
+
+### 🐛 Bug Fixes
+
+- Renumber series books on delete and restore, clear deleted book numbers
+- *(plugins)* Prevent plugin process leaks by aborting reader task on drop
+- *(plugins)* Map plugin errors to proper HTTP status codes instead of blanket 500s
+
 ## [1.10.1] - 2026-02-11
 
 ### 🚀 Features
