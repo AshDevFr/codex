@@ -49,6 +49,8 @@ let progressUnit: "volumes" | "chapters" = "volumes";
 let pauseAfterDays = 0;
 let dropAfterDays = 0;
 let searchFallback = false;
+let privateMode = true;
+let hiddenFromStatusLists = false;
 
 /** Set the AniList client (exported for testing) */
 export function setClient(c: AniListClient | null): void {
@@ -63,6 +65,16 @@ export function setViewerId(id: number | null): void {
 /** Set the searchFallback flag (exported for testing) */
 export function setSearchFallback(enabled: boolean): void {
   searchFallback = enabled;
+}
+
+/** Set the privateMode flag (exported for testing) */
+export function setPrivateMode(enabled: boolean): void {
+  privateMode = enabled;
+}
+
+/** Set the hiddenFromStatusLists flag (exported for testing) */
+export function setHiddenFromStatusLists(enabled: boolean): void {
+  hiddenFromStatusLists = enabled;
 }
 
 // =============================================================================
@@ -196,9 +208,13 @@ export const provider: SyncProvider = {
           startedAt?: AniListFuzzyDate;
           completedAt?: AniListFuzzyDate;
           notes?: string;
+          private?: boolean;
+          hiddenFromStatusLists?: boolean;
         } = {
           mediaId,
           status: syncStatusToAnilist(effectiveStatus),
+          private: privateMode,
+          hiddenFromStatusLists,
         };
 
         // Map progress using the configured progressUnit.
@@ -348,8 +364,14 @@ createSyncPlugin({
       if (typeof uc.searchFallback === "boolean") {
         searchFallback = uc.searchFallback;
       }
+      if (typeof uc.private === "boolean") {
+        privateMode = uc.private;
+      }
+      if (typeof uc.hiddenFromStatusLists === "boolean") {
+        hiddenFromStatusLists = uc.hiddenFromStatusLists;
+      }
       logger.info(
-        `Plugin config: progressUnit=${progressUnit}, pauseAfterDays=${pauseAfterDays}, dropAfterDays=${dropAfterDays}, searchFallback=${searchFallback}`,
+        `Plugin config: progressUnit=${progressUnit}, pauseAfterDays=${pauseAfterDays}, dropAfterDays=${dropAfterDays}, searchFallback=${searchFallback}, private=${privateMode}, hiddenFromStatusLists=${hiddenFromStatusLists}`,
       );
     }
   },

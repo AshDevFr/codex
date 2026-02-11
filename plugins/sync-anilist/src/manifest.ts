@@ -63,6 +63,24 @@ export const manifest = {
         required: false,
         default: false,
       },
+      {
+        key: "private",
+        label: "Private Mode",
+        description:
+          "When enabled, all manga list entries synced from Codex will be marked as private on AniList, visible only to you. When disabled, entries follow AniList's default visibility (public).",
+        type: "boolean" as const,
+        required: false,
+        default: true,
+      },
+      {
+        key: "hiddenFromStatusLists",
+        label: "Hide from Status Lists",
+        description:
+          "When enabled, synced entries will be hidden from your standard AniList status lists (Currently Reading, Completed, etc.) but will still appear in custom lists. Has no effect when Private Mode is enabled.",
+        type: "boolean" as const,
+        required: false,
+        default: false,
+      },
     ],
   },
   oauth: {

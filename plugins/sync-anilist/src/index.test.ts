@@ -1,6 +1,14 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AniListClient } from "./anilist.js";
-import { applyStaleness, provider, setClient, setSearchFallback, setViewerId } from "./index.js";
+import {
+  applyStaleness,
+  provider,
+  setClient,
+  setHiddenFromStatusLists,
+  setPrivateMode,
+  setSearchFallback,
+  setViewerId,
+} from "./index.js";
 
 // =============================================================================
 // applyStaleness Tests
@@ -263,5 +271,184 @@ describe("pushProgress searchFallback", () => {
 
     expect(result.success).toHaveLength(1);
     expect(result.success[0].status).toBe("updated");
+  });
+});
+
+// =============================================================================
+// pushProgress — visibility params (private, hiddenFromStatusLists) Tests
+// =============================================================================
+
+describe("pushProgress visibility params", () => {
+  function makeMockClient(overrides?: {
+    saveEntry?: AniListClient["saveEntry"];
+    getMangaList?: AniListClient["getMangaList"];
+  }) {
+    return {
+      getViewer: vi.fn(),
+      getMangaList:
+        overrides?.getMangaList ??
+        vi.fn().mockResolvedValue({
+          pageInfo: { total: 0, currentPage: 1, lastPage: 1, hasNextPage: false },
+          entries: [],
+        }),
+      saveEntry:
+        overrides?.saveEntry ??
+        vi.fn().mockResolvedValue({
+          id: 1,
+          mediaId: 42,
+          status: "CURRENT",
+          score: 0,
+          progress: 0,
+          progressVolumes: 1,
+        }),
+      searchManga: vi.fn().mockResolvedValue(null),
+    } as unknown as AniListClient;
+  }
+
+  let mockClient: ReturnType<typeof makeMockClient>;
+
+  beforeEach(() => {
+    mockClient = makeMockClient();
+    setClient(mockClient);
+    setViewerId(1);
+  });
+
+  afterEach(() => {
+    setClient(null);
+    setViewerId(null);
+    setPrivateMode(true); // restore default
+    setHiddenFromStatusLists(false); // restore default
+  });
+
+  it("sends private=true and hiddenFromStatusLists=false by default", async () => {
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 1 },
+        },
+      ],
+    });
+
+    expect(mockClient.saveEntry).toHaveBeenCalledOnce();
+    const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.private).toBe(true);
+    expect(args.hiddenFromStatusLists).toBe(false);
+  });
+
+  it("includes both visibility params alongside other fields", async () => {
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "completed",
+          progress: { volumes: 10 },
+          score: 80,
+          startedAt: "2026-01-01T00:00:00Z",
+          completedAt: "2026-02-01T00:00:00Z",
+          notes: "Great manga",
+        },
+      ],
+    });
+
+    expect(mockClient.saveEntry).toHaveBeenCalledOnce();
+    const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.mediaId).toBe(42);
+    expect(args.status).toBe("COMPLETED");
+    expect(args.private).toBe(true);
+    expect(args.hiddenFromStatusLists).toBe(false);
+    expect(args.notes).toBe("Great manga");
+  });
+
+  it("sends visibility params for every entry in a batch", async () => {
+    await provider.pushProgress({
+      entries: [
+        { externalId: "10", status: "reading", progress: { volumes: 1 } },
+        { externalId: "20", status: "completed", progress: { volumes: 5 } },
+        { externalId: "30", status: "plan_to_read", progress: {} },
+      ],
+    });
+
+    expect(mockClient.saveEntry).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[i][0];
+      expect(args.private).toBe(true);
+      expect(args.hiddenFromStatusLists).toBe(false);
+    }
+  });
+
+  it("sends private=false when privateMode is disabled", async () => {
+    setPrivateMode(false);
+
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 1 },
+        },
+      ],
+    });
+
+    const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.private).toBe(false);
+    expect(args.hiddenFromStatusLists).toBe(false);
+  });
+
+  it("sends hiddenFromStatusLists=true when enabled", async () => {
+    setHiddenFromStatusLists(true);
+
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 1 },
+        },
+      ],
+    });
+
+    const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.private).toBe(true);
+    expect(args.hiddenFromStatusLists).toBe(true);
+  });
+
+  it("sends private=false and hiddenFromStatusLists=true together", async () => {
+    setPrivateMode(false);
+    setHiddenFromStatusLists(true);
+
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 1 },
+        },
+      ],
+    });
+
+    const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.private).toBe(false);
+    expect(args.hiddenFromStatusLists).toBe(true);
+  });
+
+  it("sends both=true when both are enabled", async () => {
+    setPrivateMode(true);
+    setHiddenFromStatusLists(true);
+
+    await provider.pushProgress({
+      entries: [
+        {
+          externalId: "42",
+          status: "reading",
+          progress: { volumes: 1 },
+        },
+      ],
+    });
+
+    const args = (mockClient.saveEntry as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.private).toBe(true);
+    expect(args.hiddenFromStatusLists).toBe(true);
   });
 });

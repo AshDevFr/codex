@@ -97,7 +97,9 @@ const UPDATE_ENTRY_MUTATION = `
     $progressVolumes: Int,
     $startedAt: FuzzyDateInput,
     $completedAt: FuzzyDateInput,
-    $notes: String
+    $notes: String,
+    $private: Boolean,
+    $hiddenFromStatusLists: Boolean
   ) {
     SaveMediaListEntry(
       mediaId: $mediaId,
@@ -107,7 +109,9 @@ const UPDATE_ENTRY_MUTATION = `
       progressVolumes: $progressVolumes,
       startedAt: $startedAt,
       completedAt: $completedAt,
-      notes: $notes
+      notes: $notes,
+      private: $private,
+      hiddenFromStatusLists: $hiddenFromStatusLists
     ) {
       id
       mediaId
@@ -301,6 +305,8 @@ export class AniListClient {
     startedAt?: AniListFuzzyDate;
     completedAt?: AniListFuzzyDate;
     notes?: string;
+    private?: boolean;
+    hiddenFromStatusLists?: boolean;
   }): Promise<AniListSaveResult> {
     const data = await this.query<{ SaveMediaListEntry: AniListSaveResult }>(
       UPDATE_ENTRY_MUTATION,
