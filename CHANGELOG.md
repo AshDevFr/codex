@@ -2,6 +2,16 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.5] - 2026-02-12
+
+### 🚀 Features
+
+- *(screenshots)* Rewrite plugin scenarios for official store and update docs
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Clamp mangabaka search limit to 50, add sort_by config, handle null JSON-RPC result
+
 ## [1.10.4] - 2026-02-12
 
 ### 🚀 Features

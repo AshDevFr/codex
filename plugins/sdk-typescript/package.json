@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-sdk",
-  "version": "1.10.4",
+  "version": "1.10.5",
   "description": "SDK for building Codex plugins",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
