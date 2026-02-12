@@ -43,6 +43,10 @@ import {
   pluginsApi,
 } from "@/api/plugins";
 import { PluginConfigModal } from "@/components/forms/PluginConfigModal";
+import {
+  type OfficialPlugin,
+  OfficialPlugins,
+} from "./plugins/OfficialPlugins";
 import { PluginDetails } from "./plugins/PluginDetails";
 import {
   defaultFormValues,
@@ -320,6 +324,21 @@ export function PluginsSettings() {
     },
   });
 
+  const handleAddOfficialPlugin = (official: OfficialPlugin) => {
+    createForm.setValues({
+      ...defaultFormValues,
+      name: official.name,
+      displayName: official.displayName,
+      description: official.description,
+      command: official.formDefaults.command,
+      args: official.formDefaults.args,
+      credentialDelivery: official.formDefaults.credentialDelivery,
+      credentials: official.formDefaults.credentials ?? "",
+      enabled: true,
+    });
+    openCreateModal();
+  };
+
   const handleEditPlugin = (plugin: PluginDto) => {
     setSelectedPlugin(plugin);
     editForm.setValues({
@@ -383,6 +402,11 @@ export function PluginsSettings() {
             Add Plugin
           </Button>
         </Group>
+
+        <OfficialPlugins
+          installedPlugins={plugins}
+          onAdd={handleAddOfficialPlugin}
+        />
 
         {isLoading ? (
           <Group justify="center" py="xl">

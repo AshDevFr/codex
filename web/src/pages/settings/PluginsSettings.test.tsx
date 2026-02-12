@@ -820,9 +820,9 @@ describe("PluginsSettings - row expansion", () => {
     await clickExpandButton(container, user);
 
     await waitFor(() => {
-      expect(screen.getByText("Credentials")).toBeInTheDocument();
+      // "Configured" is unique to the expanded plugin row credentials section
+      expect(screen.getByText("Configured")).toBeInTheDocument();
     });
-    expect(screen.getByText("Configured")).toBeInTheDocument();
   });
 
   it("shows 'Not configured' when hasCredentials is false", async () => {
@@ -1703,7 +1703,172 @@ describe("PluginsSettings - recommendation provider badge", () => {
 });
 
 // ===========================================================================
-// 25. Notification mock verification
+// 25. Official Plugins section
+// ===========================================================================
+describe("PluginsSettings - Official Plugins section", () => {
+  it("renders the Official Plugins section header", async () => {
+    renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Official Plugins")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Pre-configured plugins maintained by the Codex team/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows official plugin cards when section is expanded", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Official Plugins")).toBeInTheDocument();
+    });
+
+    // Click to expand
+    await user.click(screen.getByText("Official Plugins"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Open Library Metadata")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Mangabaka Metadata")).toBeInTheDocument();
+    expect(screen.getByText("AniList Sync")).toBeInTheDocument();
+    expect(screen.getByText("AniList Recommendations")).toBeInTheDocument();
+    expect(screen.getByText("Echo Metadata")).toBeInTheDocument();
+  });
+
+  it("shows type badges for each official plugin", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PluginsSettings />);
+
+    await user.click(screen.getByText("Official Plugins"));
+
+    await waitFor(() => {
+      // Each plugin type should appear as a badge
+      expect(screen.getByText("Sync")).toBeInTheDocument();
+      expect(screen.getByText("Recommendations")).toBeInTheDocument();
+      // "Metadata" appears for Echo, Mangabaka, and Open Library plugins
+      expect(screen.getAllByText("Metadata").length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  it("shows 'Add' buttons for plugins that are not installed", async () => {
+    mockGetAll.mockResolvedValue({ plugins: [], total: 0 });
+
+    const user = userEvent.setup();
+    renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Official Plugins")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Official Plugins"));
+
+    await waitFor(() => {
+      // All 5 official plugins should show their names
+      expect(screen.getByText("Open Library Metadata")).toBeInTheDocument();
+      expect(screen.getByText("Mangabaka Metadata")).toBeInTheDocument();
+      expect(screen.getByText("AniList Sync")).toBeInTheDocument();
+      expect(screen.getByText("AniList Recommendations")).toBeInTheDocument();
+      expect(screen.getByText("Echo Metadata")).toBeInTheDocument();
+    });
+
+    // No "Installed" badges since nothing is installed
+    expect(screen.queryByText("Installed")).not.toBeInTheDocument();
+  });
+
+  it("shows 'Installed' for plugins that are already installed", async () => {
+    const installed = createMockPlugin({
+      id: "ol-1",
+      name: "metadata-openlibrary",
+      displayName: "Open Library Metadata",
+    });
+    mockGetAll.mockResolvedValue({ plugins: [installed], total: 1 });
+
+    const user = userEvent.setup();
+    renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Official Plugins")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Official Plugins"));
+
+    // Wait for the "Installed" badge on the front face
+    await waitFor(() => {
+      expect(screen.getByText("Installed")).toBeInTheDocument();
+    });
+  });
+
+  it("opens create modal with pre-filled values when Add is clicked", async () => {
+    mockGetAll.mockResolvedValue({ plugins: [], total: 0 });
+
+    const user = userEvent.setup();
+    renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Official Plugins")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Official Plugins"));
+
+    // Wait for plugin cards to appear
+    await waitFor(() => {
+      expect(screen.getByText("Open Library Metadata")).toBeInTheDocument();
+    });
+
+    // With CSS 3D flip, both faces are always in the DOM.
+    // In the test environment CSS backface-visibility doesn't apply,
+    // so we can find the Add button on the back face directly.
+    // Locate the package link for Open Library, then find the Add button
+    // within the same flip card container.
+    const pkgLink = screen.getByText(
+      "@ashdev/codex-plugin-metadata-openlibrary",
+    );
+    const flipCard = pkgLink.closest("[class*='flipCard']") as HTMLElement;
+    expect(flipCard).not.toBeNull();
+    const addButton = flipCard.querySelector(
+      "button:not([disabled])",
+    ) as HTMLElement;
+    expect(addButton).not.toBeNull();
+    await user.click(addButton);
+
+    // The create modal should open
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /Add Plugin/i }),
+      ).toBeInTheDocument();
+    });
+
+    // Check that the form is pre-filled with the plugin's display name
+    const displayNameInput = screen.getByLabelText(/Display Name/i);
+    expect(displayNameInput).toHaveValue("Open Library Metadata");
+  });
+
+  it("collapses section when clicked again", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PluginsSettings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Official Plugins")).toBeInTheDocument();
+    });
+
+    // Expand
+    await user.click(screen.getByText("Official Plugins"));
+    await waitFor(() => {
+      expect(screen.getByText("Open Library Metadata")).toBeInTheDocument();
+    });
+
+    // Collapse
+    await user.click(screen.getByText("Official Plugins"));
+
+    // The content should be collapsed (Mantine Collapse animates)
+    // We can verify the toggle doesn't error out
+  });
+});
+
+// ===========================================================================
+// 26. Notification mock verification
 // ===========================================================================
 describe("PluginsSettings - notification mock", () => {
   it("verifies that notifications.show is properly mocked", () => {
