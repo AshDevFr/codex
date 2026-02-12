@@ -15,12 +15,12 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::tasks;
-use crate::db::repositories::UserPluginDataRepository;
+use crate::db::repositories::{PluginsRepository, UserPluginDataRepository};
 use crate::events::EventBroadcaster;
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::library::build_user_library;
-use crate::services::plugin::protocol::methods;
+use crate::services::plugin::protocol::{PluginManifest, methods};
 use crate::services::plugin::recommendations::{
     RecommendationClearResponse, RecommendationRequest, RecommendationResponse,
 };
@@ -143,11 +143,46 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 library.len()
             );
 
+            // Resolve the plugin's external_id_source so we can populate exclude_ids
+            // with external IDs from the user's library that match this source.
+            // This tells the plugin to skip recommending series the user already has.
+            let exclude_ids = match PluginsRepository::get_by_id(db, plugin_id).await {
+                Ok(Some(plugin_model)) => {
+                    let source = plugin_model
+                        .manifest
+                        .as_ref()
+                        .and_then(|m| serde_json::from_value::<PluginManifest>(m.clone()).ok())
+                        .and_then(|m| m.capabilities.external_id_source);
+
+                    if let Some(source) = source {
+                        library
+                            .iter()
+                            .flat_map(|entry| {
+                                entry
+                                    .external_ids
+                                    .iter()
+                                    .filter(|eid| eid.source == source)
+                                    .map(|eid| eid.external_id.clone())
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        vec![]
+                    }
+                }
+                _ => vec![],
+            };
+
+            debug!(
+                "Task {}: Excluding {} external IDs from recommendations",
+                task.id,
+                exclude_ids.len()
+            );
+
             // Call recommendations/get to generate fresh results
             let request = RecommendationRequest {
                 library,
                 limit: Some(20),
-                exclude_ids: vec![],
+                exclude_ids,
             };
 
             let result = handle

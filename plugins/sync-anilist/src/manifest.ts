@@ -1,5 +1,8 @@
-import { EXTERNAL_ID_SOURCE_ANILIST, type PluginManifest } from "@ashdev/codex-plugin-sdk";
+import type { PluginManifest } from "@ashdev/codex-plugin-sdk";
 import packageJson from "../package.json" with { type: "json" };
+
+/** Canonical external ID source for AniList (`api:<service>` convention) */
+const EXTERNAL_ID_SOURCE_ANILIST = "api:anilist" as const;
 
 export const manifest = {
   name: "sync-anilist",

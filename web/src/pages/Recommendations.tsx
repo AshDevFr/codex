@@ -16,7 +16,7 @@ import {
   IconSparkles,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type RecommendationsResponse,
   recommendationsApi,
@@ -38,6 +38,11 @@ export function Recommendations() {
   );
   const prevRecTaskRef = useRef(recTask);
 
+  // Track whether a task is running — drives query polling as a fallback for SSE.
+  // Set true on refresh or when the API reports an active task; cleared when the
+  // API response no longer has a taskStatus and SSE shows no active task.
+  const [taskRunning, setTaskRunning] = useState(false);
+
   // When a recommendation task completes, invalidate the query to fetch fresh data
   useEffect(() => {
     const prev = prevRecTaskRef.current;
@@ -53,7 +58,9 @@ export function Recommendations() {
     }
   }, [recTask, queryClient]);
 
-  // Fetch recommendations
+  // Fetch recommendations — polls every 3s while a task is running so the page
+  // updates promptly even when SSE events don't reach the browser (e.g. in
+  // split web/worker deployments).
   const {
     data: recData,
     isLoading,
@@ -62,6 +69,7 @@ export function Recommendations() {
     queryKey: ["recommendations"],
     queryFn: recommendationsApi.get,
     retry: false,
+    refetchInterval: taskRunning ? 3000 : false,
   });
 
   // Determine if a task is active (from response or SSE)
@@ -71,10 +79,16 @@ export function Recommendations() {
     (recTask != null &&
       (recTask.status === "running" || recTask.status === "pending"));
 
+  // Sync isTaskActive back to taskRunning so refetchInterval stays in sync
+  useEffect(() => {
+    setTaskRunning(isTaskActive);
+  }, [isTaskActive]);
+
   // Refresh mutation
   const refreshMutation = useMutation({
     mutationFn: recommendationsApi.refresh,
     onSuccess: (data) => {
+      setTaskRunning(true);
       notifications.show({
         title: "Refreshing recommendations",
         message: data.message,

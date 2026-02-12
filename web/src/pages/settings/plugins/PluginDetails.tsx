@@ -118,11 +118,10 @@ function MetadataManifestDetails({ plugin }: { plugin: PluginDto }) {
   );
 }
 
-// Sync provider manifest details (right column)
-function SyncManifestDetails({ plugin }: { plugin: PluginDto }) {
-  if (!plugin.manifest?.capabilities?.userReadSync) return null;
-
-  const externalIdSource = plugin.manifest.capabilities.externalIdSource;
+// External ID source manifest details (right column)
+// Shown for any plugin that declares an external ID source (sync, recommendations, etc.)
+function ExternalIdSourceDetails({ plugin }: { plugin: PluginDto }) {
+  const externalIdSource = plugin.manifest?.capabilities?.externalIdSource;
 
   if (!externalIdSource) return null;
 
@@ -392,7 +391,7 @@ export function PluginDetails({
             </Group>
 
             <MetadataManifestDetails plugin={plugin} />
-            <SyncManifestDetails plugin={plugin} />
+            <ExternalIdSourceDetails plugin={plugin} />
             <OAuthManifestDetails plugin={plugin} />
 
             {plugin.manifest.configSchema && (

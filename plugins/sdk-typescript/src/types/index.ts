@@ -23,7 +23,6 @@ export type {
   PluginManifest,
 } from "./manifest.js";
 export {
-  EXTERNAL_ID_SOURCE_ANILIST,
   hasBookMetadataProvider,
   hasSeriesMetadataProvider,
 } from "./manifest.js";

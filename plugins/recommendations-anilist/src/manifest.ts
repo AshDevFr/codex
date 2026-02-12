@@ -1,6 +1,9 @@
 import type { PluginManifest } from "@ashdev/codex-plugin-sdk";
 import packageJson from "../package.json" with { type: "json" };
 
+/** Canonical external ID source for AniList (`api:<service>` convention) */
+export const EXTERNAL_ID_SOURCE_ANILIST = "api:anilist" as const;
+
 export const manifest = {
   name: "recommendations-anilist",
   displayName: "AniList Recommendations",
@@ -12,6 +15,7 @@ export const manifest = {
   protocolVersion: "1.0",
   capabilities: {
     userRecommendationProvider: true,
+    externalIdSource: EXTERNAL_ID_SOURCE_ANILIST,
   },
   requiredCredentials: [
     {

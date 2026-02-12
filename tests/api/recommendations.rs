@@ -17,7 +17,11 @@ use common::http::{
 use hyper::StatusCode;
 use serde_json::json;
 
-use codex::db::repositories::{PluginsRepository, UserPluginsRepository, UserRepository};
+use codex::db::ScanningStrategy;
+use codex::db::repositories::{
+    LibraryRepository, PluginsRepository, SeriesExternalIdRepository, SeriesRepository,
+    UserPluginsRepository, UserRepository,
+};
 use codex::utils::password;
 use std::sync::Once;
 
@@ -776,5 +780,238 @@ async fn test_refresh_recommendations_deduplication() {
     assert_eq!(
         body["message"],
         "Recommendation refresh already in progress"
+    );
+}
+
+// =============================================================================
+// Local Series Filtering Tests
+// =============================================================================
+
+/// Create a recommendation plugin with externalIdSource set in its manifest
+async fn create_recommendation_plugin_with_external_source(
+    db: &sea_orm::DatabaseConnection,
+    name: &str,
+    display_name: &str,
+    external_id_source: &str,
+) -> uuid::Uuid {
+    let plugin = PluginsRepository::create(
+        db,
+        name,
+        display_name,
+        Some("A test recommendation plugin"),
+        "user",
+        "echo",
+        vec!["hello".to_string()],
+        vec![],
+        None,
+        vec![],
+        vec![],
+        vec![],
+        None,
+        "none",
+        None,
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let manifest = json!({
+        "name": name,
+        "displayName": display_name,
+        "version": "1.0.0",
+        "protocolVersion": "1.0",
+        "pluginType": "user",
+        "capabilities": {
+            "userRecommendationProvider": true,
+            "externalIdSource": external_id_source
+        },
+        "userDescription": "Get personalized recommendations"
+    });
+    PluginsRepository::update_manifest(db, plugin.id, Some(manifest))
+        .await
+        .unwrap();
+
+    plugin.id
+}
+
+#[tokio::test]
+async fn test_get_recommendations_filters_out_local_series() {
+    // When a recommendation's external_id matches a local series via
+    // series_external_ids, it should be filtered out of the response.
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id = create_recommendation_plugin_with_external_source(
+        &db,
+        "rec-anilist",
+        "AniList Recommendations",
+        "api:anilist",
+    )
+    .await;
+
+    // Enable the plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Create a local series and give it an external ID matching one of the recommendations
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "My Local Manga", None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create(
+        &db,
+        series.id,
+        "api:anilist",
+        "111",
+        Some("https://anilist.co/manga/111"),
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Store cached recommendations:
+    // - "111" matches the local series → should be FILTERED OUT
+    // - "222" does NOT match → should be returned
+    let cached_data = json!({
+        "recommendations": [
+            {
+                "externalId": "111",
+                "title": "Already In Library",
+                "score": 0.9,
+                "reason": "Because you read something"
+            },
+            {
+                "externalId": "222",
+                "title": "New Recommendation",
+                "score": 0.85,
+                "reason": "Because you might like it"
+            }
+        ],
+        "generatedAt": "2026-02-12T10:00:00Z",
+        "cached": true
+    });
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance.id,
+        "recommendations",
+        cached_data,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // GET recommendations — "111" should be filtered out, "222" should remain
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/user/recommendations", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+    let recs = body["recommendations"].as_array().unwrap();
+    assert_eq!(recs.len(), 1, "Should have filtered out the local series");
+    assert_eq!(recs[0]["externalId"], "222");
+    assert_eq!(recs[0]["title"], "New Recommendation");
+}
+
+#[tokio::test]
+async fn test_get_recommendations_no_filter_without_external_id_source() {
+    // When a plugin has no externalIdSource in its manifest, no filtering occurs
+    // and all recommendations are returned as-is.
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    // Create plugin WITHOUT externalIdSource
+    let plugin_id = create_recommendation_plugin(&db, "rec-no-source", "Rec Without Source").await;
+
+    // Enable the plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Create a local series with an external ID (won't match since no source)
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Some Manga", None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create(&db, series.id, "api:anilist", "111", None, None)
+        .await
+        .unwrap();
+
+    // Store cached recommendations
+    let cached_data = json!({
+        "recommendations": [
+            {
+                "externalId": "111",
+                "title": "Manga A",
+                "score": 0.9,
+                "reason": "test"
+            },
+            {
+                "externalId": "222",
+                "title": "Manga B",
+                "score": 0.8,
+                "reason": "test"
+            }
+        ],
+        "generatedAt": "2026-02-12T10:00:00Z",
+        "cached": true
+    });
+    codex::db::repositories::UserPluginDataRepository::set(
+        &db,
+        instance.id,
+        "recommendations",
+        cached_data,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // GET recommendations — both should be returned since no externalIdSource
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth("/api/v1/user/recommendations", &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("Expected response body");
+    let recs = body["recommendations"].as_array().unwrap();
+    assert_eq!(
+        recs.len(),
+        2,
+        "Without externalIdSource, no filtering should happen"
     );
 }

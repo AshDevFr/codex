@@ -169,7 +169,7 @@ pub async fn get_recommendations(
                     None => (vec![], None, false),
                 };
 
-                enrich_with_codex_presence(&state.db, &mut recommendations, &plugin).await;
+                enrich_and_filter_codex_presence(&state.db, &mut recommendations, &plugin).await;
 
                 return Ok(Json(RecommendationsResponse {
                     recommendations,
@@ -217,7 +217,7 @@ pub async fn get_recommendations(
         None => (vec![], None, false),
     };
 
-    enrich_with_codex_presence(&state.db, &mut recommendations, &plugin).await;
+    enrich_and_filter_codex_presence(&state.db, &mut recommendations, &plugin).await;
 
     Ok(Json(RecommendationsResponse {
         recommendations,
@@ -291,14 +291,15 @@ pub async fn refresh_recommendations(
     }))
 }
 
-/// Enrich recommendation DTOs with Codex library presence.
+/// Enrich recommendation DTOs with Codex library presence and filter out
+/// series that already exist in the user's Codex library.
 ///
 /// For each recommendation, checks whether its `external_id` maps to a Codex series
-/// via `series_external_ids`. When matched, sets `in_codex = true` and populates
-/// `codex_series_id`.
-async fn enrich_with_codex_presence(
+/// via `series_external_ids`. When matched, the recommendation is removed from the
+/// list since the user already has it locally — there's no point recommending it.
+async fn enrich_and_filter_codex_presence(
     db: &sea_orm::DatabaseConnection,
-    recommendations: &mut [RecommendationDto],
+    recommendations: &mut Vec<RecommendationDto>,
     plugin: &crate::db::entities::plugins::Model,
 ) {
     // Resolve the external_id_source from the plugin manifest
@@ -328,16 +329,16 @@ async fn enrich_with_codex_presence(
         .await
     {
         Ok(matches) => {
-            for rec in recommendations.iter_mut() {
-                if let Some(ext) = matches.get(&rec.external_id) {
-                    rec.in_codex = true;
-                    rec.codex_series_id = Some(ext.series_id.to_string());
-                }
-            }
+            let before_count = recommendations.len();
+            // Remove recommendations that map to a local Codex series
+            recommendations.retain(|rec| !matches.contains_key(&rec.external_id));
+            let filtered = before_count - recommendations.len();
             debug!(
                 matched = matches.len(),
-                total = external_ids.len(),
-                "Enriched recommendations with Codex presence"
+                filtered = filtered,
+                remaining = recommendations.len(),
+                total = before_count,
+                "Enriched recommendations and filtered out local series"
             );
         }
         Err(e) => {

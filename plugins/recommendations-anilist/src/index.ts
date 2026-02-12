@@ -13,7 +13,6 @@
 import {
   createLogger,
   createRecommendationPlugin,
-  EXTERNAL_ID_SOURCE_ANILIST,
   type InitializeParams,
   type PluginStorage,
   type Recommendation,
@@ -33,7 +32,7 @@ import {
   getBestTitle,
   stripHtml,
 } from "./anilist.js";
-import { manifest } from "./manifest.js";
+import { EXTERNAL_ID_SOURCE_ANILIST, manifest } from "./manifest.js";
 
 const logger = createLogger({ name: "recommendations-anilist", level: "debug" });
 

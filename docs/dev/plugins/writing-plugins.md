@@ -484,7 +484,7 @@ Sync plugins enable bidirectional reading progress synchronization with external
 ### Manifest
 
 ```typescript
-import { EXTERNAL_ID_SOURCE_ANILIST, type PluginManifest } from "@ashdev/codex-plugin-sdk";
+import type { PluginManifest } from "@ashdev/codex-plugin-sdk";
 
 export const manifest = {
   name: "sync-example",
@@ -634,11 +634,10 @@ createSyncPlugin({
 
 Sync plugins declare an `externalIdSource` in their manifest (e.g., `"api:example"`). Codex uses this to match series in your library with entries on the external service via the `series_external_ids` table. When pushing progress, Codex only sends entries that have a matching external ID.
 
-The SDK provides constants for known sources:
+Define the source string as a constant in your plugin using the `api:<service>` convention:
 
 ```typescript
-import { EXTERNAL_ID_SOURCE_ANILIST } from "@ashdev/codex-plugin-sdk";
-// Value: "api:anilist"
+const EXTERNAL_ID_SOURCE_ANILIST = "api:anilist" as const;
 ```
 
 ### OAuth Configuration

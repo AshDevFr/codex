@@ -634,12 +634,17 @@ type BookCoverSize = "small" | "medium" | "large";
 interface BookAward { name: string; year?: number; category?: string; won?: boolean; }
 ```
 
-### Constants
+### External ID Source Convention
+
+Plugins that match entries to external services should declare an `externalIdSource` in their capabilities using the `api:<service>` convention:
 
 ```typescript
-import { EXTERNAL_ID_SOURCE_ANILIST } from "@ashdev/codex-plugin-sdk";
-// Value: "api:anilist"
+capabilities: {
+  externalIdSource: "api:anilist",  // or "api:myanimelist", "api:kitsu", etc.
+}
 ```
+
+Define the source string as a constant in your plugin (not in the SDK, since it's service-specific).
 
 ### JSON-RPC Types
 

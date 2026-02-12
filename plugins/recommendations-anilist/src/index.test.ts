@@ -1,4 +1,4 @@
-import { EXTERNAL_ID_SOURCE_ANILIST, type UserLibraryEntry } from "@ashdev/codex-plugin-sdk";
+import type { UserLibraryEntry } from "@ashdev/codex-plugin-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AniListRecommendationNode } from "./anilist.js";
 import {
@@ -10,6 +10,7 @@ import {
   setClient,
   setSearchFallback,
 } from "./index.js";
+import { EXTERNAL_ID_SOURCE_ANILIST } from "./manifest.js";
 
 // =============================================================================
 // Helpers

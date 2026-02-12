@@ -168,18 +168,6 @@ export interface PluginManifest {
 }
 
 // =============================================================================
-// External ID Source Constants
-// =============================================================================
-
-/**
- * Canonical external ID source for AniList.
- *
- * Use this as the `externalIdSource` in plugin capabilities and when
- * creating external ID entries. Follows the `api:<service>` convention.
- */
-export const EXTERNAL_ID_SOURCE_ANILIST = "api:anilist" as const;
-
-// =============================================================================
 // Type Guards for Manifest Validation
 // =============================================================================
 

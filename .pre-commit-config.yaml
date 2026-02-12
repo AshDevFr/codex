@@ -26,3 +26,17 @@ repos:
         language: script
         files: ^(src/api/.*\.rs|src/db/entities/.*\.rs|web/openapi\.json|web/src/types/api\.generated\.ts)$
         pass_filenames: false
+
+      - id: plugin-lint-fix
+        name: Fix plugin lint issues
+        entry: make plugins-lint-fix
+        language: system
+        files: ^plugins/.*$
+        pass_filenames: false
+
+      - id: frontend-lint-fix
+        name: Fix frontend lint issues
+        entry: make frontend-lint-fix
+        language: system
+        files: ^web/.*$
+        pass_filenames: false
