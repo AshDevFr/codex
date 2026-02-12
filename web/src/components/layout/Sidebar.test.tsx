@@ -235,7 +235,8 @@ describe("Sidebar Component (via AppLayout)", () => {
   });
 
   describe("Settings navigation", () => {
-    it("should open Settings menu when navigating to a settings page", async () => {
+    it("should open Settings menu when clicking Settings toggle", async () => {
+      const user = userEvent.setup();
       const mockAdmin: User = {
         id: "1",
         username: "admin",
@@ -252,10 +253,11 @@ describe("Sidebar Component (via AppLayout)", () => {
       });
 
       // Render starting from home page
-      const { rerender } = renderWithProviders(
-        <AppLayout currentPath="/">
+      renderWithProviders(
+        <AppLayout>
           <div>Content</div>
         </AppLayout>,
+        { initialEntries: ["/"] },
       );
 
       // Settings submenu items (like Plugins) should not be visible when Settings is collapsed
@@ -263,14 +265,10 @@ describe("Sidebar Component (via AppLayout)", () => {
       const pluginsLinkBefore = screen.getByText("Plugins");
       expect(pluginsLinkBefore).not.toBeVisible();
 
-      // Now rerender with a settings path to simulate navigation
-      rerender(
-        <AppLayout currentPath="/settings/plugins">
-          <div>Content</div>
-        </AppLayout>,
-      );
+      // Click Settings to expand the submenu
+      await user.click(screen.getByText("Settings"));
 
-      // After navigation to settings page, the Settings menu should be expanded
+      // After clicking Settings, the submenu should be expanded
       // and Plugins submenu item should be visible
       await waitFor(() => {
         expect(screen.getByText("Plugins")).toBeVisible();
@@ -295,13 +293,118 @@ describe("Sidebar Component (via AppLayout)", () => {
 
       // Render directly on a settings page
       renderWithProviders(
-        <AppLayout currentPath="/settings/plugins">
+        <AppLayout>
           <div>Content</div>
         </AppLayout>,
+        { initialEntries: ["/settings/plugins"] },
       );
 
       // Settings submenu items should be visible since we started on a settings page
       expect(screen.getByText("Plugins")).toBeVisible();
+    });
+  });
+
+  describe("Sidebar active state highlighting", () => {
+    const mockLibrary: Library = {
+      id: "lib-123",
+      name: "Test Library",
+      path: "/test/path",
+      isActive: true,
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-01",
+      bookStrategy: "filename",
+      defaultReadingDirection: "ltr",
+      numberStrategy: "filename",
+      seriesStrategy: "flat",
+    };
+
+    it("should highlight the library nav item when on that library's page", async () => {
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      vi.mocked(librariesApi.getAll).mockResolvedValue([mockLibrary]);
+
+      renderWithProviders(
+        <AppLayout>
+          <div>Content</div>
+        </AppLayout>,
+        { initialEntries: ["/libraries/lib-123/series"] },
+      );
+
+      // Wait for the library to appear
+      await waitFor(() => {
+        expect(screen.getByText("Test Library")).toBeInTheDocument();
+      });
+
+      // The library nav link should have the active data attribute
+      const libraryLink = screen.getByText("Test Library").closest("a");
+      expect(libraryLink).toHaveAttribute("data-active", "true");
+    });
+
+    it("should highlight Home when on the root path", () => {
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      renderWithProviders(
+        <AppLayout>
+          <div>Content</div>
+        </AppLayout>,
+        { initialEntries: ["/"] },
+      );
+
+      const homeLink = screen.getByText("Home").closest("a");
+      expect(homeLink).toHaveAttribute("data-active", "true");
+    });
+
+    it("should highlight Libraries when on the all-libraries page", () => {
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      renderWithProviders(
+        <AppLayout>
+          <div>Content</div>
+        </AppLayout>,
+        { initialEntries: ["/libraries/all/series"] },
+      );
+
+      const librariesLink = screen.getByText("Libraries").closest("a");
+      expect(librariesLink).toHaveAttribute("data-active", "true");
     });
   });
 

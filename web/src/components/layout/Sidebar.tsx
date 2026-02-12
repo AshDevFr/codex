@@ -38,7 +38,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { userPluginsApi } from "@/api/userPlugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
@@ -52,14 +52,11 @@ import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
 
-interface SidebarProps {
-  currentPath?: string;
-}
-
-export function Sidebar({ currentPath = "/" }: SidebarProps) {
+export function Sidebar() {
   const appName = useAppName();
   const { data: appInfo } = useAppInfo();
   const navigate = useNavigate();
+  const { pathname: currentPath } = useLocation();
   const queryClient = useQueryClient();
   const { clearAuth } = useAuthStore();
   // Only subscribe to getLastTab action (doesn't cause re-renders since it's not state)

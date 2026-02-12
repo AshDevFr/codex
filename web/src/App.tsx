@@ -147,7 +147,7 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/">
+              <AppLayout>
                 <Home />
               </AppLayout>
             </ProtectedRoute>
@@ -158,7 +158,7 @@ function App() {
           path="/recommendations"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/recommendations">
+              <AppLayout>
                 <Recommendations />
               </AppLayout>
             </ProtectedRoute>
@@ -169,7 +169,7 @@ function App() {
           path="/libraries"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/libraries">
+              <AppLayout>
                 <Home />
               </AppLayout>
             </ProtectedRoute>
@@ -180,7 +180,7 @@ function App() {
           path="/libraries/:libraryId/*"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/libraries/:libraryId">
+              <AppLayout>
                 <LibraryPage />
               </AppLayout>
             </ProtectedRoute>
@@ -192,7 +192,7 @@ function App() {
           path="/series/:seriesId"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/series/:seriesId">
+              <AppLayout>
                 <SeriesDetail />
               </AppLayout>
             </ProtectedRoute>
@@ -204,7 +204,7 @@ function App() {
           path="/books/:bookId"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/books/:bookId">
+              <AppLayout>
                 <BookDetail />
               </AppLayout>
             </ProtectedRoute>
@@ -226,7 +226,7 @@ function App() {
           path="/search"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/search">
+              <AppLayout>
                 <SearchResults />
               </AppLayout>
             </ProtectedRoute>
@@ -238,7 +238,7 @@ function App() {
           path="/settings/integrations"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/integrations">
+              <AppLayout>
                 <IntegrationsSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -249,7 +249,7 @@ function App() {
           path="/settings/profile"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/profile">
+              <AppLayout>
                 <ProfileSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -260,7 +260,7 @@ function App() {
           path="/settings/server"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/server">
+              <AppLayout>
                 <ServerSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -271,7 +271,7 @@ function App() {
           path="/settings/users"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/users">
+              <AppLayout>
                 <UsersSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -282,7 +282,7 @@ function App() {
           path="/settings/sharing-tags"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/sharing-tags">
+              <AppLayout>
                 <SharingTagsSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -293,7 +293,7 @@ function App() {
           path="/settings/plugins"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/plugins">
+              <AppLayout>
                 <PluginsSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -304,7 +304,7 @@ function App() {
           path="/settings/tasks"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/tasks">
+              <AppLayout>
                 <TasksSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -315,7 +315,7 @@ function App() {
           path="/settings/duplicates"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/duplicates">
+              <AppLayout>
                 <DuplicatesSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -326,7 +326,7 @@ function App() {
           path="/settings/cleanup"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/cleanup">
+              <AppLayout>
                 <CleanupSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -337,7 +337,7 @@ function App() {
           path="/settings/pdf-cache"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/pdf-cache">
+              <AppLayout>
                 <PdfCacheSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -348,7 +348,7 @@ function App() {
           path="/settings/metrics"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/metrics">
+              <AppLayout>
                 <MetricsSettings />
               </AppLayout>
             </ProtectedRoute>
@@ -359,7 +359,7 @@ function App() {
           path="/settings/book-errors"
           element={
             <ProtectedRoute>
-              <AppLayout currentPath="/settings/book-errors">
+              <AppLayout>
                 <BooksInErrorSettings />
               </AppLayout>
             </ProtectedRoute>

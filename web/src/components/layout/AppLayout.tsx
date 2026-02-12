@@ -9,10 +9,9 @@ import { Sidebar } from "./Sidebar";
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPath?: string;
 }
 
-export function AppLayout({ children, currentPath }: AppLayoutProps) {
+export function AppLayout({ children }: AppLayoutProps) {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
   const searchInputRef = useRef<SearchInputHandle>(null);
@@ -36,7 +35,7 @@ export function AppLayout({ children, currentPath }: AppLayoutProps) {
         toggleDesktop={toggleDesktop}
         searchInputRef={searchInputRef}
       />
-      <Sidebar currentPath={currentPath} />
+      <Sidebar />
 
       <AppShell.Main>
         <PluginStatusBanner />
