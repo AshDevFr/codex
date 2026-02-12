@@ -4,10 +4,14 @@ import { useSearchParams } from "react-router-dom";
 import { searchApi } from "@/api/search";
 import { HorizontalCarousel } from "@/components/library/HorizontalCarousel";
 import { MediaCard } from "@/components/library/MediaCard";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export function SearchResults() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q") ?? "";
+
+  // Set document title to search query for browser history
+  useDocumentTitle(query ? `Search: ${query}` : "Search");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["search", "results", query],

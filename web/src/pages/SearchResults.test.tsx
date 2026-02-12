@@ -10,6 +10,14 @@ vi.mock("@/api/search", () => ({
   },
 }));
 
+// Mock the branding API (used by useDocumentTitle -> useAppName)
+vi.mock("@/hooks/useAppName", () => ({
+  useAppName: () => "Codex",
+  useBranding: () => ({ data: { applicationName: "Codex" } }),
+  brandingQueryKey: ["settings", "branding"],
+  DEFAULT_APP_NAME: "Codex",
+}));
+
 // Mock the HorizontalCarousel component
 vi.mock("@/components/library/HorizontalCarousel", () => ({
   HorizontalCarousel: ({
@@ -50,6 +58,31 @@ import { searchApi } from "@/api/search";
 describe("SearchResults Page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("should set document title to 'Search' when query is empty", async () => {
+    renderWithProviders(<SearchResults />, {
+      initialEntries: ["/search"],
+    });
+
+    await waitFor(() => {
+      expect(document.title).toBe("Search - Codex");
+    });
+  });
+
+  it("should set document title with search query", async () => {
+    vi.mocked(searchApi.search).mockResolvedValueOnce({
+      series: [],
+      books: [],
+    });
+
+    renderWithProviders(<SearchResults />, {
+      initialEntries: ["/search?q=batman"],
+    });
+
+    await waitFor(() => {
+      expect(document.title).toBe("Search: batman - Codex");
+    });
   });
 
   it("should show message when query is empty", async () => {

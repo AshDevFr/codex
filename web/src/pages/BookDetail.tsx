@@ -56,6 +56,7 @@ import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal"
 import { ExternalIdEditModal } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
 import { ExternalLinks } from "@/components/series";
+import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ExtendedBookMetadata } from "@/types/book-metadata";
 import { PERMISSIONS } from "@/types/permissions";
@@ -146,6 +147,9 @@ export function BookDetail() {
     queryFn: () => booksApi.listExternalLinks(bookId!),
     enabled: !!bookId,
   });
+
+  // Set document title to book name for browser history
+  useDynamicDocumentTitle(bookDetail?.book?.title, "Book");
 
   const book = bookDetail?.book;
   const metadata = bookDetail?.metadata;

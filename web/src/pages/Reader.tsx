@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { ReaderRouter } from "@/components/reader";
+import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 
 /**
  * Reader page component.
@@ -39,6 +40,9 @@ export function Reader() {
     queryFn: () => booksApi.getDetail(bookId as string),
     enabled: !!bookId,
   });
+
+  // Set document title to book name for browser history
+  useDynamicDocumentTitle(bookDetail?.book?.title, "Reading");
 
   const handleClose = () => {
     // Navigate back to book detail page

@@ -63,6 +63,7 @@ import {
   SeriesMetadataEditModal,
   SeriesRating,
 } from "@/components/series";
+import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
@@ -433,6 +434,9 @@ export function SeriesDetail() {
       });
     },
   });
+
+  // Set document title to series name for browser history
+  useDynamicDocumentTitle(series?.metadata?.title, "Series");
 
   const isLoading = seriesLoading;
   const error = seriesError;
