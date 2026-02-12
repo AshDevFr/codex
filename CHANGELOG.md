@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.4] - 2026-02-12
+
+### 🚀 Features
+
+- *(metadata)* Add series metadata reset endpoint with bulk support and UI
+- *(plugins)* Add official plugin store with 3D flip card carousel
+
+### 🚜 Refactor
+
+- *(plugins)* Extract General tab in plugin config modal
+
 ## [1.10.3] - 2026-02-12
 
 ### 🚀 Features
