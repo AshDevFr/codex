@@ -8,6 +8,7 @@ use crate::db::repositories::{LibraryRepository, TaskRepository};
 use crate::scanner::{ScanMode, ScanningConfig};
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
+use crate::utils::cron::normalize_cron_expression;
 
 /// Generic scheduler for managing scheduled tasks (library scans, deduplication, etc.)
 pub struct Scheduler {
@@ -116,6 +117,10 @@ impl Scheduler {
             return Ok(());
         }
 
+        // Normalize cron expression (converts 5-part Unix cron to 6-part format)
+        let cron = normalize_cron_expression(&cron)
+            .context("Invalid cron expression for deduplication schedule")?;
+
         // Create cron job
         let db = self.db.clone();
         let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
@@ -154,6 +159,10 @@ impl Scheduler {
             debug!("PDF cache cleanup disabled (no cron schedule)");
             return Ok(());
         }
+
+        // Normalize cron expression (converts 5-part Unix cron to 6-part format)
+        let cron = normalize_cron_expression(&cron)
+            .context("Invalid cron expression for PDF cache cleanup schedule")?;
 
         // Create cron job
         let db = self.db.clone();
@@ -197,6 +206,10 @@ impl Scheduler {
             debug!("Book thumbnail generation disabled (no cron schedule)");
             return Ok(());
         }
+
+        // Normalize cron expression (converts 5-part Unix cron to 6-part format)
+        let cron = normalize_cron_expression(&cron)
+            .context("Invalid cron expression for book thumbnail schedule")?;
 
         // Create cron job
         let db = self.db.clone();
@@ -249,6 +262,10 @@ impl Scheduler {
             debug!("Series thumbnail generation disabled (no cron schedule)");
             return Ok(());
         }
+
+        // Normalize cron expression (converts 5-part Unix cron to 6-part format)
+        let cron = normalize_cron_expression(&cron)
+            .context("Invalid cron expression for series thumbnail schedule")?;
 
         // Create cron job
         let db = self.db.clone();
@@ -312,6 +329,10 @@ impl Scheduler {
                 return Ok(());
             }
         };
+
+        // Normalize cron expression (converts 5-part Unix cron to 6-part format)
+        let cron_schedule = normalize_cron_expression(&cron_schedule)
+            .context("Invalid cron expression for library schedule")?;
 
         // Parse scan mode
         let scan_mode = config.get_scan_mode()?;

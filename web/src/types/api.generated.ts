@@ -13042,7 +13042,9 @@ export interface components {
         /** @description Scanning configuration for a library */
         ScanningConfigDto: {
             /**
-             * @description Cron expression for scheduled scans (e.g., "0 *\/6 * * *")
+             * @description Cron expression for scheduled scans.
+             *     Accepts standard 5-part Unix cron (e.g., "0 *\/6 * * *") or 6-part with seconds
+             *     (e.g., "0 0 *\/6 * * *"). Stored as provided; normalization happens at scheduler level.
              * @example 0 *\/6 * * *
              */
             cronSchedule?: string | null;

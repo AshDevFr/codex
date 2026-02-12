@@ -142,6 +142,7 @@ utoipa = { version = "5.0", features = [
 utoipa-scalar = { version = "0.2", features = ["axum"] }
 
 # Job Scheduling
+cron = "0.12"
 tokio-cron-scheduler = "0.10"
 tokio-util = { version = "0.7", features = ["io"] }
 

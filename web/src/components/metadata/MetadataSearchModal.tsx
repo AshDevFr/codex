@@ -406,7 +406,6 @@ export function MetadataSearchModal({
               </Text>
             </Center>
           )}
-
       </Stack>
     </Modal>
   );

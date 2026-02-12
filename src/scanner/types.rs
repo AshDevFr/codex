@@ -208,7 +208,9 @@ impl Default for ScanResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanningConfig {
-    /// Cron expression for scheduled scans (e.g., "0 */6 * * *")
+    /// Cron expression for scheduled scans.
+    /// Accepts standard 5-part Unix cron (e.g., "0 */6 * * *") or 6-part with seconds
+    /// (e.g., "0 0 */6 * * *"). 5-part expressions are normalized to 6-part at API level.
     pub cron_schedule: Option<String>,
     /// Default scan mode for scheduled scans ("normal" or "deep")
     #[serde(default = "default_scan_mode")]

@@ -79,7 +79,9 @@ fn default_scan_mode() -> String {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanningConfigDto {
-    /// Cron expression for scheduled scans (e.g., "0 */6 * * *")
+    /// Cron expression for scheduled scans.
+    /// Accepts standard 5-part Unix cron (e.g., "0 */6 * * *") or 6-part with seconds
+    /// (e.g., "0 0 */6 * * *"). Stored as provided; normalization happens at scheduler level.
     #[schema(example = "0 */6 * * *")]
     pub cron_schedule: Option<String>,
 
@@ -100,6 +102,20 @@ pub struct ScanningConfigDto {
     #[serde(default)]
     #[schema(example = false)]
     pub purge_deleted_on_scan: bool,
+}
+
+impl ScanningConfigDto {
+    /// Validate the cron expression without modifying it.
+    ///
+    /// Accepts both standard 5-part Unix cron (e.g., "0 */6 * * *") and 6-part
+    /// with seconds (e.g., "0 0 */6 * * *"). The original expression is preserved
+    /// as-is for storage; normalization to 6-part happens at scheduler level.
+    pub fn validated(self) -> Result<Self, String> {
+        if let Some(cron) = &self.cron_schedule {
+            crate::utils::cron::validate_cron_expression(cron).map_err(|e| e.to_string())?;
+        }
+        Ok(self)
+    }
 }
 
 impl Default for ScanningConfigDto {

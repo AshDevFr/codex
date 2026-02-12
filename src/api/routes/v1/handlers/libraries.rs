@@ -224,7 +224,7 @@ pub async fn get_library(
 pub async fn create_library(
     State(state): State<Arc<AuthState>>,
     auth: AuthContext,
-    Json(request): Json<CreateLibraryRequest>,
+    Json(mut request): Json<CreateLibraryRequest>,
 ) -> Result<Json<LibraryDto>, ApiError> {
     require_permission!(auth, Permission::LibrariesWrite)?;
 
@@ -262,8 +262,11 @@ pub async fn create_library(
         .with_number_config(number_config);
 
     // Add optional fields
-    if let Some(config_dto) = &request.scanning_config {
-        let config_json = serde_json::to_string(config_dto)
+    if let Some(config_dto) = request.scanning_config.take() {
+        let config_dto = config_dto
+            .validated()
+            .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
+        let config_json = serde_json::to_string(&config_dto)
             .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
         params = params.with_scanning_config(Some(config_json));
     }
@@ -385,7 +388,10 @@ pub async fn update_library(
     }
     // Handle scanning_config if provided
     if let Some(config_dto) = request.scanning_config {
-        // Serialize the config to JSON string for database storage
+        // Validate and normalize the cron expression before storing
+        let config_dto = config_dto
+            .validated()
+            .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
         let config_json = serde_json::to_string(&config_dto)
             .map_err(|e| ApiError::BadRequest(format!("Invalid scanning config: {}", e)))?;
 

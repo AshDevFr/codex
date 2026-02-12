@@ -758,6 +758,7 @@ dependencies = [
  "chrono",
  "clap",
  "config",
+ "cron",
  "dashmap",
  "dirs",
  "futures",

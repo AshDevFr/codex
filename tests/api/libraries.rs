@@ -845,6 +845,224 @@ async fn test_series_count_accuracy() {
 }
 
 // ============================================================================
+// Cron Expression Normalization Tests
+// ============================================================================
+
+use codex::api::routes::v1::dto::scan::ScanningConfigDto;
+
+#[tokio::test]
+async fn test_create_library_accepts_5_part_cron() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let lib_path = temp_dir.path().join("cron_test_lib");
+    std::fs::create_dir(&lib_path).unwrap();
+
+    let create_request = CreateLibraryRequest {
+        name: "Cron Test Library".to_string(),
+        path: lib_path.to_str().unwrap().to_string(),
+        description: None,
+        series_strategy: None,
+        series_config: None,
+        book_strategy: None,
+        book_config: None,
+        number_strategy: None,
+        number_config: None,
+        scanning_config: Some(ScanningConfigDto {
+            cron_schedule: Some("0 */6 * * *".to_string()), // 5-part Unix cron
+            scan_mode: "normal".to_string(),
+            enabled: true,
+            scan_on_start: false,
+            purge_deleted_on_scan: false,
+        }),
+        scan_immediately: false,
+        allowed_formats: None,
+        excluded_patterns: None,
+        default_reading_direction: None,
+        title_preprocessing_rules: None,
+        auto_match_conditions: None,
+    };
+
+    let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let library = response.unwrap();
+
+    // 5-part cron should be stored as-is (normalization happens at scheduler level)
+    let scanning_config = library.scanning_config.unwrap();
+    assert_eq!(
+        scanning_config.cron_schedule,
+        Some("0 */6 * * *".to_string()),
+        "5-part cron should be preserved as provided by user"
+    );
+}
+
+#[tokio::test]
+async fn test_create_library_preserves_6_part_cron() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let lib_path = temp_dir.path().join("cron_test_lib_6part");
+    std::fs::create_dir(&lib_path).unwrap();
+
+    let create_request = CreateLibraryRequest {
+        name: "Cron Test Library 6-part".to_string(),
+        path: lib_path.to_str().unwrap().to_string(),
+        description: None,
+        series_strategy: None,
+        series_config: None,
+        book_strategy: None,
+        book_config: None,
+        number_strategy: None,
+        number_config: None,
+        scanning_config: Some(ScanningConfigDto {
+            cron_schedule: Some("0 0 */6 * * *".to_string()), // Already 6-part
+            scan_mode: "normal".to_string(),
+            enabled: true,
+            scan_on_start: false,
+            purge_deleted_on_scan: false,
+        }),
+        scan_immediately: false,
+        allowed_formats: None,
+        excluded_patterns: None,
+        default_reading_direction: None,
+        title_preprocessing_rules: None,
+        auto_match_conditions: None,
+    };
+
+    let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let library = response.unwrap();
+
+    // 6-part cron should be preserved as-is
+    let scanning_config = library.scanning_config.unwrap();
+    assert_eq!(
+        scanning_config.cron_schedule,
+        Some("0 0 */6 * * *".to_string()),
+    );
+}
+
+#[tokio::test]
+async fn test_create_library_rejects_invalid_cron() {
+    let (db, temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let lib_path = temp_dir.path().join("cron_test_invalid");
+    std::fs::create_dir(&lib_path).unwrap();
+
+    let create_request = CreateLibraryRequest {
+        name: "Invalid Cron Library".to_string(),
+        path: lib_path.to_str().unwrap().to_string(),
+        description: None,
+        series_strategy: None,
+        series_config: None,
+        book_strategy: None,
+        book_config: None,
+        number_strategy: None,
+        number_config: None,
+        scanning_config: Some(ScanningConfigDto {
+            cron_schedule: Some("not a cron expression".to_string()),
+            scan_mode: "normal".to_string(),
+            enabled: true,
+            scan_on_start: false,
+            purge_deleted_on_scan: false,
+        }),
+        scan_immediately: false,
+        allowed_formats: None,
+        excluded_patterns: None,
+        default_reading_direction: None,
+        title_preprocessing_rules: None,
+        auto_match_conditions: None,
+    };
+
+    let request = post_json_request_with_auth("/api/v1/libraries", &create_request, &token);
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let error = response.unwrap();
+    assert!(
+        error.error.contains("BadRequest"),
+        "Should return BadRequest for invalid cron: {}",
+        error.error
+    );
+}
+
+#[tokio::test]
+async fn test_update_library_accepts_5_part_cron() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let lib_path = temp_dir.path().join("update_cron_lib");
+    std::fs::create_dir(&lib_path).unwrap();
+
+    let library = LibraryRepository::create(
+        &db,
+        "Update Cron Library",
+        lib_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let update_request = UpdateLibraryRequest {
+        name: None,
+        path: None,
+        description: None,
+        is_active: None,
+        book_strategy: None,
+        book_config: None,
+        number_strategy: None,
+        number_config: None,
+        scanning_config: Some(ScanningConfigDto {
+            cron_schedule: Some("30 2 * * 1-5".to_string()), // 5-part: weekdays at 2:30
+            scan_mode: "deep".to_string(),
+            enabled: true,
+            scan_on_start: false,
+            purge_deleted_on_scan: false,
+        }),
+        allowed_formats: None,
+        excluded_patterns: None,
+        default_reading_direction: None,
+        title_preprocessing_rules: PatchValue::Absent,
+        auto_match_conditions: PatchValue::Absent,
+    };
+
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/libraries/{}", library.id),
+        &update_request,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<LibraryDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let updated = response.unwrap();
+
+    // 5-part cron should be stored as-is (normalization happens at scheduler level)
+    let scanning_config = updated.scanning_config.unwrap();
+    assert_eq!(
+        scanning_config.cron_schedule,
+        Some("30 2 * * 1-5".to_string()),
+        "5-part cron should be preserved as provided by user"
+    );
+}
+
+// ============================================================================
 // Scheduler Reload Tests
 // ============================================================================
 
