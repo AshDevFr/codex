@@ -453,6 +453,14 @@ async fn response_reader_task(
             continue;
         }
 
+        // Check if the raw JSON has a "result" key before deserialization.
+        // JSON-RPC allows `"result": null` as a valid success response, but
+        // serde deserializes `null` into `None` for `Option<Value>`, making it
+        // indistinguishable from a missing field. We track this explicitly.
+        let has_result_key = json_value
+            .as_object()
+            .is_some_and(|obj| obj.contains_key("result"));
+
         // Normal response processing
         let response: JsonRpcResponse = match serde_json::from_value(json_value) {
             Ok(r) => r,
@@ -495,6 +503,9 @@ async fn response_reader_task(
                 Err(RpcError::from(err))
             } else if let Some(result) = response.result {
                 Ok(result)
+            } else if has_result_key {
+                // "result": null is a valid JSON-RPC success response
+                Ok(Value::Null)
             } else {
                 Err(RpcError::InvalidResponse(
                     "Response has neither result nor error".to_string(),

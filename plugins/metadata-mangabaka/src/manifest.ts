@@ -35,6 +35,16 @@ export const manifest = {
         default: 60,
         example: 30,
       },
+      {
+        key: "sort_by",
+        label: "Search Sort Order",
+        description:
+          "How the MangaBaka API sorts search results. Valid values: relevance_desc (default), popularity_asc (recommended - surfaces well-known series), popularity_desc, title_asc, title_desc, created_at_desc, created_at_asc",
+        type: "string",
+        required: false,
+        default: "relevance_desc",
+        example: "popularity_asc",
+      },
     ],
   },
 } as const satisfies PluginManifest & {

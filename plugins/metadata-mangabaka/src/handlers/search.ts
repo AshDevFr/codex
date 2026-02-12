@@ -10,6 +10,9 @@ import { similarity } from "../similarity.js";
 
 const logger = createLogger({ name: "mangabaka-search", level: "debug" });
 
+/** MangaBaka API enforces a maximum of 50 results per request */
+const MAX_LIMIT = 50;
+
 /**
  * Score a search result against the query using title similarity.
  * Checks both primary title and alternate titles, returning the best score.
@@ -28,7 +31,7 @@ export async function handleSearch(
 ): Promise<MetadataSearchResponse> {
   logger.debug("Search params received:", params);
 
-  const limit = params.limit ?? 20;
+  const limit = Math.min(params.limit ?? 20, MAX_LIMIT);
 
   // Parse cursor as page number (default to 1)
   const page = params.cursor ? Number.parseInt(params.cursor, 10) : 1;

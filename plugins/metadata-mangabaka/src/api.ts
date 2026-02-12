@@ -17,13 +17,16 @@ const DEFAULT_TIMEOUT_SECONDS = 60;
 const logger = createLogger({ name: "mangabaka-api", level: "debug" });
 
 export interface MangaBakaClientOptions {
-  /** Request timeout in seconds (default: 15) */
+  /** Request timeout in seconds (default: 60) */
   timeout?: number;
+  /** Sort order for search results (passed as sort_by to the API) */
+  sortBy?: string;
 }
 
 export class MangaBakaClient {
   private readonly apiKey: string;
   private readonly timeoutMs: number;
+  private readonly sortBy: string | undefined;
 
   constructor(apiKey: string, options?: MangaBakaClientOptions) {
     if (!apiKey) {
@@ -31,7 +34,10 @@ export class MangaBakaClient {
     }
     this.apiKey = apiKey;
     this.timeoutMs = (options?.timeout ?? DEFAULT_TIMEOUT_SECONDS) * 1000;
-    logger.debug(`MangaBakaClient initialized with timeout: ${this.timeoutMs}ms`);
+    this.sortBy = options?.sortBy;
+    logger.debug(
+      `MangaBakaClient initialized with timeout: ${this.timeoutMs}ms, sortBy: ${this.sortBy ?? "default"}`,
+    );
   }
 
   /**
@@ -49,6 +55,10 @@ export class MangaBakaClient {
       page: String(page),
       limit: String(perPage),
     });
+
+    if (this.sortBy) {
+      params.set("sort_by", this.sortBy);
+    }
 
     const response = await this.request<MbSearchResponse>(`/v1/series/search?${params.toString()}`);
 
