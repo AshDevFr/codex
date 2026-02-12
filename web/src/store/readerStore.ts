@@ -318,6 +318,8 @@ export interface ReaderState {
     totalPages: number,
     startPage?: number,
   ) => void;
+  /** Correct totalPages downward when a page error reveals fewer real pages */
+  correctTotalPages: (actualTotal: number) => void;
   setReadingDirectionOverride: (direction: ReadingDirection | null) => void;
   setLoading: (loading: boolean) => void;
   setToolbarVisible: (visible: boolean) => void;
@@ -621,6 +623,16 @@ export const useReaderStore = create<ReaderState>()(
             state.currentPage = Math.min(Math.max(1, startPage), totalPages);
             state.isLoading = false;
             state.toolbarVisible = true;
+          }),
+
+        correctTotalPages: (actualTotal) =>
+          set((state) => {
+            if (actualTotal < state.totalPages && actualTotal >= 1) {
+              state.totalPages = actualTotal;
+              if (state.currentPage > actualTotal) {
+                state.currentPage = actualTotal;
+              }
+            }
           }),
 
         setReadingDirectionOverride: (direction) =>

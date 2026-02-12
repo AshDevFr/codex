@@ -16,6 +16,8 @@ interface ComicReaderPageProps {
   isVisible?: boolean;
   /** Click handler for navigation zones */
   onClick?: (zone: "left" | "center" | "right") => void;
+  /** Called when the page image fails to load */
+  onError?: () => void;
 }
 
 const BACKGROUND_COLORS: Record<BackgroundColor, string> = {
@@ -98,6 +100,7 @@ export function ComicReaderPage({
   backgroundColor,
   isVisible = true,
   onClick,
+  onError,
 }: ComicReaderPageProps) {
   // Check if this image is already preloaded to avoid showing loader
   const isPreloaded = useReaderStore((state) => state.preloadedImages.has(src));
@@ -118,6 +121,7 @@ export function ComicReaderPage({
 
   const handleImageError = () => {
     setLoadingState({ src, isLoading: false, hasError: true });
+    onError?.();
   };
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {

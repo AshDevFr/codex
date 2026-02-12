@@ -1,4 +1,5 @@
 export { useAdjacentBooks } from "./useAdjacentBooks";
+export { useBoundaryNotification } from "./useBoundaryNotification";
 export type { EpubBookmark } from "./useEpubBookmarks";
 export { useEpubBookmarks } from "./useEpubBookmarks";
 export { useEpubProgress } from "./useEpubProgress";

@@ -14,6 +14,7 @@ import { ContinuousScrollReader } from "./ContinuousScrollReader";
 import { DoublePageSpread } from "./DoublePageSpread";
 import {
   useAdjacentBooks,
+  useBoundaryNotification,
   useKeyboardNav,
   useReadProgress,
   useSeriesNavigation,
@@ -83,9 +84,11 @@ export function ComicReader({
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const initializedBookIdRef = useRef<string | null>(null);
   const [settingsOpened, setSettingsOpened] = useState(false);
-  const [boundaryNotification, setBoundaryNotification] = useState<
-    string | null
-  >(null);
+  const {
+    message: boundaryNotification,
+    onBoundaryChange,
+    clearNotification,
+  } = useBoundaryNotification();
 
   // Per-series settings (forkable settings with series overrides)
   const {
@@ -148,6 +151,7 @@ export function ComicReader({
     (state) => state.setPageOrientation,
   );
   const goToPage = useReaderStore((state) => state.goToPage);
+  const correctTotalPages = useReaderStore((state) => state.correctTotalPages);
   const setLastNavigationDirection = useReaderStore(
     (state) => state.setLastNavigationDirection,
   );
@@ -166,13 +170,9 @@ export function ComicReader({
     goToPrevBook,
     canGoNextBook,
     canGoPrevBook,
-  } = useSeriesNavigation({
-    onBoundaryChange: (_state, message) => {
-      setBoundaryNotification(message);
-      // Auto-hide notification after 3 seconds
-      setTimeout(() => setBoundaryNotification(null), 3000);
-    },
-  });
+    isSeriesEnd,
+    isSeriesStart,
+  } = useSeriesNavigation({ onBoundaryChange, clearNotification });
 
   // Read progress hook (disabled in incognito mode)
   const { initialPage, isLoading: progressLoading } = useReadProgress({
@@ -389,6 +389,15 @@ export function ComicReader({
     },
     [bookId],
   );
+
+  // When a page image fails to load, the real page count is less than metadata.
+  // Correct totalPages so boundary detection works correctly.
+  const handlePageError = useCallback(() => {
+    const page = useReaderStore.getState().currentPage;
+    if (page > 1) {
+      correctTotalPages(page - 1);
+    }
+  }, [correctTotalPages]);
 
   // Determine if we have orientation data loaded from backend
   // Only enable showWideAlone when we have pre-populated orientations from backend pages
@@ -684,6 +693,8 @@ export function ComicReader({
         message={boundaryNotification}
         visible={boundaryState !== "none"}
         type={boundaryState}
+        readingDirection={readingDirection === "rtl" ? "rtl" : "ltr"}
+        isSeriesEnd={isSeriesEnd || isSeriesStart}
       />
 
       {/* Page display - use continuous scroll when pageLayout is continuous OR reading direction is webtoon */}
@@ -734,6 +745,7 @@ export function ComicReader({
                 fitMode={fitMode}
                 backgroundColor={backgroundColor}
                 onClick={handleSinglePageClick}
+                onError={handlePageError}
               />
             )}
           </PageTransitionWrapper>

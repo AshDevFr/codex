@@ -38,6 +38,11 @@ let mockUseSeriesReaderSettings = vi.fn(() => ({
 // Mock the hooks
 vi.mock("./hooks", () => ({
   useAdjacentBooks: vi.fn(),
+  useBoundaryNotification: vi.fn(() => ({
+    message: null,
+    onBoundaryChange: vi.fn(),
+    clearNotification: vi.fn(),
+  })),
   useKeyboardNav: vi.fn(),
   useReadProgress: (...args: Parameters<typeof mockUseReadProgress>) =>
     mockUseReadProgress(...args),

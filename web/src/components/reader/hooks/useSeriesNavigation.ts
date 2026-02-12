@@ -23,6 +23,10 @@ export interface SeriesNavigationResult {
   boundaryState: "none" | "at-start" | "at-end";
   /** Message to display when at boundary (if any) */
   boundaryMessage: string | null;
+  /** True when at the end of the last book in the series (no next book) */
+  isSeriesEnd: boolean;
+  /** True when at the start of the first book in the series (no prev book) */
+  isSeriesStart: boolean;
 }
 
 export interface UseSeriesNavigationOptions {
@@ -31,6 +35,8 @@ export interface UseSeriesNavigationOptions {
     state: "none" | "at-start" | "at-end",
     message: string | null,
   ) => void;
+  /** Callback to clear both notification and boundary state (cancels auto-hide timeout) */
+  clearNotification?: () => void;
 }
 
 /**
@@ -46,7 +52,7 @@ export interface UseSeriesNavigationOptions {
 export function useSeriesNavigation(
   options: UseSeriesNavigationOptions = {},
 ): SeriesNavigationResult {
-  const { onBoundaryChange } = options;
+  const { onBoundaryChange, clearNotification } = options;
   const navigate = useNavigate();
 
   // Store state
@@ -87,98 +93,131 @@ export function useSeriesNavigation(
     }
   }, [adjacentBooks?.next, navigate, clearBoundaryState]);
 
-  // Handle next page with boundary detection
+  // Boundary logic for end-of-book
+  const handleEndBoundary = useCallback(
+    (currentBoundaryState: "none" | "at-start" | "at-end") => {
+      if (autoAdvance && canGoNextBook) {
+        const message = `Continuing to next book\n${adjacentBooks?.next?.title}`;
+        onBoundaryChange?.("at-end", message);
+        goToNextBook();
+      } else if (currentBoundaryState === "at-end" && canGoNextBook) {
+        goToNextBook();
+      } else if (canGoNextBook) {
+        setBoundaryState("at-end");
+        const message = `End of book\nPress again for "${adjacentBooks?.next?.title}"`;
+        onBoundaryChange?.("at-end", message);
+      } else {
+        setBoundaryState("at-end");
+        const message = "End of series\nYou have reached the last book";
+        onBoundaryChange?.("at-end", message);
+      }
+    },
+    [
+      autoAdvance,
+      canGoNextBook,
+      adjacentBooks?.next?.title,
+      goToNextBook,
+      setBoundaryState,
+      onBoundaryChange,
+    ],
+  );
+
+  // Boundary logic for start-of-book
+  const handleStartBoundary = useCallback(
+    (currentBoundaryState: "none" | "at-start" | "at-end") => {
+      if (autoAdvance && canGoPrevBook) {
+        const message = `Going back to previous book\n${adjacentBooks?.prev?.title}`;
+        onBoundaryChange?.("at-start", message);
+        goToPrevBook();
+      } else if (currentBoundaryState === "at-start" && canGoPrevBook) {
+        goToPrevBook();
+      } else if (canGoPrevBook) {
+        setBoundaryState("at-start");
+        const message = `Beginning of book\nPress again for "${adjacentBooks?.prev?.title}"`;
+        onBoundaryChange?.("at-start", message);
+      } else {
+        setBoundaryState("at-start");
+        const message = "Beginning of series\nYou are at the first book";
+        onBoundaryChange?.("at-start", message);
+      }
+    },
+    [
+      autoAdvance,
+      canGoPrevBook,
+      adjacentBooks?.prev?.title,
+      goToPrevBook,
+      setBoundaryState,
+      onBoundaryChange,
+    ],
+  );
+
+  // Clears boundary state and cancels any pending auto-hide timeout.
+  // Falls back to store-only clear if clearNotification isn't provided.
+  const dismissBoundary = useCallback(() => {
+    if (clearNotification) {
+      clearNotification();
+    } else {
+      clearBoundaryState();
+    }
+  }, [clearNotification, clearBoundaryState]);
+
+  // Handle next page with boundary detection.
+  // Reads boundaryState from getState() to always get the freshest value,
+  // avoiding race conditions between React re-renders and the auto-hide
+  // timeout in useBoundaryNotification that clears boundaryState.
   const handleNextPage = useCallback(() => {
+    const currentBoundary = useReaderStore.getState().boundaryState;
+
     if (!isLastPage) {
-      // Not at boundary, just go to next page
-      if (boundaryState !== "none") {
-        clearBoundaryState();
+      if (currentBoundary !== "none") {
+        dismissBoundary();
       }
+      const pageBefore = useReaderStore.getState().currentPage;
       nextPage();
-      return;
-    }
-
-    // At the last page
-    if (autoAdvance && canGoNextBook) {
-      // Auto-advance is enabled - navigate directly to next book
-      const message = `Continuing to "${adjacentBooks?.next?.title}"...`;
-      onBoundaryChange?.("at-end", message);
-      goToNextBook();
-    } else if (boundaryState === "at-end" && canGoNextBook) {
-      // User pressed again at end - navigate to next book
-      goToNextBook();
-    } else if (canGoNextBook) {
-      // First press at end - show message
-      setBoundaryState("at-end");
-      const message = `End of book. Press again to continue to "${adjacentBooks?.next?.title}"`;
-      onBoundaryChange?.("at-end", message);
-    } else {
-      // No next book
-      const message = "You have reached the end of the series";
-      onBoundaryChange?.("at-end", message);
-    }
-  }, [
-    isLastPage,
-    boundaryState,
-    autoAdvance,
-    canGoNextBook,
-    adjacentBooks?.next?.title,
-    nextPage,
-    goToNextBook,
-    setBoundaryState,
-    clearBoundaryState,
-    onBoundaryChange,
-  ]);
-
-  // Handle previous page with boundary detection
-  const handlePrevPage = useCallback(() => {
-    if (!isFirstPage) {
-      // Not at boundary, just go to previous page
-      if (boundaryState !== "none") {
-        clearBoundaryState();
+      // If the page didn't change, we hit the effective end
+      if (useReaderStore.getState().currentPage === pageBefore) {
+        handleEndBoundary(currentBoundary);
       }
-      prevPage();
       return;
     }
 
-    // At the first page
-    if (autoAdvance && canGoPrevBook) {
-      // Auto-advance is enabled - navigate directly to prev book at last page
-      const message = `Going back to "${adjacentBooks?.prev?.title}"...`;
-      onBoundaryChange?.("at-start", message);
-      goToPrevBook();
-    } else if (boundaryState === "at-start" && canGoPrevBook) {
-      // User pressed again at start - navigate to prev book at last page
-      goToPrevBook();
-    } else if (canGoPrevBook) {
-      // First press at start - show message
-      setBoundaryState("at-start");
-      const message = `Beginning of book. Press again to go to "${adjacentBooks?.prev?.title}"`;
-      onBoundaryChange?.("at-start", message);
-    } else {
-      // No prev book
-      const message = "You are at the beginning of the series";
-      onBoundaryChange?.("at-start", message);
+    handleEndBoundary(currentBoundary);
+  }, [isLastPage, nextPage, dismissBoundary, handleEndBoundary]);
+
+  // Handle previous page with boundary detection.
+  // Same getState() approach as handleNextPage.
+  const handlePrevPage = useCallback(() => {
+    const currentBoundary = useReaderStore.getState().boundaryState;
+
+    if (!isFirstPage) {
+      if (currentBoundary !== "none") {
+        dismissBoundary();
+      }
+      const pageBefore = useReaderStore.getState().currentPage;
+      prevPage();
+      // If the page didn't change, we hit the effective start
+      if (useReaderStore.getState().currentPage === pageBefore) {
+        handleStartBoundary(currentBoundary);
+      }
+      return;
     }
-  }, [
-    isFirstPage,
-    boundaryState,
-    autoAdvance,
-    canGoPrevBook,
-    adjacentBooks?.prev?.title,
-    prevPage,
-    goToPrevBook,
-    setBoundaryState,
-    clearBoundaryState,
-    onBoundaryChange,
-  ]);
+
+    handleStartBoundary(currentBoundary);
+  }, [isFirstPage, prevPage, dismissBoundary, handleStartBoundary]);
 
   // Determine boundary message
+  const isSeriesEnd = boundaryState === "at-end" && !canGoNextBook;
+  const isSeriesStart = boundaryState === "at-start" && !canGoPrevBook;
+
   let boundaryMessage: string | null = null;
   if (boundaryState === "at-end" && canGoNextBook) {
-    boundaryMessage = `End of book. Press again to continue to "${adjacentBooks?.next?.title}"`;
+    boundaryMessage = `End of book\nPress again for "${adjacentBooks?.next?.title}"`;
   } else if (boundaryState === "at-start" && canGoPrevBook) {
-    boundaryMessage = `Beginning of book. Press again to go to "${adjacentBooks?.prev?.title}"`;
+    boundaryMessage = `Beginning of book\nPress again for "${adjacentBooks?.prev?.title}"`;
+  } else if (isSeriesEnd) {
+    boundaryMessage = "End of series\nYou have reached the last book";
+  } else if (isSeriesStart) {
+    boundaryMessage = "Beginning of series\nYou are at the first book";
   }
 
   return {
@@ -190,5 +229,7 @@ export function useSeriesNavigation(
     handlePrevPage,
     boundaryState,
     boundaryMessage,
+    isSeriesEnd,
+    isSeriesStart,
   };
 }

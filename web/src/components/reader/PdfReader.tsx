@@ -14,6 +14,7 @@ import { useReaderStore } from "@/store/readerStore";
 import { BoundaryNotification } from "./BoundaryNotification";
 import {
   useAdjacentBooks,
+  useBoundaryNotification,
   useKeyboardNav,
   useReadProgress,
   useSeriesNavigation,
@@ -86,9 +87,11 @@ export function PdfReader({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearchText] = useDebouncedValue(searchText, 300);
-  const [boundaryNotification, setBoundaryNotification] = useState<
-    string | null
-  >(null);
+  const {
+    message: boundaryNotification,
+    onBoundaryChange,
+    clearNotification,
+  } = useBoundaryNotification();
   const [containerDimensions, setContainerDimensions] = useState({
     width: 0,
     height: 0,
@@ -152,6 +155,7 @@ export function PdfReader({
 
   // Reader store actions
   const initializeReader = useReaderStore((state) => state.initializeReader);
+  const correctTotalPages = useReaderStore((state) => state.correctTotalPages);
   const setToolbarVisible = useReaderStore((state) => state.setToolbarVisible);
   const setFullscreen = useReaderStore((state) => state.setFullscreen);
   const toggleToolbar = useReaderStore((state) => state.toggleToolbar);
@@ -167,21 +171,24 @@ export function PdfReader({
     goToPrevBook,
     canGoNextBook,
     canGoPrevBook,
-  } = useSeriesNavigation({
-    onBoundaryChange: (_state, message) => {
-      setBoundaryNotification(message);
-      setTimeout(() => setBoundaryNotification(null), 3000);
-    },
-  });
+    isSeriesEnd,
+    isSeriesStart,
+  } = useSeriesNavigation({ onBoundaryChange, clearNotification });
 
-  // Spread-aware navigation: in double-page modes, move by 2 pages
+  // Spread-aware navigation: in double-page modes, move by 2 pages.
+  // After the first step, check if we hit a boundary (boundaryState changed
+  // from "none") — if so, don't call a second time or the overlay will be
+  // skipped and the reader will immediately navigate to the next book.
   const handleNextPage = useCallback(() => {
     if (pdfSpreadMode === "single" || pdfContinuousScroll) {
       baseNextPage();
     } else {
-      // Double-page mode: advance by 2 pages
+      const boundaryBefore = useReaderStore.getState().boundaryState;
       baseNextPage();
-      baseNextPage();
+      const boundaryAfter = useReaderStore.getState().boundaryState;
+      if (boundaryBefore === "none" && boundaryAfter === "none") {
+        baseNextPage();
+      }
     }
   }, [pdfSpreadMode, pdfContinuousScroll, baseNextPage]);
 
@@ -189,9 +196,12 @@ export function PdfReader({
     if (pdfSpreadMode === "single" || pdfContinuousScroll) {
       basePrevPage();
     } else {
-      // Double-page mode: go back by 2 pages
+      const boundaryBefore = useReaderStore.getState().boundaryState;
       basePrevPage();
-      basePrevPage();
+      const boundaryAfter = useReaderStore.getState().boundaryState;
+      if (boundaryBefore === "none" && boundaryAfter === "none") {
+        basePrevPage();
+      }
     }
   }, [pdfSpreadMode, pdfContinuousScroll, basePrevPage]);
 
@@ -457,12 +467,17 @@ export function PdfReader({
   }, []);
 
   // PDF document load success
+  // When the real PDF page count is less than the backend metadata, correct the
+  // store so boundary detection (overlay) fires at the real last page.
   const handleDocumentLoadSuccess = useCallback(
     ({ numPages: pdfNumPages }: { numPages: number }) => {
       setNumPages(pdfNumPages);
       setPageError(null);
+      if (pdfNumPages < _backendTotalPages) {
+        correctTotalPages(pdfNumPages);
+      }
     },
-    [],
+    [_backendTotalPages, correctTotalPages],
   );
 
   // PDF document load error
@@ -683,6 +698,7 @@ export function PdfReader({
         message={boundaryNotification}
         visible={boundaryState !== "none"}
         type={boundaryState}
+        isSeriesEnd={isSeriesEnd || isSeriesStart}
       />
 
       {/* Search bar (when open) */}

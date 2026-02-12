@@ -16,6 +16,7 @@ import { EpubReaderSettings } from "./EpubReaderSettings";
 import { EpubSearch, type SearchResult } from "./EpubSearch";
 import { EpubTableOfContents } from "./EpubTableOfContents";
 import { useAdjacentBooks } from "./hooks/useAdjacentBooks";
+import { useBoundaryNotification } from "./hooks/useBoundaryNotification";
 import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
 import { useEpubProgress } from "./hooks/useEpubProgress";
 import { useSeriesNavigation } from "./hooks/useSeriesNavigation";
@@ -191,8 +192,12 @@ export function EpubReader({
   // Series navigation - fetch adjacent books and handle boundary navigation
   useAdjacentBooks({ bookId, enabled: seriesId !== null });
 
-  // State for boundary notification message
-  const [boundaryMessage, setBoundaryMessage] = useState<string | null>(null);
+  // Boundary notification with auto-hide and state reset
+  const {
+    message: boundaryMessage,
+    onBoundaryChange,
+    clearNotification,
+  } = useBoundaryNotification();
 
   // Series navigation with boundary handling
   const {
@@ -201,15 +206,9 @@ export function EpubReader({
     goToPrevBook,
     goToNextBook,
     boundaryState,
-  } = useSeriesNavigation({
-    onBoundaryChange: (_state, message) => {
-      setBoundaryMessage(message);
-      // Auto-clear message after 3 seconds
-      if (message) {
-        setTimeout(() => setBoundaryMessage(null), 3000);
-      }
-    },
-  });
+    isSeriesEnd,
+    isSeriesStart,
+  } = useSeriesNavigation({ onBoundaryChange, clearNotification });
 
   // Use ref for saveLocation to avoid re-creating handleGetRendition
   const saveLocationRef = useRef(saveLocation);
@@ -854,6 +853,7 @@ export function EpubReader({
         visible={boundaryState !== "none" && boundaryMessage !== null}
         message={boundaryMessage}
         type={boundaryState}
+        isSeriesEnd={isSeriesEnd || isSeriesStart}
       />
 
       {/* Loading overlay */}

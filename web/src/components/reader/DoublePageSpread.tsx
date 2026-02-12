@@ -232,6 +232,11 @@ export function DoublePageSpread({
       ...prev,
       [pageNumber]: { isLoading: false, hasError: true, src },
     }));
+    // If a page fails to load, the real page count is less than metadata.
+    // Correct totalPages so boundary detection works correctly.
+    if (pageNumber > 1) {
+      useReaderStore.getState().correctTotalPages(pageNumber - 1);
+    }
   }, []);
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {

@@ -57,6 +57,11 @@ vi.mock("react-pdf/dist/esm/Page/AnnotationLayer.css", () => ({}));
 // Mock hooks
 vi.mock("./hooks", () => ({
   useAdjacentBooks: vi.fn(),
+  useBoundaryNotification: vi.fn(() => ({
+    message: null,
+    onBoundaryChange: vi.fn(),
+    clearNotification: vi.fn(),
+  })),
   useKeyboardNav: vi.fn(),
   useReadProgress: vi.fn(() => ({
     initialPage: 1,
@@ -69,6 +74,8 @@ vi.mock("./hooks", () => ({
     goToPrevBook: vi.fn(),
     canGoNextBook: false,
     canGoPrevBook: false,
+    isSeriesEnd: false,
+    isSeriesStart: false,
   })),
   useTouchNav: vi.fn(() => ({
     touchRef: vi.fn(),

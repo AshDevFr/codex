@@ -357,6 +357,13 @@ export function ContinuousScrollReader({
                       display: page.isLoaded ? "block" : "none",
                     }}
                     onLoad={() => handleImageLoad(page.pageNumber)}
+                    onError={() => {
+                      if (page.pageNumber > 1) {
+                        useReaderStore
+                          .getState()
+                          .correctTotalPages(page.pageNumber - 1);
+                      }
+                    }}
                   />
                 </>
               ) : (
