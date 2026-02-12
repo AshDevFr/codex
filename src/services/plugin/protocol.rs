@@ -301,6 +301,16 @@ pub struct PluginManifest {
     /// User-facing setup instructions (e.g., how to connect or get a personal token)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_setup_instructions: Option<String>,
+
+    /// URI template for searching on the plugin's website.
+    /// Use `<title>` as placeholder for the URL-encoded search query.
+    /// Example: `https://mangabaka.org/search?sort_by=popularity_asc&q=<title>`
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "searchURITemplate"
+    )]
+    pub search_uri_template: Option<String>,
 }
 
 /// Content types that a metadata provider can support
@@ -2257,5 +2267,83 @@ mod tests {
         let params = InitializeParams::default();
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json, json!({}));
+    }
+
+    #[test]
+    fn test_plugin_manifest_with_search_uri_template() {
+        let json = json!({
+            "name": "test-plugin",
+            "displayName": "Test Plugin",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "metadataProvider": ["series"]
+            },
+            "searchURITemplate": "https://example.com/search?q=<title>"
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        assert_eq!(
+            manifest.search_uri_template.as_deref(),
+            Some("https://example.com/search?q=<title>")
+        );
+    }
+
+    #[test]
+    fn test_plugin_manifest_without_search_uri_template() {
+        let json = json!({
+            "name": "test-plugin",
+            "displayName": "Test Plugin",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "metadataProvider": ["series"]
+            }
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        assert!(manifest.search_uri_template.is_none());
+    }
+
+    #[test]
+    fn test_plugin_manifest_search_uri_template_round_trip() {
+        let json = json!({
+            "name": "test-plugin",
+            "displayName": "Test Plugin",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {
+                "metadataProvider": ["series"]
+            },
+            "searchURITemplate": "https://mangabaka.org/search?sort_by=popularity_asc&q=<title>"
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        let serialized = serde_json::to_value(&manifest).unwrap();
+        // The field is renamed explicitly to "searchURITemplate" to match plugin protocol
+        assert_eq!(
+            serialized["searchURITemplate"],
+            "https://mangabaka.org/search?sort_by=popularity_asc&q=<title>"
+        );
+    }
+
+    #[test]
+    fn test_plugin_manifest_search_uri_template_omitted_when_none() {
+        let json = json!({
+            "name": "test-plugin",
+            "displayName": "Test Plugin",
+            "version": "1.0.0",
+            "protocolVersion": "1.0",
+            "capabilities": {}
+        });
+
+        let manifest: PluginManifest = serde_json::from_value(json).unwrap();
+        let serialized = serde_json::to_value(&manifest).unwrap();
+        assert!(
+            !serialized
+                .as_object()
+                .unwrap()
+                .contains_key("searchURITemplate")
+        );
     }
 }

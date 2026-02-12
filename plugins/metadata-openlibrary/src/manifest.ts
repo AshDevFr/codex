@@ -17,6 +17,7 @@ export const manifest = {
     // Book metadata provider only (not series)
     metadataProvider: ["book"] as MetadataContentType[],
   },
+  searchURITemplate: "https://openlibrary.org/search?q=<title>",
   configSchema: {
     description: "Configuration options for the Open Library plugin",
     fields: [

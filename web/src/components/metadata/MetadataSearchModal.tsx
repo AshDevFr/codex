@@ -13,7 +13,13 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconHash, IconSearch, IconUser, IconX } from "@tabler/icons-react";
+import {
+  IconExternalLink,
+  IconHash,
+  IconSearch,
+  IconUser,
+  IconX,
+} from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -310,6 +316,24 @@ export function MetadataSearchModal({
           )}
         </Stack>
 
+        {/* External search link */}
+        {plugin.searchUriTemplate && query.trim().length >= 2 && (
+          <Button
+            component="a"
+            href={plugin.searchUriTemplate.replace(
+              "<title>",
+              encodeURIComponent(query.trim()),
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="light"
+            leftSection={<IconExternalLink size={16} />}
+            fullWidth
+          >
+            Search on {plugin.pluginDisplayName}
+          </Button>
+        )}
+
         {/* Loading state */}
         {searchMutation.isPending && (
           <Center py="xl">
@@ -382,6 +406,7 @@ export function MetadataSearchModal({
               </Text>
             </Center>
           )}
+
       </Stack>
     </Modal>
   );

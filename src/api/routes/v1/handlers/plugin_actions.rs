@@ -223,6 +223,7 @@ pub async fn get_plugin_actions(
                 description: plugin.description.clone(),
                 icon: Some("search".to_string()),
                 library_ids: plugin.library_ids_vec(),
+                search_uri_template: manifest.search_uri_template.clone(),
             });
         }
     }

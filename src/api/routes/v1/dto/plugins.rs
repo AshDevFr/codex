@@ -331,6 +331,10 @@ pub struct PluginManifestDto {
     /// User-facing setup instructions (e.g., how to connect or get a personal token)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_setup_instructions: Option<String>,
+
+    /// URI template for searching on the plugin's website
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_uri_template: Option<String>,
 }
 
 impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestDto {
@@ -378,6 +382,7 @@ impl From<crate::services::plugin::protocol::PluginManifest> for PluginManifestD
             oauth: m.oauth.map(OAuthConfigDto::from),
             admin_setup_instructions: m.admin_setup_instructions,
             user_setup_instructions: m.user_setup_instructions,
+            search_uri_template: m.search_uri_template,
         }
     }
 }
@@ -1008,6 +1013,10 @@ pub struct PluginActionDto {
     /// Used by frontend to filter which plugins show up for each library
     #[serde(default)]
     pub library_ids: Vec<Uuid>,
+
+    /// URI template for searching on the plugin's website (from manifest)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_uri_template: Option<String>,
 }
 
 /// Response containing available plugin actions for a scope

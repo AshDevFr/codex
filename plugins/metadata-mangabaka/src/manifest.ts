@@ -23,6 +23,7 @@ export const manifest = {
       placeholder: "mb-...",
     },
   ],
+  searchURITemplate: "https://mangabaka.org/search?sort_by=popularity_asc&q=<title>",
   configSchema: {
     description: "Optional configuration for the MangaBaka plugin",
     fields: [

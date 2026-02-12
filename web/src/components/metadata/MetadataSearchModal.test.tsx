@@ -203,6 +203,71 @@ describe("MetadataSearchModal", () => {
     expect(screen.getByText("Retry")).toBeInTheDocument();
   });
 
+  it("shows 'Search on' button when plugin has searchUriTemplate and query is valid", () => {
+    const pluginWithTemplate: PluginActionDto = {
+      ...mockPlugin,
+      searchUriTemplate: "https://mangabaka.org/search?q=<title>",
+    };
+
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={pluginWithTemplate}
+        initialQuery="One Piece"
+        onSelect={onSelect}
+      />,
+    );
+
+    const link = screen.getByRole("link", {
+      name: /Search on Test Plugin/,
+    });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute(
+      "href",
+      "https://mangabaka.org/search?q=One%20Piece",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("does not show 'Search on' button when plugin has no searchUriTemplate", () => {
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={mockPlugin}
+        initialQuery="One Piece"
+        onSelect={onSelect}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: /Search on/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show 'Search on' button when query is too short", () => {
+    const pluginWithTemplate: PluginActionDto = {
+      ...mockPlugin,
+      searchUriTemplate: "https://mangabaka.org/search?q=<title>",
+    };
+
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={pluginWithTemplate}
+        initialQuery="a"
+        onSelect={onSelect}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: /Search on/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not render when closed", () => {
     renderWithProviders(
       <MetadataSearchModal

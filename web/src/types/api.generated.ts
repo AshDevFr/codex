@@ -11635,6 +11635,8 @@ export interface components {
             pluginId: string;
             /** @description Plugin name */
             pluginName: string;
+            /** @description URI template for searching on the plugin's website (from manifest) */
+            searchUriTemplate?: string | null;
         };
         /**
          * @description Plugin action request - tagged by plugin type
@@ -11945,6 +11947,8 @@ export interface components {
             requiredCredentials?: components["schemas"]["CredentialFieldDto"][];
             /** @description Supported scopes */
             scopes?: string[];
+            /** @description URI template for searching on the plugin's website */
+            searchUriTemplate?: string | null;
             /** @description User-facing setup instructions (e.g., how to connect or get a personal token) */
             userSetupInstructions?: string | null;
             /** @description Semantic version */

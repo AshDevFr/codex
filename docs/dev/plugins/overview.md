@@ -30,9 +30,9 @@ Plugins are external processes that Codex spawns and communicates with. They can
 │        ┌─────────────────────┼──────────────────────┐                        │
 │        ▼                     ▼                      ▼                        │
 │  ┌────────────┐     ┌──────────────┐     ┌───────────────────┐               │
-│  │  Metadata   │     │    Sync      │     │ Recommendations   │               │
-│  │  Plugins    │     │   Plugins    │     │    Plugins        │               │
-│  │ stdin/out   │     │  stdin/out   │     │   stdin/out       │               │
+│  │  Metadata  │     │    Sync      │     │ Recommendations   │               │
+│  │  Plugins   │     │   Plugins    │     │    Plugins        │               │
+│  │ stdin/out  │     │  stdin/out   │     │   stdin/out       │               │
 │  └────────────┘     └──────────────┘     └───────────────────┘               │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -41,12 +41,12 @@ Plugins are external processes that Codex spawns and communicates with. They can
 
 ### Official Plugins
 
-| Plugin | Package | Type | Description |
-|--------|---------|------|-------------|
-| Echo Metadata | `@ashdev/codex-plugin-metadata-echo` | Metadata | Test plugin for development (series + book) |
-| Open Library Metadata | `@ashdev/codex-plugin-metadata-openlibrary` | Metadata | Book metadata via ISBN or title search |
-| AniList Sync | `@ashdev/codex-plugin-sync-anilist` | Sync | Bidirectional manga reading progress sync |
-| AniList Recommendations | `@ashdev/codex-plugin-recommendations-anilist` | Recommendation | Personalized manga recommendations |
+| Plugin                  | Package                                        | Type           | Description                                 |
+| ----------------------- | ---------------------------------------------- | -------------- | ------------------------------------------- |
+| Echo Metadata           | `@ashdev/codex-plugin-metadata-echo`           | Metadata       | Test plugin for development (series + book) |
+| Open Library Metadata   | `@ashdev/codex-plugin-metadata-openlibrary`    | Metadata       | Book metadata via ISBN or title search      |
+| AniList Sync            | `@ashdev/codex-plugin-sync-anilist`            | Sync           | Bidirectional manga reading progress sync   |
+| AniList Recommendations | `@ashdev/codex-plugin-recommendations-anilist` | Recommendation | Personalized manga recommendations          |
 
 ### Community Plugins
 
@@ -90,11 +90,11 @@ The easiest way to run plugins is via `npx`, which downloads and runs the plugin
 
 ### npx Options
 
-| Option | Arguments (one per line) | Description |
-|--------|--------------------------|-------------|
-| Latest version | `-y`<br/>`@ashdev/codex-plugin-metadata-echo` | Always uses latest |
-| Specific version | `-y`<br/>`@ashdev/codex-plugin-metadata-echo@1.9.3` | Pins to exact version |
-| Faster startup | `-y`<br/>`--prefer-offline`<br/>`@ashdev/codex-plugin-metadata-echo@1.9.3` | Skips version check if cached |
+| Option           | Arguments (one per line)                                                   | Description                   |
+| ---------------- | -------------------------------------------------------------------------- | ----------------------------- |
+| Latest version   | `-y`<br/>`@ashdev/codex-plugin-metadata-echo`                              | Always uses latest            |
+| Specific version | `-y`<br/>`@ashdev/codex-plugin-metadata-echo@1.9.3`                        | Pins to exact version         |
+| Faster startup   | `-y`<br/>`--prefer-offline`<br/>`@ashdev/codex-plugin-metadata-echo@1.9.3` | Skips version check if cached |
 
 **Flags explained:**
 
@@ -143,13 +143,13 @@ Then configure:
 
 ## Plugin Capabilities
 
-| Capability | Manifest Field | Factory Function | Description |
-|-----------|---------------|-----------------|-------------|
-| Series Metadata | `metadataProvider: ["series"]` | `createMetadataPlugin` | Search and fetch series metadata |
-| Book Metadata | `metadataProvider: ["book"]` | `createMetadataPlugin` | Search and fetch book metadata |
-| Both | `metadataProvider: ["series", "book"]` | `createMetadataPlugin` | Series and book metadata |
-| Read Sync | `userReadSync: true` | `createSyncPlugin` | Bidirectional reading progress sync |
-| Recommendations | `userRecommendationProvider: true` | `createRecommendationPlugin` | Personalized series recommendations |
+| Capability      | Manifest Field                         | Factory Function             | Description                         |
+| --------------- | -------------------------------------- | ---------------------------- | ----------------------------------- |
+| Series Metadata | `metadataProvider: ["series"]`         | `createMetadataPlugin`       | Search and fetch series metadata    |
+| Book Metadata   | `metadataProvider: ["book"]`           | `createMetadataPlugin`       | Search and fetch book metadata      |
+| Both            | `metadataProvider: ["series", "book"]` | `createMetadataPlugin`       | Series and book metadata            |
+| Read Sync       | `userReadSync: true`                   | `createSyncPlugin`           | Bidirectional reading progress sync |
+| Recommendations | `userRecommendationProvider: true`     | `createRecommendationPlugin` | Personalized series recommendations |
 
 ## Advanced Configuration
 

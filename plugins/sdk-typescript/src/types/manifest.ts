@@ -157,6 +157,14 @@ export interface PluginManifest {
 
   /** User-facing setup instructions (e.g., how to connect or get a personal token) */
   userSetupInstructions?: string;
+
+  /**
+   * URI template for searching on the plugin's website.
+   * Use `<title>` as a placeholder for the URL-encoded search query.
+   * When present, the metadata search modal shows a "Search on {displayName}" button.
+   * @example "https://mangabaka.org/search?sort_by=popularity_asc&q=<title>"
+   */
+  searchURITemplate?: string;
 }
 
 // =============================================================================

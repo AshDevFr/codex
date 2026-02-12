@@ -26444,6 +26444,13 @@
           "pluginName": {
             "type": "string",
             "description": "Plugin name"
+          },
+          "searchUriTemplate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URI template for searching on the plugin's website (from manifest)"
           }
         }
       },
@@ -27052,6 +27059,13 @@
               "type": "string"
             },
             "description": "Supported scopes"
+          },
+          "searchUriTemplate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URI template for searching on the plugin's website"
           },
           "userSetupInstructions": {
             "type": [
