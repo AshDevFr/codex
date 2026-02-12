@@ -10,6 +10,7 @@ import {
   Image,
   Loader,
   Menu,
+  Modal,
   Stack,
   Text,
   Title,
@@ -30,6 +31,7 @@ import {
   IconInfoCircle,
   IconPhoto,
   IconRefresh,
+  IconRestore,
   IconSearch,
   IconWand,
 } from "@tabler/icons-react";
@@ -42,6 +44,7 @@ import {
   pluginsApi,
 } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
+import { seriesMetadataApi } from "@/api/seriesMetadata";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { ExternalIdEditModal } from "@/components/common";
@@ -115,6 +118,7 @@ export function SeriesDetail() {
     externalIdModalOpened,
     { open: openExternalIdModal, close: closeExternalIdModal },
   ] = useDisclosure(false);
+  const [resetConfirmOpened, setResetConfirmOpened] = useState(false);
 
   // Fetch full series data (includes metadata, genres, tags, etc.)
   const {
@@ -409,6 +413,27 @@ export function SeriesDetail() {
     },
   });
 
+  // Reset metadata mutation
+  const resetMetadataMutation = useMutation({
+    mutationFn: () => seriesMetadataApi.resetMetadata(seriesId!),
+    onSuccess: () => {
+      notifications.show({
+        title: "Metadata reset",
+        message: "All metadata has been reset to filesystem defaults",
+        color: "green",
+      });
+      setResetConfirmOpened(false);
+      queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Failed to reset metadata",
+        message: error.message,
+        color: "red",
+      });
+    },
+  });
+
   const isLoading = seriesLoading;
   const error = seriesError;
 
@@ -639,6 +664,14 @@ export function SeriesDetail() {
                           disabled={reprocessTitleMutation.isPending}
                         >
                           Reprocess Title
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconRestore size={14} />}
+                          color="red"
+                          onClick={() => setResetConfirmOpened(true)}
+                          disabled={resetMetadataMutation.isPending}
+                        >
+                          Reset Metadata
                         </Menu.Item>
                         {/* Plugin actions for metadata fetching */}
                         {pluginActions && pluginActions.actions.length > 0 && (
@@ -904,6 +937,41 @@ export function SeriesDetail() {
         opened={externalIdModalOpened}
         onClose={closeExternalIdModal}
       />
+
+      {/* Reset Metadata Confirmation Modal */}
+      <Modal
+        opened={resetConfirmOpened}
+        onClose={() => setResetConfirmOpened(false)}
+        title="Reset Metadata"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            Are you sure you want to reset all metadata for this series? This
+            will clear all genres, tags, alternate titles, external links,
+            ratings, covers, and lock states. The title will revert to the
+            directory name.
+          </Text>
+          <Text size="sm" c="dimmed">
+            User ratings, read progress, and book data will be preserved.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button
+              variant="subtle"
+              onClick={() => setResetConfirmOpened(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => resetMetadataMutation.mutate()}
+              loading={resetMetadataMutation.isPending}
+            >
+              Reset
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Box>
   );
 }

@@ -398,6 +398,22 @@ impl SeriesMetadataRepository {
         SeriesMetadata::delete_by_id(series_id).exec(db).await?;
         Ok(())
     }
+
+    /// Reset metadata for a series back to filesystem-derived defaults.
+    ///
+    /// Deletes the existing metadata row (which cascades to clear lock states)
+    /// and recreates a fresh one with just the series directory name as the title.
+    /// Does NOT clear related data (genres, tags, etc.) — callers must do that.
+    pub async fn reset(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        title: &str,
+    ) -> Result<series_metadata::Model> {
+        // Delete existing metadata row
+        Self::delete(db, series_id).await?;
+        // Recreate with defaults
+        Self::create(db, series_id, title).await
+    }
 }
 
 #[cfg(test)]
@@ -564,5 +580,60 @@ mod tests {
         assert_eq!(updated.publisher, Some("New Publisher".to_string()));
         assert_eq!(updated.year, Some(2024));
         assert_eq!(updated.reading_direction, Some("rtl".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_reset_metadata() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "My Series", None)
+                .await
+                .unwrap();
+
+        // Populate metadata
+        SeriesMetadataRepository::update_title(
+            db.sea_orm_connection(),
+            series.id,
+            "Plugin Title".to_string(),
+            Some("sort title".to_string()),
+        )
+        .await
+        .unwrap();
+
+        SeriesMetadataRepository::update_summary(
+            db.sea_orm_connection(),
+            series.id,
+            Some("A summary".to_string()),
+        )
+        .await
+        .unwrap();
+
+        SeriesMetadataRepository::set_lock(db.sea_orm_connection(), series.id, "title", true)
+            .await
+            .unwrap();
+
+        // Reset metadata back to series.name
+        let reset =
+            SeriesMetadataRepository::reset(db.sea_orm_connection(), series.id, "My Series")
+                .await
+                .unwrap();
+
+        assert_eq!(reset.series_id, series.id);
+        assert_eq!(reset.title, "My Series");
+        assert!(reset.title_sort.is_none());
+        assert!(reset.summary.is_none());
+        assert!(reset.publisher.is_none());
+        assert!(!reset.title_lock);
+        assert!(!reset.summary_lock);
     }
 }

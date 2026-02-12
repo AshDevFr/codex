@@ -21,6 +21,7 @@ mod api {
     mod komga;
     mod libraries;
     mod metadata_locks;
+    mod metadata_reset;
     mod metrics;
     mod oidc;
     mod opds;

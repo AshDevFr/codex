@@ -185,6 +185,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::download_series,
         v1::handlers::replace_series_metadata,
         v1::handlers::patch_series_metadata,
+        v1::handlers::reset_series_metadata,
         v1::handlers::get_series_metadata,
         v1::handlers::get_metadata_locks,
         v1::handlers::update_metadata_locks,
@@ -321,6 +322,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::bulk_generate_series_thumbnails,
         v1::handlers::bulk_generate_series_book_thumbnails,
         v1::handlers::bulk_reprocess_series_titles,
+        v1::handlers::bulk_reset_series_metadata,
 
         // User endpoints
         v1::handlers::list_users,
@@ -756,6 +758,7 @@ The following paths are exempt from rate limiting:
             v1::dto::BulkGenerateSeriesThumbnailsRequest,
             v1::dto::BulkReprocessSeriesTitlesRequest,
             v1::dto::BulkTaskResponse,
+            v1::dto::BulkMetadataResetResponse,
 
             // Filesystem DTOs
             v1::handlers::filesystem::FileSystemEntry,

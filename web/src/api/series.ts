@@ -449,6 +449,23 @@ export const seriesApi = {
     );
     return response.data;
   },
+
+  /**
+   * Reset metadata for multiple series back to filesystem-derived defaults in bulk.
+   * Clears genres, tags, alternate titles, external IDs/ratings/links,
+   * covers, metadata sources, and all lock states.
+   * Preserves series records, book data, user ratings, and read progress.
+   * @param seriesIds - Array of series IDs to reset metadata for
+   */
+  bulkResetMetadata: async (
+    seriesIds: string[],
+  ): Promise<{ count: number; message: string }> => {
+    const response = await api.post<{ count: number; message: string }>(
+      "/series/bulk/metadata/reset",
+      { seriesIds },
+    );
+    return response.data;
+  },
 };
 
 /** Alphabetical group with count */

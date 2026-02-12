@@ -30,8 +30,8 @@ use crate::db::entities::{series, series_metadata};
 use crate::db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
     GenreRepository, LibraryRepository, ReadProgressRepository, SeriesCoversRepository,
-    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
-    UserSeriesRatingRepository,
+    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, SharingTagRepository,
+    TagRepository, UserSeriesRatingRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
@@ -2538,6 +2538,169 @@ pub async fn replace_series_metadata(
         total_book_count: updated_metadata.total_book_count,
         custom_metadata: parse_custom_metadata(updated_metadata.custom_metadata.as_deref()),
         updated_at: updated_metadata.updated_at,
+    }))
+}
+
+/// Reset series metadata to filesystem-derived defaults
+///
+/// Completely resets all series metadata back to original values derived from
+/// the filesystem. This deletes and recreates the metadata row, clears all
+/// associated data (genres, tags, alternate titles, external IDs, external
+/// ratings, external links, covers, metadata sources, sharing tags), and
+/// unlocks all fields. The title is reset to the series directory name.
+///
+/// User ratings, read progress, book records, and book metadata are preserved.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/series/{series_id}/metadata",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Metadata reset successfully", body = FullSeriesMetadataResponse),
+        (status = 404, description = "Series not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Series"
+)]
+pub async fn reset_series_metadata(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(series_id): Path<Uuid>,
+) -> Result<Json<FullSeriesMetadataResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    // Verify series exists
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Clear all associated data in parallel
+    let (
+        genres_res,
+        tags_res,
+        alt_titles_res,
+        ext_ids_res,
+        ext_ratings_res,
+        ext_links_res,
+        covers_res,
+        sharing_tags_res,
+    ) = tokio::join!(
+        GenreRepository::set_genres_for_series(&state.db, series_id, vec![]),
+        TagRepository::set_tags_for_series(&state.db, series_id, vec![]),
+        AlternateTitleRepository::delete_all_for_series(&state.db, series_id),
+        SeriesExternalIdRepository::delete_all_for_series(&state.db, series_id),
+        ExternalRatingRepository::delete_all_for_series(&state.db, series_id),
+        ExternalLinkRepository::delete_all_for_series(&state.db, series_id),
+        SeriesCoversRepository::delete_by_series(&state.db, series_id),
+        SharingTagRepository::set_tags_for_series(&state.db, series_id, vec![]),
+    );
+
+    // Check for errors
+    genres_res.map_err(|e| ApiError::Internal(format!("Failed to clear genres: {}", e)))?;
+    tags_res.map_err(|e| ApiError::Internal(format!("Failed to clear tags: {}", e)))?;
+    alt_titles_res
+        .map_err(|e| ApiError::Internal(format!("Failed to clear alternate titles: {}", e)))?;
+    ext_ids_res.map_err(|e| ApiError::Internal(format!("Failed to clear external IDs: {}", e)))?;
+    ext_ratings_res
+        .map_err(|e| ApiError::Internal(format!("Failed to clear external ratings: {}", e)))?;
+    ext_links_res
+        .map_err(|e| ApiError::Internal(format!("Failed to clear external links: {}", e)))?;
+    covers_res.map_err(|e| ApiError::Internal(format!("Failed to clear covers: {}", e)))?;
+    sharing_tags_res
+        .map_err(|e| ApiError::Internal(format!("Failed to clear sharing tags: {}", e)))?;
+
+    // Delete metadata sources
+    use crate::db::entities::metadata_sources::Entity as MetadataSources;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+    MetadataSources::delete_many()
+        .filter(crate::db::entities::metadata_sources::Column::SeriesId.eq(series_id))
+        .exec(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to clear metadata sources: {}", e)))?;
+
+    // Reset metadata row (delete + recreate with series.name as title)
+    let metadata = SeriesMetadataRepository::reset(&state.db, series_id, &series.name)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to reset metadata: {}", e)))?;
+
+    // Touch series to update timestamp
+    SeriesRepository::touch(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update series timestamp: {}", e)))?;
+
+    // Regenerate the series thumbnail to use the default cover
+    regenerate_series_thumbnail(&state, series_id).await;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::SeriesUpdated {
+            series_id,
+            library_id: series.library_id,
+            fields: Some(vec![
+                "title".to_string(),
+                "summary".to_string(),
+                "publisher".to_string(),
+                "genres".to_string(),
+                "tags".to_string(),
+                "alternate_titles".to_string(),
+                "external_ids".to_string(),
+                "external_ratings".to_string(),
+                "external_links".to_string(),
+                "covers".to_string(),
+                "metadata_sources".to_string(),
+                "locks".to_string(),
+            ]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    // Return the fresh (empty) metadata
+    Ok(Json(FullSeriesMetadataResponse {
+        series_id,
+        title: metadata.title,
+        title_sort: metadata.title_sort,
+        summary: metadata.summary,
+        publisher: metadata.publisher,
+        imprint: metadata.imprint,
+        status: metadata.status,
+        age_rating: metadata.age_rating,
+        language: metadata.language,
+        reading_direction: metadata.reading_direction,
+        year: metadata.year,
+        total_book_count: metadata.total_book_count,
+        custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
+        locks: MetadataLocks {
+            title: metadata.title_lock,
+            title_sort: metadata.title_sort_lock,
+            summary: metadata.summary_lock,
+            publisher: metadata.publisher_lock,
+            imprint: metadata.imprint_lock,
+            status: metadata.status_lock,
+            age_rating: metadata.age_rating_lock,
+            language: metadata.language_lock,
+            reading_direction: metadata.reading_direction_lock,
+            year: metadata.year_lock,
+            total_book_count: metadata.total_book_count_lock,
+            genres: metadata.genres_lock,
+            tags: metadata.tags_lock,
+            custom_metadata: metadata.custom_metadata_lock,
+            cover: metadata.cover_lock,
+        },
+        genres: vec![],
+        tags: vec![],
+        alternate_titles: vec![],
+        external_ratings: vec![],
+        external_links: vec![],
+        created_at: metadata.created_at,
+        updated_at: metadata.updated_at,
     }))
 }
 

@@ -1,21 +1,26 @@
 //! Bulk operations handlers
 //!
-//! Handlers for bulk mark read/unread, analyze, thumbnail generation, and title reprocessing
-//! operations on books and series.
+//! Handlers for bulk mark read/unread, analyze, thumbnail generation, title reprocessing,
+//! and metadata reset operations on books and series.
 
 use super::super::dto::{
     BulkAnalyzeBooksRequest, BulkAnalyzeResponse, BulkAnalyzeSeriesRequest, BulkBooksRequest,
     BulkGenerateBookThumbnailsRequest, BulkGenerateSeriesBookThumbnailsRequest,
-    BulkGenerateSeriesThumbnailsRequest, BulkReprocessSeriesTitlesRequest, BulkSeriesRequest,
-    BulkTaskResponse, MarkReadResponse,
+    BulkGenerateSeriesThumbnailsRequest, BulkMetadataResetResponse,
+    BulkReprocessSeriesTitlesRequest, BulkSeriesRequest, BulkTaskResponse, MarkReadResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{
-    BookRepository, ReadProgressRepository, SeriesRepository, TaskRepository,
+    AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
+    GenreRepository, ReadProgressRepository, SeriesCoversRepository, SeriesExternalIdRepository,
+    SeriesMetadataRepository, SeriesRepository, SharingTagRepository, TagRepository,
+    TaskRepository,
 };
+use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::require_permission;
 use crate::tasks::types::TaskType;
 use axum::{Json, extract::State};
+use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -678,5 +683,139 @@ pub async fn bulk_reprocess_series_titles(
             "Title reprocessing task queued for {} series",
             request.series_ids.len()
         ),
+    }))
+}
+
+/// Bulk reset metadata for multiple series
+///
+/// Resets all metadata for the specified series back to filesystem-derived defaults.
+/// Each series has its metadata row deleted and recreated, and all associated data
+/// (genres, tags, alternate titles, external IDs/ratings/links, covers, metadata sources,
+/// sharing tags) is cleared. User ratings, read progress, and book data are preserved.
+///
+/// Series that don't exist are silently skipped.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/bulk/metadata/reset",
+    request_body = BulkSeriesRequest,
+    responses(
+        (status = 200, description = "Metadata reset for specified series", body = BulkMetadataResetResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Bulk Operations"
+)]
+pub async fn bulk_reset_series_metadata(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(request): Json<BulkSeriesRequest>,
+) -> Result<Json<BulkMetadataResetResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    if request.series_ids.is_empty() {
+        return Ok(Json(BulkMetadataResetResponse {
+            count: 0,
+            message: "No series specified".to_string(),
+        }));
+    }
+
+    let mut count = 0;
+    for series_id in &request.series_ids {
+        // Verify series exists
+        let series = match SeriesRepository::get_by_id(&state.db, *series_id).await {
+            Ok(Some(s)) => s,
+            _ => continue,
+        };
+
+        // Clear all associated data
+        let (
+            genres_res,
+            tags_res,
+            alt_res,
+            ext_ids_res,
+            ext_ratings_res,
+            ext_links_res,
+            covers_res,
+            sharing_res,
+        ) = tokio::join!(
+            GenreRepository::set_genres_for_series(&state.db, *series_id, vec![]),
+            TagRepository::set_tags_for_series(&state.db, *series_id, vec![]),
+            AlternateTitleRepository::delete_all_for_series(&state.db, *series_id),
+            SeriesExternalIdRepository::delete_all_for_series(&state.db, *series_id),
+            ExternalRatingRepository::delete_all_for_series(&state.db, *series_id),
+            ExternalLinkRepository::delete_all_for_series(&state.db, *series_id),
+            SeriesCoversRepository::delete_by_series(&state.db, *series_id),
+            SharingTagRepository::set_tags_for_series(&state.db, *series_id, vec![]),
+        );
+
+        // Log errors but continue with other series
+        if let Err(e) = genres_res {
+            tracing::error!("Failed to clear genres for {}: {}", series_id, e);
+        }
+        if let Err(e) = tags_res {
+            tracing::error!("Failed to clear tags for {}: {}", series_id, e);
+        }
+        if let Err(e) = alt_res {
+            tracing::error!("Failed to clear alternate titles for {}: {}", series_id, e);
+        }
+        if let Err(e) = ext_ids_res {
+            tracing::error!("Failed to clear external IDs for {}: {}", series_id, e);
+        }
+        if let Err(e) = ext_ratings_res {
+            tracing::error!("Failed to clear external ratings for {}: {}", series_id, e);
+        }
+        if let Err(e) = ext_links_res {
+            tracing::error!("Failed to clear external links for {}: {}", series_id, e);
+        }
+        if let Err(e) = covers_res {
+            tracing::error!("Failed to clear covers for {}: {}", series_id, e);
+        }
+        if let Err(e) = sharing_res {
+            tracing::error!("Failed to clear sharing tags for {}: {}", series_id, e);
+        }
+
+        // Delete metadata sources
+        use crate::db::entities::metadata_sources;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        if let Err(e) = metadata_sources::Entity::delete_many()
+            .filter(metadata_sources::Column::SeriesId.eq(*series_id))
+            .exec(&state.db)
+            .await
+        {
+            tracing::error!("Failed to clear metadata sources for {}: {}", series_id, e);
+        }
+
+        // Reset metadata
+        match SeriesMetadataRepository::reset(&state.db, *series_id, &series.name).await {
+            Ok(_) => {
+                count += 1;
+                // Touch series timestamp
+                let _ = SeriesRepository::touch(&state.db, *series_id).await;
+
+                // Emit event
+                let event = EntityChangeEvent {
+                    event: EntityEvent::SeriesUpdated {
+                        series_id: *series_id,
+                        library_id: series.library_id,
+                        fields: Some(vec!["metadata_reset".to_string()]),
+                    },
+                    timestamp: Utc::now(),
+                    user_id: Some(auth.user_id),
+                };
+                let _ = state.event_broadcaster.emit(event);
+            }
+            Err(e) => {
+                tracing::error!("Failed to reset metadata for series {}: {}", series_id, e);
+            }
+        }
+    }
+
+    Ok(Json(BulkMetadataResetResponse {
+        count,
+        message: format!("Reset metadata for {} series", count),
     }))
 }

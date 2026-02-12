@@ -116,6 +116,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             patch(handlers::patch_series_metadata),
         )
         .route(
+            "/series/:series_id/metadata",
+            delete(handlers::reset_series_metadata),
+        )
+        .route(
             "/series/:series_id/metadata/locks",
             get(handlers::get_metadata_locks),
         )
@@ -269,6 +273,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/series/bulk/titles/reprocess",
             post(handlers::bulk_reprocess_series_titles),
+        )
+        .route(
+            "/series/bulk/metadata/reset",
+            post(handlers::bulk_reset_series_metadata),
         )
         // Series metadata from plugins (Phase 4)
         .route(

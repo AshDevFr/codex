@@ -4,6 +4,7 @@ import {
   Group,
   Loader,
   Menu,
+  Modal,
   Text,
   Tooltip,
 } from "@mantine/core";
@@ -15,11 +16,12 @@ import {
   IconChevronDown,
   IconPhotoPlus,
   IconRefresh,
+  IconRestore,
   IconWand,
   IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { booksApi } from "@/api/books";
 import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
@@ -348,6 +350,32 @@ export function BulkSelectionToolbar() {
     },
   });
 
+  // Bulk reset series metadata
+  const bulkResetMetadataMutation = useMutation({
+    mutationFn: (seriesIds: string[]) => seriesApi.bulkResetMetadata(seriesIds),
+    onSuccess: (data) => {
+      notifications.show({
+        title: "Metadata reset",
+        message: data.message,
+        color: "green",
+      });
+      refetchAll();
+      clearSelection();
+      setResetConfirmOpened(false);
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Failed to reset metadata",
+        message: error.message || "Failed to reset series metadata",
+        color: "red",
+      });
+      setResetConfirmOpened(false);
+    },
+  });
+
+  // Confirmation modal state for destructive bulk reset
+  const [resetConfirmOpened, setResetConfirmOpened] = useState(false);
+
   // Keyboard shortcut: Escape to clear selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -383,7 +411,8 @@ export function BulkSelectionToolbar() {
     bulkGenerateBookThumbnailsMutation.isPending ||
     bulkGenerateSeriesThumbnailsMutation.isPending ||
     bulkGenerateSeriesBookThumbnailsMutation.isPending ||
-    bulkReprocessTitlesMutation.isPending;
+    bulkReprocessTitlesMutation.isPending ||
+    bulkResetMetadataMutation.isPending;
 
   // Determine if the "More" menu should be shown based on permissions
   const showBooksMoreMenu = isBooks && (canWriteBooks || canWriteTasks);
@@ -476,6 +505,10 @@ export function BulkSelectionToolbar() {
 
   const handleReprocessTitles = () => {
     bulkReprocessTitlesMutation.mutate(selectedIds);
+  };
+
+  const handleResetMetadata = () => {
+    bulkResetMetadataMutation.mutate(selectedIds);
   };
 
   const itemLabel = isBooks
@@ -683,6 +716,17 @@ export function BulkSelectionToolbar() {
                   >
                     Reprocess Titles
                   </Menu.Item>
+
+                  <Menu.Divider />
+                  <Menu.Label>Metadata</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconRestore size={16} />}
+                    onClick={() => setResetConfirmOpened(true)}
+                    disabled={isAnyPending}
+                    color="red"
+                  >
+                    Reset Metadata
+                  </Menu.Item>
                 </>
               )}
             </Menu.Dropdown>
@@ -724,6 +768,38 @@ export function BulkSelectionToolbar() {
           </Menu>
         )}
       </Group>
+
+      {/* Bulk reset metadata confirmation modal */}
+      <Modal
+        opened={resetConfirmOpened}
+        onClose={() => setResetConfirmOpened(false)}
+        title="Reset Metadata"
+        centered
+      >
+        <Text size="sm" mb="md">
+          This will reset metadata for {count} {itemLabel} back to
+          filesystem-derived defaults. All genres, tags, alternate titles,
+          external IDs, ratings, links, covers, and lock states will be cleared.
+        </Text>
+        <Text size="sm" mb="lg" c="dimmed">
+          User ratings, read progress, and book data will be preserved.
+        </Text>
+        <Group justify="flex-end">
+          <Button
+            variant="default"
+            onClick={() => setResetConfirmOpened(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            color="red"
+            onClick={handleResetMetadata}
+            loading={bulkResetMetadataMutation.isPending}
+          >
+            Reset {count} {itemLabel}
+          </Button>
+        </Group>
+      </Modal>
     </Group>
   );
 }

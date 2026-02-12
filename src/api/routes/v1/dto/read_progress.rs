@@ -222,6 +222,19 @@ pub struct BulkReprocessSeriesTitlesRequest {
     pub series_ids: Vec<Uuid>,
 }
 
+/// Response for bulk metadata reset operations
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkMetadataResetResponse {
+    /// Number of series whose metadata was reset
+    #[schema(example = 3)]
+    pub count: usize,
+
+    /// Message describing the operation
+    #[schema(example = "Reset metadata for 3 series")]
+    pub message: String,
+}
+
 /// Response for bulk task operations
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

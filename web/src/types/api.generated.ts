@@ -2380,6 +2380,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/bulk/metadata/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk reset metadata for multiple series
+         * @description Resets all metadata for the specified series back to filesystem-derived defaults.
+         *     Each series has its metadata row deleted and recreated, and all associated data
+         *     (genres, tags, alternate titles, external IDs/ratings/links, covers, metadata sources,
+         *     sharing tags) is cleared. User ratings, read progress, and book data are preserved.
+         *
+         *     Series that don't exist are silently skipped.
+         */
+        post: operations["bulk_reset_series_metadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/bulk/read": {
         parameters: {
             query?: never;
@@ -3231,7 +3256,17 @@ export interface paths {
          */
         put: operations["replace_series_metadata"];
         post?: never;
-        delete?: never;
+        /**
+         * Reset series metadata to filesystem-derived defaults
+         * @description Completely resets all series metadata back to original values derived from
+         *     the filesystem. This deletes and recreates the metadata row, clears all
+         *     associated data (genres, tags, alternate titles, external IDs, external
+         *     ratings, external links, covers, metadata sources, sharing tags), and
+         *     unlocks all fields. The title is reset to the series directory name.
+         *
+         *     User ratings, read progress, book records, and book metadata are preserved.
+         */
+        delete: operations["reset_series_metadata"];
         options?: never;
         head?: never;
         /**
@@ -7209,6 +7244,19 @@ export interface components {
              *     ]
              */
             seriesIds: string[];
+        };
+        /** @description Response for bulk metadata reset operations */
+        BulkMetadataResetResponse: {
+            /**
+             * @description Number of series whose metadata was reset
+             * @example 3
+             */
+            count: number;
+            /**
+             * @description Message describing the operation
+             * @example Reset metadata for 3 series
+             */
+            message: string;
         };
         /** @description Request to reprocess series titles in bulk */
         BulkReprocessSeriesTitlesRequest: {
@@ -20578,6 +20626,44 @@ export interface operations {
             };
         };
     };
+    bulk_reset_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata reset for specified series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataResetResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bulk_mark_series_as_read: {
         parameters: {
             query?: never;
@@ -22590,6 +22676,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesMetadataResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Metadata reset successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FullSeriesMetadataResponse"];
                 };
             };
             /** @description Forbidden */

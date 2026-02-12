@@ -233,6 +233,19 @@ export const seriesMetadataApi = {
   },
 
   /**
+   * Reset all metadata back to filesystem-derived defaults.
+   * Clears genres, tags, alternate titles, external IDs/ratings/links,
+   * covers, metadata sources, and all lock states.
+   * Preserves user ratings, read progress, and book data.
+   */
+  resetMetadata: async (seriesId: string): Promise<FullSeriesMetadata> => {
+    const response = await api.delete<FullSeriesMetadata>(
+      `/series/${seriesId}/metadata`,
+    );
+    return response.data;
+  },
+
+  /**
    * Reset to default cover (deselect all custom covers)
    * The series will use the first book's cover as thumbnail
    */
