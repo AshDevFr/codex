@@ -169,9 +169,9 @@ Plugins can use Handlebars templates to customize the search query sent to metad
 
 ### Configuration Location
 
-- **Admin Settings** → **Plugins** → Edit plugin → **Search Template**
+- **Admin Settings** → **Plugins** → Configure plugin (gear icon) → **Template** tab
 
-![Plugin Search Template Settings](../screenshots/plugins/search-config-template.png)
+![Plugin Search Template Settings](../screenshots/plugins/config-modal-template.png)
 
 ### Template Syntax
 
@@ -273,9 +273,9 @@ Additional regex rules can be applied to the search query after template renderi
 
 ### Configuration Location
 
-- **Admin Settings** → **Plugins** → Edit plugin → **Search Preprocessing**
+- **Admin Settings** → **Plugins** → Configure plugin (gear icon) → **Preprocessing** tab
 
-![Plugin Search Preprocessing Settings](../screenshots/plugins/search-config-preprocessing.png)
+![Plugin Search Preprocessing Settings](../screenshots/plugins/config-modal-preprocessing.png)
 
 ### Use Cases
 
@@ -304,11 +304,11 @@ Control when auto-matching should occur based on series state. Conditions preven
 ### Configuration Locations
 
 - **Library Settings** → Auto-match conditions (applies to all plugins)
-- **Admin Settings** → **Plugins** → Edit plugin → Conditions (applies to this plugin only)
+- **Admin Settings** → **Plugins** → Configure plugin (gear icon) → **Conditions** tab (applies to this plugin only)
 
 ![Library Auto-Match Conditions](../screenshots/libraries/add-library-conditions-comics.png)
 
-![Plugin Auto-Match Conditions](../screenshots/plugins/search-config-conditions.png)
+![Plugin Auto-Match Conditions](../screenshots/plugins/config-modal-conditions.png)
 
 ### Condition Structure
 
@@ -575,7 +575,7 @@ External IDs are displayed on the series detail page in the metadata section.
 
 Enable this option on a plugin to skip searching when an external ID already exists:
 
-**Admin Settings** → **Plugins** → Edit plugin → **Use Existing External ID**
+**Admin Settings** → **Plugins** → Configure plugin (gear icon) → **General** tab → **Use Existing External ID**
 
 When enabled:
 

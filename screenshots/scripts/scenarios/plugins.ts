@@ -4,13 +4,14 @@ import { waitForPageReady } from "../utils/wait.js";
 
 /**
  * Plugins scenario
- * Captures plugin creation, series detail plugin actions, and library auto-match
+ * Captures plugin store, plugin installation, series detail plugin actions,
+ * library auto-match, user integrations, and plugin metrics.
  */
 export async function run(page: Page, _context: BrowserContext): Promise<void> {
   console.log("  🔌 Capturing plugins screenshots...");
 
-  // Part 1: Create a plugin in settings
-  await createPluginScreenshots(page);
+  // Part 1: Install plugins from the Official Plugin Store
+  await pluginStoreScreenshots(page);
 
   // Part 2: Series detail page - plugin dropdown and metadata flow
   await seriesDetailPluginScreenshots(page);
@@ -18,223 +19,93 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
   // Part 3: Library sidebar - auto-match
   await libraryAutoMatchScreenshots(page);
 
-  // Part 4: Plugin Metrics
+  // Part 4: User Integrations page
+  await userIntegrationsScreenshots(page);
+
+  // Part 5: Plugin Metrics
   await pluginMetricsScreenshots(page);
 }
 
 /**
- * Create a plugin through the settings UI
+ * Install plugins from the Official Plugin Store.
+ * Adds echo, sync-anilist, and recommendations-anilist plugins via the store carousel.
  */
-async function createPluginScreenshots(page: Page): Promise<void> {
-  console.log("    📷 Plugin Settings - Create Plugin Flow");
+async function pluginStoreScreenshots(page: Page): Promise<void> {
+  console.log("    📷 Plugin Store - Install Plugins");
 
   // Navigate to plugins settings
   await page.goto("/settings/plugins");
   await waitForPageReady(page);
   await page.waitForTimeout(500);
 
-  // Capture initial plugins page (may be empty or have existing plugins)
-  await captureScreenshot(page, "plugins/settings-plugins");
+  // Capture initial plugins page (empty state)
+  await captureScreenshot(page, "plugins/settings-plugins-empty");
 
-  // Click "Add Plugin" button - Mantine Button component
-  const addPluginButton = page.locator('button:has-text("Add Plugin")').first();
-  if ((await addPluginButton.count()) === 0) {
-    console.log("      ⚠️  Add Plugin button not found");
+  // === OPEN THE OFFICIAL PLUGINS STORE ===
+  // The OfficialPlugins component is a collapsible Card with "Official Plugins" header
+  const officialPluginsHeader = page.locator('button:has-text("Official Plugins")').first();
+  if ((await officialPluginsHeader.count()) === 0) {
+    console.log("      ⚠️  Official Plugins section not found");
     return;
   }
 
-  await addPluginButton.click();
-  await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "visible", timeout: 5000 });
+  await officialPluginsHeader.click();
   await page.waitForTimeout(500);
 
-  // === GENERAL TAB (First Tab) ===
-  // Fill in plugin details
-  await page.fill('input[placeholder="mangabaka"]', "echo");
-  await page.waitForTimeout(100);
+  // Capture the plugin store carousel (all 5 cards visible)
+  await captureScreenshot(page, "plugins/store-carousel");
 
-  await page.fill('input[placeholder="MangaBaka"]', "Echo");
-  await page.waitForTimeout(100);
+  // === ADD ECHO METADATA PLUGIN ===
+  await addPluginFromStore(page, "Echo Metadata", "plugins/store-add-echo");
 
-  // Fill description
-  const descriptionTextarea = await page.$('textarea[placeholder*="MangaBaka"]');
-  if (descriptionTextarea) {
-    await descriptionTextarea.fill("Echo plugin");
-    await page.waitForTimeout(100);
+  // === ADD ANILIST SYNC PLUGIN ===
+  await addPluginFromStore(page, "AniList Sync", "plugins/store-add-sync");
+
+  // === ADD ANILIST RECOMMENDATIONS PLUGIN ===
+  await addPluginFromStore(page, "AniList Recommendations", "plugins/store-add-recommendations");
+
+  // Navigate back to plugins page to see all installed plugins
+  await page.goto("/settings/plugins");
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  // Capture plugins list with all installed plugins
+  await captureScreenshot(page, "plugins/settings-plugins-installed");
+
+  // === TEST ALL PLUGINS ===
+  // Test each plugin (play icon) to populate their manifests/capabilities
+  const testButtons = page.locator('button:has(svg.tabler-icon-player-play)');
+  const testCount = await testButtons.count();
+  for (let i = 0; i < testCount; i++) {
+    await testButtons.nth(i).click();
+    await page.waitForTimeout(3000); // Wait for test to complete
   }
 
-  // Enable the plugin immediately - click the Switch label/track, not the hidden input
-  const enableSwitch = page.locator('label:has-text("Enable immediately")').first();
-  if ((await enableSwitch.count()) > 0) {
-    await enableSwitch.click();
-    await page.waitForTimeout(100);
-  }
+  // Capture plugins list after tests
+  await captureScreenshot(page, "plugins/settings-plugins-after-test");
 
-  // Capture General tab
-  await captureScreenshot(page, "plugins/create-general");
-
-  // === EXECUTION TAB (Second Tab) ===
-  const executionTab = await page.$('button[role="tab"]:has-text("Execution")');
-  if (executionTab) {
-    await executionTab.click();
-    await page.waitForTimeout(500);
-
-    // Fill command - find the command input by its placeholder
-    const commandInput = page.locator('input[placeholder="node"]').first();
-    await commandInput.fill("npx");
-    await page.waitForTimeout(100);
-
-    // Fill arguments - find by placeholder that contains "mangabaka" (the args textarea)
-    const argsTextarea = page.locator('textarea[placeholder*="mangabaka"]').first();
-    await argsTextarea.fill("-y\n@ashdev/codex-plugin-metadata-echo@1.0.0");
-    await page.waitForTimeout(100);
-
-    // Capture Execution tab with npx command
-    await captureScreenshot(page, "plugins/create-execution");
-
-    // Now change command to node and arguments to local path (per instructions)
-    await commandInput.fill("node");
-    await page.waitForTimeout(100);
-
-    await argsTextarea.fill("/opt/codex/plugins/metadata-echo/dist/index.js");
-    await page.waitForTimeout(100);
-  } else {
-    console.log("      ⚠️  Execution tab not found");
-  }
-
-  // === PERMISSIONS TAB (Third Tab) ===
-  const permissionsTab = await page.$('button[role="tab"]:has-text("Permissions")');
-  if (permissionsTab) {
-    await permissionsTab.click();
-    await page.waitForTimeout(300);
-
-    // Select permissions using MultiSelect
-    // Click on Permissions MultiSelect
-    const permissionsSelect = await page.locator('label:has-text("Permissions")').locator('..').locator('.mantine-MultiSelect-input').first();
-    if (await permissionsSelect.count() > 0) {
-      await permissionsSelect.click();
-      await page.waitForTimeout(300);
-
-      // Select "Read metadata"
-      const readOption = await page.$('[role="option"]:has-text("Read")');
-      if (readOption) {
-        await readOption.click();
-        await page.waitForTimeout(200);
-      }
-
-      // Click again to select more
-      await permissionsSelect.click();
-      await page.waitForTimeout(300);
-
-      // Select "Write All metadata"
-      const writeAllOption = await page.$('[role="option"]:has-text("Write All")');
-      if (writeAllOption) {
-        await writeAllOption.click();
-        await page.waitForTimeout(200);
-      }
-
-      // Click outside to close dropdown
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(200);
-    }
-
-    // Select scopes using MultiSelect
-    const scopesSelect = await page.locator('label:has-text("Scopes")').locator('..').locator('.mantine-MultiSelect-input').first();
-    if (await scopesSelect.count() > 0) {
-      await scopesSelect.click();
-      await page.waitForTimeout(300);
-
-      // Select "series:detail"
-      const seriesDetailOption = await page.$('[role="option"]:has-text("Series Detail")');
-      if (seriesDetailOption) {
-        await seriesDetailOption.click();
-        await page.waitForTimeout(200);
-      }
-
-      // Click again for more
-      await scopesSelect.click();
-      await page.waitForTimeout(300);
-
-      // Select "library:detail"
-      const libraryDetailOption = await page.$('[role="option"]:has-text("Library Detail")');
-      if (libraryDetailOption) {
-        await libraryDetailOption.click();
-        await page.waitForTimeout(200);
-      }
-
-      // Close dropdown
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(200);
-    }
-
-    // Capture Permissions tab
-    await captureScreenshot(page, "plugins/create-permissions");
-  }
-
-  // === CREDENTIALS TAB (Fourth Tab) ===
-  const credentialsTab = await page.$('button[role="tab"]:has-text("Credentials")');
-  if (credentialsTab) {
-    await credentialsTab.click();
-    await page.waitForTimeout(300);
-
-    // Fill credentials JSON with fake data
-    const credentialsTextarea = await page.$('textarea[placeholder*="api_key"]');
-    if (credentialsTextarea) {
-      await credentialsTextarea.fill('{\n  "api_key": "demo-key-12345",\n  "secret": "demo-secret"\n}');
-      await page.waitForTimeout(100);
-    }
-
-    // Capture Credentials tab
-    await captureScreenshot(page, "plugins/create-credentials");
-  }
-
-  // Create the plugin - use text selector for reliability
-  const createButton = page.locator('button:has-text("Create Plugin")').first();
-  if ((await createButton.count()) > 0) {
-    await createButton.click();
-    await page.waitForTimeout(2000); // Give more time for API call
-
-    // Check if modal is still open (indicates validation error)
-    const modalStillOpen = await page.$('[role="dialog"], .mantine-Modal-content');
-    if (modalStillOpen) {
-      console.log("      ⚠️  Modal still open - plugin creation may have failed");
-      // Take a screenshot to see the error state
-      await captureScreenshot(page, "plugins/create-error");
-      // Try to close the modal
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(500);
-    }
-
-    // Wait for modal to close (API call may take time)
-    await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "hidden", timeout: 15000 }).catch(() => {});
-
-    // Wait for notification to appear and disappear
-    await page.waitForTimeout(3000);
-    await waitForPageReady(page);
-  }
-
-  // Click the test button to verify plugin connection
-  const testButton = page.locator('button:has(svg.tabler-icon-player-play)').first();
-  if ((await testButton.count()) > 0) {
-    await testButton.click();
-    // Wait for test to complete and notification to appear
-    await page.waitForTimeout(2000);
-  }
-
-  // Capture plugins list with new plugin (after test)
-  await captureScreenshot(page, "plugins/settings-plugins-with-echo");
+  // === CONFIGURE ECHO PLUGIN PERMISSIONS & SCOPES ===
+  // After testing, the plugin has a manifest. Open the Config Modal (gear icon)
+  // to set permissions and scopes so it appears in series detail and library menus.
+  await configureEchoPlugin(page);
 
   // === EXPANDED PLUGIN DETAILS ===
-  // Click the expand chevron to show plugin details row
-  const expandButton = page.locator('button:has(svg.tabler-icon-chevron-right)').first();
+  // Navigate back to plugins page (config modal may have changed state)
+  await page.goto("/settings/plugins");
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  // Click the expand chevron on the first plugin row to show details
+  const expandButton = page.locator('.mantine-Table-tbody button:has(svg.tabler-icon-chevron-right)').first();
   if ((await expandButton.count()) > 0) {
     await expandButton.click();
     await page.waitForTimeout(500);
 
-    // Capture expanded plugin details (two-column layout with manifest, permissions, scopes, etc.)
-    await captureScreenshot(page, "plugins/settings-plugins-with-echo-expanded");
+    // Capture expanded plugin details
+    await captureScreenshot(page, "plugins/settings-plugin-expanded");
 
-    // Collapse it back before continuing
-    const collapseButton = page.locator('button:has(svg.tabler-icon-chevron-down)').first();
+    // Collapse it back
+    const collapseButton = page.locator('.mantine-Table-tbody button:has(svg.tabler-icon-chevron-down)').first();
     if ((await collapseButton.count()) > 0) {
       await collapseButton.click();
       await page.waitForTimeout(300);
@@ -243,23 +114,40 @@ async function createPluginScreenshots(page: Page): Promise<void> {
     console.log("      ⚠️  Expand button not found on plugin row");
   }
 
-  // === SEARCH CONFIG MODAL (Separate from creation, for metadata providers) ===
-  // Click the gear icon to open Search Configuration modal
+  // === SEARCH CONFIG MODAL ===
+  // Click the gear icon to open Plugin Configuration modal (for metadata plugins)
+  // This is the same gear icon that opens the config modal with all tabs
   const searchConfigButton = page.locator('button:has(svg.tabler-icon-settings)').first();
   if ((await searchConfigButton.count()) > 0) {
     await searchConfigButton.click();
     await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "visible", timeout: 5000 });
     await page.waitForTimeout(500);
 
-    // Capture Template tab (first tab, shown by default)
-    await captureScreenshot(page, "plugins/search-config-template");
+    // For metadata providers, default tab is "General" - capture it
+    await captureScreenshot(page, "plugins/config-modal-general");
+
+    // Click Permissions tab
+    const permTab = await page.$('button[role="tab"]:has-text("Permissions")');
+    if (permTab) {
+      await permTab.click();
+      await page.waitForTimeout(300);
+      await captureScreenshot(page, "plugins/config-modal-permissions");
+    }
+
+    // Click Template tab
+    const templateTab = await page.$('button[role="tab"]:has-text("Template")');
+    if (templateTab) {
+      await templateTab.click();
+      await page.waitForTimeout(300);
+      await captureScreenshot(page, "plugins/config-modal-template");
+    }
 
     // Click Preprocessing tab
     const preprocessingTab = await page.$('button[role="tab"]:has-text("Preprocessing")');
     if (preprocessingTab) {
       await preprocessingTab.click();
       await page.waitForTimeout(300);
-      await captureScreenshot(page, "plugins/search-config-preprocessing");
+      await captureScreenshot(page, "plugins/config-modal-preprocessing");
     }
 
     // Click Conditions tab
@@ -267,7 +155,7 @@ async function createPluginScreenshots(page: Page): Promise<void> {
     if (conditionsTab) {
       await conditionsTab.click();
       await page.waitForTimeout(300);
-      await captureScreenshot(page, "plugins/search-config-conditions");
+      await captureScreenshot(page, "plugins/config-modal-conditions");
     }
 
     // Close the modal
@@ -277,7 +165,242 @@ async function createPluginScreenshots(page: Page): Promise<void> {
     console.log("      ⚠️  Search Config button not found (plugin may not be a metadata provider)");
   }
 
-  console.log("      ✓ Plugin creation screenshots captured");
+  console.log("      ✓ Plugin store screenshots captured");
+}
+
+/**
+ * Add a plugin from the Official Plugin Store.
+ * The store uses 3D flip cards with CSS hover animations. Since the back face
+ * (with the "Add" button) uses backface-visibility: hidden and CSS :hover transforms,
+ * we use JavaScript to programmatically click the Add button.
+ *
+ * @param page - Playwright page
+ * @param displayName - The plugin's display name shown on the card front (e.g., "Echo Metadata")
+ * @param screenshotPrefix - Screenshot name prefix for the pre-filled modal
+ */
+async function addPluginFromStore(page: Page, displayName: string, screenshotPrefix: string): Promise<void> {
+  console.log(`      📦 Adding "${displayName}" from store...`);
+
+  // Navigate to plugins page for clean state
+  await page.goto("/settings/plugins");
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  // Expand the Official Plugins carousel
+  const officialPluginsHeader = page.locator('button:has-text("Official Plugins")').first();
+  if ((await officialPluginsHeader.count()) > 0) {
+    await officialPluginsHeader.click();
+    await page.waitForTimeout(800); // Wait for Collapse animation
+  }
+
+  // Use JavaScript to find and click the "Add" button for this plugin.
+  // The flip cards use CSS modules (hashed class names) and CSS :hover for 3D flip,
+  // making direct Playwright interaction unreliable. Instead, we find the button via
+  // text content matching in the DOM.
+  const clicked = await page.evaluate((name: string) => {
+    // Find all buttons with "Add" text that are inside the official plugins section
+    const buttons = document.querySelectorAll("button");
+    for (const btn of buttons) {
+      if (btn.textContent?.trim() !== "Add") continue;
+      // Walk up to find a container that includes the plugin display name
+      const card = btn.closest("div[class*='flipCard'], div[style*='perspective']");
+      if (!card) {
+        // Try a broader parent search - look for a parent div that contains both
+        // the button and the display name text
+        let parent: HTMLElement | null = btn.parentElement;
+        for (let i = 0; i < 10 && parent; i++) {
+          if (parent.textContent?.includes(name)) {
+            btn.click();
+            return "clicked";
+          }
+          parent = parent.parentElement;
+        }
+        continue;
+      }
+      if (card.textContent?.includes(name)) {
+        btn.click();
+        return "clicked";
+      }
+    }
+    // Check if already installed
+    for (const btn of buttons) {
+      if (btn.textContent?.trim() !== "Added") continue;
+      let parent: HTMLElement | null = btn.parentElement;
+      for (let i = 0; i < 10 && parent; i++) {
+        if (parent.textContent?.includes(name)) {
+          return "already_installed";
+        }
+        parent = parent.parentElement;
+      }
+    }
+    return "not_found";
+  }, displayName);
+
+  if (clicked === "already_installed") {
+    console.log(`      ✓ "${displayName}" is already installed`);
+    return;
+  }
+  if (clicked === "not_found") {
+    console.log(`      ⚠️  Add button not found for "${displayName}"`);
+    return;
+  }
+
+  await page.waitForTimeout(500);
+
+  // Wait for the pre-filled create modal to open
+  await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "visible", timeout: 5000 });
+  await page.waitForTimeout(500);
+
+  // Capture the pre-filled modal (General tab is shown by default)
+  await captureScreenshot(page, `${screenshotPrefix}-general`);
+
+  // Capture the Execution tab (pre-filled with npx command)
+  const executionTab = await page.$('button[role="tab"]:has-text("Execution")');
+  if (executionTab) {
+    await executionTab.click();
+    await page.waitForTimeout(300);
+    await captureScreenshot(page, `${screenshotPrefix}-execution`);
+  }
+
+  // Switch back to General tab before submitting
+  const generalTab = await page.$('button[role="tab"]:has-text("General")');
+  if (generalTab) {
+    await generalTab.click();
+    await page.waitForTimeout(200);
+  }
+
+  // Submit the form - click "Create Plugin" button
+  const createButton = page.locator('button:has-text("Create Plugin")').first();
+  if ((await createButton.count()) > 0) {
+    await createButton.click();
+    await page.waitForTimeout(2000);
+
+    // Check if modal is still open (validation error)
+    const modalStillOpen = await page.$('[role="dialog"], .mantine-Modal-content');
+    if (modalStillOpen) {
+      console.log(`      ⚠️  Modal still open - "${displayName}" creation may have failed`);
+      await captureScreenshot(page, `${screenshotPrefix}-error`);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+    }
+
+    // Wait for modal to close
+    await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "hidden", timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1000);
+    await waitForPageReady(page);
+  }
+
+  console.log(`      ✓ "${displayName}" added from store`);
+}
+
+/**
+ * Configure the Echo Metadata plugin's permissions and scopes via the Config Modal.
+ * This must be done after testing (so the manifest is populated) for the plugin
+ * to appear in series detail and library context menus.
+ */
+async function configureEchoPlugin(page: Page): Promise<void> {
+  console.log("      ⚙️  Configuring Echo plugin permissions & scopes...");
+
+  // We should be on the plugins settings page already
+  // Find the gear icon (Configure Plugin) for the Echo plugin row
+  // The table rows contain plugin display names; find the row with "Echo" and click its gear icon
+  const echoRow = page.locator('.mantine-Table-tbody .mantine-Table-tr:has-text("Echo")').first();
+  if ((await echoRow.count()) === 0) {
+    console.log("      ⚠️  Echo plugin row not found");
+    return;
+  }
+
+  const configButton = echoRow.locator('button:has(svg.tabler-icon-settings)');
+  if ((await configButton.count()) === 0) {
+    console.log("      ⚠️  Config button not found on Echo plugin row");
+    return;
+  }
+
+  await configButton.click();
+  await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "visible", timeout: 5000 });
+  await page.waitForTimeout(500);
+
+  // Navigate to Permissions tab
+  const permissionsTab = page.locator('button[role="tab"]:has-text("Permissions")');
+  if ((await permissionsTab.count()) > 0) {
+    await permissionsTab.click();
+    await page.waitForTimeout(300);
+  }
+
+  // === SELECT PERMISSIONS ===
+  // Click the Permissions MultiSelect input
+  const permissionsSelect = page.locator('label:has-text("Permissions")').locator('..').locator('.mantine-MultiSelect-input').first();
+  if ((await permissionsSelect.count()) > 0) {
+    await permissionsSelect.click();
+    await page.waitForTimeout(300);
+
+    // Select "Read metadata"
+    const readOption = page.locator('[role="option"]:has-text("Read")').first();
+    if ((await readOption.count()) > 0) {
+      await readOption.click();
+      await page.waitForTimeout(200);
+    }
+
+    // Click again to open dropdown for more selections
+    await permissionsSelect.click();
+    await page.waitForTimeout(300);
+
+    // Select "Write All metadata"
+    const writeAllOption = page.locator('[role="option"]:has-text("Write All")').first();
+    if ((await writeAllOption.count()) > 0) {
+      await writeAllOption.click();
+      await page.waitForTimeout(200);
+    }
+
+    // Close dropdown
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+  }
+
+  // === SELECT SCOPES ===
+  const scopesSelect = page.locator('label:has-text("Scopes")').locator('..').locator('.mantine-MultiSelect-input').first();
+  if ((await scopesSelect.count()) > 0) {
+    await scopesSelect.click();
+    await page.waitForTimeout(300);
+
+    // Select "Series Detail"
+    const seriesDetailOption = page.locator('[role="option"]:has-text("Series Detail")').first();
+    if ((await seriesDetailOption.count()) > 0) {
+      await seriesDetailOption.click();
+      await page.waitForTimeout(200);
+    }
+
+    // Click again
+    await scopesSelect.click();
+    await page.waitForTimeout(300);
+
+    // Select "Library Detail"
+    const libraryDetailOption = page.locator('[role="option"]:has-text("Library Detail")').first();
+    if ((await libraryDetailOption.count()) > 0) {
+      await libraryDetailOption.click();
+      await page.waitForTimeout(200);
+    }
+
+    // Close dropdown
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+  }
+
+  // Capture the configured Permissions tab (with selections made)
+  await captureScreenshot(page, "plugins/config-modal-permissions-filled");
+
+  // Save changes
+  const saveButton = page.locator('button:has-text("Save Changes")').first();
+  if ((await saveButton.count()) > 0) {
+    await saveButton.click();
+    await page.waitForTimeout(2000);
+
+    // Wait for modal to close
+    await page.waitForSelector('[role="dialog"], .mantine-Modal-content', { state: "hidden", timeout: 10000 }).catch(() => {});
+    await waitForPageReady(page);
+  }
+
+  console.log("      ✓ Echo plugin configured with permissions & scopes");
 }
 
 /**
@@ -287,12 +410,10 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
   console.log("    📷 Series Detail - Plugin Actions");
 
   // Navigate to the manga library's series view
-  // First, find the manga library by clicking its link in the sidebar
   const mangaLibraryLink = page.locator('nav a[href*="/libraries/"]:has-text("Manga")').first();
   if ((await mangaLibraryLink.count()) > 0) {
     await mangaLibraryLink.click();
   } else {
-    // Fallback to all libraries if manga not found
     await page.goto("/libraries/all/series");
   }
   await waitForPageReady(page);
@@ -309,23 +430,19 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
   await waitForPageReady(page);
   await page.waitForTimeout(500);
 
-  // Find and click the actions menu button (IconDotsVertical - three vertical dots)
-  // Target the menu button in the series header Grid, not the sidebar
-  // Use a more specific selector: find the ActionIcon with size="lg" that contains the dots icon
-  // The sidebar uses smaller buttons without the "lg" size variant
+  // Find and click the actions menu button (three vertical dots in the series header)
   const actionsMenu = page.locator('.mantine-Grid-root button:has(svg.tabler-icon-dots-vertical)').first();
   if ((await actionsMenu.count()) === 0) {
     console.log("      ⚠️  Actions menu not found on series detail");
     return;
   }
 
-  // Retry mechanism: open menu and wait for plugin to appear (handles TTL/cache delays)
+  // Retry mechanism: open menu and wait for Echo plugin to appear (handles TTL/cache delays)
   const maxRetries = 10;
-  const retryDelay = 5000; // 5 seconds between retries
+  const retryDelay = 5000;
   let fetchMetadataEcho: Awaited<ReturnType<typeof page.$>> = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // Reload the page on retry attempts to refresh plugin cache
     if (attempt > 1) {
       console.log(`      🔄 Reloading page (attempt ${attempt}/${maxRetries})...`);
       await page.reload();
@@ -336,7 +453,6 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
     await actionsMenu.click();
     await page.waitForTimeout(500);
 
-    // Check if Echo plugin is in the menu
     fetchMetadataEcho = await page.$('[role="menuitem"]:has-text("Echo"), .mantine-Menu-item:has-text("Echo")');
 
     if (fetchMetadataEcho) {
@@ -344,7 +460,6 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
       break;
     }
 
-    // Plugin not found, close menu and wait before retry
     console.log(`      ⏳ Echo plugin not found (attempt ${attempt}/${maxRetries}), waiting...`);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(retryDelay);
@@ -358,8 +473,7 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
   // Capture dropdown showing plugin options
   await captureScreenshot(page, "plugins/series-detail-plugin-dropdown");
 
-  // Click on "Echo" plugin in "Fetch Metadata" section
-
+  // Click on "Echo" plugin
   await fetchMetadataEcho.click();
   await page.waitForTimeout(500);
 
@@ -370,13 +484,11 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
   // Capture search results
   await captureScreenshot(page, "plugins/search-results");
 
-  // Click on first search result (div with cursor: pointer inside the results stack)
+  // Click on first search result
   const searchResult = await page.$('.mantine-Modal-content .mantine-Stack-root .mantine-Stack-root > div[style*="cursor: pointer"]');
   if (searchResult) {
     await searchResult.click();
     await page.waitForTimeout(500);
-
-    // Wait for preview to load
     await waitForPageReady(page);
     await page.waitForTimeout(500);
 
@@ -392,7 +504,7 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
       // Capture success state
       await captureScreenshot(page, "plugins/apply-success");
 
-      // Close the success modal (X button in header)
+      // Close the success modal
       const closeButton = await page.$('.mantine-Modal-close');
       if (closeButton) {
         await closeButton.click();
@@ -425,20 +537,17 @@ async function seriesDetailPluginScreenshots(page: Page): Promise<void> {
 async function libraryAutoMatchScreenshots(page: Page): Promise<void> {
   console.log("    📷 Library Sidebar - Auto Match");
 
-  // Navigate to home to access the sidebar
   await page.goto("/");
   await waitForPageReady(page);
   await page.waitForTimeout(500);
 
   // Find the Manga library's menu button in the sidebar
-  // Look for the NavLink containing "Manga" text and find its menu button
   const mangaNavLink = page.locator('nav .mantine-NavLink-root:has-text("Manga")').first();
   if ((await mangaNavLink.count()) === 0) {
     console.log("      ⚠️  Manga library not found in sidebar");
     return;
   }
 
-  // Click the menu button within the Manga library NavLink
   const mangaMenuButton = mangaNavLink.locator('button:has(svg.tabler-icon-dots-vertical)');
   if ((await mangaMenuButton.count()) === 0) {
     console.log("      ⚠️  Manga library menu button not found");
@@ -452,7 +561,6 @@ async function libraryAutoMatchScreenshots(page: Page): Promise<void> {
   await captureScreenshot(page, "plugins/library-sidebar-plugin-dropdown");
 
   // Click on "Echo" plugin under "Auto Match All Series" section
-  // The menu item shows the plugin's displayName
   const autoMatchEcho = page.locator('[role="menuitem"]:has-text("Echo")').first();
   if ((await autoMatchEcho.count()) > 0) {
     await autoMatchEcho.click();
@@ -462,11 +570,57 @@ async function libraryAutoMatchScreenshots(page: Page): Promise<void> {
     await captureScreenshot(page, "plugins/library-auto-match-success");
   } else {
     console.log("      ⚠️  Auto Match Echo option not found in menu");
-    // Close menu
     await page.keyboard.press("Escape");
   }
 
   console.log("      ✓ Library auto-match screenshots captured");
+}
+
+/**
+ * User Integrations page - shows available and enabled plugin integrations
+ * This is the user-facing view at /settings/integrations where users can
+ * enable/disable sync and recommendation plugins for their account.
+ */
+async function userIntegrationsScreenshots(page: Page): Promise<void> {
+  console.log("    📷 User Integrations Page");
+
+  // Navigate to the integrations page
+  await page.goto("/settings/integrations");
+  await waitForPageReady(page);
+  await page.waitForTimeout(500);
+
+  // Capture the integrations page showing available plugins
+  // Since sync and recommendations plugins were added, they should appear here
+  await captureScreenshot(page, "plugins/user-integrations");
+
+  // Try to enable the sync plugin if it appears in "Available" section
+  const enableButtons = page.locator('button:has-text("Enable")');
+  const enableCount = await enableButtons.count();
+
+  if (enableCount > 0) {
+    // Enable the first available integration (likely AniList Sync)
+    await enableButtons.first().click();
+    await page.waitForTimeout(1500);
+    await waitForPageReady(page);
+
+    // Capture after enabling first integration
+    await captureScreenshot(page, "plugins/user-integrations-enabled-sync");
+
+    // Enable the second available integration if present (likely AniList Recommendations)
+    const remainingEnableButtons = page.locator('button:has-text("Enable")');
+    if ((await remainingEnableButtons.count()) > 0) {
+      await remainingEnableButtons.first().click();
+      await page.waitForTimeout(1500);
+      await waitForPageReady(page);
+
+      // Capture after enabling second integration
+      await captureScreenshot(page, "plugins/user-integrations-all-enabled");
+    }
+  } else {
+    console.log("      ⚠️  No available integrations found to enable");
+  }
+
+  console.log("      ✓ User integrations screenshots captured");
 }
 
 /**
@@ -476,7 +630,6 @@ async function libraryAutoMatchScreenshots(page: Page): Promise<void> {
 async function pluginMetricsScreenshots(page: Page): Promise<void> {
   console.log("    📷 Plugin Metrics Tab");
 
-  // Navigate to metrics settings
   await page.goto("/settings/metrics");
   await waitForPageReady(page);
   await page.waitForTimeout(500);
@@ -496,10 +649,8 @@ async function pluginMetricsScreenshots(page: Page): Promise<void> {
   await captureScreenshot(page, "settings/metrics-plugins-overview");
 
   // Try to expand a plugin row to show details
-  // Target the Plugins tab panel specifically using aria attributes
   const pluginRow = page.locator('[role="tabpanel"][aria-labelledby*="plugins" i] .mantine-Table-tbody .mantine-Table-tr').first();
   if ((await pluginRow.count()) > 0 && (await pluginRow.isVisible())) {
-    // Scroll the row into view before clicking
     await pluginRow.scrollIntoViewIfNeeded();
     await page.waitForTimeout(200);
 
@@ -514,4 +665,3 @@ async function pluginMetricsScreenshots(page: Page): Promise<void> {
 
   console.log("      ✓ Plugin metrics screenshots captured");
 }
-

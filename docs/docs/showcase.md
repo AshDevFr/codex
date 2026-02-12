@@ -152,23 +152,37 @@ View statistics about your library contents and monitor performance.
 
 Manage metadata plugins for enhanced library information.
 
-![Plugin Settings - Empty](../screenshots/plugins/settings-plugins.png)
+![Plugin Settings - Empty](../screenshots/plugins/settings-plugins-empty.png)
 
-##### Creating a Plugin
+##### Official Plugin Store
 
-Configure plugins with general settings, credentials, permissions, and execution options.
+Install plugins from the built-in store with pre-configured settings.
 
-![Create Plugin - General](../screenshots/plugins/create-general.png)
+![Official Plugin Store](../screenshots/plugins/store-carousel.png)
 
-![Create Plugin - Execution](../screenshots/plugins/create-execution.png)
+Clicking "Add" on a plugin opens a pre-filled creation form with the plugin's recommended settings.
 
-![Create Plugin - Permissions](../screenshots/plugins/create-permissions.png)
+![Add Plugin - General](../screenshots/plugins/store-add-echo-general.png)
 
-![Create Plugin - Credentials](../screenshots/plugins/create-credentials.png)
+![Add Plugin - Execution](../screenshots/plugins/store-add-echo-execution.png)
 
-![Plugin Settings - With Echo Plugin](../screenshots/plugins/settings-plugins-with-echo.png)
+![Plugin Settings - Installed Plugins](../screenshots/plugins/settings-plugins-installed.png)
 
-![Plugin Settings - With Echo Plugin Expanded](../screenshots/plugins/settings-plugins-with-echo-expanded.png)
+![Plugin Settings - Expanded Details](../screenshots/plugins/settings-plugin-expanded.png)
+
+##### Configuring a Plugin
+
+After installing a plugin, open its configuration modal to set permissions, scopes, search templates, preprocessing rules, and conditions.
+
+![Config Modal - General](../screenshots/plugins/config-modal-general.png)
+
+![Config Modal - Permissions](../screenshots/plugins/config-modal-permissions.png)
+
+![Config Modal - Template](../screenshots/plugins/config-modal-template.png)
+
+![Config Modal - Preprocessing](../screenshots/plugins/config-modal-preprocessing.png)
+
+![Config Modal - Conditions](../screenshots/plugins/config-modal-conditions.png)
 
 ##### Using Plugins
 
@@ -253,6 +267,14 @@ Manage your account details and preferences.
 Generate and manage API keys for integrations.
 
 ![Profile - API Keys](../screenshots/settings/profile-api-keys.png)
+
+#### Integrations
+
+Enable or disable plugin integrations for your account, such as sync and recommendation services.
+
+![User Integrations](../screenshots/plugins/user-integrations.png)
+
+![User Integrations - Enabled](../screenshots/plugins/user-integrations-enabled-sync.png)
 
 ## Authentication
 
