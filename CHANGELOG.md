@@ -2,6 +2,23 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.3] - 2026-02-12
+
+### 🚀 Features
+
+- *(recommendations)* Make GET and dismiss endpoints non-blocking with SSE task tracking
+- *(plugins)* Add internal_config with search results limit and external ID lookup in search modal
+- *(external-ids)* Add series external ID CRUD endpoints and edit modal for series/books
+- *(recommendations)* Add "View in Library" button and link to series detail page
+- *(reader)* Improve volume change overlay with boundary-aware navigation
+- *(recommendations)* Add rating, popularity, status, volume count, and in-codex enrichment
+
+### 🐛 Bug Fixes
+
+- *(plugins)* Detect RPC-level rate limits in task retry system
+- *(recommendations)* Persist plugin response to DB so GET endpoint can read cached data
+- *(ui)* Use router location for sidebar active state instead of static route patterns
+
 ## [1.10.2] - 2026-02-11
 
 ### 🚀 Features

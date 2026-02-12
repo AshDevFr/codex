@@ -27,8 +27,8 @@ import {
   type UserLibraryEntry,
 } from "@ashdev/codex-plugin-sdk";
 import {
-  AniListRecommendationClient,
   type AniListMediaStatus,
+  AniListRecommendationClient,
   type AniListRecommendationNode,
   getBestTitle,
   stripHtml,
