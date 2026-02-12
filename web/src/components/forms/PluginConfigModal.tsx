@@ -2,6 +2,7 @@ import { Button, Group, Modal, Stack, Tabs } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
 import {
+  IconAdjustments,
   IconCode,
   IconKey,
   IconSearch,
@@ -16,6 +17,7 @@ import type { AutoMatchConditions } from "./ConditionsEditor";
 import type { PreprocessingRule } from "./PreprocessingRulesEditor";
 import {
   ConditionsTab,
+  GeneralTab,
   isMetadataProvider,
   isOAuthPlugin,
   type MetadataTarget,
@@ -42,7 +44,9 @@ function PluginConfigContent({
   const queryClient = useQueryClient();
   const isMeta = isMetadataProvider(plugin);
   const isOAuth = isOAuthPlugin(plugin);
-  const [activeTab, setActiveTab] = useState<string | null>("permissions");
+  const [activeTab, setActiveTab] = useState<string | null>(
+    isMeta ? "general" : "permissions",
+  );
 
   // Parse initial preprocessing rules from plugin
   const initialPreprocessingRules: PreprocessingRule[] =
@@ -168,6 +172,14 @@ function PluginConfigContent({
     <>
       <Tabs value={activeTab} onChange={setActiveTab}>
         <Tabs.List>
+          {isMeta && (
+            <Tabs.Tab
+              value="general"
+              leftSection={<IconAdjustments size={14} />}
+            >
+              General
+            </Tabs.Tab>
+          )}
           <Tabs.Tab value="permissions" leftSection={<IconShield size={14} />}>
             Permissions
           </Tabs.Tab>
@@ -210,6 +222,10 @@ function PluginConfigContent({
 
           {isMeta && (
             <>
+              <Tabs.Panel value="general">
+                <GeneralTab plugin={plugin} form={form} />
+              </Tabs.Panel>
+
               <Tabs.Panel value="template">
                 <TemplateTab form={form} />
               </Tabs.Panel>
@@ -225,8 +241,6 @@ function PluginConfigContent({
 
               <Tabs.Panel value="conditions">
                 <ConditionsTab
-                  plugin={plugin}
-                  form={form}
                   autoMatchConditions={autoMatchConditions}
                   onAutoMatchConditionsChange={setAutoMatchConditions}
                 />

@@ -1,4 +1,5 @@
 export { ConditionsTab } from "./ConditionsTab";
+export { GeneralTab } from "./GeneralTab";
 export { OAuthTab } from "./OAuthTab";
 export { PermissionsTab } from "./PermissionsTab";
 export { PreprocessingTab } from "./PreprocessingTab";

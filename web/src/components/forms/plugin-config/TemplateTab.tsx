@@ -4,7 +4,6 @@ import {
   Card,
   Code,
   Group,
-  NumberInput,
   Paper,
   Stack,
   Text,
@@ -38,22 +37,6 @@ export function TemplateTab({ form }: TemplateTabProps) {
           access to series context data shown below.
         </Text>
       </Alert>
-
-      <NumberInput
-        label="Search Results Limit"
-        description="Maximum number of results returned by metadata search. Leave empty for plugin default."
-        placeholder="Default (plugin decides)"
-        min={1}
-        max={200}
-        allowDecimal={false}
-        value={form.values.searchResultsLimit ?? ""}
-        onChange={(value) =>
-          form.setFieldValue(
-            "searchResultsLimit",
-            typeof value === "number" ? value : null,
-          )
-        }
-      />
 
       <Stack gap="xs">
         <Text fw={500} size="sm">
