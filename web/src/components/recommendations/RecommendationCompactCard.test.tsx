@@ -30,18 +30,38 @@ describe("RecommendationCompactCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows in-library badge when in library", () => {
+  it("shows Available badge when inCodex is true", () => {
+    renderWithProviders(
+      <RecommendationCompactCard
+        recommendation={{ ...baseRec, inCodex: true }}
+      />,
+    );
+    expect(screen.getByText("Available")).toBeInTheDocument();
+  });
+
+  it("shows In Anilist Library badge when inLibrary is true and inCodex is false", () => {
     renderWithProviders(
       <RecommendationCompactCard
         recommendation={{ ...baseRec, inLibrary: true }}
       />,
     );
-    expect(screen.getByText("Owned")).toBeInTheDocument();
+    expect(screen.getByText("In Anilist Library")).toBeInTheDocument();
   });
 
-  it("does not show in-library badge when not in library", () => {
+  it("prioritizes Available over In Anilist Library", () => {
+    renderWithProviders(
+      <RecommendationCompactCard
+        recommendation={{ ...baseRec, inLibrary: true, inCodex: true }}
+      />,
+    );
+    expect(screen.getByText("Available")).toBeInTheDocument();
+    expect(screen.queryByText("In Anilist Library")).not.toBeInTheDocument();
+  });
+
+  it("does not show library badge when neither flag is set", () => {
     renderWithProviders(<RecommendationCompactCard recommendation={baseRec} />);
-    expect(screen.queryByText("Owned")).not.toBeInTheDocument();
+    expect(screen.queryByText("Available")).not.toBeInTheDocument();
+    expect(screen.queryByText("In Anilist Library")).not.toBeInTheDocument();
   });
 
   it("renders cover image when coverUrl provided", () => {
@@ -121,5 +141,31 @@ describe("RecommendationCompactCard", () => {
     const card = screen.getByTestId("recommendation-compact-card");
     // Should link to internal series page, not external URL
     expect(card).toHaveAttribute("href", "/series/abc-123");
+  });
+
+  it("renders rating when provided", () => {
+    renderWithProviders(
+      <RecommendationCompactCard recommendation={{ ...baseRec, rating: 90 }} />,
+    );
+    expect(screen.getByText("90%")).toBeInTheDocument();
+  });
+
+  it("does not render rating when absent", () => {
+    renderWithProviders(<RecommendationCompactCard recommendation={baseRec} />);
+    expect(screen.queryByText("90%")).not.toBeInTheDocument();
+  });
+
+  it("renders popularity when provided", () => {
+    renderWithProviders(
+      <RecommendationCompactCard
+        recommendation={{ ...baseRec, popularity: 185000 }}
+      />,
+    );
+    expect(screen.getByText("185,000")).toBeInTheDocument();
+  });
+
+  it("does not render popularity when absent", () => {
+    renderWithProviders(<RecommendationCompactCard recommendation={baseRec} />);
+    expect(screen.queryByText(/185,000/)).not.toBeInTheDocument();
   });
 });

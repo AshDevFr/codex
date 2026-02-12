@@ -11,7 +11,8 @@ use super::super::dto::recommendations::{
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
 use crate::db::repositories::{
-    PluginsRepository, TaskRepository, UserPluginDataRepository, UserPluginsRepository,
+    PluginsRepository, SeriesExternalIdRepository, TaskRepository, UserPluginDataRepository,
+    UserPluginsRepository,
 };
 use crate::services::plugin::protocol::PluginManifest;
 use crate::services::plugin::recommendations::RecommendationResponse;
@@ -156,7 +157,7 @@ pub async fn get_recommendations(
                     "Auto-enqueued recommendations refresh task"
                 );
                 // Return response with the newly created task info
-                let (recommendations, generated_at, cached) = match cached_response {
+                let (mut recommendations, generated_at, cached) = match cached_response {
                     Some(resp) => (
                         resp.recommendations
                             .into_iter()
@@ -167,6 +168,8 @@ pub async fn get_recommendations(
                     ),
                     None => (vec![], None, false),
                 };
+
+                enrich_with_codex_presence(&state.db, &mut recommendations, &plugin).await;
 
                 return Ok(Json(RecommendationsResponse {
                     recommendations,
@@ -202,7 +205,7 @@ pub async fn get_recommendations(
     };
 
     // Build response from cached data
-    let (recommendations, generated_at, cached) = match cached_response {
+    let (mut recommendations, generated_at, cached) = match cached_response {
         Some(resp) => (
             resp.recommendations
                 .into_iter()
@@ -213,6 +216,8 @@ pub async fn get_recommendations(
         ),
         None => (vec![], None, false),
     };
+
+    enrich_with_codex_presence(&state.db, &mut recommendations, &plugin).await;
 
     Ok(Json(RecommendationsResponse {
         recommendations,
@@ -286,6 +291,61 @@ pub async fn refresh_recommendations(
     }))
 }
 
+/// Enrich recommendation DTOs with Codex library presence.
+///
+/// For each recommendation, checks whether its `external_id` maps to a Codex series
+/// via `series_external_ids`. When matched, sets `in_codex = true` and populates
+/// `codex_series_id`.
+async fn enrich_with_codex_presence(
+    db: &sea_orm::DatabaseConnection,
+    recommendations: &mut [RecommendationDto],
+    plugin: &crate::db::entities::plugins::Model,
+) {
+    // Resolve the external_id_source from the plugin manifest
+    let source = plugin
+        .manifest
+        .as_ref()
+        .and_then(|m| serde_json::from_value::<PluginManifest>(m.clone()).ok())
+        .and_then(|m| m.capabilities.external_id_source);
+
+    let Some(source) = source else {
+        debug!("Plugin has no external_id_source — skipping Codex enrichment");
+        return;
+    };
+
+    // Collect all external IDs from recommendations
+    let external_ids: Vec<String> = recommendations
+        .iter()
+        .map(|r| r.external_id.clone())
+        .collect();
+
+    if external_ids.is_empty() {
+        return;
+    }
+
+    // Batch lookup
+    match SeriesExternalIdRepository::find_by_external_ids_and_source(db, &external_ids, &source)
+        .await
+    {
+        Ok(matches) => {
+            for rec in recommendations.iter_mut() {
+                if let Some(ext) = matches.get(&rec.external_id) {
+                    rec.in_codex = true;
+                    rec.codex_series_id = Some(ext.series_id.to_string());
+                }
+            }
+            debug!(
+                matched = matches.len(),
+                total = external_ids.len(),
+                "Enriched recommendations with Codex presence"
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to enrich recommendations with Codex presence");
+        }
+    }
+}
+
 /// Convert a plugin Recommendation to an API RecommendationDto
 ///
 /// This is extracted for testability — the handler maps the plugin's response
@@ -305,6 +365,11 @@ fn to_recommendation_dto(
         based_on: r.based_on,
         codex_series_id: r.codex_series_id,
         in_library: r.in_library,
+        in_codex: false,
+        status: r.status.map(|s| s.to_string()),
+        total_book_count: r.total_book_count,
+        rating: r.rating,
+        popularity: r.popularity,
     }
 }
 
@@ -452,6 +517,8 @@ mod tests {
     /// when all optional fields are populated.
     #[test]
     fn test_to_recommendation_dto_full_fields() {
+        use crate::db::entities::SeriesStatus;
+
         let rec = Recommendation {
             external_id: "12345".to_string(),
             external_url: Some("https://anilist.co/manga/12345".to_string()),
@@ -464,6 +531,10 @@ mod tests {
             based_on: vec!["Berserk".to_string(), "Vagabond".to_string()],
             codex_series_id: Some("codex-uuid-abc".to_string()),
             in_library: true,
+            status: Some(SeriesStatus::Ongoing),
+            total_book_count: Some(27),
+            rating: Some(90),
+            popularity: Some(50000),
         };
 
         let dto = to_recommendation_dto(rec);
@@ -488,6 +559,11 @@ mod tests {
         assert_eq!(dto.based_on, vec!["Berserk", "Vagabond"]);
         assert_eq!(dto.codex_series_id.as_deref(), Some("codex-uuid-abc"));
         assert!(dto.in_library);
+        assert!(!dto.in_codex); // in_codex defaults to false before enrichment
+        assert_eq!(dto.status.as_deref(), Some("ongoing"));
+        assert_eq!(dto.total_book_count, Some(27));
+        assert_eq!(dto.rating, Some(90));
+        assert_eq!(dto.popularity, Some(50000));
     }
 
     /// Verify that the mapping handles minimal recommendations (None/empty optional fields).
@@ -505,6 +581,10 @@ mod tests {
             based_on: vec![],
             codex_series_id: None,
             in_library: false,
+            status: None,
+            total_book_count: None,
+            rating: None,
+            popularity: None,
         };
 
         let dto = to_recommendation_dto(rec);
@@ -520,11 +600,18 @@ mod tests {
         assert!(dto.based_on.is_empty());
         assert!(dto.codex_series_id.is_none());
         assert!(!dto.in_library);
+        assert!(!dto.in_codex);
+        assert!(dto.status.is_none());
+        assert!(dto.total_book_count.is_none());
+        assert!(dto.rating.is_none());
+        assert!(dto.popularity.is_none());
     }
 
     /// Verify the full RecommendationsResponse can be serialized with the expected JSON shape.
     #[test]
     fn test_recommendations_response_json_shape() {
+        use crate::db::entities::SeriesStatus;
+
         let recs = vec![
             to_recommendation_dto(Recommendation {
                 external_id: "1".to_string(),
@@ -538,6 +625,10 @@ mod tests {
                 based_on: vec!["Source A".to_string()],
                 codex_series_id: None,
                 in_library: false,
+                status: Some(SeriesStatus::Ongoing),
+                total_book_count: Some(30),
+                rating: Some(88),
+                popularity: Some(75000),
             }),
             to_recommendation_dto(Recommendation {
                 external_id: "2".to_string(),
@@ -551,6 +642,10 @@ mod tests {
                 based_on: vec![],
                 codex_series_id: Some("series-id".to_string()),
                 in_library: true,
+                status: None,
+                total_book_count: None,
+                rating: None,
+                popularity: None,
             }),
         ];
 
@@ -589,8 +684,13 @@ mod tests {
         assert_eq!(rec0["reason"], "Based on your library");
         assert_eq!(rec0["basedOn"].as_array().unwrap().len(), 1);
         assert!(!rec0["inLibrary"].as_bool().unwrap());
+        assert!(!rec0["inCodex"].as_bool().unwrap());
         // codexSeriesId should be absent (None)
         assert!(rec0.get("codexSeriesId").is_none());
+        assert_eq!(rec0["status"], "ongoing");
+        assert_eq!(rec0["totalBookCount"], 30);
+        assert_eq!(rec0["rating"], 88);
+        assert_eq!(rec0["popularity"], 75000);
 
         // Second recommendation (minimal fields — optional fields absent)
         let rec1 = &recs_arr[1];
@@ -604,6 +704,12 @@ mod tests {
         assert!(rec1.get("basedOn").is_none()); // empty vec is skipped
         assert_eq!(rec1["codexSeriesId"], "series-id");
         assert!(rec1["inLibrary"].as_bool().unwrap());
+        assert!(!rec1["inCodex"].as_bool().unwrap());
+        // Optional fields should be absent (None)
+        assert!(rec1.get("status").is_none());
+        assert!(rec1.get("totalBookCount").is_none());
+        assert!(rec1.get("rating").is_none());
+        assert!(rec1.get("popularity").is_none());
     }
 
     /// Verify that RecommendationResponse round-trips through serde_json::Value.
@@ -626,6 +732,10 @@ mod tests {
                 based_on: vec!["Unit Tests".to_string()],
                 codex_series_id: None,
                 in_library: false,
+                status: None,
+                total_book_count: None,
+                rating: None,
+                popularity: None,
             }],
             generated_at: Some("2026-02-11T16:00:00Z".to_string()),
             cached: false,

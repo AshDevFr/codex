@@ -362,9 +362,12 @@ impl TaskRepository {
 
         match result {
             Some(row) => {
-                let id: String = row.try_get("", "id")?;
+                // PostgreSQL returns native UUID; SQLite returns TEXT
+                let task_id: Uuid = row.try_get::<Uuid>("", "id").or_else(|_| {
+                    let id_str: String = row.try_get("", "id")?;
+                    Uuid::parse_str(&id_str).map_err(|e| sea_orm::DbErr::Type(e.to_string()))
+                })?;
                 let status: String = row.try_get("", "status")?;
-                let task_id = Uuid::parse_str(&id)?;
                 Ok(Some((task_id, status)))
             }
             None => Ok(None),

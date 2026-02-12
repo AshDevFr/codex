@@ -36,6 +36,11 @@ let mockRecommendations: RecommendationDto[] = [
     basedOn: ["Berserk", "Vagabond"],
     codexSeriesId: onePiece?.id ?? null,
     inLibrary: !!onePiece,
+    inCodex: !!onePiece,
+    status: "ongoing",
+    totalBookCount: 110,
+    rating: 88,
+    popularity: 234000,
   },
   {
     externalId: "anilist-16498",
@@ -50,6 +55,11 @@ let mockRecommendations: RecommendationDto[] = [
     basedOn: ["Berserk", "Claymore"],
     codexSeriesId: attackOnTitan?.id ?? null,
     inLibrary: !!attackOnTitan,
+    inCodex: !!attackOnTitan,
+    status: "ended",
+    totalBookCount: 34,
+    rating: 84,
+    popularity: 302000,
   },
   {
     externalId: "anilist-30002",
@@ -63,6 +73,11 @@ let mockRecommendations: RecommendationDto[] = [
     reason: "Highly rated dark fantasy with masterful artwork",
     basedOn: ["Vagabond", "Vinland Saga"],
     inLibrary: false,
+    inCodex: false,
+    status: "hiatus",
+    totalBookCount: 42,
+    rating: 93,
+    popularity: 185000,
   },
   {
     externalId: "anilist-36531",
@@ -76,6 +91,11 @@ let mockRecommendations: RecommendationDto[] = [
     reason: "Fans of historical action manga love this series",
     basedOn: ["Berserk", "Vagabond", "Kingdom"],
     inLibrary: false,
+    inCodex: false,
+    status: "ended",
+    totalBookCount: 27,
+    rating: 89,
+    popularity: 95000,
   },
   {
     externalId: "anilist-30656",
@@ -89,6 +109,11 @@ let mockRecommendations: RecommendationDto[] = [
     reason: "A beautifully drawn historical masterpiece",
     basedOn: ["Berserk", "Blade of the Immortal"],
     inLibrary: false,
+    inCodex: false,
+    status: "hiatus",
+    totalBookCount: 37,
+    rating: 90,
+    popularity: 112000,
   },
   {
     externalId: "anilist-30026",
@@ -104,6 +129,11 @@ let mockRecommendations: RecommendationDto[] = [
     codexSeriesId:
       mockSeries.find((s) => s.title === "Fullmetal Alchemist")?.id ?? null,
     inLibrary: !!mockSeries.find((s) => s.title === "Fullmetal Alchemist"),
+    inCodex: !!mockSeries.find((s) => s.title === "Fullmetal Alchemist"),
+    status: "ended",
+    totalBookCount: 27,
+    rating: 88,
+    popularity: 198000,
   },
   {
     externalId: "anilist-85486",
@@ -119,6 +149,11 @@ let mockRecommendations: RecommendationDto[] = [
     codexSeriesId:
       mockSeries.find((s) => s.title === "Chainsaw Man")?.id ?? null,
     inLibrary: !!mockSeries.find((s) => s.title === "Chainsaw Man"),
+    inCodex: !!mockSeries.find((s) => s.title === "Chainsaw Man"),
+    status: "ongoing",
+    totalBookCount: 18,
+    rating: 85,
+    popularity: 267000,
   },
   {
     externalId: "anilist-44347",
@@ -132,6 +167,11 @@ let mockRecommendations: RecommendationDto[] = [
     reason: "Epic historical warfare at its finest",
     basedOn: ["Vinland Saga", "Vagabond"],
     inLibrary: false,
+    inCodex: false,
+    status: "ongoing",
+    totalBookCount: 72,
+    rating: 86,
+    popularity: 48000,
   },
 ];
 

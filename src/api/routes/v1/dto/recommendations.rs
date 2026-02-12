@@ -36,9 +36,24 @@ pub struct RecommendationDto {
     /// Codex series ID if matched to an existing series
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codex_series_id: Option<String>,
-    /// Whether this series is already in the user's library
+    /// Whether this series is already in the user's library (as reported by the plugin)
     #[serde(default)]
     pub in_library: bool,
+    /// Whether this series exists in the Codex library (matched via external IDs)
+    #[serde(default)]
+    pub in_codex: bool,
+    /// Publication status (ongoing, ended, hiatus, abandoned, unknown)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Total expected number of books/volumes in the series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_book_count: Option<i32>,
+    /// Average user rating on the source service (0-100 scale)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rating: Option<i32>,
+    /// Popularity ranking/count on the source service
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub popularity: Option<i32>,
 }
 
 /// Response from GET /api/v1/user/recommendations
@@ -110,6 +125,11 @@ mod tests {
             based_on: vec![],
             codex_series_id: None,
             in_library: false,
+            in_codex: false,
+            status: None,
+            total_book_count: None,
+            rating: None,
+            popularity: None,
         };
         let json = serde_json::to_value(&dto).unwrap();
         let obj = json.as_object().unwrap();
@@ -119,6 +139,10 @@ mod tests {
         assert!(!obj.contains_key("genres"));
         assert!(!obj.contains_key("basedOn"));
         assert!(!obj.contains_key("codexSeriesId"));
+        assert!(!obj.contains_key("status"));
+        assert!(!obj.contains_key("totalBookCount"));
+        assert!(!obj.contains_key("rating"));
+        assert!(!obj.contains_key("popularity"));
     }
 
     #[test]

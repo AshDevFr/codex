@@ -12424,8 +12424,20 @@ export interface components {
             externalUrl?: string | null;
             /** @description Genres */
             genres?: string[];
-            /** @description Whether this series is already in the user's library */
+            /** @description Whether this series exists in the Codex library (matched via external IDs) */
+            inCodex?: boolean;
+            /** @description Whether this series is already in the user's library (as reported by the plugin) */
             inLibrary?: boolean;
+            /**
+             * Format: int32
+             * @description Popularity ranking/count on the source service
+             */
+            popularity?: number | null;
+            /**
+             * Format: int32
+             * @description Average user rating on the source service (0-100 scale)
+             */
+            rating?: number | null;
             /** @description Human-readable reason for this recommendation */
             reason: string;
             /**
@@ -12433,10 +12445,17 @@ export interface components {
              * @description Confidence/relevance score (0.0 to 1.0)
              */
             score: number;
+            /** @description Publication status (ongoing, ended, hiatus, abandoned, unknown) */
+            status?: string | null;
             /** @description Summary/description */
             summary?: string | null;
             /** @description Title of the recommended series/book */
             title: string;
+            /**
+             * Format: int32
+             * @description Total expected number of books/volumes in the series
+             */
+            totalBookCount?: number | null;
         };
         /** @description Response from POST /api/v1/user/recommendations/refresh */
         RecommendationsRefreshResponse: {

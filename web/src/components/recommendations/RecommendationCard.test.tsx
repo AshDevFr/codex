@@ -29,13 +29,14 @@ const minimalRecommendation: RecommendationDto = {
   inLibrary: false,
 };
 
-const inLibraryRecommendation: RecommendationDto = {
+const inCodexRecommendation: RecommendationDto = {
   externalId: "42",
   title: "Hunter x Hunter",
   score: 0.92,
   reason: "Because you loved One Piece and Naruto",
   basedOn: ["One Piece", "Naruto"],
-  inLibrary: true,
+  inLibrary: false,
+  inCodex: true,
 };
 
 // =============================================================================
@@ -103,20 +104,48 @@ describe("RecommendationCard", () => {
     expect(onDismiss).toHaveBeenCalledWith("12345");
   });
 
-  it("shows In Library badge for library items", () => {
+  it("shows Available badge when inCodex is true", () => {
     renderWithProviders(
       <RecommendationCard
-        recommendation={inLibraryRecommendation}
+        recommendation={inCodexRecommendation}
         onDismiss={vi.fn()}
       />,
     );
-    expect(screen.getByText("In Library")).toBeInTheDocument();
+    expect(screen.getByText("Available")).toBeInTheDocument();
   });
 
-  it("hides Not Interested button for library items", () => {
+  it("shows In Anilist Library badge when inLibrary is true", () => {
     renderWithProviders(
       <RecommendationCard
-        recommendation={inLibraryRecommendation}
+        recommendation={{
+          ...fullRecommendation,
+          inLibrary: true,
+        }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("In Anilist Library")).toBeInTheDocument();
+  });
+
+  it("shows both badges when inCodex and inLibrary are true", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{
+          ...fullRecommendation,
+          inLibrary: true,
+          inCodex: true,
+        }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Available")).toBeInTheDocument();
+    expect(screen.getByText("In Anilist Library")).toBeInTheDocument();
+  });
+
+  it("hides Not Interested button when inCodex is true", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={inCodexRecommendation}
         onDismiss={vi.fn()}
       />,
     );
@@ -156,7 +185,7 @@ describe("RecommendationCard", () => {
     renderWithProviders(
       <RecommendationCard
         recommendation={{
-          ...inLibraryRecommendation,
+          ...inCodexRecommendation,
           codexSeriesId: "abc-123",
         }}
         onDismiss={vi.fn()}
@@ -169,5 +198,107 @@ describe("RecommendationCard", () => {
   it("does not show View in Library button when codexSeriesId is absent", () => {
     renderWithProviders(<RecommendationCard {...defaultProps} />);
     expect(screen.queryByText("View in Library")).not.toBeInTheDocument();
+  });
+
+  it("renders status badge when status is provided", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{ ...fullRecommendation, status: "ongoing" }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Ongoing")).toBeInTheDocument();
+  });
+
+  it("renders ended status with green color", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{ ...fullRecommendation, status: "ended" }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Ended")).toBeInTheDocument();
+  });
+
+  it("does not render status badge when status is unknown", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{ ...fullRecommendation, status: "unknown" }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+  });
+
+  it("does not render status badge when status is absent", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={minimalRecommendation}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Ongoing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ended")).not.toBeInTheDocument();
+  });
+
+  it("renders total book count when provided", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{ ...fullRecommendation, totalBookCount: 27 }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("27 vol")).toBeInTheDocument();
+  });
+
+  it("does not render book count when absent", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={minimalRecommendation}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/vol/)).not.toBeInTheDocument();
+  });
+
+  it("renders rating when provided", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{ ...fullRecommendation, rating: 88 }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("88%")).toBeInTheDocument();
+  });
+
+  it("does not render rating when absent", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={minimalRecommendation}
+        onDismiss={vi.fn()}
+      />,
+    );
+    // Only the match score percentage should be present, not a rating badge
+    expect(screen.queryByText("88%")).not.toBeInTheDocument();
+  });
+
+  it("renders popularity when provided", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={{ ...fullRecommendation, popularity: 234000 }}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("234,000")).toBeInTheDocument();
+  });
+
+  it("does not render popularity when absent", () => {
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={minimalRecommendation}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/234,000/)).not.toBeInTheDocument();
   });
 });

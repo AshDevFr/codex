@@ -22,6 +22,7 @@ import { seriesHandlers } from "./series";
 import { settingsHandlers } from "./settings";
 import { sharingTagsHandlers } from "./sharingTags";
 import { tasksHandlers } from "./tasks";
+import { userPluginsHandlers } from "./userPlugins";
 import { usersHandlers } from "./users";
 
 // Additional utility handlers
@@ -124,6 +125,7 @@ export const handlers = [
   ...duplicatesHandlers,
   ...pluginsHandlers,
   ...recommendationsHandlers,
+  ...userPluginsHandlers,
   ...utilityHandlers,
 ];
 
@@ -145,4 +147,5 @@ export { seriesHandlers } from "./series";
 export { settingsHandlers } from "./settings";
 export { sharingTagsHandlers } from "./sharingTags";
 export { tasksHandlers } from "./tasks";
+export { userPluginsHandlers } from "./userPlugins";
 export { usersHandlers } from "./users";

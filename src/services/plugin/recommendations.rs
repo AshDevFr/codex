@@ -19,7 +19,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::protocol::UserLibraryEntry;
+use super::protocol::{SeriesStatus, UserLibraryEntry};
 
 // =============================================================================
 // Recommendation Request
@@ -98,6 +98,19 @@ pub struct Recommendation {
     /// Whether this series is already in the user's library
     #[serde(default)]
     pub in_library: bool,
+
+    /// Publication status of the series (ongoing, ended, hiatus, abandoned, unknown)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<SeriesStatus>,
+    /// Total expected number of books/volumes in the series
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_book_count: Option<i32>,
+    /// Average user rating on the source service (0-100 scale)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rating: Option<i32>,
+    /// Popularity ranking/count on the source service
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub popularity: Option<i32>,
 }
 
 // =============================================================================
@@ -283,6 +296,10 @@ mod tests {
                 based_on: vec!["Berserk".to_string()],
                 codex_series_id: None,
                 in_library: false,
+                status: Some(SeriesStatus::Ongoing),
+                total_book_count: Some(27),
+                rating: Some(85),
+                popularity: Some(120000),
             }],
             generated_at: Some("2026-02-06T12:00:00Z".to_string()),
             cached: false,
@@ -291,6 +308,10 @@ mod tests {
         assert_eq!(json["recommendations"].as_array().unwrap().len(), 1);
         assert_eq!(json["recommendations"][0]["title"], "Vinland Saga");
         assert_eq!(json["recommendations"][0]["score"], 0.95);
+        assert_eq!(json["recommendations"][0]["status"], "ongoing");
+        assert_eq!(json["recommendations"][0]["totalBookCount"], 27);
+        assert_eq!(json["recommendations"][0]["rating"], 85);
+        assert_eq!(json["recommendations"][0]["popularity"], 120000);
         assert_eq!(json["generatedAt"], "2026-02-06T12:00:00Z");
         assert!(!json["cached"].as_bool().unwrap());
     }
@@ -336,6 +357,10 @@ mod tests {
             based_on: vec!["Death Note".to_string(), "20th Century Boys".to_string()],
             codex_series_id: Some("codex-uuid-123".to_string()),
             in_library: true,
+            status: Some(SeriesStatus::Ended),
+            total_book_count: Some(18),
+            rating: Some(92),
+            popularity: Some(85000),
         };
         let json = serde_json::to_value(&rec).unwrap();
         assert_eq!(json["externalId"], "54321");
@@ -352,6 +377,10 @@ mod tests {
         assert_eq!(json["basedOn"].as_array().unwrap().len(), 2);
         assert_eq!(json["codexSeriesId"], "codex-uuid-123");
         assert!(json["inLibrary"].as_bool().unwrap());
+        assert_eq!(json["status"], "ended");
+        assert_eq!(json["totalBookCount"], 18);
+        assert_eq!(json["rating"], 92);
+        assert_eq!(json["popularity"], 85000);
     }
 
     #[test]
@@ -374,6 +403,10 @@ mod tests {
         assert!(rec.based_on.is_empty());
         assert!(rec.codex_series_id.is_none());
         assert!(!rec.in_library);
+        assert!(rec.status.is_none());
+        assert!(rec.total_book_count.is_none());
+        assert!(rec.rating.is_none());
+        assert!(rec.popularity.is_none());
     }
 
     #[test]
@@ -390,6 +423,10 @@ mod tests {
             based_on: vec![],
             codex_series_id: None,
             in_library: false,
+            status: None,
+            total_book_count: None,
+            rating: None,
+            popularity: None,
         };
         let json = serde_json::to_value(&rec).unwrap();
         let obj = json.as_object().unwrap();
@@ -399,6 +436,10 @@ mod tests {
         assert!(!obj.contains_key("genres"));
         assert!(!obj.contains_key("basedOn"));
         assert!(!obj.contains_key("codexSeriesId"));
+        assert!(!obj.contains_key("status"));
+        assert!(!obj.contains_key("totalBookCount"));
+        assert!(!obj.contains_key("rating"));
+        assert!(!obj.contains_key("popularity"));
     }
 
     // =========================================================================

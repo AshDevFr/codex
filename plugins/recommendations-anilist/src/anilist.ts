@@ -49,7 +49,10 @@ const MEDIA_RECOMMENDATIONS_QUERY = `
             description(asHtml: false)
             genres
             averageScore
+            popularity
             siteUrl
+            status
+            volumes
           }
         }
       }
@@ -89,6 +92,14 @@ const USER_MANGA_IDS_QUERY = `
 // Types
 // =============================================================================
 
+/** AniList media status values */
+export type AniListMediaStatus =
+  | "FINISHED"
+  | "RELEASING"
+  | "NOT_YET_RELEASED"
+  | "CANCELLED"
+  | "HIATUS";
+
 export interface AniListRecommendationNode {
   rating: number;
   mediaRecommendation: {
@@ -98,7 +109,10 @@ export interface AniListRecommendationNode {
     description: string | null;
     genres: string[];
     averageScore: number | null;
+    popularity: number | null;
     siteUrl: string;
+    status: AniListMediaStatus | null;
+    volumes: number | null;
   } | null;
 }
 

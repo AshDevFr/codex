@@ -1,5 +1,5 @@
-import { Badge, Box, Image, Stack, Text, Tooltip } from "@mantine/core";
-import { IconCheck } from "@tabler/icons-react";
+import { Badge, Box, Group, Image, Stack, Text, Tooltip } from "@mantine/core";
+import { IconCheck, IconStar, IconTrendingUp } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 import type { RecommendationDto } from "@/api/recommendations";
 
@@ -18,6 +18,9 @@ export function RecommendationCompactCard({
     externalUrl,
     inLibrary,
     codexSeriesId,
+    inCodex,
+    rating,
+    popularity,
   } = recommendation;
 
   const scorePercent = `${Math.round(score * 100)}%`;
@@ -84,8 +87,8 @@ export function RecommendationCompactCard({
           {scorePercent}
         </Badge>
 
-        {/* In library indicator */}
-        {inLibrary && (
+        {/* Library indicator — prioritize Codex over AniList */}
+        {inCodex ? (
           <Badge
             size="xs"
             color="green"
@@ -97,19 +100,57 @@ export function RecommendationCompactCard({
               right: 4,
             }}
           >
-            Owned
+            Available
           </Badge>
-        )}
+        ) : inLibrary ? (
+          <Badge
+            size="xs"
+            color="blue"
+            variant="filled"
+            leftSection={<IconCheck size={10} />}
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+            }}
+          >
+            In Anilist Library
+          </Badge>
+        ) : null}
       </Box>
 
       {/* Content area */}
-      <Box h="3.5rem">
+      <Box>
         <Text size="sm" fw={600} lineClamp={1}>
           {title}
         </Text>
         <Text size="xs" c="dimmed" lineClamp={1}>
           {reason}
         </Text>
+        {(rating != null || popularity != null) && (
+          <Group gap={6} mt={2}>
+            {rating != null && (
+              <Badge
+                size="xs"
+                variant="light"
+                color="yellow"
+                leftSection={<IconStar size={8} />}
+              >
+                {rating}%
+              </Badge>
+            )}
+            {popularity != null && (
+              <Badge
+                size="xs"
+                variant="light"
+                color="grape"
+                leftSection={<IconTrendingUp size={8} />}
+              >
+                {popularity.toLocaleString()}
+              </Badge>
+            )}
+          </Group>
+        )}
       </Box>
     </Stack>
   );

@@ -17,6 +17,8 @@
  * @see src/services/plugin/recommendations.rs in the Codex backend
  */
 
+import type { SeriesStatus } from "./protocol.js";
+
 // =============================================================================
 // UserLibraryEntry (matches Rust UserLibraryEntry in protocol.rs)
 // =============================================================================
@@ -97,6 +99,14 @@ export interface Recommendation {
   codexSeriesId?: string;
   /** Whether this series is already in the user's library */
   inLibrary: boolean;
+  /** Publication status (ongoing, ended, hiatus, abandoned, unknown) */
+  status?: SeriesStatus;
+  /** Total expected number of books/volumes in the series */
+  totalBookCount?: number;
+  /** Average user rating on the source service (0-100 scale) */
+  rating?: number;
+  /** Popularity ranking/count on the source service */
+  popularity?: number;
 }
 
 /** Response from `recommendations/get` method */

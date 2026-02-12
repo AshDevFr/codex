@@ -23,10 +23,12 @@ import {
   type RecommendationProvider,
   type RecommendationRequest,
   type RecommendationResponse,
+  type SeriesStatus,
   type UserLibraryEntry,
 } from "@ashdev/codex-plugin-sdk";
 import {
   AniListRecommendationClient,
+  type AniListMediaStatus,
   type AniListRecommendationNode,
   getBestTitle,
   stripHtml,
@@ -163,6 +165,28 @@ export function pickSeedEntries(entries: UserLibraryEntry[], maxSeeds: number): 
 }
 
 /**
+ * Map AniList media status to Codex SeriesStatus.
+ * AniList values: FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED, HIATUS
+ */
+export function mapAniListStatus(status: AniListMediaStatus | null): SeriesStatus | undefined {
+  if (!status) return undefined;
+  switch (status) {
+    case "RELEASING":
+      return "ongoing";
+    case "FINISHED":
+      return "ended";
+    case "HIATUS":
+      return "hiatus";
+    case "CANCELLED":
+      return "abandoned";
+    case "NOT_YET_RELEASED":
+      return "unknown";
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Convert AniList recommendation nodes into Recommendation objects.
  */
 export function convertRecommendations(
@@ -189,6 +213,9 @@ export function convertRecommendations(
     const avgScore = media.averageScore ? media.averageScore / 100 : 0.5;
     const score = Math.round((communityScore * 0.6 + avgScore * 0.4) * 100) / 100;
 
+    const status = mapAniListStatus(media.status);
+    const totalBookCount = media.volumes ?? undefined;
+
     results.push({
       externalId,
       externalUrl: media.siteUrl,
@@ -200,6 +227,10 @@ export function convertRecommendations(
       reason: `Recommended because you liked ${basedOnTitle}`,
       basedOn: [basedOnTitle],
       inLibrary,
+      status,
+      totalBookCount,
+      rating: media.averageScore ?? undefined,
+      popularity: media.popularity ?? undefined,
     });
   }
 

@@ -9,9 +9,12 @@ import {
   Text,
 } from "@mantine/core";
 import {
+  IconBook,
   IconCheck,
   IconExternalLink,
   IconLibrary,
+  IconStar,
+  IconTrendingUp,
   IconX,
 } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
@@ -24,6 +27,25 @@ import type { RecommendationDto } from "@/api/recommendations";
 /** Format a score (0.0-1.0) as a percentage */
 function formatScore(score: number): string {
   return `${Math.round(score * 100)}%`;
+}
+
+/** Capitalize a status string (e.g., "ongoing" → "Ongoing") */
+function formatStatus(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+/** Get badge color for a series status */
+function statusColor(status: string): string {
+  switch (status) {
+    case "ended":
+      return "green";
+    case "hiatus":
+      return "yellow";
+    case "abandoned":
+      return "red";
+    default:
+      return "blue";
+  }
 }
 
 // =============================================================================
@@ -53,6 +75,11 @@ export function RecommendationCard({
     basedOn = [],
     inLibrary,
     codexSeriesId,
+    inCodex,
+    status,
+    totalBookCount,
+    rating,
+    popularity,
   } = recommendation;
 
   return (
@@ -107,19 +134,67 @@ export function RecommendationCard({
                   </a>
                 )}
               </Group>
-              <Text size="sm" fw={500} c="yellow.7">
-                {formatScore(score)} match
-              </Text>
+              <Group gap="xs" mt={2}>
+                <Text size="sm" fw={500} c="yellow.7">
+                  {formatScore(score)} match
+                </Text>
+                {status && status !== "unknown" && (
+                  <Badge size="xs" variant="filled" color={statusColor(status)}>
+                    {formatStatus(status)}
+                  </Badge>
+                )}
+                {totalBookCount != null && (
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color="gray"
+                    leftSection={<IconBook size={10} />}
+                  >
+                    {totalBookCount} vol
+                  </Badge>
+                )}
+                {rating != null && (
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color="yellow"
+                    leftSection={<IconStar size={10} />}
+                  >
+                    {rating}%
+                  </Badge>
+                )}
+                {popularity != null && (
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color="grape"
+                    leftSection={<IconTrendingUp size={10} />}
+                  >
+                    {popularity.toLocaleString()}
+                  </Badge>
+                )}
+              </Group>
             </Box>
-            {inLibrary && (
-              <Badge
-                color="green"
-                variant="light"
-                leftSection={<IconCheck size={12} />}
-              >
-                In Library
-              </Badge>
-            )}
+            <Group gap={4}>
+              {inCodex && (
+                <Badge
+                  color="green"
+                  variant="light"
+                  leftSection={<IconCheck size={12} />}
+                >
+                  Available
+                </Badge>
+              )}
+              {inLibrary && (
+                <Badge
+                  color="blue"
+                  variant="light"
+                  leftSection={<IconCheck size={12} />}
+                >
+                  In Anilist Library
+                </Badge>
+              )}
+            </Group>
           </Group>
 
           {/* Reason */}
@@ -171,7 +246,7 @@ export function RecommendationCard({
                 View in Library
               </Button>
             )}
-            {!inLibrary && (
+            {!inCodex && (
               <Button
                 size="xs"
                 variant="subtle"

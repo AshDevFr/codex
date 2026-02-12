@@ -4,6 +4,7 @@ import type { AniListRecommendationNode } from "./anilist.js";
 import {
   convertRecommendations,
   dismissedIds,
+  mapAniListStatus,
   pickSeedEntries,
   resolveAniListIds,
   setClient,
@@ -37,6 +38,13 @@ function makeNode(
     description: string | null;
     siteUrl: string;
     coverImage: string | null;
+    popularity: number | null;
+    status: AniListRecommendationNode["mediaRecommendation"] extends infer T
+      ? T extends { status: infer S }
+        ? S
+        : never
+      : never;
+    volumes: number | null;
     mediaRecommendation: AniListRecommendationNode["mediaRecommendation"];
   }>,
 ): AniListRecommendationNode {
@@ -58,7 +66,10 @@ function makeNode(
       description: "description" in overrides ? (overrides.description ?? null) : "A great manga",
       genres: overrides.genres ?? ["Action"],
       averageScore: "averageScore" in overrides ? (overrides.averageScore ?? null) : 80,
+      popularity: "popularity" in overrides ? (overrides.popularity ?? null) : 5000,
       siteUrl: overrides.siteUrl ?? `https://anilist.co/manga/${overrides.id ?? 100}`,
+      status: "status" in overrides ? (overrides.status ?? null) : null,
+      volumes: "volumes" in overrides ? (overrides.volumes ?? null) : null,
     },
   };
 }
@@ -272,6 +283,102 @@ describe("convertRecommendations", () => {
     const nodes = [makeNode({ id: 1, rating: 50, description: null })];
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
     expect(results[0].summary).toBeUndefined();
+  });
+
+  it("maps RELEASING status to ongoing", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, status: "RELEASING" })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].status).toBe("ongoing");
+  });
+
+  it("maps FINISHED status to ended", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, status: "FINISHED" })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].status).toBe("ended");
+  });
+
+  it("maps HIATUS status to hiatus", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, status: "HIATUS" })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].status).toBe("hiatus");
+  });
+
+  it("maps CANCELLED status to abandoned", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, status: "CANCELLED" })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].status).toBe("abandoned");
+  });
+
+  it("leaves status undefined when null", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, status: null })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].status).toBeUndefined();
+  });
+
+  it("includes totalBookCount from volumes", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, volumes: 27 })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalBookCount).toBe(27);
+  });
+
+  it("leaves totalBookCount undefined when volumes is null", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, volumes: null })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalBookCount).toBeUndefined();
+  });
+
+  it("includes rating from AniList averageScore", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, averageScore: 85 })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].rating).toBe(85);
+  });
+
+  it("leaves rating undefined when averageScore is null", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, averageScore: null })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].rating).toBeUndefined();
+  });
+
+  it("includes popularity from AniList", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, popularity: 120000 })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].popularity).toBe(120000);
+  });
+
+  it("leaves popularity undefined when null", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, popularity: null })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].popularity).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// mapAniListStatus Tests
+// =============================================================================
+
+describe("mapAniListStatus", () => {
+  it("maps RELEASING to ongoing", () => {
+    expect(mapAniListStatus("RELEASING")).toBe("ongoing");
+  });
+
+  it("maps FINISHED to ended", () => {
+    expect(mapAniListStatus("FINISHED")).toBe("ended");
+  });
+
+  it("maps HIATUS to hiatus", () => {
+    expect(mapAniListStatus("HIATUS")).toBe("hiatus");
+  });
+
+  it("maps CANCELLED to abandoned", () => {
+    expect(mapAniListStatus("CANCELLED")).toBe("abandoned");
+  });
+
+  it("maps NOT_YET_RELEASED to unknown", () => {
+    expect(mapAniListStatus("NOT_YET_RELEASED")).toBe("unknown");
+  });
+
+  it("returns undefined for null", () => {
+    expect(mapAniListStatus(null)).toBeUndefined();
   });
 });
 

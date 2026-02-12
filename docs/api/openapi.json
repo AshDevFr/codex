@@ -27937,9 +27937,29 @@
             },
             "description": "Genres"
           },
+          "inCodex": {
+            "type": "boolean",
+            "description": "Whether this series exists in the Codex library (matched via external IDs)"
+          },
           "inLibrary": {
             "type": "boolean",
-            "description": "Whether this series is already in the user's library"
+            "description": "Whether this series is already in the user's library (as reported by the plugin)"
+          },
+          "popularity": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Popularity ranking/count on the source service"
+          },
+          "rating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Average user rating on the source service (0-100 scale)"
           },
           "reason": {
             "type": "string",
@@ -27949,6 +27969,13 @@
             "type": "number",
             "format": "double",
             "description": "Confidence/relevance score (0.0 to 1.0)"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publication status (ongoing, ended, hiatus, abandoned, unknown)"
           },
           "summary": {
             "type": [
@@ -27960,6 +27987,14 @@
           "title": {
             "type": "string",
             "description": "Title of the recommended series/book"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total expected number of books/volumes in the series"
           }
         }
       },
