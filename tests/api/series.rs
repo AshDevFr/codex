@@ -1806,6 +1806,57 @@ async fn test_download_series_without_auth() {
 }
 
 #[tokio::test]
+async fn test_download_series_with_cookie_auth() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library_path = temp_dir.path().join("library");
+    std::fs::create_dir_all(&library_path).unwrap();
+
+    let library = LibraryRepository::create(
+        &db,
+        "Library",
+        library_path.to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book_path = library_path.join("book1.cbz");
+    create_test_cbz(&book_path, 3);
+
+    let book = create_test_book(
+        series.id,
+        library.id,
+        book_path.to_str().unwrap(),
+        "book1.cbz",
+        Some("Book 1"),
+    );
+    let _book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Use cookie-based auth instead of Authorization header (simulates browser <a href> download)
+    let request =
+        get_request_with_cookie(&format!("/api/v1/series/{}/download", series.id), &token);
+    let (status, body) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(!body.is_empty());
+
+    use std::io::Cursor;
+    let reader = Cursor::new(&body);
+    let mut archive = zip::ZipArchive::new(reader).unwrap();
+    assert_eq!(archive.len(), 1);
+    assert_eq!(archive.by_index(0).unwrap().name(), "book1.cbz");
+}
+
+#[tokio::test]
 async fn test_download_series_skips_missing_files() {
     let (db, temp_dir) = setup_test_db().await;
 

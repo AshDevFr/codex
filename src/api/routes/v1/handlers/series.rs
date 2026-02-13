@@ -2315,7 +2315,7 @@ pub async fn mark_series_as_unread(
 )]
 pub async fn download_series(
     State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
     Path(series_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;

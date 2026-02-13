@@ -334,6 +334,16 @@ pub fn get_request_with_api_key(uri: &str, api_key: &str) -> Request<String> {
         .unwrap()
 }
 
+/// Helper to create a GET request with auth_token cookie
+pub fn get_request_with_cookie(uri: &str, token: &str) -> Request<String> {
+    Request::builder()
+        .method("GET")
+        .uri(uri)
+        .header("Cookie", format!("auth_token={}", token))
+        .body(String::new())
+        .unwrap()
+}
+
 /// Helper to create a POST request (no auth)
 pub fn post_request(uri: &str) -> Request<String> {
     Request::builder()
