@@ -55,6 +55,8 @@ pub enum SeriesSortFieldRepo {
     ReleaseDate,
     /// Sort by last read date (requires user_id)
     DateRead,
+    /// Sort by number of books in the series
+    BookCount,
 }
 
 /// Result type for series with aggregated data (used for date_read sorting)
@@ -75,6 +77,37 @@ pub struct SeriesWithAggregates {
 
 impl From<SeriesWithAggregates> for series::Model {
     fn from(s: SeriesWithAggregates) -> Self {
+        series::Model {
+            id: s.id,
+            library_id: s.library_id,
+            fingerprint: s.fingerprint,
+            path: s.path,
+            name: s.name,
+            normalized_name: s.normalized_name,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+        }
+    }
+}
+
+/// Result type for series with book count aggregate (used for book_count sorting)
+#[derive(Debug, FromQueryResult)]
+pub struct SeriesWithBookCount {
+    pub id: Uuid,
+    pub library_id: Uuid,
+    pub fingerprint: Option<String>,
+    pub path: String,
+    pub name: String,
+    pub normalized_name: String,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
+    /// Aggregated book count - used for SQL ORDER BY mapping
+    #[allow(dead_code)]
+    pub book_count: i64,
+}
+
+impl From<SeriesWithBookCount> for series::Model {
+    fn from(s: SeriesWithBookCount) -> Self {
         series::Model {
             id: s.id,
             library_id: s.library_id,
@@ -112,6 +145,11 @@ impl SeriesRepository {
             && let Some(user_id) = options.user_id
         {
             return Self::query_with_date_read_sort(db, options, user_id, order).await;
+        }
+
+        // Handle BookCount sort separately as it requires GROUP BY aggregation
+        if matches!(sort_field, Some(SeriesSortFieldRepo::BookCount)) {
+            return Self::query_with_book_count_sort(db, options, order).await;
         }
 
         let mut query =
@@ -164,7 +202,7 @@ impl SeriesRepository {
             Some(SeriesSortFieldRepo::ReleaseDate) => {
                 query.order_by(series_metadata::Column::Year, order)
             }
-            Some(SeriesSortFieldRepo::DateRead) => {
+            Some(SeriesSortFieldRepo::DateRead) | Some(SeriesSortFieldRepo::BookCount) => {
                 // Fallback: shouldn't reach here, handled above
                 query.order_by(series::Column::UpdatedAt, order)
             }
@@ -275,6 +313,92 @@ impl SeriesRepository {
             .all(db)
             .await
             .context("Failed to query series with date_read sort")?;
+
+        // Convert to series::Model
+        let series_models: Vec<series::Model> = series_list.into_iter().map(|s| s.into()).collect();
+
+        Ok((series_models, total))
+    }
+
+    /// Query series with BookCount sort (requires GROUP BY aggregation)
+    async fn query_with_book_count_sort(
+        db: &DatabaseConnection,
+        options: SeriesQueryOptions<'_>,
+        order: Order,
+    ) -> Result<(Vec<series::Model>, u64)> {
+        let mut query = Series::find()
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            .join(JoinType::LeftJoin, series::Relation::Books.def());
+
+        // Apply filters
+        if let Some(library_id) = options.library_id {
+            query = query.filter(series::Column::LibraryId.eq(library_id));
+        }
+
+        // Handle text search
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            let lower_title = Func::lower(Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::Title,
+            )));
+            query = query.filter(Expr::expr(lower_title).like(&pattern));
+        }
+
+        // Get total count (before aggregation)
+        let count_query =
+            Series::find().join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
+
+        let mut count_query = if let Some(library_id) = options.library_id {
+            count_query.filter(series::Column::LibraryId.eq(library_id))
+        } else {
+            count_query
+        };
+
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            let lower_title = Func::lower(Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::Title,
+            )));
+            count_query = count_query.filter(Expr::expr(lower_title).like(&pattern));
+        }
+
+        let total = count_query
+            .select_only()
+            .column(series::Column::Id)
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count series")?;
+
+        // Add aggregation for book_count sort
+        let series_list: Vec<SeriesWithBookCount> = query
+            .select_only()
+            .column(series::Column::Id)
+            .column(series::Column::LibraryId)
+            .column(series::Column::Fingerprint)
+            .column(series::Column::Path)
+            .column(series::Column::Name)
+            .column(series::Column::NormalizedName)
+            .column(series::Column::CreatedAt)
+            .column(series::Column::UpdatedAt)
+            .column_as(
+                Expr::col((books::Entity, books::Column::Id)).count(),
+                "book_count",
+            )
+            .group_by(series::Column::Id)
+            .order_by(Expr::col(Alias::new("book_count")), order)
+            .offset(options.page * options.page_size)
+            .limit(options.page_size)
+            .into_model::<SeriesWithBookCount>()
+            .all(db)
+            .await
+            .context("Failed to query series with book_count sort")?;
 
         // Convert to series::Model
         let series_models: Vec<series::Model> = series_list.into_iter().map(|s| s.into()).collect();
@@ -620,17 +744,23 @@ impl SeriesRepository {
                     .context("Failed to list series with release date sort")
             }
             SeriesSortField::BookCount => {
-                // Dynamic book count - join with books and count
-                // For now, order by series.id as a fallback (book count will be computed dynamically)
-                // TODO: Consider adding a computed/virtual column or subquery for book count sorting
-                Series::find()
+                let results = Series::find()
                     .filter(series::Column::LibraryId.eq(library_id))
-                    .order_by(series::Column::CreatedAt, order)
+                    .join(JoinType::LeftJoin, series::Relation::Books.def())
+                    .column_as(
+                        Expr::col((books::Entity, books::Column::Id)).count(),
+                        "book_count",
+                    )
+                    .group_by(series::Column::Id)
+                    .order_by(Expr::col(Alias::new("book_count")), order)
                     .offset(offset)
                     .limit(limit)
+                    .into_model::<SeriesWithBookCount>()
                     .all(db)
                     .await
-                    .context("Failed to list series with book count sort")
+                    .context("Failed to list series with book count sort")?;
+
+                Ok(results.into_iter().map(Into::into).collect())
             }
             _ => {
                 // Simple sorts that may use metadata for name sort
@@ -744,16 +874,23 @@ impl SeriesRepository {
                     .context("Failed to list series by IDs with release date sort")?
             }
             SeriesSortField::BookCount => {
-                // TODO: Implement proper book count sorting with subquery
-                // For now, fall back to created_at
-                Series::find()
+                let results = Series::find()
                     .filter(base_condition)
-                    .order_by(series::Column::CreatedAt, order)
+                    .join(JoinType::LeftJoin, series::Relation::Books.def())
+                    .column_as(
+                        Expr::col((books::Entity, books::Column::Id)).count(),
+                        "book_count",
+                    )
+                    .group_by(series::Column::Id)
+                    .order_by(Expr::col(Alias::new("book_count")), order)
                     .offset(offset)
                     .limit(limit)
+                    .into_model::<SeriesWithBookCount>()
                     .all(db)
                     .await
-                    .context("Failed to list series by IDs with book count sort")?
+                    .context("Failed to list series by IDs with book count sort")?;
+
+                results.into_iter().map(Into::into).collect()
             }
             SeriesSortField::DateRead => {
                 // User-specific sort - requires user_id

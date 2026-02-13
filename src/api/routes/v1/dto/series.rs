@@ -127,7 +127,7 @@ impl SeriesSortParam {
 
     /// Check if this sort requires aggregation from books table
     pub fn requires_aggregation(&self) -> bool {
-        false
+        matches!(self.field, SeriesSortField::BookCount)
     }
 }
 

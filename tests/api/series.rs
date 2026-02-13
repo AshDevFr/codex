@@ -334,6 +334,144 @@ async fn test_list_library_series_sort_by_release_date() {
 }
 
 #[tokio::test]
+async fn test_list_library_series_sort_by_book_count_asc() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 3 series with different numbers of books
+    let series1 = SeriesRepository::create(&db, library.id, "Many Books", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Few Books", None)
+        .await
+        .unwrap();
+    let _series3 = SeriesRepository::create(&db, library.id, "No Books", None)
+        .await
+        .unwrap();
+
+    // Add 3 books to series1
+    for i in 0..3 {
+        let book = create_test_book(
+            series1.id,
+            library.id,
+            &format!("/lib/many/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            None,
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    // Add 1 book to series2
+    let book = create_test_book(
+        series2.id,
+        library.id,
+        "/lib/few/book0.cbz",
+        "book0.cbz",
+        None,
+    );
+    BookRepository::create(&db, &book, None).await.unwrap();
+
+    // series3 has 0 books
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Sort by book_count ascending (fewest first)
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=book_count,asc",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    assert_eq!(series_list.data[0].title, "No Books"); // 0 books
+    assert_eq!(series_list.data[0].book_count, 0);
+    assert_eq!(series_list.data[1].title, "Few Books"); // 1 book
+    assert_eq!(series_list.data[1].book_count, 1);
+    assert_eq!(series_list.data[2].title, "Many Books"); // 3 books
+    assert_eq!(series_list.data[2].book_count, 3);
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_book_count_desc() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 3 series with different numbers of books
+    let series1 = SeriesRepository::create(&db, library.id, "Many Books", None)
+        .await
+        .unwrap();
+    let series2 = SeriesRepository::create(&db, library.id, "Few Books", None)
+        .await
+        .unwrap();
+    let _series3 = SeriesRepository::create(&db, library.id, "No Books", None)
+        .await
+        .unwrap();
+
+    // Add 3 books to series1
+    for i in 0..3 {
+        let book = create_test_book(
+            series1.id,
+            library.id,
+            &format!("/lib/many/book{}.cbz", i),
+            &format!("book{}.cbz", i),
+            None,
+        );
+        BookRepository::create(&db, &book, None).await.unwrap();
+    }
+
+    // Add 1 book to series2
+    let book = create_test_book(
+        series2.id,
+        library.id,
+        "/lib/few/book0.cbz",
+        "book0.cbz",
+        None,
+    );
+    BookRepository::create(&db, &book, None).await.unwrap();
+
+    // series3 has 0 books
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Sort by book_count descending (most first)
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=book_count,desc",
+            library.id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    assert_eq!(series_list.data[0].title, "Many Books"); // 3 books
+    assert_eq!(series_list.data[0].book_count, 3);
+    assert_eq!(series_list.data[1].title, "Few Books"); // 1 book
+    assert_eq!(series_list.data[1].book_count, 1);
+    assert_eq!(series_list.data[2].title, "No Books"); // 0 books
+    assert_eq!(series_list.data[2].book_count, 0);
+}
+
+#[tokio::test]
 async fn test_list_library_series_sort_with_pagination() {
     let (db, _temp_dir) = setup_test_db().await;
 
