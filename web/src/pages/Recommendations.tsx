@@ -4,6 +4,7 @@ import {
   Button,
   Group,
   Loader,
+  SimpleGrid,
   Stack,
   Text,
   Title,
@@ -256,17 +257,19 @@ export function Recommendations() {
         )}
 
         {/* Recommendation cards */}
-        {recommendations.map((rec) => (
-          <RecommendationCard
-            key={rec.externalId}
-            recommendation={rec}
-            onDismiss={(id) => dismissMutation.mutate(id)}
-            dismissing={
-              dismissMutation.isPending &&
-              dismissMutation.variables === rec.externalId
-            }
-          />
-        ))}
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+          {recommendations.map((rec) => (
+            <RecommendationCard
+              key={rec.externalId}
+              recommendation={rec}
+              onDismiss={(id) => dismissMutation.mutate(id)}
+              dismissing={
+                dismissMutation.isPending &&
+                dismissMutation.variables === rec.externalId
+              }
+            />
+          ))}
+        </SimpleGrid>
       </Stack>
     </Box>
   );
