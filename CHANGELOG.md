@@ -2,6 +2,21 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.6] - 2026-02-13
+
+### 🚀 Features
+
+- *(plugins)* Add searchURITemplate to plugin manifests with external search link in metadata modal
+- *(ui)* Add dynamic document titles to series, book, reader, and search pages
+- *(ui)* Add collapsible overflow for tags and alternate titles on series detail page
+- *(api)* Add sort by rating for series (user, community, external)
+
+### 🐛 Bug Fixes
+
+- *(scheduler)* Normalize 5-part cron expressions for tokio-cron-scheduler compatibility
+- *(recommendations)* Filter local series, populate exclude_ids, and add polling fallback
+- *(api)* Implement book count sorting for series queries
+
 ## [1.10.5] - 2026-02-12
 
 ### 🚀 Features
