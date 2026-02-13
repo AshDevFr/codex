@@ -1,4 +1,5 @@
 import { Badge, Group, Text } from "@mantine/core";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Genre } from "@/api/genres";
 import type { Tag } from "@/api/tags";
@@ -18,6 +19,7 @@ export function GenreTagChips({
   clickable = true,
   maxDisplay,
 }: GenreTagChipsProps) {
+  const [expanded, setExpanded] = useState(false);
   const basePath = libraryId ? `/libraries/${libraryId}` : "/libraries/all";
 
   const getGenreUrl = (genre: Genre) =>
@@ -26,12 +28,17 @@ export function GenreTagChips({
   const getTagUrl = (tag: Tag) =>
     `${basePath}/series?tf=any:${encodeURIComponent(tag.name)}`;
 
-  const displayGenres = maxDisplay ? genres.slice(0, maxDisplay) : genres;
-  const displayTags = maxDisplay
+  const totalCount = genres.length + tags.length;
+  const shouldCollapse = maxDisplay != null && totalCount > maxDisplay;
+  const isCollapsed = shouldCollapse && !expanded;
+
+  const displayGenres = isCollapsed ? genres.slice(0, maxDisplay) : genres;
+  const displayTags = isCollapsed
     ? tags.slice(0, Math.max(0, maxDisplay - genres.length))
     : tags;
-  const hiddenCount =
-    genres.length + tags.length - displayGenres.length - displayTags.length;
+  const hiddenCount = isCollapsed
+    ? totalCount - displayGenres.length - displayTags.length
+    : 0;
 
   if (genres.length === 0 && tags.length === 0) {
     return null;
@@ -83,8 +90,23 @@ export function GenreTagChips({
         ),
       )}
       {hiddenCount > 0 && (
-        <Text size="xs" c="dimmed">
+        <Text
+          size="xs"
+          c="dimmed"
+          style={{ cursor: "pointer" }}
+          onClick={() => setExpanded(true)}
+        >
           +{hiddenCount} more
+        </Text>
+      )}
+      {expanded && shouldCollapse && (
+        <Text
+          size="xs"
+          c="dimmed"
+          style={{ cursor: "pointer" }}
+          onClick={() => setExpanded(false)}
+        >
+          Show less
         </Text>
       )}
     </Group>

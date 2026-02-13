@@ -1,5 +1,9 @@
 import { Group, List, Text } from "@mantine/core";
+import { useState } from "react";
 import type { AlternateTitle } from "@/api/seriesMetadata";
+
+/** Labels that are always shown when in compact mode */
+const PRIORITY_LABELS = new Set(["en", "english", "native", "romaji"]);
 
 interface AlternateTitlesProps {
   titles: AlternateTitle[];
@@ -7,15 +11,26 @@ interface AlternateTitlesProps {
 }
 
 export function AlternateTitles({ titles, compact }: AlternateTitlesProps) {
+  const [expanded, setExpanded] = useState(false);
+
   if (titles.length === 0) {
     return null;
   }
 
-  // Compact mode: inline display like Komga
+  // Compact mode: inline display like Komga, with collapsible overflow
   if (compact) {
+    const priorityTitles = titles.filter((t) =>
+      PRIORITY_LABELS.has(t.label.toLowerCase()),
+    );
+    const otherTitles = titles.filter(
+      (t) => !PRIORITY_LABELS.has(t.label.toLowerCase()),
+    );
+    const displayTitles = expanded ? titles : priorityTitles;
+    const hiddenCount = otherTitles.length;
+
     return (
       <Group gap="md">
-        {titles.map((title) => (
+        {displayTitles.map((title) => (
           <Text key={title.id} size="xs" c="dimmed">
             <Text component="span" tt="uppercase" fw={500}>
               {title.label}
@@ -23,6 +38,26 @@ export function AlternateTitles({ titles, compact }: AlternateTitlesProps) {
             {title.title}
           </Text>
         ))}
+        {!expanded && hiddenCount > 0 && (
+          <Text
+            size="xs"
+            c="dimmed"
+            style={{ cursor: "pointer" }}
+            onClick={() => setExpanded(true)}
+          >
+            +{hiddenCount} more
+          </Text>
+        )}
+        {expanded && hiddenCount > 0 && (
+          <Text
+            size="xs"
+            c="dimmed"
+            style={{ cursor: "pointer" }}
+            onClick={() => setExpanded(false)}
+          >
+            Show less
+          </Text>
+        )}
       </Group>
     );
   }

@@ -806,6 +806,7 @@ export function SeriesDetail() {
               <GenreTagChips
                 genres={series.genres}
                 libraryId={series.libraryId}
+                maxDisplay={8}
               />
             </Group>
           )}
@@ -816,7 +817,11 @@ export function SeriesDetail() {
               <Text size="sm" c="dimmed" w={100}>
                 TAGS
               </Text>
-              <GenreTagChips tags={series.tags} libraryId={series.libraryId} />
+              <GenreTagChips
+                tags={series.tags}
+                libraryId={series.libraryId}
+                maxDisplay={8}
+              />
             </Group>
           )}
 

@@ -216,4 +216,49 @@ describe("GenreTagChips", () => {
       "/libraries/all/series?gf=any:Adventure",
     );
   });
+
+  it("should expand collapsed items when clicking '+X more'", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <GenreTagChips genres={mockGenres} tags={mockTags} maxDisplay={3} />,
+    );
+
+    // Initially collapsed: tags should be hidden
+    expect(screen.queryByText("Favorite")).not.toBeInTheDocument();
+    expect(screen.getByText("+2 more")).toBeInTheDocument();
+
+    // Click to expand
+    await user.click(screen.getByText("+2 more"));
+
+    // All items should now be visible
+    expect(screen.getByText("Action")).toBeInTheDocument();
+    expect(screen.getByText("Adventure")).toBeInTheDocument();
+    expect(screen.getByText("Comedy")).toBeInTheDocument();
+    expect(screen.getByText("Favorite")).toBeInTheDocument();
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+
+    // "+2 more" should be gone, "Show less" should appear
+    expect(screen.queryByText("+2 more")).not.toBeInTheDocument();
+    expect(screen.getByText("Show less")).toBeInTheDocument();
+  });
+
+  it("should collapse expanded items when clicking 'Show less'", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(
+      <GenreTagChips genres={mockGenres} tags={mockTags} maxDisplay={3} />,
+    );
+
+    // Expand first
+    await user.click(screen.getByText("+2 more"));
+    expect(screen.getByText("Favorite")).toBeInTheDocument();
+
+    // Click to collapse
+    await user.click(screen.getByText("Show less"));
+
+    // Tags should be hidden again
+    expect(screen.queryByText("Favorite")).not.toBeInTheDocument();
+    expect(screen.getByText("+2 more")).toBeInTheDocument();
+  });
 });
