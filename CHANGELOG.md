@@ -2,6 +2,18 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.7] - 2026-02-13
+
+### 🚀 Features
+
+- *(api)* Add glob pattern support for rate limit exempt paths
+- *(ui)* Display description preview in metadata search results
+
+### 🐛 Bug Fixes
+
+- *(ui)* Correct series download button endpoint URL
+- *(api)* Use FlexibleAuthContext for series download to support cookie auth
+
 ## [1.10.6] - 2026-02-13
 
 ### 🚀 Features
