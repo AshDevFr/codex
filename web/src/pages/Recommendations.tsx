@@ -109,8 +109,13 @@ export function Recommendations() {
 
   // Dismiss mutation
   const dismissMutation = useMutation({
-    mutationFn: (externalId: string) =>
-      recommendationsApi.dismiss(externalId, "not_interested"),
+    mutationFn: ({
+      externalId,
+      reason,
+    }: {
+      externalId: string;
+      reason: string;
+    }) => recommendationsApi.dismiss(externalId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recommendations"] });
       notifications.show({
@@ -262,10 +267,12 @@ export function Recommendations() {
             <RecommendationCard
               key={rec.externalId}
               recommendation={rec}
-              onDismiss={(id) => dismissMutation.mutate(id)}
+              onDismiss={(id, reason) =>
+                dismissMutation.mutate({ externalId: id, reason })
+              }
               dismissing={
                 dismissMutation.isPending &&
-                dismissMutation.variables === rec.externalId
+                dismissMutation.variables?.externalId === rec.externalId
               }
             />
           ))}

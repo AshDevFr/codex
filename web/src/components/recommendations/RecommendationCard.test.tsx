@@ -85,7 +85,7 @@ describe("RecommendationCard", () => {
     expect(screen.getByText("Not Interested")).toBeInTheDocument();
   });
 
-  it("calls onDismiss when Not Interested is clicked", async () => {
+  it("calls onDismiss with not_interested reason when Not Interested is clicked", async () => {
     const user = userEvent.setup();
     const onDismiss = vi.fn();
     renderWithProviders(
@@ -96,7 +96,7 @@ describe("RecommendationCard", () => {
     );
 
     await user.click(screen.getByText("Not Interested"));
-    expect(onDismiss).toHaveBeenCalledWith("12345");
+    expect(onDismiss).toHaveBeenCalledWith("12345", "not_interested");
   });
 
   it("shows Available badge when inCodex is true", () => {
@@ -137,14 +137,28 @@ describe("RecommendationCard", () => {
     expect(screen.getByText("In Anilist Library")).toBeInTheDocument();
   });
 
-  it("hides Not Interested button when inCodex is true", () => {
+  it("shows Not Interested button when inCodex is true", () => {
     renderWithProviders(
       <RecommendationCard
         recommendation={inCodexRecommendation}
         onDismiss={vi.fn()}
       />,
     );
-    expect(screen.queryByText("Not Interested")).not.toBeInTheDocument();
+    expect(screen.getByText("Not Interested")).toBeInTheDocument();
+  });
+
+  it("calls onDismiss with already_owned reason when inCodex item is dismissed", async () => {
+    const user = userEvent.setup();
+    const onDismiss = vi.fn();
+    renderWithProviders(
+      <RecommendationCard
+        recommendation={inCodexRecommendation}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    await user.click(screen.getByText("Not Interested"));
+    expect(onDismiss).toHaveBeenCalledWith("42", "already_owned");
   });
 
   it("renders minimal recommendation without errors", () => {

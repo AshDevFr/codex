@@ -56,7 +56,7 @@ function topBorderColor(
 
 interface RecommendationCardProps {
   recommendation: RecommendationDto;
-  onDismiss: (externalId: string) => void;
+  onDismiss: (externalId: string, reason: string) => void;
   dismissing?: boolean;
 }
 
@@ -260,18 +260,21 @@ export function RecommendationCard({
               View in Library
             </Button>
           )}
-          {!inCodex && (
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              color="gray"
-              leftSection={<IconX size={14} />}
-              onClick={() => onDismiss(externalId)}
-              loading={dismissing}
-            >
-              Not Interested
-            </Button>
-          )}
+          <Button
+            size="compact-xs"
+            variant="subtle"
+            color="gray"
+            leftSection={<IconX size={14} />}
+            onClick={() =>
+              onDismiss(
+                externalId,
+                inCodex ? "already_owned" : "not_interested",
+              )
+            }
+            loading={dismissing}
+          >
+            Not Interested
+          </Button>
         </Group>
       </Box>
     </Card>
