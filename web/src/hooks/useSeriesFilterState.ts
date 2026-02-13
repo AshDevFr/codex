@@ -51,6 +51,9 @@ interface UseSeriesFilterStateReturn {
   // Actions for hasExternalSourceId filter
   setHasExternalSourceIdState: (state: TriState) => void;
 
+  // Actions for hasUserRating filter
+  setHasUserRatingState: (state: TriState) => void;
+
   // Bulk actions
   clearAll: () => void;
   clearGroup: (group: keyof SeriesFilterState) => void;
@@ -103,6 +106,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       newParams.delete("stf");
       newParams.delete("cf");
       newParams.delete("esf");
+      newParams.delete("urf");
       // Add new filter params
       for (const [key, value] of filterParams) {
         newParams.set(key, value);
@@ -121,7 +125,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     (
       group: keyof Omit<
         SeriesFilterState,
-        "completion" | "hasExternalSourceId"
+        "completion" | "hasExternalSourceId" | "hasUserRating"
       >,
       updater: (current: FilterGroupState) => FilterGroupState,
     ) => {
@@ -311,6 +315,15 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     [filters, updateFilters],
   );
 
+  // HasUserRating actions
+  const setHasUserRatingState = useCallback(
+    (state: TriState) => {
+      const newFilters = { ...filters, hasUserRating: state };
+      updateFilters(newFilters);
+    },
+    [filters, updateFilters],
+  );
+
   // Clear all filters
   const clearAll = useCallback(() => {
     updateFilters(createEmptySeriesFilterState());
@@ -326,6 +339,12 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
         const newFilters = {
           ...filters,
           hasExternalSourceId: "neutral" as const,
+        };
+        updateFilters(newFilters);
+      } else if (group === "hasUserRating") {
+        const newFilters = {
+          ...filters,
+          hasUserRating: "neutral" as const,
         };
         updateFilters(newFilters);
       } else {
@@ -350,6 +369,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
       sharingTags: countActiveFilters(filters.sharingTags),
       completion: filters.completion !== "neutral" ? 1 : 0,
       hasExternalSourceId: filters.hasExternalSourceId !== "neutral" ? 1 : 0,
+      hasUserRating: filters.hasUserRating !== "neutral" ? 1 : 0,
     }),
     [filters],
   );
@@ -383,6 +403,7 @@ export function useSeriesFilterState(): UseSeriesFilterStateReturn {
     setSharingTagMode,
     setCompletionState,
     setHasExternalSourceIdState,
+    setHasUserRatingState,
     clearAll,
     clearGroup,
     hasActiveFilters,

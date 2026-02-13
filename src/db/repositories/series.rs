@@ -9,7 +9,7 @@ use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
-    sea_query::{Alias, Expr, Func, IntoCondition, SimpleExpr},
+    sea_query::{Alias, Expr, Func, IntoCondition, NullOrdering, SimpleExpr},
 };
 use uuid::Uuid;
 
@@ -547,18 +547,20 @@ impl SeriesRepository {
             .await
             .context("Failed to count series")?;
 
-        // Build aggregated sort expression
-        // AVG is used for all variants: returns float for consistent f64 deserialization.
-        // For Rating (user-specific), user_id filter ensures one row per series, so AVG = the value.
-        // For ExternalRating, averaging across sources is a reasonable default.
+        // Build sort expression for ratings.
+        // - Rating: user's own rating (direct column, JOIN already filters to one row per series)
+        // - CommunityRating: AVG of all user ratings
+        // - ExternalRating: AVG of external source ratings
+        // CAST to DOUBLE PRECISION ensures PostgreSQL compatibility (AVG returns NUMERIC).
         let rating_expr: SimpleExpr = match sort_field {
             Some(SeriesSortFieldRepo::Rating) => {
-                // User's own rating (AVG of single value = that value)
-                Expr::expr(Func::avg(Expr::col((
+                // User's own rating - MAX() is a no-op aggregate (JOIN filters to one row
+                // per series via user_id) but satisfies PostgreSQL's GROUP BY requirement.
+                Expr::expr(Func::max(Expr::col((
                     user_series_ratings::Entity,
                     user_series_ratings::Column::Rating,
                 ))))
-                .into()
+                .cast_as(Alias::new("DOUBLE PRECISION"))
             }
             Some(SeriesSortFieldRepo::CommunityRating) => {
                 // Average of all user ratings
@@ -566,7 +568,7 @@ impl SeriesRepository {
                     user_series_ratings::Entity,
                     user_series_ratings::Column::Rating,
                 ))))
-                .into()
+                .cast_as(Alias::new("DOUBLE PRECISION"))
             }
             Some(SeriesSortFieldRepo::ExternalRating) => {
                 // Average of external source ratings
@@ -574,9 +576,17 @@ impl SeriesRepository {
                     series_external_ratings::Entity,
                     series_external_ratings::Column::Rating,
                 ))))
-                .into()
+                .cast_as(Alias::new("DOUBLE PRECISION"))
             }
             _ => unreachable!(),
+        };
+
+        // Treat NULLs as smallest value (matches SQLite behavior):
+        // ASC → NULLS FIRST, DESC → NULLS LAST
+        let null_order = if matches!(order, Order::Asc) {
+            NullOrdering::First
+        } else {
+            NullOrdering::Last
         };
 
         let series_list: Vec<SeriesWithRating> = base_query
@@ -591,7 +601,7 @@ impl SeriesRepository {
             .column(series::Column::UpdatedAt)
             .column_as(rating_expr, "sort_rating")
             .group_by(series::Column::Id)
-            .order_by(Expr::col(Alias::new("sort_rating")), order)
+            .order_by_with_nulls(Expr::col(Alias::new("sort_rating")), order, null_order)
             .offset(options.page * options.page_size)
             .limit(options.page_size)
             .into_model::<SeriesWithRating>()
@@ -986,11 +996,13 @@ impl SeriesRepository {
                                 series::Relation::UserSeriesRatings.def(),
                             );
                         }
-                        Expr::expr(Func::avg(Expr::col((
+                        // User's own rating - MAX() is a no-op aggregate (JOIN filters to one
+                        // row per series via user_id) but satisfies PostgreSQL's GROUP BY.
+                        Expr::expr(Func::max(Expr::col((
                             user_series_ratings::Entity,
                             user_series_ratings::Column::Rating,
                         ))))
-                        .into()
+                        .cast_as(Alias::new("DOUBLE PRECISION"))
                     }
                     SeriesSortField::CommunityRating => {
                         query = query.join(
@@ -1001,7 +1013,7 @@ impl SeriesRepository {
                             user_series_ratings::Entity,
                             user_series_ratings::Column::Rating,
                         ))))
-                        .into()
+                        .cast_as(Alias::new("DOUBLE PRECISION"))
                     }
                     SeriesSortField::ExternalRating => {
                         query = query.join(
@@ -1012,9 +1024,16 @@ impl SeriesRepository {
                             series_external_ratings::Entity,
                             series_external_ratings::Column::Rating,
                         ))))
-                        .into()
+                        .cast_as(Alias::new("DOUBLE PRECISION"))
                     }
                     _ => unreachable!(),
+                };
+
+                // Treat NULLs as smallest value (matches SQLite behavior)
+                let null_order = if matches!(order, Order::Asc) {
+                    NullOrdering::First
+                } else {
+                    NullOrdering::Last
                 };
 
                 let results: Vec<SeriesWithRating> = query
@@ -1029,7 +1048,7 @@ impl SeriesRepository {
                     .column(series::Column::UpdatedAt)
                     .column_as(rating_expr, "sort_rating")
                     .group_by(series::Column::Id)
-                    .order_by(Expr::col(Alias::new("sort_rating")), order)
+                    .order_by_with_nulls(Expr::col(Alias::new("sort_rating")), order, null_order)
                     .offset(offset)
                     .limit(limit)
                     .into_model::<SeriesWithRating>()
@@ -1243,23 +1262,31 @@ impl SeriesRepository {
             _ => {}
         }
 
-        // Build aggregated sort expression (cast to float for consistent type)
+        // Build sort expression for ratings.
+        // - Rating: user's own rating (direct column, JOIN already filters to one row per series)
+        // - CommunityRating: AVG of all user ratings
+        // - ExternalRating: AVG of external source ratings
+        // CAST to DOUBLE PRECISION ensures PostgreSQL compatibility (AVG returns NUMERIC).
         let rating_expr: SimpleExpr = match sort_field {
-            SeriesSortField::Rating => Expr::expr(Func::avg(Expr::col((
-                user_series_ratings::Entity,
-                user_series_ratings::Column::Rating,
-            ))))
-            .into(),
+            SeriesSortField::Rating => {
+                // User's own rating - MAX() is a no-op aggregate (JOIN filters to one row
+                // per series via user_id) but satisfies PostgreSQL's GROUP BY requirement.
+                Expr::expr(Func::max(Expr::col((
+                    user_series_ratings::Entity,
+                    user_series_ratings::Column::Rating,
+                ))))
+                .cast_as(Alias::new("DOUBLE PRECISION"))
+            }
             SeriesSortField::CommunityRating => Expr::expr(Func::avg(Expr::col((
                 user_series_ratings::Entity,
                 user_series_ratings::Column::Rating,
             ))))
-            .into(),
+            .cast_as(Alias::new("DOUBLE PRECISION")),
             SeriesSortField::ExternalRating => Expr::expr(Func::avg(Expr::col((
                 series_external_ratings::Entity,
                 series_external_ratings::Column::Rating,
             ))))
-            .into(),
+            .cast_as(Alias::new("DOUBLE PRECISION")),
             _ => unreachable!(),
         };
 
@@ -1275,7 +1302,16 @@ impl SeriesRepository {
             .column(series::Column::UpdatedAt)
             .column_as(rating_expr, "sort_rating")
             .group_by(series::Column::Id)
-            .order_by(Expr::col(Alias::new("sort_rating")), order.clone())
+            // Treat NULLs as smallest value (matches SQLite behavior)
+            .order_by_with_nulls(
+                Expr::col(Alias::new("sort_rating")),
+                order.clone(),
+                if matches!(order, Order::Asc) {
+                    NullOrdering::First
+                } else {
+                    NullOrdering::Last
+                },
+            )
             .offset(offset)
             .limit(limit)
             .into_model::<SeriesWithRating>()

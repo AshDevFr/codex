@@ -197,6 +197,26 @@ export function SeriesFilterPanel() {
                   showModeToggle={false}
                 />
 
+                {/* User Rating Filter */}
+                <FilterGroup
+                  title="My Rating"
+                  options={[{ value: "rated", label: "Has Rating" }]}
+                  state={{
+                    mode: "allOf",
+                    values:
+                      draftState.draftFilters.hasUserRating !== "neutral"
+                        ? new Map([
+                            ["rated", draftState.draftFilters.hasUserRating],
+                          ])
+                        : new Map(),
+                  }}
+                  onValueChange={(_value, state) =>
+                    draftState.setHasUserRatingState(state)
+                  }
+                  onModeChange={() => {}}
+                  showModeToggle={false}
+                />
+
                 <Divider my="xs" />
 
                 {/* Publication Status Section */}

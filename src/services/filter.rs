@@ -141,6 +141,11 @@ impl FilterService {
                     )
                     .await
                 }
+
+                SeriesCondition::HasUserRating { has_user_rating } => {
+                    Self::filter_by_has_user_rating(db, has_user_rating, candidate_ids, user_id)
+                        .await
+                }
             }
         })
     }
@@ -805,6 +810,92 @@ impl FilterService {
                     Ok(all_series
                         .into_iter()
                         .filter(|id| !series_with_external_ids.contains(id))
+                        .collect())
+                }
+            }
+        }
+    }
+
+    /// Filter series by whether the current user has rated them
+    ///
+    /// - IsTrue: return series that the user has rated
+    /// - IsFalse: return series that the user has not rated
+    ///
+    /// If no user_id is provided, returns an empty set (no user = no ratings).
+    async fn filter_by_has_user_rating(
+        db: &DatabaseConnection,
+        operator: &BoolOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+        user_id: Option<Uuid>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::{series, user_series_ratings};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let Some(uid) = user_id else {
+            // No user context — no ratings possible
+            return match operator {
+                BoolOperator::IsTrue => Ok(HashSet::new()),
+                BoolOperator::IsFalse => {
+                    if let Some(candidates) = candidate_ids {
+                        Ok(candidates.clone())
+                    } else {
+                        let all_series: HashSet<Uuid> = series::Entity::find()
+                            .select_only()
+                            .column(series::Column::Id)
+                            .into_tuple()
+                            .all(db)
+                            .await?
+                            .into_iter()
+                            .collect();
+                        Ok(all_series)
+                    }
+                }
+            };
+        };
+
+        // Get all series IDs that the user has rated
+        let rated_series: HashSet<Uuid> = user_series_ratings::Entity::find()
+            .select_only()
+            .column(user_series_ratings::Column::SeriesId)
+            .filter(user_series_ratings::Column::UserId.eq(uid))
+            .distinct()
+            .into_tuple()
+            .all(db)
+            .await?
+            .into_iter()
+            .collect();
+
+        match operator {
+            BoolOperator::IsTrue => {
+                // Return series WITH user ratings
+                if let Some(candidates) = candidate_ids {
+                    Ok(rated_series.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(rated_series)
+                }
+            }
+            BoolOperator::IsFalse => {
+                // Return series WITHOUT user ratings
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !rated_series.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    // Need all series, then exclude those with ratings
+                    let all_series: HashSet<Uuid> = series::Entity::find()
+                        .select_only()
+                        .column(series::Column::Id)
+                        .into_tuple()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .collect();
+
+                    Ok(all_series
+                        .into_iter()
+                        .filter(|id| !rated_series.contains(id))
                         .collect())
                 }
             }

@@ -3,11 +3,14 @@
 // Run with: cargo test --test postgres_integration_tests -- --ignored
 
 use chrono::Utc;
+use codex::api::routes::v1::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
 use codex::config::{DatabaseConfig, DatabaseType, PostgresConfig};
 use codex::db::entities::{books, libraries, series};
 use codex::db::{
     Database,
-    repositories::{BookRepository, LibraryRepository, SeriesRepository},
+    repositories::{
+        BookRepository, LibraryRepository, SeriesRepository, UserSeriesRatingRepository,
+    },
 };
 use codex::models::ScanningStrategy;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, Statement};
@@ -333,6 +336,88 @@ async fn test_postgres_metrics_repository() {
 
     // Cleanup
     LibraryRepository::delete(conn, library.id).await.unwrap();
+
+    db.close().await;
+}
+
+/// Test rating sort with PostgreSQL
+/// Verifies that rating sort queries work correctly on PostgreSQL.
+/// The user's own rating uses a direct column value (no AVG), while
+/// community/external ratings use AVG which returns NUMERIC on PostgreSQL
+/// (requiring CAST to DOUBLE PRECISION for Rust f64 deserialization).
+#[tokio::test]
+#[ignore]
+async fn test_postgres_rating_sort() {
+    use codex::db::repositories::UserRepository;
+    use codex::utils::password;
+
+    let db = create_test_postgres_db().await;
+    let conn = db.sea_orm_connection();
+
+    // Create library and series
+    let library = LibraryRepository::create(
+        conn,
+        "Rating Sort Test Library",
+        "/test/rating-sort",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series_a = SeriesRepository::create(conn, library.id, "Series A", None)
+        .await
+        .unwrap();
+    let series_b = SeriesRepository::create(conn, library.id, "Series B", None)
+        .await
+        .unwrap();
+    let _series_c = SeriesRepository::create(conn, library.id, "Series C", None)
+        .await
+        .unwrap();
+
+    // Create a test user
+    let password_hash = password::hash_password("test123").unwrap();
+    let user_model = codex::db::entities::users::Model {
+        id: Uuid::new_v4(),
+        username: format!("rating_sort_test_{}", Uuid::new_v4()),
+        email: format!("rating_sort_{}@test.com", Uuid::new_v4()),
+        password_hash,
+        role: "admin".to_string(),
+        is_active: true,
+        email_verified: false,
+        permissions: serde_json::json!([]),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        last_login_at: None,
+    };
+    let user = UserRepository::create(conn, &user_model).await.unwrap();
+
+    // Rate series A=30, B=80 (C is unrated)
+    UserSeriesRatingRepository::create(conn, user.id, series_a.id, 30, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(conn, user.id, series_b.id, 80, None)
+        .await
+        .unwrap();
+
+    // Test rating sort via list_by_ids_sorted (this is the code path that fails on PG)
+    let all_ids = vec![series_a.id, series_b.id, _series_c.id];
+    let sort = SeriesSortParam::new(SeriesSortField::Rating, SortDirection::Desc);
+
+    let (sorted_series, total) =
+        SeriesRepository::list_by_ids_sorted(conn, &all_ids, &sort, Some(user.id), 0, 50)
+            .await
+            .expect("Rating sort should work on PostgreSQL");
+
+    assert_eq!(total, 3);
+    assert_eq!(sorted_series.len(), 3);
+    // Series B (80) first, Series A (30) second, Series C (unrated) last
+    assert_eq!(sorted_series[0].name, "Series B");
+    assert_eq!(sorted_series[1].name, "Series A");
+    assert_eq!(sorted_series[2].name, "Series C");
+
+    // Cleanup
+    LibraryRepository::delete(conn, library.id).await.unwrap();
+    UserRepository::delete(conn, user.id).await.unwrap();
 
     db.close().await;
 }

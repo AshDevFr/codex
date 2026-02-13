@@ -102,6 +102,11 @@ pub enum SeriesCondition {
         #[serde(rename = "hasExternalSourceId")]
         has_external_source_id: BoolOperator,
     },
+    /// Filter by whether the series has a rating from the current user
+    HasUserRating {
+        #[serde(rename = "hasUserRating")]
+        has_user_rating: BoolOperator,
+    },
 }
 
 /// Book-level search conditions
@@ -589,6 +594,41 @@ mod tests {
                 has_external_source_id: BoolOperator::IsTrue,
             } => {}
             _ => panic!("Expected HasExternalSourceId condition with IsTrue operator"),
+        }
+    }
+
+    #[test]
+    fn test_has_user_rating_condition_is_true() {
+        let condition = SeriesCondition::HasUserRating {
+            has_user_rating: BoolOperator::IsTrue,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""hasUserRating""#));
+        assert!(json.contains(r#""operator":"isTrue""#));
+    }
+
+    #[test]
+    fn test_has_user_rating_condition_is_false() {
+        let condition = SeriesCondition::HasUserRating {
+            has_user_rating: BoolOperator::IsFalse,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""hasUserRating""#));
+        assert!(json.contains(r#""operator":"isFalse""#));
+    }
+
+    #[test]
+    fn test_has_user_rating_condition_deserialization() {
+        let json = r#"{"hasUserRating":{"operator":"isTrue"}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+
+        match condition {
+            SeriesCondition::HasUserRating {
+                has_user_rating: BoolOperator::IsTrue,
+            } => {}
+            _ => panic!("Expected HasUserRating condition with IsTrue operator"),
         }
     }
 }

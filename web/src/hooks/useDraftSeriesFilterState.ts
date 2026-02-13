@@ -50,6 +50,9 @@ interface UseDraftSeriesFilterStateReturn {
   // Actions for hasExternalSourceId filter
   setHasExternalSourceIdState: (state: TriState) => void;
 
+  // Actions for hasUserRating filter
+  setHasUserRatingState: (state: TriState) => void;
+
   // Bulk actions on draft
   clearAllDraft: () => void;
   clearGroupDraft: (group: keyof SeriesFilterState) => void;
@@ -94,6 +97,7 @@ function cloneFilterState(state: SeriesFilterState): SeriesFilterState {
     },
     completion: state.completion,
     hasExternalSourceId: state.hasExternalSourceId,
+    hasUserRating: state.hasUserRating,
   };
 }
 
@@ -107,10 +111,11 @@ function filterStatesEqual(
   // Compare simple TriState fields first
   if (a.completion !== b.completion) return false;
   if (a.hasExternalSourceId !== b.hasExternalSourceId) return false;
+  if (a.hasUserRating !== b.hasUserRating) return false;
   // Compare FilterGroupState fields
   const groups: (keyof Omit<
     SeriesFilterState,
-    "completion" | "hasExternalSourceId"
+    "completion" | "hasExternalSourceId" | "hasUserRating"
   >)[] = [
     "genres",
     "tags",
@@ -182,7 +187,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     (
       group: keyof Omit<
         SeriesFilterState,
-        "completion" | "hasExternalSourceId"
+        "completion" | "hasExternalSourceId" | "hasUserRating"
       >,
       updater: (current: FilterGroupState) => FilterGroupState,
     ) => {
@@ -377,6 +382,17 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     [updateDraft],
   );
 
+  // HasUserRating actions
+  const setHasUserRatingState = useCallback(
+    (state: TriState) => {
+      updateDraft((current) => ({
+        ...current,
+        hasUserRating: state,
+      }));
+    },
+    [updateDraft],
+  );
+
   // Clear all draft filters
   const clearAllDraft = useCallback(() => {
     setDraftFilters(createEmptySeriesFilterState());
@@ -403,6 +419,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     newParams.delete("stf");
     newParams.delete("cf");
     newParams.delete("esf");
+    newParams.delete("urf");
     // Add new filter params (will be empty for cleared filters)
     for (const [key, value] of filterParams) {
       newParams.set(key, value);
@@ -434,6 +451,11 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
         ...current,
         hasExternalSourceId: "neutral",
       }));
+    } else if (group === "hasUserRating") {
+      setDraftFilters((current) => ({
+        ...current,
+        hasUserRating: "neutral",
+      }));
     } else {
       setDraftFilters((current) => ({
         ...current,
@@ -459,6 +481,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     newParams.delete("stf");
     newParams.delete("cf");
     newParams.delete("esf");
+    newParams.delete("urf");
     // Add new filter params
     for (const [key, value] of filterParams) {
       newParams.set(key, value);
@@ -488,6 +511,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
       completion: draftFilters.completion !== "neutral" ? 1 : 0,
       hasExternalSourceId:
         draftFilters.hasExternalSourceId !== "neutral" ? 1 : 0,
+      hasUserRating: draftFilters.hasUserRating !== "neutral" ? 1 : 0,
     }),
     [draftFilters],
   );
@@ -521,6 +545,7 @@ export function useDraftSeriesFilterState(): UseDraftSeriesFilterStateReturn {
     setSharingTagMode,
     setCompletionState,
     setHasExternalSourceIdState,
+    setHasUserRatingState,
     clearAllDraft,
     clearGroupDraft,
     clearAllAndApply,

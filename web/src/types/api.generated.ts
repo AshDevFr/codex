@@ -13169,6 +13169,8 @@ export interface components {
             completion: components["schemas"]["BoolOperator"];
         } | {
             hasExternalSourceId: components["schemas"]["BoolOperator"];
+        } | {
+            hasUserRating: components["schemas"]["BoolOperator"];
         };
         /**
          * @description Series context for template and condition evaluation.

@@ -29348,6 +29348,18 @@
                 "$ref": "#/components/schemas/BoolOperator"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Filter by whether the series has a rating from the current user",
+            "required": [
+              "hasUserRating"
+            ],
+            "properties": {
+              "hasUserRating": {
+                "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
           }
         ],
         "description": "Series-level search conditions\n\nConditions can be composed using `allOf` (AND) and `anyOf` (OR).\nUses untagged enum for cleaner JSON without explicit type field."

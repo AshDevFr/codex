@@ -5049,6 +5049,181 @@ async fn test_list_series_filtered_by_has_external_source_id() {
 }
 
 // ============================================================================
+// Has User Rating Filter Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_filtered_by_has_user_rating() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::UserSeriesRatingRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create three series
+    let series_rated = SeriesRepository::create(&db, library.id, "Rated Series", None)
+        .await
+        .unwrap();
+    let series_rated2 = SeriesRepository::create(&db, library.id, "Another Rated Series", None)
+        .await
+        .unwrap();
+    let _series_unrated = SeriesRepository::create(&db, library.id, "Unrated Series", None)
+        .await
+        .unwrap();
+
+    // Create user and get token
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
+        .unwrap();
+
+    // Create ratings for two series
+    UserSeriesRatingRepository::create(&db, admin_user.id, series_rated.id, 80, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, admin_user.id, series_rated2.id, 50, None)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Filter by hasUserRating = true (series the user HAS rated)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::HasUserRating {
+            has_user_rating: BoolOperator::IsTrue,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert!(titles.contains(&"Rated Series"));
+    assert!(titles.contains(&"Another Rated Series"));
+
+    // Filter by hasUserRating = false (series the user has NOT rated)
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::HasUserRating {
+            has_user_rating: BoolOperator::IsFalse,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Unrated Series");
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_has_user_rating_with_rating_sort() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::UserSeriesRatingRepository;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create three series
+    let series_high = SeriesRepository::create(&db, library.id, "High Rating", None)
+        .await
+        .unwrap();
+    let series_low = SeriesRepository::create(&db, library.id, "Low Rating", None)
+        .await
+        .unwrap();
+    let _series_unrated = SeriesRepository::create(&db, library.id, "Unrated", None)
+        .await
+        .unwrap();
+
+    // Create user and get token
+    let password_hash = password::hash_password("admin123").unwrap();
+    let admin = create_test_user("admin", "admin@example.com", &password_hash, true);
+    let admin_user = UserRepository::create(&db, &admin).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = state
+        .jwt_service
+        .generate_token(
+            admin_user.id,
+            admin_user.username.clone(),
+            admin_user.get_role(),
+        )
+        .unwrap();
+
+    // Rate two series
+    UserSeriesRatingRepository::create(&db, admin_user.id, series_high.id, 90, None)
+        .await
+        .unwrap();
+    UserSeriesRatingRepository::create(&db, admin_user.id, series_low.id, 30, None)
+        .await
+        .unwrap();
+
+    // Combine hasUserRating filter with rating sort
+    let app = create_test_router(state.clone()).await;
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::HasUserRating {
+            has_user_rating: BoolOperator::IsTrue,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?sort=rating,desc",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    // High Rating (90) first, Low Rating (30) second
+    assert_eq!(series_list.data[0].title, "High Rating");
+    assert_eq!(series_list.data[1].title, "Low Rating");
+
+    // Also test: no filter, just rating sort (all 3 series)
+    let app = create_test_router(state).await;
+    let request_body = SeriesListRequest {
+        condition: None,
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?sort=rating,desc",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    // High Rating (90) first, Low Rating (30) second, Unrated last
+    assert_eq!(series_list.data[0].title, "High Rating");
+    assert_eq!(series_list.data[1].title, "Low Rating");
+    assert_eq!(series_list.data[2].title, "Unrated");
+}
+
+// ============================================================================
 // Reprocess Title Tests
 // ============================================================================
 

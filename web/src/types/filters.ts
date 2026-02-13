@@ -63,7 +63,8 @@ export type SeriesCondition =
   | { readStatus: FieldOperator }
   | { sharingTag: FieldOperator }
   | { completion: BoolOperator }
-  | { hasExternalSourceId: BoolOperator };
+  | { hasExternalSourceId: BoolOperator }
+  | { hasUserRating: BoolOperator };
 
 // =============================================================================
 // Book conditions (matches backend BookCondition)
@@ -134,6 +135,7 @@ export interface SeriesFilterState {
   sharingTags: FilterGroupState;
   completion: TriState;
   hasExternalSourceId: TriState;
+  hasUserRating: TriState;
 }
 
 /**
@@ -175,6 +177,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
     sharingTags: createEmptyFilterGroup(),
     completion: "neutral",
     hasExternalSourceId: "neutral",
+    hasUserRating: "neutral",
   };
 }
 
@@ -332,6 +335,13 @@ export function seriesFilterStateToCondition(
     allConditions.push({ hasExternalSourceId: { operator: "isTrue" } });
   } else if (state.hasExternalSourceId === "exclude") {
     allConditions.push({ hasExternalSourceId: { operator: "isFalse" } });
+  }
+
+  // Add hasUserRating condition
+  if (state.hasUserRating === "include") {
+    allConditions.push({ hasUserRating: { operator: "isTrue" } });
+  } else if (state.hasUserRating === "exclude") {
+    allConditions.push({ hasUserRating: { operator: "isFalse" } });
   }
 
   // Return combined condition
@@ -527,6 +537,7 @@ export const FILTER_PARAM_KEYS = {
   sharingTags: "stf",
   completion: "cf",
   hasExternalSourceId: "esf",
+  hasUserRating: "urf",
 } as const;
 
 /**
@@ -571,6 +582,10 @@ export function serializeSeriesFilters(
     );
   }
 
+  if (state.hasUserRating !== "neutral") {
+    params.set(FILTER_PARAM_KEYS.hasUserRating, state.hasUserRating);
+  }
+
   return params;
 }
 
@@ -582,6 +597,7 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
   const hasExternalSourceIdParam = params.get(
     FILTER_PARAM_KEYS.hasExternalSourceId,
   );
+  const hasUserRatingParam = params.get(FILTER_PARAM_KEYS.hasUserRating);
   return {
     genres: parseFilterGroup(params.get(FILTER_PARAM_KEYS.genres)),
     tags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.tags)),
@@ -598,6 +614,10 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
       hasExternalSourceIdParam === "include" ||
       hasExternalSourceIdParam === "exclude"
         ? hasExternalSourceIdParam
+        : "neutral",
+    hasUserRating:
+      hasUserRatingParam === "include" || hasUserRatingParam === "exclude"
+        ? hasUserRatingParam
         : "neutral",
   };
 }
