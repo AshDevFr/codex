@@ -334,4 +334,57 @@ describe("MetadataSearchModal", () => {
     // Singular form for 1 book
     expect(screen.getByText("1 book")).toBeInTheDocument();
   });
+
+  it("displays description when provided in preview", async () => {
+    (pluginsApi.searchMetadata as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      result: {
+        results: [
+          {
+            externalId: "ext-1",
+            title: "Series With Description",
+            alternateTitles: [],
+            year: 2024,
+            coverUrl: null,
+            preview: {
+              description: "A thrilling adventure through distant lands.",
+              status: "Ongoing",
+              genres: [],
+            },
+          },
+          {
+            externalId: "ext-2",
+            title: "Series Without Description",
+            alternateTitles: [],
+            year: 2023,
+            coverUrl: null,
+            preview: {
+              status: "Completed",
+              genres: [],
+            },
+          },
+        ],
+      },
+      latencyMs: 100,
+    });
+
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={mockPlugin}
+        initialQuery="Series"
+        onSelect={onSelect}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText("A thrilling adventure through distant lands."),
+        ).toBeInTheDocument();
+      },
+      { timeout: 1000 },
+    );
+  });
 });

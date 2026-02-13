@@ -469,6 +469,12 @@ function SearchResultCard({ result, onSelect }: SearchResultCardProps) {
             </Text>
           )}
 
+          {result.preview?.description && (
+            <Text size="xs" c="dimmed" lineClamp={2}>
+              {result.preview.description}
+            </Text>
+          )}
+
           {result.preview && (
             <Group gap="xs" mt={4}>
               {result.preview.status && (
