@@ -728,7 +728,7 @@ export function SeriesDetail() {
                   size="xs"
                   variant="filled"
                   component="a"
-                  href={`/api/v1/series/${series.id}/file`}
+                  href={`/api/v1/series/${series.id}/download`}
                   leftSection={<IconDownload size={14} />}
                 >
                   Download
