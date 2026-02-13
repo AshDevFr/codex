@@ -248,6 +248,7 @@ frontend-lint-fix: ## Run frontend lint with auto-fix
 # =============================================================================
 
 PLUGIN_DIRS := $(notdir $(patsubst %/package.json,%,$(wildcard plugins/*/package.json)))
+PLUGIN_ONLY_DIRS := $(filter-out sdk-typescript, $(PLUGIN_DIRS))
 
 plugins-install: ## Install dependencies for all plugins
 	@echo "$(BLUE)Installing plugin dependencies...$(NC)"
@@ -534,33 +535,46 @@ release-prepare: ## Prepare a release (usage: make release-prepare VERSION=1.0.0
 	fi
 	@echo "$(BLUE)Preparing release v$(VERSION)...$(NC)"
 	@echo ""
+
 	@# Update Cargo.toml version
+	@echo "$(YELLOW)Updating Cargo.toml version...$(NC)";
 	@sed -i.bak 's/^version = ".*"/version = "$(VERSION)"/' Cargo.toml && rm Cargo.toml.bak
 	@echo "$(GREEN)✓$(NC) Cargo.toml version set to $(VERSION)"
 
 	@# Update web/package.json version
+	@echo "$(YELLOW)Updating web/package.json version...$(NC)";
 	@cd web && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
 	@echo "$(GREEN)✓$(NC) web/package.json version set to $(VERSION)"
 
-	@for dir in $(PLUGIN_DIRS); do \
+	@# Update plugins/sdk-typescript/package.json version
+	@echo "$(YELLOW)Updating plugins/sdk-typescript/package.json version...$(NC)";
+	@cd plugins/sdk-typescript && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
+	@echo "$(GREEN)✓$(NC) plugins/sdk-typescript/package.json version set to $(VERSION)"
+
+	@for dir in $(PLUGIN_ONLY_DIRS); do \
 		echo "$(YELLOW)Building $$dir...$(NC)"; \
 		(cd plugins/$$dir && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1); \
+		(cd plugins/$$dir && npm install >/dev/null 2>&1); \
 		echo "$(GREEN)✓$(NC) plugins/$$dir/package.json version set to $(VERSION)"; \
 	done
 
 	@# Update docs/package.json version
+	@echo "$(YELLOW)Updating docs/package.json version...$(NC)";
 	@cd docs && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null 2>&1
 	@echo "$(GREEN)✓$(NC) docs/package.json version set to $(VERSION)"
 
 	@# Update Cargo.lock
+	@echo "$(YELLOW)Updating Cargo.lock...$(NC)";
 	@cargo build --quiet 2>/dev/null || cargo build
 	@echo "$(GREEN)✓$(NC) Updated Cargo.lock"
 
 	@# Regenerate OpenAPI spec and TypeScript types
+	@echo "$(YELLOW)Regenerating OpenAPI spec and TypeScript types...$(NC)";
 	@$(MAKE) openapi-all
 	@echo "$(GREEN)✓$(NC) Regenerated OpenAPI spec and TypeScript types"
 
 	@# Generate changelog (skip if already modified)
+	@echo "$(YELLOW)Generating CHANGELOG.md...$(NC)";
 	@if git diff --quiet CHANGELOG.md 2>/dev/null && git diff --cached --quiet CHANGELOG.md 2>/dev/null; then \
 		$(MAKE) changelog-release VERSION=$(VERSION); \
 		echo "$(GREEN)✓$(NC) Generated CHANGELOG.md for v$(VERSION)"; \
