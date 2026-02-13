@@ -61,6 +61,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/user/plugins/:plugin_id/sync/status",
             get(handlers::user_plugins::get_sync_status),
         )
+        // User-scoped plugin tasks (no TasksRead permission required)
+        .route(
+            "/user/plugins/:plugin_id/tasks",
+            get(handlers::user_plugins::get_plugin_tasks),
+        )
         // OAuth flow
         .route(
             "/user/plugins/:plugin_id/oauth/start",

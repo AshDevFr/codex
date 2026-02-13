@@ -1,4 +1,3 @@
-import type { TaskResponse } from "@/types";
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
@@ -18,6 +17,7 @@ export type UpdateUserPluginConfigRequest =
 export type SyncTriggerResponse = components["schemas"]["SyncTriggerResponse"];
 export type SyncStatusDto = components["schemas"]["SyncStatusDto"];
 export type ConfigSchemaDto = components["schemas"]["ConfigSchemaDto"];
+export type UserPluginTaskDto = components["schemas"]["UserPluginTaskDto"];
 
 // =============================================================================
 // API Client
@@ -136,10 +136,17 @@ export const userPluginsApi = {
   },
 
   /**
-   * Get a task by ID (for polling sync task completion)
+   * Get the latest task for a plugin (user-scoped, no TasksRead permission needed)
+   * Pass taskType to filter by type (e.g., "user_plugin_sync")
    */
-  getTask: async (taskId: string): Promise<TaskResponse> => {
-    const response = await api.get<TaskResponse>(`/tasks/${taskId}`);
+  getPluginTask: async (
+    pluginId: string,
+    taskType?: string,
+  ): Promise<UserPluginTaskDto> => {
+    const response = await api.get<UserPluginTaskDto>(
+      `/user/plugins/${pluginId}/tasks`,
+      { params: taskType ? { type: taskType } : undefined },
+    );
     return response.data;
   },
 };

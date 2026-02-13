@@ -374,6 +374,70 @@ impl TaskRepository {
         }
     }
 
+    /// Find the most recent task for a user+plugin combination, optionally filtered by task type.
+    ///
+    /// Returns the full task model so callers can build response DTOs.
+    /// Used for user-scoped plugin task endpoints that don't require TasksRead permission.
+    pub async fn find_latest_user_plugin_task(
+        db: &DatabaseConnection,
+        plugin_id: Uuid,
+        user_id: Uuid,
+        task_type_filter: Option<&str>,
+    ) -> Result<Option<tasks::Model>> {
+        let plugin_id_str = plugin_id.to_string();
+        let user_id_str = user_id.to_string();
+        let backend = db.get_database_backend();
+
+        let stmt = match (backend, task_type_filter) {
+            (DbBackend::Postgres, Some(task_type)) => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"SELECT * FROM tasks
+                   WHERE task_type = $1
+                     AND params->>'plugin_id' = $2
+                     AND params->>'user_id' = $3
+                   ORDER BY created_at DESC
+                   LIMIT 1"#,
+                vec![task_type.into(), plugin_id_str.into(), user_id_str.into()],
+            ),
+            (DbBackend::Postgres, None) => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"SELECT * FROM tasks
+                   WHERE params->>'plugin_id' = $1
+                     AND params->>'user_id' = $2
+                   ORDER BY created_at DESC
+                   LIMIT 1"#,
+                vec![plugin_id_str.into(), user_id_str.into()],
+            ),
+            (_, Some(task_type)) => Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"SELECT * FROM tasks
+                   WHERE task_type = ?
+                     AND json_extract(params, '$.plugin_id') = ?
+                     AND json_extract(params, '$.user_id') = ?
+                   ORDER BY created_at DESC
+                   LIMIT 1"#,
+                vec![task_type.into(), plugin_id_str.into(), user_id_str.into()],
+            ),
+            (_, None) => Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                r#"SELECT * FROM tasks
+                   WHERE json_extract(params, '$.plugin_id') = ?
+                     AND json_extract(params, '$.user_id') = ?
+                   ORDER BY created_at DESC
+                   LIMIT 1"#,
+                vec![plugin_id_str.into(), user_id_str.into()],
+            ),
+        };
+
+        let result = tasks::Entity::find()
+            .from_raw_sql(stmt)
+            .one(db)
+            .await
+            .context("Failed to find latest user plugin task")?;
+
+        Ok(result)
+    }
+
     /// Claim next available task (atomic operation using SKIP LOCKED for Postgres, transaction for SQLite)
     ///
     /// # Arguments

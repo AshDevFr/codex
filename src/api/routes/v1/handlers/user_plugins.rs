@@ -8,7 +8,8 @@ use super::super::dto::plugins::ConfigSchemaDto;
 use super::super::dto::user_plugins::{
     AvailablePluginDto, OAuthCallbackQuery, OAuthStartResponse, SetUserCredentialsRequest,
     SyncStatusDto, SyncStatusQuery, SyncTriggerResponse, UpdateUserPluginConfigRequest,
-    UserPluginCapabilitiesDto, UserPluginDto, UserPluginsListResponse,
+    UserPluginCapabilitiesDto, UserPluginDto, UserPluginTaskDto, UserPluginTasksQuery,
+    UserPluginsListResponse,
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
@@ -1012,4 +1013,54 @@ pub async fn set_user_credentials(
     Ok(Json(
         build_user_plugin_dto(&state.db, &updated, &plugin, None).await,
     ))
+}
+
+/// Get the latest task for a user plugin
+///
+/// Returns the most recent background task for this user+plugin combination.
+/// Use the `?type=user_plugin_sync` query parameter to filter by task type.
+///
+/// This endpoint is user-scoped and does NOT require `TasksRead` permission.
+/// Only the authenticated user's own tasks are returned.
+#[utoipa::path(
+    get,
+    path = "/api/v1/user/plugins/{plugin_id}/tasks",
+    params(
+        ("plugin_id" = Uuid, Path, description = "Plugin ID"),
+        UserPluginTasksQuery,
+    ),
+    responses(
+        (status = 200, description = "Latest task found", body = UserPluginTaskDto),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "No tasks found for this plugin"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "User Plugins"
+)]
+pub async fn get_plugin_tasks(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(plugin_id): Path<Uuid>,
+    Query(query): Query<UserPluginTasksQuery>,
+) -> Result<Json<UserPluginTaskDto>, ApiError> {
+    // Verify user has this plugin enabled
+    UserPluginsRepository::get_by_user_and_plugin(&state.db, auth.user_id, plugin_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Plugin not enabled for this user".to_string()))?;
+
+    let task = TaskRepository::find_latest_user_plugin_task(
+        &state.db,
+        plugin_id,
+        auth.user_id,
+        query.task_type.as_deref(),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to query tasks: {}", e)))?
+    .ok_or_else(|| ApiError::NotFound("No tasks found for this plugin".to_string()))?;
+
+    Ok(Json(UserPluginTaskDto::from(task)))
 }

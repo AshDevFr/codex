@@ -13,6 +13,7 @@ import { notifications } from "@mantine/notifications";
 import { IconAlertCircle, IconPlugConnected } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import type { UserPluginTaskDto } from "@/api/userPlugins";
 import { userPluginsApi } from "@/api/userPlugins";
 import { useOAuthCallback, useOAuthFlow } from "@/components/plugins/OAuthFlow";
 import {
@@ -21,6 +22,10 @@ import {
 } from "@/components/plugins/UserPluginCard";
 import { UserPluginSettingsModal } from "@/components/plugins/UserPluginSettingsModal";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+
+function isTaskActive(task: UserPluginTaskDto | undefined): boolean {
+  return task?.status === "pending" || task?.status === "processing";
+}
 
 export function IntegrationsSettings() {
   useDocumentTitle("Integrations");
@@ -35,8 +40,10 @@ export function IntegrationsSettings() {
   const [liveStatusPluginId, setLiveStatusPluginId] = useState<string | null>(
     null,
   );
-  const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
+  // Track which plugin we're actively polling for sync task status
+  const [syncingPluginId, setSyncingPluginId] = useState<string | null>(null);
   const syncTaskNotifiedRef = useRef<string | null>(null);
+  const checkedInitialSyncRef = useRef(false);
 
   // Fetch user's plugins
   const {
@@ -48,11 +55,12 @@ export function IntegrationsSettings() {
     queryFn: userPluginsApi.list,
   });
 
-  // Poll sync task until completed/failed
+  // Poll sync task for the syncing plugin until completed/failed
   const { data: syncTask } = useQuery({
-    queryKey: ["sync-task", syncTaskId],
-    queryFn: () => userPluginsApi.getTask(syncTaskId ?? ""),
-    enabled: syncTaskId !== null,
+    queryKey: ["plugin-sync-task", syncingPluginId],
+    queryFn: () =>
+      userPluginsApi.getPluginTask(syncingPluginId ?? "", "user_plugin_sync"),
+    enabled: syncingPluginId !== null,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       if (status === "completed" || status === "failed") return false;
@@ -62,12 +70,13 @@ export function IntegrationsSettings() {
 
   // Handle sync task completion
   useEffect(() => {
-    if (!syncTask || !syncTaskId) return;
-    if (syncTaskNotifiedRef.current === syncTaskId) return;
+    if (!syncTask || !syncingPluginId) return;
+    // Use taskId to deduplicate notifications (same task won't notify twice)
+    if (syncTaskNotifiedRef.current === syncTask.taskId) return;
 
     if (syncTask.status === "completed") {
-      syncTaskNotifiedRef.current = syncTaskId;
-      setSyncTaskId(null);
+      syncTaskNotifiedRef.current = syncTask.taskId;
+      setSyncingPluginId(null);
       queryClient.invalidateQueries({ queryKey: ["user-plugins"] });
       const result = syncTask.result as Record<string, unknown> | undefined;
       if (result?.skippedReason) {
@@ -108,15 +117,15 @@ export function IntegrationsSettings() {
         });
       }
     } else if (syncTask.status === "failed") {
-      syncTaskNotifiedRef.current = syncTaskId;
-      setSyncTaskId(null);
+      syncTaskNotifiedRef.current = syncTask.taskId;
+      setSyncingPluginId(null);
       notifications.show({
         title: "Sync failed",
-        message: syncTask.lastError || "An unknown error occurred",
+        message: syncTask.error || "An unknown error occurred",
         color: "red",
       });
     }
-  }, [syncTask, syncTaskId, queryClient]);
+  }, [syncTask, syncingPluginId, queryClient]);
 
   // On-demand live sync status query (only when user clicks refresh)
   const { data: liveStatus, isFetching: fetchingLiveStatus } = useQuery({
@@ -214,9 +223,13 @@ export function IntegrationsSettings() {
   // Sync mutation
   const syncMutation = useMutation({
     mutationFn: (pluginId: string) => userPluginsApi.triggerSync(pluginId),
-    onSuccess: (data) => {
+    onSuccess: (data, pluginId) => {
       syncTaskNotifiedRef.current = null;
-      setSyncTaskId(data.taskId);
+      setSyncingPluginId(pluginId);
+      // Invalidate any previous cached task data for this plugin
+      queryClient.invalidateQueries({
+        queryKey: ["plugin-sync-task", pluginId],
+      });
       notifications.show({
         title: "Sync started",
         message: data.message,
@@ -231,6 +244,40 @@ export function IntegrationsSettings() {
       });
     },
   });
+
+  // Detect already-running syncs on page load (runs once)
+  useEffect(() => {
+    if (!pluginData?.enabled) return;
+    if (checkedInitialSyncRef.current) return;
+    if (syncingPluginId) return;
+
+    checkedInitialSyncRef.current = true;
+
+    const syncPlugins = pluginData.enabled.filter(
+      (p) => p.connected && p.capabilities?.readSync,
+    );
+    if (syncPlugins.length === 0) return;
+
+    // Check each sync plugin for an in-progress task
+    const checkRunning = async () => {
+      for (const plugin of syncPlugins) {
+        try {
+          const task = await userPluginsApi.getPluginTask(
+            plugin.pluginId,
+            "user_plugin_sync",
+          );
+          if (isTaskActive(task)) {
+            syncTaskNotifiedRef.current = null;
+            setSyncingPluginId(plugin.pluginId);
+            break;
+          }
+        } catch {
+          // 404 = no task found, which is fine
+        }
+      }
+    };
+    checkRunning();
+  }, [pluginData?.enabled, syncingPluginId]);
 
   const handleDisconnect = (pluginId: string) => {
     setDisconnectTarget(pluginId);
@@ -340,8 +387,10 @@ export function IntegrationsSettings() {
                     : null
                 }
                 syncing={
-                  syncMutation.isPending &&
-                  syncMutation.variables === plugin.pluginId
+                  (syncMutation.isPending &&
+                    syncMutation.variables === plugin.pluginId) ||
+                  (syncingPluginId === plugin.pluginId &&
+                    isTaskActive(syncTask ?? undefined))
                 }
                 disconnecting={
                   disconnectMutation.isPending &&

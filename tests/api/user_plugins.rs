@@ -22,7 +22,7 @@ use hyper::StatusCode;
 use serde_json::json;
 
 use codex::api::routes::v1::dto::user_plugins::{
-    SyncStatusDto, SyncTriggerResponse, UserPluginDto, UserPluginsListResponse,
+    SyncStatusDto, SyncTriggerResponse, UserPluginDto, UserPluginTaskDto, UserPluginsListResponse,
 };
 use codex::db::repositories::{PluginsRepository, UserPluginsRepository, UserRepository};
 use codex::utils::password;
@@ -1260,4 +1260,278 @@ async fn test_trigger_sync_deduplication_different_users() {
     let (status, _): (StatusCode, Option<SyncTriggerResponse>) =
         make_json_request(app, request).await;
     assert_eq!(status, StatusCode::OK);
+}
+
+// =============================================================================
+// Plugin Tasks Endpoint Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_get_plugin_tasks_requires_auth() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request = get_request(&format!("/api/v1/user/plugins/{}/tasks", fake_id));
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_get_plugin_tasks_not_enabled() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
+
+    // Try to get tasks without enabling plugin
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/user/plugins/{}/tasks?type=user_plugin_sync",
+            plugin_id
+        ),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_plugin_tasks_no_tasks() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
+
+    // Enable plugin
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // No sync tasks exist yet — should return 404
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/user/plugins/{}/tasks?type=user_plugin_sync",
+            plugin_id
+        ),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_plugin_tasks_returns_task_after_sync() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_user_and_token(&db, &state, "testuser").await;
+
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
+
+    // Enable plugin and set credentials
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        &db,
+        instance.id,
+        "fake_token",
+        Some("fake_refresh"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Trigger sync
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_request_with_auth(&format!("/api/v1/user/plugins/{}/sync", plugin_id), &token);
+    let (status, trigger_resp): (StatusCode, Option<SyncTriggerResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let trigger_resp = trigger_resp.unwrap();
+
+    // Now get the plugin task — should return the pending task
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/user/plugins/{}/tasks?type=user_plugin_sync",
+            plugin_id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<UserPluginTaskDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let task_dto = response.expect("Expected task response");
+    assert_eq!(task_dto.task_id, trigger_resp.task_id);
+    assert_eq!(task_dto.task_type, "user_plugin_sync");
+    assert_eq!(task_dto.status, "pending");
+    assert!(task_dto.result.is_none());
+    assert!(task_dto.error.is_none());
+}
+
+#[tokio::test]
+async fn test_get_plugin_tasks_user_isolation() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_a_id, token_a) = create_user_and_token(&db, &state, "usera").await;
+    let (_, token_b) = create_user_and_token(&db, &state, "userb").await;
+
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
+
+    // User A enables and triggers sync
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token_a,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_a_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        &db,
+        instance.id,
+        "fake_token",
+        Some("fake_refresh"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/sync", plugin_id),
+        &token_a,
+    );
+    let (status, _): (StatusCode, Option<SyncTriggerResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // User A can see the task
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/user/plugins/{}/tasks?type=user_plugin_sync",
+            plugin_id
+        ),
+        &token_a,
+    );
+    let (status, _): (StatusCode, Option<UserPluginTaskDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // User B enables plugin but has no task — should get 404 (not User A's task)
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token_b,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/user/plugins/{}/tasks?type=user_plugin_sync",
+            plugin_id
+        ),
+        &token_b,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_get_plugin_tasks_reader_role_can_access() {
+    ensure_test_encryption_key();
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    // create_user_and_token creates a non-admin (Reader role) user
+    let (user_id, token) = create_user_and_token(&db, &state, "reader_user").await;
+
+    let plugin_id = create_sync_plugin(&db, "sync-anilist", "AniList Sync").await;
+
+    // Enable and authenticate
+    let app = create_test_router(state.clone()).await;
+    let request = post_request_with_auth(
+        &format!("/api/v1/user/plugins/{}/enable", plugin_id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<UserPluginDto>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let instance = UserPluginsRepository::get_by_user_and_plugin(&db, user_id, plugin_id)
+        .await
+        .unwrap()
+        .unwrap();
+    UserPluginsRepository::update_oauth_tokens(
+        &db,
+        instance.id,
+        "fake_token",
+        Some("fake_refresh"),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Trigger sync
+    let app = create_test_router(state.clone()).await;
+    let request =
+        post_request_with_auth(&format!("/api/v1/user/plugins/{}/sync", plugin_id), &token);
+    let (status, _): (StatusCode, Option<SyncTriggerResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Reader user can access their own task via the new endpoint
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/user/plugins/{}/tasks?type=user_plugin_sync",
+            plugin_id
+        ),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<UserPluginTaskDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let task_dto = response.expect("Reader should be able to see their own sync task");
+    assert_eq!(task_dto.task_type, "user_plugin_sync");
+    assert_eq!(task_dto.status, "pending");
 }

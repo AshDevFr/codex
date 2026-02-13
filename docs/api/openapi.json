@@ -12135,6 +12135,66 @@
         }
       }
     },
+    "/api/v1/user/plugins/{plugin_id}/tasks": {
+      "get": {
+        "tags": [
+          "User Plugins"
+        ],
+        "summary": "Get the latest task for a user plugin",
+        "description": "Returns the most recent background task for this user+plugin combination.\nUse the `?type=user_plugin_sync` query parameter to filter by task type.\n\nThis endpoint is user-scoped and does NOT require `TasksRead` permission.\nOnly the authenticated user's own tasks are returned.",
+        "operationId": "get_plugin_tasks",
+        "parameters": [
+          {
+            "name": "plugin_id",
+            "in": "path",
+            "description": "Plugin ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Filter by task type (e.g., \"user_plugin_sync\").\nIf omitted, returns the latest task of any type for this plugin.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest task found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPluginTaskDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "No tasks found for this plugin"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/user/preferences": {
       "get": {
         "tags": [
@@ -33297,6 +33357,75 @@
               "null"
             ],
             "description": "User-facing setup instructions for the plugin"
+          }
+        }
+      },
+      "UserPluginTaskDto": {
+        "type": "object",
+        "description": "A user-scoped plugin task status\n\nLightweight view of a background task belonging to the current user and plugin.\nDoes not require `TasksRead` permission — access is scoped by the authenticated user.",
+        "required": [
+          "taskId",
+          "taskType",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When task execution completed"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the task was created"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error message from last failed attempt"
+          },
+          "result": {
+            "description": "Task result (populated on completion)"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When task execution started"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current status: pending, processing, completed, failed"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Task ID"
+          },
+          "taskType": {
+            "type": "string",
+            "description": "Task type (e.g., \"user_plugin_sync\")"
+          }
+        }
+      },
+      "UserPluginTasksQuery": {
+        "type": "object",
+        "description": "Query parameters for the plugin tasks endpoint",
+        "properties": {
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by task type (e.g., \"user_plugin_sync\").\nIf omitted, returns the latest task of any type for this plugin."
           }
         }
       },

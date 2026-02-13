@@ -206,6 +206,60 @@ pub struct SyncStatusDto {
     pub live_error: Option<String>,
 }
 
+/// Query parameters for the plugin tasks endpoint
+#[derive(Debug, Clone, Deserialize, ToSchema, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct UserPluginTasksQuery {
+    /// Filter by task type (e.g., "user_plugin_sync").
+    /// If omitted, returns the latest task of any type for this plugin.
+    #[serde(rename = "type")]
+    pub task_type: Option<String>,
+}
+
+/// A user-scoped plugin task status
+///
+/// Lightweight view of a background task belonging to the current user and plugin.
+/// Does not require `TasksRead` permission — access is scoped by the authenticated user.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserPluginTaskDto {
+    /// Task ID
+    pub task_id: Uuid,
+    /// Task type (e.g., "user_plugin_sync")
+    pub task_type: String,
+    /// Current status: pending, processing, completed, failed
+    pub status: String,
+    /// Task result (populated on completion)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<serde_json::Value>,
+    /// Error message from last failed attempt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// When the task was created
+    pub created_at: DateTime<Utc>,
+    /// When task execution started
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<DateTime<Utc>>,
+    /// When task execution completed
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+impl From<crate::db::entities::tasks::Model> for UserPluginTaskDto {
+    fn from(task: crate::db::entities::tasks::Model) -> Self {
+        Self {
+            task_id: task.id,
+            task_type: task.task_type,
+            status: task.status,
+            result: task.result,
+            error: task.last_error,
+            created_at: task.created_at,
+            started_at: task.started_at,
+            completed_at: task.completed_at,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

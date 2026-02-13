@@ -4130,6 +4130,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/plugins/{plugin_id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the latest task for a user plugin
+         * @description Returns the most recent background task for this user+plugin combination.
+         *     Use the `?type=user_plugin_sync` query parameter to filter by task type.
+         *
+         *     This endpoint is user-scoped and does NOT require `TasksRead` permission.
+         *     Only the authenticated user's own tasks are returned.
+         */
+        get: operations["get_plugin_tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/preferences": {
         parameters: {
             query?: never;
@@ -15317,6 +15341,50 @@ export interface components {
             /** @description User-facing setup instructions for the plugin */
             userSetupInstructions?: string | null;
         };
+        /**
+         * @description A user-scoped plugin task status
+         *
+         *     Lightweight view of a background task belonging to the current user and plugin.
+         *     Does not require `TasksRead` permission — access is scoped by the authenticated user.
+         */
+        UserPluginTaskDto: {
+            /**
+             * Format: date-time
+             * @description When task execution completed
+             */
+            completedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the task was created
+             */
+            createdAt: string;
+            /** @description Error message from last failed attempt */
+            error?: string | null;
+            /** @description Task result (populated on completion) */
+            result?: unknown;
+            /**
+             * Format: date-time
+             * @description When task execution started
+             */
+            startedAt?: string | null;
+            /** @description Current status: pending, processing, completed, failed */
+            status: string;
+            /**
+             * Format: uuid
+             * @description Task ID
+             */
+            taskId: string;
+            /** @description Task type (e.g., "user_plugin_sync") */
+            taskType: string;
+        };
+        /** @description Query parameters for the plugin tasks endpoint */
+        UserPluginTasksQuery: {
+            /**
+             * @description Filter by task type (e.g., "user_plugin_sync").
+             *     If omitted, returns the latest task of any type for this plugin.
+             */
+            type?: string | null;
+        };
         /** @description User plugins list response */
         UserPluginsListResponse: {
             /** @description Plugins available for the user to enable */
@@ -24610,6 +24678,49 @@ export interface operations {
                 content?: never;
             };
             /** @description Plugin not enabled for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_plugin_tasks: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Filter by task type (e.g., "user_plugin_sync").
+                 *     If omitted, returns the latest task of any type for this plugin.
+                 */
+                type?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Plugin ID */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest task found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPluginTaskDto"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No tasks found for this plugin */
             404: {
                 headers: {
                     [name: string]: unknown;

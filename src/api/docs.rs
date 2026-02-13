@@ -430,6 +430,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::user_plugins::set_user_credentials,
         v1::handlers::user_plugins::trigger_sync,
         v1::handlers::user_plugins::get_sync_status,
+        v1::handlers::user_plugins::get_plugin_tasks,
 
         // Recommendation endpoints
         v1::handlers::recommendations::get_recommendations,
@@ -802,6 +803,8 @@ The following paths are exempt from rate limiting:
             v1::dto::SyncTriggerResponse,
             v1::dto::SyncStatusDto,
             v1::dto::SyncStatusQuery,
+            v1::dto::UserPluginTaskDto,
+            v1::dto::UserPluginTasksQuery,
 
             // Recommendation DTOs
             v1::dto::recommendations::RecommendationDto,
