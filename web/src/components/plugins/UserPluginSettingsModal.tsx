@@ -36,6 +36,12 @@ interface CodexSyncValues {
   syncRatings: boolean;
 }
 
+interface CodexRecommendationValues {
+  maxRecommendations: number;
+  maxSeeds: number;
+  dropThreshold: number;
+}
+
 // =============================================================================
 // Inner content component (keyed by plugin.id for clean remounts)
 // =============================================================================
@@ -49,6 +55,7 @@ function UserPluginSettingsContent({
 }) {
   const queryClient = useQueryClient();
   const isSyncPlugin = plugin.capabilities?.readSync === true;
+  const isRecPlugin = plugin.capabilities?.userRecommendationProvider === true;
   const configFields: ConfigField[] =
     (plugin.userConfigSchema?.fields as ConfigField[] | undefined) ?? [];
   const currentConfig = (plugin.config ?? {}) as Record<string, unknown>;
@@ -82,6 +89,19 @@ function UserPluginSettingsContent({
         : true;
   }
 
+  if (isRecPlugin) {
+    initialValues._codex_maxRecommendations =
+      typeof codexConfig.maxRecommendations === "number"
+        ? codexConfig.maxRecommendations
+        : 20;
+    initialValues._codex_maxSeeds =
+      typeof codexConfig.maxSeeds === "number" ? codexConfig.maxSeeds : 10;
+    initialValues._codex_dropThreshold =
+      typeof codexConfig.dropThreshold === "number"
+        ? codexConfig.dropThreshold
+        : 0;
+  }
+
   for (const field of configFields) {
     initialValues[field.key] = currentConfig[field.key] ?? field.default ?? "";
   }
@@ -93,14 +113,33 @@ function UserPluginSettingsContent({
       // Build config object: preserve existing keys, update from form
       const config: Record<string, unknown> = { ...currentConfig };
 
-      // Extract Codex sync settings into _codex namespace
+      // Extract Codex settings into _codex namespace
+      const codex: Record<string, unknown> = {
+        ...((currentConfig._codex as Record<string, unknown>) ?? {}),
+      };
+
       if (isSyncPlugin) {
-        const codex: CodexSyncValues = {
+        const syncValues: CodexSyncValues = {
           includeCompleted: !!form.values._codex_includeCompleted,
           includeInProgress: !!form.values._codex_includeInProgress,
           countPartialProgress: !!form.values._codex_countPartialProgress,
           syncRatings: !!form.values._codex_syncRatings,
         };
+        Object.assign(codex, syncValues);
+      }
+
+      if (isRecPlugin) {
+        const recValues: CodexRecommendationValues = {
+          maxRecommendations: Number(
+            form.values._codex_maxRecommendations ?? 20,
+          ),
+          maxSeeds: Number(form.values._codex_maxSeeds ?? 10),
+          dropThreshold: Number(form.values._codex_dropThreshold ?? 0),
+        };
+        Object.assign(codex, recValues);
+      }
+
+      if (isSyncPlugin || isRecPlugin) {
         config._codex = codex;
       }
 
@@ -131,7 +170,7 @@ function UserPluginSettingsContent({
     },
   });
 
-  const hasFields = isSyncPlugin || configFields.length > 0;
+  const hasFields = isSyncPlugin || isRecPlugin || configFields.length > 0;
 
   return (
     <Stack gap="md">
@@ -210,7 +249,40 @@ function UserPluginSettingsContent({
         </>
       )}
 
-      {isSyncPlugin && configFields.length > 0 && (
+      {isRecPlugin && (
+        <>
+          <Divider
+            label="Recommendation Settings"
+            labelPosition="left"
+            mt="xs"
+          />
+          <NumberInput
+            label="Maximum recommendations"
+            description="How many recommendations to generate per refresh (1–50)"
+            min={1}
+            max={50}
+            {...form.getInputProps("_codex_maxRecommendations")}
+          />
+          <NumberInput
+            label="Maximum seed titles"
+            description="How many of your highest-rated series to use as seeds (1–25)"
+            min={1}
+            max={25}
+            {...form.getInputProps("_codex_maxSeeds")}
+          />
+          <NumberInput
+            label="Minimum rating threshold"
+            description="Series rated below this are not used as seeds (0 = no filter)"
+            min={0}
+            max={10}
+            step={0.5}
+            decimalScale={1}
+            {...form.getInputProps("_codex_dropThreshold")}
+          />
+        </>
+      )}
+
+      {(isSyncPlugin || isRecPlugin) && configFields.length > 0 && (
         <Divider label="Plugin Settings" labelPosition="left" mt="xs" />
       )}
 

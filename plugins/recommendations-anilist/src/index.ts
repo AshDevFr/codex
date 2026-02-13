@@ -39,8 +39,6 @@ const logger = createLogger({ name: "recommendations-anilist", level: "debug" })
 // Plugin state (set during initialization)
 let client: AniListRecommendationClient | null = null;
 let viewerId: number | null = null;
-let maxRecommendations = 20;
-let maxSeeds = 10;
 let searchFallback = true;
 let storage: PluginStorage | null = null;
 
@@ -148,22 +146,6 @@ export async function resolveAniListIds(
 }
 
 /**
- * Pick the best entries from the user's library to seed recommendations.
- * Prioritizes highly-rated, recently-read titles.
- */
-export function pickSeedEntries(entries: UserLibraryEntry[], maxSeeds: number): UserLibraryEntry[] {
-  // Sort by rating (desc), then by recency
-  const sorted = [...entries].sort((a, b) => {
-    const ratingDiff = (b.userRating ?? 0) - (a.userRating ?? 0);
-    if (ratingDiff !== 0) return ratingDiff;
-    // Fall back to books read as a proxy for engagement
-    return b.booksRead - a.booksRead;
-  });
-
-  return sorted.slice(0, maxSeeds);
-}
-
-/**
  * Map AniList media status to Codex SeriesStatus.
  * AniList values: FINISHED, RELEASING, NOT_YET_RELEASED, CANCELLED, HIATUS
  */
@@ -252,10 +234,11 @@ const provider: RecommendationProvider = {
     }
 
     const { library, limit, excludeIds: rawExcludeIds = [] } = params;
-    const effectiveLimit = Math.min(limit ?? maxRecommendations, 50);
+    const effectiveLimit = Math.min(limit ?? 20, 50);
     const excludeIds = new Set(rawExcludeIds);
 
-    // Return early if library is empty — no seeds to work with
+    // Library entries are pre-curated seeds from Codex server (rated + recent reads).
+    // Return early if no seeds provided.
     if (!library || library.length === 0) {
       logger.info("Empty library — returning no recommendations");
       return { recommendations: [], generatedAt: new Date().toISOString(), cached: false };
@@ -265,13 +248,10 @@ const provider: RecommendationProvider = {
     const userMangaIds = await client.getUserMangaIds(viewerId);
     logger.debug(`User has ${userMangaIds.size} manga in AniList list`);
 
-    // Pick seed entries (top-rated from user's library)
-    const seeds = pickSeedEntries(library, maxSeeds);
-    logger.debug(`Using ${seeds.length} seed entries from library of ${library.length}`);
-
-    // Resolve AniList IDs for seed entries
-    const resolved = await resolveAniListIds(seeds);
-    logger.debug(`Resolved ${resolved.size} AniList IDs from ${seeds.length} seeds`);
+    // Resolve AniList IDs for seed entries (library is already curated by Codex)
+    logger.debug(`Using ${library.length} seed entries`);
+    const resolved = await resolveAniListIds(library);
+    logger.debug(`Resolved ${resolved.size} AniList IDs from ${library.length} seeds`);
 
     // Fetch recommendations for each seed
     const allRecs = new Map<string, Recommendation>();
@@ -353,20 +333,6 @@ createRecommendationPlugin({
       logger.info("AniList client initialized with access token");
     } else {
       logger.warn("No access token provided - recommendation operations will fail");
-    }
-
-    // Read maxRecommendations from adminConfig (defined in configSchema)
-    const rawMax = params.adminConfig?.maxRecommendations;
-    if (typeof rawMax === "number") {
-      maxRecommendations = Math.max(1, Math.min(Math.round(rawMax), 50));
-      logger.info(`Max recommendations set to: ${maxRecommendations}`);
-    }
-
-    // Read maxSeeds from adminConfig (defined in configSchema)
-    const rawSeeds = params.adminConfig?.maxSeeds;
-    if (typeof rawSeeds === "number") {
-      maxSeeds = Math.max(1, Math.min(Math.round(rawSeeds), 25));
-      logger.info(`Max seeds set to: ${maxSeeds}`);
     }
 
     // Read searchFallback from userConfig (default: true — preserve existing behavior)

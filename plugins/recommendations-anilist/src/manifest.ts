@@ -29,24 +29,7 @@ export const manifest = {
   ],
   configSchema: {
     description: "Recommendation configuration",
-    fields: [
-      {
-        key: "maxRecommendations",
-        label: "Maximum Recommendations",
-        description: "Maximum number of recommendations to generate (1-50)",
-        type: "number" as const,
-        required: false,
-        default: 20,
-      },
-      {
-        key: "maxSeeds",
-        label: "Maximum Seed Titles",
-        description: "Number of top-rated library titles used to generate recommendations (1-25)",
-        type: "number" as const,
-        required: false,
-        default: 10,
-      },
-    ],
+    fields: [],
   },
   userConfigSchema: {
     description: "Per-user recommendation settings",
