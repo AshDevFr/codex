@@ -50,7 +50,7 @@ pub struct RateLimitConfig {
     /// Burst size for authenticated users (default: 200)
     pub authenticated_burst: u32,
 
-    /// Paths to exempt from rate limiting (default: ["/health", "/api/v1/events"])
+    /// Glob patterns for paths exempt from rate limiting (e.g. `/api/v1/books/*/thumbnail`)
     pub exempt_paths: Vec<String>,
 
     /// Cleanup interval in seconds for stale buckets (default: 60)
@@ -61,7 +61,11 @@ pub struct RateLimitConfig {
 }
 
 fn default_exempt_paths() -> Vec<String> {
-    vec!["/health".to_string(), "/api/v1/events".to_string()]
+    vec![
+        "/health".to_string(),
+        "/api/v1/events".to_string(),
+        "/api/v1/events/**".to_string(),
+    ]
 }
 
 /// Default role for OIDC users
@@ -1206,7 +1210,11 @@ database:
         // Default exempt paths
         assert_eq!(
             config.exempt_paths,
-            vec!["/health".to_string(), "/api/v1/events".to_string()]
+            vec![
+                "/health".to_string(),
+                "/api/v1/events".to_string(),
+                "/api/v1/events/**".to_string(),
+            ]
         );
         // Default cleanup settings
         assert_eq!(config.cleanup_interval_secs, 60);

@@ -225,6 +225,9 @@ impl RateLimiterService {
     }
 
     /// Check if a path is exempt from rate limiting
+    ///
+    /// Note: This is a simplified check using `starts_with`. The actual middleware
+    /// uses compiled `GlobSet` patterns for efficient glob matching.
     #[allow(dead_code)] // Useful for monitoring/debugging
     pub fn is_path_exempt(&self, path: &str) -> bool {
         self.config
@@ -302,7 +305,11 @@ mod tests {
             anonymous_burst: 5, // Small burst for easier testing
             authenticated_rps: 50,
             authenticated_burst: 10, // Small burst for easier testing
-            exempt_paths: vec!["/health".to_string(), "/api/v1/events".to_string()],
+            exempt_paths: vec![
+                "/health".to_string(),
+                "/api/v1/events".to_string(),
+                "/api/v1/events/**".to_string(),
+            ],
             cleanup_interval_secs: 1,
             bucket_ttl_secs: 2,
         })

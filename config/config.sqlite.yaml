@@ -131,8 +131,10 @@ files:
 #   anonymous_burst: 50        # Burst size for anonymous users
 #   authenticated_rps: 50      # Requests/second for authenticated users
 #   authenticated_burst: 200   # Burst size for authenticated users
-#   exempt_paths:              # Paths exempt from rate limiting
+#   exempt_paths:              # Glob patterns for paths exempt from rate limiting
 #     - /health
 #     - /api/v1/events
+#     - /api/v1/events/**
+#     - /api/v1/books/*/thumbnail   # Exempt book thumbnails
 #   cleanup_interval_secs: 60  # How often to clean up stale buckets
 #   bucket_ttl_secs: 300       # Time before a bucket is considered stale

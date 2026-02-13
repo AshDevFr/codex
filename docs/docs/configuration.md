@@ -461,9 +461,11 @@ rate_limit:
   anonymous_burst: 50         # Maximum burst size for anonymous users
   authenticated_rps: 50       # Requests per second for authenticated users
   authenticated_burst: 200    # Maximum burst size for authenticated users
-  exempt_paths:               # Paths exempt from rate limiting
+  exempt_paths:               # Glob patterns for paths exempt from rate limiting
     - /health
     - /api/v1/events
+    - /api/v1/events/**
+    - /api/v1/books/*/thumbnail   # Exempt book thumbnails
   cleanup_interval_secs: 60   # How often to clean stale buckets
   bucket_ttl_secs: 300        # Time before a bucket is considered stale
 ```
@@ -475,9 +477,14 @@ rate_limit:
 | `anonymous_burst` | `50` | Maximum burst size for anonymous users |
 | `authenticated_rps` | `50` | Requests per second for authenticated users |
 | `authenticated_burst` | `200` | Maximum burst size for authenticated users |
-| `exempt_paths` | `["/health", "/api/v1/events"]` | Paths exempt from rate limiting |
+| `exempt_paths` | `["/health", "/api/v1/events", "/api/v1/events/**"]` | Glob patterns for paths exempt from rate limiting |
 | `cleanup_interval_secs` | `60` | How often to clean up stale client buckets |
 | `bucket_ttl_secs` | `300` | Time in seconds before a bucket is considered stale |
+
+Exempt paths support glob patterns:
+- `*` matches a single path segment (e.g., `/api/v1/books/*/thumbnail` matches `/api/v1/books/123/thumbnail`)
+- `**` matches zero or more path segments (e.g., `/api/v1/events/**` matches `/api/v1/events/stream`)
+- Exact paths match only themselves (e.g., `/health` matches only `/health`, not `/health/check`)
 
 ### How It Works
 

@@ -135,8 +135,10 @@ files:
 #   anonymous_burst: 50
 #   authenticated_rps: 50
 #   authenticated_burst: 200
-#   exempt_paths:
+#   exempt_paths:              # Glob patterns for paths exempt from rate limiting
 #     - /health
 #     - /api/v1/events
+#     - /api/v1/events/**
+#     - /api/v1/books/*/thumbnail   # Exempt book thumbnails
 #   cleanup_interval_secs: 60
 #   bucket_ttl_secs: 300

@@ -50,7 +50,11 @@ fn create_rate_limit_test_config() -> Config {
     config.rate_limit.anonymous_burst = 3; // Small burst for easy testing
     config.rate_limit.authenticated_rps = 1; // 1 token per second - won't refill during test
     config.rate_limit.authenticated_burst = 5; // Small burst for easy testing
-    config.rate_limit.exempt_paths = vec!["/health".to_string(), "/api/v1/events".to_string()];
+    config.rate_limit.exempt_paths = vec![
+        "/health".to_string(),
+        "/api/v1/events".to_string(),
+        "/api/v1/events/**".to_string(),
+    ];
 
     config
 }
@@ -373,7 +377,7 @@ async fn test_rate_limit_exempt_paths_events() {
 }
 
 #[tokio::test]
-async fn test_rate_limit_exempt_paths_prefix_match() {
+async fn test_rate_limit_exempt_paths_glob_match() {
     let (db, _temp_dir) = setup_test_db().await;
 
     // Create a test user for authentication
@@ -387,7 +391,7 @@ async fn test_rate_limit_exempt_paths_prefix_match() {
     let token = generate_test_token(&state, &user);
     let app = create_rate_limited_router(state, &config);
 
-    // /api/v1/events/* should also be exempt (prefix matching)
+    // /api/v1/events/some/subpath should match the /api/v1/events/** glob pattern
     for i in 0..10 {
         let request =
             get_request_with_auth_and_ip("/api/v1/events/some/subpath", &token, "192.168.1.70");

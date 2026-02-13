@@ -30,9 +30,9 @@ use axum::{
     response::IntoResponse,
 };
 use futures::future::BoxFuture;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Serialize;
 use std::{
-    collections::HashSet,
     net::{IpAddr, SocketAddr},
     sync::Arc,
     task::{Context, Poll},
@@ -60,11 +60,12 @@ struct RateLimitExceededResponse {
 /// Rate limiting middleware layer
 ///
 /// Wraps services to add rate limiting based on client identity.
-/// Exempt paths bypass rate limiting entirely.
+/// Exempt paths bypass rate limiting entirely. Paths are matched using glob
+/// patterns (e.g. `/api/v1/books/*/thumbnail`, `/api/v1/events/**`).
 #[derive(Clone)]
 pub struct RateLimitLayer {
     service: Arc<RateLimiterService>,
-    exempt_paths: HashSet<String>,
+    exempt_paths: Arc<GlobSet>,
 }
 
 impl RateLimitLayer {
@@ -72,13 +73,32 @@ impl RateLimitLayer {
     ///
     /// # Arguments
     /// * `service` - The rate limiter service instance
-    /// * `exempt_paths` - Paths that bypass rate limiting (prefix matching)
+    /// * `exempt_paths` - Glob patterns for paths that bypass rate limiting
+    ///
+    /// # Panics
+    /// Panics if any exempt path pattern is not a valid glob.
     pub fn new(service: Arc<RateLimiterService>, exempt_paths: Vec<String>) -> Self {
         Self {
             service,
-            exempt_paths: exempt_paths.into_iter().collect(),
+            exempt_paths: Arc::new(build_exempt_globset(&exempt_paths)),
         }
     }
+}
+
+/// Compile exempt path patterns into a `GlobSet` for efficient matching.
+///
+/// # Panics
+/// Panics if any pattern is not a valid glob.
+fn build_exempt_globset(patterns: &[String]) -> GlobSet {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        let glob = Glob::new(pattern)
+            .unwrap_or_else(|e| panic!("Invalid exempt path glob pattern '{}': {}", pattern, e));
+        builder.add(glob);
+    }
+    builder
+        .build()
+        .expect("Failed to build exempt paths GlobSet")
 }
 
 impl<S> Layer<S> for RateLimitLayer {
@@ -100,7 +120,7 @@ impl<S> Layer<S> for RateLimitLayer {
 pub struct RateLimitMiddleware<S> {
     inner: S,
     rate_limiter: Arc<RateLimiterService>,
-    exempt_paths: HashSet<String>,
+    exempt_paths: Arc<GlobSet>,
 }
 
 impl<S> RateLimitMiddleware<S> {
@@ -207,9 +227,8 @@ where
                 return inner.call(req).await;
             }
 
-            // Check if path is exempt
-            let is_exempt = exempt_paths.contains(&path)
-                || exempt_paths.iter().any(|exempt| path.starts_with(exempt));
+            // Check if path is exempt (glob pattern matching)
+            let is_exempt = exempt_paths.is_match(&path);
 
             if is_exempt {
                 trace!(path = %path, "Path exempt from rate limiting");
@@ -442,28 +461,66 @@ mod tests {
         let service = Arc::new(RateLimiterService::new(config));
         let layer = RateLimitLayer::new(
             service,
-            vec!["/health".to_string(), "/api/v1/events".to_string()],
+            vec!["/health".to_string(), "/api/v1/events/**".to_string()],
         );
 
-        assert_eq!(layer.exempt_paths.len(), 2);
-        assert!(layer.exempt_paths.contains("/health"));
-        assert!(layer.exempt_paths.contains("/api/v1/events"));
+        assert!(layer.exempt_paths.is_match("/health"));
+        assert!(layer.exempt_paths.is_match("/api/v1/events/stream"));
+    }
+
+    // ===================
+    // Glob pattern matching tests
+    // ===================
+
+    #[test]
+    fn test_exempt_glob_exact_match() {
+        let gs = build_exempt_globset(&["/health".to_string()]);
+        assert!(gs.is_match("/health"));
+        assert!(!gs.is_match("/health/check"));
+        assert!(!gs.is_match("/healthz"));
     }
 
     #[test]
-    fn test_rate_limit_layer_exempt_paths_deduplication() {
-        let config = Arc::new(crate::config::RateLimitConfig::default());
-        let service = Arc::new(RateLimiterService::new(config));
-        let layer = RateLimitLayer::new(
-            service,
-            vec![
-                "/health".to_string(),
-                "/health".to_string(), // Duplicate
-                "/api/v1/events".to_string(),
-            ],
-        );
+    fn test_exempt_glob_double_star_recursive() {
+        let gs = build_exempt_globset(&["/api/v1/events/**".to_string()]);
+        assert!(gs.is_match("/api/v1/events/stream"));
+        assert!(gs.is_match("/api/v1/events/some/deep/path"));
+        // The base path without trailing slash does not match /**
+        assert!(!gs.is_match("/api/v1/events"));
+    }
 
-        // HashSet deduplicates
-        assert_eq!(layer.exempt_paths.len(), 2);
+    #[test]
+    fn test_exempt_glob_single_star_segment() {
+        let gs = build_exempt_globset(&["/api/v1/books/*/thumbnail".to_string()]);
+        assert!(gs.is_match("/api/v1/books/123/thumbnail"));
+        assert!(gs.is_match("/api/v1/books/some-uuid/thumbnail"));
+        // Does not match extra segments
+        assert!(!gs.is_match("/api/v1/books/123/thumbnail/large"));
+        // Does not match the books list itself
+        assert!(!gs.is_match("/api/v1/books"));
+        // Does not match other sub-resources
+        assert!(!gs.is_match("/api/v1/books/123/pages"));
+    }
+
+    #[test]
+    fn test_exempt_glob_multiple_patterns() {
+        let gs = build_exempt_globset(&[
+            "/health".to_string(),
+            "/api/v1/events/**".to_string(),
+            "/api/v1/books/*/thumbnail".to_string(),
+            "/api/v1/series/*/thumbnail".to_string(),
+        ]);
+        assert!(gs.is_match("/health"));
+        assert!(gs.is_match("/api/v1/events/stream"));
+        assert!(gs.is_match("/api/v1/books/abc/thumbnail"));
+        assert!(gs.is_match("/api/v1/series/xyz/thumbnail"));
+        assert!(!gs.is_match("/api/v1/books/abc/pages"));
+        assert!(!gs.is_match("/api/v1/series/xyz/books"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid exempt path glob pattern")]
+    fn test_exempt_glob_invalid_pattern_panics() {
+        build_exempt_globset(&["[invalid".to_string()]);
     }
 }
