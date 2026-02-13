@@ -291,15 +291,14 @@ pub async fn refresh_recommendations(
     }))
 }
 
-/// Enrich recommendation DTOs with Codex library presence and filter out
-/// series that already exist in the user's Codex library.
+/// Enrich recommendation DTOs with Codex library presence.
 ///
 /// For each recommendation, checks whether its `external_id` maps to a Codex series
-/// via `series_external_ids`. When matched, the recommendation is removed from the
-/// list since the user already has it locally — there's no point recommending it.
+/// via `series_external_ids`. When matched, sets `in_codex = true` and populates
+/// `codex_series_id` so the frontend can link to the local series.
 async fn enrich_and_filter_codex_presence(
     db: &sea_orm::DatabaseConnection,
-    recommendations: &mut Vec<RecommendationDto>,
+    recommendations: &mut [RecommendationDto],
     plugin: &crate::db::entities::plugins::Model,
 ) {
     // Resolve the external_id_source from the plugin manifest
@@ -329,16 +328,19 @@ async fn enrich_and_filter_codex_presence(
         .await
     {
         Ok(matches) => {
-            let before_count = recommendations.len();
-            // Remove recommendations that map to a local Codex series
-            recommendations.retain(|rec| !matches.contains_key(&rec.external_id));
-            let filtered = before_count - recommendations.len();
+            let mut enriched = 0;
+            for rec in recommendations.iter_mut() {
+                if let Some(ext_id_record) = matches.get(&rec.external_id) {
+                    rec.in_codex = true;
+                    rec.codex_series_id = Some(ext_id_record.series_id.to_string());
+                    enriched += 1;
+                }
+            }
             debug!(
                 matched = matches.len(),
-                filtered = filtered,
-                remaining = recommendations.len(),
-                total = before_count,
-                "Enriched recommendations and filtered out local series"
+                enriched = enriched,
+                total = external_ids.len(),
+                "Enriched recommendations with Codex library presence"
             );
         }
         Err(e) => {

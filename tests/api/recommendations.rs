@@ -918,7 +918,7 @@ async fn test_get_recommendations_filters_out_local_series() {
     .await
     .unwrap();
 
-    // GET recommendations — "111" should be filtered out, "222" should remain
+    // GET recommendations — "111" should be enriched with inCodex/codexSeriesId, "222" should remain as-is
     let app = create_test_router(state.clone()).await;
     let request = get_request_with_auth("/api/v1/user/recommendations", &token);
     let (status, response): (StatusCode, Option<serde_json::Value>) =
@@ -927,9 +927,36 @@ async fn test_get_recommendations_filters_out_local_series() {
     assert_eq!(status, StatusCode::OK);
     let body = response.expect("Expected response body");
     let recs = body["recommendations"].as_array().unwrap();
-    assert_eq!(recs.len(), 1, "Should have filtered out the local series");
-    assert_eq!(recs[0]["externalId"], "222");
-    assert_eq!(recs[0]["title"], "New Recommendation");
+    assert_eq!(
+        recs.len(),
+        2,
+        "Both recommendations should be returned (local series enriched, not filtered)"
+    );
+
+    // "111" matched a local series — should have inCodex=true and codexSeriesId set
+    let rec_111 = recs.iter().find(|r| r["externalId"] == "111").unwrap();
+    assert_eq!(rec_111["title"], "Already In Library");
+    assert!(
+        rec_111["inCodex"].as_bool().unwrap(),
+        "Local series should be marked inCodex=true"
+    );
+    assert_eq!(
+        rec_111["codexSeriesId"],
+        series.id.to_string(),
+        "Should have the Codex series ID"
+    );
+
+    // "222" has no local match — inCodex should be false
+    let rec_222 = recs.iter().find(|r| r["externalId"] == "222").unwrap();
+    assert_eq!(rec_222["title"], "New Recommendation");
+    assert!(
+        !rec_222["inCodex"].as_bool().unwrap(),
+        "Non-local series should have inCodex=false"
+    );
+    assert!(
+        rec_222.get("codexSeriesId").is_none(),
+        "Non-local series should not have codexSeriesId"
+    );
 }
 
 #[tokio::test]

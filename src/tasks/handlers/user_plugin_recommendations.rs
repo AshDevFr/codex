@@ -20,7 +20,7 @@ use crate::events::EventBroadcaster;
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::library::build_user_library;
-use crate::services::plugin::protocol::{PluginManifest, methods};
+use crate::services::plugin::protocol::{PluginManifest, UserReadingStatus, methods};
 use crate::services::plugin::recommendations::{
     RecommendationClearResponse, RecommendationRequest, RecommendationResponse,
 };
@@ -144,8 +144,9 @@ impl TaskHandler for UserPluginRecommendationsHandler {
             );
 
             // Resolve the plugin's external_id_source so we can populate exclude_ids
-            // with external IDs from the user's library that match this source.
-            // This tells the plugin to skip recommending series the user already has.
+            // with external IDs from series the user has already read (Reading or Completed).
+            // Unread series are NOT excluded — the user may want recommendations for titles
+            // they own but haven't started yet.
             let exclude_ids = match PluginsRepository::get_by_id(db, plugin_id).await {
                 Ok(Some(plugin_model)) => {
                     let source = plugin_model
@@ -157,6 +158,13 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                     if let Some(source) = source {
                         library
                             .iter()
+                            .filter(|entry| {
+                                matches!(
+                                    entry.reading_status,
+                                    Some(UserReadingStatus::Reading)
+                                        | Some(UserReadingStatus::Completed)
+                                )
+                            })
                             .flat_map(|entry| {
                                 entry
                                     .external_ids
