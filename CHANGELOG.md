@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.8] - 2026-02-13
+
+### 🚀 Features
+
+- *(recommendations)* Move settings to server-side with per-user seed curation
+
+### 🐛 Bug Fixes
+
+- *(ui)* Remove duplicate "Based on" text in recommendation cards
+- *(recommendations)* Only exclude read series and enrich instead of filtering local matches
+
 ## [1.10.7] - 2026-02-13
 
 ### 🚀 Features
