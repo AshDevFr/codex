@@ -2,6 +2,19 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.10.9] - 2026-02-13
+
+### 🚀 Features
+
+- *(ui)* Redesign recommendation cards with float-based grid layout
+- *(filter)* Add hasUserRating filter and fix rating sort for PostgreSQL
+- *(plugins)* Add user-scoped plugin task endpoint for sync status visibility
+
+### 🐛 Bug Fixes
+
+- *(release)* Improve release-prepare with SDK versioning and progress output
+- *(recommendations)* Allow dismissing recommendations already available in Codex
+
 ## [1.10.8] - 2026-02-13
 
 ### 🚀 Features
