@@ -66,11 +66,6 @@ describe("RecommendationCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders based on titles", () => {
-    renderWithProviders(<RecommendationCard {...defaultProps} />);
-    expect(screen.getByText("Based on: Berserk, Vagabond")).toBeInTheDocument();
-  });
-
   it("renders summary", () => {
     renderWithProviders(<RecommendationCard {...defaultProps} />);
     expect(
@@ -169,16 +164,6 @@ describe("RecommendationCard", () => {
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute("href", "https://anilist.co/manga/12345");
     expect(link).toHaveAttribute("target", "_blank");
-  });
-
-  it("does not render based on when empty", () => {
-    renderWithProviders(
-      <RecommendationCard
-        recommendation={minimalRecommendation}
-        onDismiss={vi.fn()}
-      />,
-    );
-    expect(screen.queryByText(/Based on:/)).not.toBeInTheDocument();
   });
 
   it("shows View in Library button when codexSeriesId is present", () => {

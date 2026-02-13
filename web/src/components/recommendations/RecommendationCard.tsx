@@ -72,7 +72,6 @@ export function RecommendationCard({
     genres = [],
     score,
     reason,
-    basedOn = [],
     inLibrary,
     codexSeriesId,
     inCodex,
@@ -201,13 +200,6 @@ export function RecommendationCard({
           <Text size="sm" c="dimmed" lineClamp={2}>
             {reason}
           </Text>
-
-          {/* Based on */}
-          {basedOn.length > 0 && (
-            <Text size="xs" c="dimmed">
-              Based on: {basedOn.join(", ")}
-            </Text>
-          )}
 
           {/* Summary */}
           {summary && (
