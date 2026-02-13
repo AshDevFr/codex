@@ -54,6 +54,12 @@ pub enum SeriesSortField {
     DateRead,
     /// Sort by number of books in the series
     BookCount,
+    /// Sort by user rating (user-specific)
+    Rating,
+    /// Sort by community average rating
+    CommunityRating,
+    /// Sort by external rating (highest external source rating)
+    ExternalRating,
 }
 
 impl fmt::Display for SeriesSortField {
@@ -65,6 +71,9 @@ impl fmt::Display for SeriesSortField {
             SeriesSortField::ReleaseDate => write!(f, "release_date"),
             SeriesSortField::DateRead => write!(f, "date_read"),
             SeriesSortField::BookCount => write!(f, "book_count"),
+            SeriesSortField::Rating => write!(f, "rating"),
+            SeriesSortField::CommunityRating => write!(f, "community_rating"),
+            SeriesSortField::ExternalRating => write!(f, "external_rating"),
         }
     }
 }
@@ -80,6 +89,9 @@ impl FromStr for SeriesSortField {
             "release_date" | "year" => Ok(SeriesSortField::ReleaseDate),
             "date_read" => Ok(SeriesSortField::DateRead),
             "book_count" => Ok(SeriesSortField::BookCount),
+            "rating" | "user_rating" => Ok(SeriesSortField::Rating),
+            "community_rating" | "avg_rating" => Ok(SeriesSortField::CommunityRating),
+            "external_rating" => Ok(SeriesSortField::ExternalRating),
             _ => Err(format!("Invalid sort field: {}", s)),
         }
     }
@@ -122,12 +134,21 @@ impl SeriesSortParam {
 
     /// Check if this sort requires user-specific data (e.g., read progress)
     pub fn requires_user_context(&self) -> bool {
-        matches!(self.field, SeriesSortField::DateRead)
+        matches!(
+            self.field,
+            SeriesSortField::DateRead | SeriesSortField::Rating
+        )
     }
 
-    /// Check if this sort requires aggregation from books table
+    /// Check if this sort requires aggregation
     pub fn requires_aggregation(&self) -> bool {
-        matches!(self.field, SeriesSortField::BookCount)
+        matches!(
+            self.field,
+            SeriesSortField::BookCount
+                | SeriesSortField::Rating
+                | SeriesSortField::CommunityRating
+                | SeriesSortField::ExternalRating
+        )
     }
 }
 

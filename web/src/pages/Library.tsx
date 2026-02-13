@@ -408,6 +408,21 @@ export function LibraryPage() {
             label: "Book Count",
             defaultDirection: "desc" as const,
           },
+          {
+            field: "rating",
+            label: "My Rating",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "community_rating",
+            label: "Community Rating",
+            defaultDirection: "desc" as const,
+          },
+          {
+            field: "external_rating",
+            label: "External Rating",
+            defaultDirection: "desc" as const,
+          },
         ];
 
   if (!libraryId) {

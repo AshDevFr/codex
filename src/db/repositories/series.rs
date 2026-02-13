@@ -9,12 +9,15 @@ use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, FromQueryResult,
     JoinType, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set,
-    sea_query::{Alias, Expr, Func, IntoCondition},
+    sea_query::{Alias, Expr, Func, IntoCondition, SimpleExpr},
 };
 use uuid::Uuid;
 
 use crate::api::routes::v1::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
-use crate::db::entities::{books, prelude::*, read_progress, series, series_metadata};
+use crate::db::entities::{
+    books, prelude::*, read_progress, series, series_external_ratings, series_metadata,
+    user_series_ratings,
+};
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use std::sync::Arc;
 
@@ -57,6 +60,12 @@ pub enum SeriesSortFieldRepo {
     DateRead,
     /// Sort by number of books in the series
     BookCount,
+    /// Sort by user rating (requires user_id)
+    Rating,
+    /// Sort by community average rating
+    CommunityRating,
+    /// Sort by external rating (highest external source rating)
+    ExternalRating,
 }
 
 /// Result type for series with aggregated data (used for date_read sorting)
@@ -121,6 +130,37 @@ impl From<SeriesWithBookCount> for series::Model {
     }
 }
 
+/// Result type for series with rating aggregate (used for rating sorting)
+#[derive(Debug, FromQueryResult)]
+pub struct SeriesWithRating {
+    pub id: Uuid,
+    pub library_id: Uuid,
+    pub fingerprint: Option<String>,
+    pub path: String,
+    pub name: String,
+    pub normalized_name: String,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
+    /// Aggregated rating value - used for SQL ORDER BY mapping
+    #[allow(dead_code)]
+    pub sort_rating: Option<f64>,
+}
+
+impl From<SeriesWithRating> for series::Model {
+    fn from(s: SeriesWithRating) -> Self {
+        series::Model {
+            id: s.id,
+            library_id: s.library_id,
+            fingerprint: s.fingerprint,
+            path: s.path,
+            name: s.name,
+            normalized_name: s.normalized_name,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+        }
+    }
+}
+
 /// Repository for Series operations
 pub struct SeriesRepository;
 
@@ -150,6 +190,16 @@ impl SeriesRepository {
         // Handle BookCount sort separately as it requires GROUP BY aggregation
         if matches!(sort_field, Some(SeriesSortFieldRepo::BookCount)) {
             return Self::query_with_book_count_sort(db, options, order).await;
+        }
+
+        // Handle rating sorts separately as they require JOIN + aggregation
+        if matches!(
+            sort_field,
+            Some(SeriesSortFieldRepo::Rating)
+                | Some(SeriesSortFieldRepo::CommunityRating)
+                | Some(SeriesSortFieldRepo::ExternalRating)
+        ) {
+            return Self::query_with_rating_sort(db, options, order).await;
         }
 
         let mut query =
@@ -202,7 +252,11 @@ impl SeriesRepository {
             Some(SeriesSortFieldRepo::ReleaseDate) => {
                 query.order_by(series_metadata::Column::Year, order)
             }
-            Some(SeriesSortFieldRepo::DateRead) | Some(SeriesSortFieldRepo::BookCount) => {
+            Some(SeriesSortFieldRepo::DateRead)
+            | Some(SeriesSortFieldRepo::BookCount)
+            | Some(SeriesSortFieldRepo::Rating)
+            | Some(SeriesSortFieldRepo::CommunityRating)
+            | Some(SeriesSortFieldRepo::ExternalRating) => {
                 // Fallback: shouldn't reach here, handled above
                 query.order_by(series::Column::UpdatedAt, order)
             }
@@ -401,6 +455,150 @@ impl SeriesRepository {
             .context("Failed to query series with book_count sort")?;
 
         // Convert to series::Model
+        let series_models: Vec<series::Model> = series_list.into_iter().map(|s| s.into()).collect();
+
+        Ok((series_models, total))
+    }
+
+    /// Query series with rating sort (user rating, community average, or external rating)
+    async fn query_with_rating_sort(
+        db: &DatabaseConnection,
+        options: SeriesQueryOptions<'_>,
+        order: Order,
+    ) -> Result<(Vec<series::Model>, u64)> {
+        let sort_field = options.sort.map(|s| s.field);
+
+        let mut base_query =
+            Series::find().join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
+
+        // Apply the appropriate rating JOIN based on sort type
+        match sort_field {
+            Some(SeriesSortFieldRepo::Rating) => {
+                if let Some(user_id) = options.user_id {
+                    base_query = base_query.join(
+                        JoinType::LeftJoin,
+                        series::Relation::UserSeriesRatings.def().on_condition(
+                            move |_left, right| {
+                                Expr::col((right, user_series_ratings::Column::UserId))
+                                    .eq(user_id)
+                                    .into_condition()
+                            },
+                        ),
+                    );
+                } else {
+                    base_query = base_query.join(
+                        JoinType::LeftJoin,
+                        series::Relation::UserSeriesRatings.def(),
+                    );
+                }
+            }
+            Some(SeriesSortFieldRepo::CommunityRating) => {
+                base_query = base_query.join(
+                    JoinType::LeftJoin,
+                    series::Relation::UserSeriesRatings.def(),
+                );
+            }
+            Some(SeriesSortFieldRepo::ExternalRating) => {
+                base_query = base_query.join(
+                    JoinType::LeftJoin,
+                    series::Relation::SeriesExternalRatings.def(),
+                );
+            }
+            _ => {}
+        }
+
+        // Apply filters
+        if let Some(library_id) = options.library_id {
+            base_query = base_query.filter(series::Column::LibraryId.eq(library_id));
+        }
+
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            let lower_title = Func::lower(Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::Title,
+            )));
+            base_query = base_query.filter(Expr::expr(lower_title).like(&pattern));
+        }
+
+        // Get total count (before aggregation)
+        let mut count_query =
+            Series::find().join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def());
+        if let Some(library_id) = options.library_id {
+            count_query = count_query.filter(series::Column::LibraryId.eq(library_id));
+        }
+        if let Some(search) = options.search
+            && !search.is_empty()
+        {
+            let pattern = format!("%{}%", search.to_lowercase());
+            let lower_title = Func::lower(Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::Title,
+            )));
+            count_query = count_query.filter(Expr::expr(lower_title).like(&pattern));
+        }
+        let total = count_query
+            .select_only()
+            .column(series::Column::Id)
+            .paginate(db, 1)
+            .num_items()
+            .await
+            .context("Failed to count series")?;
+
+        // Build aggregated sort expression
+        // AVG is used for all variants: returns float for consistent f64 deserialization.
+        // For Rating (user-specific), user_id filter ensures one row per series, so AVG = the value.
+        // For ExternalRating, averaging across sources is a reasonable default.
+        let rating_expr: SimpleExpr = match sort_field {
+            Some(SeriesSortFieldRepo::Rating) => {
+                // User's own rating (AVG of single value = that value)
+                Expr::expr(Func::avg(Expr::col((
+                    user_series_ratings::Entity,
+                    user_series_ratings::Column::Rating,
+                ))))
+                .into()
+            }
+            Some(SeriesSortFieldRepo::CommunityRating) => {
+                // Average of all user ratings
+                Expr::expr(Func::avg(Expr::col((
+                    user_series_ratings::Entity,
+                    user_series_ratings::Column::Rating,
+                ))))
+                .into()
+            }
+            Some(SeriesSortFieldRepo::ExternalRating) => {
+                // Average of external source ratings
+                Expr::expr(Func::avg(Expr::col((
+                    series_external_ratings::Entity,
+                    series_external_ratings::Column::Rating,
+                ))))
+                .into()
+            }
+            _ => unreachable!(),
+        };
+
+        let series_list: Vec<SeriesWithRating> = base_query
+            .select_only()
+            .column(series::Column::Id)
+            .column(series::Column::LibraryId)
+            .column(series::Column::Fingerprint)
+            .column(series::Column::Path)
+            .column(series::Column::Name)
+            .column(series::Column::NormalizedName)
+            .column(series::Column::CreatedAt)
+            .column(series::Column::UpdatedAt)
+            .column_as(rating_expr, "sort_rating")
+            .group_by(series::Column::Id)
+            .order_by(Expr::col(Alias::new("sort_rating")), order)
+            .offset(options.page * options.page_size)
+            .limit(options.page_size)
+            .into_model::<SeriesWithRating>()
+            .all(db)
+            .await
+            .context("Failed to query series with rating sort")?;
+
         let series_models: Vec<series::Model> = series_list.into_iter().map(|s| s.into()).collect();
 
         Ok((series_models, total))
@@ -762,6 +960,85 @@ impl SeriesRepository {
 
                 Ok(results.into_iter().map(Into::into).collect())
             }
+            SeriesSortField::Rating
+            | SeriesSortField::CommunityRating
+            | SeriesSortField::ExternalRating => {
+                let lib_filter = series::Column::LibraryId.eq(library_id);
+                let mut query = Series::find().filter(lib_filter);
+
+                // Apply the appropriate rating JOIN
+                let rating_expr: SimpleExpr = match sort.field {
+                    SeriesSortField::Rating => {
+                        if let Some(uid) = user_id {
+                            query = query.join(
+                                JoinType::LeftJoin,
+                                series::Relation::UserSeriesRatings.def().on_condition(
+                                    move |_left, right| {
+                                        Expr::col((right, user_series_ratings::Column::UserId))
+                                            .eq(uid)
+                                            .into_condition()
+                                    },
+                                ),
+                            );
+                        } else {
+                            query = query.join(
+                                JoinType::LeftJoin,
+                                series::Relation::UserSeriesRatings.def(),
+                            );
+                        }
+                        Expr::expr(Func::avg(Expr::col((
+                            user_series_ratings::Entity,
+                            user_series_ratings::Column::Rating,
+                        ))))
+                        .into()
+                    }
+                    SeriesSortField::CommunityRating => {
+                        query = query.join(
+                            JoinType::LeftJoin,
+                            series::Relation::UserSeriesRatings.def(),
+                        );
+                        Expr::expr(Func::avg(Expr::col((
+                            user_series_ratings::Entity,
+                            user_series_ratings::Column::Rating,
+                        ))))
+                        .into()
+                    }
+                    SeriesSortField::ExternalRating => {
+                        query = query.join(
+                            JoinType::LeftJoin,
+                            series::Relation::SeriesExternalRatings.def(),
+                        );
+                        Expr::expr(Func::avg(Expr::col((
+                            series_external_ratings::Entity,
+                            series_external_ratings::Column::Rating,
+                        ))))
+                        .into()
+                    }
+                    _ => unreachable!(),
+                };
+
+                let results: Vec<SeriesWithRating> = query
+                    .select_only()
+                    .column(series::Column::Id)
+                    .column(series::Column::LibraryId)
+                    .column(series::Column::Fingerprint)
+                    .column(series::Column::Path)
+                    .column(series::Column::Name)
+                    .column(series::Column::NormalizedName)
+                    .column(series::Column::CreatedAt)
+                    .column(series::Column::UpdatedAt)
+                    .column_as(rating_expr, "sort_rating")
+                    .group_by(series::Column::Id)
+                    .order_by(Expr::col(Alias::new("sort_rating")), order)
+                    .offset(offset)
+                    .limit(limit)
+                    .into_model::<SeriesWithRating>()
+                    .all(db)
+                    .await
+                    .context("Failed to list series with rating sort")?;
+
+                Ok(results.into_iter().map(Into::into).collect())
+            }
             _ => {
                 // Simple sorts that may use metadata for name sort
                 let query = Series::find().filter(series::Column::LibraryId.eq(library_id));
@@ -897,9 +1174,116 @@ impl SeriesRepository {
                 Self::list_by_ids_with_date_read_sort(db, ids, &order, user_id, offset, limit)
                     .await?
             }
+            SeriesSortField::Rating
+            | SeriesSortField::CommunityRating
+            | SeriesSortField::ExternalRating => {
+                Self::list_by_ids_with_rating_sort(
+                    db,
+                    ids,
+                    &sort.field,
+                    &order,
+                    user_id,
+                    offset,
+                    limit,
+                )
+                .await?
+            }
         };
 
         Ok((series, total))
+    }
+
+    /// Helper for list_by_ids_sorted with rating sorts
+    async fn list_by_ids_with_rating_sort(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        sort_field: &SeriesSortField,
+        order: &Order,
+        user_id: Option<Uuid>,
+        offset: u64,
+        limit: u64,
+    ) -> Result<Vec<series::Model>> {
+        let base_condition = series::Column::Id.is_in(ids.to_vec());
+
+        let mut query = Series::find().filter(base_condition);
+
+        // Apply the appropriate rating JOIN
+        match sort_field {
+            SeriesSortField::Rating => {
+                if let Some(uid) = user_id {
+                    query = query.join(
+                        JoinType::LeftJoin,
+                        series::Relation::UserSeriesRatings.def().on_condition(
+                            move |_left, right| {
+                                Expr::col((right, user_series_ratings::Column::UserId))
+                                    .eq(uid)
+                                    .into_condition()
+                            },
+                        ),
+                    );
+                } else {
+                    query = query.join(
+                        JoinType::LeftJoin,
+                        series::Relation::UserSeriesRatings.def(),
+                    );
+                }
+            }
+            SeriesSortField::CommunityRating => {
+                query = query.join(
+                    JoinType::LeftJoin,
+                    series::Relation::UserSeriesRatings.def(),
+                );
+            }
+            SeriesSortField::ExternalRating => {
+                query = query.join(
+                    JoinType::LeftJoin,
+                    series::Relation::SeriesExternalRatings.def(),
+                );
+            }
+            _ => {}
+        }
+
+        // Build aggregated sort expression (cast to float for consistent type)
+        let rating_expr: SimpleExpr = match sort_field {
+            SeriesSortField::Rating => Expr::expr(Func::avg(Expr::col((
+                user_series_ratings::Entity,
+                user_series_ratings::Column::Rating,
+            ))))
+            .into(),
+            SeriesSortField::CommunityRating => Expr::expr(Func::avg(Expr::col((
+                user_series_ratings::Entity,
+                user_series_ratings::Column::Rating,
+            ))))
+            .into(),
+            SeriesSortField::ExternalRating => Expr::expr(Func::avg(Expr::col((
+                series_external_ratings::Entity,
+                series_external_ratings::Column::Rating,
+            ))))
+            .into(),
+            _ => unreachable!(),
+        };
+
+        let results: Vec<SeriesWithRating> = query
+            .select_only()
+            .column(series::Column::Id)
+            .column(series::Column::LibraryId)
+            .column(series::Column::Fingerprint)
+            .column(series::Column::Path)
+            .column(series::Column::Name)
+            .column(series::Column::NormalizedName)
+            .column(series::Column::CreatedAt)
+            .column(series::Column::UpdatedAt)
+            .column_as(rating_expr, "sort_rating")
+            .group_by(series::Column::Id)
+            .order_by(Expr::col(Alias::new("sort_rating")), order.clone())
+            .offset(offset)
+            .limit(limit)
+            .into_model::<SeriesWithRating>()
+            .all(db)
+            .await
+            .context("Failed to list series by IDs with rating sort")?;
+
+        Ok(results.into_iter().map(Into::into).collect())
     }
 
     /// Helper for list_by_ids_sorted with DateRead sort

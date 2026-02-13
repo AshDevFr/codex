@@ -5370,3 +5370,285 @@ async fn test_reprocess_series_title_not_found() {
 
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+// ============================================================================
+// Sort by Rating Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_rating_desc() {
+    use codex::api::routes::v1::dto::series::{SetUserRatingRequest, UserSeriesRatingDto};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create three series
+    let series_a = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    let series_b = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    let _series_c = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Rate series: A=50, B=90, C=not rated
+    for (series_id, rating) in [(series_a.id, 50), (series_b.id, 90)] {
+        let app = create_test_router(state.clone()).await;
+        let body = SetUserRatingRequest {
+            rating,
+            notes: None,
+        };
+        let request = put_json_request_with_auth(
+            &format!("/api/v1/series/{}/rating", series_id),
+            &body,
+            &token,
+        );
+        let (status, _): (StatusCode, Option<UserSeriesRatingDto>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // Sort by rating descending (highest first)
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series?sort=rating,desc", library.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    // Series B (90) should be first, Series A (50) second, Series C (unrated/null) last
+    assert_eq!(series_list.data[0].title, "Series B");
+    assert_eq!(series_list.data[1].title, "Series A");
+    assert_eq!(series_list.data[2].title, "Series C");
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_rating_asc() {
+    use codex::api::routes::v1::dto::series::{SetUserRatingRequest, UserSeriesRatingDto};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series_a = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    let series_b = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    let _series_c = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Rate series: A=50, B=90, C=not rated
+    for (series_id, rating) in [(series_a.id, 50), (series_b.id, 90)] {
+        let app = create_test_router(state.clone()).await;
+        let body = SetUserRatingRequest {
+            rating,
+            notes: None,
+        };
+        let request = put_json_request_with_auth(
+            &format!("/api/v1/series/{}/rating", series_id),
+            &body,
+            &token,
+        );
+        let (status, _): (StatusCode, Option<UserSeriesRatingDto>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // Sort by rating ascending (lowest/unrated first)
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/libraries/{}/series?sort=rating,asc", library.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    // Series C (unrated/null) first, Series A (50) second, Series B (90) last
+    assert_eq!(series_list.data[0].title, "Series C");
+    assert_eq!(series_list.data[1].title, "Series A");
+    assert_eq!(series_list.data[2].title, "Series B");
+}
+
+#[tokio::test]
+async fn test_list_series_sort_by_rating_desc_via_post() {
+    use codex::api::routes::v1::dto::series::{SetUserRatingRequest, UserSeriesRatingDto};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series_a = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    let series_b = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    let _series_c = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Rate series: A=30, B=80
+    for (series_id, rating) in [(series_a.id, 30), (series_b.id, 80)] {
+        let app = create_test_router(state.clone()).await;
+        let body = SetUserRatingRequest {
+            rating,
+            notes: None,
+        };
+        let request = put_json_request_with_auth(
+            &format!("/api/v1/series/{}/rating", series_id),
+            &body,
+            &token,
+        );
+        let (status, _): (StatusCode, Option<UserSeriesRatingDto>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // Sort by rating via POST /api/v1/series/list endpoint (exercises list_by_ids_sorted path)
+    let app = create_test_router(state).await;
+    let request = post_request_with_auth_json(
+        "/api/v1/series/list?sort=rating,desc",
+        &token,
+        r#"{"condition":null,"fullTextSearch":null}"#,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    // Series B (80) first, Series A (30) second, Series C (unrated) last
+    assert_eq!(series_list.data[0].title, "Series B");
+    assert_eq!(series_list.data[1].title, "Series A");
+    assert_eq!(series_list.data[2].title, "Series C");
+}
+
+#[tokio::test]
+async fn test_list_library_series_sort_by_community_rating_desc() {
+    use codex::api::routes::v1::dto::series::{SetUserRatingRequest, UserSeriesRatingDto};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series_a = SeriesRepository::create(&db, library.id, "Series A", None)
+        .await
+        .unwrap();
+    let series_b = SeriesRepository::create(&db, library.id, "Series B", None)
+        .await
+        .unwrap();
+    let _series_c = SeriesRepository::create(&db, library.id, "Series C", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+
+    // Create two users and have them rate series
+    let password_hash = password::hash_password("pass123").unwrap();
+    let user1 = create_test_user("user1", "user1@example.com", &password_hash, true);
+    let user1_created = UserRepository::create(&db, &user1).await.unwrap();
+    let token1 = state
+        .jwt_service
+        .generate_token(
+            user1_created.id,
+            user1_created.username.clone(),
+            user1_created.get_role(),
+        )
+        .unwrap();
+
+    let user2 = create_test_user("user2", "user2@example.com", &password_hash, false);
+    let user2_created = UserRepository::create(&db, &user2).await.unwrap();
+    let token2 = state
+        .jwt_service
+        .generate_token(
+            user2_created.id,
+            user2_created.username.clone(),
+            user2_created.get_role(),
+        )
+        .unwrap();
+
+    // User1 rates: A=40, B=80
+    for (series_id, rating) in [(series_a.id, 40), (series_b.id, 80)] {
+        let app = create_test_router(state.clone()).await;
+        let body = SetUserRatingRequest {
+            rating,
+            notes: None,
+        };
+        let request = put_json_request_with_auth(
+            &format!("/api/v1/series/{}/rating", series_id),
+            &body,
+            &token1,
+        );
+        let (status, _): (StatusCode, Option<UserSeriesRatingDto>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // User2 rates: A=60, B=40
+    for (series_id, rating) in [(series_a.id, 60), (series_b.id, 40)] {
+        let app = create_test_router(state.clone()).await;
+        let body = SetUserRatingRequest {
+            rating,
+            notes: None,
+        };
+        let request = put_json_request_with_auth(
+            &format!("/api/v1/series/{}/rating", series_id),
+            &body,
+            &token2,
+        );
+        let (status, _): (StatusCode, Option<UserSeriesRatingDto>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // Community averages: A=(40+60)/2=50, B=(80+40)/2=60, C=unrated
+    // Sort by community_rating descending
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!(
+            "/api/v1/libraries/{}/series?sort=community_rating,desc",
+            library.id
+        ),
+        &token1,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 3);
+    // B (avg 60) first, A (avg 50) second, C (unrated) last
+    assert_eq!(series_list.data[0].title, "Series B");
+    assert_eq!(series_list.data[1].title, "Series A");
+    assert_eq!(series_list.data[2].title, "Series C");
+}
