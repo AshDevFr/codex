@@ -1,37 +1,23 @@
 import {
-  ActionIcon,
-  Box,
   Button,
-  Card,
   Center,
   Group,
-  Image,
   Loader,
   Modal,
-  SimpleGrid,
   Stack,
   Switch,
   Tabs,
   Text,
-  Tooltip,
 } from "@mantine/core";
-import { Dropzone, IMAGE_MIME_TYPE } from "@mantine/dropzone";
 import { notifications } from "@mantine/notifications";
 import {
   IconBook,
-  IconCheck,
   IconEdit,
   IconLink,
   IconList,
-  IconLock,
-  IconLockOpen,
   IconPhoto,
-  IconRefresh,
   IconTag,
-  IconTrash,
-  IconUpload,
   IconUsers,
-  IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
@@ -40,6 +26,7 @@ import {
   type BookMetadataLocks,
   booksApi,
 } from "@/api/books";
+import { CoverEditor } from "@/components/forms/CoverEditor";
 import {
   type ListItem,
   LockableInput,
@@ -248,8 +235,6 @@ export function BookMetadataEditModal({
   const [originalFormState, setOriginalFormState] = useState<FormState | null>(
     null,
   );
-  const [pendingUpload, setPendingUpload] = useState<File | null>(null);
-  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
 
   // Fetch book detail
   const { data: bookDetail, isLoading: isLoadingBook } = useQuery({
@@ -320,7 +305,7 @@ export function BookMetadataEditModal({
     [],
   );
 
-  // Upload cover mutation
+  // Cover mutations
   const uploadCoverMutation = useMutation({
     mutationFn: (file: File) => booksApi.uploadCover(bookId, file),
     onSuccess: () => {
@@ -330,11 +315,6 @@ export function BookMetadataEditModal({
         color: "green",
       });
       refetchCovers();
-      if (uploadPreviewUrl) {
-        URL.revokeObjectURL(uploadPreviewUrl);
-        setUploadPreviewUrl(null);
-      }
-      setPendingUpload(null);
     },
     onError: (error: { message?: string }) => {
       notifications.show({
@@ -345,7 +325,6 @@ export function BookMetadataEditModal({
     },
   });
 
-  // Select cover mutation
   const selectCoverMutation = useMutation({
     mutationFn: (coverId: string) => booksApi.selectCover(bookId, coverId),
     onSuccess: () => {
@@ -366,7 +345,6 @@ export function BookMetadataEditModal({
     },
   });
 
-  // Reset to default cover mutation
   const resetCoverMutation = useMutation({
     mutationFn: () => booksApi.resetCover(bookId),
     onSuccess: () => {
@@ -387,7 +365,6 @@ export function BookMetadataEditModal({
     },
   });
 
-  // Delete cover mutation
   const deleteCoverMutation = useMutation({
     mutationFn: (coverId: string) => booksApi.deleteCover(bookId, coverId),
     onSuccess: () => {
@@ -407,39 +384,6 @@ export function BookMetadataEditModal({
       });
     },
   });
-
-  // Cover upload handlers
-  const handleFileDrop = (files: File[]) => {
-    const file = files[0];
-    if (file) {
-      if (uploadPreviewUrl) {
-        URL.revokeObjectURL(uploadPreviewUrl);
-      }
-      setPendingUpload(file);
-      setUploadPreviewUrl(URL.createObjectURL(file));
-    }
-  };
-
-  const handleUploadConfirm = () => {
-    if (pendingUpload) {
-      uploadCoverMutation.mutate(pendingUpload);
-    }
-  };
-
-  const handleUploadCancel = () => {
-    if (uploadPreviewUrl) {
-      URL.revokeObjectURL(uploadPreviewUrl);
-      setUploadPreviewUrl(null);
-    }
-    setPendingUpload(null);
-  };
-
-  const getCoverSourceLabel = (source: string): string => {
-    if (source === "upload") return "Custom Upload";
-    if (source.startsWith("plugin:")) return source.replace("plugin:", "");
-    if (source === "embedded") return "Embedded";
-    return source;
-  };
 
   // Save mutation
   const saveMutation = useMutation({
@@ -993,223 +937,31 @@ export function BookMetadataEditModal({
   );
 
   // Poster tab
+  const getBookCoverSourceLabel = (source: string): string => {
+    if (source === "upload") return "Custom Upload";
+    if (source.startsWith("plugin:")) return source.replace("plugin:", "");
+    if (source === "embedded") return "Embedded";
+    return source;
+  };
+
   const renderPosterTab = () => (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        Upload custom cover images or select from existing covers.
-      </Text>
-
-      {/* Cover lock toggle */}
-      <Group gap="xs">
-        <Tooltip
-          label={
-            locksState.cover
-              ? "Locked: Cover selection protected from automatic updates"
-              : "Unlocked: Cover can be changed by plugins"
-          }
-          position="right"
-        >
-          <ActionIcon
-            variant="subtle"
-            color={locksState.cover ? "orange" : "gray"}
-            onClick={() => updateLock("cover", !locksState.cover)}
-            aria-label={locksState.cover ? "Unlock cover" : "Lock cover"}
-          >
-            {locksState.cover ? (
-              <IconLock size={18} />
-            ) : (
-              <IconLockOpen size={18} />
-            )}
-          </ActionIcon>
-        </Tooltip>
-        <Text size="sm" c={locksState.cover ? "orange" : "dimmed"}>
-          {locksState.cover
-            ? "Cover selection locked"
-            : "Cover selection unlocked"}
-        </Text>
-      </Group>
-
-      {/* Upload dropzone */}
-      <Dropzone
-        onDrop={handleFileDrop}
-        onReject={() =>
-          notifications.show({
-            title: "Error",
-            message: "Invalid file type. Please upload an image.",
-            color: "red",
-          })
-        }
-        maxSize={10 * 1024 * 1024}
-        accept={IMAGE_MIME_TYPE}
-        multiple={false}
-        disabled={uploadCoverMutation.isPending}
-      >
-        <Group
-          justify="center"
-          gap="xl"
-          mih={100}
-          style={{ pointerEvents: "none" }}
-        >
-          <Dropzone.Accept>
-            <IconUpload size={40} stroke={1.5} />
-          </Dropzone.Accept>
-          <Dropzone.Reject>
-            <IconX size={40} stroke={1.5} />
-          </Dropzone.Reject>
-          <Dropzone.Idle>
-            <IconPhoto size={40} stroke={1.5} />
-          </Dropzone.Idle>
-
-          <Box>
-            <Text size="md" inline>
-              Drop image here or click to upload
-            </Text>
-            <Text size="sm" c="dimmed" inline mt={7}>
-              Max file size: 10MB
-            </Text>
-          </Box>
-        </Group>
-      </Dropzone>
-
-      {/* Pending upload preview */}
-      {pendingUpload && uploadPreviewUrl && (
-        <Card withBorder p="md">
-          <Group wrap="nowrap" align="flex-start">
-            <Image
-              src={uploadPreviewUrl}
-              alt="Upload preview"
-              w={80}
-              h={120}
-              fit="contain"
-              radius="sm"
-            />
-            <Stack gap="xs" style={{ flex: 1 }}>
-              <Text size="sm" fw={500}>
-                Ready to upload
-              </Text>
-              <Text size="sm" c="dimmed">
-                {pendingUpload.name}
-              </Text>
-            </Stack>
-            <Group gap="xs">
-              <Tooltip label="Upload">
-                <ActionIcon
-                  variant="filled"
-                  color="green"
-                  onClick={handleUploadConfirm}
-                  loading={uploadCoverMutation.isPending}
-                  aria-label="Confirm upload"
-                >
-                  <IconCheck size={18} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Cancel">
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  onClick={handleUploadCancel}
-                  aria-label="Cancel upload"
-                >
-                  <IconX size={18} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          </Group>
-        </Card>
-      )}
-
-      {/* Reset to default button */}
-      {existingCovers?.some((c) => c.isSelected) && (
-        <Button
-          variant="light"
-          color="gray"
-          leftSection={<IconRefresh size={16} />}
-          onClick={() => resetCoverMutation.mutate()}
-          loading={resetCoverMutation.isPending}
-        >
-          Reset to Default Cover
-        </Button>
-      )}
-
-      {/* Existing covers grid */}
-      {existingCovers && existingCovers.length > 0 && (
-        <>
-          <Group justify="space-between" mt="md">
-            <Text size="sm" fw={500}>
-              Available Covers
-            </Text>
-            {!existingCovers?.some((c) => c.isSelected) && (
-              <Text size="xs" c="dimmed">
-                Using default (embedded cover)
-              </Text>
-            )}
-          </Group>
-          <SimpleGrid cols={4} spacing="md">
-            {existingCovers.map((cover) => (
-              <Card
-                key={cover.id}
-                withBorder
-                p="xs"
-                style={{
-                  cursor: "pointer",
-                  borderColor: cover.isSelected
-                    ? "var(--mantine-color-blue-6)"
-                    : undefined,
-                  borderWidth: cover.isSelected ? 2 : 1,
-                }}
-                onClick={() => {
-                  if (!cover.isSelected) {
-                    selectCoverMutation.mutate(cover.id);
-                  }
-                }}
-              >
-                <Card.Section>
-                  <Image
-                    src={booksApi.getCoverImageUrl(bookId, cover.id)}
-                    alt="Cover"
-                    h={150}
-                    fit="contain"
-                  />
-                </Card.Section>
-                <Group justify="space-between" mt="xs" wrap="nowrap">
-                  <Stack gap={2}>
-                    <Text size="xs" c="dimmed" truncate>
-                      {getCoverSourceLabel(cover.source)}
-                    </Text>
-                    {cover.isSelected && (
-                      <Text size="xs" c="blue" fw={500}>
-                        Selected
-                      </Text>
-                    )}
-                  </Stack>
-                  <Tooltip label="Delete cover">
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        deleteCoverMutation.mutate(cover.id);
-                      }}
-                      loading={deleteCoverMutation.isPending}
-                      aria-label="Delete cover"
-                    >
-                      <IconTrash size={14} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Group>
-              </Card>
-            ))}
-          </SimpleGrid>
-        </>
-      )}
-
-      {existingCovers && existingCovers.length === 0 && (
-        <Text size="sm" c="dimmed" ta="center" py="xl">
-          No covers uploaded yet. Upload an image above.
-        </Text>
-      )}
-    </Stack>
+    <CoverEditor
+      covers={existingCovers ?? []}
+      coverLocked={locksState.cover}
+      onCoverLockChange={(v) => updateLock("cover", v)}
+      onUpload={(file) => uploadCoverMutation.mutate(file)}
+      isUploading={uploadCoverMutation.isPending}
+      onSelect={(coverId) => selectCoverMutation.mutate(coverId)}
+      isSelecting={selectCoverMutation.isPending}
+      onReset={() => resetCoverMutation.mutate()}
+      isResetting={resetCoverMutation.isPending}
+      onDelete={(coverId) => deleteCoverMutation.mutate(coverId)}
+      isDeleting={deleteCoverMutation.isPending}
+      getCoverImageUrl={(coverId) => booksApi.getCoverImageUrl(bookId, coverId)}
+      getCoverSourceLabel={getBookCoverSourceLabel}
+      resetButtonLabel="Reset to Default Cover"
+      defaultCoverMessage="Using default (embedded cover)"
+    />
   );
 
   return (

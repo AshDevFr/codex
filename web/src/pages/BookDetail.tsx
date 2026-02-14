@@ -58,6 +58,7 @@ import { MetadataApplyFlow } from "@/components/metadata";
 import { ExternalLinks } from "@/components/series";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { ExtendedBookMetadata } from "@/types/book-metadata";
 import { PERMISSIONS } from "@/types/permissions";
 
@@ -102,6 +103,11 @@ export function BookDetail() {
   // Permission checks
   const { hasPermission } = usePermissions();
   const canEditBook = hasPermission(PERMISSIONS.BOOKS_WRITE);
+
+  // Get cover update timestamp for cache-busting (forces image reload when cover changes)
+  const coverTimestamp = useCoverUpdatesStore((state) =>
+    bookId ? state.updates[bookId] : undefined,
+  );
 
   // Plugin metadata flow state
   const [selectedPlugin, setSelectedPlugin] = useState<PluginActionDto | null>(
@@ -338,7 +344,8 @@ export function BookDetail() {
     );
   }
 
-  const coverUrl = `/api/v1/books/${book.id}/thumbnail`;
+  const coverCacheBuster = coverTimestamp ?? book.updatedAt;
+  const coverUrl = `/api/v1/books/${book.id}/thumbnail?v=${encodeURIComponent(String(coverCacheBuster))}`;
   const downloadUrl = `/api/v1/books/${book.id}/file`;
   const hasProgress = !!book.readProgress;
   const isCompleted = book.readProgress?.completed ?? false;

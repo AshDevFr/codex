@@ -3,7 +3,7 @@ use crate::api::{
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookRepository, PageRepository};
+use crate::db::repositories::{BookCoversRepository, BookRepository, PageRepository};
 use crate::require_permission;
 use crate::utils::{DeadlineResult, with_deadline};
 use axum::{
@@ -343,6 +343,76 @@ pub async fn get_book_thumbnail(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Check if there's a selected custom cover first
+    let selected_cover = BookCoversRepository::get_selected(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch cover: {}", e)))?;
+
+    if let Some(cover) = selected_cover {
+        // Custom cover selected - read and resize synchronously since it's
+        // a direct file read (not extracting from a book archive)
+        match tokio::fs::read(&cover.path).await {
+            Ok(data) => {
+                match state
+                    .thumbnail_service
+                    .generate_thumbnail_from_image(&state.db, data)
+                    .await
+                {
+                    Ok(thumbnail_data) => {
+                        // Save to cache for future requests
+                        if let Err(e) = state
+                            .thumbnail_service
+                            .save_generated_thumbnail(&state.db, book_id, &thumbnail_data)
+                            .await
+                        {
+                            tracing::warn!("Failed to cache book thumbnail for {}: {}", book_id, e);
+                        }
+
+                        let now = std::time::SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let etag = format!(
+                            "\"{:x}-{:x}-{:x}\"",
+                            cover.id.as_u128(),
+                            thumbnail_data.len(),
+                            now
+                        );
+                        let last_modified_str = fmt_http_date(std::time::SystemTime::now());
+
+                        return Ok(Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "image/jpeg")
+                            .header(header::CACHE_CONTROL, "public, max-age=31536000")
+                            .header(header::CONTENT_LENGTH, thumbnail_data.len())
+                            .header(header::ETAG, &etag)
+                            .header(header::LAST_MODIFIED, last_modified_str)
+                            .body(Body::from(thumbnail_data))
+                            .unwrap());
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to generate thumbnail from cover {} for book {}: {:?}",
+                            cover.path,
+                            book_id,
+                            e
+                        );
+                        return Ok(serve_placeholder_response());
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to read cover from {} for book {}: {}",
+                    cover.path,
+                    book_id,
+                    e
+                );
+                return Ok(serve_placeholder_response());
+            }
+        }
+    }
 
     // Return placeholder for books with no pages (don't spam 404s)
     if book.page_count == 0 {

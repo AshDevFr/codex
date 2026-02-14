@@ -130,7 +130,7 @@ describe("SeriesMetadataEditModal", () => {
       expect(screen.getByRole("tab", { name: /Titles/i })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Tags/i })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Links/i })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: /Poster/i })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Cover/i })).toBeInTheDocument();
     });
   });
 

@@ -1044,11 +1044,12 @@ impl ThumbnailService {
             debug!("Deleted thumbnail: {:?}", thumbnail_path);
         }
 
-        // Update book record
+        // Update book record and bump updated_at for cache-busting
         if let Some(book) = BookRepository::get_by_id(db, book_id).await? {
             let mut book_active: books::ActiveModel = book.into();
             book_active.thumbnail_path = Set(None);
             book_active.thumbnail_generated_at = Set(None);
+            book_active.updated_at = Set(Utc::now());
             book_active.update(db).await?;
         }
 

@@ -3545,6 +3545,19 @@ pub async fn select_book_cover(
         let _ = active.update(&state.db).await;
     }
 
+    // Delete cached thumbnail so it regenerates from the new cover
+    if let Err(e) = state
+        .thumbnail_service
+        .delete_thumbnail(&state.db, book_id)
+        .await
+    {
+        tracing::warn!(
+            "Failed to delete cached thumbnail for book {}: {}",
+            book_id,
+            e
+        );
+    }
+
     // Emit cover updated event
     let event = EntityChangeEvent {
         event: EntityEvent::CoverUpdated {
@@ -3596,6 +3609,19 @@ pub async fn reset_book_cover(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to reset cover: {}", e)))?;
 
+    // Delete cached thumbnail so it regenerates from the default (embedded) cover
+    if let Err(e) = state
+        .thumbnail_service
+        .delete_thumbnail(&state.db, book_id)
+        .await
+    {
+        tracing::warn!(
+            "Failed to delete cached thumbnail for book {}: {}",
+            book_id,
+            e
+        );
+    }
+
     // Emit cover updated event
     let event = EntityChangeEvent {
         event: EntityEvent::CoverUpdated {
@@ -3633,7 +3659,7 @@ pub async fn reset_book_cover(
 )]
 pub async fn get_book_cover_image(
     State(state): State<Arc<AuthState>>,
-    auth: AuthContext,
+    FlexibleAuthContext(auth): FlexibleAuthContext,
     headers: axum::http::HeaderMap,
     Path((book_id, cover_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Response, ApiError> {
@@ -3787,6 +3813,20 @@ pub async fn delete_book_cover(
     BookCoversRepository::delete(&state.db, cover_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete cover: {}", e)))?;
+
+    // Delete cached thumbnail so it regenerates from the new/default cover
+    if was_selected
+        && let Err(e) = state
+            .thumbnail_service
+            .delete_thumbnail(&state.db, book_id)
+            .await
+    {
+        tracing::warn!(
+            "Failed to delete cached thumbnail for book {}: {}",
+            book_id,
+            e
+        );
+    }
 
     // Emit cover updated event
     if was_selected {
