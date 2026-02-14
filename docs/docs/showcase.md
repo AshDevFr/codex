@@ -150,65 +150,7 @@ View statistics about your library contents and monitor performance.
 
 #### Plugins
 
-Manage metadata plugins for enhanced library information.
-
-![Plugin Settings - Empty](../screenshots/plugins/settings-plugins-empty.png)
-
-##### Official Plugin Store
-
-Install plugins from the built-in store with pre-configured settings.
-
-![Official Plugin Store](../screenshots/plugins/store-carousel.png)
-
-Clicking "Add" on a plugin opens a pre-filled creation form with the plugin's recommended settings.
-
-![Add Plugin - General](../screenshots/plugins/store-add-echo-general.png)
-
-![Add Plugin - Execution](../screenshots/plugins/store-add-echo-execution.png)
-
-![Plugin Settings - Installed Plugins](../screenshots/plugins/settings-plugins-installed.png)
-
-![Plugin Settings - Expanded Details](../screenshots/plugins/settings-plugin-expanded.png)
-
-##### Configuring a Plugin
-
-After installing a plugin, open its configuration modal to set permissions, scopes, search templates, preprocessing rules, and conditions.
-
-![Config Modal - General](../screenshots/plugins/config-modal-general.png)
-
-![Config Modal - Permissions](../screenshots/plugins/config-modal-permissions.png)
-
-![Config Modal - Template](../screenshots/plugins/config-modal-template.png)
-
-![Config Modal - Preprocessing](../screenshots/plugins/config-modal-preprocessing.png)
-
-![Config Modal - Conditions](../screenshots/plugins/config-modal-conditions.png)
-
-##### Using Plugins
-
-Access plugin actions from the library sidebar or series detail pages.
-
-If the plugin is enabled and has the library scope, you will see the plugin dropdown in the library sidebar.
-
-![Library Sidebar - Plugin Dropdown](../screenshots/plugins/library-sidebar-plugin-dropdown.png)
-
-If the plugin is enabled and has the series scope, you will see the plugin dropdown in the series detail page.
-
-![Series Detail - Plugin Dropdown](../screenshots/plugins/series-detail-plugin-dropdown.png)
-
-##### Plugin Results
-
-View results after running plugins on your library content.
-
-![Plugin Search Results](../screenshots/plugins/search-results.png)
-
-![Metadata Preview](../screenshots/plugins/metadata-preview.png)
-
-![Apply Success](../screenshots/plugins/apply-success.png)
-
-<!-- ![Library Auto-Match Success](../screenshots/plugins/library-auto-match-success.png) -->
-
-![Series Detail - After Plugin](../screenshots/plugins/series-detail-after-plugin.png)
+See the [Plugins](#plugins) section below for the full plugin showcase.
 
 ### Access
 
@@ -270,11 +212,113 @@ Generate and manage API keys for integrations.
 
 #### Integrations
 
-Enable or disable plugin integrations for your account, such as sync and recommendation services.
+See the [User Integrations](#user-integrations) section under Plugins below.
+
+## Plugins
+
+Codex supports extensible plugins for metadata enrichment, reading progress sync, and personalized recommendations. Plugins are managed by admins and connected by users.
+
+### Plugin Management
+
+The plugins page in Settings lets admins manage installed plugins.
+
+![Plugin Settings - Empty](../screenshots/plugins/settings-plugins-empty.png)
+
+### Official Plugin Store
+
+Install plugins from the built-in store with pre-configured settings.
+
+![Official Plugin Store](../screenshots/plugins/store-carousel.png)
+
+Clicking "Add" on a plugin opens a pre-filled creation form with the plugin's recommended settings.
+
+**Echo Metadata Plugin:**
+
+![Add Echo Plugin - General](../screenshots/plugins/store-add-echo-general.png)
+
+![Add Echo Plugin - Execution](../screenshots/plugins/store-add-echo-execution.png)
+
+**AniList Sync Plugin:**
+
+![Add Sync Plugin - General](../screenshots/plugins/store-add-sync-general.png)
+
+![Add Sync Plugin - Execution](../screenshots/plugins/store-add-sync-execution.png)
+
+**AniList Recommendations Plugin:**
+
+![Add Recommendations Plugin - General](../screenshots/plugins/store-add-recommendations-general.png)
+
+![Add Recommendations Plugin - Execution](../screenshots/plugins/store-add-recommendations-execution.png)
+
+### Installed Plugins
+
+View and manage installed plugins, their status, and health.
+
+![Plugin Settings - Installed Plugins](../screenshots/plugins/settings-plugins-installed.png)
+
+![Plugin Settings - Expanded Details](../screenshots/plugins/settings-plugin-expanded.png)
+
+You can test plugin connectivity using the "Test Connection" action.
+
+![Plugin Settings - After Test](../screenshots/plugins/settings-plugins-after-test.png)
+
+### Configuring a Plugin
+
+After installing a plugin, open its configuration modal to set permissions, scopes, search templates, preprocessing rules, and conditions.
+
+![Config Modal - General](../screenshots/plugins/config-modal-general.png)
+
+![Config Modal - Permissions](../screenshots/plugins/config-modal-permissions.png)
+
+![Config Modal - Permissions Filled](../screenshots/plugins/config-modal-permissions-filled.png)
+
+![Config Modal - Template](../screenshots/plugins/config-modal-template.png)
+
+![Config Modal - Preprocessing](../screenshots/plugins/config-modal-preprocessing.png)
+
+![Config Modal - Conditions](../screenshots/plugins/config-modal-conditions.png)
+
+### Using Plugins
+
+Access plugin actions from the library sidebar or series detail pages.
+
+If the plugin is enabled and has the library scope, you will see the plugin dropdown in the library sidebar.
+
+![Library Sidebar - Plugin Dropdown](../screenshots/plugins/library-sidebar-plugin-dropdown.png)
+
+If the plugin is enabled and has the series scope, you will see the plugin dropdown in the series detail page.
+
+![Series Detail - Plugin Dropdown](../screenshots/plugins/series-detail-plugin-dropdown.png)
+
+### Plugin Results
+
+View results after running plugins on your library content.
+
+![Plugin Search Results](../screenshots/plugins/search-results.png)
+
+![Metadata Preview](../screenshots/plugins/metadata-preview.png)
+
+![Apply Success](../screenshots/plugins/apply-success.png)
+
+![Library Auto-Match Success](../screenshots/plugins/library-auto-match-success.png)
+
+![Series Detail - After Plugin](../screenshots/plugins/series-detail-after-plugin.png)
+
+### User Integrations
+
+Users can enable or disable plugin integrations from their account settings, such as sync and recommendation services.
 
 ![User Integrations](../screenshots/plugins/user-integrations.png)
 
-![User Integrations - Enabled](../screenshots/plugins/user-integrations-enabled-sync.png)
+![User Integrations - Enabled Sync](../screenshots/plugins/user-integrations-enabled-sync.png)
+
+![User Integrations - All Enabled](../screenshots/plugins/user-integrations-all-enabled.png)
+
+### Recommendations
+
+When a recommendations plugin is connected, users get personalized suggestions based on their library and reading history.
+
+![Recommendations Page](../manual-screenshots/plugins/recommendations-page.png)
 
 ## Authentication
 
