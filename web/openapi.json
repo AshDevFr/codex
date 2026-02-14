@@ -17403,6 +17403,8 @@
         "type": "object",
         "description": "Book metadata lock states\n\nIndicates which metadata fields are locked (protected from automatic updates).\nWhen a field is locked, the scanner will not overwrite user-edited values.",
         "required": [
+          "titleLock",
+          "numberLock",
           "summaryLock",
           "writerLock",
           "pencillerLock",
@@ -17544,6 +17546,11 @@
             "description": "Whether month is locked",
             "example": false
           },
+          "numberLock": {
+            "type": "boolean",
+            "description": "Whether number is locked",
+            "example": false
+          },
           "originalTitleLock": {
             "type": "boolean",
             "description": "Whether original_title is locked",
@@ -17587,6 +17594,11 @@
           "summaryLock": {
             "type": "boolean",
             "description": "Whether summary is locked",
+            "example": false
+          },
+          "titleLock": {
+            "type": "boolean",
+            "description": "Whether title is locked",
             "example": false
           },
           "translatorLock": {
@@ -32394,6 +32406,13 @@
             ],
             "description": "Whether to lock month"
           },
+          "numberLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock number"
+          },
           "originalTitleLock": {
             "type": [
               "boolean",
@@ -32457,6 +32476,13 @@
             ],
             "description": "Whether to lock summary",
             "example": true
+          },
+          "titleLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock title"
           },
           "translatorLock": {
             "type": [

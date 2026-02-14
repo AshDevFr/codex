@@ -139,6 +139,7 @@ export function CustomMetadataEditor({
                 : "Unlocked: Can be updated automatically"
             }
             position="left"
+            zIndex={1100}
           >
             <ActionIcon
               variant="subtle"
@@ -182,7 +183,7 @@ export function CustomMetadataEditor({
           />
 
           {value && Object.keys(value).length > 0 && (
-            <Tooltip label="Clear all custom metadata">
+            <Tooltip label="Clear all custom metadata" zIndex={1100}>
               <ActionIcon
                 variant="subtle"
                 color="red"

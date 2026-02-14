@@ -141,6 +141,7 @@ export function CoverEditor({
               : "Unlocked: Cover can be changed by plugins"
           }
           position="right"
+          zIndex={1100}
         >
           <ActionIcon
             variant="subtle"
@@ -219,7 +220,7 @@ export function CoverEditor({
               </Text>
             </Stack>
             <Group gap="xs">
-              <Tooltip label="Upload">
+              <Tooltip label="Upload" zIndex={1100}>
                 <ActionIcon
                   variant="filled"
                   color="green"
@@ -230,7 +231,7 @@ export function CoverEditor({
                   <IconCheck size={18} />
                 </ActionIcon>
               </Tooltip>
-              <Tooltip label="Cancel">
+              <Tooltip label="Cancel" zIndex={1100}>
                 <ActionIcon
                   variant="subtle"
                   color="red"
@@ -309,7 +310,7 @@ export function CoverEditor({
                       </Text>
                     )}
                   </Stack>
-                  <Tooltip label="Delete cover">
+                  <Tooltip label="Delete cover" zIndex={1100}>
                     <ActionIcon
                       variant="subtle"
                       color="red"

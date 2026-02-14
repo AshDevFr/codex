@@ -352,6 +352,8 @@ pub async fn books_to_full_dtos_batched(
                 count: meta.count,
                 isbns: meta.isbns.clone(),
                 locks: BookMetadataLocks {
+                    title_lock: meta.title_lock,
+                    number_lock: meta.number_lock,
                     summary_lock: meta.summary_lock,
                     writer_lock: meta.writer_lock,
                     penciller_lock: meta.penciller_lock,
@@ -419,6 +421,8 @@ pub async fn books_to_full_dtos_batched(
                 count: None,
                 isbns: None,
                 locks: BookMetadataLocks {
+                    title_lock: false,
+                    number_lock: false,
                     summary_lock: false,
                     writer_lock: false,
                     penciller_lock: false,
@@ -2707,6 +2711,8 @@ pub async fn get_book_metadata_locks(
         .ok_or_else(|| ApiError::NotFound("Book metadata not found".to_string()))?;
 
     Ok(Json(BookMetadataLocks {
+        title_lock: metadata.title_lock,
+        number_lock: metadata.number_lock,
         summary_lock: metadata.summary_lock,
         writer_lock: metadata.writer_lock,
         penciller_lock: metadata.penciller_lock,
@@ -2790,6 +2796,12 @@ pub async fn update_book_metadata_locks(
     let now = Utc::now();
     let mut active: book_metadata::ActiveModel = existing.into();
 
+    if let Some(v) = request.title_lock {
+        active.title_lock = Set(v);
+    }
+    if let Some(v) = request.number_lock {
+        active.number_lock = Set(v);
+    }
     if let Some(v) = request.summary_lock {
         active.summary_lock = Set(v);
     }
@@ -2915,6 +2927,8 @@ pub async fn update_book_metadata_locks(
     let _ = state.event_broadcaster.emit(event);
 
     Ok(Json(BookMetadataLocks {
+        title_lock: updated.title_lock,
+        number_lock: updated.number_lock,
         summary_lock: updated.summary_lock,
         writer_lock: updated.writer_lock,
         penciller_lock: updated.penciller_lock,

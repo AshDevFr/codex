@@ -6773,6 +6773,11 @@ export interface components {
              */
             monthLock: boolean;
             /**
+             * @description Whether number is locked
+             * @example false
+             */
+            numberLock: boolean;
+            /**
              * @description Whether original_title is locked
              * @example false
              */
@@ -6817,6 +6822,11 @@ export interface components {
              * @example false
              */
             summaryLock: boolean;
+            /**
+             * @description Whether title is locked
+             * @example false
+             */
+            titleLock: boolean;
             /**
              * @description Whether translator is locked
              * @example false
@@ -14832,6 +14842,8 @@ export interface components {
             mangaLock?: boolean | null;
             /** @description Whether to lock month */
             monthLock?: boolean | null;
+            /** @description Whether to lock number */
+            numberLock?: boolean | null;
             /** @description Whether to lock original_title */
             originalTitleLock?: boolean | null;
             /** @description Whether to lock original_year */
@@ -14853,6 +14865,8 @@ export interface components {
              * @example true
              */
             summaryLock?: boolean | null;
+            /** @description Whether to lock title */
+            titleLock?: boolean | null;
             /** @description Whether to lock translator */
             translatorLock?: boolean | null;
             /** @description Whether to lock volume */

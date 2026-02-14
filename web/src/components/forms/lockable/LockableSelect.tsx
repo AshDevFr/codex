@@ -58,6 +58,7 @@ export function LockableSelect({
             : "Unlocked: Can be updated automatically"
         }
         position="left"
+        zIndex={1100}
       >
         <ActionIcon
           variant="subtle"

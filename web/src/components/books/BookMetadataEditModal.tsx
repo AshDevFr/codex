@@ -100,6 +100,8 @@ interface FormState {
 }
 
 interface LocksState {
+  title: boolean;
+  number: boolean;
   summary: boolean;
   bookType: boolean;
   subtitle: boolean;
@@ -181,6 +183,8 @@ function initializeLocksState(
   locks: BookMetadataLocks | undefined,
 ): LocksState {
   return {
+    title: locks?.titleLock || false,
+    number: locks?.numberLock || false,
     summary: locks?.summaryLock || false,
     bookType: locks?.bookTypeLock || false,
     subtitle: locks?.subtitleLock || false,
@@ -483,6 +487,8 @@ export function BookMetadataEditModal({
 
       // Update locks
       await booksApi.updateMetadataLocks(bookId, {
+        titleLock: locksState.title,
+        numberLock: locksState.number,
         summaryLock: locksState.summary,
         bookTypeLock: locksState.bookType,
         subtitleLock: locksState.subtitle,
@@ -551,8 +557,8 @@ export function BookMetadataEditModal({
         label="Title"
         value={formState.title}
         onChange={(v) => updateField("title", v)}
-        locked={false}
-        onLockChange={() => {}}
+        locked={locksState.title}
+        onLockChange={(v) => updateLock("title", v)}
         originalValue={originalFormState?.title}
         placeholder="Book title"
         description="Display name for this book"
@@ -584,8 +590,8 @@ export function BookMetadataEditModal({
         label="Number"
         value={formState.number}
         onChange={(v) => updateField("number", v)}
-        locked={false}
-        onLockChange={() => {}}
+        locked={locksState.number}
+        onLockChange={(v) => updateLock("number", v)}
         originalValue={originalFormState?.number}
         placeholder="e.g., 1, 2.5, 10"
         description="Book number in series (decimals allowed for sorting)"

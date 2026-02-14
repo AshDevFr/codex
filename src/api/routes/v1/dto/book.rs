@@ -1275,6 +1275,14 @@ pub struct BookMetadataResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BookMetadataLocks {
+    /// Whether title is locked
+    #[schema(example = false)]
+    pub title_lock: bool,
+
+    /// Whether number is locked
+    #[schema(example = false)]
+    pub number_lock: bool,
+
     /// Whether summary is locked
     #[schema(example = false)]
     pub summary_lock: bool,
@@ -1421,6 +1429,12 @@ pub struct BookMetadataLocks {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBookMetadataLocksRequest {
+    /// Whether to lock title
+    pub title_lock: Option<bool>,
+
+    /// Whether to lock number
+    pub number_lock: Option<bool>,
+
     /// Whether to lock summary
     #[schema(example = true)]
     pub summary_lock: Option<bool>,
