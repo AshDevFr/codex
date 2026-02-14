@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::db::entities::book_metadata::Model as BookMetadata;
 use crate::db::entities::plugins::{Model as Plugin, PluginPermission};
-use crate::db::repositories::BookMetadataRepository;
+use crate::db::repositories::{BookExternalIdRepository, BookMetadataRepository};
 use crate::events::EventBroadcaster;
 use crate::services::ThumbnailService;
 use crate::services::plugin::protocol::PluginBookMetadata;
@@ -474,6 +474,30 @@ impl BookMetadataApplier {
                     field: "coverUrl".to_string(),
                     reason: "ThumbnailService not available".to_string(),
                 });
+            }
+        }
+
+        // External IDs (cross-references to other services)
+        if should_apply_field("externalIds") && !metadata.external_ids.is_empty() {
+            if !plugin.has_permission(&PluginPermission::MetadataWriteExternalIds) {
+                skipped_fields.push(SkippedField {
+                    field: "externalIds".to_string(),
+                    reason: "Plugin does not have permission".to_string(),
+                });
+            } else {
+                for ext_id in &metadata.external_ids {
+                    BookExternalIdRepository::upsert(
+                        db,
+                        book_id,
+                        &ext_id.source,
+                        &ext_id.external_id,
+                        None, // external_url - not provided in cross-references
+                        None, // metadata_hash - not applicable for cross-references
+                    )
+                    .await
+                    .context("Failed to upsert book external ID")?;
+                }
+                applied_fields.push("externalIds".to_string());
             }
         }
 

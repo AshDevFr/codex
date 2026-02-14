@@ -2126,6 +2126,64 @@ pub async fn preview_book_metadata(
         &mut not_provided,
     ));
 
+    // External IDs (cross-reference IDs from other services like OpenLibrary)
+    if !plugin_metadata.external_ids.is_empty() {
+        let current_ext_ids = BookExternalIdRepository::get_for_book(&state.db, book_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to get external IDs: {}", e)))?;
+        let proposed_ext_id_sources: HashSet<&str> = plugin_metadata
+            .external_ids
+            .iter()
+            .map(|e| e.source.as_str())
+            .collect();
+        let mut current_ext_id_sources: Vec<serde_json::Value> = current_ext_ids
+            .iter()
+            .filter(|e| proposed_ext_id_sources.contains(e.source.as_str()))
+            .map(|e| {
+                serde_json::json!({
+                    "source": e.source,
+                    "externalId": e.external_id
+                })
+            })
+            .collect();
+        current_ext_id_sources.sort_by(|a, b| {
+            let a_src = a["source"].as_str().unwrap_or("");
+            let b_src = b["source"].as_str().unwrap_or("");
+            a_src.cmp(b_src)
+        });
+        let mut proposed_ext_ids: Vec<serde_json::Value> = plugin_metadata
+            .external_ids
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "source": e.source,
+                    "externalId": e.external_id
+                })
+            })
+            .collect();
+        proposed_ext_ids.sort_by(|a, b| {
+            let a_src = a["source"].as_str().unwrap_or("");
+            let b_src = b["source"].as_str().unwrap_or("");
+            a_src.cmp(b_src)
+        });
+        fields.push(build_field_preview(
+            "externalIds",
+            if current_ext_id_sources.is_empty() {
+                None
+            } else {
+                Some(serde_json::json!(current_ext_id_sources))
+            },
+            Some(serde_json::json!(proposed_ext_ids)),
+            false, // External IDs don't have a lock field
+            has_permission(PluginPermission::MetadataWriteExternalIds),
+            &mut will_apply,
+            &mut locked,
+            &mut no_permission,
+            &mut unchanged,
+            &mut not_provided,
+        ));
+    }
+
     Ok(Json(MetadataPreviewResponse {
         fields,
         summary: PreviewSummary {

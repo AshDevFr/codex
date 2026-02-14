@@ -963,6 +963,14 @@ pub struct PluginBookMetadata {
     /// Links to other sites
     #[serde(default)]
     pub external_links: Vec<ExternalLink>,
+
+    // =========================================================================
+    // External IDs (cross-references to other services)
+    // =========================================================================
+    /// Cross-reference IDs from other services (e.g., OpenLibrary, Goodreads).
+    /// These use the `api:` prefix convention (e.g., "api:openlibrary").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_ids: Vec<PluginExternalId>,
 }
 
 /// Structured author with role information
@@ -1703,6 +1711,10 @@ mod tests {
             external_ratings: vec![],
             awards: vec![],
             external_links: vec![],
+            external_ids: vec![PluginExternalId {
+                source: "api:openlibrary".to_string(),
+                external_id: "OL12345M".to_string(),
+            }],
         };
 
         let json = serde_json::to_value(&metadata).unwrap();
@@ -1713,6 +1725,8 @@ mod tests {
         assert_eq!(json["year"], 1937);
         assert_eq!(json["isbn"], "978-0-547-92822-7");
         assert_eq!(json["authors"][0]["name"], "J.R.R. Tolkien");
+        assert_eq!(json["externalIds"][0]["source"], "api:openlibrary");
+        assert_eq!(json["externalIds"][0]["externalId"], "OL12345M");
     }
 
     #[test]

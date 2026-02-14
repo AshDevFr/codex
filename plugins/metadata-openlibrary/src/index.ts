@@ -147,6 +147,7 @@ const bookProvider: BookMetadataProvider = {
           linkType: "provider",
         },
       ],
+      externalIds: [{ source: "api:openlibrary", externalId }],
     };
   },
 

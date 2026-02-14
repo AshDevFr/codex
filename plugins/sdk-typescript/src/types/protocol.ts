@@ -387,6 +387,16 @@ export interface PluginBookMetadata {
   // External links
   /** Links to other sites */
   externalLinks: ExternalLink[];
+
+  // External IDs (cross-references to other services)
+  /**
+   * Cross-reference IDs from other services.
+   * Uses the `api:` prefix convention (e.g., "api:openlibrary").
+   *
+   * These allow other plugins (sync, recommendations) to match books
+   * to external services without needing title-based search.
+   */
+  externalIds?: ExternalId[];
 }
 
 /**

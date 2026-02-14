@@ -5,6 +5,7 @@
 import type {
   BookAuthor,
   BookCover,
+  ExternalId,
   ExternalLink,
   ExternalRating,
   PluginBookMetadata,
@@ -134,6 +135,13 @@ function buildCoverUrls(isbn: string | undefined, coverId: number | undefined): 
   }
 
   return covers;
+}
+
+/**
+ * Build external IDs (cross-references) for Open Library book
+ */
+function buildExternalIds(externalId: string): ExternalId[] {
+  return [{ source: "api:openlibrary", externalId }];
 }
 
 /**
@@ -267,6 +275,9 @@ export async function mapEditionToBookMetadata(
 
     // Links
     externalLinks: buildExternalLinks(edition.key, workKey),
+
+    // Cross-reference IDs
+    externalIds: buildExternalIds(externalId),
   };
 }
 
@@ -385,6 +396,9 @@ export function mapSearchDocToBookPreview(doc: OLSearchDoc): PluginBookMetadata 
         linkType: "provider",
       },
     ],
+
+    // Cross-reference IDs
+    externalIds: buildExternalIds(doc.key),
   };
 }
 
@@ -460,6 +474,7 @@ export async function getFullBookMetadata(
           linkType: "provider",
         },
       ],
+      externalIds: buildExternalIds(workData.key),
     };
   }
 
