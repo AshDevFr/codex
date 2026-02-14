@@ -64,7 +64,7 @@ export function IntegrationsSettings() {
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       if (status === "completed" || status === "failed") return false;
-      return 2000;
+      return 3000;
     },
   });
 
