@@ -261,4 +261,136 @@ describe("GenreTagChips", () => {
     expect(screen.queryByText("Favorite")).not.toBeInTheDocument();
     expect(screen.getByText("+2 more")).toBeInTheDocument();
   });
+
+  describe("generic groups", () => {
+    const mockSubjects = [
+      { id: "s1", name: "Mathematics" },
+      { id: "s2", name: "Physics" },
+      { id: "s3", name: "Chemistry" },
+      { id: "s4", name: "Biology" },
+      { id: "s5", name: "History" },
+      { id: "s6", name: "Geography" },
+      { id: "s7", name: "Literature" },
+    ];
+
+    it("should render generic groups with custom color", () => {
+      renderWithProviders(
+        <GenreTagChips
+          groups={[{ items: mockSubjects.slice(0, 3), color: "teal" }]}
+        />,
+      );
+
+      expect(screen.getByText("Mathematics")).toBeInTheDocument();
+      expect(screen.getByText("Physics")).toBeInTheDocument();
+      expect(screen.getByText("Chemistry")).toBeInTheDocument();
+    });
+
+    it("should render nothing when groups have no items", () => {
+      renderWithProviders(
+        <GenreTagChips groups={[{ items: [], color: "teal" }]} />,
+      );
+
+      expect(screen.queryByRole("group")).not.toBeInTheDocument();
+    });
+
+    it("should not render generic groups as links", () => {
+      renderWithProviders(
+        <GenreTagChips
+          groups={[{ items: mockSubjects.slice(0, 2), color: "teal" }]}
+        />,
+      );
+
+      const badge = screen.getByText("Mathematics");
+      expect(badge.closest("a")).not.toBeInTheDocument();
+    });
+
+    it("should collapse generic groups with maxDisplay", () => {
+      renderWithProviders(
+        <GenreTagChips
+          groups={[{ items: mockSubjects, color: "teal" }]}
+          maxDisplay={5}
+        />,
+      );
+
+      expect(screen.getByText("Mathematics")).toBeInTheDocument();
+      expect(screen.getByText("History")).toBeInTheDocument();
+      expect(screen.queryByText("Geography")).not.toBeInTheDocument();
+      expect(screen.getByText("+2 more")).toBeInTheDocument();
+    });
+
+    it("should expand and collapse generic groups", async () => {
+      const user = userEvent.setup();
+
+      renderWithProviders(
+        <GenreTagChips
+          groups={[{ items: mockSubjects, color: "teal" }]}
+          maxDisplay={5}
+        />,
+      );
+
+      expect(screen.queryByText("Literature")).not.toBeInTheDocument();
+
+      await user.click(screen.getByText("+2 more"));
+      expect(screen.getByText("Literature")).toBeInTheDocument();
+      expect(screen.getByText("Show less")).toBeInTheDocument();
+
+      await user.click(screen.getByText("Show less"));
+      expect(screen.queryByText("Literature")).not.toBeInTheDocument();
+    });
+
+    it("should mix genres, tags, and generic groups", () => {
+      renderWithProviders(
+        <GenreTagChips
+          genres={mockGenres.slice(0, 1)}
+          tags={mockTags.slice(0, 1)}
+          groups={[{ items: mockSubjects.slice(0, 1), color: "teal" }]}
+        />,
+      );
+
+      expect(screen.getByText("Action")).toBeInTheDocument();
+      expect(screen.getByText("Favorite")).toBeInTheDocument();
+      expect(screen.getByText("Mathematics")).toBeInTheDocument();
+    });
+
+    it("should respect maxDisplay across genres, tags, and groups", () => {
+      renderWithProviders(
+        <GenreTagChips
+          genres={mockGenres}
+          tags={mockTags}
+          groups={[{ items: mockSubjects.slice(0, 3), color: "teal" }]}
+          maxDisplay={4}
+        />,
+      );
+
+      // 3 genres shown, 1 tag shown = 4 total
+      expect(screen.getByText("Action")).toBeInTheDocument();
+      expect(screen.getByText("Adventure")).toBeInTheDocument();
+      expect(screen.getByText("Comedy")).toBeInTheDocument();
+      expect(screen.getByText("Favorite")).toBeInTheDocument();
+
+      // Rest hidden
+      expect(screen.queryByText("Completed")).not.toBeInTheDocument();
+      expect(screen.queryByText("Mathematics")).not.toBeInTheDocument();
+
+      // 4 hidden: 1 tag + 3 subjects
+      expect(screen.getByText("+4 more")).toBeInTheDocument();
+    });
+
+    it("should render generic groups with custom getUrl as links", () => {
+      renderWithProviders(
+        <GenreTagChips
+          groups={[
+            {
+              items: mockSubjects.slice(0, 2),
+              color: "teal",
+              getUrl: (item) => `/subjects/${item.id}`,
+            },
+          ]}
+        />,
+      );
+
+      const link = screen.getByText("Mathematics").closest("a");
+      expect(link).toHaveAttribute("href", "/subjects/s1");
+    });
+  });
 });

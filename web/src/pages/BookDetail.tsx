@@ -20,6 +20,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAnalyze,
+  IconAward,
   IconBarcode,
   IconBook,
   IconBookOff,
@@ -55,11 +56,10 @@ import {
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
 import { ExternalIdEditModal } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
-import { ExternalLinks } from "@/components/series";
+import { ExternalLinks, GenreTagChips } from "@/components/series";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
-import type { ExtendedBookMetadata } from "@/types/book-metadata";
 import { PERMISSIONS } from "@/types/permissions";
 
 // Language code mapping
@@ -122,14 +122,14 @@ export function BookDetail() {
     { open: openExternalIdModal, close: closeExternalIdModal },
   ] = useDisclosure(false);
 
-  // Fetch book details
+  // Fetch book details with full metadata (genres, tags, locks, etc.)
   const {
     data: bookDetail,
     isLoading,
     error,
   } = useQuery({
     queryKey: ["book-detail", bookId],
-    queryFn: () => booksApi.getDetail(bookId!),
+    queryFn: () => booksApi.getDetail(bookId!, { full: true }),
     enabled: !!bookId,
   });
 
@@ -155,15 +155,11 @@ export function BookDetail() {
   });
 
   // Set document title to book name for browser history
-  useDynamicDocumentTitle(bookDetail?.book?.title, "Book");
+  useDynamicDocumentTitle(bookDetail?.title, "Book");
 
-  const book = bookDetail?.book;
+  // FullBookResponse is a flat structure — bookDetail IS the book
+  const book = bookDetail;
   const metadata = bookDetail?.metadata;
-  // Extended metadata fields (will be populated when Phase 6 API updates are complete)
-  // For now, cast metadata to access potential future fields
-  const extendedMetadata = metadata as
-    | (typeof metadata & ExtendedBookMetadata)
-    | undefined;
   const prevBook = adjacentBooks?.prev;
   const nextBook = adjacentBooks?.next;
 
@@ -374,11 +370,9 @@ export function BookDetail() {
   const languageDisplay = metadata?.languageIso
     ? LANGUAGE_DISPLAY[metadata.languageIso] || metadata.languageIso
     : null;
-  const releaseYear = metadata?.releaseDate
-    ? new Date(metadata.releaseDate).getFullYear()
-    : null;
+  const releaseYear = metadata?.year ?? null;
 
-  // Collect all creators
+  // Collect all creators (use array fields from BookFullMetadata)
   const creators: { role: string; names: string[] }[] = [
     { role: "WRITERS", names: metadata?.writers || [] },
     { role: "PENCILLERS", names: metadata?.pencillers || [] },
@@ -388,6 +382,9 @@ export function BookDetail() {
     { role: "COVER ARTISTS", names: metadata?.coverArtists || [] },
     { role: "EDITORS", names: metadata?.editors || [] },
   ].filter((c) => c.names.length > 0);
+
+  // Structured authors (from authors_json — separate from role-based creators)
+  const structuredAuthors = metadata?.authors ?? [];
 
   return (
     <Box py="md" px="md">
@@ -480,12 +477,8 @@ export function BookDetail() {
                     <Badge size="sm" variant="filled">
                       {book.fileFormat.toUpperCase()}
                     </Badge>
-                    {/* Book type badge - will show when API provides bookType */}
                     <BookTypeBadge
-                      bookType={
-                        (extendedMetadata as ExtendedBookMetadata | undefined)
-                          ?.bookType
-                      }
+                      bookType={metadata?.bookType}
                       size="sm"
                       variant="light"
                     />
@@ -585,10 +578,10 @@ export function BookDetail() {
                 </Menu>
               </Group>
 
-              {/* Subtitle (if available from extended metadata) */}
-              {extendedMetadata?.subtitle && (
+              {/* Subtitle */}
+              {metadata?.subtitle && (
                 <Text size="md" c="dimmed" fs="italic">
-                  {extendedMetadata.subtitle}
+                  {metadata.subtitle}
                 </Text>
               )}
 
@@ -782,26 +775,64 @@ export function BookDetail() {
             </Group>
           )}
 
-          {/* Genre */}
-          {metadata?.genre && (
-            <Group gap="md" align="center">
+          {/* Genres */}
+          {book.genres && book.genres.length > 0 && (
+            <Group gap="md" align="flex-start">
               <Text size="sm" c="dimmed" w={100}>
-                GENRE
+                GENRES
               </Text>
-              <Badge variant="light" size="sm">
-                {metadata.genre}
-              </Badge>
+              <GenreTagChips
+                genres={book.genres}
+                libraryId={book.libraryId}
+                maxDisplay={8}
+              />
+            </Group>
+          )}
+
+          {/* Tags */}
+          {book.tags && book.tags.length > 0 && (
+            <Group gap="md" align="flex-start">
+              <Text size="sm" c="dimmed" w={100}>
+                TAGS
+              </Text>
+              <GenreTagChips
+                tags={book.tags}
+                libraryId={book.libraryId}
+                maxDisplay={8}
+              />
+            </Group>
+          )}
+
+          {/* Subjects */}
+          {metadata?.subjects && metadata.subjects.length > 0 && (
+            <Group gap="md" align="flex-start">
+              <Text size="sm" c="dimmed" w={100}>
+                SUBJECTS
+              </Text>
+              <GenreTagChips
+                groups={[
+                  {
+                    items: metadata.subjects.map((s) => ({
+                      id: s,
+                      name: s,
+                    })),
+                    color: "teal",
+                  },
+                ]}
+                clickable={false}
+                maxDisplay={5}
+              />
             </Group>
           )}
 
           {/* ISBN(s) */}
-          {extendedMetadata?.isbns && (
+          {metadata?.isbns && (
             <Group gap="md" align="center">
               <Text size="sm" c="dimmed" w={100}>
                 ISBN
               </Text>
               <Group gap="xs">
-                {extendedMetadata.isbns.split(",").map((isbn: string) => (
+                {metadata.isbns.split(",").map((isbn: string) => (
                   <Badge
                     key={isbn.trim()}
                     variant="outline"
@@ -815,46 +846,71 @@ export function BookDetail() {
             </Group>
           )}
 
-          {/* Edition (from extended metadata) */}
-          {extendedMetadata?.edition && (
+          {/* Edition */}
+          {metadata?.edition && (
             <Group gap="md" align="center">
               <Text size="sm" c="dimmed" w={100}>
                 EDITION
               </Text>
-              <Text size="sm">{extendedMetadata.edition}</Text>
+              <Text size="sm">{metadata.edition}</Text>
             </Group>
           )}
 
-          {/* Original Title (from extended metadata) */}
-          {extendedMetadata?.originalTitle && (
+          {/* Original Title */}
+          {metadata?.originalTitle && (
             <Group gap="md" align="center">
               <Text size="sm" c="dimmed" w={100}>
                 ORIGINAL
               </Text>
               <Group gap="xs">
-                <Text size="sm">{extendedMetadata.originalTitle}</Text>
-                {extendedMetadata.originalYear && (
+                <Text size="sm">{metadata.originalTitle}</Text>
+                {metadata.originalYear && (
                   <Text size="sm" c="dimmed">
-                    ({extendedMetadata.originalYear})
+                    ({metadata.originalYear})
                   </Text>
                 )}
               </Group>
             </Group>
           )}
 
-          {/* Translator (from extended metadata) */}
-          {extendedMetadata?.translator && (
+          {/* Translator */}
+          {metadata?.translator && (
             <Group gap="md" align="center">
               <Text size="sm" c="dimmed" w={100}>
                 TRANSLATOR
               </Text>
               <Badge variant="light" size="sm" color="orange">
-                {extendedMetadata.translator}
+                {metadata.translator}
               </Badge>
             </Group>
           )}
 
-          {/* Creators */}
+          {/* Structured Authors (from authors_json — e.g. EPUB metadata) */}
+          {structuredAuthors.length > 0 && (
+            <Group gap="md" align="flex-start">
+              <Text size="sm" c="dimmed" w={100}>
+                AUTHORS
+              </Text>
+              <Group gap="xs">
+                {structuredAuthors.map((author) => (
+                  <Tooltip
+                    key={`${author.name}-${author.role ?? ""}`}
+                    label={[author.role, author.sortName]
+                      .filter(Boolean)
+                      .join(" | ")}
+                    disabled={!author.role && !author.sortName}
+                    withArrow
+                  >
+                    <Badge variant="light" size="sm">
+                      {author.name}
+                    </Badge>
+                  </Tooltip>
+                ))}
+              </Group>
+            </Group>
+          )}
+
+          {/* Creators (role-based — e.g. ComicInfo metadata) */}
           {creators.map(({ role, names }) => (
             <Group key={role} gap="md" align="flex-start">
               <Text size="sm" c="dimmed" w={100}>
@@ -869,6 +925,65 @@ export function BookDetail() {
               </Group>
             </Group>
           ))}
+
+          {/* Awards */}
+          {metadata?.awards && metadata.awards.length > 0 && (
+            <Group gap="md" align="flex-start">
+              <Text size="sm" c="dimmed" w={100}>
+                AWARDS
+              </Text>
+              <Group gap="xs">
+                {metadata.awards.map((award) => (
+                  <Tooltip
+                    key={`${award.name}-${award.year ?? ""}-${award.category ?? ""}`}
+                    label={[
+                      award.category,
+                      award.year ? `(${award.year})` : null,
+                      award.won ? "Won" : "Nominated",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    withArrow
+                  >
+                    <Badge
+                      variant="light"
+                      size="sm"
+                      color={award.won ? "yellow" : "gray"}
+                      leftSection={<IconAward size={10} />}
+                    >
+                      {award.name}
+                    </Badge>
+                  </Tooltip>
+                ))}
+              </Group>
+            </Group>
+          )}
+
+          {/* Custom Metadata */}
+          {metadata?.customMetadata &&
+            typeof metadata.customMetadata === "object" &&
+            Object.keys(metadata.customMetadata).length > 0 && (
+              <Group gap="md" align="flex-start">
+                <Text size="sm" c="dimmed" w={100}>
+                  CUSTOM
+                </Text>
+                <Group gap="xs">
+                  {Object.entries(
+                    metadata.customMetadata as Record<string, unknown>,
+                  ).map(([key, value]) => (
+                    <Tooltip
+                      key={key}
+                      label={`${key}: ${String(value)}`}
+                      withArrow
+                    >
+                      <Badge variant="outline" size="sm">
+                        {key}: {String(value)}
+                      </Badge>
+                    </Tooltip>
+                  ))}
+                </Group>
+              </Group>
+            )}
 
           {/* External Links */}
           {externalLinks && externalLinks.length > 0 && (
@@ -987,7 +1102,7 @@ export function BookDetail() {
           plugin={selectedPlugin}
           entityId={book.id}
           entityTitle={book.title}
-          entityAuthor={metadata?.authors?.[0]?.name ?? metadata?.writers?.[0]}
+          entityAuthor={metadata?.authors?.[0]?.name ?? metadata?.writers[0]}
           contentType="book"
           onApplySuccess={handleMetadataApplySuccess}
         />

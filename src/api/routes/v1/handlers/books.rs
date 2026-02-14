@@ -336,6 +336,33 @@ pub async fn books_to_full_dtos_batched(
         // Build full metadata (even if no metadata record exists)
         let now = Utc::now();
         let full_metadata = if let Some(meta) = book_meta {
+            // Parse authors JSON
+            let authors = meta
+                .authors_json
+                .as_ref()
+                .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok());
+            // Parse awards JSON
+            let awards = meta
+                .awards_json
+                .as_ref()
+                .and_then(|json| serde_json::from_str::<Vec<BookAwardDto>>(json).ok());
+            // Parse subjects (either JSON array or comma-separated)
+            let subjects = meta.subjects.as_ref().map(|s| {
+                if s.starts_with('[') {
+                    serde_json::from_str::<Vec<String>>(s).unwrap_or_else(|_| vec![s.clone()])
+                } else {
+                    s.split(',')
+                        .map(|t| t.trim().to_string())
+                        .filter(|t| !t.is_empty())
+                        .collect()
+                }
+            });
+            // Parse custom metadata
+            let custom_metadata = meta
+                .custom_metadata
+                .as_ref()
+                .and_then(|json| serde_json::from_str(json).ok());
+
             BookFullMetadata {
                 title: meta.title.clone(),
                 title_sort: meta.title_sort.clone(),
@@ -361,6 +388,37 @@ pub async fn books_to_full_dtos_batched(
                 volume: meta.volume,
                 count: meta.count,
                 isbns: meta.isbns.clone(),
+                // Phase 6 fields
+                book_type: meta
+                    .book_type
+                    .as_ref()
+                    .and_then(|s| s.parse::<BookType>().ok())
+                    .map(BookTypeDto::from),
+                subtitle: meta.subtitle.clone(),
+                authors,
+                translator: meta.translator.clone(),
+                edition: meta.edition.clone(),
+                original_title: meta.original_title.clone(),
+                original_year: meta.original_year,
+                series_position: meta
+                    .series_position
+                    .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0)),
+                series_total: meta.series_total,
+                subjects,
+                awards,
+                custom_metadata,
+                release_date: None, // Computed from year/month/day if needed
+                writers: meta.writer.clone().map(|s| vec![s]).unwrap_or_default(),
+                pencillers: meta.penciller.clone().map(|s| vec![s]).unwrap_or_default(),
+                inkers: meta.inker.clone().map(|s| vec![s]).unwrap_or_default(),
+                colorists: meta.colorist.clone().map(|s| vec![s]).unwrap_or_default(),
+                letterers: meta.letterer.clone().map(|s| vec![s]).unwrap_or_default(),
+                cover_artists: meta
+                    .cover_artist
+                    .clone()
+                    .map(|s| vec![s])
+                    .unwrap_or_default(),
+                editors: meta.editor.clone().map(|s| vec![s]).unwrap_or_default(),
                 locks: BookMetadataLocks {
                     title_lock: meta.title_lock,
                     title_sort_lock: meta.title_sort_lock,
@@ -386,7 +444,6 @@ pub async fn books_to_full_dtos_batched(
                     volume_lock: meta.volume_lock,
                     count_lock: meta.count_lock,
                     isbns_lock: meta.isbns_lock,
-                    // New lock fields for Phase 6
                     book_type_lock: meta.book_type_lock,
                     subtitle_lock: meta.subtitle_lock,
                     authors_json_lock: meta.authors_json_lock,
@@ -431,6 +488,26 @@ pub async fn books_to_full_dtos_batched(
                 volume: None,
                 count: None,
                 isbns: None,
+                book_type: None,
+                subtitle: None,
+                authors: None,
+                translator: None,
+                edition: None,
+                original_title: None,
+                original_year: None,
+                series_position: None,
+                series_total: None,
+                subjects: None,
+                awards: None,
+                custom_metadata: None,
+                release_date: None,
+                writers: vec![],
+                pencillers: vec![],
+                inkers: vec![],
+                colorists: vec![],
+                letterers: vec![],
+                cover_artists: vec![],
+                editors: vec![],
                 locks: BookMetadataLocks {
                     title_lock: false,
                     title_sort_lock: false,
@@ -456,7 +533,6 @@ pub async fn books_to_full_dtos_batched(
                     volume_lock: false,
                     count_lock: false,
                     isbns_lock: false,
-                    // New lock fields for Phase 6
                     book_type_lock: false,
                     subtitle_lock: false,
                     authors_json_lock: false,

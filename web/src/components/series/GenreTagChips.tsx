@@ -4,9 +4,24 @@ import { Link } from "react-router-dom";
 import type { Genre } from "@/api/genres";
 import type { Tag } from "@/api/tags";
 
+interface BadgeItem {
+  id: string;
+  name: string;
+}
+
+interface BadgeGroup {
+  items: BadgeItem[];
+  color: string;
+  getUrl?: (item: BadgeItem) => string;
+}
+
 interface GenreTagChipsProps {
+  /** Pre-configured genre badges (blue, clickable by default) */
   genres?: Genre[];
+  /** Pre-configured tag badges (gray, clickable by default) */
   tags?: Tag[];
+  /** Generic badge groups with custom colors and optional links */
+  groups?: BadgeGroup[];
   libraryId?: string;
   clickable?: boolean;
   maxDisplay?: number;
@@ -15,6 +30,7 @@ interface GenreTagChipsProps {
 export function GenreTagChips({
   genres = [],
   tags = [],
+  groups = [],
   libraryId,
   clickable = true,
   maxDisplay,
@@ -22,71 +38,85 @@ export function GenreTagChips({
   const [expanded, setExpanded] = useState(false);
   const basePath = libraryId ? `/libraries/${libraryId}` : "/libraries/all";
 
-  const getGenreUrl = (genre: Genre) =>
+  const getGenreUrl = (genre: BadgeItem) =>
     `${basePath}/series?gf=any:${encodeURIComponent(genre.name)}`;
 
-  const getTagUrl = (tag: Tag) =>
+  const getTagUrl = (tag: BadgeItem) =>
     `${basePath}/series?tf=any:${encodeURIComponent(tag.name)}`;
 
-  const totalCount = genres.length + tags.length;
-  const shouldCollapse = maxDisplay != null && totalCount > maxDisplay;
-  const isCollapsed = shouldCollapse && !expanded;
+  // Build unified badge groups: genres first, then tags, then custom groups
+  const allGroups: BadgeGroup[] = [
+    ...(genres.length > 0
+      ? [
+          {
+            items: genres,
+            color: "blue",
+            getUrl: clickable ? getGenreUrl : undefined,
+          },
+        ]
+      : []),
+    ...(tags.length > 0
+      ? [
+          {
+            items: tags,
+            color: "gray",
+            getUrl: clickable ? getTagUrl : undefined,
+          },
+        ]
+      : []),
+    ...groups,
+  ];
 
-  const displayGenres = isCollapsed ? genres.slice(0, maxDisplay) : genres;
-  const displayTags = isCollapsed
-    ? tags.slice(0, Math.max(0, maxDisplay - genres.length))
-    : tags;
-  const hiddenCount = isCollapsed
-    ? totalCount - displayGenres.length - displayTags.length
-    : 0;
+  // Flatten all items for counting
+  const totalCount = allGroups.reduce((sum, g) => sum + g.items.length, 0);
 
-  if (genres.length === 0 && tags.length === 0) {
+  if (totalCount === 0) {
     return null;
   }
 
+  const shouldCollapse = maxDisplay != null && totalCount > maxDisplay;
+  const isCollapsed = shouldCollapse && !expanded;
+
+  // Determine which items to display from each group
+  let remaining = isCollapsed ? maxDisplay : totalCount;
+  const displayGroups = allGroups.map((group) => {
+    const take = Math.min(group.items.length, remaining);
+    remaining -= take;
+    return { ...group, displayItems: group.items.slice(0, take) };
+  });
+
+  const displayedCount = displayGroups.reduce(
+    (sum, g) => sum + g.displayItems.length,
+    0,
+  );
+  const hiddenCount = isCollapsed ? totalCount - displayedCount : 0;
+
   return (
     <Group gap="xs">
-      {displayGenres.map((genre) =>
-        clickable ? (
-          <Badge
-            key={`genre-${genre.id}`}
-            component={Link}
-            to={getGenreUrl(genre)}
-            variant="light"
-            color="blue"
-            size="sm"
-            style={{ cursor: "pointer", textDecoration: "none" }}
-          >
-            {genre.name}
-          </Badge>
-        ) : (
-          <Badge
-            key={`genre-${genre.id}`}
-            variant="light"
-            color="blue"
-            size="sm"
-          >
-            {genre.name}
-          </Badge>
-        ),
-      )}
-      {displayTags.map((tag) =>
-        clickable ? (
-          <Badge
-            key={`tag-${tag.id}`}
-            component={Link}
-            to={getTagUrl(tag)}
-            variant="light"
-            color="gray"
-            size="sm"
-            style={{ cursor: "pointer", textDecoration: "none" }}
-          >
-            {tag.name}
-          </Badge>
-        ) : (
-          <Badge key={`tag-${tag.id}`} variant="light" color="gray" size="sm">
-            {tag.name}
-          </Badge>
+      {displayGroups.map((group) =>
+        group.displayItems.map((item) =>
+          group.getUrl ? (
+            <Badge
+              key={`${group.color}-${item.id}`}
+              component={Link}
+              to={group.getUrl(item)}
+              variant="light"
+              color={group.color}
+              size="sm"
+              style={{ cursor: "pointer", textDecoration: "none" }}
+            >
+              {item.name}
+            </Badge>
+          ) : (
+            <Badge
+              key={`${group.color}-${item.id}`}
+              variant="light"
+              color={group.color}
+              size="sm"
+            >
+              {item.name}
+            </Badge>
+          ),
         ),
       )}
       {hiddenCount > 0 && (

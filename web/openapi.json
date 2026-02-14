@@ -16770,11 +16770,53 @@
         "type": "object",
         "description": "Full book metadata including all fields and their lock states",
         "required": [
+          "writers",
+          "pencillers",
+          "inkers",
+          "colorists",
+          "letterers",
+          "coverArtists",
+          "editors",
           "locks",
           "createdAt",
           "updatedAt"
         ],
         "properties": {
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information as JSON array",
+            "example": [
+              {
+                "name": "Andy Weir",
+                "role": "author",
+                "sortName": "Weir, Andy"
+              }
+            ]
+          },
+          "awards": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAwardDto"
+            },
+            "description": "Awards information",
+            "example": [
+              {
+                "category": "Best Novel",
+                "name": "Hugo Award",
+                "won": true,
+                "year": 2015
+              }
+            ]
+          },
           "blackAndWhite": {
             "type": [
               "boolean",
@@ -16783,6 +16825,17 @@
             "description": "Whether the book is black and white",
             "example": false
           },
+          "bookType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookTypeDto",
+                "description": "Book type classification (comic, manga, novel, etc.)"
+              }
+            ]
+          },
           "colorist": {
             "type": [
               "string",
@@ -16790,6 +16843,13 @@
             ],
             "description": "Colorist(s)",
             "example": "Richmond Lewis"
+          },
+          "colorists": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Colorists as array"
           },
           "count": {
             "type": [
@@ -16808,11 +16868,25 @@
             "description": "Cover artist(s)",
             "example": "David Mazzucchelli"
           },
+          "coverArtists": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Cover artists as array"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
             "description": "When the metadata was created",
             "example": "2024-01-01T00:00:00Z"
+          },
+          "customMetadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Custom metadata JSON escape hatch"
           },
           "day": {
             "type": [
@@ -16823,6 +16897,14 @@
             "description": "Publication day (1-31)",
             "example": 1
           },
+          "edition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Edition information (e.g., \"First Edition\", \"Revised Edition\")",
+            "example": "First Edition"
+          },
           "editor": {
             "type": [
               "string",
@@ -16830,6 +16912,13 @@
             ],
             "description": "Editor(s)",
             "example": "Dennis O'Neil"
+          },
+          "editors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Editors as array"
           },
           "formatDetail": {
             "type": [
@@ -16863,6 +16952,13 @@
             "description": "Inker(s)",
             "example": "David Mazzucchelli"
           },
+          "inkers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Inkers as array"
+          },
           "isbns": {
             "type": [
               "string",
@@ -16886,6 +16982,13 @@
             ],
             "description": "Letterer(s)",
             "example": "Todd Klein"
+          },
+          "letterers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Letterers as array"
           },
           "locks": {
             "$ref": "#/components/schemas/BookMetadataLocks",
@@ -16916,6 +17019,23 @@
             "description": "Chapter/book number",
             "example": "1"
           },
+          "originalTitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Original title (for translated works)",
+            "example": "火星の人"
+          },
+          "originalYear": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Original publication year (for re-releases or translations)",
+            "example": 2011
+          },
           "penciller": {
             "type": [
               "string",
@@ -16924,6 +17044,13 @@
             "description": "Penciller(s)",
             "example": "David Mazzucchelli"
           },
+          "pencillers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Pencillers as array"
+          },
           "publisher": {
             "type": [
               "string",
@@ -16931,6 +17058,56 @@
             ],
             "description": "Publisher name",
             "example": "DC Comics"
+          },
+          "releaseDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Release/publication date",
+            "example": "1987-02-01T00:00:00Z"
+          },
+          "seriesPosition": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Position in a series (e.g., 1.0, 2.5 for .5 volumes)",
+            "example": 1.0
+          },
+          "seriesTotal": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total number of books in the series",
+            "example": 3
+          },
+          "subjects": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Subject/topic tags",
+            "example": [
+              "Science Fiction",
+              "Space Exploration",
+              "Survival"
+            ]
+          },
+          "subtitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book subtitle",
+            "example": "A Novel"
           },
           "summary": {
             "type": [
@@ -16956,6 +17133,14 @@
             "description": "Sort title for ordering",
             "example": "batman year one 001"
           },
+          "translator": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Translator name",
+            "example": "John Smith"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -16978,6 +17163,13 @@
             ],
             "description": "Writer(s)",
             "example": "Frank Miller"
+          },
+          "writers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Writers as array"
           },
           "year": {
             "type": [

@@ -1954,6 +1954,95 @@ pub struct BookFullMetadata {
     #[schema(example = "978-1401207526")]
     pub isbns: Option<String>,
 
+    // ==========================================================================
+    // Phase 6 fields (book-specific rich metadata)
+    // ==========================================================================
+    /// Book type classification (comic, manga, novel, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "novel")]
+    pub book_type: Option<BookTypeDto>,
+
+    /// Book subtitle
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "A Novel")]
+    pub subtitle: Option<String>,
+
+    /// Structured author information as JSON array
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = json!([{"name": "Andy Weir", "role": "author", "sortName": "Weir, Andy"}]))]
+    pub authors: Option<Vec<BookAuthorDto>>,
+
+    /// Translator name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "John Smith")]
+    pub translator: Option<String>,
+
+    /// Edition information (e.g., "First Edition", "Revised Edition")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "First Edition")]
+    pub edition: Option<String>,
+
+    /// Original title (for translated works)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "火星の人")]
+    pub original_title: Option<String>,
+
+    /// Original publication year (for re-releases or translations)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 2011)]
+    pub original_year: Option<i32>,
+
+    /// Position in a series (e.g., 1.0, 2.5 for .5 volumes)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1.0)]
+    pub series_position: Option<f64>,
+
+    /// Total number of books in the series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 3)]
+    pub series_total: Option<i32>,
+
+    /// Subject/topic tags
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = json!(["Science Fiction", "Space Exploration", "Survival"]))]
+    pub subjects: Option<Vec<String>>,
+
+    /// Awards information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = json!([{"name": "Hugo Award", "year": 2015, "category": "Best Novel", "won": true}]))]
+    pub awards: Option<Vec<BookAwardDto>>,
+
+    /// Custom metadata JSON escape hatch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>, example = json!({"customField": "value"}))]
+    pub custom_metadata: Option<serde_json::Value>,
+
+    /// Release/publication date
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "1987-02-01T00:00:00Z")]
+    pub release_date: Option<DateTime<Utc>>,
+
+    /// Writers as array
+    pub writers: Vec<String>,
+
+    /// Pencillers as array
+    pub pencillers: Vec<String>,
+
+    /// Inkers as array
+    pub inkers: Vec<String>,
+
+    /// Colorists as array
+    pub colorists: Vec<String>,
+
+    /// Letterers as array
+    pub letterers: Vec<String>,
+
+    /// Cover artists as array
+    pub cover_artists: Vec<String>,
+
+    /// Editors as array
+    pub editors: Vec<String>,
+
     /// Lock states for all metadata fields
     pub locks: BookMetadataLocks,
 

@@ -6268,15 +6268,41 @@ export interface components {
         /** @description Full book metadata including all fields and their lock states */
         BookFullMetadata: {
             /**
+             * @description Structured author information as JSON array
+             * @example [
+             *       {
+             *         "name": "Andy Weir",
+             *         "role": "author",
+             *         "sortName": "Weir, Andy"
+             *       }
+             *     ]
+             */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
+            /**
+             * @description Awards information
+             * @example [
+             *       {
+             *         "category": "Best Novel",
+             *         "name": "Hugo Award",
+             *         "won": true,
+             *         "year": 2015
+             *       }
+             *     ]
+             */
+            awards?: components["schemas"]["BookAwardDto"][] | null;
+            /**
              * @description Whether the book is black and white
              * @example false
              */
             blackAndWhite?: boolean | null;
+            bookType?: null | components["schemas"]["BookTypeDto"];
             /**
              * @description Colorist(s)
              * @example Richmond Lewis
              */
             colorist?: string | null;
+            /** @description Colorists as array */
+            colorists: string[];
             /**
              * Format: int32
              * @description Total count in series
@@ -6288,12 +6314,16 @@ export interface components {
              * @example David Mazzucchelli
              */
             coverArtist?: string | null;
+            /** @description Cover artists as array */
+            coverArtists: string[];
             /**
              * Format: date-time
              * @description When the metadata was created
              * @example 2024-01-01T00:00:00Z
              */
             createdAt: string;
+            /** @description Custom metadata JSON escape hatch */
+            customMetadata?: Record<string, never> | null;
             /**
              * Format: int32
              * @description Publication day (1-31)
@@ -6301,10 +6331,17 @@ export interface components {
              */
             day?: number | null;
             /**
+             * @description Edition information (e.g., "First Edition", "Revised Edition")
+             * @example First Edition
+             */
+            edition?: string | null;
+            /**
              * @description Editor(s)
              * @example Dennis O'Neil
              */
             editor?: string | null;
+            /** @description Editors as array */
+            editors: string[];
             /**
              * @description Format details
              * @example Trade Paperback
@@ -6325,6 +6362,8 @@ export interface components {
              * @example David Mazzucchelli
              */
             inker?: string | null;
+            /** @description Inkers as array */
+            inkers: string[];
             /**
              * @description ISBN(s)
              * @example 978-1401207526
@@ -6340,6 +6379,8 @@ export interface components {
              * @example Todd Klein
              */
             letterer?: string | null;
+            /** @description Letterers as array */
+            letterers: string[];
             /** @description Lock states for all metadata fields */
             locks: components["schemas"]["BookMetadataLocks"];
             /**
@@ -6359,15 +6400,60 @@ export interface components {
              */
             number?: string | null;
             /**
+             * @description Original title (for translated works)
+             * @example 火星の人
+             */
+            originalTitle?: string | null;
+            /**
+             * Format: int32
+             * @description Original publication year (for re-releases or translations)
+             * @example 2011
+             */
+            originalYear?: number | null;
+            /**
              * @description Penciller(s)
              * @example David Mazzucchelli
              */
             penciller?: string | null;
+            /** @description Pencillers as array */
+            pencillers: string[];
             /**
              * @description Publisher name
              * @example DC Comics
              */
             publisher?: string | null;
+            /**
+             * Format: date-time
+             * @description Release/publication date
+             * @example 1987-02-01T00:00:00Z
+             */
+            releaseDate?: string | null;
+            /**
+             * Format: double
+             * @description Position in a series (e.g., 1.0, 2.5 for .5 volumes)
+             * @example 1
+             */
+            seriesPosition?: number | null;
+            /**
+             * Format: int32
+             * @description Total number of books in the series
+             * @example 3
+             */
+            seriesTotal?: number | null;
+            /**
+             * @description Subject/topic tags
+             * @example [
+             *       "Science Fiction",
+             *       "Space Exploration",
+             *       "Survival"
+             *     ]
+             */
+            subjects?: string[] | null;
+            /**
+             * @description Book subtitle
+             * @example A Novel
+             */
+            subtitle?: string | null;
             /**
              * @description Book summary/description
              * @example Bruce Wayne returns to Gotham City after years abroad.
@@ -6383,6 +6469,11 @@ export interface components {
              * @example batman year one 001
              */
             titleSort?: string | null;
+            /**
+             * @description Translator name
+             * @example John Smith
+             */
+            translator?: string | null;
             /**
              * Format: date-time
              * @description When the metadata was last updated
@@ -6400,6 +6491,8 @@ export interface components {
              * @example Frank Miller
              */
             writer?: string | null;
+            /** @description Writers as array */
+            writers: string[];
             /**
              * Format: int32
              * @description Publication year
