@@ -6828,6 +6828,11 @@ export interface components {
              */
             titleLock: boolean;
             /**
+             * @description Whether title_sort is locked
+             * @example false
+             */
+            titleSortLock: boolean;
+            /**
              * @description Whether translator is locked
              * @example false
              */
@@ -6935,6 +6940,8 @@ export interface components {
              * @example Todd Klein
              */
             letterer?: string | null;
+            /** @description Metadata lock states */
+            locks: components["schemas"]["BookMetadataLocks"];
             /**
              * @description Whether the book is manga format
              * @example false
@@ -8439,6 +8446,8 @@ export interface components {
              * @example 52428800
              */
             fileSize: number;
+            /** @description Genres assigned to this book */
+            genres: components["schemas"]["GenreDto"][];
             /**
              * Format: uuid
              * @description Book unique identifier
@@ -8487,6 +8496,8 @@ export interface components {
              * @example Batman: Year One
              */
             seriesName: string;
+            /** @description Tags assigned to this book */
+            tags: components["schemas"]["TagDto"][];
             /**
              * @description Book title (display name)
              * @example Batman: Year One #1
@@ -14867,6 +14878,8 @@ export interface components {
             summaryLock?: boolean | null;
             /** @description Whether to lock title */
             titleLock?: boolean | null;
+            /** @description Whether to lock title_sort */
+            titleSortLock?: boolean | null;
             /** @description Whether to lock translator */
             translatorLock?: boolean | null;
             /** @description Whether to lock volume */

@@ -76,6 +76,44 @@ export const genresApi = {
   },
 
   /**
+   * Get genres for a specific book
+   */
+  getForBook: async (bookId: string): Promise<Genre[]> => {
+    const response = await api.get<GenreListResponse>(
+      `/books/${bookId}/genres`,
+    );
+    return response.data.genres;
+  },
+
+  /**
+   * Set all genres for a book (replaces existing)
+   */
+  setForBook: async (bookId: string, genres: string[]): Promise<Genre[]> => {
+    const response = await api.put<GenreListResponse>(
+      `/books/${bookId}/genres`,
+      { genres },
+    );
+    return response.data.genres;
+  },
+
+  /**
+   * Add a single genre to a book
+   */
+  addToBook: async (bookId: string, name: string): Promise<Genre> => {
+    const response = await api.post<Genre>(`/books/${bookId}/genres`, {
+      name,
+    });
+    return response.data;
+  },
+
+  /**
+   * Remove a genre from a book
+   */
+  removeFromBook: async (bookId: string, genreId: string): Promise<void> => {
+    await api.delete(`/books/${bookId}/genres/${genreId}`);
+  },
+
+  /**
    * Delete a genre globally
    */
   delete: async (genreId: string): Promise<void> => {

@@ -1,6 +1,6 @@
 //! `SeaORM` Entity for tags table
 //!
-//! Tag taxonomy table for categorizing series.
+//! Tag taxonomy table for categorizing series and books.
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
@@ -23,6 +23,8 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::series_tags::Entity")]
     SeriesTags,
+    #[sea_orm(has_many = "super::book_tags::Entity")]
+    BookTags,
 }
 
 impl Related<super::series_tags::Entity> for Entity {
@@ -37,6 +39,21 @@ impl Related<super::series::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::series_tags::Relation::Tag.def().rev())
+    }
+}
+
+impl Related<super::book_tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BookTags.def()
+    }
+}
+
+impl Related<super::books::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::book_tags::Relation::Book.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::book_tags::Relation::Tag.def().rev())
     }
 }
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, waitFor } from "@/test/utils";
 import { BookMetadataEditModal } from "./BookMetadataEditModal";
 
-// Mock the API module
+// Mock the API modules
 vi.mock("@/api/books", () => ({
   booksApi: {
     getDetail: vi.fn(),
@@ -13,7 +13,25 @@ vi.mock("@/api/books", () => ({
   },
 }));
 
+vi.mock("@/api/genres", () => ({
+  genresApi: {
+    getForBook: vi.fn(),
+    setForBook: vi.fn(),
+    getAll: vi.fn(),
+  },
+}));
+
+vi.mock("@/api/tags", () => ({
+  tagsApi: {
+    getForBook: vi.fn(),
+    setForBook: vi.fn(),
+    getAll: vi.fn(),
+  },
+}));
+
 import { booksApi } from "@/api/books";
+import { genresApi } from "@/api/genres";
+import { tagsApi } from "@/api/tags";
 
 const mockBookDetail = {
   book: {
@@ -87,6 +105,10 @@ describe("BookMetadataEditModal", () => {
     (
       booksApi.updateMetadataLocks as ReturnType<typeof vi.fn>
     ).mockResolvedValue({});
+    (genresApi.getForBook as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (genresApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (tagsApi.getForBook as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (tagsApi.getAll as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   });
 
   it("renders modal with title", async () => {
@@ -147,10 +169,14 @@ describe("BookMetadataEditModal", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: /General/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /Publication/i }),
+      ).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Authors/i })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Tags/i })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Links/i })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /Cover/i })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Custom/i })).toBeInTheDocument();
     });
   });
 

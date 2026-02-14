@@ -7,7 +7,11 @@ pub use super::book_error::{BookError, BookErrorType, BookErrors};
 pub use super::book_external_ids::Entity as BookExternalIds;
 #[allow(unused_imports)]
 pub use super::book_external_links::Entity as BookExternalLinks;
+#[allow(unused_imports)]
+pub use super::book_genres::Entity as BookGenres;
 pub use super::book_metadata::Entity as BookMetadata;
+#[allow(unused_imports)]
+pub use super::book_tags::Entity as BookTags;
 pub use super::books::Entity as Books;
 pub use super::libraries::Entity as Libraries;
 pub use super::pages::Entity as Pages;

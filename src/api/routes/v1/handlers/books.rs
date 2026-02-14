@@ -2,11 +2,15 @@ use super::super::dto::{
     AdjacentBooksResponse, BookDetailResponse, BookDto, BookFullMetadata, BookListRequest,
     BookListResponse, BookMetadataDto, BookMetadataLocks, FullBookListResponse, FullBookResponse,
     PaginationParams,
-    book::{BookAuthorDto, BookAwardDto, BookSortParam, BookType, BookTypeDto},
+    book::{
+        AddBookGenreRequest, AddBookTagRequest, BookAuthorDto, BookAwardDto, BookSortParam,
+        BookType, BookTypeDto, SetBookGenresRequest, SetBookTagsRequest,
+    },
     common::{
         DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE, PaginationLinkBuilder,
     },
     page::PageDto,
+    series::{GenreDto, GenreListResponse, TagDto, TagListResponse},
 };
 use super::paginated_response;
 use crate::api::{
@@ -15,8 +19,8 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
-    ReadProgressRepository, SeriesMetadataRepository,
+    BookMetadataRepository, BookRepository, GenreRepository, LibraryRepository, PageRepository,
+    ReadProgressRepository, SeriesMetadataRepository, TagRepository,
 };
 use crate::require_permission;
 use crate::services::FilterService;
@@ -249,7 +253,7 @@ pub async fn books_to_full_dtos_batched(
         .collect();
 
     // Fetch all related data in parallel
-    let (metadata_map, series_metadata_map, library_map, progress_map) = tokio::join!(
+    let (metadata_map, series_metadata_map, library_map, progress_map, genres_map, tags_map) = tokio::join!(
         BookMetadataRepository::get_by_book_ids(db, &book_ids),
         SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
         LibraryRepository::get_by_ids(db, &library_ids),
@@ -264,7 +268,9 @@ pub async fn books_to_full_dtos_batched(
                 }
             }
             Ok::<_, anyhow::Error>(map)
-        }
+        },
+        GenreRepository::get_genres_for_book_ids(db, &book_ids),
+        TagRepository::get_tags_for_book_ids(db, &book_ids),
     );
 
     // Handle errors
@@ -276,6 +282,10 @@ pub async fn books_to_full_dtos_batched(
         library_map.map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
     let progress_map = progress_map
         .map_err(|e| ApiError::Internal(format!("Failed to fetch read progress: {}", e)))?;
+    let genres_map = genres_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book genres: {}", e)))?;
+    let tags_map =
+        tags_map.map_err(|e| ApiError::Internal(format!("Failed to fetch book tags: {}", e)))?;
 
     // Convert to DTOs
     let mut results = Vec::with_capacity(books.len());
@@ -353,6 +363,7 @@ pub async fn books_to_full_dtos_batched(
                 isbns: meta.isbns.clone(),
                 locks: BookMetadataLocks {
                     title_lock: meta.title_lock,
+                    title_sort_lock: meta.title_sort_lock,
                     number_lock: meta.number_lock,
                     summary_lock: meta.summary_lock,
                     writer_lock: meta.writer_lock,
@@ -422,6 +433,7 @@ pub async fn books_to_full_dtos_batched(
                 isbns: None,
                 locks: BookMetadataLocks {
                     title_lock: false,
+                    title_sort_lock: false,
                     number_lock: false,
                     summary_lock: false,
                     writer_lock: false,
@@ -464,6 +476,34 @@ pub async fn books_to_full_dtos_batched(
             }
         };
 
+        // Build genre/tag DTOs from batch-fetched data
+        let book_genres = genres_map
+            .get(&book_id)
+            .map(|gs| {
+                gs.iter()
+                    .map(|g| super::super::dto::series::GenreDto {
+                        id: g.id,
+                        name: g.name.clone(),
+                        series_count: None,
+                        created_at: g.created_at,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let book_tags = tags_map
+            .get(&book_id)
+            .map(|ts| {
+                ts.iter()
+                    .map(|t| super::super::dto::series::TagDto {
+                        id: t.id,
+                        name: t.name.clone(),
+                        series_count: None,
+                        created_at: t.created_at,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
         results.push(FullBookResponse {
             id: book.id,
             library_id: book.library_id,
@@ -484,6 +524,8 @@ pub async fn books_to_full_dtos_batched(
             reading_direction,
             read_progress,
             metadata: full_metadata,
+            genres: book_genres,
+            tags: book_tags,
             created_at: book.created_at,
             updated_at: book.updated_at,
         });
@@ -2129,6 +2171,45 @@ pub async fn replace_book_metadata(
         subjects,
         awards,
         custom_metadata,
+        locks: BookMetadataLocks {
+            title_lock: updated.title_lock,
+            title_sort_lock: updated.title_sort_lock,
+            number_lock: updated.number_lock,
+            summary_lock: updated.summary_lock,
+            writer_lock: updated.writer_lock,
+            penciller_lock: updated.penciller_lock,
+            inker_lock: updated.inker_lock,
+            colorist_lock: updated.colorist_lock,
+            letterer_lock: updated.letterer_lock,
+            cover_artist_lock: updated.cover_artist_lock,
+            editor_lock: updated.editor_lock,
+            publisher_lock: updated.publisher_lock,
+            imprint_lock: updated.imprint_lock,
+            genre_lock: updated.genre_lock,
+            language_iso_lock: updated.language_iso_lock,
+            format_detail_lock: updated.format_detail_lock,
+            black_and_white_lock: updated.black_and_white_lock,
+            manga_lock: updated.manga_lock,
+            year_lock: updated.year_lock,
+            month_lock: updated.month_lock,
+            day_lock: updated.day_lock,
+            volume_lock: updated.volume_lock,
+            count_lock: updated.count_lock,
+            isbns_lock: updated.isbns_lock,
+            book_type_lock: updated.book_type_lock,
+            subtitle_lock: updated.subtitle_lock,
+            authors_json_lock: updated.authors_json_lock,
+            translator_lock: updated.translator_lock,
+            edition_lock: updated.edition_lock,
+            original_title_lock: updated.original_title_lock,
+            original_year_lock: updated.original_year_lock,
+            series_position_lock: updated.series_position_lock,
+            series_total_lock: updated.series_total_lock,
+            subjects_lock: updated.subjects_lock,
+            awards_json_lock: updated.awards_json_lock,
+            custom_metadata_lock: updated.custom_metadata_lock,
+            cover_lock: updated.cover_lock,
+        },
         updated_at: updated.updated_at,
     }))
 }
@@ -2659,6 +2740,45 @@ pub async fn patch_book_metadata(
         subjects,
         awards,
         custom_metadata,
+        locks: BookMetadataLocks {
+            title_lock: updated.title_lock,
+            title_sort_lock: updated.title_sort_lock,
+            number_lock: updated.number_lock,
+            summary_lock: updated.summary_lock,
+            writer_lock: updated.writer_lock,
+            penciller_lock: updated.penciller_lock,
+            inker_lock: updated.inker_lock,
+            colorist_lock: updated.colorist_lock,
+            letterer_lock: updated.letterer_lock,
+            cover_artist_lock: updated.cover_artist_lock,
+            editor_lock: updated.editor_lock,
+            publisher_lock: updated.publisher_lock,
+            imprint_lock: updated.imprint_lock,
+            genre_lock: updated.genre_lock,
+            language_iso_lock: updated.language_iso_lock,
+            format_detail_lock: updated.format_detail_lock,
+            black_and_white_lock: updated.black_and_white_lock,
+            manga_lock: updated.manga_lock,
+            year_lock: updated.year_lock,
+            month_lock: updated.month_lock,
+            day_lock: updated.day_lock,
+            volume_lock: updated.volume_lock,
+            count_lock: updated.count_lock,
+            isbns_lock: updated.isbns_lock,
+            book_type_lock: updated.book_type_lock,
+            subtitle_lock: updated.subtitle_lock,
+            authors_json_lock: updated.authors_json_lock,
+            translator_lock: updated.translator_lock,
+            edition_lock: updated.edition_lock,
+            original_title_lock: updated.original_title_lock,
+            original_year_lock: updated.original_year_lock,
+            series_position_lock: updated.series_position_lock,
+            series_total_lock: updated.series_total_lock,
+            subjects_lock: updated.subjects_lock,
+            awards_json_lock: updated.awards_json_lock,
+            custom_metadata_lock: updated.custom_metadata_lock,
+            cover_lock: updated.cover_lock,
+        },
         updated_at: updated.updated_at,
     }))
 }
@@ -2712,6 +2832,7 @@ pub async fn get_book_metadata_locks(
 
     Ok(Json(BookMetadataLocks {
         title_lock: metadata.title_lock,
+        title_sort_lock: metadata.title_sort_lock,
         number_lock: metadata.number_lock,
         summary_lock: metadata.summary_lock,
         writer_lock: metadata.writer_lock,
@@ -2798,6 +2919,9 @@ pub async fn update_book_metadata_locks(
 
     if let Some(v) = request.title_lock {
         active.title_lock = Set(v);
+    }
+    if let Some(v) = request.title_sort_lock {
+        active.title_sort_lock = Set(v);
     }
     if let Some(v) = request.number_lock {
         active.number_lock = Set(v);
@@ -2928,6 +3052,7 @@ pub async fn update_book_metadata_locks(
 
     Ok(Json(BookMetadataLocks {
         title_lock: updated.title_lock,
+        title_sort_lock: updated.title_sort_lock,
         number_lock: updated.number_lock,
         summary_lock: updated.summary_lock,
         writer_lock: updated.writer_lock,
@@ -4371,4 +4496,466 @@ pub async fn list_book_pages(
         .collect();
 
     Ok(Json(page_dtos))
+}
+
+// ============================================================================
+// Book Genre Endpoints
+// ============================================================================
+
+/// Get genres for a book
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/genres",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "List of genres for the book", body = GenreListResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn get_book_genres(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<GenreListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let genres = GenreRepository::get_genres_for_book(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch genres: {}", e)))?;
+
+    let dtos: Vec<GenreDto> = genres
+        .into_iter()
+        .map(|g| GenreDto {
+            id: g.id,
+            name: g.name,
+            series_count: None,
+            created_at: g.created_at,
+        })
+        .collect();
+
+    Ok(Json(GenreListResponse { genres: dtos }))
+}
+
+/// Set genres for a book (replaces existing)
+#[utoipa::path(
+    put,
+    path = "/api/v1/books/{book_id}/genres",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = SetBookGenresRequest,
+    responses(
+        (status = 200, description = "Genres updated", body = GenreListResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn set_book_genres(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<SetBookGenresRequest>,
+) -> Result<Json<GenreListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let genres = GenreRepository::set_genres_for_book(&state.db, book_id, request.genres)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to set genres: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["genres".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    let dtos: Vec<GenreDto> = genres
+        .into_iter()
+        .map(|g| GenreDto {
+            id: g.id,
+            name: g.name,
+            series_count: None,
+            created_at: g.created_at,
+        })
+        .collect();
+
+    Ok(Json(GenreListResponse { genres: dtos }))
+}
+
+/// Add a single genre to a book
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/genres",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = AddBookGenreRequest,
+    responses(
+        (status = 200, description = "Genre added", body = GenreDto),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn add_book_genre(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<AddBookGenreRequest>,
+) -> Result<Json<GenreDto>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let genre = GenreRepository::add_genre_to_book(&state.db, book_id, &request.name)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to add genre: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["genres".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(GenreDto {
+        id: genre.id,
+        name: genre.name,
+        series_count: None,
+        created_at: genre.created_at,
+    }))
+}
+
+/// Remove a genre from a book
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/genres/{genre_id}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("genre_id" = Uuid, Path, description = "Genre ID")
+    ),
+    responses(
+        (status = 204, description = "Genre removed from book"),
+        (status = 404, description = "Book or genre link not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn remove_book_genre(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path((book_id, genre_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let removed = GenreRepository::remove_genre_from_book(&state.db, book_id, genre_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to remove genre: {}", e)))?;
+
+    if !removed {
+        return Err(ApiError::NotFound(
+            "Genre not linked to this book".to_string(),
+        ));
+    }
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["genres".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Book Tag Endpoints
+// ============================================================================
+
+/// Get tags for a book
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/tags",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    responses(
+        (status = 200, description = "List of tags for the book", body = TagListResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn get_book_tags(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Json<TagListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksRead)?;
+
+    // Verify book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let tags = TagRepository::get_tags_for_book(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch tags: {}", e)))?;
+
+    let dtos: Vec<TagDto> = tags
+        .into_iter()
+        .map(|t| TagDto {
+            id: t.id,
+            name: t.name,
+            series_count: None,
+            created_at: t.created_at,
+        })
+        .collect();
+
+    Ok(Json(TagListResponse { tags: dtos }))
+}
+
+/// Set tags for a book (replaces existing)
+#[utoipa::path(
+    put,
+    path = "/api/v1/books/{book_id}/tags",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = SetBookTagsRequest,
+    responses(
+        (status = 200, description = "Tags updated", body = TagListResponse),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn set_book_tags(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<SetBookTagsRequest>,
+) -> Result<Json<TagListResponse>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let tags = TagRepository::set_tags_for_book(&state.db, book_id, request.tags)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to set tags: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["tags".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    let dtos: Vec<TagDto> = tags
+        .into_iter()
+        .map(|t| TagDto {
+            id: t.id,
+            name: t.name,
+            series_count: None,
+            created_at: t.created_at,
+        })
+        .collect();
+
+    Ok(Json(TagListResponse { tags: dtos }))
+}
+
+/// Add a single tag to a book
+#[utoipa::path(
+    post,
+    path = "/api/v1/books/{book_id}/tags",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID")
+    ),
+    request_body = AddBookTagRequest,
+    responses(
+        (status = 200, description = "Tag added", body = TagDto),
+        (status = 404, description = "Book not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn add_book_tag(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(request): Json<AddBookTagRequest>,
+) -> Result<Json<TagDto>, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let tag = TagRepository::add_tag_to_book(&state.db, book_id, &request.name)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to add tag: {}", e)))?;
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["tags".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(Json(TagDto {
+        id: tag.id,
+        name: tag.name,
+        series_count: None,
+        created_at: tag.created_at,
+    }))
+}
+
+/// Remove a tag from a book
+#[utoipa::path(
+    delete,
+    path = "/api/v1/books/{book_id}/tags/{tag_id}",
+    params(
+        ("book_id" = Uuid, Path, description = "Book ID"),
+        ("tag_id" = Uuid, Path, description = "Tag ID")
+    ),
+    responses(
+        (status = 204, description = "Tag removed from book"),
+        (status = 404, description = "Book or tag link not found"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Books"
+)]
+pub async fn remove_book_tag(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path((book_id, tag_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    require_permission!(auth, Permission::BooksWrite)?;
+
+    // Verify book exists
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let removed = TagRepository::remove_tag_from_book(&state.db, book_id, tag_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to remove tag: {}", e)))?;
+
+    if !removed {
+        return Err(ApiError::NotFound(
+            "Tag not linked to this book".to_string(),
+        ));
+    }
+
+    // Emit update event
+    let event = EntityChangeEvent {
+        event: EntityEvent::BookUpdated {
+            book_id,
+            series_id: book.series_id,
+            library_id: book.library_id,
+            fields: Some(vec!["tags".to_string()]),
+        },
+        timestamp: Utc::now(),
+        user_id: Some(auth.user_id),
+    };
+    let _ = state.event_broadcaster.emit(event);
+
+    Ok(StatusCode::NO_CONTENT)
 }

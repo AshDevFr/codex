@@ -1,4 +1,4 @@
-//! Repository for genres and series_genres table operations
+//! Repository for genres, series_genres, and book_genres table operations
 //!
 //! TODO: Remove allow(dead_code) when genre features are fully integrated
 
@@ -12,7 +12,9 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::db::entities::{genres, genres::Entity as Genres, series_genres};
+use crate::db::entities::{
+    book_genres, book_genres::Entity as BookGenres, genres, genres::Entity as Genres, series_genres,
+};
 
 /// Repository for genre operations
 pub struct GenreRepository;
@@ -439,7 +441,168 @@ impl GenreRepository {
         Ok(result)
     }
 
-    /// Delete all unused genres (genres with no series linked)
+    /// Get all genres for a book
+    pub async fn get_genres_for_book(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+    ) -> Result<Vec<genres::Model>> {
+        let genre_ids: Vec<Uuid> = BookGenres::find()
+            .filter(book_genres::Column::BookId.eq(book_id))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|bg| bg.genre_id)
+            .collect();
+
+        if genre_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let genres = Genres::find()
+            .filter(genres::Column::Id.is_in(genre_ids))
+            .order_by_asc(genres::Column::Name)
+            .all(db)
+            .await?;
+
+        Ok(genres)
+    }
+
+    /// Set genres for a book (replaces existing)
+    /// Takes a list of genre names, finds or creates each, then links them
+    pub async fn set_genres_for_book(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        genre_names: Vec<String>,
+    ) -> Result<Vec<genres::Model>> {
+        // Remove existing genre links for this book
+        BookGenres::delete_many()
+            .filter(book_genres::Column::BookId.eq(book_id))
+            .exec(db)
+            .await?;
+
+        if genre_names.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Find or create each genre and link it
+        let mut genres = Vec::new();
+        for name in genre_names {
+            let genre = Self::find_or_create(db, &name).await?;
+
+            // Create the link
+            let link = book_genres::ActiveModel {
+                book_id: Set(book_id),
+                genre_id: Set(genre.id),
+            };
+            link.insert(db).await?;
+
+            genres.push(genre);
+        }
+
+        // Sort by name before returning
+        genres.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(genres)
+    }
+
+    /// Add a single genre to a book
+    pub async fn add_genre_to_book(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        genre_name: &str,
+    ) -> Result<genres::Model> {
+        let genre = Self::find_or_create(db, genre_name).await?;
+
+        // Check if already linked
+        let existing = BookGenres::find()
+            .filter(book_genres::Column::BookId.eq(book_id))
+            .filter(book_genres::Column::GenreId.eq(genre.id))
+            .one(db)
+            .await?;
+
+        if existing.is_none() {
+            let link = book_genres::ActiveModel {
+                book_id: Set(book_id),
+                genre_id: Set(genre.id),
+            };
+            link.insert(db).await?;
+        }
+
+        Ok(genre)
+    }
+
+    /// Remove a genre from a book
+    pub async fn remove_genre_from_book(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        genre_id: Uuid,
+    ) -> Result<bool> {
+        let result = BookGenres::delete_many()
+            .filter(book_genres::Column::BookId.eq(book_id))
+            .filter(book_genres::Column::GenreId.eq(genre_id))
+            .exec(db)
+            .await?;
+
+        Ok(result.rows_affected > 0)
+    }
+
+    /// Get genres for multiple books by their IDs
+    ///
+    /// Returns a HashMap keyed by book_id for efficient lookups
+    pub async fn get_genres_for_book_ids(
+        db: &DatabaseConnection,
+        book_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<genres::Model>>> {
+        if book_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        // Get all book_genres mappings for the given books
+        let book_genre_links: Vec<book_genres::Model> = BookGenres::find()
+            .filter(book_genres::Column::BookId.is_in(book_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        if book_genre_links.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        // Collect unique genre IDs
+        let genre_ids: Vec<Uuid> = book_genre_links
+            .iter()
+            .map(|bg| bg.genre_id)
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        // Fetch all genres at once
+        let all_genres: Vec<genres::Model> = Genres::find()
+            .filter(genres::Column::Id.is_in(genre_ids))
+            .all(db)
+            .await?;
+
+        // Create genre lookup map
+        let genre_map: std::collections::HashMap<Uuid, genres::Model> =
+            all_genres.into_iter().map(|g| (g.id, g)).collect();
+
+        // Build result map
+        let mut result: std::collections::HashMap<Uuid, Vec<genres::Model>> =
+            std::collections::HashMap::new();
+
+        for link in book_genre_links {
+            if let Some(genre) = genre_map.get(&link.genre_id) {
+                result.entry(link.book_id).or_default().push(genre.clone());
+            }
+        }
+
+        // Sort genres by name within each book
+        for genres in result.values_mut() {
+            genres.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+
+        Ok(result)
+    }
+
+    /// Delete all unused genres (genres with no series or books linked)
     /// Returns the names of deleted genres
     pub async fn delete_unused(db: &DatabaseConnection) -> Result<Vec<String>> {
         use crate::db::entities::series_genres::Entity as SeriesGenres;
@@ -450,12 +613,18 @@ impl GenreRepository {
 
         for genre in all_genres {
             // Check if genre has any series
-            let count = SeriesGenres::find()
+            let series_count = SeriesGenres::find()
                 .filter(series_genres::Column::GenreId.eq(genre.id))
                 .count(db)
                 .await?;
 
-            if count == 0 {
+            // Check if genre has any books
+            let book_count = BookGenres::find()
+                .filter(book_genres::Column::GenreId.eq(genre.id))
+                .count(db)
+                .await?;
+
+            if series_count == 0 && book_count == 0 {
                 // Delete the unused genre
                 Genres::delete_by_id(genre.id).exec(db).await?;
                 deleted_names.push(genre.name);
@@ -805,5 +974,207 @@ mod tests {
             .unwrap();
 
         assert!(deleted_names.is_empty());
+    }
+
+    /// Helper to create a test book for genre tests
+    async fn create_test_book_for_genre(
+        db: &crate::db::Database,
+        series_id: Uuid,
+        library_id: Uuid,
+    ) -> crate::db::entities::books::Model {
+        use crate::db::entities::books;
+        use crate::db::repositories::BookRepository;
+        use chrono::Utc;
+
+        let book = books::Model {
+            id: Uuid::new_v4(),
+            series_id,
+            library_id,
+            file_path: "/test/book.cbz".to_string(),
+            file_name: "book.cbz".to_string(),
+            file_size: 1024,
+            file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            analysis_error: None,
+            analysis_errors: None,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+        };
+
+        BookRepository::create(db.sea_orm_connection(), &book, None)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_set_genres_for_book() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_test_book_for_genre(&db, series.id, library.id).await;
+
+        // Set initial genres
+        let genres = GenreRepository::set_genres_for_book(
+            db.sea_orm_connection(),
+            book.id,
+            vec!["Action".to_string(), "Comedy".to_string()],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(genres.len(), 2);
+
+        // Verify they're linked
+        let fetched = GenreRepository::get_genres_for_book(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(fetched.len(), 2);
+
+        // Replace with different genres
+        let new_genres = GenreRepository::set_genres_for_book(
+            db.sea_orm_connection(),
+            book.id,
+            vec!["Drama".to_string()],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(new_genres.len(), 1);
+        assert_eq!(new_genres[0].name, "Drama");
+
+        // Verify old genres are unlinked
+        let fetched = GenreRepository::get_genres_for_book(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(fetched.len(), 1);
+        assert_eq!(fetched[0].name, "Drama");
+    }
+
+    #[tokio::test]
+    async fn test_add_and_remove_genre_from_book() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_test_book_for_genre(&db, series.id, library.id).await;
+
+        // Add a genre
+        let genre = GenreRepository::add_genre_to_book(db.sea_orm_connection(), book.id, "Horror")
+            .await
+            .unwrap();
+
+        let fetched = GenreRepository::get_genres_for_book(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(fetched.len(), 1);
+
+        // Adding same genre again should not duplicate
+        GenreRepository::add_genre_to_book(db.sea_orm_connection(), book.id, "Horror")
+            .await
+            .unwrap();
+
+        let fetched = GenreRepository::get_genres_for_book(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(fetched.len(), 1);
+
+        // Remove the genre
+        let removed =
+            GenreRepository::remove_genre_from_book(db.sea_orm_connection(), book.id, genre.id)
+                .await
+                .unwrap();
+        assert!(removed);
+
+        let fetched = GenreRepository::get_genres_for_book(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap();
+        assert_eq!(fetched.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_unused_genres_with_book_links() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "Test Series", None)
+                .await
+                .unwrap();
+
+        let book = create_test_book_for_genre(&db, series.id, library.id).await;
+
+        // Create genres: one linked to book only, one linked to series only, one unused
+        let book_genre = GenreRepository::create(db.sea_orm_connection(), "BookOnlyGenre")
+            .await
+            .unwrap();
+        GenreRepository::create(db.sea_orm_connection(), "UnusedGenre")
+            .await
+            .unwrap();
+
+        // Link one genre to a book (not a series)
+        GenreRepository::add_genre_to_book(db.sea_orm_connection(), book.id, "BookOnlyGenre")
+            .await
+            .unwrap();
+
+        // Verify we have 2 genres
+        let all_genres = GenreRepository::list_all(db.sea_orm_connection())
+            .await
+            .unwrap();
+        assert_eq!(all_genres.len(), 2);
+
+        // Delete unused genres — should only delete the truly unused one
+        let deleted_names = GenreRepository::delete_unused(db.sea_orm_connection())
+            .await
+            .unwrap();
+
+        assert_eq!(deleted_names.len(), 1);
+        assert!(deleted_names.contains(&"UnusedGenre".to_string()));
+
+        // Genre linked to book should still exist
+        let remaining = GenreRepository::list_all(db.sea_orm_connection())
+            .await
+            .unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, book_genre.id);
     }
 }

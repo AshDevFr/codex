@@ -1,16 +1,20 @@
-//! Integration tests for series metadata locks endpoints
+//! Integration tests for series and book metadata locks endpoints
 
 #[path = "../common/mod.rs"]
 mod common;
 
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::book::{
+    BookMetadataLocks, BookMetadataResponse, UpdateBookMetadataLocksRequest,
+};
 use codex::api::routes::v1::dto::series::{
     FullSeriesMetadataResponse, MetadataLocks, UpdateMetadataLocksRequest,
 };
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
-    AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
-    LibraryRepository, SeriesRepository, TagRepository, UserRepository,
+    AlternateTitleRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
+    ExternalRatingRepository, GenreRepository, LibraryRepository, SeriesRepository, TagRepository,
+    UserRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -779,4 +783,498 @@ async fn test_get_full_series_requires_auth() {
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+// ============================================================================
+// Book Metadata Locks Tests
+// ============================================================================
+
+// Helper to create a test book in the database
+fn create_test_book_model(
+    series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
+    path: &str,
+    name: &str,
+) -> codex::db::entities::books::Model {
+    use chrono::Utc;
+    codex::db::entities::books::Model {
+        id: uuid::Uuid::new_v4(),
+        series_id,
+        library_id,
+        file_path: path.to_string(),
+        file_name: name.to_string(),
+        file_size: 1024,
+        file_hash: format!("hash_{}", uuid::Uuid::new_v4()),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 10,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        analysis_errors: None,
+        modified_at: Utc::now(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    }
+}
+
+// Helper to create a library, series, and book with metadata
+async fn create_test_book_with_metadata(
+    db: &sea_orm::DatabaseConnection,
+) -> (uuid::Uuid, uuid::Uuid, uuid::Uuid) {
+    let library =
+        LibraryRepository::create(db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model =
+        create_test_book_model(series.id, library.id, "/test/path/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(db, &book_model, None).await.unwrap();
+
+    // Create metadata record for the book (required for lock endpoints)
+    BookMetadataRepository::create_with_title_and_number(
+        db,
+        book.id,
+        Some("Test Book".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+
+    (library.id, series.id, book.id)
+}
+
+#[tokio::test]
+async fn test_get_book_metadata_locks_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/metadata/locks", book_id), &token);
+    let (status, response): (StatusCode, Option<BookMetadataLocks>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+
+    // All locks should default to false
+    assert!(!locks.title_lock);
+    assert!(!locks.title_sort_lock);
+    assert!(!locks.number_lock);
+    assert!(!locks.summary_lock);
+    assert!(!locks.writer_lock);
+    assert!(!locks.penciller_lock);
+    assert!(!locks.inker_lock);
+    assert!(!locks.colorist_lock);
+    assert!(!locks.letterer_lock);
+    assert!(!locks.cover_artist_lock);
+    assert!(!locks.editor_lock);
+    assert!(!locks.publisher_lock);
+    assert!(!locks.imprint_lock);
+    assert!(!locks.genre_lock);
+    assert!(!locks.language_iso_lock);
+    assert!(!locks.format_detail_lock);
+    assert!(!locks.black_and_white_lock);
+    assert!(!locks.manga_lock);
+    assert!(!locks.year_lock);
+    assert!(!locks.month_lock);
+    assert!(!locks.day_lock);
+    assert!(!locks.volume_lock);
+    assert!(!locks.count_lock);
+    assert!(!locks.isbns_lock);
+}
+
+#[tokio::test]
+async fn test_update_book_metadata_locks_single() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Update a single lock field
+    let body = UpdateBookMetadataLocksRequest {
+        summary_lock: Some(true),
+        title_lock: None,
+        title_sort_lock: None,
+        number_lock: None,
+        writer_lock: None,
+        penciller_lock: None,
+        inker_lock: None,
+        colorist_lock: None,
+        letterer_lock: None,
+        cover_artist_lock: None,
+        editor_lock: None,
+        publisher_lock: None,
+        imprint_lock: None,
+        genre_lock: None,
+        language_iso_lock: None,
+        format_detail_lock: None,
+        black_and_white_lock: None,
+        manga_lock: None,
+        year_lock: None,
+        month_lock: None,
+        day_lock: None,
+        volume_lock: None,
+        count_lock: None,
+        isbns_lock: None,
+        book_type_lock: None,
+        subtitle_lock: None,
+        authors_json_lock: None,
+        translator_lock: None,
+        edition_lock: None,
+        original_title_lock: None,
+        original_year_lock: None,
+        series_position_lock: None,
+        series_total_lock: None,
+        subjects_lock: None,
+        awards_json_lock: None,
+        custom_metadata_lock: None,
+        cover_lock: None,
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata/locks", book_id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataLocks>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(locks.summary_lock);
+    // Others remain false
+    assert!(!locks.title_lock);
+    assert!(!locks.publisher_lock);
+
+    // Verify it persisted by fetching again
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/metadata/locks", book_id), &token);
+    let (status, response): (StatusCode, Option<BookMetadataLocks>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(locks.summary_lock);
+}
+
+#[tokio::test]
+async fn test_update_book_metadata_locks_multiple() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Update multiple lock fields
+    let body = UpdateBookMetadataLocksRequest {
+        title_lock: Some(true),
+        summary_lock: Some(true),
+        publisher_lock: Some(true),
+        year_lock: Some(true),
+        title_sort_lock: None,
+        number_lock: None,
+        writer_lock: None,
+        penciller_lock: None,
+        inker_lock: None,
+        colorist_lock: None,
+        letterer_lock: None,
+        cover_artist_lock: None,
+        editor_lock: None,
+        imprint_lock: None,
+        genre_lock: None,
+        language_iso_lock: None,
+        format_detail_lock: None,
+        black_and_white_lock: None,
+        manga_lock: None,
+        month_lock: None,
+        day_lock: None,
+        volume_lock: None,
+        count_lock: None,
+        isbns_lock: None,
+        book_type_lock: None,
+        subtitle_lock: None,
+        authors_json_lock: None,
+        translator_lock: None,
+        edition_lock: None,
+        original_title_lock: None,
+        original_year_lock: None,
+        series_position_lock: None,
+        series_total_lock: None,
+        subjects_lock: None,
+        awards_json_lock: None,
+        custom_metadata_lock: None,
+        cover_lock: None,
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata/locks", book_id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataLocks>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(locks.title_lock);
+    assert!(locks.summary_lock);
+    assert!(locks.publisher_lock);
+    assert!(locks.year_lock);
+    // Others remain false
+    assert!(!locks.genre_lock);
+    assert!(!locks.writer_lock);
+}
+
+#[tokio::test]
+async fn test_get_book_metadata_locks_includes_title_sort_lock() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/metadata/locks", book_id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+
+    // Verify title_sort_lock field exists in the response JSON
+    assert!(
+        body.get("titleSortLock").is_some(),
+        "titleSortLock field should be present in response"
+    );
+    assert_eq!(body.get("titleSortLock").unwrap(), false);
+}
+
+#[tokio::test]
+async fn test_update_book_title_sort_lock() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Set title_sort_lock to true
+    let body = UpdateBookMetadataLocksRequest {
+        title_sort_lock: Some(true),
+        title_lock: None,
+        number_lock: None,
+        summary_lock: None,
+        writer_lock: None,
+        penciller_lock: None,
+        inker_lock: None,
+        colorist_lock: None,
+        letterer_lock: None,
+        cover_artist_lock: None,
+        editor_lock: None,
+        publisher_lock: None,
+        imprint_lock: None,
+        genre_lock: None,
+        language_iso_lock: None,
+        format_detail_lock: None,
+        black_and_white_lock: None,
+        manga_lock: None,
+        year_lock: None,
+        month_lock: None,
+        day_lock: None,
+        volume_lock: None,
+        count_lock: None,
+        isbns_lock: None,
+        book_type_lock: None,
+        subtitle_lock: None,
+        authors_json_lock: None,
+        translator_lock: None,
+        edition_lock: None,
+        original_title_lock: None,
+        original_year_lock: None,
+        series_position_lock: None,
+        series_total_lock: None,
+        subjects_lock: None,
+        awards_json_lock: None,
+        custom_metadata_lock: None,
+        cover_lock: None,
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata/locks", book_id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataLocks>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(locks.title_sort_lock);
+
+    // Verify it persisted
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/metadata/locks", book_id), &token);
+    let (status, response): (StatusCode, Option<BookMetadataLocks>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(locks.title_sort_lock);
+}
+
+#[tokio::test]
+async fn test_book_metadata_locks_all_phase6_fields() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Verify all Phase 6 lock fields are present in the response
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/metadata/locks", book_id), &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+
+    // Phase 6 lock fields
+    assert!(
+        body.get("bookTypeLock").is_some(),
+        "bookTypeLock field should be present"
+    );
+    assert!(
+        body.get("subtitleLock").is_some(),
+        "subtitleLock field should be present"
+    );
+    assert!(
+        body.get("authorsJsonLock").is_some(),
+        "authorsJsonLock field should be present"
+    );
+    assert!(
+        body.get("translatorLock").is_some(),
+        "translatorLock field should be present"
+    );
+    assert!(
+        body.get("editionLock").is_some(),
+        "editionLock field should be present"
+    );
+    assert!(
+        body.get("originalTitleLock").is_some(),
+        "originalTitleLock field should be present"
+    );
+    assert!(
+        body.get("originalYearLock").is_some(),
+        "originalYearLock field should be present"
+    );
+    assert!(
+        body.get("seriesPositionLock").is_some(),
+        "seriesPositionLock field should be present"
+    );
+    assert!(
+        body.get("seriesTotalLock").is_some(),
+        "seriesTotalLock field should be present"
+    );
+    assert!(
+        body.get("subjectsLock").is_some(),
+        "subjectsLock field should be present"
+    );
+    assert!(
+        body.get("awardsJsonLock").is_some(),
+        "awardsJsonLock field should be present"
+    );
+    assert!(
+        body.get("customMetadataLock").is_some(),
+        "customMetadataLock field should be present"
+    );
+    assert!(
+        body.get("coverLock").is_some(),
+        "coverLock field should be present"
+    );
+
+    // All should default to false
+    assert_eq!(body.get("bookTypeLock").unwrap(), false);
+    assert_eq!(body.get("subtitleLock").unwrap(), false);
+    assert_eq!(body.get("authorsJsonLock").unwrap(), false);
+    assert_eq!(body.get("coverLock").unwrap(), false);
+}
+
+#[tokio::test]
+async fn test_book_metadata_locks_auth_required() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // No auth token
+    let request = get_request(&format!("/api/v1/books/{}/metadata/locks", book_id));
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_book_metadata_locks_not_found() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let fake_id = uuid::Uuid::new_v4();
+    let request =
+        get_request_with_auth(&format!("/api/v1/books/{}/metadata/locks", fake_id), &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_book_metadata_response_includes_locks() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let (_, _, book_id) = create_test_book_with_metadata(&db).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PATCH metadata and verify response includes locks field
+    let request = patch_request_with_auth_json(
+        &format!("/api/v1/books/{}/metadata", book_id),
+        &token,
+        r#"{"summary": "test summary"}"#,
+    );
+    let (status, response): (StatusCode, Option<BookMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+
+    // Verify locks field is present in the response
+    assert_eq!(metadata.book_id, book_id);
+    assert!(!metadata.locks.title_lock);
+    // summary_lock should be auto-locked because we set summary to a non-null value
+    assert!(metadata.locks.summary_lock);
+    assert!(!metadata.locks.publisher_lock);
 }

@@ -105,6 +105,9 @@ mod m20260211_000053_seed_plugin_task_timeout;
 // Plugin internal config (server-side per-plugin settings)
 mod m20260211_000054_add_plugin_internal_config;
 
+// Book genres and tags junction tables (shared taxonomy with series)
+mod m20260214_000055_create_book_genres_tags;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -189,6 +192,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260211_000053_seed_plugin_task_timeout::Migration),
             // Plugin internal config (server-side per-plugin settings)
             Box::new(m20260211_000054_add_plugin_internal_config::Migration),
+            // Book genres and tags junction tables
+            Box::new(m20260214_000055_create_book_genres_tags::Migration),
         ]
     }
 }

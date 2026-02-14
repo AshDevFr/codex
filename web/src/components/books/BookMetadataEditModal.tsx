@@ -12,6 +12,7 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
   IconBook,
+  IconCode,
   IconEdit,
   IconLink,
   IconList,
@@ -26,9 +27,13 @@ import {
   type BookMetadataLocks,
   booksApi,
 } from "@/api/books";
+import { genresApi } from "@/api/genres";
+import { tagsApi } from "@/api/tags";
 import { CoverEditor } from "@/components/forms/CoverEditor";
+import { CustomMetadataEditor } from "@/components/forms/CustomMetadataEditor";
 import {
   type ListItem,
+  LockableChipInput,
   LockableInput,
   LockableListEditor,
   LockableSelect,
@@ -95,12 +100,18 @@ interface FormState {
   // Flags
   blackAndWhite: boolean | null;
   manga: boolean | null;
+  // Genres & Tags (many-to-many)
+  genres: string[];
+  tags: string[];
+  // Custom metadata
+  customMetadata: Record<string, unknown> | null;
   // Links
   externalLinks: ListItem[];
 }
 
 interface LocksState {
   title: boolean;
+  titleSort: boolean;
   number: boolean;
   summary: boolean;
   bookType: boolean;
@@ -175,6 +186,10 @@ function initializeFormState(
     formatDetail: metadata?.formatDetail || "",
     blackAndWhite: metadata?.blackAndWhite ?? null,
     manga: metadata?.manga ?? null,
+    genres: [],
+    tags: [],
+    customMetadata:
+      (metadata?.customMetadata as Record<string, unknown>) ?? null,
     externalLinks: [],
   };
 }
@@ -184,6 +199,7 @@ function initializeLocksState(
 ): LocksState {
   return {
     title: locks?.titleLock || false,
+    titleSort: locks?.titleSortLock || false,
     number: locks?.numberLock || false,
     summary: locks?.summaryLock || false,
     bookType: locks?.bookTypeLock || false,
@@ -268,6 +284,34 @@ export function BookMetadataEditModal({
     enabled: opened,
   });
 
+  // Fetch genres for this book
+  const { data: bookGenres } = useQuery({
+    queryKey: ["books", bookId, "genres"],
+    queryFn: () => genresApi.getForBook(bookId),
+    enabled: opened,
+  });
+
+  // Fetch tags for this book
+  const { data: bookTags } = useQuery({
+    queryKey: ["books", bookId, "tags"],
+    queryFn: () => tagsApi.getForBook(bookId),
+    enabled: opened,
+  });
+
+  // Fetch all genres for suggestions
+  const { data: allGenres } = useQuery({
+    queryKey: ["genres"],
+    queryFn: () => genresApi.getAll(),
+    enabled: opened,
+  });
+
+  // Fetch all tags for suggestions
+  const { data: allTags } = useQuery({
+    queryKey: ["tags"],
+    queryFn: () => tagsApi.getAll(),
+    enabled: opened,
+  });
+
   const isLoading = isLoadingBook || isLoadingLocks;
 
   // Initialize form state when data loads
@@ -282,10 +326,17 @@ export function BookMetadataEditModal({
           locked: false,
         }));
       }
+      // Populate genres and tags from API
+      if (bookGenres) {
+        newFormState.genres = bookGenres.map((g) => g.name);
+      }
+      if (bookTags) {
+        newFormState.tags = bookTags.map((t) => t.name);
+      }
       setFormState(newFormState);
       setOriginalFormState(newFormState);
     }
-  }, [bookDetail, externalLinks]);
+  }, [bookDetail, externalLinks, bookGenres, bookTags]);
 
   useEffect(() => {
     if (locks) {
@@ -458,6 +509,10 @@ export function BookMetadataEditModal({
               .map((s) => s.trim())
               .filter(Boolean)
           : null,
+        customMetadata: formState.customMetadata as Record<
+          string,
+          never
+        > | null,
       });
 
       // Handle external links changes
@@ -485,9 +540,26 @@ export function BookMetadataEditModal({
         }
       }
 
+      // Update genres if changed
+      const genresChanged =
+        JSON.stringify(formState.genres.slice().sort()) !==
+        JSON.stringify((originalFormState?.genres || []).slice().sort());
+      if (genresChanged) {
+        await genresApi.setForBook(bookId, formState.genres);
+      }
+
+      // Update tags if changed
+      const tagsChanged =
+        JSON.stringify(formState.tags.slice().sort()) !==
+        JSON.stringify((originalFormState?.tags || []).slice().sort());
+      if (tagsChanged) {
+        await tagsApi.setForBook(bookId, formState.tags);
+      }
+
       // Update locks
       await booksApi.updateMetadataLocks(bookId, {
         titleLock: locksState.title,
+        titleSortLock: locksState.titleSort,
         numberLock: locksState.number,
         summaryLock: locksState.summary,
         bookTypeLock: locksState.bookType,
@@ -535,6 +607,14 @@ export function BookMetadataEditModal({
       queryClient.invalidateQueries({
         queryKey: ["books", bookId, "external-links"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["books", bookId, "genres"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["books", bookId, "tags"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["genres"] });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
       onClose();
     },
     onError: (error: Error) => {
@@ -824,14 +904,28 @@ export function BookMetadataEditModal({
   // Tags tab
   const renderTagsTab = () => (
     <Stack gap="md">
-      <LockableInput
-        label="Genre"
-        value={formState.genre}
-        onChange={(v) => updateField("genre", v)}
+      <LockableChipInput
+        label="Genres"
+        value={formState.genres}
+        onChange={(v) => updateField("genres", v)}
         locked={locksState.genre}
         onLockChange={(v) => updateLock("genre", v)}
-        originalValue={originalFormState?.genre}
-        placeholder="e.g., Superhero, Action"
+        originalValue={originalFormState?.genres}
+        placeholder="Add genres..."
+        description="Press Enter to add a genre"
+        data={allGenres?.map((g) => g.name) ?? []}
+      />
+
+      <LockableChipInput
+        label="Tags"
+        value={formState.tags}
+        onChange={(v) => updateField("tags", v)}
+        locked={false}
+        onLockChange={() => {}}
+        originalValue={originalFormState?.tags}
+        placeholder="Add tags..."
+        description="Press Enter to add a tag"
+        data={allTags?.map((t) => t.name) ?? []}
       />
 
       <LockableInput
@@ -942,6 +1036,17 @@ export function BookMetadataEditModal({
     </Stack>
   );
 
+  // Custom metadata tab
+  const renderCustomTab = () => (
+    <CustomMetadataEditor
+      value={formState.customMetadata}
+      onChange={(v) => updateField("customMetadata", v)}
+      locked={locksState.customMetadata}
+      onLockChange={(v) => updateLock("customMetadata", v)}
+      originalValue={originalFormState?.customMetadata}
+    />
+  );
+
   // Poster tab
   const getBookCoverSourceLabel = (source: string): string => {
     if (source === "upload") return "Custom Upload";
@@ -1018,6 +1123,9 @@ export function BookMetadataEditModal({
               <Tabs.Tab value="poster" leftSection={<IconPhoto size={16} />}>
                 Cover
               </Tabs.Tab>
+              <Tabs.Tab value="custom" leftSection={<IconCode size={16} />}>
+                Custom
+              </Tabs.Tab>
             </Tabs.List>
 
             <Tabs.Panel value="general" pt="md">
@@ -1042,6 +1150,10 @@ export function BookMetadataEditModal({
 
             <Tabs.Panel value="poster" pt="md">
               {renderPosterTab()}
+            </Tabs.Panel>
+
+            <Tabs.Panel value="custom" pt="md">
+              {renderCustomTab()}
             </Tabs.Panel>
           </Tabs>
 

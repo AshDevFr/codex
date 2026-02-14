@@ -1263,6 +1263,9 @@ pub struct BookMetadataResponse {
     #[schema(value_type = Option<Object>)]
     pub custom_metadata: Option<serde_json::Value>,
 
+    /// Metadata lock states
+    pub locks: BookMetadataLocks,
+
     /// Last update timestamp
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
@@ -1278,6 +1281,10 @@ pub struct BookMetadataLocks {
     /// Whether title is locked
     #[schema(example = false)]
     pub title_lock: bool,
+
+    /// Whether title_sort is locked
+    #[schema(example = false)]
+    pub title_sort_lock: bool,
 
     /// Whether number is locked
     #[schema(example = false)]
@@ -1426,11 +1433,14 @@ pub struct BookMetadataLocks {
 /// Request to update book metadata locks
 ///
 /// All fields are optional. Only provided fields will be updated.
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBookMetadataLocksRequest {
     /// Whether to lock title
     pub title_lock: Option<bool>,
+
+    /// Whether to lock title_sort
+    pub title_sort_lock: Option<bool>,
 
     /// Whether to lock number
     pub number_lock: Option<bool>,
@@ -1540,6 +1550,46 @@ pub struct UpdateBookMetadataLocksRequest {
 
     /// Whether to lock cover (prevents auto-updates)
     pub cover_lock: Option<bool>,
+}
+
+// ==========================================================================
+// Book genre/tag request DTOs
+// ==========================================================================
+
+/// Request to set all genres for a book (replaces existing)
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBookGenresRequest {
+    /// List of genre names to assign to the book
+    #[schema(example = json!(["Action", "Comedy", "Drama"]))]
+    pub genres: Vec<String>,
+}
+
+/// Request to add a single genre to a book
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AddBookGenreRequest {
+    /// Genre name to add
+    #[schema(example = "Action")]
+    pub name: String,
+}
+
+/// Request to set all tags for a book (replaces existing)
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBookTagsRequest {
+    /// List of tag names to assign to the book
+    #[schema(example = json!(["completed", "favorite", "to-read"]))]
+    pub tags: Vec<String>,
+}
+
+/// Request to add a single tag to a book
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AddBookTagRequest {
+    /// Tag name to add
+    #[schema(example = "favorite")]
+    pub name: String,
 }
 
 /// Response containing adjacent books in the same series
@@ -1998,6 +2048,12 @@ pub struct FullBookResponse {
 
     /// Complete book metadata with lock states
     pub metadata: BookFullMetadata,
+
+    /// Genres assigned to this book
+    pub genres: Vec<super::series::GenreDto>,
+
+    /// Tags assigned to this book
+    pub tags: Vec<super::series::TagDto>,
 
     /// When the book was added to the library
     #[schema(example = "2024-01-01T00:00:00Z")]

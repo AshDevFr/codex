@@ -17404,6 +17404,7 @@
         "description": "Book metadata lock states\n\nIndicates which metadata fields are locked (protected from automatic updates).\nWhen a field is locked, the scanner will not overwrite user-edited values.",
         "required": [
           "titleLock",
+          "titleSortLock",
           "numberLock",
           "summaryLock",
           "writerLock",
@@ -17601,6 +17602,11 @@
             "description": "Whether title is locked",
             "example": false
           },
+          "titleSortLock": {
+            "type": "boolean",
+            "description": "Whether title_sort is locked",
+            "example": false
+          },
           "translatorLock": {
             "type": "boolean",
             "description": "Whether translator is locked",
@@ -17628,6 +17634,7 @@
         "description": "Response containing book metadata",
         "required": [
           "bookId",
+          "locks",
           "updatedAt"
         ],
         "properties": {
@@ -17788,6 +17795,10 @@
             ],
             "description": "Letterer(s)",
             "example": "Todd Klein"
+          },
+          "locks": {
+            "$ref": "#/components/schemas/BookMetadataLocks",
+            "description": "Metadata lock states"
           },
           "manga": {
             "type": [
@@ -20716,6 +20727,8 @@
           "deleted",
           "analyzed",
           "metadata",
+          "genres",
+          "tags",
           "createdAt",
           "updatedAt"
         ],
@@ -20764,6 +20777,13 @@
             "format": "int64",
             "description": "File size in bytes",
             "example": 52428800
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenreDto"
+            },
+            "description": "Genres assigned to this book"
           },
           "id": {
             "type": "string",
@@ -20830,6 +20850,13 @@
             "type": "string",
             "description": "Name of the series",
             "example": "Batman: Year One"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            },
+            "description": "Tags assigned to this book"
           },
           "title": {
             "type": "string",
@@ -32483,6 +32510,13 @@
               "null"
             ],
             "description": "Whether to lock title"
+          },
+          "titleSortLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock title_sort"
           },
           "translatorLock": {
             "type": [

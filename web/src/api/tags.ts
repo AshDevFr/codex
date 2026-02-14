@@ -66,6 +66,39 @@ export const tagsApi = {
   },
 
   /**
+   * Get tags for a specific book
+   */
+  getForBook: async (bookId: string): Promise<Tag[]> => {
+    const response = await api.get<TagListResponse>(`/books/${bookId}/tags`);
+    return response.data.tags;
+  },
+
+  /**
+   * Set all tags for a book (replaces existing)
+   */
+  setForBook: async (bookId: string, tags: string[]): Promise<Tag[]> => {
+    const response = await api.put<TagListResponse>(`/books/${bookId}/tags`, {
+      tags,
+    });
+    return response.data.tags;
+  },
+
+  /**
+   * Add a single tag to a book
+   */
+  addToBook: async (bookId: string, name: string): Promise<Tag> => {
+    const response = await api.post<Tag>(`/books/${bookId}/tags`, { name });
+    return response.data;
+  },
+
+  /**
+   * Remove a tag from a book
+   */
+  removeFromBook: async (bookId: string, tagId: string): Promise<void> => {
+    await api.delete(`/books/${bookId}/tags/${tagId}`);
+  },
+
+  /**
    * Delete a tag globally
    */
   delete: async (tagId: string): Promise<void> => {

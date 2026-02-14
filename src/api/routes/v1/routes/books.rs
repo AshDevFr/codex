@@ -177,4 +177,20 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/books/bulk/thumbnails/generate",
             post(handlers::bulk_generate_book_thumbnails),
         )
+        // Book genre routes
+        .route("/books/:book_id/genres", get(handlers::get_book_genres))
+        .route("/books/:book_id/genres", put(handlers::set_book_genres))
+        .route("/books/:book_id/genres", post(handlers::add_book_genre))
+        .route(
+            "/books/:book_id/genres/:genre_id",
+            delete(handlers::remove_book_genre),
+        )
+        // Book tag routes
+        .route("/books/:book_id/tags", get(handlers::get_book_tags))
+        .route("/books/:book_id/tags", put(handlers::set_book_tags))
+        .route("/books/:book_id/tags", post(handlers::add_book_tag))
+        .route(
+            "/books/:book_id/tags/:tag_id",
+            delete(handlers::remove_book_tag),
+        )
 }

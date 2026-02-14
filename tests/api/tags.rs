@@ -4,12 +4,15 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
+use codex::api::routes::v1::dto::book::{AddBookTagRequest, SetBookTagsRequest};
 use codex::api::routes::v1::dto::common::PaginatedResponse;
 use codex::api::routes::v1::dto::series::{
     AddSeriesTagRequest, SetSeriesTagsRequest, TagDto, TagListResponse, TaxonomyCleanupResponse,
 };
 use codex::db::ScanningStrategy;
-use codex::db::repositories::{LibraryRepository, SeriesRepository, TagRepository, UserRepository};
+use codex::db::repositories::{
+    BookRepository, LibraryRepository, SeriesRepository, TagRepository, UserRepository,
+};
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
@@ -539,4 +542,297 @@ async fn test_cleanup_tags_empty() {
     let cleanup = response.unwrap();
     assert_eq!(cleanup.deleted_count, 0);
     assert!(cleanup.deleted_names.is_empty());
+}
+
+// ============================================================================
+// Book Tags Tests
+// ============================================================================
+
+// Helper to create a test book in the database
+fn create_test_book_model(
+    series_id: uuid::Uuid,
+    library_id: uuid::Uuid,
+    path: &str,
+    name: &str,
+) -> codex::db::entities::books::Model {
+    use chrono::Utc;
+    codex::db::entities::books::Model {
+        id: uuid::Uuid::new_v4(),
+        series_id,
+        library_id,
+        file_path: path.to_string(),
+        file_name: name.to_string(),
+        file_size: 1024,
+        file_hash: format!("hash_{}", uuid::Uuid::new_v4()),
+        partial_hash: String::new(),
+        format: "cbz".to_string(),
+        page_count: 10,
+        deleted: false,
+        analyzed: false,
+        analysis_error: None,
+        analysis_errors: None,
+        modified_at: Utc::now(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        thumbnail_path: None,
+        thumbnail_generated_at: None,
+    }
+}
+
+#[tokio::test]
+async fn test_get_book_tags_empty() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(&db, &book_model, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/tags", book.id), &token);
+    let (status, response): (StatusCode, Option<TagListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let tag_response = response.unwrap();
+    assert_eq!(tag_response.tags.len(), 0);
+}
+
+#[tokio::test]
+async fn test_set_book_tags() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(&db, &book_model, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Set tags
+    let body = SetBookTagsRequest {
+        tags: vec!["completed".to_string(), "favorite".to_string()],
+    };
+    let request =
+        put_json_request_with_auth(&format!("/api/v1/books/{}/tags", book.id), &body, &token);
+    let (status, response): (StatusCode, Option<TagListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let tag_response = response.unwrap();
+    assert_eq!(tag_response.tags.len(), 2);
+
+    let names: Vec<&str> = tag_response.tags.iter().map(|t| t.name.as_str()).collect();
+    assert!(names.contains(&"completed"));
+    assert!(names.contains(&"favorite"));
+}
+
+#[tokio::test]
+async fn test_add_book_tag() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(&db, &book_model, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Add a single tag
+    let body = AddBookTagRequest {
+        name: "completed".to_string(),
+    };
+    let request =
+        post_json_request_with_auth(&format!("/api/v1/books/{}/tags", book.id), &body, &token);
+    let (status, response): (StatusCode, Option<TagDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let tag = response.unwrap();
+    assert_eq!(tag.name, "completed");
+
+    // Verify it was added
+    let tags = TagRepository::get_tags_for_book(&db, book.id)
+        .await
+        .unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].name, "completed");
+}
+
+#[tokio::test]
+async fn test_remove_book_tag() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(&db, &book_model, None)
+        .await
+        .unwrap();
+
+    // Add tags
+    let tag = TagRepository::add_tag_to_book(&db, book.id, "completed")
+        .await
+        .unwrap();
+    TagRepository::add_tag_to_book(&db, book.id, "favorite")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Remove one tag
+    let request = delete_request_with_auth(
+        &format!("/api/v1/books/{}/tags/{}", book.id, tag.id),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<()>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // Verify only favorite remains
+    let tags = TagRepository::get_tags_for_book(&db, book.id)
+        .await
+        .unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].name, "favorite");
+}
+
+#[tokio::test]
+async fn test_set_book_tags_replaces_existing() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(&db, &book_model, None)
+        .await
+        .unwrap();
+
+    // Set initial tags
+    TagRepository::set_tags_for_book(
+        &db,
+        book.id,
+        vec!["completed".to_string(), "favorite".to_string()],
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Replace with new tags
+    let body = SetBookTagsRequest {
+        tags: vec!["reading".to_string()],
+    };
+    let request =
+        put_json_request_with_auth(&format!("/api/v1/books/{}/tags", book.id), &body, &token);
+    let (status, response): (StatusCode, Option<TagListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let tag_response = response.unwrap();
+    assert_eq!(tag_response.tags.len(), 1);
+    assert_eq!(tag_response.tags[0].name, "reading");
+}
+
+#[tokio::test]
+async fn test_add_duplicate_book_tag() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(&db, &book_model, None)
+        .await
+        .unwrap();
+
+    // Pre-add the tag
+    TagRepository::add_tag_to_book(&db, book.id, "completed")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Add the same tag again
+    let body = AddBookTagRequest {
+        name: "completed".to_string(),
+    };
+    let request =
+        post_json_request_with_auth(&format!("/api/v1/books/{}/tags", book.id), &body, &token);
+    let (status, _response): (StatusCode, Option<TagDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+
+    // Should still only have one tag
+    let tags = TagRepository::get_tags_for_book(&db, book.id)
+        .await
+        .unwrap();
+    assert_eq!(tags.len(), 1);
+}
+
+#[tokio::test]
+async fn test_book_tags_auth_required() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book_model = create_test_book_model(series.id, library.id, "/lib/book1.cbz", "book1.cbz");
+    let book = BookRepository::create(&db, &book_model, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    // No auth token
+    let request = get_request(&format!("/api/v1/books/{}/tags", book.id));
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

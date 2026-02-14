@@ -1,6 +1,6 @@
 //! `SeaORM` Entity for genres table
 //!
-//! Genre taxonomy table for categorizing series.
+//! Genre taxonomy table for categorizing series and books.
 
 use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
@@ -23,6 +23,8 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::series_genres::Entity")]
     SeriesGenres,
+    #[sea_orm(has_many = "super::book_genres::Entity")]
+    BookGenres,
 }
 
 impl Related<super::series_genres::Entity> for Entity {
@@ -37,6 +39,21 @@ impl Related<super::series::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::series_genres::Relation::Genre.def().rev())
+    }
+}
+
+impl Related<super::book_genres::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BookGenres.def()
+    }
+}
+
+impl Related<super::books::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::book_genres::Relation::Book.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::book_genres::Relation::Genre.def().rev())
     }
 }
 

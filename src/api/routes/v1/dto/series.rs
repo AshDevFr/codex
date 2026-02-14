@@ -457,7 +457,7 @@ pub struct SeriesMetadataResponse {
 // ============================================================================
 
 /// Genre data transfer object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GenreDto {
     /// Genre ID
@@ -524,7 +524,7 @@ pub struct TaxonomyCleanupResponse {
 // ============================================================================
 
 /// Tag data transfer object
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagDto {
     /// Tag ID
