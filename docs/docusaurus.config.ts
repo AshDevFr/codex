@@ -47,7 +47,6 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           // Enable "edit this page" links
-          editUrl: 'https://github.com/AshDevFr/codex/edit/main/docs/',
           docItemComponent: '@theme/ApiItem',
         },
         blog: false,
@@ -66,7 +65,6 @@ const config: Config = {
         path: 'dev',
         routeBasePath: 'dev',
         sidebarPath: './devSidebar.ts',
-        editUrl: 'https://github.com/AshDevFr/codex/edit/main/docs/',
       },
     ],
     [
@@ -152,8 +150,8 @@ const config: Config = {
           label: 'API',
         },
         {
-          href: 'https://github.com/AshDevFr/codex',
-          label: 'GitHub',
+          href: 'https://codex.userjot.com',
+          label: 'Feature Board',
           position: 'right',
         },
       ],
@@ -195,12 +193,12 @@ const config: Config = {
           title: 'Project',
           items: [
             {
-              label: 'GitHub',
-              href: 'https://github.com/AshDevFr/codex',
+              label: 'Feature Board',
+              href: 'https://codex.userjot.com',
             },
             {
-              label: 'Issues',
-              href: 'https://github.com/AshDevFr/codex/issues',
+              label: 'Documentation',
+              href: 'https://codex.4sh.dev',
             },
           ],
         },

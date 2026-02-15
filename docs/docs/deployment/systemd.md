@@ -6,25 +6,25 @@ sidebar_position: 4
 
 For traditional Linux server deployments without containers.
 
+:::note
+Pre-built binaries are not yet available. You will need to [build Codex from source](../../dev/contributing/development) to use this deployment method.
+:::
+
 ## Prerequisites
 
 - Linux server with systemd
-- Codex binary downloaded
+- Codex binary (built from source)
 - PostgreSQL or SQLite configured
 
 ## Installation
 
-### Download Binary
+### Build from Source
+
+Follow the [Development Setup guide](../../dev/contributing/development) to build the binary:
 
 ```bash
-# Download latest release
-curl -LO https://github.com/AshDevFr/codex/releases/latest/download/codex-linux-amd64.tar.gz
-
-# Extract
-tar xzf codex-linux-amd64.tar.gz
-
-# Move to system location
-sudo mv codex /usr/local/bin/
+cargo build --release
+sudo mv target/release/codex /usr/local/bin/
 sudo chmod +x /usr/local/bin/codex
 ```
 
@@ -130,10 +130,10 @@ sudo systemctl reload codex
 # Stop service
 sudo systemctl stop codex
 
-# Download and replace binary
-curl -LO https://github.com/AshDevFr/codex/releases/latest/download/codex-linux-amd64.tar.gz
-tar xzf codex-linux-amd64.tar.gz
-sudo mv codex /usr/local/bin/
+# Build new version from source
+git pull
+cargo build --release
+sudo mv target/release/codex /usr/local/bin/
 
 # Start service (migrations run automatically)
 sudo systemctl start codex

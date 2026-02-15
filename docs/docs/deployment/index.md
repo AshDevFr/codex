@@ -13,7 +13,6 @@ This guide covers deploying Codex in various environments, from simple homelab s
 | [Docker Compose](./docker) | PostgreSQL | Production, Multi-user | Single host |
 | [Kubernetes](./kubernetes) | PostgreSQL | Enterprise, High Availability | Horizontal |
 | [Systemd Service](./systemd) | Either | Dedicated server | None |
-| Binary + SQLite | SQLite | Homelab, Single-user | None |
 
 ## Understanding Limitations
 
@@ -61,22 +60,9 @@ SSE streams require special handling in certain deployments:
 ### Docker (Recommended)
 
 ```bash
-git clone https://github.com/AshDevFr/codex.git
-cd codex
+docker pull ghcr.io/ashdevfr/codex:latest
 docker compose --profile prod up -d
 docker compose exec codex codex seed --config /app/config/config.docker.yaml
-```
-
-### Binary
-
-```bash
-# Download and extract
-curl -LO https://github.com/AshDevFr/codex/releases/latest/download/codex-linux-amd64.tar.gz
-tar xzf codex-linux-amd64.tar.gz
-
-# Configure and run
-cp codex.example.yaml codex.yaml
-./codex serve --config codex.yaml
 ```
 
 ## In This Section

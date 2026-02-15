@@ -3,7 +3,6 @@
 
 import DockerRunQuickStart from "./_partials/_docker-run-quick-start.mdx";
 import DockerVolumes from "./_partials/_docker-volumes.mdx";
-import BinaryQuickStart from "./_partials/_binary-quick-start.mdx";
 
 # Getting Started
 
@@ -32,33 +31,6 @@ Replace `/path/to/your/library` with the path to your comics, manga, or ebooks f
 For a more maintainable setup, see the [Docker Deployment guide](./deployment/docker) for Docker Compose examples.
 :::
 
-## Quick Start with Binary
-
-If you prefer running without Docker:
-
-### 1. Download Codex
-
-Download the latest release from [GitHub Releases](https://github.com/AshDevFr/codex/releases).
-
-Available platforms:
-
-- Linux x86_64 / ARM64
-- macOS x86_64 (Intel) / ARM64 (Apple Silicon)
-- Windows x86_64
-
-### 2. Install and Run
-
-```bash
-# Extract and make executable
-tar -xzf codex-x.x.x-linux-x86_64.tar.gz
-chmod +x codex
-
-# Optional: move to PATH
-sudo mv codex /usr/local/bin/
-```
-
-<BinaryQuickStart />
-
 ## First Login
 
 1. Open Codex in your browser at `http://localhost:8080`
@@ -79,9 +51,7 @@ sudo mv codex /usr/local/bin/
 1. Click **Libraries** in the sidebar, then click **+** to add a new library
 2. Fill in the **General** tab:
    - **Name**: A descriptive name (e.g., "My Comics")
-   - **Path**: The folder path containing your files
-     - Docker: Use the container path (e.g., `/library`)
-     - Binary: Use the local path (e.g., `/home/user/comics`)
+   - **Path**: The folder path containing your files (use the container path, e.g., `/library`)
    - **Default Reading Direction**: Choose based on your content type
 
 ![Add Library - General Settings](../screenshots/libraries/add-library-general-comics.png)
@@ -155,13 +125,6 @@ docker stop codex && docker rm codex
 # Run your docker run command again
 ```
 
-### Binary
-
-1. Download the new release
-2. Stop Codex
-3. Replace the binary
-4. Start Codex (migrations run automatically)
-
 ## Troubleshooting
 
 ### Library Not Found
@@ -171,8 +134,6 @@ docker stop codex && docker rm codex
 ```bash
 docker exec codex ls -la /library
 ```
-
-**Binary**: Verify the path exists and Codex has read permissions.
 
 ### Books Not Appearing
 

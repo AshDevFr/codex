@@ -128,7 +128,6 @@ Use the comprehensive API to build custom tools, sync with other services, or in
 
 CBR (Comic Book RAR) archive support requires the UnRAR library, which uses a **proprietary license** (not standard open source). The UnRAR license allows free use for extraction but prohibits creating RAR compression software.
 
-- **Pre-built binaries**: Include CBR support by default
 - **Docker images**: Include CBR support by default
 - **Building from source**:
   - With CBR: `cargo build --release` (default)
@@ -141,7 +140,7 @@ Codex is actively developed and used in production environments. While the core 
 ## Getting Help
 
 - **Documentation**: You're reading it!
-- **GitHub Issues**: [Report bugs or request features](https://github.com/AshDevFr/codex/issues)
+- **Feature Board**: [Report bugs or request features](https://codex.userjot.com)
 
 ## License
 

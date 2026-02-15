@@ -802,7 +802,7 @@ Go to **Settings** > **Metrics** to view server statistics including inventory c
 
 ### Report Issues
 
-- [GitHub Issues](https://github.com/AshDevFr/codex/issues)
+- [Feature Board](https://codex.userjot.com)
 - Include:
   - Steps to reproduce
   - Expected vs actual behavior

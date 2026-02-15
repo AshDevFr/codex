@@ -27,6 +27,6 @@ Help improve Codex itself:
 
 ## Quick Links
 
-- [GitHub Repository](https://github.com/AshDevFr/codex)
-- [Issue Tracker](https://github.com/AshDevFr/codex/issues)
+- [Feature Board](https://codex.userjot.com)
+- [Documentation](https://codex.4sh.dev)
 - [API Reference](/docs/api/codex-api)
