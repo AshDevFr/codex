@@ -108,6 +108,9 @@ mod m20260211_000054_add_plugin_internal_config;
 // Book genres and tags junction tables (shared taxonomy with series)
 mod m20260214_000055_create_book_genres_tags;
 
+// Consolidate individual author columns into authors_json
+mod m20260215_000056_consolidate_authors;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -194,6 +197,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260211_000054_add_plugin_internal_config::Migration),
             // Book genres and tags junction tables
             Box::new(m20260214_000055_create_book_genres_tags::Migration),
+            // Consolidate individual author columns into authors_json
+            Box::new(m20260215_000056_consolidate_authors::Migration),
         ]
     }
 }

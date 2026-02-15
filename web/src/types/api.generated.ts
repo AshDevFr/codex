@@ -5920,7 +5920,7 @@ export interface components {
          * @description Role of an author in a book
          * @enum {string}
          */
-        BookAuthorRole: "author" | "co_author" | "editor" | "translator" | "illustrator" | "contributor";
+        BookAuthorRole: "author" | "co_author" | "editor" | "translator" | "illustrator" | "contributor" | "writer" | "penciller" | "inker" | "colorist" | "letterer" | "cover_artist";
         /** @description Award information for a book */
         BookAwardDto: {
             /**
@@ -8618,6 +8618,8 @@ export interface components {
             ageRating?: number | null;
             /** @description Alternate titles for this series */
             alternateTitles: components["schemas"]["AlternateTitleDto"][];
+            /** @description Structured author information */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
             /**
              * Format: date-time
              * @description Timestamps
@@ -10220,6 +10222,11 @@ export interface components {
              */
             ageRating: boolean;
             /**
+             * @description Whether the authors_json field is locked
+             * @example false
+             */
+            authorsJsonLock: boolean;
+            /**
              * @description Whether the cover selection is locked
              *     When locked, plugins can still download covers but won't auto-select them
              * @example false
@@ -11619,6 +11626,8 @@ export interface components {
              * @example 16
              */
             ageRating?: number | null;
+            /** @description Structured author information */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
             /** @description Custom JSON metadata for extensions */
             customMetadata?: Record<string, never> | null;
             /**
@@ -12928,6 +12937,8 @@ export interface components {
              * @example 16
              */
             ageRating?: number | null;
+            /** @description Structured author information */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
             /** @description Custom JSON metadata for extensions */
             customMetadata?: Record<string, never> | null;
             /**
@@ -13587,6 +13598,8 @@ export interface components {
              * @example 16
              */
             ageRating?: number | null;
+            /** @description Structured author information */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
             /**
              * Format: date-time
              * @description When the metadata was created
@@ -13686,6 +13699,8 @@ export interface components {
              * @example 16
              */
             ageRating?: number | null;
+            /** @description Structured author information */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
             /** @description Custom JSON metadata for extensions */
             customMetadata?: Record<string, never> | null;
             /**
@@ -15058,6 +15073,11 @@ export interface components {
              * @example false
              */
             ageRating?: boolean | null;
+            /**
+             * @description Whether to lock the authors_json field
+             * @example false
+             */
+            authorsJsonLock?: boolean | null;
             /**
              * @description Whether to lock the cover selection
              *     When locked, plugins can still download covers but won't auto-select them

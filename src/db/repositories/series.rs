@@ -722,6 +722,7 @@ impl SeriesRepository {
             year: Set(None),
             total_book_count: Set(None),
             custom_metadata: Set(None),
+            authors_json: Set(None),
             // Lock fields default to false
             total_book_count_lock: Set(false),
             title_lock: Set(false),
@@ -737,6 +738,7 @@ impl SeriesRepository {
             genres_lock: Set(false),
             tags_lock: Set(false),
             custom_metadata_lock: Set(false),
+            authors_json_lock: Set(false),
             cover_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),

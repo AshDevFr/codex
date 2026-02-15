@@ -1,13 +1,18 @@
 import {
+  ActionIcon,
+  Box,
   Button,
   Center,
   Group,
   Loader,
   Modal,
+  Select,
   Stack,
   Switch,
   Tabs,
   Text,
+  TextInput,
+  Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -16,8 +21,12 @@ import {
   IconEdit,
   IconLink,
   IconList,
+  IconLock,
+  IconLockOpen,
   IconPhoto,
+  IconPlus,
   IconTag,
+  IconTrash,
   IconUsers,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -41,6 +50,8 @@ import {
 } from "@/components/forms/lockable";
 import { extractSourceFromUrl } from "@/components/series/ExternalLinks";
 import type { BookTypeDto } from "@/types";
+import type { BookAuthor, BookAuthorRole } from "@/types/book-metadata";
+import { AUTHOR_ROLE_DISPLAY } from "@/types/book-metadata";
 
 const BOOK_TYPE_OPTIONS = [
   { value: "comic", label: "Comic" },
@@ -84,13 +95,7 @@ interface FormState {
   translator: string;
   subjects: string;
   // Authors
-  writer: string;
-  penciller: string;
-  inker: string;
-  colorist: string;
-  letterer: string;
-  coverArtist: string;
-  editor: string;
+  authors: BookAuthor[];
   // Publishing
   publisher: string;
   imprint: string;
@@ -116,13 +121,6 @@ interface LocksState {
   summary: boolean;
   bookType: boolean;
   subtitle: boolean;
-  writer: boolean;
-  penciller: boolean;
-  inker: boolean;
-  colorist: boolean;
-  letterer: boolean;
-  coverArtist: boolean;
-  editor: boolean;
   publisher: boolean;
   imprint: boolean;
   genre: boolean;
@@ -149,6 +147,26 @@ interface LocksState {
   cover: boolean;
 }
 
+function buildAuthorsFromLegacy(
+  metadata: BookDetailResponse["metadata"] | undefined,
+): BookAuthor[] {
+  if (!metadata) return [];
+  const authors: BookAuthor[] = [];
+  const addRole = (names: string[] | undefined, role: BookAuthorRole) => {
+    for (const name of names ?? []) {
+      authors.push({ name, role });
+    }
+  };
+  addRole(metadata.writers, "writer");
+  addRole(metadata.pencillers, "penciller");
+  addRole(metadata.inkers, "inker");
+  addRole(metadata.colorists, "colorist");
+  addRole(metadata.letterers, "letterer");
+  addRole(metadata.coverArtists, "cover_artist");
+  addRole(metadata.editors, "editor");
+  return authors;
+}
+
 function initializeFormState(
   detail: BookDetailResponse | undefined,
 ): FormState {
@@ -172,13 +190,7 @@ function initializeFormState(
     seriesTotal: metadata?.seriesTotal?.toString() || "",
     translator: metadata?.translator || "",
     subjects: metadata?.subjects?.join(", ") || "",
-    writer: metadata?.writers?.join(", ") || "",
-    penciller: metadata?.pencillers?.join(", ") || "",
-    inker: metadata?.inkers?.join(", ") || "",
-    colorist: metadata?.colorists?.join(", ") || "",
-    letterer: metadata?.letterers?.join(", ") || "",
-    coverArtist: metadata?.coverArtists?.join(", ") || "",
-    editor: metadata?.editors?.join(", ") || "",
+    authors: metadata?.authors ?? buildAuthorsFromLegacy(metadata),
     publisher: metadata?.publisher || "",
     imprint: metadata?.imprint || "",
     genre: metadata?.genre || "",
@@ -204,13 +216,6 @@ function initializeLocksState(
     summary: locks?.summaryLock || false,
     bookType: locks?.bookTypeLock || false,
     subtitle: locks?.subtitleLock || false,
-    writer: locks?.writerLock || false,
-    penciller: locks?.pencillerLock || false,
-    inker: locks?.inkerLock || false,
-    colorist: locks?.coloristLock || false,
-    letterer: locks?.lettererLock || false,
-    coverArtist: locks?.coverArtistLock || false,
-    editor: locks?.editorLock || false,
     publisher: locks?.publisherLock || false,
     imprint: locks?.imprintLock || false,
     genre: locks?.genreLock || false,
@@ -465,13 +470,10 @@ export function BookMetadataEditModal({
         summary: formState.summary || null,
         bookType: (formState.bookType as BookTypeDto) || null,
         subtitle: formState.subtitle || null,
-        writer: formState.writer || null,
-        penciller: formState.penciller || null,
-        inker: formState.inker || null,
-        colorist: formState.colorist || null,
-        letterer: formState.letterer || null,
-        coverArtist: formState.coverArtist || null,
-        editor: formState.editor || null,
+        authors:
+          formState.authors.length > 0
+            ? formState.authors.filter((a) => a.name.trim())
+            : null,
         publisher: formState.publisher || null,
         imprint: formState.imprint || null,
         genre: formState.genre || null,
@@ -564,13 +566,6 @@ export function BookMetadataEditModal({
         summaryLock: locksState.summary,
         bookTypeLock: locksState.bookType,
         subtitleLock: locksState.subtitle,
-        writerLock: locksState.writer,
-        pencillerLock: locksState.penciller,
-        inkerLock: locksState.inker,
-        coloristLock: locksState.colorist,
-        lettererLock: locksState.letterer,
-        coverArtistLock: locksState.coverArtist,
-        editorLock: locksState.editor,
         publisherLock: locksState.publisher,
         imprintLock: locksState.imprint,
         genreLock: locksState.genre,
@@ -827,77 +822,111 @@ export function BookMetadataEditModal({
   );
 
   // Authors tab
+  const AUTHOR_ROLE_OPTIONS = Object.entries(AUTHOR_ROLE_DISPLAY).map(
+    ([value, label]) => ({ value, label }),
+  );
+
   const renderAuthorsTab = () => (
     <Stack gap="md">
-      <LockableInput
-        label="Writer"
-        value={formState.writer}
-        onChange={(v) => updateField("writer", v)}
-        locked={locksState.writer}
-        onLockChange={(v) => updateLock("writer", v)}
-        originalValue={originalFormState?.writer}
-        placeholder="Comma-separated if multiple"
-      />
+      <Group justify="space-between">
+        <Text size="sm" fw={500}>
+          Authors
+        </Text>
+        <Tooltip
+          label={
+            locksState.authorsJson
+              ? "Locked: Protected from automatic updates"
+              : "Unlocked: Can be updated automatically"
+          }
+          position="left"
+          zIndex={1100}
+        >
+          <ActionIcon
+            variant="subtle"
+            color={locksState.authorsJson ? "orange" : "gray"}
+            onClick={() => updateLock("authorsJson", !locksState.authorsJson)}
+            aria-label={
+              locksState.authorsJson ? "Unlock authors" : "Lock authors"
+            }
+          >
+            {locksState.authorsJson ? (
+              <IconLock size={18} />
+            ) : (
+              <IconLockOpen size={18} />
+            )}
+          </ActionIcon>
+        </Tooltip>
+      </Group>
 
-      <LockableInput
-        label="Penciller"
-        value={formState.penciller}
-        onChange={(v) => updateField("penciller", v)}
-        locked={locksState.penciller}
-        onLockChange={(v) => updateLock("penciller", v)}
-        originalValue={originalFormState?.penciller}
-        placeholder="Comma-separated if multiple"
-      />
+      {formState.authors.map((author, index) => (
+        <Group
+          key={`${author.role}-${index}`}
+          gap="xs"
+          wrap="nowrap"
+          align="flex-end"
+        >
+          <Select
+            label={index === 0 ? "Role" : undefined}
+            data={AUTHOR_ROLE_OPTIONS}
+            value={author.role}
+            onChange={(value) => {
+              if (value) {
+                const newAuthors = [...formState.authors];
+                newAuthors[index] = {
+                  ...newAuthors[index],
+                  role: value as BookAuthorRole,
+                };
+                updateField("authors", newAuthors);
+              }
+            }}
+            style={{ flex: 1 }}
+            comboboxProps={{ zIndex: 1100 }}
+          />
+          <TextInput
+            label={index === 0 ? "Name" : undefined}
+            placeholder="Author name"
+            value={author.name}
+            onChange={(e) => {
+              const newAuthors = [...formState.authors];
+              newAuthors[index] = {
+                ...newAuthors[index],
+                name: e.target.value,
+              };
+              updateField("authors", newAuthors);
+            }}
+            style={{ flex: 2 }}
+          />
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            onClick={() => {
+              const newAuthors = formState.authors.filter(
+                (_, i) => i !== index,
+              );
+              updateField("authors", newAuthors);
+            }}
+            aria-label="Remove author"
+          >
+            <IconTrash size={18} />
+          </ActionIcon>
+        </Group>
+      ))}
 
-      <LockableInput
-        label="Inker"
-        value={formState.inker}
-        onChange={(v) => updateField("inker", v)}
-        locked={locksState.inker}
-        onLockChange={(v) => updateLock("inker", v)}
-        originalValue={originalFormState?.inker}
-        placeholder="Comma-separated if multiple"
-      />
-
-      <LockableInput
-        label="Colorist"
-        value={formState.colorist}
-        onChange={(v) => updateField("colorist", v)}
-        locked={locksState.colorist}
-        onLockChange={(v) => updateLock("colorist", v)}
-        originalValue={originalFormState?.colorist}
-        placeholder="Comma-separated if multiple"
-      />
-
-      <LockableInput
-        label="Letterer"
-        value={formState.letterer}
-        onChange={(v) => updateField("letterer", v)}
-        locked={locksState.letterer}
-        onLockChange={(v) => updateLock("letterer", v)}
-        originalValue={originalFormState?.letterer}
-        placeholder="Comma-separated if multiple"
-      />
-
-      <LockableInput
-        label="Cover Artist"
-        value={formState.coverArtist}
-        onChange={(v) => updateField("coverArtist", v)}
-        locked={locksState.coverArtist}
-        onLockChange={(v) => updateLock("coverArtist", v)}
-        originalValue={originalFormState?.coverArtist}
-        placeholder="Comma-separated if multiple"
-      />
-
-      <LockableInput
-        label="Editor"
-        value={formState.editor}
-        onChange={(v) => updateField("editor", v)}
-        locked={locksState.editor}
-        onLockChange={(v) => updateLock("editor", v)}
-        originalValue={originalFormState?.editor}
-        placeholder="Comma-separated if multiple"
-      />
+      <Box>
+        <Button
+          variant="subtle"
+          leftSection={<IconPlus size={16} />}
+          onClick={() => {
+            updateField("authors", [
+              ...formState.authors,
+              { name: "", role: "author" as BookAuthorRole },
+            ]);
+          }}
+          size="sm"
+        >
+          Add Author
+        </Button>
+      </Box>
     </Stack>
   );
 

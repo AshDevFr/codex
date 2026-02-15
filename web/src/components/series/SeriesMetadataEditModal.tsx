@@ -1,14 +1,19 @@
 import {
+  ActionIcon,
+  Box,
   Button,
   Center,
   Group,
   Loader,
   Modal,
+  Select,
   SimpleGrid,
   Stack,
   Tabs,
   TagsInput,
   Text,
+  TextInput,
+  Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -17,10 +22,15 @@ import {
   IconEdit,
   IconLink,
   IconList,
+  IconLock,
+  IconLockOpen,
   IconPhoto,
+  IconPlus,
   IconShare,
   IconTag,
+  IconTrash,
   IconTypography,
+  IconUsers,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
@@ -45,6 +55,8 @@ import {
 } from "@/components/forms/lockable";
 import { extractSourceFromUrl } from "@/components/series/ExternalLinks";
 import { usePermissions } from "@/hooks/usePermissions";
+import type { BookAuthor, BookAuthorRole } from "@/types/book-metadata";
+import { AUTHOR_ROLE_DISPLAY } from "@/types/book-metadata";
 
 export interface SeriesMetadataEditModalProps {
   opened: boolean;
@@ -68,6 +80,7 @@ interface FormState {
   genres: string[];
   tags: string[];
   sharingTags: string[];
+  authors: BookAuthor[];
   alternateTitles: ListItem[];
   externalLinks: ListItem[];
   customMetadata: Record<string, unknown> | null;
@@ -88,6 +101,7 @@ interface LocksState {
   genres: boolean;
   tags: boolean;
   customMetadata: boolean;
+  authorsJson: boolean;
   cover: boolean;
 }
 
@@ -134,6 +148,7 @@ function initializeFormState(
     totalBookCount: metadata?.totalBookCount?.toString() || "",
     genres: metadata?.genres.map((g) => g.name) || [],
     tags: metadata?.tags?.map((t) => t.name) || [],
+    authors: (metadata?.authors as BookAuthor[] | undefined) ?? [],
     sharingTags: [], // Populated separately from seriesSharingTags query
     alternateTitles:
       metadata?.alternateTitles.map((t) => ({
@@ -168,6 +183,7 @@ function initializeLocksState(locks: MetadataLocks | undefined): LocksState {
     genres: locks?.genres || false,
     tags: locks?.tags || false,
     customMetadata: locks?.customMetadata || false,
+    authorsJson: locks?.authorsJsonLock || false,
     cover: (locks as LocksState | undefined)?.cover || false,
   };
 }
@@ -369,6 +385,10 @@ export function SeriesMetadataEditModal({
         totalBookCount: formState.totalBookCount
           ? Number.parseInt(formState.totalBookCount, 10)
           : null,
+        authors:
+          formState.authors.length > 0
+            ? formState.authors.filter((a) => a.name.trim())
+            : null,
         // Cast needed due to OpenAPI type generation quirk (Record<string, never> vs Record<string, unknown>)
         customMetadata: formState.customMetadata as Record<
           string,
@@ -377,7 +397,10 @@ export function SeriesMetadataEditModal({
       });
 
       // Update locks
-      await seriesMetadataApi.updateLocks(seriesId, locksState);
+      await seriesMetadataApi.updateLocks(seriesId, {
+        ...locksState,
+        authorsJsonLock: locksState.authorsJson,
+      });
 
       // Update genres if changed
       const genresChanged =
@@ -667,6 +690,115 @@ export function SeriesMetadataEditModal({
     </Stack>
   );
 
+  // Authors tab
+  const AUTHOR_ROLE_OPTIONS = Object.entries(AUTHOR_ROLE_DISPLAY).map(
+    ([value, label]) => ({ value, label }),
+  );
+
+  const renderAuthorsTab = () => (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Text size="sm" fw={500}>
+          Authors
+        </Text>
+        <Tooltip
+          label={
+            locksState.authorsJson
+              ? "Locked: Protected from automatic updates"
+              : "Unlocked: Can be updated automatically"
+          }
+          position="left"
+          zIndex={1100}
+        >
+          <ActionIcon
+            variant="subtle"
+            color={locksState.authorsJson ? "orange" : "gray"}
+            onClick={() => updateLock("authorsJson", !locksState.authorsJson)}
+            aria-label={
+              locksState.authorsJson ? "Unlock authors" : "Lock authors"
+            }
+          >
+            {locksState.authorsJson ? (
+              <IconLock size={18} />
+            ) : (
+              <IconLockOpen size={18} />
+            )}
+          </ActionIcon>
+        </Tooltip>
+      </Group>
+
+      {formState.authors.map((author, index) => (
+        <Group
+          key={`${author.role}-${index}`}
+          gap="xs"
+          wrap="nowrap"
+          align="flex-end"
+        >
+          <Select
+            label={index === 0 ? "Role" : undefined}
+            data={AUTHOR_ROLE_OPTIONS}
+            value={author.role}
+            onChange={(value) => {
+              if (value) {
+                const newAuthors = [...formState.authors];
+                newAuthors[index] = {
+                  ...newAuthors[index],
+                  role: value as BookAuthorRole,
+                };
+                updateField("authors", newAuthors);
+              }
+            }}
+            style={{ flex: 1 }}
+            comboboxProps={{ zIndex: 1100 }}
+          />
+          <TextInput
+            label={index === 0 ? "Name" : undefined}
+            placeholder="Author name"
+            value={author.name}
+            onChange={(e) => {
+              const newAuthors = [...formState.authors];
+              newAuthors[index] = {
+                ...newAuthors[index],
+                name: e.target.value,
+              };
+              updateField("authors", newAuthors);
+            }}
+            style={{ flex: 2 }}
+          />
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            onClick={() => {
+              const newAuthors = formState.authors.filter(
+                (_, i) => i !== index,
+              );
+              updateField("authors", newAuthors);
+            }}
+            aria-label="Remove author"
+          >
+            <IconTrash size={18} />
+          </ActionIcon>
+        </Group>
+      ))}
+
+      <Box>
+        <Button
+          variant="subtle"
+          leftSection={<IconPlus size={16} />}
+          onClick={() => {
+            updateField("authors", [
+              ...formState.authors,
+              { name: "", role: "author" as BookAuthorRole },
+            ]);
+          }}
+          size="sm"
+        >
+          Add Author
+        </Button>
+      </Box>
+    </Stack>
+  );
+
   // Alternate titles tab
   const renderAlternateTitlesTab = () => (
     <Stack gap="md">
@@ -858,6 +990,9 @@ export function SeriesMetadataEditModal({
               <Tabs.Tab value="details" leftSection={<IconBook size={16} />}>
                 Details
               </Tabs.Tab>
+              <Tabs.Tab value="authors" leftSection={<IconUsers size={16} />}>
+                Authors
+              </Tabs.Tab>
               <Tabs.Tab
                 value="alternateTitles"
                 leftSection={<IconTypography size={16} />}
@@ -889,6 +1024,10 @@ export function SeriesMetadataEditModal({
 
             <Tabs.Panel value="details" pt="md">
               {renderDetailsTab()}
+            </Tabs.Panel>
+
+            <Tabs.Panel value="authors" pt="md">
+              {renderAuthorsTab()}
             </Tabs.Panel>
 
             <Tabs.Panel value="alternateTitles" pt="md">

@@ -369,28 +369,30 @@ fn build_book_metadata(
         };
     };
 
-    // Collect authors from role-based fields
-    let mut authors = Vec::new();
-    let role_fields: &[(&str, &Option<String>)] = &[
-        ("writer", &meta.writer),
-        ("penciller", &meta.penciller),
-        ("inker", &meta.inker),
-        ("colorist", &meta.colorist),
-        ("letterer", &meta.letterer),
-        ("cover", &meta.cover_artist),
-        ("editor", &meta.editor),
-    ];
-    for (role, value) in role_fields {
-        if let Some(name) = value {
-            let name = name.trim();
-            if !name.is_empty() {
-                authors.push(KomgaAuthorDto {
-                    name: name.to_string(),
-                    role: role.to_string(),
-                });
-            }
-        }
-    }
+    // Collect authors from authors_json field
+    let authors = meta
+        .authors_json
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<Vec<serde_json::Value>>(json).ok())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| {
+                    let name = entry.get("name")?.as_str()?.trim().to_string();
+                    let role = entry
+                        .get("role")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("writer")
+                        .to_string();
+                    if name.is_empty() {
+                        None
+                    } else {
+                        Some(KomgaAuthorDto { name, role })
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     // Build release date from year/month/day
     let release_date = match (meta.year, meta.month, meta.day) {
@@ -434,7 +436,7 @@ fn build_book_metadata(
         release_date,
         release_date_lock: meta.year_lock,
         authors,
-        authors_lock: meta.writer_lock,
+        authors_lock: meta.authors_json_lock,
         tags,
         tags_lock: meta.genre_lock,
         isbn: meta.isbns.clone().unwrap_or_default(),

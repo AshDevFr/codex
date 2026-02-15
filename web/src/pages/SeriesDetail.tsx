@@ -47,6 +47,7 @@ import { seriesApi } from "@/api/series";
 import { seriesMetadataApi } from "@/api/seriesMetadata";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
+import { AuthorsList } from "@/components/book/AuthorsList";
 import { ExternalIdEditModal } from "@/components/common";
 import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MetadataApplyFlow } from "@/components/metadata";
@@ -794,6 +795,16 @@ export function SeriesDetail() {
               <Badge variant="outline" size="sm">
                 {metadata.publisher}
               </Badge>
+            </Group>
+          )}
+
+          {/* Authors */}
+          {metadata?.authors && metadata.authors.length > 0 && (
+            <Group gap="md" align="flex-start">
+              <Text size="sm" c="dimmed" w={100}>
+                {metadata.authors.length > 1 ? "AUTHORS" : "AUTHOR"}
+              </Text>
+              <AuthorsList authors={metadata.authors} showRoles />
             </Group>
           )}
 

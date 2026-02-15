@@ -37,6 +37,91 @@ use std::sync::Arc;
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
+/// Extract authors with a specific role from an `authors_json` string.
+///
+/// Parses the JSON array and returns names where the `role` field matches.
+/// Returns an empty Vec if the JSON is None or invalid.
+fn extract_authors_by_role(authors_json: &Option<String>, role: &str) -> Vec<String> {
+    authors_json
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<Vec<serde_json::Value>>(json).ok())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| {
+                    let entry_role = entry.get("role").and_then(|r| r.as_str()).unwrap_or("");
+                    if entry_role == role {
+                        entry
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Extract the first author name with a specific role from `authors_json`.
+fn extract_first_author_by_role(authors_json: &Option<String>, role: &str) -> Option<String> {
+    let authors = extract_authors_by_role(authors_json, role);
+    if authors.is_empty() {
+        None
+    } else {
+        Some(authors.join(", "))
+    }
+}
+
+/// Build `authors_json` from individual role fields in a request DTO.
+///
+/// For each non-None field, creates author entries with the appropriate role.
+/// Returns None if all fields are None.
+fn build_authors_json_from_request(
+    writer: &Option<String>,
+    penciller: &Option<String>,
+    inker: &Option<String>,
+    colorist: &Option<String>,
+    letterer: &Option<String>,
+    cover_artist: &Option<String>,
+    editor: &Option<String>,
+) -> Option<String> {
+    let fields: &[(&Option<String>, &str)] = &[
+        (writer, "writer"),
+        (penciller, "penciller"),
+        (inker, "inker"),
+        (colorist, "colorist"),
+        (letterer, "letterer"),
+        (cover_artist, "cover_artist"),
+        (editor, "editor"),
+    ];
+
+    let mut entries = Vec::new();
+    let mut has_any = false;
+
+    for (field, role) in fields {
+        if let Some(value) = field {
+            has_any = true;
+            for name in value.split(',') {
+                let trimmed = name.trim();
+                if !trimmed.is_empty() {
+                    entries.push(serde_json::json!({
+                        "name": trimmed,
+                        "role": role,
+                    }));
+                }
+            }
+        }
+    }
+
+    if !has_any {
+        None
+    } else {
+        Some(serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_string()))
+    }
+}
+
 fn default_page() -> u64 {
     DEFAULT_PAGE
 }
@@ -368,13 +453,13 @@ pub async fn books_to_full_dtos_batched(
                 title_sort: meta.title_sort.clone(),
                 number: meta.number.map(|d| d.to_string()),
                 summary: meta.summary.clone(),
-                writer: meta.writer.clone(),
-                penciller: meta.penciller.clone(),
-                inker: meta.inker.clone(),
-                colorist: meta.colorist.clone(),
-                letterer: meta.letterer.clone(),
-                cover_artist: meta.cover_artist.clone(),
-                editor: meta.editor.clone(),
+                writer: extract_first_author_by_role(&meta.authors_json, "writer"),
+                penciller: extract_first_author_by_role(&meta.authors_json, "penciller"),
+                inker: extract_first_author_by_role(&meta.authors_json, "inker"),
+                colorist: extract_first_author_by_role(&meta.authors_json, "colorist"),
+                letterer: extract_first_author_by_role(&meta.authors_json, "letterer"),
+                cover_artist: extract_first_author_by_role(&meta.authors_json, "cover_artist"),
+                editor: extract_first_author_by_role(&meta.authors_json, "editor"),
                 publisher: meta.publisher.clone(),
                 imprint: meta.imprint.clone(),
                 genre: meta.genre.clone(),
@@ -408,29 +493,25 @@ pub async fn books_to_full_dtos_batched(
                 awards,
                 custom_metadata,
                 release_date: None, // Computed from year/month/day if needed
-                writers: meta.writer.clone().map(|s| vec![s]).unwrap_or_default(),
-                pencillers: meta.penciller.clone().map(|s| vec![s]).unwrap_or_default(),
-                inkers: meta.inker.clone().map(|s| vec![s]).unwrap_or_default(),
-                colorists: meta.colorist.clone().map(|s| vec![s]).unwrap_or_default(),
-                letterers: meta.letterer.clone().map(|s| vec![s]).unwrap_or_default(),
-                cover_artists: meta
-                    .cover_artist
-                    .clone()
-                    .map(|s| vec![s])
-                    .unwrap_or_default(),
-                editors: meta.editor.clone().map(|s| vec![s]).unwrap_or_default(),
+                writers: extract_authors_by_role(&meta.authors_json, "writer"),
+                pencillers: extract_authors_by_role(&meta.authors_json, "penciller"),
+                inkers: extract_authors_by_role(&meta.authors_json, "inker"),
+                colorists: extract_authors_by_role(&meta.authors_json, "colorist"),
+                letterers: extract_authors_by_role(&meta.authors_json, "letterer"),
+                cover_artists: extract_authors_by_role(&meta.authors_json, "cover_artist"),
+                editors: extract_authors_by_role(&meta.authors_json, "editor"),
                 locks: BookMetadataLocks {
                     title_lock: meta.title_lock,
                     title_sort_lock: meta.title_sort_lock,
                     number_lock: meta.number_lock,
                     summary_lock: meta.summary_lock,
-                    writer_lock: meta.writer_lock,
-                    penciller_lock: meta.penciller_lock,
-                    inker_lock: meta.inker_lock,
-                    colorist_lock: meta.colorist_lock,
-                    letterer_lock: meta.letterer_lock,
-                    cover_artist_lock: meta.cover_artist_lock,
-                    editor_lock: meta.editor_lock,
+                    writer_lock: meta.authors_json_lock,
+                    penciller_lock: meta.authors_json_lock,
+                    inker_lock: meta.authors_json_lock,
+                    colorist_lock: meta.authors_json_lock,
+                    letterer_lock: meta.authors_json_lock,
+                    cover_artist_lock: meta.authors_json_lock,
+                    editor_lock: meta.authors_json_lock,
                     publisher_lock: meta.publisher_lock,
                     imprint_lock: meta.imprint_lock,
                     genre_lock: meta.genre_lock,
@@ -970,13 +1051,13 @@ pub async fn get_book(
                     page_count: None, // Page count is in books table, not metadata
                     language_iso: meta.language_iso,
                     release_date: None, // Release date is computed from year/month/day
-                    writers: meta.writer.map(|s| vec![s]).unwrap_or_default(),
-                    pencillers: meta.penciller.map(|s| vec![s]).unwrap_or_default(),
-                    inkers: meta.inker.map(|s| vec![s]).unwrap_or_default(),
-                    colorists: meta.colorist.map(|s| vec![s]).unwrap_or_default(),
-                    letterers: meta.letterer.map(|s| vec![s]).unwrap_or_default(),
-                    cover_artists: meta.cover_artist.map(|s| vec![s]).unwrap_or_default(),
-                    editors: meta.editor.map(|s| vec![s]).unwrap_or_default(),
+                    writers: extract_authors_by_role(&meta.authors_json, "writer"),
+                    pencillers: extract_authors_by_role(&meta.authors_json, "penciller"),
+                    inkers: extract_authors_by_role(&meta.authors_json, "inker"),
+                    colorists: extract_authors_by_role(&meta.authors_json, "colorist"),
+                    letterers: extract_authors_by_role(&meta.authors_json, "letterer"),
+                    cover_artists: extract_authors_by_role(&meta.authors_json, "cover_artist"),
+                    editors: extract_authors_by_role(&meta.authors_json, "editor"),
                     // New Phase 6 fields
                     book_type: meta
                         .book_type
@@ -1113,13 +1194,6 @@ pub async fn patch_book(
             title_sort: Set(None),
             number: Set(decimal_opt),
             summary: Set(None),
-            writer: Set(None),
-            penciller: Set(None),
-            inker: Set(None),
-            colorist: Set(None),
-            letterer: Set(None),
-            cover_artist: Set(None),
-            editor: Set(None),
             publisher: Set(None),
             imprint: Set(None),
             genre: Set(None),
@@ -1151,13 +1225,6 @@ pub async fn patch_book(
             title_sort_lock: Set(false),
             number_lock: Set(number_opt.is_some()),
             summary_lock: Set(false),
-            writer_lock: Set(false),
-            penciller_lock: Set(false),
-            inker_lock: Set(false),
-            colorist_lock: Set(false),
-            letterer_lock: Set(false),
-            cover_artist_lock: Set(false),
-            editor_lock: Set(false),
             publisher_lock: Set(false),
             imprint_lock: Set(false),
             genre_lock: Set(false),
@@ -1985,13 +2052,16 @@ pub async fn replace_book_metadata(
         let mut active: book_metadata::ActiveModel = existing.into();
 
         active.summary = Set(request.summary.clone());
-        active.writer = Set(request.writer.clone());
-        active.penciller = Set(request.penciller.clone());
-        active.inker = Set(request.inker.clone());
-        active.colorist = Set(request.colorist.clone());
-        active.letterer = Set(request.letterer.clone());
-        active.cover_artist = Set(request.cover_artist.clone());
-        active.editor = Set(request.editor.clone());
+        // Build authors_json from individual role fields
+        active.authors_json = Set(build_authors_json_from_request(
+            &request.writer,
+            &request.penciller,
+            &request.inker,
+            &request.colorist,
+            &request.letterer,
+            &request.cover_artist,
+            &request.editor,
+        ));
         active.publisher = Set(request.publisher.clone());
         active.imprint = Set(request.imprint.clone());
         active.genre = Set(request.genre.clone());
@@ -2010,26 +2080,15 @@ pub async fn replace_book_metadata(
         if request.summary.is_some() {
             active.summary_lock = Set(true);
         }
-        if request.writer.is_some() {
-            active.writer_lock = Set(true);
-        }
-        if request.penciller.is_some() {
-            active.penciller_lock = Set(true);
-        }
-        if request.inker.is_some() {
-            active.inker_lock = Set(true);
-        }
-        if request.colorist.is_some() {
-            active.colorist_lock = Set(true);
-        }
-        if request.letterer.is_some() {
-            active.letterer_lock = Set(true);
-        }
-        if request.cover_artist.is_some() {
-            active.cover_artist_lock = Set(true);
-        }
-        if request.editor.is_some() {
-            active.editor_lock = Set(true);
+        if request.writer.is_some()
+            || request.penciller.is_some()
+            || request.inker.is_some()
+            || request.colorist.is_some()
+            || request.letterer.is_some()
+            || request.cover_artist.is_some()
+            || request.editor.is_some()
+        {
+            active.authors_json_lock = Set(true);
         }
         if request.publisher.is_some() {
             active.publisher_lock = Set(true);
@@ -2079,6 +2138,17 @@ pub async fn replace_book_metadata(
             .map_err(|e| ApiError::Internal(format!("Failed to update metadata: {}", e)))?
     } else {
         // Create new record with locks set for non-null fields
+        let new_authors_json = build_authors_json_from_request(
+            &request.writer,
+            &request.penciller,
+            &request.inker,
+            &request.colorist,
+            &request.letterer,
+            &request.cover_artist,
+            &request.editor,
+        );
+        let any_author_set = new_authors_json.is_some();
+
         let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
             book_id: Set(book_id),
@@ -2086,13 +2156,6 @@ pub async fn replace_book_metadata(
             title_sort: Set(None), // Title sort is not set via this endpoint
             number: Set(None), // Number is not set via this endpoint (use PATCH /books/{id})
             summary: Set(request.summary.clone()),
-            writer: Set(request.writer.clone()),
-            penciller: Set(request.penciller.clone()),
-            inker: Set(request.inker.clone()),
-            colorist: Set(request.colorist.clone()),
-            letterer: Set(request.letterer.clone()),
-            cover_artist: Set(request.cover_artist.clone()),
-            editor: Set(request.editor.clone()),
             publisher: Set(request.publisher.clone()),
             imprint: Set(request.imprint.clone()),
             genre: Set(request.genre.clone()),
@@ -2109,7 +2172,7 @@ pub async fn replace_book_metadata(
             // New Phase 1 fields
             book_type: Set(None),
             subtitle: Set(None),
-            authors_json: Set(None),
+            authors_json: Set(new_authors_json),
             translator: Set(None),
             edition: Set(None),
             original_title: Set(None),
@@ -2124,13 +2187,6 @@ pub async fn replace_book_metadata(
             title_sort_lock: Set(false),
             number_lock: Set(false),
             summary_lock: Set(request.summary.is_some()),
-            writer_lock: Set(request.writer.is_some()),
-            penciller_lock: Set(request.penciller.is_some()),
-            inker_lock: Set(request.inker.is_some()),
-            colorist_lock: Set(request.colorist.is_some()),
-            letterer_lock: Set(request.letterer.is_some()),
-            cover_artist_lock: Set(request.cover_artist.is_some()),
-            editor_lock: Set(request.editor.is_some()),
             publisher_lock: Set(request.publisher.is_some()),
             imprint_lock: Set(request.imprint.is_some()),
             genre_lock: Set(request.genre.is_some()),
@@ -2147,7 +2203,7 @@ pub async fn replace_book_metadata(
             // New Phase 1 lock fields
             book_type_lock: Set(false),
             subtitle_lock: Set(false),
-            authors_json_lock: Set(false),
+            authors_json_lock: Set(any_author_set),
             translator_lock: Set(false),
             edition_lock: Set(false),
             original_title_lock: Set(false),
@@ -2208,13 +2264,13 @@ pub async fn replace_book_metadata(
     Ok(Json(BookMetadataResponse {
         book_id: updated.book_id,
         summary: updated.summary,
-        writer: updated.writer,
-        penciller: updated.penciller,
-        inker: updated.inker,
-        colorist: updated.colorist,
-        letterer: updated.letterer,
-        cover_artist: updated.cover_artist,
-        editor: updated.editor,
+        writer: extract_first_author_by_role(&updated.authors_json, "writer"),
+        penciller: extract_first_author_by_role(&updated.authors_json, "penciller"),
+        inker: extract_first_author_by_role(&updated.authors_json, "inker"),
+        colorist: extract_first_author_by_role(&updated.authors_json, "colorist"),
+        letterer: extract_first_author_by_role(&updated.authors_json, "letterer"),
+        cover_artist: extract_first_author_by_role(&updated.authors_json, "cover_artist"),
+        editor: extract_first_author_by_role(&updated.authors_json, "editor"),
         publisher: updated.publisher,
         imprint: updated.imprint,
         genre: updated.genre,
@@ -2252,13 +2308,13 @@ pub async fn replace_book_metadata(
             title_sort_lock: updated.title_sort_lock,
             number_lock: updated.number_lock,
             summary_lock: updated.summary_lock,
-            writer_lock: updated.writer_lock,
-            penciller_lock: updated.penciller_lock,
-            inker_lock: updated.inker_lock,
-            colorist_lock: updated.colorist_lock,
-            letterer_lock: updated.letterer_lock,
-            cover_artist_lock: updated.cover_artist_lock,
-            editor_lock: updated.editor_lock,
+            writer_lock: updated.authors_json_lock,
+            penciller_lock: updated.authors_json_lock,
+            inker_lock: updated.authors_json_lock,
+            colorist_lock: updated.authors_json_lock,
+            letterer_lock: updated.authors_json_lock,
+            cover_artist_lock: updated.authors_json_lock,
+            editor_lock: updated.authors_json_lock,
             publisher_lock: updated.publisher_lock,
             imprint_lock: updated.imprint_lock,
             genre_lock: updated.genre_lock,
@@ -2337,6 +2393,7 @@ pub async fn patch_book_metadata(
 
     let updated = if let Some(existing) = existing {
         // Partial update existing record with auto-locking
+        let existing_authors_json = existing.authors_json.clone();
         let mut active: book_metadata::ActiveModel = existing.into();
 
         if let Some(opt) = request.summary.into_nested_option() {
@@ -2346,54 +2403,60 @@ pub async fn patch_book_metadata(
             }
             has_changes = true;
         }
-        if let Some(opt) = request.writer.into_nested_option() {
-            active.writer = Set(opt.clone());
-            if opt.is_some() {
-                active.writer_lock = Set(true);
+        // Handle individual author role fields by merging into authors_json.
+        // Each role field (writer, penciller, etc.) updates only its entries
+        // within the existing authors_json, preserving other roles.
+        {
+            let role_fields: Vec<(&str, Option<Option<String>>)> = vec![
+                ("writer", request.writer.into_nested_option()),
+                ("penciller", request.penciller.into_nested_option()),
+                ("inker", request.inker.into_nested_option()),
+                ("colorist", request.colorist.into_nested_option()),
+                ("letterer", request.letterer.into_nested_option()),
+                ("cover_artist", request.cover_artist.into_nested_option()),
+                ("editor", request.editor.into_nested_option()),
+            ];
+
+            let mut any_author_change = false;
+            // Parse existing authors_json into a mutable list
+            let mut entries: Vec<serde_json::Value> = existing_authors_json
+                .as_deref()
+                .and_then(|j| serde_json::from_str(j).ok())
+                .unwrap_or_default();
+
+            for (role, patch_value) in role_fields {
+                if let Some(opt) = patch_value {
+                    any_author_change = true;
+                    // Remove existing entries for this role
+                    entries
+                        .retain(|e| e.get("role").and_then(|r| r.as_str()).unwrap_or("") != role);
+                    // Add new entries if the value is non-null
+                    if let Some(ref value) = opt {
+                        for name in value.split(',') {
+                            let trimmed = name.trim();
+                            if !trimmed.is_empty() {
+                                entries.push(serde_json::json!({
+                                    "name": trimmed,
+                                    "role": role,
+                                }));
+                            }
+                        }
+                    }
+                }
             }
-            has_changes = true;
-        }
-        if let Some(opt) = request.penciller.into_nested_option() {
-            active.penciller = Set(opt.clone());
-            if opt.is_some() {
-                active.penciller_lock = Set(true);
+
+            if any_author_change {
+                let new_json = if entries.is_empty() {
+                    None
+                } else {
+                    Some(serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_string()))
+                };
+                active.authors_json = Set(new_json.clone());
+                if new_json.is_some() {
+                    active.authors_json_lock = Set(true);
+                }
+                has_changes = true;
             }
-            has_changes = true;
-        }
-        if let Some(opt) = request.inker.into_nested_option() {
-            active.inker = Set(opt.clone());
-            if opt.is_some() {
-                active.inker_lock = Set(true);
-            }
-            has_changes = true;
-        }
-        if let Some(opt) = request.colorist.into_nested_option() {
-            active.colorist = Set(opt.clone());
-            if opt.is_some() {
-                active.colorist_lock = Set(true);
-            }
-            has_changes = true;
-        }
-        if let Some(opt) = request.letterer.into_nested_option() {
-            active.letterer = Set(opt.clone());
-            if opt.is_some() {
-                active.letterer_lock = Set(true);
-            }
-            has_changes = true;
-        }
-        if let Some(opt) = request.cover_artist.into_nested_option() {
-            active.cover_artist = Set(opt.clone());
-            if opt.is_some() {
-                active.cover_artist_lock = Set(true);
-            }
-            has_changes = true;
-        }
-        if let Some(opt) = request.editor.into_nested_option() {
-            active.editor = Set(opt.clone());
-            if opt.is_some() {
-                active.editor_lock = Set(true);
-            }
-            has_changes = true;
         }
         if let Some(opt) = request.publisher.into_nested_option() {
             active.publisher = Set(opt.clone());
@@ -2597,6 +2660,9 @@ pub async fn patch_book_metadata(
         // Create new record with provided fields and auto-locking
         has_changes = true;
         let summary_opt = request.summary.into_option();
+        // Merge individual author role fields into authors_json.
+        // If the new-style authors field is provided, it takes precedence.
+        // Otherwise, build from individual role fields for backward compatibility.
         let writer_opt = request.writer.into_option();
         let penciller_opt = request.penciller.into_option();
         let inker_opt = request.inker.into_option();
@@ -2644,6 +2710,23 @@ pub async fn patch_book_metadata(
             .as_ref()
             .map(|v| serde_json::to_string(v).unwrap_or_default());
 
+        // Merge individual author fields into authors_json if the new-style
+        // authors field was not provided.
+        let merged_authors_json = if authors_json_opt.is_some() {
+            authors_json_opt.clone()
+        } else {
+            build_authors_json_from_request(
+                &writer_opt,
+                &penciller_opt,
+                &inker_opt,
+                &colorist_opt,
+                &letterer_opt,
+                &cover_artist_opt,
+                &editor_opt,
+            )
+        };
+        let any_author_set = merged_authors_json.is_some();
+
         let active = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
             book_id: Set(book_id),
@@ -2651,13 +2734,6 @@ pub async fn patch_book_metadata(
             title_sort: Set(None), // Title sort is not set via metadata replace
             number: Set(None), // Number is not set via metadata replace (use PATCH /books/{id})
             summary: Set(summary_opt.clone()),
-            writer: Set(writer_opt.clone()),
-            penciller: Set(penciller_opt.clone()),
-            inker: Set(inker_opt.clone()),
-            colorist: Set(colorist_opt.clone()),
-            letterer: Set(letterer_opt.clone()),
-            cover_artist: Set(cover_artist_opt.clone()),
-            editor: Set(editor_opt.clone()),
             publisher: Set(publisher_opt.clone()),
             imprint: Set(imprint_opt.clone()),
             genre: Set(genre_opt.clone()),
@@ -2674,7 +2750,7 @@ pub async fn patch_book_metadata(
             // New Phase 6 fields
             book_type: Set(book_type_str.clone()),
             subtitle: Set(subtitle_opt.clone()),
-            authors_json: Set(authors_json_opt.clone()),
+            authors_json: Set(merged_authors_json),
             translator: Set(translator_opt.clone()),
             edition: Set(edition_opt.clone()),
             original_title: Set(original_title_opt.clone()),
@@ -2691,13 +2767,6 @@ pub async fn patch_book_metadata(
             title_sort_lock: Set(false),
             number_lock: Set(false),
             summary_lock: Set(summary_opt.is_some()),
-            writer_lock: Set(writer_opt.is_some()),
-            penciller_lock: Set(penciller_opt.is_some()),
-            inker_lock: Set(inker_opt.is_some()),
-            colorist_lock: Set(colorist_opt.is_some()),
-            letterer_lock: Set(letterer_opt.is_some()),
-            cover_artist_lock: Set(cover_artist_opt.is_some()),
-            editor_lock: Set(editor_opt.is_some()),
             publisher_lock: Set(publisher_opt.is_some()),
             imprint_lock: Set(imprint_opt.is_some()),
             genre_lock: Set(genre_opt.is_some()),
@@ -2714,7 +2783,7 @@ pub async fn patch_book_metadata(
             // New Phase 6 lock fields
             book_type_lock: Set(book_type_str.is_some()),
             subtitle_lock: Set(subtitle_opt.is_some()),
-            authors_json_lock: Set(authors_json_opt.is_some()),
+            authors_json_lock: Set(any_author_set),
             translator_lock: Set(translator_opt.is_some()),
             edition_lock: Set(edition_opt.is_some()),
             original_title_lock: Set(original_title_opt.is_some()),
@@ -2777,13 +2846,13 @@ pub async fn patch_book_metadata(
     Ok(Json(BookMetadataResponse {
         book_id: updated.book_id,
         summary: updated.summary,
-        writer: updated.writer,
-        penciller: updated.penciller,
-        inker: updated.inker,
-        colorist: updated.colorist,
-        letterer: updated.letterer,
-        cover_artist: updated.cover_artist,
-        editor: updated.editor,
+        writer: extract_first_author_by_role(&updated.authors_json, "writer"),
+        penciller: extract_first_author_by_role(&updated.authors_json, "penciller"),
+        inker: extract_first_author_by_role(&updated.authors_json, "inker"),
+        colorist: extract_first_author_by_role(&updated.authors_json, "colorist"),
+        letterer: extract_first_author_by_role(&updated.authors_json, "letterer"),
+        cover_artist: extract_first_author_by_role(&updated.authors_json, "cover_artist"),
+        editor: extract_first_author_by_role(&updated.authors_json, "editor"),
         publisher: updated.publisher,
         imprint: updated.imprint,
         genre: updated.genre,
@@ -2821,13 +2890,13 @@ pub async fn patch_book_metadata(
             title_sort_lock: updated.title_sort_lock,
             number_lock: updated.number_lock,
             summary_lock: updated.summary_lock,
-            writer_lock: updated.writer_lock,
-            penciller_lock: updated.penciller_lock,
-            inker_lock: updated.inker_lock,
-            colorist_lock: updated.colorist_lock,
-            letterer_lock: updated.letterer_lock,
-            cover_artist_lock: updated.cover_artist_lock,
-            editor_lock: updated.editor_lock,
+            writer_lock: updated.authors_json_lock,
+            penciller_lock: updated.authors_json_lock,
+            inker_lock: updated.authors_json_lock,
+            colorist_lock: updated.authors_json_lock,
+            letterer_lock: updated.authors_json_lock,
+            cover_artist_lock: updated.authors_json_lock,
+            editor_lock: updated.authors_json_lock,
             publisher_lock: updated.publisher_lock,
             imprint_lock: updated.imprint_lock,
             genre_lock: updated.genre_lock,
@@ -2911,13 +2980,13 @@ pub async fn get_book_metadata_locks(
         title_sort_lock: metadata.title_sort_lock,
         number_lock: metadata.number_lock,
         summary_lock: metadata.summary_lock,
-        writer_lock: metadata.writer_lock,
-        penciller_lock: metadata.penciller_lock,
-        inker_lock: metadata.inker_lock,
-        colorist_lock: metadata.colorist_lock,
-        letterer_lock: metadata.letterer_lock,
-        cover_artist_lock: metadata.cover_artist_lock,
-        editor_lock: metadata.editor_lock,
+        writer_lock: metadata.authors_json_lock,
+        penciller_lock: metadata.authors_json_lock,
+        inker_lock: metadata.authors_json_lock,
+        colorist_lock: metadata.authors_json_lock,
+        letterer_lock: metadata.authors_json_lock,
+        cover_artist_lock: metadata.authors_json_lock,
+        editor_lock: metadata.authors_json_lock,
         publisher_lock: metadata.publisher_lock,
         imprint_lock: metadata.imprint_lock,
         genre_lock: metadata.genre_lock,
@@ -3005,26 +3074,18 @@ pub async fn update_book_metadata_locks(
     if let Some(v) = request.summary_lock {
         active.summary_lock = Set(v);
     }
-    if let Some(v) = request.writer_lock {
-        active.writer_lock = Set(v);
-    }
-    if let Some(v) = request.penciller_lock {
-        active.penciller_lock = Set(v);
-    }
-    if let Some(v) = request.inker_lock {
-        active.inker_lock = Set(v);
-    }
-    if let Some(v) = request.colorist_lock {
-        active.colorist_lock = Set(v);
-    }
-    if let Some(v) = request.letterer_lock {
-        active.letterer_lock = Set(v);
-    }
-    if let Some(v) = request.cover_artist_lock {
-        active.cover_artist_lock = Set(v);
-    }
-    if let Some(v) = request.editor_lock {
-        active.editor_lock = Set(v);
+    // Map individual author lock fields to the consolidated authors_json_lock.
+    // Any of the individual lock fields being set will update authors_json_lock.
+    if let Some(v) = request
+        .writer_lock
+        .or(request.penciller_lock)
+        .or(request.inker_lock)
+        .or(request.colorist_lock)
+        .or(request.letterer_lock)
+        .or(request.cover_artist_lock)
+        .or(request.editor_lock)
+    {
+        active.authors_json_lock = Set(v);
     }
     if let Some(v) = request.publisher_lock {
         active.publisher_lock = Set(v);
@@ -3131,13 +3192,13 @@ pub async fn update_book_metadata_locks(
         title_sort_lock: updated.title_sort_lock,
         number_lock: updated.number_lock,
         summary_lock: updated.summary_lock,
-        writer_lock: updated.writer_lock,
-        penciller_lock: updated.penciller_lock,
-        inker_lock: updated.inker_lock,
-        colorist_lock: updated.colorist_lock,
-        letterer_lock: updated.letterer_lock,
-        cover_artist_lock: updated.cover_artist_lock,
-        editor_lock: updated.editor_lock,
+        writer_lock: updated.authors_json_lock,
+        penciller_lock: updated.authors_json_lock,
+        inker_lock: updated.authors_json_lock,
+        colorist_lock: updated.authors_json_lock,
+        letterer_lock: updated.authors_json_lock,
+        cover_artist_lock: updated.authors_json_lock,
+        editor_lock: updated.authors_json_lock,
         publisher_lock: updated.publisher_lock,
         imprint_lock: updated.imprint_lock,
         genre_lock: updated.genre_lock,

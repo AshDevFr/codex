@@ -948,27 +948,23 @@ async fn aggregate_books_metadata(
     let mut tags_set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
     for meta in metadata_map.values() {
-        // Collect authors from role-based fields
-        let role_fields: &[(&str, &Option<String>)] = &[
-            ("writer", &meta.writer),
-            ("penciller", &meta.penciller),
-            ("inker", &meta.inker),
-            ("colorist", &meta.colorist),
-            ("letterer", &meta.letterer),
-            ("cover", &meta.cover_artist),
-            ("editor", &meta.editor),
-        ];
-
-        for (role, value) in role_fields {
-            if let Some(name) = value {
-                let name = name.trim().to_string();
-                if !name.is_empty() {
-                    let key = (name.clone(), role.to_string());
-                    if seen_authors.insert(key) {
-                        authors.push(KomgaAuthorDto {
-                            name,
-                            role: role.to_string(),
-                        });
+        // Collect authors from authors_json field
+        if let Some(ref authors_json) = meta.authors_json
+            && let Ok(entries) = serde_json::from_str::<Vec<serde_json::Value>>(authors_json)
+        {
+            for entry in &entries {
+                if let Some(name) = entry.get("name").and_then(|n| n.as_str()) {
+                    let name = name.trim().to_string();
+                    let role = entry
+                        .get("role")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("writer")
+                        .to_string();
+                    if !name.is_empty() {
+                        let key = (name.clone(), role.clone());
+                        if seen_authors.insert(key) {
+                            authors.push(KomgaAuthorDto { name, role });
+                        }
                     }
                 }
             }

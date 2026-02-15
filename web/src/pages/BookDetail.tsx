@@ -49,6 +49,7 @@ import {
   pluginsApi,
 } from "@/api/plugins";
 import {
+  AuthorsList,
   BookExternalIds,
   BookInfoModal,
   BookTypeBadge,
@@ -372,19 +373,11 @@ export function BookDetail() {
     : null;
   const releaseYear = metadata?.year ?? null;
 
-  // Collect all creators (use array fields from BookFullMetadata)
-  const creators: { role: string; names: string[] }[] = [
-    { role: "WRITERS", names: metadata?.writers || [] },
-    { role: "PENCILLERS", names: metadata?.pencillers || [] },
-    { role: "INKERS", names: metadata?.inkers || [] },
-    { role: "COLORISTS", names: metadata?.colorists || [] },
-    { role: "LETTERERS", names: metadata?.letterers || [] },
-    { role: "COVER ARTISTS", names: metadata?.coverArtists || [] },
-    { role: "EDITORS", names: metadata?.editors || [] },
-  ].filter((c) => c.names.length > 0);
-
-  // Structured authors (from authors_json — separate from role-based creators)
-  const structuredAuthors = metadata?.authors ?? [];
+  // Authors from authors_json (unified: all roles consolidated)
+  const bookAuthors = (metadata?.authors ?? []).map((a) => ({
+    ...a,
+    sortName: a.sortName ?? undefined,
+  }));
 
   return (
     <Box py="md" px="md">
@@ -885,46 +878,15 @@ export function BookDetail() {
             </Group>
           )}
 
-          {/* Structured Authors (from authors_json — e.g. EPUB metadata) */}
-          {structuredAuthors.length > 0 && (
+          {/* Authors (from authors_json — all roles unified) */}
+          {bookAuthors.length > 0 && (
             <Group gap="md" align="flex-start">
               <Text size="sm" c="dimmed" w={100}>
-                AUTHORS
+                {bookAuthors.length > 1 ? "AUTHORS" : "AUTHOR"}
               </Text>
-              <Group gap="xs">
-                {structuredAuthors.map((author) => (
-                  <Tooltip
-                    key={`${author.name}-${author.role ?? ""}`}
-                    label={[author.role, author.sortName]
-                      .filter(Boolean)
-                      .join(" | ")}
-                    disabled={!author.role && !author.sortName}
-                    withArrow
-                  >
-                    <Badge variant="light" size="sm">
-                      {author.name}
-                    </Badge>
-                  </Tooltip>
-                ))}
-              </Group>
+              <AuthorsList authors={bookAuthors} showRoles />
             </Group>
           )}
-
-          {/* Creators (role-based — e.g. ComicInfo metadata) */}
-          {creators.map(({ role, names }) => (
-            <Group key={role} gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                {role}
-              </Text>
-              <Group gap="xs">
-                {names.map((name) => (
-                  <Badge key={`${role}-${name}`} variant="light" size="sm">
-                    {name}
-                  </Badge>
-                ))}
-              </Group>
-            </Group>
-          ))}
 
           {/* Awards */}
           {metadata?.awards && metadata.awards.length > 0 && (
@@ -1102,7 +1064,7 @@ export function BookDetail() {
           plugin={selectedPlugin}
           entityId={book.id}
           entityTitle={book.title}
-          entityAuthor={metadata?.authors?.[0]?.name ?? metadata?.writers[0]}
+          entityAuthor={metadata?.authors?.[0]?.name}
           contentType="book"
           onApplySuccess={handleMetadataApplySuccess}
         />

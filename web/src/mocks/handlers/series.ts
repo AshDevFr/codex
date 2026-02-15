@@ -678,6 +678,7 @@ export const seriesHandlers = [
         tags: false,
         customMetadata: false,
         cover: false,
+        authorsJsonLock: false,
       },
     });
   }),
@@ -772,6 +773,7 @@ export const seriesHandlers = [
       tags: false,
       customMetadata: false,
       cover: false,
+      authorsJsonLock: false,
     });
   }),
 

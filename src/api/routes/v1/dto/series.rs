@@ -321,6 +321,9 @@ pub struct ReplaceSeriesMetadataRequest {
     /// Custom JSON metadata for extensions
     #[schema(value_type = Option<Object>, example = json!({"myField": "value", "nested": {"key": "data"}}))]
     pub custom_metadata: Option<serde_json::Value>,
+
+    /// Structured author information
+    pub authors: Option<Vec<super::book::BookAuthorDto>>,
 }
 
 /// PATCH request for partial update of series metadata
@@ -389,6 +392,11 @@ pub struct PatchSeriesMetadataRequest {
     #[serde(default)]
     #[schema(value_type = Option<Object>, example = json!({"myField": "value"}), nullable = true)]
     pub custom_metadata: super::patch::PatchValue<serde_json::Value>,
+
+    /// Structured author information
+    #[serde(default)]
+    #[schema(value_type = Option<Vec<super::book::BookAuthorDto>>, nullable = true)]
+    pub authors: super::patch::PatchValue<Vec<super::book::BookAuthorDto>>,
 }
 
 /// Response containing series metadata
@@ -446,6 +454,10 @@ pub struct SeriesMetadataResponse {
     /// Custom JSON metadata for extensions
     #[schema(value_type = Option<Object>, example = json!({"myField": "value"}))]
     pub custom_metadata: Option<serde_json::Value>,
+
+    /// Structured author information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authors: Option<Vec<super::book::BookAuthorDto>>,
 
     /// Last update timestamp
     #[schema(example = "2024-01-15T10:30:00Z")]
@@ -982,6 +994,10 @@ pub struct MetadataLocks {
     /// When locked, plugins can still download covers but won't auto-select them
     #[schema(example = false)]
     pub cover: bool,
+
+    /// Whether the authors_json field is locked
+    #[schema(example = false)]
+    pub authors_json_lock: bool,
 }
 
 /// Full series metadata response including all related data
@@ -1040,6 +1056,10 @@ pub struct FullSeriesMetadataResponse {
     /// Custom JSON metadata
     #[schema(value_type = Option<Object>, example = json!({"myField": "value"}))]
     pub custom_metadata: Option<serde_json::Value>,
+
+    /// Structured author information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authors: Option<Vec<super::book::BookAuthorDto>>,
 
     // Lock states
     /// Lock states for all metadata fields
@@ -1131,6 +1151,10 @@ pub struct SeriesFullMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>, example = json!({"myField": "value"}))]
     pub custom_metadata: Option<serde_json::Value>,
+
+    /// Structured author information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authors: Option<Vec<super::book::BookAuthorDto>>,
 
     /// Lock states for all metadata fields
     pub locks: MetadataLocks,
@@ -1293,6 +1317,11 @@ pub struct UpdateMetadataLocksRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = false)]
     pub cover: Option<bool>,
+
+    /// Whether to lock the authors_json field
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub authors_json_lock: Option<bool>,
 }
 
 // ============================================================================

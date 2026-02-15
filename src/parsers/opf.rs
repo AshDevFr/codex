@@ -6,6 +6,7 @@
 use crate::parsers::ComicInfo;
 use crate::parsers::isbn_utils::extract_isbns;
 use crate::utils::{CodexError, Result};
+use serde::Serialize;
 use std::path::Path;
 
 /// Parsed OPF metadata
@@ -93,6 +94,11 @@ pub fn opf_to_comic_info(opf: &OpfMetadata) -> ComicInfo {
         ..Default::default()
     };
 
+    // Build authors_json from OPF creators
+    // The first creator is already set as writer; all creators get the "writer" role
+    // since OPF Dublin Core doesn't distinguish roles in the same way ComicInfo does
+    ci.authors_json = build_opf_authors_json(&opf.creators);
+
     // Parse date into year/month/day
     if let Some(ref date_str) = opf.date {
         parse_date_into_comic_info(date_str, &mut ci);
@@ -126,6 +132,10 @@ pub fn merge_comic_info(base: &ComicInfo, overlay: &ComicInfo) -> ComicInfo {
             .clone()
             .or_else(|| base.cover_artist.clone()),
         editor: overlay.editor.clone().or_else(|| base.editor.clone()),
+        authors_json: overlay
+            .authors_json
+            .clone()
+            .or_else(|| base.authors_json.clone()),
         publisher: overlay.publisher.clone().or_else(|| base.publisher.clone()),
         imprint: overlay.imprint.clone().or_else(|| base.imprint.clone()),
         genre: overlay.genre.clone().or_else(|| base.genre.clone()),
@@ -147,6 +157,34 @@ pub fn merge_comic_info(base: &ComicInfo, overlay: &ComicInfo) -> ComicInfo {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/// A single author entry for the structured `authors_json` field.
+#[derive(Debug, Clone, Serialize)]
+struct OpfAuthorEntry {
+    name: String,
+    role: String,
+}
+
+/// Build a JSON string from OPF creator list.
+///
+/// OPF Dublin Core uses `dc:creator` for all authors. We map each creator
+/// to the "writer" role since OPF doesn't distinguish fine-grained roles in
+/// the same way ComicInfo does.
+fn build_opf_authors_json(creators: &[String]) -> Option<String> {
+    if creators.is_empty() {
+        return None;
+    }
+
+    let entries: Vec<OpfAuthorEntry> = creators
+        .iter()
+        .map(|name| OpfAuthorEntry {
+            name: name.clone(),
+            role: "writer".to_string(),
+        })
+        .collect();
+
+    serde_json::to_string(&entries).ok()
+}
 
 /// Decode basic XML entities in text content.
 fn decode_xml_entities(s: &str) -> String {

@@ -160,13 +160,51 @@ async fn test_analyze_book_saves_metadata() -> Result<()> {
         metadata.summary,
         Some("This is a test comic book summary with detailed description.".to_string())
     );
-    assert_eq!(metadata.writer, Some("Test Writer".to_string()));
-    assert_eq!(metadata.penciller, Some("Test Penciller".to_string()));
-    assert_eq!(metadata.inker, Some("Test Inker".to_string()));
-    assert_eq!(metadata.colorist, Some("Test Colorist".to_string()));
-    assert_eq!(metadata.letterer, Some("Test Letterer".to_string()));
-    assert_eq!(metadata.cover_artist, Some("Test Cover Artist".to_string()));
-    assert_eq!(metadata.editor, Some("Test Editor".to_string()));
+    // Verify authors are stored in authors_json
+    let authors: Vec<serde_json::Value> =
+        serde_json::from_str(metadata.authors_json.as_deref().unwrap_or("[]")).unwrap();
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Writer" && a["role"] == "writer"),
+        "Expected author 'Test Writer' with role 'writer' in authors_json"
+    );
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Penciller" && a["role"] == "penciller"),
+        "Expected author 'Test Penciller' with role 'penciller' in authors_json"
+    );
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Inker" && a["role"] == "inker"),
+        "Expected author 'Test Inker' with role 'inker' in authors_json"
+    );
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Colorist" && a["role"] == "colorist"),
+        "Expected author 'Test Colorist' with role 'colorist' in authors_json"
+    );
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Letterer" && a["role"] == "letterer"),
+        "Expected author 'Test Letterer' with role 'letterer' in authors_json"
+    );
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Cover Artist" && a["role"] == "cover_artist"),
+        "Expected author 'Test Cover Artist' with role 'cover_artist' in authors_json"
+    );
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Editor" && a["role"] == "editor"),
+        "Expected author 'Test Editor' with role 'editor' in authors_json"
+    );
     assert_eq!(metadata.publisher, Some("Test Publisher".to_string()));
     assert_eq!(metadata.imprint, Some("Test Imprint".to_string()));
     assert_eq!(metadata.genre, Some("Action, Adventure".to_string()));
@@ -340,7 +378,14 @@ async fn test_analyze_book_title_fallback_to_filename() -> Result<()> {
     );
 
     // Verify metadata record was created with other fields
-    assert_eq!(metadata.writer, Some("Test Writer".to_string()));
+    let authors: Vec<serde_json::Value> =
+        serde_json::from_str(metadata.authors_json.as_deref().unwrap_or("[]")).unwrap();
+    assert!(
+        authors
+            .iter()
+            .any(|a| a["name"] == "Test Writer" && a["role"] == "writer"),
+        "Expected author 'Test Writer' with role 'writer' in authors_json"
+    );
     assert_eq!(metadata.publisher, Some("Test Publisher".to_string()));
 
     Ok(())
@@ -597,7 +642,14 @@ async fn test_reanalyze_book_updates_metadata() -> Result<()> {
         .await?
         .expect("Initial metadata should exist");
 
-    assert_eq!(initial_metadata.writer, Some("Test Writer".to_string()));
+    let initial_authors: Vec<serde_json::Value> =
+        serde_json::from_str(initial_metadata.authors_json.as_deref().unwrap_or("[]")).unwrap();
+    assert!(
+        initial_authors
+            .iter()
+            .any(|a| a["name"] == "Test Writer" && a["role"] == "writer"),
+        "Expected initial author 'Test Writer' with role 'writer'"
+    );
 
     // Simulate file change by creating a new CBZ with different metadata
     let file_path = temp_dir.path().join("reanalysis_test.cbz");
@@ -640,10 +692,17 @@ async fn test_reanalyze_book_updates_metadata() -> Result<()> {
         .await?
         .expect("Updated metadata should exist");
 
-    eprintln!("Initial writer: {:?}", initial_metadata.writer);
-    eprintln!("Updated writer: {:?}", updated_metadata.writer);
+    eprintln!("Initial authors_json: {:?}", initial_metadata.authors_json);
+    eprintln!("Updated authors_json: {:?}", updated_metadata.authors_json);
 
-    assert_eq!(updated_metadata.writer, Some("Updated Writer".to_string()));
+    let updated_authors: Vec<serde_json::Value> =
+        serde_json::from_str(updated_metadata.authors_json.as_deref().unwrap_or("[]")).unwrap();
+    assert!(
+        updated_authors
+            .iter()
+            .any(|a| a["name"] == "Updated Writer" && a["role"] == "writer"),
+        "Expected updated author 'Updated Writer' with role 'writer'"
+    );
     assert_eq!(
         updated_metadata.publisher,
         Some("Updated Publisher".to_string())

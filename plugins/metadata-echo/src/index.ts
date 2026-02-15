@@ -94,7 +94,10 @@ const provider: MetadataProvider = {
       tags: ["plugin-test", "echo", "automation", "development"],
 
       // Credits
-      authors: ["Echo Author", "Test Writer"],
+      authors: [
+        { name: "Echo Author", role: "author" },
+        { name: "Test Writer", role: "author" },
+      ],
       artists: ["Echo Artist"],
       publisher: "Echo Publisher",
 
@@ -267,7 +270,7 @@ const bookProvider: BookMetadataProvider = {
       // Authors with roles
       authors: [
         { name: "Echo Author", role: "author", sortName: "Author, Echo" },
-        { name: "Test Writer", role: "coauthor", sortName: "Writer, Test" },
+        { name: "Test Writer", role: "co_author", sortName: "Writer, Test" },
         { name: "Echo Editor", role: "editor" },
       ],
       artists: ["Echo Illustrator"],

@@ -2000,6 +2000,7 @@ async fn test_replace_series_metadata_success() {
         reading_direction: Some("ltr".to_string()),
         total_book_count: None,
         custom_metadata: Some(serde_json::json!({"tag": "value"})),
+        authors: None,
     };
 
     let request = put_json_request_with_auth(
@@ -2074,6 +2075,7 @@ async fn test_replace_series_metadata_clears_omitted_fields() {
         reading_direction: None,
         total_book_count: None,
         custom_metadata: None,
+        authors: None,
     };
 
     let request = put_json_request_with_auth(
@@ -2114,6 +2116,7 @@ async fn test_replace_series_metadata_not_found() {
         reading_direction: None,
         total_book_count: None,
         custom_metadata: None,
+        authors: None,
     };
 
     let request = put_json_request_with_auth(
@@ -2159,6 +2162,7 @@ async fn test_replace_series_metadata_without_auth() {
         reading_direction: None,
         total_book_count: None,
         custom_metadata: None,
+        authors: None,
     };
 
     let request = put_json_request(
@@ -5877,4 +5881,405 @@ async fn test_list_library_series_sort_by_community_rating_desc() {
     assert_eq!(series_list.data[0].title, "Series B");
     assert_eq!(series_list.data[1].title, "Series A");
     assert_eq!(series_list.data[2].title, "Series C");
+}
+
+// ============================================================================
+// Series Metadata Authors Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_replace_series_metadata_with_authors() {
+    use codex::api::routes::v1::dto::series::{
+        ReplaceSeriesMetadataRequest, SeriesMetadataResponse,
+    };
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = ReplaceSeriesMetadataRequest {
+        title: Some("Series With Authors".to_string()),
+        title_sort: None,
+        summary: None,
+        publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
+        year: None,
+        reading_direction: None,
+        total_book_count: None,
+        custom_metadata: None,
+        authors: Some(vec![
+            serde_json::from_value(serde_json::json!({
+                "name": "Frank Miller",
+                "role": "writer",
+                "sortName": "Miller, Frank"
+            }))
+            .unwrap(),
+            serde_json::from_value(serde_json::json!({
+                "name": "David Mazzucchelli",
+                "role": "illustrator"
+            }))
+            .unwrap(),
+        ]),
+    };
+
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.title, "Series With Authors");
+
+    let authors = metadata.authors.expect("authors should be present");
+    assert_eq!(authors.len(), 2);
+    assert_eq!(authors[0].name, "Frank Miller");
+    assert_eq!(authors[1].name, "David Mazzucchelli");
+}
+
+#[tokio::test]
+async fn test_replace_series_metadata_clears_authors_when_omitted() {
+    use codex::api::routes::v1::dto::series::{
+        ReplaceSeriesMetadataRequest, SeriesMetadataResponse,
+    };
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // First, set authors
+    let app = create_test_router(state.clone()).await;
+    let request_body = ReplaceSeriesMetadataRequest {
+        title: Some("Series".to_string()),
+        title_sort: None,
+        summary: None,
+        publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
+        year: None,
+        reading_direction: None,
+        total_book_count: None,
+        custom_metadata: None,
+        authors: Some(vec![
+            serde_json::from_value(serde_json::json!({
+                "name": "Test Author",
+                "role": "writer"
+            }))
+            .unwrap(),
+        ]),
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &request_body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Now replace without authors (should clear them)
+    let app = create_test_router(state).await;
+    let request_body = ReplaceSeriesMetadataRequest {
+        title: Some("Series".to_string()),
+        title_sort: None,
+        summary: None,
+        publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
+        year: None,
+        reading_direction: None,
+        total_book_count: None,
+        custom_metadata: None,
+        authors: None,
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert!(metadata.authors.is_none(), "authors should be cleared");
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_authors() {
+    use codex::api::routes::v1::dto::series::SeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // PATCH with authors
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "authors": [
+                {"name": "Neil Gaiman", "role": "writer", "sortName": "Gaiman, Neil"},
+                {"name": "Dave McKean", "role": "illustrator"}
+            ]
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    let authors = metadata.authors.expect("authors should be present");
+    assert_eq!(authors.len(), 2);
+    assert_eq!(authors[0].name, "Neil Gaiman");
+    assert_eq!(authors[0].sort_name, Some("Gaiman, Neil".to_string()));
+    assert_eq!(authors[1].name, "Dave McKean");
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_null_authors_clears() {
+    use codex::api::routes::v1::dto::series::SeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // First set authors via PATCH
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "authors": [{"name": "Test Author", "role": "writer"}]
+        }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Now PATCH with null authors to clear
+    let app = create_test_router(state).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "authors": null
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert!(
+        metadata.authors.is_none(),
+        "authors should be cleared by null"
+    );
+}
+
+#[tokio::test]
+async fn test_patch_series_metadata_omitted_authors_unchanged() {
+    use codex::api::routes::v1::dto::series::SeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // First set authors
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "authors": [{"name": "Alan Moore", "role": "writer"}]
+        }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // PATCH without mentioning authors - should be unchanged
+    let app = create_test_router(state).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "summary": "Updated summary"
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    assert_eq!(metadata.summary, Some("Updated summary".to_string()));
+    let authors = metadata.authors.expect("authors should still be present");
+    assert_eq!(authors.len(), 1);
+    assert_eq!(authors[0].name, "Alan Moore");
+}
+
+#[tokio::test]
+async fn test_get_series_metadata_includes_authors_and_lock() {
+    use codex::api::routes::v1::dto::series::FullSeriesMetadataResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Set authors via PATCH
+    let app = create_test_router(state.clone()).await;
+    let request = patch_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata", series.id),
+        &serde_json::json!({
+            "authors": [{"name": "Eiichiro Oda", "role": "writer"}]
+        }),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // GET full metadata
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/metadata", series.id), &token);
+    let (status, response): (StatusCode, Option<FullSeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let metadata = response.unwrap();
+    let authors = metadata
+        .authors
+        .expect("authors should be present in full response");
+    assert_eq!(authors.len(), 1);
+    assert_eq!(authors[0].name, "Eiichiro Oda");
+    assert!(
+        !metadata.locks.authors_json_lock,
+        "authors_json_lock should default to false"
+    );
+}
+
+#[tokio::test]
+async fn test_metadata_locks_authors_json_lock() {
+    use codex::api::routes::v1::dto::series::MetadataLocks;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Verify default lock state is false
+    let app = create_test_router(state.clone()).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(!locks.authors_json_lock);
+
+    // Set authors_json_lock to true
+    let app = create_test_router(state.clone()).await;
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &serde_json::json!({
+            "authorsJsonLock": true
+        }),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(
+        locks.authors_json_lock,
+        "authors_json_lock should be true after update"
+    );
+
+    // Verify it persists on GET
+    let app = create_test_router(state).await;
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(locks.authors_json_lock, "authors_json_lock should persist");
 }

@@ -68,6 +68,7 @@ impl SeriesMetadataRepository {
             year: Set(None),
             total_book_count: Set(None),
             custom_metadata: Set(None),
+            authors_json: Set(None),
             total_book_count_lock: Set(false),
             title_lock: Set(false),
             title_sort_lock: Set(false),
@@ -82,6 +83,7 @@ impl SeriesMetadataRepository {
             genres_lock: Set(false),
             tags_lock: Set(false),
             custom_metadata_lock: Set(false),
+            authors_json_lock: Set(false),
             cover_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
@@ -308,6 +310,26 @@ impl SeriesMetadataRepository {
 
         let mut active_model: series_metadata::ActiveModel = existing.into();
         active_model.total_book_count = Set(total_book_count);
+        active_model.updated_at = Set(Utc::now());
+
+        let model = active_model.update(db).await?;
+        Ok(model)
+    }
+
+    /// Update authors JSON
+    pub async fn update_authors_json(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        authors_json: Option<String>,
+    ) -> Result<series_metadata::Model> {
+        let existing = Self::get_by_series_id(db, series_id)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Series metadata not found for series: {}", series_id)
+            })?;
+
+        let mut active_model: series_metadata::ActiveModel = existing.into();
+        active_model.authors_json = Set(authors_json);
         active_model.updated_at = Set(Utc::now());
 
         let model = active_model.update(db).await?;

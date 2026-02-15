@@ -991,6 +991,31 @@ pub async fn preview_series_metadata(
         &mut not_provided,
     ));
 
+    // Authors
+    fields.push(build_field_preview(
+        "authors",
+        current_metadata.as_ref().and_then(|m| {
+            m.authors_json
+                .as_ref()
+                .and_then(|v| serde_json::from_str(v).ok())
+        }),
+        if plugin_metadata.authors.is_empty() {
+            None
+        } else {
+            Some(serde_json::json!(plugin_metadata.authors))
+        },
+        current_metadata
+            .as_ref()
+            .map(|m| m.authors_json_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteAuthors),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
     // Age Rating
     fields.push(build_field_preview(
         "ageRating",

@@ -97,6 +97,9 @@ pub struct Model {
     pub year: Option<i32>,
     pub total_book_count: Option<i32>, // Expected total (for ongoing series)
     pub custom_metadata: Option<String>, // JSON escape hatch for user-defined fields
+    /// Structured author information as JSON array
+    /// Format: [{"name": "...", "role": "author|co-author|editor|...", "sort_name": "..."}]
+    pub authors_json: Option<String>,
     // Lock fields
     pub total_book_count_lock: bool,
     pub title_lock: bool,
@@ -112,6 +115,7 @@ pub struct Model {
     pub genres_lock: bool,
     pub tags_lock: bool,
     pub custom_metadata_lock: bool,
+    pub authors_json_lock: bool,
     pub cover_lock: bool,
     // Timestamps
     pub created_at: DateTime<Utc>,

@@ -59,11 +59,17 @@ export const BOOK_TYPE_COLORS: Record<BookType, string> = {
  */
 export type BookAuthorRole =
   | "author"
-  | "co-author"
+  | "co_author"
   | "editor"
   | "translator"
   | "illustrator"
-  | "contributor";
+  | "contributor"
+  | "writer"
+  | "penciller"
+  | "inker"
+  | "colorist"
+  | "letterer"
+  | "cover_artist";
 
 /**
  * Structured author information
@@ -71,7 +77,7 @@ export type BookAuthorRole =
 export interface BookAuthor {
   name: string;
   role: BookAuthorRole;
-  sortName?: string;
+  sortName?: string | null;
 }
 
 /**
@@ -221,11 +227,17 @@ export function parseSubjects(value: string | null | undefined): string[] {
  */
 export const AUTHOR_ROLE_DISPLAY: Record<BookAuthorRole, string> = {
   author: "Author",
-  "co-author": "Co-Author",
+  co_author: "Co-Author",
   editor: "Editor",
   translator: "Translator",
   illustrator: "Illustrator",
   contributor: "Contributor",
+  writer: "Writer",
+  penciller: "Penciller",
+  inker: "Inker",
+  colorist: "Colorist",
+  letterer: "Letterer",
+  cover_artist: "Cover Artist",
 };
 
 /**
@@ -233,9 +245,15 @@ export const AUTHOR_ROLE_DISPLAY: Record<BookAuthorRole, string> = {
  */
 export const AUTHOR_ROLE_COLORS: Record<BookAuthorRole, string> = {
   author: "blue",
-  "co-author": "cyan",
+  co_author: "cyan",
   editor: "grape",
   translator: "orange",
   illustrator: "pink",
   contributor: "gray",
+  writer: "teal",
+  penciller: "indigo",
+  inker: "violet",
+  colorist: "lime",
+  letterer: "yellow",
+  cover_artist: "red",
 };

@@ -239,8 +239,20 @@ impl PluginAutoMatchHandler {
                         .map(|e| e.external_id)
                 };
 
-                // Extract author from book metadata
-                let author = book_metadata.as_ref().and_then(|m| m.writer.clone());
+                // Extract author from book metadata (first author from authors_json)
+                let author = book_metadata.as_ref().and_then(|m| {
+                    m.authors_json.as_deref().and_then(|json| {
+                        serde_json::from_str::<Vec<serde_json::Value>>(json)
+                            .ok()
+                            .and_then(|entries| {
+                                entries.first().and_then(|e| {
+                                    e.get("name")
+                                        .and_then(|n| n.as_str())
+                                        .map(|s| s.to_string())
+                                })
+                            })
+                    })
+                });
 
                 // Extract year from book metadata
                 let year = book_metadata.as_ref().and_then(|m| m.year);

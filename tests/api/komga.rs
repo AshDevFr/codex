@@ -2081,13 +2081,6 @@ async fn create_book_metadata_with_date(
         title_sort: title.map(|s| s.to_string()),
         number: None,
         summary: None,
-        writer: None,
-        penciller: None,
-        inker: None,
-        colorist: None,
-        letterer: None,
-        cover_artist: None,
-        editor: None,
         publisher: None,
         imprint: None,
         genre: None,
@@ -2105,13 +2098,6 @@ async fn create_book_metadata_with_date(
         title_sort_lock: false,
         number_lock: false,
         summary_lock: false,
-        writer_lock: false,
-        penciller_lock: false,
-        inker_lock: false,
-        colorist_lock: false,
-        letterer_lock: false,
-        cover_artist_lock: false,
-        editor_lock: false,
         publisher_lock: false,
         imprint_lock: false,
         genre_lock: false,
@@ -3529,13 +3515,6 @@ async fn create_book_metadata_full(
         title_sort: title.map(|s| s.to_string()),
         number: None,
         summary: summary.map(|s| s.to_string()),
-        writer: None,
-        penciller: None,
-        inker: None,
-        colorist: None,
-        letterer: None,
-        cover_artist: None,
-        editor: None,
         publisher: None,
         imprint: None,
         genre: genre.map(|s| s.to_string()),
@@ -3553,13 +3532,6 @@ async fn create_book_metadata_full(
         title_sort_lock: false,
         number_lock: false,
         summary_lock: false,
-        writer_lock: false,
-        penciller_lock: false,
-        inker_lock: false,
-        colorist_lock: false,
-        letterer_lock: false,
-        cover_artist_lock: false,
-        editor_lock: false,
         publisher_lock: false,
         imprint_lock: false,
         genre_lock: false,
@@ -3614,6 +3586,27 @@ async fn create_book_metadata_with_authors(
     letterer: Option<&str>,
 ) {
     use codex::db::entities::book_metadata;
+
+    // Build authors_json from the individual role parameters
+    let mut authors = Vec::new();
+    if let Some(name) = writer {
+        authors.push(serde_json::json!({"name": name, "role": "writer"}));
+    }
+    if let Some(name) = penciller {
+        authors.push(serde_json::json!({"name": name, "role": "penciller"}));
+    }
+    if let Some(name) = colorist {
+        authors.push(serde_json::json!({"name": name, "role": "colorist"}));
+    }
+    if let Some(name) = letterer {
+        authors.push(serde_json::json!({"name": name, "role": "letterer"}));
+    }
+    let authors_json = if authors.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_string(&authors).unwrap())
+    };
+
     let metadata = book_metadata::Model {
         id: uuid::Uuid::new_v4(),
         book_id,
@@ -3621,13 +3614,6 @@ async fn create_book_metadata_with_authors(
         title_sort: None,
         number: None,
         summary: None,
-        writer: writer.map(|s| s.to_string()),
-        penciller: penciller.map(|s| s.to_string()),
-        inker: None,
-        colorist: colorist.map(|s| s.to_string()),
-        letterer: letterer.map(|s| s.to_string()),
-        cover_artist: None,
-        editor: None,
         publisher: None,
         imprint: None,
         genre: None,
@@ -3645,13 +3631,6 @@ async fn create_book_metadata_with_authors(
         title_sort_lock: false,
         number_lock: false,
         summary_lock: false,
-        writer_lock: false,
-        penciller_lock: false,
-        inker_lock: false,
-        colorist_lock: false,
-        letterer_lock: false,
-        cover_artist_lock: false,
-        editor_lock: false,
         publisher_lock: false,
         imprint_lock: false,
         genre_lock: false,
@@ -3667,7 +3646,7 @@ async fn create_book_metadata_with_authors(
         isbns_lock: false,
         book_type: None,
         subtitle: None,
-        authors_json: None,
+        authors_json,
         translator: None,
         edition: None,
         original_title: None,

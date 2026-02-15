@@ -295,6 +295,7 @@ async fn test_update_metadata_locks() {
         custom_metadata: None,
         total_book_count: None,
         cover: None,
+        authors_json_lock: None,
     };
 
     let request = put_json_request_with_auth(
@@ -363,6 +364,7 @@ async fn test_update_metadata_locks_partial() {
         custom_metadata: None,
         total_book_count: None,
         cover: None,
+        authors_json_lock: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -390,6 +392,7 @@ async fn test_update_metadata_locks_partial() {
         custom_metadata: None,
         total_book_count: None,
         cover: None,
+        authors_json_lock: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -441,6 +444,7 @@ async fn test_update_metadata_locks_all_fields() {
         custom_metadata: Some(true),
         total_book_count: Some(true),
         cover: Some(true),
+        authors_json_lock: Some(true),
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -493,6 +497,7 @@ async fn test_update_metadata_locks_not_found() {
         custom_metadata: None,
         total_book_count: None,
         cover: None,
+        authors_json_lock: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", fake_id),
@@ -537,6 +542,7 @@ async fn test_update_metadata_locks_empty_request() {
         custom_metadata: None,
         total_book_count: None,
         cover: None,
+        authors_json_lock: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -598,6 +604,7 @@ async fn test_update_locks_requires_write_permission() {
         custom_metadata: None,
         total_book_count: None,
         cover: None,
+        authors_json_lock: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),

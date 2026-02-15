@@ -601,6 +601,34 @@ function ValueDisplay({
         );
       }
 
+      // Check if it's authors (has name and role properties)
+      if ("name" in firstItem && "role" in firstItem) {
+        const authors = value as Array<{
+          name: string;
+          role: string;
+          sortName?: string;
+        }>;
+        return (
+          <Group gap={4} wrap="wrap">
+            {authors.slice(0, 5).map((author, idx) => (
+              <Tooltip
+                key={`${author.name}-${idx}`}
+                label={`${author.role}${author.sortName ? ` | Sort: ${author.sortName}` : ""}`}
+              >
+                <Badge size="xs" variant={highlight ? "filled" : "light"}>
+                  {author.name}
+                </Badge>
+              </Tooltip>
+            ))}
+            {authors.length > 5 && (
+              <Text size="xs" c="dimmed">
+                +{authors.length - 5}
+              </Text>
+            )}
+          </Group>
+        );
+      }
+
       // Otherwise treat as external links (has label/url properties)
       const items = value as Array<{ label?: string; url?: string }>;
       return (

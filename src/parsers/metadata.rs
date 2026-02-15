@@ -224,6 +224,9 @@ pub struct ComicInfo {
     pub letterer: Option<String>,
     pub cover_artist: Option<String>,
     pub editor: Option<String>,
+    /// Structured author information as JSON array, computed from individual role fields
+    /// Format: [{"name": "...", "role": "writer|penciller|inker|..."}]
+    pub authors_json: Option<String>,
     pub publisher: Option<String>,
     pub imprint: Option<String>,
     pub genre: Option<String>,

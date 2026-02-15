@@ -402,20 +402,26 @@ impl MetadataApplier {
             }
         }
 
-        // Authors - not yet implemented in series_metadata
+        // Authors
         if should_apply_field("authors") && !metadata.authors.is_empty() {
-            skipped_fields.push(SkippedField {
-                field: "authors".to_string(),
-                reason: "Authors field not yet implemented".to_string(),
-            });
-        }
-
-        // Artists - not yet implemented in series_metadata
-        if should_apply_field("artists") && !metadata.artists.is_empty() {
-            skipped_fields.push(SkippedField {
-                field: "artists".to_string(),
-                reason: "Artists field not yet implemented".to_string(),
-            });
+            let is_locked = current_metadata
+                .map(|m| m.authors_json_lock)
+                .unwrap_or(false);
+            match check_field("authors", is_locked, PluginPermission::MetadataWriteAuthors) {
+                Ok(_) => {
+                    let authors_json = serde_json::to_string(&metadata.authors)
+                        .unwrap_or_else(|_| "[]".to_string());
+                    SeriesMetadataRepository::update_authors_json(
+                        db,
+                        series_id,
+                        Some(authors_json),
+                    )
+                    .await
+                    .context("Failed to update authors")?;
+                    applied_fields.push("authors".to_string());
+                }
+                Err(skip) => skipped_fields.push(skip),
+            }
         }
 
         // External Links

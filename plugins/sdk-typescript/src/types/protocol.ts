@@ -121,8 +121,8 @@ export interface PluginSeriesMetadata {
   tags: string[];
 
   // Credits
-  /** Authors/writers */
-  authors: string[];
+  /** Authors/writers (structured with roles, or plain strings for backward compat) */
+  authors: BookAuthor[];
   /** Artists (if different from authors) */
   artists: string[];
   /** Publisher name */
@@ -416,11 +416,17 @@ export interface BookAuthor {
  */
 export type BookAuthorRole =
   | "author"
-  | "coauthor"
+  | "co_author"
   | "editor"
   | "translator"
   | "illustrator"
-  | "contributor";
+  | "contributor"
+  | "writer"
+  | "penciller"
+  | "inker"
+  | "colorist"
+  | "letterer"
+  | "cover_artist";
 
 /**
  * Book cover with size and source information

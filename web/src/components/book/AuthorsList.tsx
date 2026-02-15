@@ -69,10 +69,8 @@ export function AuthorsList({
               {roleAuthors.map((author) => (
                 <Tooltip
                   key={`${role}-${author.name}`}
-                  label={
-                    author.sortName ? `Sort: ${author.sortName}` : author.name
-                  }
-                  disabled={!author.sortName}
+                  label={author.name}
+                  disabled
                 >
                   <Badge
                     variant="light"
@@ -112,14 +110,11 @@ export function AuthorsList({
           <Tooltip
             key={`${author.name}-${role}`}
             label={
-              [
-                showRoles ? AUTHOR_ROLE_DISPLAY[role] : null,
-                author.sortName ? `Sort: ${author.sortName}` : null,
-              ]
-                .filter(Boolean)
-                .join(" | ") || author.name
+              showRoles && role !== "author"
+                ? AUTHOR_ROLE_DISPLAY[role]
+                : author.name
             }
-            disabled={!showRoles && !author.sortName}
+            disabled={!showRoles || role === "author"}
           >
             <Badge
               variant="light"

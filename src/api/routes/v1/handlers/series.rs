@@ -1,5 +1,5 @@
 use super::super::dto::{
-    BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
+    BookAuthorDto, BookDto, MarkReadResponse, SearchSeriesRequest, SeriesDto, SeriesListRequest,
     SeriesListResponse,
     common::{
         DEFAULT_PAGE, DEFAULT_PAGE_SIZE, ListPaginationParams, MAX_PAGE_SIZE, PaginatedResponse,
@@ -411,6 +411,10 @@ async fn series_to_full_dtos_batched(
                 year: metadata.year,
                 total_book_count: metadata.total_book_count,
                 custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
+                authors: metadata
+                    .authors_json
+                    .as_ref()
+                    .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok()),
                 locks: MetadataLocks {
                     title: metadata.title_lock,
                     title_sort: metadata.title_sort_lock,
@@ -427,6 +431,7 @@ async fn series_to_full_dtos_batched(
                     tags: metadata.tags_lock,
                     custom_metadata: metadata.custom_metadata_lock,
                     cover: metadata.cover_lock,
+                    authors_json_lock: metadata.authors_json_lock,
                 },
                 created_at: metadata.created_at,
                 updated_at: metadata.updated_at,
@@ -758,6 +763,7 @@ pub async fn patch_series(
                 year: Set(None),
                 total_book_count: Set(None),
                 custom_metadata: Set(None),
+                authors_json: Set(None),
                 total_book_count_lock: Set(false),
                 title_lock: Set(true), // Auto-lock when user edits
                 title_sort_lock: Set(false),
@@ -772,6 +778,7 @@ pub async fn patch_series(
                 genres_lock: Set(false),
                 tags_lock: Set(false),
                 custom_metadata_lock: Set(false),
+                authors_json_lock: Set(false),
                 cover_lock: Set(false),
                 created_at: Set(now),
                 updated_at: Set(now),
@@ -2491,6 +2498,9 @@ pub async fn replace_series_metadata(
         validate_custom_metadata_size(Some(cm)).map_err(ApiError::BadRequest)?;
     }
     active.custom_metadata = Set(serialize_custom_metadata(request.custom_metadata.as_ref()));
+    active.authors_json = Set(request
+        .authors
+        .map(|authors| serde_json::to_string(&authors).unwrap_or_default()));
     active.updated_at = Set(Utc::now());
 
     let updated_metadata = active
@@ -2516,6 +2526,7 @@ pub async fn replace_series_metadata(
                 "year".to_string(),
                 "total_book_count".to_string(),
                 "custom_metadata".to_string(),
+                "authors".to_string(),
             ]),
         },
         timestamp: Utc::now(),
@@ -2537,6 +2548,10 @@ pub async fn replace_series_metadata(
         year: updated_metadata.year,
         total_book_count: updated_metadata.total_book_count,
         custom_metadata: parse_custom_metadata(updated_metadata.custom_metadata.as_deref()),
+        authors: updated_metadata
+            .authors_json
+            .as_ref()
+            .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok()),
         updated_at: updated_metadata.updated_at,
     }))
 }
@@ -2677,6 +2692,10 @@ pub async fn reset_series_metadata(
         year: metadata.year,
         total_book_count: metadata.total_book_count,
         custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
+        authors: metadata
+            .authors_json
+            .as_ref()
+            .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok()),
         locks: MetadataLocks {
             title: metadata.title_lock,
             title_sort: metadata.title_sort_lock,
@@ -2693,6 +2712,7 @@ pub async fn reset_series_metadata(
             tags: metadata.tags_lock,
             custom_metadata: metadata.custom_metadata_lock,
             cover: metadata.cover_lock,
+            authors_json_lock: metadata.authors_json_lock,
         },
         genres: vec![],
         tags: vec![],
@@ -2806,6 +2826,11 @@ pub async fn patch_series_metadata(
         metadata_active.custom_metadata = Set(serialize_custom_metadata(opt.as_ref()));
         has_changes = true;
     }
+    if let Some(authors_opt) = request.authors.into_nested_option() {
+        metadata_active.authors_json =
+            Set(authors_opt.map(|authors| serde_json::to_string(&authors).unwrap_or_default()));
+        has_changes = true;
+    }
 
     // Update metadata table if needed
     let updated_metadata = if has_changes {
@@ -2846,6 +2871,10 @@ pub async fn patch_series_metadata(
         year: updated_metadata.year,
         total_book_count: updated_metadata.total_book_count,
         custom_metadata: parse_custom_metadata(updated_metadata.custom_metadata.as_deref()),
+        authors: updated_metadata
+            .authors_json
+            .as_ref()
+            .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok()),
         updated_at: updated_metadata.updated_at,
     }))
 }
@@ -2987,6 +3016,10 @@ pub async fn get_series_metadata(
         year: metadata.year,
         total_book_count: metadata.total_book_count,
         custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
+        authors: metadata
+            .authors_json
+            .as_ref()
+            .and_then(|json| serde_json::from_str::<Vec<BookAuthorDto>>(json).ok()),
         locks: MetadataLocks {
             title: metadata.title_lock,
             title_sort: metadata.title_sort_lock,
@@ -3003,6 +3036,7 @@ pub async fn get_series_metadata(
             tags: metadata.tags_lock,
             custom_metadata: metadata.custom_metadata_lock,
             cover: metadata.cover_lock,
+            authors_json_lock: metadata.authors_json_lock,
         },
         genres: genre_dtos,
         tags: tag_dtos,
@@ -3121,6 +3155,10 @@ pub async fn update_metadata_locks(
         active.cover_lock = Set(v);
         has_changes = true;
     }
+    if let Some(v) = request.authors_json_lock {
+        active.authors_json_lock = Set(v);
+        has_changes = true;
+    }
 
     let updated = if has_changes {
         active.updated_at = Set(Utc::now());
@@ -3152,6 +3190,7 @@ pub async fn update_metadata_locks(
         tags: updated.tags_lock,
         custom_metadata: updated.custom_metadata_lock,
         cover: updated.cover_lock,
+        authors_json_lock: updated.authors_json_lock,
     }))
 }
 
@@ -3208,6 +3247,7 @@ pub async fn get_metadata_locks(
         tags: metadata.tags_lock,
         custom_metadata: metadata.custom_metadata_lock,
         cover: metadata.cover_lock,
+        authors_json_lock: metadata.authors_json_lock,
     }))
 }
 

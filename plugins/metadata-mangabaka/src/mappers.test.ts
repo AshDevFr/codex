@@ -68,6 +68,28 @@ describe("mappers", () => {
       expect(result.relevanceScore).toBeUndefined();
     });
 
+    it("should include authors in preview", () => {
+      const series: MbSeries = {
+        id: 12345,
+        state: "active",
+        title: "Author Test",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "releasing",
+        authors: ["Oda Eiichiro"],
+        artists: ["Oda Eiichiro"],
+      };
+
+      const result = mapSearchResult(series);
+
+      expect(result.preview?.authors).toEqual(["Oda Eiichiro"]);
+    });
+
     it("should include book count from final_volume", () => {
       const series: MbSeries = {
         id: 12345,
@@ -153,8 +175,11 @@ describe("mappers", () => {
       expect(result.year).toBe(2020);
       expect(result.genres).toEqual(["Action", "Drama"]);
       expect(result.tags).toEqual(["Strong Lead", "Time Travel"]);
-      expect(result.authors).toEqual(["Test Author"]);
-      expect(result.artists).toEqual(["Test Artist"]);
+      expect(result.authors).toEqual([
+        { name: "Test Author", role: "author" },
+        { name: "Test Artist", role: "illustrator" },
+      ]);
+      expect(result.artists).toEqual([]);
       expect(result.rating).toEqual({ score: 8.75, source: "mangabaka" });
 
       // Check external links
@@ -262,6 +287,57 @@ describe("mappers", () => {
 
       // "cancelled" from MangaBaka maps to "abandoned" in Codex
       expect(result.status).toBe("abandoned");
+    });
+
+    it("should deduplicate authors who are also artists", () => {
+      const series: MbSeries = {
+        id: 1598,
+        state: "active",
+        title: "Give My Regards to Black Jack",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "completed",
+        authors: ["Shuuhou Sato"],
+        artists: ["Shuuhou Sato"],
+      };
+
+      const result = mapSeriesMetadata(series);
+
+      // Same person as both author and artist should appear once as "writer"
+      expect(result.authors).toEqual([{ name: "Shuuhou Sato", role: "author" }]);
+      expect(result.artists).toEqual([]);
+    });
+
+    it("should merge separate authors and artists", () => {
+      const series: MbSeries = {
+        id: 100,
+        state: "active",
+        title: "Collab Manga",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "releasing",
+        authors: ["Writer A"],
+        artists: ["Artist B", "Artist C"],
+      };
+
+      const result = mapSeriesMetadata(series);
+
+      expect(result.authors).toEqual([
+        { name: "Writer A", role: "author" },
+        { name: "Artist B", role: "illustrator" },
+        { name: "Artist C", role: "illustrator" },
+      ]);
+      expect(result.artists).toEqual([]);
     });
 
     it("should detect language from country of origin", () => {

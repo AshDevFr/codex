@@ -29,13 +29,6 @@ impl BookMetadataRepository {
             number: Set(metadata_model.number),
             // Content fields
             summary: Set(metadata_model.summary.clone()),
-            writer: Set(metadata_model.writer.clone()),
-            penciller: Set(metadata_model.penciller.clone()),
-            inker: Set(metadata_model.inker.clone()),
-            colorist: Set(metadata_model.colorist.clone()),
-            letterer: Set(metadata_model.letterer.clone()),
-            cover_artist: Set(metadata_model.cover_artist.clone()),
-            editor: Set(metadata_model.editor.clone()),
             publisher: Set(metadata_model.publisher.clone()),
             imprint: Set(metadata_model.imprint.clone()),
             genre: Set(metadata_model.genre.clone()),
@@ -68,13 +61,6 @@ impl BookMetadataRepository {
             title_sort_lock: Set(metadata_model.title_sort_lock),
             number_lock: Set(metadata_model.number_lock),
             summary_lock: Set(metadata_model.summary_lock),
-            writer_lock: Set(metadata_model.writer_lock),
-            penciller_lock: Set(metadata_model.penciller_lock),
-            inker_lock: Set(metadata_model.inker_lock),
-            colorist_lock: Set(metadata_model.colorist_lock),
-            letterer_lock: Set(metadata_model.letterer_lock),
-            cover_artist_lock: Set(metadata_model.cover_artist_lock),
-            editor_lock: Set(metadata_model.editor_lock),
             publisher_lock: Set(metadata_model.publisher_lock),
             imprint_lock: Set(metadata_model.imprint_lock),
             genre_lock: Set(metadata_model.genre_lock),
@@ -181,13 +167,6 @@ impl BookMetadataRepository {
             number: Set(metadata_model.number),
             // Content fields
             summary: Set(metadata_model.summary.clone()),
-            writer: Set(metadata_model.writer.clone()),
-            penciller: Set(metadata_model.penciller.clone()),
-            inker: Set(metadata_model.inker.clone()),
-            colorist: Set(metadata_model.colorist.clone()),
-            letterer: Set(metadata_model.letterer.clone()),
-            cover_artist: Set(metadata_model.cover_artist.clone()),
-            editor: Set(metadata_model.editor.clone()),
             publisher: Set(metadata_model.publisher.clone()),
             imprint: Set(metadata_model.imprint.clone()),
             genre: Set(metadata_model.genre.clone()),
@@ -220,13 +199,6 @@ impl BookMetadataRepository {
             title_sort_lock: Set(metadata_model.title_sort_lock),
             number_lock: Set(metadata_model.number_lock),
             summary_lock: Set(metadata_model.summary_lock),
-            writer_lock: Set(metadata_model.writer_lock),
-            penciller_lock: Set(metadata_model.penciller_lock),
-            inker_lock: Set(metadata_model.inker_lock),
-            colorist_lock: Set(metadata_model.colorist_lock),
-            letterer_lock: Set(metadata_model.letterer_lock),
-            cover_artist_lock: Set(metadata_model.cover_artist_lock),
-            editor_lock: Set(metadata_model.editor_lock),
             publisher_lock: Set(metadata_model.publisher_lock),
             imprint_lock: Set(metadata_model.imprint_lock),
             genre_lock: Set(metadata_model.genre_lock),
@@ -294,13 +266,6 @@ impl BookMetadataRepository {
             title_sort: Set(None),
             number: Set(number),
             summary: Set(None),
-            writer: Set(None),
-            penciller: Set(None),
-            inker: Set(None),
-            colorist: Set(None),
-            letterer: Set(None),
-            cover_artist: Set(None),
-            editor: Set(None),
             publisher: Set(None),
             imprint: Set(None),
             genre: Set(None),
@@ -332,13 +297,6 @@ impl BookMetadataRepository {
             title_sort_lock: Set(false),
             number_lock: Set(false),
             summary_lock: Set(false),
-            writer_lock: Set(false),
-            penciller_lock: Set(false),
-            inker_lock: Set(false),
-            colorist_lock: Set(false),
-            letterer_lock: Set(false),
-            cover_artist_lock: Set(false),
-            editor_lock: Set(false),
             publisher_lock: Set(false),
             imprint_lock: Set(false),
             genre_lock: Set(false),
@@ -440,13 +398,6 @@ mod tests {
             number: None,
             // Content fields
             summary: None,
-            writer: None,
-            penciller: None,
-            inker: None,
-            colorist: None,
-            letterer: None,
-            cover_artist: None,
-            editor: None,
             publisher: None,
             imprint: None,
             genre: None,
@@ -478,13 +429,6 @@ mod tests {
             title_sort_lock: false,
             number_lock: false,
             summary_lock: false,
-            writer_lock: false,
-            penciller_lock: false,
-            inker_lock: false,
-            colorist_lock: false,
-            letterer_lock: false,
-            cover_artist_lock: false,
-            editor_lock: false,
             publisher_lock: false,
             imprint_lock: false,
             genre_lock: false,
@@ -524,7 +468,7 @@ mod tests {
 
         let mut metadata = create_metadata_model(book.id);
         metadata.summary = Some("Test summary".to_string());
-        metadata.writer = Some("Test Writer".to_string());
+        metadata.authors_json = Some(r#"[{"name":"Test Writer","role":"writer"}]"#.to_string());
         metadata.publisher = Some("Test Publisher".to_string());
         metadata.year = Some(2024);
 
@@ -538,7 +482,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(retrieved.summary, Some("Test summary".to_string()));
-        assert_eq!(retrieved.writer, Some("Test Writer".to_string()));
+        assert_eq!(
+            retrieved.authors_json,
+            Some(r#"[{"name":"Test Writer","role":"writer"}]"#.to_string())
+        );
         assert_eq!(retrieved.year, Some(2024));
     }
 
@@ -583,14 +530,14 @@ mod tests {
 
         let mut metadata = create_metadata_model(book.id);
         metadata.summary = Some("Original summary".to_string());
-        metadata.writer = Some("Original Writer".to_string());
+        metadata.authors_json = Some(r#"[{"name":"Original Writer","role":"writer"}]"#.to_string());
 
         BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
             .await
             .unwrap();
 
         metadata.summary = Some("Updated summary".to_string());
-        metadata.writer = Some("Updated Writer".to_string());
+        metadata.authors_json = Some(r#"[{"name":"Updated Writer","role":"writer"}]"#.to_string());
 
         BookMetadataRepository::update(db.sea_orm_connection(), &metadata)
             .await
@@ -602,7 +549,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(retrieved.summary, Some("Updated summary".to_string()));
-        assert_eq!(retrieved.writer, Some("Updated Writer".to_string()));
+        assert_eq!(
+            retrieved.authors_json,
+            Some(r#"[{"name":"Updated Writer","role":"writer"}]"#.to_string())
+        );
     }
 
     #[tokio::test]
@@ -612,7 +562,7 @@ mod tests {
 
         let mut metadata = create_metadata_model(book.id);
         metadata.summary = Some("Original summary".to_string());
-        metadata.writer = Some("Original Writer".to_string());
+        metadata.authors_json = Some(r#"[{"name":"Original Writer","role":"writer"}]"#.to_string());
 
         // First upsert creates the record
         BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
@@ -621,7 +571,7 @@ mod tests {
 
         // Second upsert updates the record
         metadata.summary = Some("Updated summary".to_string());
-        metadata.writer = Some("Updated Writer".to_string());
+        metadata.authors_json = Some(r#"[{"name":"Updated Writer","role":"writer"}]"#.to_string());
 
         BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
             .await
@@ -633,7 +583,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(retrieved.summary, Some("Updated summary".to_string()));
-        assert_eq!(retrieved.writer, Some("Updated Writer".to_string()));
+        assert_eq!(
+            retrieved.authors_json,
+            Some(r#"[{"name":"Updated Writer","role":"writer"}]"#.to_string())
+        );
     }
 
     #[tokio::test]
@@ -667,7 +620,7 @@ mod tests {
         let mut metadata = create_metadata_model(book.id);
         metadata.summary = Some("Test summary".to_string());
         metadata.summary_lock = true;
-        metadata.writer_lock = true;
+        metadata.authors_json_lock = true;
         metadata.year_lock = true;
 
         BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
@@ -680,10 +633,9 @@ mod tests {
             .unwrap();
 
         assert!(retrieved.summary_lock);
-        assert!(retrieved.writer_lock);
+        assert!(retrieved.authors_json_lock);
         assert!(retrieved.year_lock);
         // Others should still be false
-        assert!(!retrieved.penciller_lock);
         assert!(!retrieved.publisher_lock);
     }
 }

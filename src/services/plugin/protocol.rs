@@ -784,8 +784,8 @@ pub struct PluginSeriesMetadata {
     pub tags: Vec<String>,
 
     // Credits
-    #[serde(default)]
-    pub authors: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_series_authors")]
+    pub authors: Vec<BookAuthor>,
     #[serde(default)]
     pub artists: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -989,7 +989,7 @@ pub struct BookAuthor {
 
 /// Author role in a book
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum BookAuthorRole {
     #[default]
     Author,
@@ -998,6 +998,48 @@ pub enum BookAuthorRole {
     Translator,
     Illustrator,
     Contributor,
+    // Comic-specific roles
+    Writer,
+    Penciller,
+    Inker,
+    Colorist,
+    Letterer,
+    CoverArtist,
+}
+
+/// Custom deserializer for series authors that accepts both:
+/// - Legacy format: `["Author Name", "Another Author"]` (Vec<String>)
+/// - New format: `[{"name": "Author Name", "role": "author"}]` (Vec<BookAuthor>)
+fn deserialize_series_authors<'de, D>(deserializer: D) -> Result<Vec<BookAuthor>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum AuthorItem {
+        Structured(BookAuthor),
+        Plain(String),
+    }
+
+    let items: Vec<AuthorItem> = Vec::deserialize(deserializer)?;
+    Ok(items
+        .into_iter()
+        .filter_map(|item| match item {
+            AuthorItem::Structured(author) => Some(author),
+            AuthorItem::Plain(name) => {
+                let name = name.trim().to_string();
+                if name.is_empty() {
+                    None
+                } else {
+                    Some(BookAuthor {
+                        name,
+                        role: BookAuthorRole::Author,
+                        sort_name: None,
+                    })
+                }
+            }
+        })
+        .collect())
 }
 
 /// Book cover with size and source information
@@ -1419,7 +1461,11 @@ mod tests {
             reading_direction: Some("rtl".to_string()),
             genres: vec!["Action".to_string(), "Adventure".to_string()],
             tags: vec!["pirates".to_string()],
-            authors: vec!["Oda, Eiichiro".to_string()],
+            authors: vec![BookAuthor {
+                name: "Oda, Eiichiro".to_string(),
+                role: BookAuthorRole::Author,
+                sort_name: None,
+            }],
             artists: vec![],
             publisher: Some("Shueisha".to_string()),
             cover_url: Some("https://example.com/cover.jpg".to_string()),

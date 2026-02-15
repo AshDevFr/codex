@@ -10,7 +10,7 @@ describe("AuthorsList", () => {
       role: "author",
       sortName: "Sanderson, Brandon",
     },
-    { name: "Dan Wells", role: "co-author" },
+    { name: "Dan Wells", role: "co_author" },
     { name: "Howard Tayler", role: "illustrator" },
   ];
 

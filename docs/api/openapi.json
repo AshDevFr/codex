@@ -16131,7 +16131,13 @@
           "editor",
           "translator",
           "illustrator",
-          "contributor"
+          "contributor",
+          "writer",
+          "penciller",
+          "inker",
+          "colorist",
+          "letterer",
+          "cover_artist"
         ]
       },
       "BookAwardDto": {
@@ -21103,6 +21109,16 @@
             },
             "description": "Alternate titles for this series"
           },
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -24258,12 +24274,18 @@
           "genres",
           "tags",
           "customMetadata",
-          "cover"
+          "cover",
+          "authorsJsonLock"
         ],
         "properties": {
           "ageRating": {
             "type": "boolean",
             "description": "Whether the age_rating field is locked",
+            "example": false
+          },
+          "authorsJsonLock": {
+            "type": "boolean",
+            "description": "Whether the authors_json field is locked",
             "example": false
           },
           "cover": {
@@ -26486,6 +26508,16 @@
             "format": "int32",
             "description": "Age rating (e.g., 13, 16, 18)",
             "example": 16
+          },
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information"
           },
           "customMetadata": {
             "type": [
@@ -28880,6 +28912,16 @@
             "description": "Age rating (e.g., 13, 16, 18)",
             "example": 16
           },
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information"
+          },
           "customMetadata": {
             "type": [
               "object",
@@ -30022,6 +30064,16 @@
             "description": "Age rating (e.g., 13, 16, 18)",
             "example": 16
           },
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -30184,6 +30236,16 @@
             "format": "int32",
             "description": "Age rating (e.g., 13, 16, 18)",
             "example": 16
+          },
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information"
           },
           "customMetadata": {
             "type": [
@@ -32871,6 +32933,14 @@
               "null"
             ],
             "description": "Whether to lock the age_rating field",
+            "example": false
+          },
+          "authorsJsonLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the authors_json field",
             "example": false
           },
           "cover": {

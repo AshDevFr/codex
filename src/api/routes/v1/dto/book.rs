@@ -105,6 +105,18 @@ pub enum BookAuthorRole {
     Illustrator,
     /// Contributor (other role)
     Contributor,
+    /// Writer (comics)
+    Writer,
+    /// Penciller (comics)
+    Penciller,
+    /// Inker (comics)
+    Inker,
+    /// Colorist (comics)
+    Colorist,
+    /// Letterer (comics)
+    Letterer,
+    /// Cover artist (comics)
+    CoverArtist,
 }
 
 /// Structured author information

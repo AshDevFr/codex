@@ -1,6 +1,6 @@
 use crate::parsers::ComicInfo;
 use quick_xml::de::from_str;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// ComicInfo.xml structure for deserialization
 #[derive(Debug, Deserialize)]
@@ -58,9 +58,74 @@ struct ComicInfoXml {
     manga: Option<String>,
 }
 
+/// A single author entry for the structured `authors_json` field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthorEntry {
+    name: String,
+    role: String,
+}
+
+/// Build a JSON string from individual ComicInfo role fields.
+///
+/// For each non-None field, splits the value on `,`, trims whitespace from each
+/// name, and creates an `AuthorEntry` with the field name as the role.
+/// Returns `None` if no authors are found across any field.
+fn build_authors_json(
+    writer: &Option<String>,
+    penciller: &Option<String>,
+    inker: &Option<String>,
+    colorist: &Option<String>,
+    letterer: &Option<String>,
+    cover_artist: &Option<String>,
+    editor: &Option<String>,
+) -> Option<String> {
+    let fields: &[(&Option<String>, &str)] = &[
+        (writer, "writer"),
+        (penciller, "penciller"),
+        (inker, "inker"),
+        (colorist, "colorist"),
+        (letterer, "letterer"),
+        (cover_artist, "cover_artist"),
+        (editor, "editor"),
+    ];
+
+    let mut entries = Vec::new();
+
+    for (field, role) in fields {
+        if let Some(value) = field {
+            for name in value.split(',') {
+                let trimmed = name.trim();
+                if !trimmed.is_empty() {
+                    entries.push(AuthorEntry {
+                        name: trimmed.to_string(),
+                        role: role.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    if entries.is_empty() {
+        None
+    } else {
+        // serde_json::to_string should not fail for this simple structure
+        serde_json::to_string(&entries).ok()
+    }
+}
+
 /// Parse ComicInfo.xml content
 pub fn parse_comic_info(xml_content: &str) -> Result<ComicInfo, quick_xml::DeError> {
     let xml_info: ComicInfoXml = from_str(xml_content)?;
+
+    let authors_json = build_authors_json(
+        &xml_info.writer,
+        &xml_info.penciller,
+        &xml_info.inker,
+        &xml_info.colorist,
+        &xml_info.letterer,
+        &xml_info.cover_artist,
+        &xml_info.editor,
+    );
 
     Ok(ComicInfo {
         title: xml_info.title,
@@ -79,6 +144,7 @@ pub fn parse_comic_info(xml_content: &str) -> Result<ComicInfo, quick_xml::DeErr
         letterer: xml_info.letterer,
         cover_artist: xml_info.cover_artist,
         editor: xml_info.editor,
+        authors_json,
         publisher: xml_info.publisher,
         imprint: xml_info.imprint,
         genre: xml_info.genre,

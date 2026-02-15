@@ -4,6 +4,7 @@
 
 import type {
   AlternateTitle,
+  BookAuthor,
   ExternalId,
   ExternalLink,
   ExternalRating,
@@ -155,6 +156,11 @@ export function mapSearchResult(series: MbSeries): SearchResult {
   }
 
   // Note: relevanceScore is omitted - the API already returns results in relevance order
+  const previewAuthors = [...new Set([...(series.authors ?? []), ...(series.artists ?? [])])].slice(
+    0,
+    3,
+  );
+
   return {
     externalId: String(series.id),
     title: series.title,
@@ -167,6 +173,7 @@ export function mapSearchResult(series: MbSeries): SearchResult {
       rating: extractRating(series.rating),
       description: stripHtml(series.description)?.slice(0, 200) ?? undefined,
       bookCount: series.final_volume ? Number.parseInt(series.final_volume, 10) : undefined,
+      authors: previewAuthors.length > 0 ? previewAuthors : undefined,
     },
   };
 }
@@ -212,9 +219,19 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     }
   }
 
-  // Extract authors and artists as string arrays
-  const authors = series.authors ?? [];
-  const artists = series.artists ?? [];
+  // Extract authors and artists — merge into unified BookAuthor array
+  // Authors get "author" role (generic default), artists get "illustrator" role
+  // Deduplicate: if someone is both author and artist, keep them as "author"
+  const authorNames = new Set((series.authors ?? []).map((n) => n));
+  const authors: BookAuthor[] = (series.authors ?? []).map((name) => ({
+    name,
+    role: "author" as const,
+  }));
+  for (const name of series.artists ?? []) {
+    if (!authorNames.has(name)) {
+      authors.push({ name, role: "illustrator" as const });
+    }
+  }
 
   // Format genres
   const genres = (series.genres ?? []).map(formatGenre);
@@ -328,7 +345,7 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     genres,
     tags: series.tags ?? [],
     authors,
-    artists,
+    artists: [],
     coverUrl: coverUrl ?? undefined,
     rating: (() => {
       const r = extractRating(series.rating);

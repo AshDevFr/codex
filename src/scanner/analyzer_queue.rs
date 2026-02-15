@@ -427,40 +427,10 @@ async fn analyze_single_book(
                 } else {
                     comic_info.summary.clone()
                 },
-                writer: if existing.writer_lock {
-                    existing.writer.clone()
+                authors_json: if existing.authors_json_lock {
+                    existing.authors_json.clone()
                 } else {
-                    comic_info.writer.clone()
-                },
-                penciller: if existing.penciller_lock {
-                    existing.penciller.clone()
-                } else {
-                    comic_info.penciller.clone()
-                },
-                inker: if existing.inker_lock {
-                    existing.inker.clone()
-                } else {
-                    comic_info.inker.clone()
-                },
-                colorist: if existing.colorist_lock {
-                    existing.colorist.clone()
-                } else {
-                    comic_info.colorist.clone()
-                },
-                letterer: if existing.letterer_lock {
-                    existing.letterer.clone()
-                } else {
-                    comic_info.letterer.clone()
-                },
-                cover_artist: if existing.cover_artist_lock {
-                    existing.cover_artist.clone()
-                } else {
-                    comic_info.cover_artist.clone()
-                },
-                editor: if existing.editor_lock {
-                    existing.editor.clone()
-                } else {
-                    comic_info.editor.clone()
+                    comic_info.authors_json.clone()
                 },
                 publisher: if existing.publisher_lock {
                     existing.publisher.clone()
@@ -530,7 +500,6 @@ async fn analyze_single_book(
                 // New Phase 1 fields - preserve existing values (not populated from ComicInfo)
                 book_type: existing.book_type.clone(),
                 subtitle: existing.subtitle.clone(),
-                authors_json: existing.authors_json.clone(),
                 translator: existing.translator.clone(),
                 edition: existing.edition.clone(),
                 original_title: existing.original_title.clone(),
@@ -545,13 +514,6 @@ async fn analyze_single_book(
                 title_sort_lock: existing.title_sort_lock,
                 number_lock: existing.number_lock,
                 summary_lock: existing.summary_lock,
-                writer_lock: existing.writer_lock,
-                penciller_lock: existing.penciller_lock,
-                inker_lock: existing.inker_lock,
-                colorist_lock: existing.colorist_lock,
-                letterer_lock: existing.letterer_lock,
-                cover_artist_lock: existing.cover_artist_lock,
-                editor_lock: existing.editor_lock,
                 publisher_lock: existing.publisher_lock,
                 imprint_lock: existing.imprint_lock,
                 genre_lock: existing.genre_lock,
@@ -592,13 +554,6 @@ async fn analyze_single_book(
                 title_sort: None, // title_sort is typically user-set
                 number: resolved_number_decimal,
                 summary: comic_info.summary.clone(),
-                writer: comic_info.writer.clone(),
-                penciller: comic_info.penciller.clone(),
-                inker: comic_info.inker.clone(),
-                colorist: comic_info.colorist.clone(),
-                letterer: comic_info.letterer.clone(),
-                cover_artist: comic_info.cover_artist.clone(),
-                editor: comic_info.editor.clone(),
                 publisher: comic_info.publisher.clone(),
                 imprint: comic_info.imprint.clone(),
                 genre: comic_info.genre.clone(),
@@ -612,10 +567,10 @@ async fn analyze_single_book(
                 volume: comic_info.volume,
                 count: comic_info.count,
                 isbns: isbns_json,
-                // New Phase 1 fields - not populated from ComicInfo
+                // New Phase 1 fields
                 book_type: None,
                 subtitle: None,
-                authors_json: None,
+                authors_json: comic_info.authors_json.clone(),
                 translator: None,
                 edition: None,
                 original_title: None,
@@ -630,13 +585,6 @@ async fn analyze_single_book(
                 title_sort_lock: false,
                 number_lock: false,
                 summary_lock: false,
-                writer_lock: false,
-                penciller_lock: false,
-                inker_lock: false,
-                colorist_lock: false,
-                letterer_lock: false,
-                cover_artist_lock: false,
-                editor_lock: false,
                 publisher_lock: false,
                 imprint_lock: false,
                 genre_lock: false,
@@ -766,13 +714,6 @@ async fn analyze_single_book(
                 },
                 // Keep all existing values
                 summary: existing.summary.clone(),
-                writer: existing.writer.clone(),
-                penciller: existing.penciller.clone(),
-                inker: existing.inker.clone(),
-                colorist: existing.colorist.clone(),
-                letterer: existing.letterer.clone(),
-                cover_artist: existing.cover_artist.clone(),
-                editor: existing.editor.clone(),
                 publisher: existing.publisher.clone(),
                 imprint: existing.imprint.clone(),
                 genre: existing.genre.clone(),
@@ -804,13 +745,6 @@ async fn analyze_single_book(
                 title_sort_lock: existing.title_sort_lock,
                 number_lock: existing.number_lock,
                 summary_lock: existing.summary_lock,
-                writer_lock: existing.writer_lock,
-                penciller_lock: existing.penciller_lock,
-                inker_lock: existing.inker_lock,
-                colorist_lock: existing.colorist_lock,
-                letterer_lock: existing.letterer_lock,
-                cover_artist_lock: existing.cover_artist_lock,
-                editor_lock: existing.editor_lock,
                 publisher_lock: existing.publisher_lock,
                 imprint_lock: existing.imprint_lock,
                 genre_lock: existing.genre_lock,
@@ -850,13 +784,6 @@ async fn analyze_single_book(
                 title_sort: None,
                 number: resolved_number_decimal,
                 summary: None,
-                writer: None,
-                penciller: None,
-                inker: None,
-                colorist: None,
-                letterer: None,
-                cover_artist: None,
-                editor: None,
                 publisher: None,
                 imprint: None,
                 genre: None,
@@ -887,13 +814,6 @@ async fn analyze_single_book(
                 title_sort_lock: false,
                 number_lock: false,
                 summary_lock: false,
-                writer_lock: false,
-                penciller_lock: false,
-                inker_lock: false,
-                colorist_lock: false,
-                letterer_lock: false,
-                cover_artist_lock: false,
-                editor_lock: false,
                 publisher_lock: false,
                 imprint_lock: false,
                 genre_lock: false,
@@ -1427,25 +1347,7 @@ fn count_non_null_fields(metadata: &book_metadata::Model) -> usize {
     if metadata.summary.is_some() {
         count += 1;
     }
-    if metadata.writer.is_some() {
-        count += 1;
-    }
-    if metadata.penciller.is_some() {
-        count += 1;
-    }
-    if metadata.inker.is_some() {
-        count += 1;
-    }
-    if metadata.colorist.is_some() {
-        count += 1;
-    }
-    if metadata.letterer.is_some() {
-        count += 1;
-    }
-    if metadata.cover_artist.is_some() {
-        count += 1;
-    }
-    if metadata.editor.is_some() {
+    if metadata.authors_json.is_some() {
         count += 1;
     }
     if metadata.publisher.is_some() {
@@ -1574,13 +1476,6 @@ mod tests {
             number: None,
             // Content fields
             summary: Some("Test summary".to_string()),
-            writer: Some("Test Writer".to_string()),
-            penciller: None,
-            inker: None,
-            colorist: None,
-            letterer: None,
-            cover_artist: None,
-            editor: None,
             publisher: Some("Test Publisher".to_string()),
             imprint: None,
             genre: Some("Action".to_string()),
@@ -1597,7 +1492,7 @@ mod tests {
             // New Phase 1 fields
             book_type: None,
             subtitle: None,
-            authors_json: None,
+            authors_json: Some(r#"[{"name":"Test Writer","role":"writer"}]"#.to_string()),
             translator: None,
             edition: None,
             original_title: None,
@@ -1612,13 +1507,6 @@ mod tests {
             title_sort_lock: false,
             number_lock: false,
             summary_lock: false,
-            writer_lock: false,
-            penciller_lock: false,
-            inker_lock: false,
-            colorist_lock: false,
-            letterer_lock: false,
-            cover_artist_lock: false,
-            editor_lock: false,
             publisher_lock: false,
             imprint_lock: false,
             genre_lock: false,
@@ -1650,7 +1538,7 @@ mod tests {
             updated_at: Utc::now(),
         };
 
-        assert_eq!(count_non_null_fields(&metadata), 8); // title, summary, writer, publisher, genre, language_iso, manga, year
+        assert_eq!(count_non_null_fields(&metadata), 8); // title, summary, publisher, genre, language_iso, manga, year, authors_json
     }
 
     /// Test filename extraction logic (unit test for the title fallback logic)
