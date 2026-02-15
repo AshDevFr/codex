@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.11.1] - 2026-02-15
+
+### 🐛 Bug Fixes
+
+- *(migration)* Make consolidate_authors migration idempotent for partial failure recovery
+
 ## [1.11.0] - 2026-02-15
 
 ### 🚀 Features
