@@ -143,6 +143,66 @@ impl PdfParser {
         Ok(images)
     }
 
+    /// Check if a PDF page has text content in its content stream
+    ///
+    /// Scans the page's content stream for PDF text operators (`BT`, `Tj`, `TJ`, `Tf`).
+    /// Returns `true` if any text operators are found, indicating the page has text
+    /// content that would be lost if we only extracted embedded images.
+    fn page_has_text_content(doc: &Document, page_id: ObjectId) -> bool {
+        let page = match doc.get_object(page_id) {
+            Ok(obj) => obj,
+            Err(_) => return false,
+        };
+
+        let page_dict = match page.as_dict() {
+            Ok(dict) => dict,
+            Err(_) => return false,
+        };
+
+        // Get the content stream(s) for this page
+        // Use get_plain_content() which handles both compressed and uncompressed streams
+        let content_bytes = match page_dict.get(b"Contents") {
+            Ok(Object::Reference(ref_id)) => {
+                // Single content stream reference
+                match doc.get_object(*ref_id) {
+                    Ok(Object::Stream(stream)) => stream.get_plain_content().unwrap_or_default(),
+                    _ => return false,
+                }
+            }
+            Ok(Object::Array(arr)) => {
+                // Multiple content streams - concatenate them
+                let mut all_bytes = Vec::new();
+                for item in arr {
+                    if let Ok(ref_id) = item.as_reference()
+                        && let Ok(Object::Stream(stream)) = doc.get_object(ref_id)
+                    {
+                        all_bytes.extend(stream.get_plain_content().unwrap_or_default());
+                        all_bytes.push(b' ');
+                    }
+                }
+                all_bytes
+            }
+            _ => return false,
+        };
+
+        let content_str = String::from_utf8_lossy(&content_bytes);
+
+        // Look for PDF text operators in the content stream:
+        // BT = Begin Text object, ET = End Text object
+        // Tj = Show text string, TJ = Show text with positioning
+        // Tf = Set text font and size
+        // We check for "BT" as the primary indicator since all text must be
+        // within a BT/ET block. We use word boundaries to avoid false positives
+        // from operator names appearing inside string literals.
+        for token in content_str.split_whitespace() {
+            if token == "BT" || token == "Tj" || token == "TJ" || token == "Tf" {
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// Extract image data from a PDF stream
     ///
     /// This function extracts embedded images from PDF streams. It only returns
@@ -407,18 +467,28 @@ impl PdfParser {
 
     /// Build page info list for all PDF pages
     ///
-    /// This creates a PageInfo entry for every page in the PDF. For pages with
-    /// embedded images, we extract the image dimensions. For pages without
-    /// embedded images (text-only, vector graphics), we try to get dimensions
-    /// from PDFium if available, otherwise use default US Letter dimensions.
+    /// This creates a PageInfo entry for every page in the PDF using per-page
+    /// content detection:
+    /// - **Image-only pages** (no text in content stream): Use embedded image
+    ///   dimensions directly for accurate metadata.
+    /// - **Mixed/text pages**: Use PDFium page dimensions (if available) since
+    ///   the page will be rendered at extraction time.
     fn build_page_info_list(doc: &Document, path: &Path, page_count: usize) -> Vec<PageInfo> {
         let mut pages = Vec::with_capacity(page_count);
+        let page_ids = Self::collect_page_ids(doc);
 
         for page_idx in 0..page_count {
             let page_number = page_idx + 1; // 1-indexed for PageInfo
 
-            // Try to get embedded image info first (fast path)
-            if let Ok(page_images) = Self::extract_images_from_page(doc, page_idx as u32)
+            // Check if this page has text content
+            let has_text = page_ids
+                .get(page_idx)
+                .map(|&pid| Self::page_has_text_content(doc, pid))
+                .unwrap_or(false);
+
+            // Image-only page: try to use embedded image info (fast, accurate)
+            if !has_text
+                && let Ok(page_images) = Self::extract_images_from_page(doc, page_idx as u32)
                 && let Some((image_data, format, width, height, img_file_size)) =
                     page_images.into_iter().next()
             {
@@ -454,14 +524,11 @@ impl PdfParser {
                 continue;
             }
 
-            // No embedded image found - try to get dimensions from PDFium renderer
+            // Mixed/text page or no embedded image: use PDFium dimensions
             let (width, height) = if renderer::is_initialized() {
-                // Get pixel dimensions at default rendering DPI (page_number is 1-indexed for API)
                 renderer::get_page_dimensions_pixels(path, page_number as i32, DEFAULT_RENDER_DPI)
                     .unwrap_or((1275, 1650)) // Default to US Letter at 150 DPI
             } else {
-                // PDFium not available, use default US Letter dimensions at 150 DPI
-                // 8.5" x 11" at 150 DPI = 1275 x 1650 pixels
                 (1275, 1650)
             };
 
@@ -487,9 +554,9 @@ impl Default for PdfParser {
 
 /// Extract a specific page image from a PDF file
 ///
-/// This function uses a two-step strategy:
-/// 1. **Fast path**: Try to extract an embedded image from the PDF page (works for scanned PDFs)
-/// 2. **Fallback**: Render the page using PDFium (handles text-only and vector graphics PDFs)
+/// Uses per-page content detection to choose the best extraction strategy:
+/// - **Image-only pages**: Extract embedded image directly (fast, preserves quality)
+/// - **Mixed/text pages**: Render with PDFium (captures full page content)
 ///
 /// # Arguments
 /// * `path` - Path to the PDF file
@@ -503,14 +570,16 @@ pub fn extract_page_from_pdf<P: AsRef<Path>>(path: P, page_number: i32) -> anyho
 
 /// Extract a specific page image from a PDF file with configurable DPI
 ///
-/// This function uses a two-step strategy:
-/// 1. **Fast path**: Try to extract an embedded image from the PDF page (works for scanned PDFs)
-/// 2. **Fallback**: Render the page using PDFium (handles text-only and vector graphics PDFs)
+/// Uses per-page content detection to choose the best extraction strategy:
+/// - **Image-only pages** (no text operators in content stream): Extract the embedded
+///   image directly. This is faster and preserves original quality.
+/// - **Mixed-content or text-only pages**: Render with PDFium to capture the full page
+///   (text, images, vectors, annotations).
 ///
 /// # Arguments
 /// * `path` - Path to the PDF file
 /// * `page_number` - Page number (1-indexed)
-/// * `dpi` - DPI for rendering (only used if page needs to be rendered)
+/// * `dpi` - DPI for rendering (only used if page needs to be rendered via PDFium)
 ///
 /// # Returns
 /// The raw image data as bytes (JPEG format for rendered pages, original format for embedded images)
@@ -521,22 +590,63 @@ pub fn extract_page_from_pdf_with_dpi<P: AsRef<Path>>(
 ) -> anyhow::Result<Vec<u8>> {
     let path = path.as_ref();
 
-    // Fast path: try to extract embedded image first
-    // This is much faster for PDFs that contain embedded images (scanned documents)
-    if let Ok(image_data) = try_extract_embedded_image(path, page_number) {
+    let doc = Document::load(path).map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
+
+    let page_count = PdfParser::count_pages(&doc);
+    if page_number < 1 || page_number as usize > page_count {
+        anyhow::bail!(
+            "Page {} out of range (PDF has {} pages)",
+            page_number,
+            page_count
+        );
+    }
+
+    let page_index = (page_number - 1) as u32;
+    let page_ids = PdfParser::collect_page_ids(&doc);
+
+    // Check if the page has text content to decide extraction strategy
+    let has_text = page_ids
+        .get(page_index as usize)
+        .map(|&pid| PdfParser::page_has_text_content(&doc, pid))
+        .unwrap_or(false);
+
+    if !has_text
+        && let Ok(page_images) = PdfParser::extract_images_from_page(&doc, page_index)
+        && let Some((image_data, _format, _width, _height, _file_size)) =
+            page_images.into_iter().next()
+    {
+        // Image-only page: extract embedded image directly (fast path)
         tracing::debug!(
             path = %path.display(),
             page = page_number,
-            "Extracted embedded image from PDF page"
+            "Extracted embedded image from image-only PDF page"
         );
         return Ok(image_data);
+    } else if has_text {
+        tracing::debug!(
+            path = %path.display(),
+            page = page_number,
+            "PDF page has text content, using PDFium for full-page rendering"
+        );
     }
 
-    // Fallback: render the page using PDFium
-    // This handles text-only PDFs, vector graphics, and mixed content
+    // Mixed/text page or no embedded image found: render with PDFium
     if !renderer::is_initialized() {
+        // Last resort: try embedded image even on mixed pages when PDFium unavailable
+        if let Ok(page_images) = PdfParser::extract_images_from_page(&doc, page_index)
+            && let Some((image_data, _format, _width, _height, _file_size)) =
+                page_images.into_iter().next()
+        {
+            tracing::warn!(
+                path = %path.display(),
+                page = page_number,
+                "PDFium not available, falling back to embedded image extraction for mixed-content page"
+            );
+            return Ok(image_data);
+        }
+
         anyhow::bail!(
-            "Page {} could not be extracted from PDF: no embedded image found and PDFium renderer is not available",
+            "Page {} could not be extracted from PDF: PDFium renderer is not available and no embedded image found",
             page_number
         );
     }
@@ -551,52 +661,10 @@ pub fn extract_page_from_pdf_with_dpi<P: AsRef<Path>>(
     renderer::render_page(path, page_number, dpi)
 }
 
-/// Try to extract an embedded image from a specific PDF page
-///
-/// This function attempts to find an embedded image XObject on the specified page.
-/// It's a "fast path" that works well for scanned PDFs where each page is essentially
-/// a single large image.
-///
-/// # Arguments
-/// * `path` - Path to the PDF file
-/// * `page_number` - Page number (1-indexed)
-///
-/// # Returns
-/// * `Ok(Vec<u8>)` - The raw image data
-/// * `Err` - If no suitable embedded image could be found on this page
-fn try_extract_embedded_image<P: AsRef<Path>>(
-    path: P,
-    page_number: i32,
-) -> anyhow::Result<Vec<u8>> {
-    let doc = Document::load(path).map_err(|e| anyhow::anyhow!("Failed to load PDF: {}", e))?;
-
-    // Validate page number using our custom page counter that handles indirect Kids arrays
-    let page_count = PdfParser::count_pages(&doc);
-    if page_number < 1 || page_number as usize > page_count {
-        anyhow::bail!(
-            "Page {} out of range (PDF has {} pages)",
-            page_number,
-            page_count
-        );
-    }
-
-    // Get images from the specific page (0-indexed)
-    let page_index = (page_number - 1) as u32;
-    let page_images = PdfParser::extract_images_from_page(&doc, page_index)?;
-
-    // Return the first (and typically only) image from this page
-    // For scanned PDFs, each page usually has exactly one full-page image
-    if let Some((image_data, _format, _width, _height, _file_size)) = page_images.into_iter().next()
-    {
-        return Ok(image_data);
-    }
-
-    anyhow::bail!("No embedded image found on page {}", page_number)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lopdf::dictionary;
 
     #[test]
     fn test_pdf_parser_new() {
@@ -667,21 +735,85 @@ mod tests {
     }
 
     #[test]
-    fn test_try_extract_embedded_image_invalid_path() {
-        let result = try_extract_embedded_image("/nonexistent/file.pdf", 1);
+    fn test_extract_page_from_pdf_invalid_page_number() {
+        let result = extract_page_from_pdf("/nonexistent/file.pdf", 0);
+        assert!(result.is_err());
+
+        let result = extract_page_from_pdf("/nonexistent/file.pdf", -1);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_try_extract_embedded_image_invalid_page_number() {
-        // Create a minimal PDF to test page validation
-        // We can't easily create a valid PDF in memory, so we test with a path
-        // that would fail at the Document::load step
-        let result = try_extract_embedded_image("/nonexistent/file.pdf", 0);
-        assert!(result.is_err());
+    fn test_page_has_text_content_with_text() {
+        // Build a minimal PDF with text content on a page
+        let mut doc = Document::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let page_id = doc.new_object_id();
+        let content_id = doc.new_object_id();
 
-        let result = try_extract_embedded_image("/nonexistent/file.pdf", -1);
-        assert!(result.is_err());
+        let content_text = "BT /F1 24 Tf 100 700 Td (Hello World) Tj ET";
+        let content =
+            lopdf::Stream::new(lopdf::Dictionary::new(), content_text.as_bytes().to_vec());
+        doc.objects.insert(content_id, Object::Stream(content));
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => Object::Reference(content_id),
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        };
+        doc.objects.insert(page_id, Object::Dictionary(page_dict));
+
+        assert!(PdfParser::page_has_text_content(&doc, page_id));
+    }
+
+    #[test]
+    fn test_page_has_text_content_image_only() {
+        // Build a minimal PDF with only image placement (no text operators)
+        let mut doc = Document::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let page_id = doc.new_object_id();
+        let content_id = doc.new_object_id();
+
+        // Content stream with only image placement, no text
+        let content_text = "q 612 0 0 792 0 0 cm /Im1 Do Q";
+        let content =
+            lopdf::Stream::new(lopdf::Dictionary::new(), content_text.as_bytes().to_vec());
+        doc.objects.insert(content_id, Object::Stream(content));
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => Object::Reference(content_id),
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        };
+        doc.objects.insert(page_id, Object::Dictionary(page_dict));
+
+        assert!(!PdfParser::page_has_text_content(&doc, page_id));
+    }
+
+    #[test]
+    fn test_page_has_text_content_mixed() {
+        // Build a minimal PDF with both text and image content
+        let mut doc = Document::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let page_id = doc.new_object_id();
+        let content_id = doc.new_object_id();
+
+        let content_text = "q 612 0 0 792 0 0 cm /Im1 Do Q BT /F1 12 Tf 100 100 Td (Caption) Tj ET";
+        let content =
+            lopdf::Stream::new(lopdf::Dictionary::new(), content_text.as_bytes().to_vec());
+        doc.objects.insert(content_id, Object::Stream(content));
+
+        let page_dict = dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => Object::Reference(content_id),
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        };
+        doc.objects.insert(page_id, Object::Dictionary(page_dict));
+
+        assert!(PdfParser::page_has_text_content(&doc, page_id));
     }
 
     #[test]
