@@ -30,7 +30,7 @@ async fn has_column(
         }
         DatabaseBackend::Postgres => {
             format!(
-                "SELECT COUNT(*) as cnt FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'"
+                "SELECT CAST(COUNT(*) AS INT) as cnt FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'"
             )
         }
         _ => return Err(DbErr::Custom("Unsupported database backend".to_owned())),
@@ -93,21 +93,28 @@ impl MigrationTrait for Migration {
             return Ok(());
         }
 
+        // SQLite stores UUIDs as 16-byte blobs; CAST(... AS TEXT) produces invalid UTF-8.
+        // Use HEX() on SQLite to get a readable hex string, CAST on PostgreSQL where UUID is native.
+        let book_id_expr = match backend {
+            DatabaseBackend::Sqlite => "HEX(book_id)",
+            _ => "CAST(book_id AS TEXT)",
+        };
         let rows = db
             .query_all(Statement::from_string(
                 backend,
-                "SELECT CAST(book_id AS TEXT) AS book_id, writer, penciller, inker, colorist, letterer, cover_artist, editor
-                 FROM book_metadata
-                 WHERE authors_json IS NULL
-                   AND (writer IS NOT NULL OR penciller IS NOT NULL OR inker IS NOT NULL
-                        OR colorist IS NOT NULL OR letterer IS NOT NULL OR cover_artist IS NOT NULL
-                        OR editor IS NOT NULL)"
-                    .to_owned(),
+                format!(
+                    "SELECT {book_id_expr} AS book_id, writer, penciller, inker, colorist, letterer, cover_artist, editor
+                     FROM book_metadata
+                     WHERE authors_json IS NULL
+                       AND (writer IS NOT NULL OR penciller IS NOT NULL OR inker IS NOT NULL
+                            OR colorist IS NOT NULL OR letterer IS NOT NULL OR cover_artist IS NOT NULL
+                            OR editor IS NOT NULL)"
+                ),
             ))
             .await?;
 
         for row in &rows {
-            let book_id: String = row.try_get("", "book_id")?;
+            let book_id_raw: String = row.try_get("", "book_id")?;
             let writer: Option<String> = row.try_get("", "writer").ok().flatten();
             let penciller: Option<String> = row.try_get("", "penciller").ok().flatten();
             let inker: Option<String> = row.try_get("", "inker").ok().flatten();
@@ -143,9 +150,14 @@ impl MigrationTrait for Migration {
             if !authors.is_empty() {
                 let json = format!("[{}]", authors.join(","));
                 let escaped_json = json.replace('\'', "''");
+                // SQLite: book_id is a blob, so match with X'...' hex literal.
+                // PostgreSQL: book_id is a native UUID, so match with '...'::uuid.
+                let where_clause = match backend {
+                    DatabaseBackend::Sqlite => format!("book_id = X'{book_id_raw}'"),
+                    _ => format!("book_id = '{book_id_raw}'"),
+                };
                 let sql = format!(
-                    "UPDATE book_metadata SET authors_json = '{}' WHERE book_id = '{}'",
-                    escaped_json, book_id
+                    "UPDATE book_metadata SET authors_json = '{escaped_json}' WHERE {where_clause}"
                 );
                 db.execute(Statement::from_string(backend, sql)).await?;
             }
