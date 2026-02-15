@@ -9,10 +9,39 @@
 //! 4. Drops the 14 individual author/lock columns from book_metadata
 
 use sea_orm_migration::prelude::*;
-use sea_orm_migration::sea_orm::{ConnectionTrait, Statement};
+use sea_orm_migration::sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 
 use crate::m20260103_000006_create_series_metadata::SeriesMetadata;
 use crate::m20260103_000014_create_book_metadata::BookMetadata;
+
+/// Check if a column exists on a table (works for both SQLite and PostgreSQL).
+/// This makes the migration idempotent in case a previous run partially applied.
+async fn has_column(
+    db: &impl ConnectionTrait,
+    backend: DatabaseBackend,
+    table: &str,
+    column: &str,
+) -> Result<bool, DbErr> {
+    let sql = match backend {
+        DatabaseBackend::Sqlite => {
+            format!(
+                "SELECT COUNT(*) as cnt FROM pragma_table_info('{table}') WHERE name = '{column}'"
+            )
+        }
+        DatabaseBackend::Postgres => {
+            format!(
+                "SELECT COUNT(*) as cnt FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'"
+            )
+        }
+        _ => return Err(DbErr::Custom("Unsupported database backend".to_owned())),
+    };
+    let row = db
+        .query_one(Statement::from_string(backend, sql))
+        .await?
+        .ok_or_else(|| DbErr::Custom("Expected a row from column check query".to_owned()))?;
+    let count: i32 = row.try_get("", "cnt")?;
+    Ok(count > 0)
+}
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -24,32 +53,46 @@ impl MigrationTrait for Migration {
         let backend = manager.get_database_backend();
 
         // Step 1: Add authors_json + authors_json_lock to series_metadata
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(SeriesMetadata::Table)
-                    .add_column(ColumnDef::new(Alias::new("authors_json")).text())
-                    .to_owned(),
-            )
-            .await?;
+        // (idempotent — skip if columns already exist from a partial previous run)
+        if !has_column(db, backend, "series_metadata", "authors_json").await? {
+            manager
+                .alter_table(
+                    Table::alter()
+                        .table(SeriesMetadata::Table)
+                        .add_column(ColumnDef::new(Alias::new("authors_json")).text())
+                        .to_owned(),
+                )
+                .await?;
+        }
 
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(SeriesMetadata::Table)
-                    .add_column(
-                        ColumnDef::new(Alias::new("authors_json_lock"))
-                            .boolean()
-                            .not_null()
-                            .default(false),
-                    )
-                    .to_owned(),
-            )
-            .await?;
+        if !has_column(db, backend, "series_metadata", "authors_json_lock").await? {
+            manager
+                .alter_table(
+                    Table::alter()
+                        .table(SeriesMetadata::Table)
+                        .add_column(
+                            ColumnDef::new(Alias::new("authors_json_lock"))
+                                .boolean()
+                                .not_null()
+                                .default(false),
+                        )
+                        .to_owned(),
+                )
+                .await?;
+        }
 
         // Step 2: Backfill authors_json from individual columns using Rust logic
         // We query rows that have individual author fields but no authors_json,
         // then build JSON from the individual fields (handling comma-separated names).
+        // (only run if individual columns still exist — they may have been dropped in a partial run)
+        let has_individual_columns = has_column(db, backend, "book_metadata", "writer").await?;
+
+        if !has_individual_columns {
+            // Individual columns already dropped — backfill was completed in a prior partial run.
+            // Skip steps 2-4 entirely.
+            return Ok(());
+        }
+
         let rows = db
             .query_all(Statement::from_string(
                 backend,
@@ -109,18 +152,22 @@ impl MigrationTrait for Migration {
         }
 
         // Step 3: Consolidate locks — if any individual lock is true, set authors_json_lock
-        db.execute(Statement::from_string(
-            backend,
-            "UPDATE book_metadata SET authors_json_lock = TRUE
-             WHERE authors_json_lock = FALSE
-               AND (writer_lock = TRUE OR penciller_lock = TRUE OR inker_lock = TRUE
-                    OR colorist_lock = TRUE OR letterer_lock = TRUE
-                    OR cover_artist_lock = TRUE OR editor_lock = TRUE)"
-                .to_owned(),
-        ))
-        .await?;
+        // (only run if old lock columns still exist)
+        if has_column(db, backend, "book_metadata", "writer_lock").await? {
+            db.execute(Statement::from_string(
+                backend,
+                "UPDATE book_metadata SET authors_json_lock = TRUE
+                 WHERE authors_json_lock = FALSE
+                   AND (writer_lock = TRUE OR penciller_lock = TRUE OR inker_lock = TRUE
+                        OR colorist_lock = TRUE OR letterer_lock = TRUE
+                        OR cover_artist_lock = TRUE OR editor_lock = TRUE)"
+                    .to_owned(),
+            ))
+            .await?;
+        }
 
         // Step 4: Drop 14 individual author columns (7 lock + 7 data)
+        // (idempotent — skip columns already dropped from a partial previous run)
         let columns_to_drop = [
             "writer_lock",
             "penciller_lock",
@@ -139,14 +186,16 @@ impl MigrationTrait for Migration {
         ];
 
         for col in &columns_to_drop {
-            manager
-                .alter_table(
-                    Table::alter()
-                        .table(BookMetadata::Table)
-                        .drop_column(Alias::new(*col))
-                        .to_owned(),
-                )
-                .await?;
+            if has_column(db, backend, "book_metadata", col).await? {
+                manager
+                    .alter_table(
+                        Table::alter()
+                            .table(BookMetadata::Table)
+                            .drop_column(Alias::new(*col))
+                            .to_owned(),
+                    )
+                    .await?;
+            }
         }
 
         Ok(())
