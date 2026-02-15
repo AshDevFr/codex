@@ -2,6 +2,30 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.11.0] - 2026-02-15
+
+### 🚀 Features
+
+- *(books)* Add many-to-many genre/tag support, custom metadata editor, and title_sort_lock
+- *(books)* Enrich BookDetail page with full metadata and generic badge chips
+- *(plugins)* Add externalIds support to PluginBookMetadata for book cross-references
+- *(authors)* Consolidate individual author columns into unified authors_json
+
+### 🐛 Bug Fixes
+
+- *(covers)* Extract shared CoverEditor and fix book cover selection/thumbnail pipeline
+- *(books)* Expose title/number lock fields and fix tooltip z-index in metadata modals
+- *(pdf)* Use per-page content detection to correctly render mixed-content PDFs
+
+### 📚 Documentation
+
+- *(showcase)* Promote plugins to dedicated section and add missing screenshots
+- Replace GitHub links with feature board and remove binary download references
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ui)* Increase sync task polling interval to 3 seconds
+
 ## [1.10.9] - 2026-02-13
 
 ### 🚀 Features
