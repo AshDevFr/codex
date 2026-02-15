@@ -87,6 +87,9 @@ auth:
 ### Email Configuration
 
 ```yaml
+application:
+  base_url: https://codex.example.com  # Used for verification links
+
 email:
   smtp_host: smtp.example.com
   smtp_port: 587
@@ -95,7 +98,7 @@ email:
   smtp_from_email: noreply@example.com
   smtp_from_name: Codex
   verification_token_expiry_hours: 24
-  verification_url_base: http://localhost:8080
+  # verification_url_base: https://codex.example.com  # Optional override, falls back to application.base_url
 ```
 
 ### Resend Verification

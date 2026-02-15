@@ -17,6 +17,7 @@ async fn test_init_database_without_skip_migrations() {
         application: codex::config::ApplicationConfig {
             host: "127.0.0.1".to_string(),
             port: 8080,
+            ..Default::default()
         },
         database: DatabaseConfig {
             db_type: DatabaseType::SQLite,
@@ -88,6 +89,7 @@ async fn test_init_database_with_skip_migrations_complete() {
         application: codex::config::ApplicationConfig {
             host: "127.0.0.1".to_string(),
             port: 8080,
+            ..Default::default()
         },
         database: DatabaseConfig {
             db_type: DatabaseType::SQLite,
@@ -160,6 +162,7 @@ async fn test_init_database_with_skip_migrations_wait_for_completion() {
         application: codex::config::ApplicationConfig {
             host: "127.0.0.1".to_string(),
             port: 8080,
+            ..Default::default()
         },
         database: DatabaseConfig {
             db_type: DatabaseType::SQLite,
@@ -248,6 +251,7 @@ async fn test_init_database_with_skip_migrations_variant_1() {
         application: codex::config::ApplicationConfig {
             host: "127.0.0.1".to_string(),
             port: 8080,
+            ..Default::default()
         },
         database: DatabaseConfig {
             db_type: DatabaseType::SQLite,
@@ -320,6 +324,7 @@ async fn test_init_database_with_skip_migrations_timeout() {
         application: codex::config::ApplicationConfig {
             host: "127.0.0.1".to_string(),
             port: 8080,
+            ..Default::default()
         },
         database: DatabaseConfig {
             db_type: DatabaseType::SQLite,

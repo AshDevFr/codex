@@ -244,6 +244,9 @@ impl EnvOverride for ApplicationConfig {
         {
             self.port = port_num;
         }
+        if let Ok(base_url) = env::var(format!("{}_BASE_URL", prefix)) {
+            self.base_url = Some(base_url);
+        }
     }
 }
 
@@ -496,6 +499,7 @@ mod tests {
         let mut config = ApplicationConfig {
             host: "127.0.0.1".to_string(),
             port: 8080,
+            ..Default::default()
         };
 
         config.apply_env_overrides("CODEX_APPLICATION");
@@ -505,6 +509,28 @@ mod tests {
 
         remove_var("CODEX_APPLICATION_HOST");
         remove_var("CODEX_APPLICATION_PORT");
+    }
+
+    #[test]
+    #[serial]
+    fn test_application_base_url_env_override() {
+        set_var("CODEX_APPLICATION_BASE_URL", "https://codex.example.com");
+
+        let mut config = ApplicationConfig {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            base_url: None,
+        };
+
+        config.apply_env_overrides("CODEX_APPLICATION");
+
+        assert_eq!(
+            config.base_url,
+            Some("https://codex.example.com".to_string())
+        );
+        assert_eq!(config.effective_base_url(), "https://codex.example.com");
+
+        remove_var("CODEX_APPLICATION_BASE_URL");
     }
 
     #[test]
@@ -605,6 +631,7 @@ mod tests {
             application: ApplicationConfig {
                 host: "127.0.0.1".to_string(),
                 port: 8080,
+                ..Default::default()
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
@@ -787,6 +814,7 @@ mod tests {
             application: ApplicationConfig {
                 host: "127.0.0.1".to_string(),
                 port: 8080,
+                ..Default::default()
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),

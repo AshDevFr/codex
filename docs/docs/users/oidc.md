@@ -56,7 +56,7 @@ auth:
 | `enabled` | `false` | Enable OIDC authentication |
 | `auto_create_users` | `true` | Create new Codex users on first OIDC login |
 | `default_role` | `reader` | Default role when no group mapping matches (`reader`, `maintainer`, `admin`) |
-| `redirect_uri_base` | auto-detected | Override the base URL for OAuth callbacks (e.g., `https://codex.example.com`) |
+| `redirect_uri_base` | auto-detected | Override the base URL for OAuth callbacks. Falls back to `application.base_url` if set. |
 
 #### Provider Settings
 
@@ -332,7 +332,13 @@ The redirect URI registered in your IdP must exactly match:
 https://your-codex-url/api/v1/auth/oidc/{provider-name}/callback
 ```
 
-If Codex is behind a reverse proxy, you may need to set `redirect_uri_base`:
+If Codex is behind a reverse proxy, set `application.base_url` to your public URL:
+```yaml
+application:
+  base_url: "https://codex.example.com"
+```
+
+Alternatively, you can override the OIDC redirect URI base specifically:
 ```yaml
 auth:
   oidc:

@@ -19,6 +19,7 @@ database:
 application:
   host: 0.0.0.0
   port: 8080
+  # base_url: https://codex.example.com  # Public-facing URL (used for OIDC redirects, email links)
 
 logging:
   level: info
@@ -83,7 +84,7 @@ api:
 #   smtp_from_email: noreply@example.com
 #   smtp_from_name: Codex
 #   verification_token_expiry_hours: 24
-#   verification_url_base: http://localhost:8080
+#   verification_url_base: https://codex.example.com  # Falls back to application.base_url
 
 # Task Worker Settings (Startup-Time - Require Restart)
 # ======================================================

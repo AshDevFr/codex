@@ -212,9 +212,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Initialize email service
     info!("Initializing email service...");
-    let email_service = Arc::new(crate::services::email::EmailService::new(
-        config.email.clone(),
-    ));
+    let mut email_config = config.email.clone();
+    // Resolve verification_url_base: explicit config > application.base_url > http://{host}:{port}
+    if email_config.verification_url_base.is_none() {
+        email_config.verification_url_base = Some(config.application.effective_base_url());
+    }
+    let email_service = Arc::new(crate::services::email::EmailService::new(email_config));
     info!("  SMTP host: {}", config.email.smtp_host);
     info!("  SMTP port: {}", config.email.smtp_port);
     info!("  From: {}", config.email.smtp_from_email);
@@ -227,12 +230,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             .oidc
             .redirect_uri_base
             .clone()
-            .unwrap_or_else(|| {
-                format!(
-                    "http://{}:{}",
-                    config.application.host, config.application.port
-                )
-            });
+            .unwrap_or_else(|| config.application.effective_base_url());
         info!("  Redirect URI base: {}", base_url);
         info!(
             "  Auto-create users: {}",

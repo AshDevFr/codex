@@ -65,6 +65,7 @@ application:
             application: ApplicationConfig {
                 host: "0.0.0.0".to_string(),
                 port: 8080,
+                ..Default::default()
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
@@ -145,6 +146,7 @@ scanner:
             application: ApplicationConfig {
                 host: "127.0.0.1".to_string(),
                 port: 8080,
+                ..Default::default()
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),

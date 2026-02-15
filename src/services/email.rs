@@ -24,9 +24,14 @@ impl EmailService {
         verification_token: &str,
         app_name: &str,
     ) -> Result<()> {
+        let base_url = self
+            .config
+            .verification_url_base
+            .as_deref()
+            .unwrap_or("http://localhost:8080");
         let verification_url = format!(
             "{}/auth/verify-email?token={}",
-            self.config.verification_url_base, verification_token
+            base_url, verification_token
         );
 
         let html_body = self.create_verification_email_html(to_name, &verification_url, app_name);
@@ -170,7 +175,7 @@ mod tests {
             smtp_from_email: "test@example.com".to_string(),
             smtp_from_name: "Test".to_string(),
             verification_token_expiry_hours: 24,
-            verification_url_base: "http://localhost:8080".to_string(),
+            verification_url_base: Some("http://localhost:8080".to_string()),
         }
     }
 

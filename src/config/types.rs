@@ -281,11 +281,7 @@ impl Default for Config {
                 postgres: postgres_config,
                 sqlite: sqlite_config,
             },
-            application: ApplicationConfig {
-                host: env_string_opt("CODEX_APPLICATION_HOST")
-                    .unwrap_or_else(|| "0.0.0.0".to_string()),
-                port: env_or("CODEX_APPLICATION_PORT", 8080),
-            },
+            application: ApplicationConfig::default(),
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),
             api: ApiConfig::default(),
@@ -559,6 +555,22 @@ impl Default for SQLiteConfig {
 pub struct ApplicationConfig {
     pub host: String,
     pub port: u16,
+    /// Public-facing base URL for the application (e.g., "https://codex.example.com")
+    /// Used as a fallback for OIDC redirect URIs and email verification links.
+    /// If not set, falls back to http://{host}:{port}
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+}
+
+impl ApplicationConfig {
+    /// Returns the effective base URL for external-facing links.
+    ///
+    /// Priority: base_url config > http://{host}:{port} fallback
+    pub fn effective_base_url(&self) -> String {
+        self.base_url
+            .clone()
+            .unwrap_or_else(|| format!("http://{}:{}", self.host, self.port))
+    }
 }
 
 impl Default for ApplicationConfig {
@@ -566,6 +578,7 @@ impl Default for ApplicationConfig {
         Self {
             host: env_string_opt("CODEX_APPLICATION_HOST").unwrap_or_else(|| "0.0.0.0".to_string()),
             port: env_or("CODEX_APPLICATION_PORT", 8080),
+            base_url: env_string_opt("CODEX_APPLICATION_BASE_URL"),
         }
     }
 }
@@ -670,7 +683,10 @@ pub struct EmailConfig {
     pub smtp_from_email: String,
     pub smtp_from_name: String,
     pub verification_token_expiry_hours: u32,
-    pub verification_url_base: String,
+    /// Base URL for email verification links (e.g., "https://codex.example.com")
+    /// If not set, falls back to application.base_url, then http://{host}:{port}
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_url_base: Option<String>,
 }
 
 /// PDF rendering configuration
@@ -724,8 +740,7 @@ impl Default for EmailConfig {
                 "CODEX_EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS",
                 24,
             ),
-            verification_url_base: env_string_opt("CODEX_EMAIL_VERIFICATION_URL_BASE")
-                .unwrap_or_else(|| "http://localhost:8080".to_string()),
+            verification_url_base: env_string_opt("CODEX_EMAIL_VERIFICATION_URL_BASE"),
         }
     }
 }
@@ -805,10 +820,130 @@ mod tests {
         let config = ApplicationConfig {
             host: "0.0.0.0".to_string(),
             port: 8080,
+            base_url: None,
         };
 
         assert_eq!(config.host, "0.0.0.0");
         assert_eq!(config.port, 8080);
+        assert!(config.base_url.is_none());
+    }
+
+    #[test]
+    fn test_effective_base_url_with_explicit_base_url() {
+        let config = ApplicationConfig {
+            host: "0.0.0.0".to_string(),
+            port: 8080,
+            base_url: Some("https://codex.example.com".to_string()),
+        };
+
+        assert_eq!(config.effective_base_url(), "https://codex.example.com");
+    }
+
+    #[test]
+    fn test_effective_base_url_fallback_to_host_port() {
+        let config = ApplicationConfig {
+            host: "127.0.0.1".to_string(),
+            port: 3000,
+            base_url: None,
+        };
+
+        assert_eq!(config.effective_base_url(), "http://127.0.0.1:3000");
+    }
+
+    #[test]
+    fn test_application_config_base_url_serialization() {
+        let config = ApplicationConfig {
+            host: "0.0.0.0".to_string(),
+            port: 8080,
+            base_url: Some("https://codex.example.com".to_string()),
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("base_url"));
+        assert!(yaml.contains("https://codex.example.com"));
+
+        let deserialized: ApplicationConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            deserialized.base_url,
+            Some("https://codex.example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn test_application_config_base_url_omitted_when_none() {
+        let config = ApplicationConfig {
+            host: "0.0.0.0".to_string(),
+            port: 8080,
+            base_url: None,
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(!yaml.contains("base_url"));
+    }
+
+    #[test]
+    fn test_application_config_base_url_from_yaml() {
+        let yaml_content = r#"
+host: 0.0.0.0
+port: 8080
+base_url: https://library.example.com
+"#;
+
+        let config: ApplicationConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(
+            config.base_url,
+            Some("https://library.example.com".to_string())
+        );
+        assert_eq!(config.effective_base_url(), "https://library.example.com");
+    }
+
+    #[test]
+    fn test_application_config_base_url_defaults_to_none() {
+        let yaml_content = r#"
+host: 0.0.0.0
+port: 8080
+"#;
+
+        let config: ApplicationConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.base_url.is_none());
+        assert_eq!(config.effective_base_url(), "http://0.0.0.0:8080");
+    }
+
+    #[test]
+    fn test_email_config_verification_url_base_optional() {
+        // When verification_url_base is not set, it should be None
+        let yaml_content = r#"
+smtp_host: localhost
+smtp_port: 587
+smtp_username: ""
+smtp_password: ""
+smtp_from_email: noreply@example.com
+smtp_from_name: Codex
+verification_token_expiry_hours: 24
+"#;
+
+        let config: EmailConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(config.verification_url_base.is_none());
+    }
+
+    #[test]
+    fn test_email_config_verification_url_base_explicit() {
+        let yaml_content = r#"
+smtp_host: localhost
+smtp_port: 587
+smtp_username: ""
+smtp_password: ""
+smtp_from_email: noreply@example.com
+smtp_from_name: Codex
+verification_token_expiry_hours: 24
+verification_url_base: https://codex.example.com
+"#;
+
+        let config: EmailConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(
+            config.verification_url_base,
+            Some("https://codex.example.com".to_string())
+        );
     }
 
     #[test]
@@ -905,6 +1040,7 @@ mod tests {
             application: ApplicationConfig {
                 host: "127.0.0.1".to_string(),
                 port: 3000,
+                base_url: None,
             },
             logging: LoggingConfig::default(),
             auth: AuthConfig::default(),

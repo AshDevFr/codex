@@ -136,6 +136,7 @@ application:
   name: Codex           # Server name (displayed in UI)
   host: 0.0.0.0         # Bind address (0.0.0.0 for all interfaces)
   port: 8080            # Server port
+  base_url: https://codex.example.com  # Public-facing URL (optional)
 ```
 
 | Setting | Default | Description |
@@ -143,6 +144,7 @@ application:
 | `name` | `Codex` | Server display name |
 | `host` | `127.0.0.1` | Bind address |
 | `port` | `8080` | HTTP port |
+| `base_url` | *(none)* | Public-facing URL (e.g., `https://codex.example.com`). Used as fallback for OIDC redirect URIs and email verification links. If not set, falls back to `http://{host}:{port}`. |
 
 ## Authentication Configuration
 
@@ -210,7 +212,7 @@ auth:
 | `oidc.enabled` | `false` | Enable OIDC authentication |
 | `oidc.auto_create_users` | `true` | Create users on first OIDC login |
 | `oidc.default_role` | `reader` | Default role when no groups match |
-| `oidc.redirect_uri_base` | auto-detected | Override base URL for OAuth callbacks |
+| `oidc.redirect_uri_base` | auto-detected | Override base URL for OAuth callbacks. Falls back to `application.base_url`. |
 
 See [OIDC / Single Sign-On](./users/oidc) for full setup instructions and provider guides.
 
@@ -302,8 +304,12 @@ email:
   smtp_from_email: noreply@example.com
   smtp_from_name: Codex
   verification_token_expiry_hours: 24
-  verification_url_base: http://localhost:8080
+  # verification_url_base: https://codex.example.com  # Falls back to application.base_url
 ```
+
+:::tip
+If you've set `application.base_url`, you don't need to set `verification_url_base` separately — it will automatically use the application base URL for email verification links.
+:::
 
 ## PDF Rendering Configuration
 
@@ -754,6 +760,7 @@ application:
   name: My Library
   host: 0.0.0.0
   port: 8080
+  base_url: https://library.example.com
 
 logging:
   level: info
