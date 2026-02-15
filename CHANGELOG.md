@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.11.2] - 2026-02-15
+
+### 🐛 Bug Fixes
+
+- *(migration)* Handle SQLite blob UUIDs and PostgreSQL INT8 in consolidate_authors
+
 ## [1.11.1] - 2026-02-15
 
 ### 🐛 Bug Fixes
