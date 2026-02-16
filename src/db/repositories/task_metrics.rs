@@ -413,7 +413,7 @@ impl TaskMetricsRepository {
             "#
         } else {
             r#"
-            SELECT DISTINCT DATE(period_start) as day_start, task_type, library_id
+            SELECT DISTINCT DATETIME(DATE(period_start)) as day_start, task_type, library_id
             FROM task_metrics
             WHERE period_type = 'hour' AND period_start < ?
             "#
@@ -985,6 +985,84 @@ mod tests {
             .await
             .expect("Failed to delete by library id");
         assert_eq!(deleted, 0);
+    }
+
+    #[tokio::test]
+    async fn test_rollup_hourly_to_daily() {
+        let (db, _temp_dir) = create_test_db().await;
+        let db = db.sea_orm_connection();
+
+        // Insert hourly records with period_start older than 7 days
+        let old_day = Utc::now() - Duration::days(10);
+        let hour1 = TaskMetricsRepository::hour_start(old_day);
+        let hour2 = hour1 + Duration::hours(1);
+        let now = Utc::now();
+
+        for (i, period_start) in [hour1, hour2].iter().enumerate() {
+            let record = task_metrics::ActiveModel {
+                id: Set(Uuid::new_v4()),
+                period_start: Set(*period_start),
+                period_type: Set("hour".to_string()),
+                task_type: Set("scan_library".to_string()),
+                library_id: Set(None),
+                count: Set(1),
+                succeeded: Set(1),
+                failed: Set(0),
+                retried: Set(0),
+                total_duration_ms: Set(100 * (i as i64 + 1)),
+                min_duration_ms: Set(Some(100 * (i as i64 + 1))),
+                max_duration_ms: Set(Some(100 * (i as i64 + 1))),
+                total_queue_wait_ms: Set(10),
+                duration_samples: Set(None),
+                items_processed: Set(1),
+                bytes_processed: Set(512),
+                error_count: Set(0),
+                last_error: Set(None),
+                last_error_at: Set(None),
+                created_at: Set(now),
+                updated_at: Set(now),
+            };
+            record
+                .insert(db)
+                .await
+                .expect("Failed to insert hourly record");
+        }
+
+        // Verify we have 2 hourly records
+        let hourly = TaskMetrics::find()
+            .filter(task_metrics::Column::PeriodType.eq("hour"))
+            .all(db)
+            .await
+            .expect("Failed to query hourly records");
+        assert_eq!(hourly.len(), 2);
+
+        // Run rollup
+        let rolled_up = TaskMetricsRepository::rollup_hourly_to_daily(db)
+            .await
+            .expect("Failed to rollup hourly to daily");
+        assert_eq!(rolled_up, 2);
+
+        // Verify hourly records were deleted
+        let hourly = TaskMetrics::find()
+            .filter(task_metrics::Column::PeriodType.eq("hour"))
+            .all(db)
+            .await
+            .expect("Failed to query hourly records");
+        assert_eq!(hourly.len(), 0);
+
+        // Verify daily record was created
+        let daily = TaskMetrics::find()
+            .filter(task_metrics::Column::PeriodType.eq("day"))
+            .all(db)
+            .await
+            .expect("Failed to query daily records");
+        assert_eq!(daily.len(), 1);
+
+        let daily_record = &daily[0];
+        assert_eq!(daily_record.task_type, "scan_library");
+        assert_eq!(daily_record.count, 2);
+        assert_eq!(daily_record.succeeded, 2);
+        assert_eq!(daily_record.total_duration_ms, 300); // 100 + 200
     }
 
     #[tokio::test]
