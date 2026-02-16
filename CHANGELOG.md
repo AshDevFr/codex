@@ -2,6 +2,21 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.12.0] - 2026-02-16
+
+### 🚀 Features
+
+- *(config)* Add application.base_url as unified external URL setting
+- *(plugins)* Add centralized data_dir config and plugin file storage
+- *(ui)* Add admin plugin storage management page
+- *(seed)* Add --seed-config flag for declarative plugin, library, and user setup
+
+### 🐛 Bug Fixes
+
+- *(metrics)* Use DATETIME() wrapper in SQLite rollup query to produce valid datetime strings
+- *(ui)* Skip recommendations fetch when no plugin is enabled
+- *(api)* Return null instead of 404 when no reading progress exists for a book
+
 ## [1.11.2] - 2026-02-15
 
 ### 🐛 Bug Fixes
