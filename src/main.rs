@@ -69,6 +69,10 @@ enum Commands {
         /// Path to configuration file
         #[arg(short, long, default_value = DEFAULT_CONFIG_PATH)]
         config: PathBuf,
+
+        /// Path to seed configuration file (YAML) for plugins, libraries, and user passwords
+        #[arg(long)]
+        seed_config: Option<PathBuf>,
     },
 
     /// Run database migrations
@@ -134,8 +138,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::Worker { config } => {
             worker_command(config).await?;
         }
-        Commands::Seed { config } => {
-            seed_command(config).await?;
+        Commands::Seed {
+            config,
+            seed_config,
+        } => {
+            seed_command(config, seed_config).await?;
         }
         Commands::Migrate { config } => {
             migrate_command(config).await?;

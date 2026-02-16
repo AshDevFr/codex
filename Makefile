@@ -62,6 +62,9 @@ dev-shell-frontend: ## Open shell in frontend container
 dev-seed: ## Create initial admin user in dev environment
 	docker compose --profile dev exec codex-dev cargo run -- seed --config config/config.docker.yaml
 
+dev-seed-config: ## Create initial admin user in dev environment
+	docker compose --profile dev exec codex-dev cargo run -- seed --config config/config.docker.yaml --seed-config config/seed-config.yaml
+
 dev-watch: ## Start with watch mode (auto-sync code changes)
 	docker compose -f docker-compose.yml -f compose.watch.yml --profile dev watch
 

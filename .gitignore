@@ -10,3 +10,4 @@
 *.log
 
 plugins/**/openapi.json
+seed-config.yaml

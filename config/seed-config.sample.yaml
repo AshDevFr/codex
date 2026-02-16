@@ -1,0 +1,152 @@
+# Codex Seed Configuration
+# ========================
+#
+# Optional configuration for `codex seed --seed-config <this-file>`.
+# All sections are optional — omit any section you don't need.
+#
+# Usage:
+#   codex seed --config config/codex.yaml --seed-config config/seed-config.yaml
+
+# =============================================================================
+# User Passwords
+# =============================================================================
+# Override the default random password generation for seeded users.
+# If a user is omitted here, a random password will be generated.
+users:
+  admin:
+    password: "admin"
+  maintainer:
+    password: "maintainer"
+  reader:
+    password: "reader"
+
+# =============================================================================
+# Plugins
+# =============================================================================
+# Register plugins during seed. Plugins that already exist (by name) are skipped.
+#
+# For Docker development, plugins are mounted at /opt/codex/plugins/<name>/dist/
+# For production, use npx: command: "npx", args: ["-y", "@ashdev/codex-plugin-<name>"]
+#
+# credential_delivery options: "init_message" (default), "env", "both"
+# credentials: JSON object with API keys/tokens (optional, can be set later via UI)
+#
+# NOTE: If credentials are provided, CODEX_ENCRYPTION_KEY must be set.
+plugins:
+  # MangaBaka - Manga metadata provider (requires API key)
+  - name: metadata-mangabaka
+    display_name: MangaBaka Metadata
+    description: Fetch manga metadata from MangaBaka - aggregated data from multiple sources
+    command: node
+    args: ["/opt/codex/plugins/metadata-mangabaka/dist/index.js"]
+    permissions:
+      - "metadata:write:*"
+      - "metadata:read"
+    scopes:
+      - "series:detail"
+      - "series:bulk"
+      - "library:detail"
+      - "library:scan"
+    credential_delivery: init_message
+    # credentials: { "api_key": "your-mangabaka-api-key" }
+
+  # Echo - Test/debug plugin (no credentials needed)
+  - name: metadata-echo
+    display_name: Echo Metadata Plugin
+    description: Test metadata plugin that echoes back search queries
+    command: node
+    args: ["/opt/codex/plugins/metadata-echo/dist/index.js"]
+    permissions:
+      - "metadata:write:*"
+      - "metadata:read"
+    scopes:
+      - "series:detail"
+      - "series:bulk"
+      - "book:detail"
+      - "book:bulk"
+      - "library:detail"
+      - "library:scan"
+    credential_delivery: env
+
+  # Open Library - Book metadata provider (no credentials needed)
+  - name: metadata-openlibrary
+    display_name: Open Library
+    description: Fetches book metadata from Open Library - supports ISBN lookup and title search
+    command: node
+    args: ["/opt/codex/plugins/metadata-openlibrary/dist/index.js"]
+    permissions:
+      - "metadata:write:*"
+      - "metadata:read"
+    scopes:
+      - "book:detail"
+      - "book:bulk"
+      - "library:detail"
+      - "library:scan"
+    credential_delivery: env
+
+  # AniList Recommendations - Personalized manga recommendations
+  - name: recommendations-anilist
+    display_name: AniList Recommendations
+    description: Personalized manga recommendations from AniList based on reading history
+    plugin_type: user
+    command: node
+    args: ["/opt/codex/plugins/recommendations-anilist/dist/index.js"]
+    permissions:
+      - "metadata:read"
+    scopes: []
+    credential_delivery: env
+
+  # AniList Sync - Reading progress sync
+  - name: sync-anilist
+    display_name: AniList Sync
+    description: Sync manga reading progress between Codex and AniList
+    plugin_type: user
+    command: node
+    args: ["/opt/codex/plugins/sync-anilist/dist/index.js"]
+    permissions:
+      - "metadata:read"
+    scopes: []
+    credential_delivery: env
+
+# =============================================================================
+# Libraries
+# =============================================================================
+# Create libraries during seed. Libraries that already exist (by path) are skipped.
+#
+# Adjust paths to match your volume mounts or local filesystem.
+# In Docker dev, /libraries/ is the default mount point (see docker-compose.yml).
+#
+# Strategy options:
+#   series_strategy: series_volume (default), series_volume_chapter, flat, publisher_hierarchy, calibre
+#   book_strategy: filename (default), metadata_first, smart, series_name, custom
+#   number_strategy: file_order (default), metadata, filename, smart
+#   default_reading_direction: LEFT_TO_RIGHT (default), RIGHT_TO_LEFT, VERTICAL, WEBTOON
+#   allowed_formats: list of formats, e.g. [cbz, cbr, epub, pdf]
+#   excluded_patterns: list of glob patterns, e.g. ["*.txt", "thumbs.db"]
+libraries:
+  - name: Comics
+    path: /libraries/comics
+    # series_strategy: series_volume
+    # book_strategy: filename
+    # number_strategy: file_order
+    # default_reading_direction: LEFT_TO_RIGHT
+
+  - name: Manga
+    path: /libraries/manga
+    series_strategy: series_volume_chapter
+    default_reading_direction: RIGHT_TO_LEFT
+
+  - name: Books
+    path: /libraries/books
+    series_strategy: calibre
+    book_strategy: metadata_first
+    # series_config options for calibre:
+    #   strip_id_suffix: true       # Strip Calibre ID suffix " (123)" from folder names (default: true)
+    #   series_mode: from_metadata  # standalone, by_author, or from_metadata (default: from_metadata)
+    #   read_opf_metadata: true     # Read metadata.opf files (default: true)
+    #   author_from_folder: true    # Use author folder name as author (default: true)
+    series_config:
+      strip_id_suffix: true
+      series_mode: from_metadata
+      read_opf_metadata: true
+      author_from_folder: true
