@@ -141,6 +141,32 @@ describe("useOAuthFlow", () => {
     );
   });
 
+  it("shows server message when error is an ApiError object (429 rate limit)", async () => {
+    // The axios interceptor rejects with a plain { error, message } object, not an Error instance
+    vi.mocked(userPluginsApi.startOAuth).mockRejectedValue({
+      error: "rate_limit_exceeded",
+      message:
+        "Too many pending OAuth flows (max 3). Please complete or wait for existing flows to expire.",
+    });
+
+    const { result } = renderHook(() => useOAuthFlow(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.startOAuthFlow("sync-anilist");
+    });
+
+    expect(notifications.show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "OAuth Error",
+        message:
+          "Too many pending OAuth flows (max 3). Please complete or wait for existing flows to expire.",
+        color: "red",
+      }),
+    );
+  });
+
   it("shows fallback message when error is not an Error instance", async () => {
     vi.mocked(userPluginsApi.startOAuth).mockRejectedValue("something weird");
 

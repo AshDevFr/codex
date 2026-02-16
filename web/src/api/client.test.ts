@@ -145,7 +145,7 @@ describe("Rate Limit Retry Logic", () => {
       if (interceptorFn) {
         await expect(interceptorFn(mockError)).rejects.toEqual({
           error: "rate_limit_exceeded",
-          message: "Too many requests. Please try again later.",
+          message: "Too many requests",
         });
       }
     }

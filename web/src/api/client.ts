@@ -100,7 +100,7 @@ api.interceptors.response.use(
 
         // Notify UI if wait time is significant
         if (
-          retryAfterSeconds > RATE_LIMIT_NOTIFICATION_THRESHOLD &&
+          retryAfterSeconds >= RATE_LIMIT_NOTIFICATION_THRESHOLD &&
           rateLimitNotificationHandler
         ) {
           rateLimitNotificationHandler(retryAfterSeconds);
@@ -114,10 +114,12 @@ api.interceptors.response.use(
         return api.request(config);
       }
 
-      // Max retries exceeded - return rate limit error
+      // Max retries exceeded - return rate limit error, preserving the server's message
       return Promise.reject({
         error: "rate_limit_exceeded",
-        message: `Too many requests. Please try again later.`,
+        message:
+          error.response?.data?.message ||
+          "Too many requests. Please try again later.",
       } as ApiError);
     }
 

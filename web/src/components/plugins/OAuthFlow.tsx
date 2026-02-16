@@ -89,9 +89,16 @@ export function useOAuthFlow() {
             });
           }
         }, 500);
-      } catch (error) {
+      } catch (error: unknown) {
         const message =
-          error instanceof Error ? error.message : "Failed to start OAuth flow";
+          error != null &&
+          typeof error === "object" &&
+          "message" in error &&
+          typeof (error as { message: unknown }).message === "string"
+            ? (error as { message: string }).message
+            : error instanceof Error
+              ? error.message
+              : "Failed to start OAuth flow";
         notifications.show({
           title: "OAuth Error",
           message,

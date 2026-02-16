@@ -293,7 +293,12 @@ impl OAuthStateManager {
     }
 
     /// Get the number of pending flows for a specific user (for rate-limiting)
+    ///
+    /// Performs an opportunistic cleanup of expired flows before counting,
+    /// so that expired flows (past `OAUTH_STATE_TTL_SECS`) don't permanently
+    /// block users from starting new OAuth flows.
     pub fn pending_count_for_user(&self, user_id: Uuid) -> usize {
+        self.cleanup_expired();
         self.pending_flows
             .iter()
             .filter(|entry| entry.value().user_id == user_id)
@@ -582,5 +587,79 @@ mod tests {
         assert_eq!(manager.pending_count_for_user(user_a), 2);
         assert_eq!(manager.pending_count_for_user(user_b), 1);
         assert_eq!(manager.pending_count_for_user(Uuid::new_v4()), 0);
+    }
+
+    #[test]
+    fn test_pending_count_for_user_excludes_expired_flows() {
+        let manager = OAuthStateManager::new();
+        let config = test_oauth_config();
+        let user_id = Uuid::new_v4();
+
+        // Start 3 flows for the user
+        for _ in 0..3 {
+            manager
+                .start_oauth_flow(
+                    Uuid::new_v4(),
+                    user_id,
+                    &config,
+                    "client-id",
+                    "https://codex.local/callback",
+                )
+                .unwrap();
+        }
+
+        assert_eq!(manager.pending_count_for_user(user_id), 3);
+
+        // Manually expire all flows by backdating their created_at
+        let expired_time = Utc::now() - Duration::seconds(OAUTH_STATE_TTL_SECS + 1);
+        for mut entry in manager.pending_flows.iter_mut() {
+            entry.value_mut().created_at = expired_time;
+        }
+
+        // pending_count_for_user should now return 0 (expired flows are cleaned up)
+        assert_eq!(manager.pending_count_for_user(user_id), 0);
+
+        // The expired flows should have been removed from the map
+        assert_eq!(manager.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_expired_flows_do_not_block_new_flows() {
+        let manager = OAuthStateManager::new();
+        let config = test_oauth_config();
+        let user_id = Uuid::new_v4();
+
+        // Start 3 flows (would hit the typical max-3 limit)
+        for _ in 0..3 {
+            manager
+                .start_oauth_flow(
+                    Uuid::new_v4(),
+                    user_id,
+                    &config,
+                    "client-id",
+                    "https://codex.local/callback",
+                )
+                .unwrap();
+        }
+
+        // Expire all existing flows
+        let expired_time = Utc::now() - Duration::seconds(OAUTH_STATE_TTL_SECS + 1);
+        for mut entry in manager.pending_flows.iter_mut() {
+            entry.value_mut().created_at = expired_time;
+        }
+
+        // Count should be 0 after cleanup (triggered by pending_count_for_user)
+        assert_eq!(manager.pending_count_for_user(user_id), 0);
+
+        // Should be able to start a new flow (not blocked by expired ones)
+        let result = manager.start_oauth_flow(
+            Uuid::new_v4(),
+            user_id,
+            &config,
+            "client-id",
+            "https://codex.local/callback",
+        );
+        assert!(result.is_ok());
+        assert_eq!(manager.pending_count_for_user(user_id), 1);
     }
 }

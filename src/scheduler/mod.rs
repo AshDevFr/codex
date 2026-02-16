@@ -39,6 +39,9 @@ impl Scheduler {
         // Load PDF cache cleanup schedule
         self.load_pdf_cache_cleanup_schedule().await?;
 
+        // Load plugin data cleanup schedule (OAuth flows, expired storage)
+        self.load_plugin_data_cleanup_schedule().await?;
+
         // Load thumbnail generation schedules
         self.load_book_thumbnail_schedule().await?;
         self.load_series_thumbnail_schedule().await?;
@@ -186,6 +189,40 @@ impl Scheduler {
             .context("Failed to add PDF cache cleanup job to scheduler")?;
 
         info!("Added PDF cache cleanup schedule: {}", cron);
+
+        Ok(())
+    }
+
+    /// Load plugin data cleanup schedule
+    ///
+    /// Periodically cleans up expired OAuth pending flows and plugin storage data.
+    /// Runs every 15 minutes. This is always enabled as it's essential housekeeping
+    /// to prevent memory leaks from abandoned OAuth flows.
+    async fn load_plugin_data_cleanup_schedule(&mut self) -> Result<()> {
+        // Every 15 minutes (6-part cron: sec min hour day month weekday)
+        let cron = "0 */15 * * * *";
+
+        let db = self.db.clone();
+        let job = Job::new_async(cron, move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                debug!("Triggering scheduled plugin data cleanup");
+
+                let task_type = TaskType::CleanupPluginData;
+                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                    Ok(_) => debug!("Plugin data cleanup task enqueued"),
+                    Err(e) => error!("Failed to enqueue plugin data cleanup: {}", e),
+                }
+            })
+        })
+        .context("Failed to create plugin data cleanup cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add plugin data cleanup job to scheduler")?;
+
+        info!("Added plugin data cleanup schedule: {}", cron);
 
         Ok(())
     }
