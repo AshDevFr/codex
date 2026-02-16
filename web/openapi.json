@@ -251,6 +251,125 @@
         ]
       }
     },
+    "/api/v1/admin/plugin-storage": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get storage statistics for all plugins",
+        "description": "Scans the plugins directory and returns file count and size per plugin.\n\n# Permission Required\n- Admin access required",
+        "operationId": "get_all_plugin_storage_stats",
+        "responses": {
+          "200": {
+            "description": "Plugin storage statistics retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllPluginStorageStatsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plugin-storage/{name}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get storage statistics for a specific plugin",
+        "description": "# Permission Required\n- Admin access required",
+        "operationId": "get_plugin_storage_stats",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Plugin name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin storage statistics retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginStorageStatsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Delete all storage files for a specific plugin",
+        "description": "Removes the plugin's entire data directory. This is irreversible.\n\n# Permission Required\n- Admin access required",
+        "operationId": "cleanup_plugin_storage",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Plugin name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plugin storage cleaned up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginCleanupResultDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/plugins": {
       "get": {
         "tags": [
@@ -15821,6 +15940,38 @@
           }
         }
       },
+      "AllPluginStorageStatsDto": {
+        "type": "object",
+        "description": "Overall storage statistics for all plugins",
+        "required": [
+          "plugins",
+          "totalFileCount",
+          "totalBytes"
+        ],
+        "properties": {
+          "plugins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PluginStorageStatsDto"
+            },
+            "description": "Storage statistics per plugin"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total bytes across all plugins",
+            "example": 5242880,
+            "minimum": 0
+          },
+          "totalFileCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total file count across all plugins",
+            "example": 15,
+            "minimum": 0
+          }
+        }
+      },
       "AlphabeticalGroupDto": {
         "type": "object",
         "description": "Alphabetical group with count\n\nRepresents a group of series starting with a specific letter/character\nalong with the count of series in that group.",
@@ -26868,6 +27019,45 @@
           }
         }
       },
+      "PluginCleanupResultDto": {
+        "type": "object",
+        "description": "Result of a plugin storage cleanup operation",
+        "required": [
+          "filesDeleted",
+          "bytesFreed",
+          "failures"
+        ],
+        "properties": {
+          "bytesFreed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total bytes freed by deletion",
+            "example": 1048576,
+            "minimum": 0
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Error messages for any failed deletions"
+          },
+          "failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of files that failed to delete",
+            "example": 0,
+            "minimum": 0
+          },
+          "filesDeleted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of files deleted",
+            "example": 5,
+            "minimum": 0
+          }
+        }
+      },
       "PluginDto": {
         "type": "object",
         "description": "A plugin (credentials are never exposed)",
@@ -27804,6 +27994,36 @@
           "plugin": {
             "$ref": "#/components/schemas/PluginDto",
             "description": "The updated plugin"
+          }
+        }
+      },
+      "PluginStorageStatsDto": {
+        "type": "object",
+        "description": "Storage statistics for a single plugin",
+        "required": [
+          "pluginName",
+          "fileCount",
+          "totalBytes"
+        ],
+        "properties": {
+          "fileCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of files in the plugin's storage directory",
+            "example": 5,
+            "minimum": 0
+          },
+          "pluginName": {
+            "type": "string",
+            "description": "Name of the plugin",
+            "example": "metadata-anilist"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total size of all files in bytes",
+            "example": 1048576,
+            "minimum": 0
           }
         }
       },

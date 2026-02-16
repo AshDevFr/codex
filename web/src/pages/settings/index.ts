@@ -4,6 +4,7 @@ export { DuplicatesSettings } from "./DuplicatesSettings";
 export { IntegrationsSettings } from "./IntegrationsSettings";
 export { MetricsSettings } from "./MetricsSettings";
 export { PdfCacheSettings } from "./PdfCacheSettings";
+export { PluginStorageSettings } from "./PluginStorageSettings";
 export { PluginsSettings } from "./PluginsSettings";
 export { ProfileSettings } from "./ProfileSettings";
 export { ServerSettings } from "./ServerSettings";

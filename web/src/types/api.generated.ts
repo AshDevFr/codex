@@ -140,6 +140,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/plugin-storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get storage statistics for all plugins
+         * @description Scans the plugins directory and returns file count and size per plugin.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        get: operations["get_all_plugin_storage_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/plugin-storage/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get storage statistics for a specific plugin
+         * @description # Permission Required
+         *     - Admin access required
+         */
+        get: operations["get_plugin_storage_stats"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete all storage files for a specific plugin
+         * @description Removes the plugin's entire data directory. This is irreversible.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        delete: operations["cleanup_plugin_storage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/plugins": {
         parameters: {
             query?: never;
@@ -5734,6 +5785,23 @@ export interface components {
         AdjacentBooksResponse: {
             next?: null | components["schemas"]["BookDto"];
             prev?: null | components["schemas"]["BookDto"];
+        };
+        /** @description Overall storage statistics for all plugins */
+        AllPluginStorageStatsDto: {
+            /** @description Storage statistics per plugin */
+            plugins: components["schemas"]["PluginStorageStatsDto"][];
+            /**
+             * Format: int64
+             * @description Total bytes across all plugins
+             * @example 5242880
+             */
+            totalBytes: number;
+            /**
+             * Format: int64
+             * @description Total file count across all plugins
+             * @example 15
+             */
+            totalFileCount: number;
         };
         /**
          * @description Alphabetical group with count
@@ -11820,6 +11888,29 @@ export interface components {
             /** @description Can provide personalized recommendations */
             userRecommendationProvider?: boolean;
         };
+        /** @description Result of a plugin storage cleanup operation */
+        PluginCleanupResultDto: {
+            /**
+             * Format: int64
+             * @description Total bytes freed by deletion
+             * @example 1048576
+             */
+            bytesFreed: number;
+            /** @description Error messages for any failed deletions */
+            errors?: string[];
+            /**
+             * Format: int64
+             * @description Number of files that failed to delete
+             * @example 0
+             */
+            failures: number;
+            /**
+             * Format: int64
+             * @description Number of files deleted
+             * @example 5
+             */
+            filesDeleted: number;
+        };
         /** @description A plugin (credentials are never exposed) */
         PluginDto: {
             /**
@@ -12333,6 +12424,26 @@ export interface components {
             message: string;
             /** @description The updated plugin */
             plugin: components["schemas"]["PluginDto"];
+        };
+        /** @description Storage statistics for a single plugin */
+        PluginStorageStatsDto: {
+            /**
+             * Format: int64
+             * @description Number of files in the plugin's storage directory
+             * @example 5
+             */
+            fileCount: number;
+            /**
+             * @description Name of the plugin
+             * @example metadata-anilist
+             */
+            pluginName: string;
+            /**
+             * Format: int64
+             * @description Total size of all files in bytes
+             * @example 1048576
+             */
+            totalBytes: number;
         };
         /** @description Response from testing a plugin connection */
         PluginTestResult: {
@@ -15903,6 +16014,93 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["PdfCacheStatsDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_all_plugin_storage_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin storage statistics retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllPluginStorageStatsDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_plugin_storage_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin storage statistics retrieved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginStorageStatsDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cleanup_plugin_storage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plugin name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin storage cleaned up */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginCleanupResultDto"];
                 };
             };
             /** @description Admin access required */

@@ -31,6 +31,7 @@ import {
   IntegrationsSettings,
   MetricsSettings,
   PdfCacheSettings,
+  PluginStorageSettings,
   PluginsSettings,
   ProfileSettings,
   ServerSettings,
@@ -339,6 +340,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <PdfCacheSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/plugin-storage"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <PluginStorageSettings />
               </AppLayout>
             </ProtectedRoute>
           }

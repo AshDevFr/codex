@@ -462,6 +462,11 @@ The following paths are exempt from rate limiting:
         v1::handlers::pdf_cache::trigger_pdf_cache_cleanup,
         v1::handlers::pdf_cache::clear_pdf_cache,
 
+        // Plugin storage management endpoints
+        v1::handlers::plugin_storage::get_all_plugin_storage_stats,
+        v1::handlers::plugin_storage::get_plugin_storage_stats,
+        v1::handlers::plugin_storage::cleanup_plugin_storage,
+
         // Duplicates endpoints
         v1::handlers::duplicates::list_duplicates,
         v1::handlers::duplicates::trigger_duplicate_scan,
@@ -866,6 +871,11 @@ The following paths are exempt from rate limiting:
             v1::dto::PdfCacheStatsDto,
             v1::dto::PdfCacheCleanupResultDto,
             v1::dto::TriggerPdfCacheCleanupResponse,
+
+            // Plugin Storage DTOs
+            v1::dto::AllPluginStorageStatsDto,
+            v1::dto::PluginStorageStatsDto,
+            v1::dto::PluginCleanupResultDto,
 
             // SSE Event DTOs
             crate::events::EntityChangeEvent,

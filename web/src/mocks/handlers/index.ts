@@ -16,6 +16,7 @@ import { libraryHandlers } from "./libraries";
 import { metadataHandlers } from "./metadata";
 import { metricsHandlers } from "./metrics";
 import { pdfCacheHandlers } from "./pdfCache";
+import { pluginStorageHandlers } from "./pluginStorage";
 import { pluginsHandlers } from "./plugins";
 import { recommendationsHandlers } from "./recommendations";
 import { seriesHandlers } from "./series";
@@ -124,6 +125,7 @@ export const handlers = [
   ...tasksHandlers,
   ...duplicatesHandlers,
   ...pluginsHandlers,
+  ...pluginStorageHandlers,
   ...recommendationsHandlers,
   ...userPluginsHandlers,
   ...utilityHandlers,
@@ -141,6 +143,7 @@ export { libraryHandlers } from "./libraries";
 export { metadataHandlers } from "./metadata";
 export { metricsHandlers } from "./metrics";
 export { pdfCacheHandlers } from "./pdfCache";
+export { pluginStorageHandlers } from "./pluginStorage";
 export { pluginsHandlers } from "./plugins";
 export { recommendationsHandlers } from "./recommendations";
 export { seriesHandlers } from "./series";

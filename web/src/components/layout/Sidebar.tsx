@@ -18,6 +18,7 @@ import {
   IconChartBar,
   IconClipboardList,
   IconCopy,
+  IconDatabase,
   IconDotsVertical,
   IconFileTypePdf,
   IconHome,
@@ -630,6 +631,13 @@ export function Sidebar() {
                     label="Page Cache"
                     leftSection={<IconFileTypePdf size={16} />}
                     active={currentPath.startsWith("/settings/pdf-cache")}
+                  />
+                  <NavLink
+                    component={Link}
+                    to="/settings/plugin-storage"
+                    label="Plugin Storage"
+                    leftSection={<IconDatabase size={16} />}
+                    active={currentPath.startsWith("/settings/plugin-storage")}
                   />
 
                   {/* Account Section */}
