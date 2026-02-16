@@ -1381,7 +1381,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get reading progress for a book */
+        /**
+         * Get reading progress for a book
+         * @description Returns the user's reading progress for a specific book.
+         *     If no progress exists, returns `null` with a 200 status.
+         */
         get: operations["get_reading_progress"];
         /** Update reading progress for a book */
         put: operations["update_reading_progress"];
@@ -18964,13 +18968,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Reading progress retrieved */
+            /** @description Reading progress retrieved (null if no progress exists) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadProgressResponse"];
+                    "application/json": null | components["schemas"]["ReadProgressResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -18987,7 +18991,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Progress not found */
+            /** @description Book not found */
             404: {
                 headers: {
                     [name: string]: unknown;

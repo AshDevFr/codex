@@ -9,22 +9,13 @@ export type UpdateProgressRequest =
 export const readProgressApi = {
   /**
    * Get reading progress for a book
+   * Returns null if no progress exists for the book
    */
   get: async (bookId: string): Promise<ReadProgressResponse | null> => {
-    try {
-      const response = await api.get<ReadProgressResponse>(
-        `/books/${bookId}/progress`,
-      );
-      return response.data;
-    } catch (error) {
-      // Return null if no progress exists (404)
-      if (
-        (error as { response?: { status?: number } })?.response?.status === 404
-      ) {
-        return null;
-      }
-      throw error;
-    }
+    const response = await api.get<ReadProgressResponse | null>(
+      `/books/${bookId}/progress`,
+    );
+    return response.data;
   },
 
   /**

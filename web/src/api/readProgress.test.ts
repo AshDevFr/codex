@@ -32,20 +32,13 @@ describe("readProgressApi", () => {
       expect(result).toEqual(mockProgress);
     });
 
-    it("should return null when no progress exists (404)", async () => {
-      const error = { response: { status: 404 } };
-      vi.mocked(api.get).mockRejectedValueOnce(error);
+    it("should return null when no progress exists", async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({ data: null });
 
       const result = await readProgressApi.get("book-123");
 
+      expect(api.get).toHaveBeenCalledWith("/books/book-123/progress");
       expect(result).toBeNull();
-    });
-
-    it("should throw on other errors", async () => {
-      const error = { response: { status: 500 }, message: "Server error" };
-      vi.mocked(api.get).mockRejectedValueOnce(error);
-
-      await expect(readProgressApi.get("book-123")).rejects.toEqual(error);
     });
   });
 

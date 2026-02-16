@@ -96,14 +96,17 @@ pub async fn update_reading_progress(
 }
 
 /// Get reading progress for a book
+///
+/// Returns the user's reading progress for a specific book.
+/// If no progress exists, returns `null` with a 200 status.
 #[utoipa::path(
     get,
     path = "/api/v1/books/{book_id}/progress",
     responses(
-        (status = 200, description = "Reading progress retrieved", body = ReadProgressResponse),
+        (status = 200, description = "Reading progress retrieved (null if no progress exists)", body = Option<ReadProgressResponse>),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "Progress not found"),
+        (status = 404, description = "Book not found"),
     ),
     security(
         ("bearer_auth" = []),
@@ -115,17 +118,23 @@ pub async fn get_reading_progress(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
     Path(book_id): Path<Uuid>,
-) -> Result<Json<ReadProgressResponse>, ApiError> {
+) -> Result<Json<Option<ReadProgressResponse>>, ApiError> {
     // Check permission
     auth.require_permission(&Permission::BooksRead)?;
 
-    // Get progress
+    // Verify the book exists
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to get book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    // Get progress (returns None/null if no progress exists)
     let progress = ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get reading progress: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Reading progress not found".to_string()))?;
+        .map(ReadProgressResponse::from);
 
-    Ok(Json(progress.into()))
+    Ok(Json(progress))
 }
 
 /// Delete reading progress for a book

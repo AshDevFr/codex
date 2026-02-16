@@ -393,6 +393,127 @@ async fn test_mark_series_as_read_unauthorized() {
 }
 
 // ============================================================================
+// Get Reading Progress Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_progress_returns_null_when_no_progress_exists() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a test book
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book 1".to_string()),
+        50,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Get progress for a book with no progress — should return 200 with null
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/progress", book.id), &token);
+    let (status, response): (StatusCode, Option<ReadProgressResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        response.is_none(),
+        "Expected null response when no progress exists"
+    );
+}
+
+#[tokio::test]
+async fn test_get_progress_returns_progress_when_exists() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Create library and series
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Create a test book
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/test/book1.cbz",
+        "book1.cbz",
+        Some("Book 1".to_string()),
+        50,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    // Create progress first
+    ReadProgressRepository::upsert(&db, user_id, book.id, 25, false)
+        .await
+        .unwrap();
+
+    let app = create_test_router(state).await;
+
+    // Get progress — should return 200 with the progress
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/progress", book.id), &token);
+    let (status, response): (StatusCode, Option<ReadProgressResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let progress = response.unwrap();
+    assert_eq!(progress.book_id, book.id);
+    assert_eq!(progress.user_id, user_id);
+    assert_eq!(progress.current_page, 25);
+    assert!(!progress.completed);
+}
+
+#[tokio::test]
+async fn test_get_progress_returns_404_for_nonexistent_book() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let non_existent_id = uuid::Uuid::new_v4();
+
+    // Get progress for a book that doesn't exist — should return 404
+    let request = get_request_with_auth(
+        &format!("/api/v1/books/{}/progress", non_existent_id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let error = response.unwrap();
+    assert!(
+        error.message.to_lowercase().contains("book")
+            && error.message.to_lowercase().contains("not"),
+        "Expected error to mention book not found, got: {}",
+        error.message
+    );
+}
+
+// ============================================================================
 // Auto-completion on Progress Update Tests
 // ============================================================================
 

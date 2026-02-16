@@ -931,8 +931,8 @@ export const bookHandlers = [
     }
 
     if (!book.readProgress) {
-      // No progress exists
-      return HttpResponse.json({ error: "No progress found" }, { status: 404 });
+      // No progress exists — return null with 200
+      return HttpResponse.json(null);
     }
 
     const currentPage = book.readProgress.currentPage;
