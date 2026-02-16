@@ -16,12 +16,37 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/** MSW handler that returns an enabled, connected recommendation plugin. */
+const pluginsWithRecommendation = http.get("*/user/plugins", () => {
+  return HttpResponse.json({
+    enabled: [
+      {
+        id: "plugin-1",
+        pluginId: "plugin-1",
+        connected: true,
+        capabilities: { userRecommendationProvider: true, readSync: false },
+      },
+    ],
+    available: [],
+  });
+});
+
+/** MSW handler that returns no enabled plugins. */
+const pluginsEmpty = http.get("*/user/plugins", () => {
+  return HttpResponse.json({ enabled: [], available: [] });
+});
+
+// =============================================================================
 // Tests
 // =============================================================================
 
 describe("RecommendationsWidget", () => {
   it("renders nothing when no recommendations", async () => {
     server.use(
+      pluginsWithRecommendation,
       http.get("*/user/recommendations", () => {
         return HttpResponse.json({
           recommendations: [],
@@ -43,15 +68,8 @@ describe("RecommendationsWidget", () => {
     expect(screen.queryByText("Recommended For You")).not.toBeInTheDocument();
   });
 
-  it("renders nothing on API error", async () => {
-    server.use(
-      http.get("*/user/recommendations", () => {
-        return HttpResponse.json(
-          { error: "No recommendation plugin enabled" },
-          { status: 404 },
-        );
-      }),
-    );
+  it("renders nothing when no plugin is enabled", async () => {
+    server.use(pluginsEmpty);
 
     const { container } = renderWithProviders(<RecommendationsWidget />);
 
@@ -65,6 +83,7 @@ describe("RecommendationsWidget", () => {
 
   it("renders carousel with recommendations", async () => {
     server.use(
+      pluginsWithRecommendation,
       http.get("*/user/recommendations", () => {
         return HttpResponse.json({
           recommendations: [
@@ -101,6 +120,7 @@ describe("RecommendationsWidget", () => {
 
   it("shows plugin name as subtitle", async () => {
     server.use(
+      pluginsWithRecommendation,
       http.get("*/user/recommendations", () => {
         return HttpResponse.json({
           recommendations: [
