@@ -78,6 +78,8 @@ pub struct PluginConfig {
     /// Credentials to pass to plugin (via init message)
     /// Uses SecretValue to prevent logging of sensitive data
     pub credentials: Option<SecretValue>,
+    /// Scoped data directory for this plugin's file storage
+    pub data_dir: Option<String>,
 }
 
 impl std::fmt::Debug for PluginConfig {
@@ -90,6 +92,7 @@ impl std::fmt::Debug for PluginConfig {
             .field("admin_config", &self.admin_config)
             .field("user_config", &self.user_config)
             .field("credentials", &self.credentials) // SecretValue shows [REDACTED]
+            .field("data_dir", &self.data_dir)
             .finish()
     }
 }
@@ -104,6 +107,7 @@ impl Default for PluginConfig {
             admin_config: None,
             user_config: None,
             credentials: None,
+            data_dir: None,
         }
     }
 }
@@ -262,6 +266,7 @@ impl PluginHandle {
             admin_config: self.config.admin_config.clone(),
             user_config: self.config.user_config.clone(),
             credentials: self.config.credentials.as_ref().map(|s| s.inner().clone()),
+            data_dir: self.config.data_dir.clone(),
         };
 
         debug!(

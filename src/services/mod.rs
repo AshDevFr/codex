@@ -8,6 +8,7 @@ pub mod metadata;
 pub mod oidc;
 pub mod pdf_cache;
 pub mod plugin;
+pub mod plugin_file_storage;
 pub mod plugin_metrics;
 pub mod rate_limiter;
 pub mod read_progress;
@@ -32,4 +33,5 @@ pub use task_metrics::TaskMetricsService;
 pub use thumbnail::ThumbnailService;
 
 pub use plugin::encryption::CredentialEncryption;
+pub use plugin_file_storage::{PluginCleanupStats, PluginFileStorage, PluginStorageStats};
 pub use plugin_metrics::{PluginHealthStatus, PluginMetricsService};

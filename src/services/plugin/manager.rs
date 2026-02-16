@@ -330,6 +330,8 @@ pub struct PluginManager {
     health_check_handle: RwLock<Option<tokio::task::JoinHandle<()>>>,
     /// Optional metrics service for recording plugin operation metrics
     metrics_service: Option<Arc<PluginMetricsService>>,
+    /// Optional plugin file storage for resolving plugin data directories
+    plugin_file_storage: Option<Arc<crate::services::PluginFileStorage>>,
 }
 
 impl PluginManager {
@@ -343,6 +345,7 @@ impl PluginManager {
             cache_refresh_mutex: Mutex::new(()),
             health_check_handle: RwLock::new(None),
             metrics_service: None,
+            plugin_file_storage: None,
         }
     }
 
@@ -354,6 +357,15 @@ impl PluginManager {
     /// Set the metrics service for recording plugin operation metrics
     pub fn with_metrics_service(mut self, metrics_service: Arc<PluginMetricsService>) -> Self {
         self.metrics_service = Some(metrics_service);
+        self
+    }
+
+    /// Set the plugin file storage for resolving plugin data directories
+    pub fn with_plugin_file_storage(
+        mut self,
+        storage: Arc<crate::services::PluginFileStorage>,
+    ) -> Self {
+        self.plugin_file_storage = Some(storage);
         self
     }
 
@@ -816,6 +828,9 @@ impl PluginManager {
             None
         };
 
+        // User plugins share the same data directory as their parent system plugin
+        let data_dir = self.resolve_plugin_data_dir(&plugin.name).await;
+
         Ok(PluginConfig {
             process: process_config,
             request_timeout: self.config.default_request_timeout,
@@ -824,6 +839,7 @@ impl PluginManager {
             admin_config,
             user_config,
             credentials,
+            data_dir,
         })
     }
 
@@ -1554,6 +1570,25 @@ impl PluginManager {
     }
 
     /// Create a PluginConfig from database model
+    /// Resolve the scoped data directory for a plugin.
+    ///
+    /// Uses `PluginFileStorage` to create and return `{plugins_dir}/{plugin_name}/`.
+    /// Returns `None` if plugin file storage is not configured or resolution fails.
+    async fn resolve_plugin_data_dir(&self, plugin_name: &str) -> Option<String> {
+        let storage = self.plugin_file_storage.as_ref()?;
+        match storage.get_plugin_dir(plugin_name).await {
+            Ok(path) => Some(path.to_string_lossy().to_string()),
+            Err(e) => {
+                warn!(
+                    plugin = plugin_name,
+                    error = %e,
+                    "Failed to resolve plugin data directory"
+                );
+                None
+            }
+        }
+    }
+
     async fn create_plugin_config(
         &self,
         plugin: &plugins::Model,
@@ -1607,6 +1642,8 @@ impl PluginManager {
             }
         }
 
+        let data_dir = self.resolve_plugin_data_dir(&plugin.name).await;
+
         Ok(PluginConfig {
             process: process_config,
             request_timeout: self.config.default_request_timeout,
@@ -1615,6 +1652,7 @@ impl PluginManager {
             admin_config: Some(plugin.config.clone()),
             user_config: None,
             credentials,
+            data_dir,
         })
     }
 

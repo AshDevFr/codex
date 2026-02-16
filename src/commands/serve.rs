@@ -269,13 +269,19 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     let plugin_metrics_service = Arc::new(crate::services::PluginMetricsService::new());
     info!("Plugin metrics service initialized");
 
+    // Initialize plugin file storage (shared between plugin manager and app state)
+    let plugin_file_storage = Arc::new(crate::services::PluginFileStorage::new(
+        &config.files.plugins_dir,
+    ));
+
     // Initialize plugin manager (before workers so they can handle plugin tasks)
     info!("Initializing plugin manager...");
     let plugin_manager = Arc::new(
         crate::services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
         ))
-        .with_metrics_service(plugin_metrics_service.clone()),
+        .with_metrics_service(plugin_metrics_service.clone())
+        .with_plugin_file_storage(plugin_file_storage.clone()),
     );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {
@@ -361,6 +367,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         plugin_metrics_service,
         oidc_service,
         oauth_state_manager: oauth_state_manager.clone(),
+        plugin_file_storage: Some(plugin_file_storage),
     });
 
     // Build router using API module

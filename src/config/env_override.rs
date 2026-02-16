@@ -1,7 +1,7 @@
 use super::types::{
-    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, KomgaApiConfig,
-    LogLevel, LoggingConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig, PostgresConfig,
-    RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+    ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, FilesConfig,
+    KomgaApiConfig, LogLevel, LoggingConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig,
+    PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
 use std::collections::HashMap;
 use std::env;
@@ -215,6 +215,10 @@ impl EnvOverride for OidcConfig {
 
 impl EnvOverride for Config {
     fn apply_env_overrides(&mut self, prefix: &str) {
+        // Apply data_dir override first (sub-configs may reference it)
+        if let Ok(data_dir) = env::var(format!("{}_DATA_DIR", prefix)) {
+            self.data_dir = data_dir;
+        }
         self.application
             .apply_env_overrides(&format!("{}_APPLICATION", prefix));
         self.database
@@ -226,6 +230,7 @@ impl EnvOverride for Config {
         self.task.apply_env_overrides(&format!("{}_TASK", prefix));
         self.scanner
             .apply_env_overrides(&format!("{}_SCANNER", prefix));
+        self.files.apply_env_overrides(&format!("{}_FILES", prefix));
         self.komga_api
             .apply_env_overrides(&format!("{}_KOMGA_API", prefix));
         self.rate_limit
@@ -408,6 +413,20 @@ impl EnvOverride for ApiConfig {
             && let Ok(size) = max_page_size.parse()
         {
             self.max_page_size = size;
+        }
+    }
+}
+
+impl EnvOverride for FilesConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(thumbnail_dir) = env::var(format!("{}_THUMBNAIL_DIR", prefix)) {
+            self.thumbnail_dir = thumbnail_dir;
+        }
+        if let Ok(uploads_dir) = env::var(format!("{}_UPLOADS_DIR", prefix)) {
+            self.uploads_dir = uploads_dir;
+        }
+        if let Ok(plugins_dir) = env::var(format!("{}_PLUGINS_DIR", prefix)) {
+            self.plugins_dir = plugins_dir;
         }
     }
 }
@@ -619,6 +638,7 @@ mod tests {
             FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
         };
         let mut config = Config {
+            data_dir: "data".to_string(),
             database: DatabaseConfig {
                 db_type: DatabaseType::SQLite,
                 postgres: None,
@@ -802,6 +822,7 @@ mod tests {
             FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
         };
         let mut config = Config {
+            data_dir: "data".to_string(),
             database: DatabaseConfig {
                 db_type: DatabaseType::SQLite,
                 postgres: None,
@@ -1398,5 +1419,74 @@ mod tests {
         );
 
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN");
+    }
+
+    // FilesConfig Environment Override Tests
+
+    #[test]
+    #[serial]
+    fn test_files_config_env_override_all_fields() {
+        remove_var("CODEX_FILES_THUMBNAIL_DIR");
+        remove_var("CODEX_FILES_UPLOADS_DIR");
+        remove_var("CODEX_FILES_PLUGINS_DIR");
+
+        let mut config = FilesConfig {
+            thumbnail_dir: "data/thumbnails".to_string(),
+            uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
+        };
+
+        set_var("CODEX_FILES_THUMBNAIL_DIR", "/custom/thumbs");
+        set_var("CODEX_FILES_UPLOADS_DIR", "/custom/uploads");
+        set_var("CODEX_FILES_PLUGINS_DIR", "/custom/plugins");
+        config.apply_env_overrides("CODEX_FILES");
+
+        assert_eq!(config.thumbnail_dir, "/custom/thumbs");
+        assert_eq!(config.uploads_dir, "/custom/uploads");
+        assert_eq!(config.plugins_dir, "/custom/plugins");
+
+        remove_var("CODEX_FILES_THUMBNAIL_DIR");
+        remove_var("CODEX_FILES_UPLOADS_DIR");
+        remove_var("CODEX_FILES_PLUGINS_DIR");
+    }
+
+    #[test]
+    #[serial]
+    fn test_files_config_env_override_partial() {
+        remove_var("CODEX_FILES_THUMBNAIL_DIR");
+        remove_var("CODEX_FILES_UPLOADS_DIR");
+        remove_var("CODEX_FILES_PLUGINS_DIR");
+
+        let mut config = FilesConfig {
+            thumbnail_dir: "data/thumbnails".to_string(),
+            uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
+        };
+
+        // Only override plugins_dir
+        set_var("CODEX_FILES_PLUGINS_DIR", "/mnt/storage/plugins");
+        config.apply_env_overrides("CODEX_FILES");
+
+        assert_eq!(config.thumbnail_dir, "data/thumbnails"); // Unchanged
+        assert_eq!(config.uploads_dir, "data/uploads"); // Unchanged
+        assert_eq!(config.plugins_dir, "/mnt/storage/plugins");
+
+        remove_var("CODEX_FILES_PLUGINS_DIR");
+    }
+
+    #[test]
+    #[serial]
+    fn test_config_data_dir_env_override() {
+        remove_var("CODEX_DATA_DIR");
+
+        let mut config = Config::default();
+        assert_eq!(config.data_dir, "data"); // Default
+
+        set_var("CODEX_DATA_DIR", "/mnt/codex-data");
+        config.apply_env_overrides("CODEX");
+
+        assert_eq!(config.data_dir, "/mnt/codex-data");
+
+        remove_var("CODEX_DATA_DIR");
     }
 }

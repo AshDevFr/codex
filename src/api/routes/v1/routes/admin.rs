@@ -90,6 +90,19 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/admin/pdf-cache",
             delete(handlers::pdf_cache::clear_pdf_cache),
         )
+        // Plugin file storage routes (admin only)
+        .route(
+            "/admin/plugin-storage",
+            get(handlers::plugin_storage::get_all_plugin_storage_stats),
+        )
+        .route(
+            "/admin/plugin-storage/:name",
+            get(handlers::plugin_storage::get_plugin_storage_stats),
+        )
+        .route(
+            "/admin/plugin-storage/:name",
+            delete(handlers::plugin_storage::cleanup_plugin_storage),
+        )
         // Plugin management routes (admin only)
         .route("/admin/plugins", get(handlers::plugins::list_plugins))
         .route("/admin/plugins", post(handlers::plugins::create_plugin))

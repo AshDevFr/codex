@@ -215,6 +215,12 @@ impl Default for TaskConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
+    /// Base data directory — all other data dirs derive from this unless overridden.
+    /// When set, sub-directories (thumbnails, uploads, plugins, cache, SQLite DB) default
+    /// to paths under this directory. Explicit overrides take precedence.
+    /// Default: "data" (env: CODEX_DATA_DIR)
+    #[serde(default = "default_data_dir")]
+    pub data_dir: String,
     #[serde(default)]
     pub database: DatabaseConfig,
     #[serde(default)]
@@ -239,6 +245,79 @@ pub struct Config {
     pub komga_api: KomgaApiConfig,
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
+}
+
+fn default_data_dir() -> String {
+    env_string_opt("CODEX_DATA_DIR").unwrap_or_else(|| "data".to_string())
+}
+
+/// Default sub-directory names under data_dir
+const DEFAULT_THUMBNAILS_SUBDIR: &str = "thumbnails";
+const DEFAULT_UPLOADS_SUBDIR: &str = "uploads";
+const DEFAULT_PLUGINS_SUBDIR: &str = "plugins";
+const DEFAULT_CACHE_SUBDIR: &str = "cache";
+const DEFAULT_SQLITE_FILENAME: &str = "codex.db";
+
+impl Config {
+    /// Resolve sub-directory paths relative to `data_dir`.
+    ///
+    /// For each sub-path (thumbnail_dir, uploads_dir, plugins_dir, cache_dir, sqlite path),
+    /// if the value matches the old hardcoded default (e.g., "data/thumbnails") AND no
+    /// explicit env var override is set for that field, replace it with `{data_dir}/{subdir}`.
+    ///
+    /// This ensures backward compatibility: users who never set `data_dir` get the same
+    /// paths as before ("data/thumbnails"), while users who set `data_dir: /var/lib/codex`
+    /// get "/var/lib/codex/thumbnails" automatically.
+    ///
+    /// Explicit overrides (env vars or non-default config values) always take precedence.
+    pub fn resolve_data_dir(&mut self) {
+        let data_dir = &self.data_dir;
+
+        // Helper: build the derived path from data_dir
+        let derive = |subdir: &str| -> String { format!("{}/{}", data_dir, subdir) };
+
+        // Helper: check if a field uses the old hardcoded default ("data/{subdir}")
+        let is_old_default =
+            |value: &str, subdir: &str| -> bool { value == format!("data/{}", subdir) };
+
+        // Resolve files.thumbnail_dir
+        if is_old_default(&self.files.thumbnail_dir, DEFAULT_THUMBNAILS_SUBDIR)
+            && env_string_opt("CODEX_FILES_THUMBNAIL_DIR").is_none()
+        {
+            self.files.thumbnail_dir = derive(DEFAULT_THUMBNAILS_SUBDIR);
+        }
+
+        // Resolve files.uploads_dir
+        if is_old_default(&self.files.uploads_dir, DEFAULT_UPLOADS_SUBDIR)
+            && env_string_opt("CODEX_FILES_UPLOADS_DIR").is_none()
+        {
+            self.files.uploads_dir = derive(DEFAULT_UPLOADS_SUBDIR);
+        }
+
+        // Resolve files.plugins_dir
+        if is_old_default(&self.files.plugins_dir, DEFAULT_PLUGINS_SUBDIR)
+            && env_string_opt("CODEX_FILES_PLUGINS_DIR").is_none()
+        {
+            self.files.plugins_dir = derive(DEFAULT_PLUGINS_SUBDIR);
+        }
+
+        // Resolve pdf.cache_dir
+        if is_old_default(&self.pdf.cache_dir, DEFAULT_CACHE_SUBDIR)
+            && env_string_opt("CODEX_PDF_CACHE_DIR").is_none()
+        {
+            self.pdf.cache_dir = derive(DEFAULT_CACHE_SUBDIR);
+        }
+
+        // Resolve database.sqlite.path
+        if let Some(ref mut sqlite_config) = self.database.sqlite {
+            let old_default = format!("data/{}", DEFAULT_SQLITE_FILENAME);
+            if sqlite_config.path == old_default
+                && env_string_opt("CODEX_DATABASE_SQLITE_PATH").is_none()
+            {
+                sqlite_config.path = derive(DEFAULT_SQLITE_FILENAME);
+            }
+        }
+    }
 }
 
 impl Default for Config {
@@ -276,6 +355,7 @@ impl Default for Config {
         };
 
         Self {
+            data_dir: default_data_dir(),
             database: DatabaseConfig {
                 db_type,
                 postgres: postgres_config,
@@ -660,6 +740,11 @@ pub struct FilesConfig {
     /// Full path to uploads directory for user-uploaded files (covers, etc.)
     /// This is a startup-time setting - changes require a restart
     pub uploads_dir: String,
+
+    /// Full path to plugins data directory for plugin-specific file storage
+    /// Each plugin gets an isolated subdirectory under this path.
+    /// This is a startup-time setting - changes require a restart
+    pub plugins_dir: String,
 }
 
 impl Default for FilesConfig {
@@ -669,6 +754,8 @@ impl Default for FilesConfig {
                 .unwrap_or_else(|| "data/thumbnails".to_string()),
             uploads_dir: env_string_opt("CODEX_FILES_UPLOADS_DIR")
                 .unwrap_or_else(|| "data/uploads".to_string()),
+            plugins_dir: env_string_opt("CODEX_FILES_PLUGINS_DIR")
+                .unwrap_or_else(|| "data/plugins".to_string()),
         }
     }
 }
@@ -1028,6 +1115,7 @@ verification_url_base: https://codex.example.com
     #[test]
     fn test_full_config() {
         let config = Config {
+            data_dir: "data".to_string(),
             database: DatabaseConfig {
                 db_type: DatabaseType::SQLite,
                 postgres: None,
@@ -1064,6 +1152,7 @@ verification_url_base: https://codex.example.com
         let config = FilesConfig::default();
         assert_eq!(config.thumbnail_dir, "data/thumbnails");
         assert_eq!(config.uploads_dir, "data/uploads");
+        assert_eq!(config.plugins_dir, "data/plugins");
     }
 
     #[test]
@@ -1740,5 +1829,131 @@ auth:
         let config: Config = serde_yaml::from_str(yaml_content).unwrap();
         assert!(config.auth.oidc.enabled);
         assert!(config.auth.oidc.providers.contains_key("keycloak"));
+    }
+
+    // ================================================================
+    // data_dir and resolve_data_dir tests
+    // ================================================================
+
+    #[test]
+    fn test_data_dir_default() {
+        let config = Config::default();
+        assert_eq!(config.data_dir, "data");
+    }
+
+    #[test]
+    fn test_data_dir_from_yaml() {
+        let yaml_content = r#"
+data_dir: /var/lib/codex
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+"#;
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.data_dir, "/var/lib/codex");
+    }
+
+    #[test]
+    fn test_resolve_data_dir_replaces_defaults() {
+        let mut config = Config {
+            data_dir: "/var/lib/codex".to_string(),
+            ..Config::default()
+        };
+        // Set old defaults
+        config.files.thumbnail_dir = "data/thumbnails".to_string();
+        config.files.uploads_dir = "data/uploads".to_string();
+        config.files.plugins_dir = "data/plugins".to_string();
+        config.pdf.cache_dir = "data/cache".to_string();
+        config.database.sqlite = Some(SQLiteConfig {
+            path: "data/codex.db".to_string(),
+            pragmas: None,
+            ..SQLiteConfig::default()
+        });
+
+        config.resolve_data_dir();
+
+        assert_eq!(config.files.thumbnail_dir, "/var/lib/codex/thumbnails");
+        assert_eq!(config.files.uploads_dir, "/var/lib/codex/uploads");
+        assert_eq!(config.files.plugins_dir, "/var/lib/codex/plugins");
+        assert_eq!(config.pdf.cache_dir, "/var/lib/codex/cache");
+        assert_eq!(
+            config.database.sqlite.as_ref().unwrap().path,
+            "/var/lib/codex/codex.db"
+        );
+    }
+
+    #[test]
+    fn test_resolve_data_dir_preserves_explicit_overrides() {
+        let mut config = Config {
+            data_dir: "/var/lib/codex".to_string(),
+            ..Config::default()
+        };
+        // Set custom (non-default) paths that should be preserved
+        config.files.thumbnail_dir = "/custom/thumbs".to_string();
+        config.files.uploads_dir = "/custom/uploads".to_string();
+        config.files.plugins_dir = "/custom/plugins".to_string();
+        config.pdf.cache_dir = "/custom/cache".to_string();
+        config.database.sqlite = Some(SQLiteConfig {
+            path: "/custom/db.sqlite".to_string(),
+            pragmas: None,
+            ..SQLiteConfig::default()
+        });
+
+        config.resolve_data_dir();
+
+        // Non-default paths should NOT be replaced
+        assert_eq!(config.files.thumbnail_dir, "/custom/thumbs");
+        assert_eq!(config.files.uploads_dir, "/custom/uploads");
+        assert_eq!(config.files.plugins_dir, "/custom/plugins");
+        assert_eq!(config.pdf.cache_dir, "/custom/cache");
+        assert_eq!(
+            config.database.sqlite.as_ref().unwrap().path,
+            "/custom/db.sqlite"
+        );
+    }
+
+    #[test]
+    fn test_resolve_data_dir_noop_with_default_data_dir() {
+        let mut config = Config::default();
+        // data_dir is "data" by default, so old defaults like "data/thumbnails"
+        // should remain "data/thumbnails"
+        let original_thumb = config.files.thumbnail_dir.clone();
+        let original_uploads = config.files.uploads_dir.clone();
+        let original_plugins = config.files.plugins_dir.clone();
+        let original_cache = config.pdf.cache_dir.clone();
+
+        config.resolve_data_dir();
+
+        assert_eq!(config.files.thumbnail_dir, original_thumb);
+        assert_eq!(config.files.uploads_dir, original_uploads);
+        assert_eq!(config.files.plugins_dir, original_plugins);
+        assert_eq!(config.pdf.cache_dir, original_cache);
+    }
+
+    #[test]
+    fn test_resolve_data_dir_no_sqlite_config() {
+        let mut config = Config {
+            data_dir: "/var/lib/codex".to_string(),
+            ..Config::default()
+        };
+        config.database.sqlite = None;
+
+        // Should not panic when sqlite is None
+        config.resolve_data_dir();
+
+        assert_eq!(config.files.thumbnail_dir, "/var/lib/codex/thumbnails");
+    }
+
+    #[test]
+    fn test_plugins_dir_in_files_config() {
+        let yaml_content = r#"
+files:
+  thumbnail_dir: /tmp/thumbs
+  uploads_dir: /tmp/uploads
+  plugins_dir: /tmp/plugins
+"#;
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.files.plugins_dir, "/tmp/plugins");
     }
 }

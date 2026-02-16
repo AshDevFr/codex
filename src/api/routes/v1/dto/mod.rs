@@ -16,6 +16,7 @@ pub mod oidc;
 pub mod page;
 pub mod patch;
 pub mod pdf_cache;
+pub mod plugin_storage;
 pub mod plugins;
 pub mod read_progress;
 pub mod recommendations;
@@ -42,6 +43,7 @@ pub use metrics::*;
 pub use oidc::*;
 pub use page::*;
 pub use pdf_cache::*;
+pub use plugin_storage::*;
 pub use plugins::*;
 pub use read_progress::*;
 #[allow(unused_imports)]

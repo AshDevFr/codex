@@ -53,6 +53,7 @@ application:
     #[test]
     fn test_config_to_file() {
         let config = Config {
+            data_dir: "data".to_string(),
             database: DatabaseConfig {
                 db_type: DatabaseType::SQLite,
                 postgres: None,
@@ -134,6 +135,7 @@ scanner:
     #[test]
     fn test_config_serialization_includes_task_and_scanner() {
         let config = Config {
+            data_dir: "data".to_string(),
             database: DatabaseConfig {
                 db_type: DatabaseType::SQLite,
                 postgres: None,

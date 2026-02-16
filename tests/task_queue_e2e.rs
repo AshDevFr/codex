@@ -35,6 +35,7 @@ async fn test_e2e_task_execution() {
     let files_config = codex::config::FilesConfig {
         thumbnail_dir: "data/thumbnails".to_string(),
         uploads_dir: "data/uploads".to_string(),
+        plugins_dir: "data/plugins".to_string(),
     };
     let thumbnail_service = Arc::new(ThumbnailService::new(files_config));
 
@@ -160,6 +161,7 @@ async fn test_concurrent_workers_skip_locked() {
     let files_config = codex::config::FilesConfig {
         thumbnail_dir: "data/thumbnails".to_string(),
         uploads_dir: "data/uploads".to_string(),
+        plugins_dir: "data/plugins".to_string(),
     };
     let thumbnail_service = Arc::new(ThumbnailService::new(files_config));
 
@@ -310,6 +312,7 @@ async fn test_stale_task_recovery() {
     let files_config = codex::config::FilesConfig {
         thumbnail_dir: "data/thumbnails".to_string(),
         uploads_dir: "data/uploads".to_string(),
+        plugins_dir: "data/plugins".to_string(),
     };
     let thumbnail_service = Arc::new(ThumbnailService::new(files_config));
 

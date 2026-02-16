@@ -1283,6 +1283,7 @@ mod tests {
         FilesConfig {
             thumbnail_dir: "data/thumbnails".to_string(),
             uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
         }
     }
 
@@ -1341,6 +1342,7 @@ mod tests {
         let config = FilesConfig {
             thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
             uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
         };
         let service = ThumbnailService::new(config);
         let book_id = Uuid::new_v4();
@@ -1355,6 +1357,7 @@ mod tests {
         let config = FilesConfig {
             thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
             uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
         };
         let service = ThumbnailService::new(config);
         let book_id = Uuid::new_v4();
@@ -1384,6 +1387,7 @@ mod tests {
         let config = FilesConfig {
             thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
             uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
         };
         let service = ThumbnailService::new(config);
         let book_id = Uuid::new_v4();
@@ -1400,6 +1404,7 @@ mod tests {
         let config = FilesConfig {
             thumbnail_dir: temp_dir.path().to_string_lossy().to_string(),
             uploads_dir: "data/uploads".to_string(),
+            plugins_dir: "data/plugins".to_string(),
         };
         let service = ThumbnailService::new(config);
         let book_id = Uuid::new_v4();

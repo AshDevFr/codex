@@ -89,6 +89,7 @@ async fn create_test_app_state_with_pdf_cache(
         plugin_metrics_service,
         oidc_service: None,
         oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
+        plugin_file_storage: None,
     })
 }
 

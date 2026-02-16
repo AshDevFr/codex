@@ -32,7 +32,7 @@ pub fn ensure_parent_dir_exists(path: &Path) -> anyhow::Result<()> {
 }
 
 /// Ensure all data directories from config exist
-/// Call this after loading config to ensure thumbnail_dir, uploads_dir, and database dir exist
+/// Call this after loading config to ensure thumbnail_dir, uploads_dir, plugins_dir, and database dir exist
 pub fn ensure_data_directories(config: &Config) -> anyhow::Result<()> {
     // Ensure thumbnail directory exists
     let thumbnail_path = Path::new(&config.files.thumbnail_dir);
@@ -48,6 +48,14 @@ pub fn ensure_data_directories(config: &Config) -> anyhow::Result<()> {
     info!(
         "Ensured uploads directory exists: {}",
         config.files.uploads_dir
+    );
+
+    // Ensure plugins directory exists
+    let plugins_path = Path::new(&config.files.plugins_dir);
+    ensure_dir_exists(plugins_path)?;
+    info!(
+        "Ensured plugins directory exists: {}",
+        config.files.plugins_dir
     );
 
     // Ensure SQLite database parent directory exists (if using SQLite)
@@ -95,6 +103,9 @@ pub fn load_config(config_path: PathBuf) -> anyhow::Result<(Config, bool)> {
 
     // Apply environment variable overrides
     config.apply_env_overrides("CODEX");
+
+    // Resolve sub-directory paths relative to data_dir
+    config.resolve_data_dir();
 
     Ok((config, config_created))
 }
@@ -593,6 +604,11 @@ mod tests {
             files: FilesConfig {
                 thumbnail_dir: thumbnail_dir.to_string_lossy().to_string(),
                 uploads_dir: uploads_dir.to_string_lossy().to_string(),
+                plugins_dir: temp_dir
+                    .path()
+                    .join("plugins")
+                    .to_string_lossy()
+                    .to_string(),
             },
             database: crate::config::DatabaseConfig {
                 db_type: crate::config::DatabaseType::SQLite,
@@ -610,10 +626,13 @@ mod tests {
             ..Config::default()
         };
 
+        let plugins_dir = temp_dir.path().join("plugins");
+
         assert!(!thumbnail_dir.exists());
         assert!(!uploads_dir.exists());
         assert!(!db_path.parent().unwrap().exists());
         assert!(!pdf_cache_dir.exists());
+        assert!(!plugins_dir.exists());
 
         ensure_data_directories(&config).unwrap();
 
@@ -621,6 +640,7 @@ mod tests {
         assert!(uploads_dir.exists());
         assert!(db_path.parent().unwrap().exists());
         assert!(pdf_cache_dir.exists());
+        assert!(plugins_dir.exists());
     }
 
     #[test]

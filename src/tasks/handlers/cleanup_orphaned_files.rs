@@ -166,6 +166,11 @@ mod tests {
                 .join("uploads")
                 .to_string_lossy()
                 .to_string(),
+            plugins_dir: temp_dir
+                .path()
+                .join("plugins")
+                .to_string_lossy()
+                .to_string(),
         }
     }
 

@@ -1266,6 +1266,11 @@ pub struct InitializeParams {
     /// Credentials passed via init message (alternative to env vars)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credentials: Option<Value>,
+    /// Scoped data directory for this plugin's file storage.
+    /// Created by the host at `{plugins_dir}/{plugin_name}/`.
+    /// Plugins can use this for larger file-based storage (SQLite DBs, caches, etc.)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_dir: Option<String>,
 }
 
 // =============================================================================
@@ -2271,6 +2276,7 @@ mod tests {
             admin_config: Some(json!({"clientId": "abc"})),
             user_config: Some(json!({"progressUnit": "chapters"})),
             credentials: Some(json!({"access_token": "secret"})),
+            data_dir: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["adminConfig"]["clientId"], "abc");
@@ -2286,6 +2292,7 @@ mod tests {
             admin_config: None,
             user_config: None,
             credentials: None,
+            data_dir: None,
         };
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json["config"]["merged"], true);
@@ -2327,6 +2334,30 @@ mod tests {
         let params = InitializeParams::default();
         let json = serde_json::to_value(&params).unwrap();
         assert_eq!(json, json!({}));
+    }
+
+    #[test]
+    fn test_initialize_params_with_data_dir() {
+        let params = InitializeParams {
+            data_dir: Some("/data/plugins/my-plugin".to_string()),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&params).unwrap();
+        assert_eq!(json["dataDir"], "/data/plugins/my-plugin");
+        // Other fields should be omitted when None
+        assert!(!json.as_object().unwrap().contains_key("config"));
+        assert!(!json.as_object().unwrap().contains_key("credentials"));
+    }
+
+    #[test]
+    fn test_initialize_params_data_dir_deserialization() {
+        let json = json!({
+            "adminConfig": {"key": "val"},
+            "dataDir": "/data/plugins/test-plugin"
+        });
+        let params: InitializeParams = serde_json::from_value(json).unwrap();
+        assert_eq!(params.data_dir.unwrap(), "/data/plugins/test-plugin");
+        assert!(params.admin_config.is_some());
     }
 
     #[test]

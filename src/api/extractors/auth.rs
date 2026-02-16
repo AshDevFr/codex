@@ -218,6 +218,9 @@ pub struct AppState {
     pub oidc_service: Option<Arc<crate::services::OidcService>>,
     /// OAuth state manager for user plugin OAuth flows
     pub oauth_state_manager: Arc<crate::services::user_plugin::OAuthStateManager>,
+    /// Plugin file storage service for managing plugin data directories
+    /// None when not configured (shouldn't happen in normal operation)
+    pub plugin_file_storage: Option<Arc<crate::services::PluginFileStorage>>,
 }
 
 // Legacy alias for backwards compatibility during transition
