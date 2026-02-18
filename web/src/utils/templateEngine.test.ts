@@ -173,6 +173,201 @@ describe("templateEngine", () => {
       });
     });
 
+    describe("eq (inline)", () => {
+      it("should return true when values are equal", () => {
+        const result = renderTemplate(
+          '{{#if (eq status "active")}}Active{{/if}}',
+          { status: "active" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Active");
+      });
+
+      it("should return false when values differ", () => {
+        const result = renderTemplate(
+          '{{#if (eq status "active")}}Active{{else}}Nope{{/if}}',
+          { status: "inactive" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Nope");
+      });
+
+      it("should compose with or block helper", () => {
+        const result = renderTemplate(
+          '{{#or (eq lang "en") (eq lang "ja")}}Match{{/or}}',
+          { lang: "ja" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Match");
+      });
+
+      it("should compose with and block helper", () => {
+        const result = renderTemplate(
+          '{{#and (eq a "x") (eq b "y")}}Both{{/and}}',
+          { a: "x", b: "y" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Both");
+      });
+
+      it("should compose with lowercase helper", () => {
+        const result = renderTemplate(
+          '{{#if (eq (lowercase label) "romaji")}}Yes{{/if}}',
+          { label: "Romaji" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Yes");
+      });
+
+      it("should work inside each loops with subexpressions", () => {
+        const result = renderTemplate(
+          '{{#each titles}}{{#or (eq (lowercase this.label) "en") (eq (lowercase this.label) "romaji")}}{{this.title}}{{/or}}{{/each}}',
+          {
+            titles: [
+              { label: "Japanese", title: "ワンピース" },
+              { label: "Romaji", title: "One Piece" },
+              { label: "EN", title: "One Piece English" },
+            ],
+          },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("One PieceOne Piece English");
+      });
+    });
+
+    describe("ne (inline)", () => {
+      it("should return true when values differ", () => {
+        const result = renderTemplate(
+          '{{#if (ne status "active")}}Not Active{{/if}}',
+          { status: "inactive" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Not Active");
+      });
+
+      it("should return false when values are equal", () => {
+        const result = renderTemplate(
+          '{{#if (ne status "active")}}Not Active{{else}}Active{{/if}}',
+          { status: "active" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Active");
+      });
+    });
+
+    describe("oneOf", () => {
+      it("should return true when value matches one of the options (inline)", () => {
+        const result = renderTemplate(
+          '{{#if (oneOf lang "en" "ja" "romaji")}}Match{{/if}}',
+          { lang: "ja" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Match");
+      });
+
+      it("should return false when value matches none", () => {
+        const result = renderTemplate(
+          '{{#if (oneOf lang "en" "ja")}}Match{{else}}No{{/if}}',
+          { lang: "fr" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("No");
+      });
+
+      it("should work as a block helper", () => {
+        const result = renderTemplate(
+          '{{#oneOf status "active" "pending"}}Yes{{else}}No{{/oneOf}}',
+          { status: "active" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Yes");
+      });
+
+      it("should compose with lowercase for case-insensitive matching", () => {
+        const result = renderTemplate(
+          '{{#if (oneOf (lowercase label) "en" "romaji" "native")}}Match{{/if}}',
+          { label: "Romaji" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Match");
+      });
+
+      it("should work in each loops for label filtering", () => {
+        const result = renderTemplate(
+          '{{#each titles}}{{#if (oneOf (lowercase this.label) "en" "romaji" "native")}}{{this.title}}, {{/if}}{{/each}}',
+          {
+            titles: [
+              { label: "Japanese", title: "ワンピース" },
+              { label: "Romaji", title: "One Piece" },
+              { label: "Native", title: "ワンピース" },
+              { label: "French", title: "One Piece FR" },
+              { label: "EN", title: "One Piece English" },
+            ],
+          },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe(
+          "One Piece, ワンピース, One Piece English, ",
+        );
+      });
+    });
+
+    describe("inArray", () => {
+      it("should return true when array contains value (inline)", () => {
+        const result = renderTemplate(
+          '{{#if (inArray genres "Action")}}Has Action{{/if}}',
+          { genres: ["Action", "Comedy", "Drama"] },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Has Action");
+      });
+
+      it("should return false when array does not contain value (inline)", () => {
+        const result = renderTemplate(
+          '{{#if (inArray genres "Horror")}}Has Horror{{else}}No Horror{{/if}}',
+          { genres: ["Action", "Comedy"] },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("No Horror");
+      });
+
+      it("should work as a block helper", () => {
+        const result = renderTemplate(
+          '{{#inArray genres "Comedy"}}Funny{{/inArray}}',
+          { genres: ["Action", "Comedy"] },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Funny");
+      });
+
+      it("should render else block when not found", () => {
+        const result = renderTemplate(
+          '{{#inArray genres "Horror"}}Scary{{else}}Not Scary{{/inArray}}',
+          { genres: ["Action", "Comedy"] },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Not Scary");
+      });
+
+      it("should return false for non-arrays", () => {
+        const result = renderTemplate(
+          '{{#if (inArray notAnArray "x")}}Found{{else}}Nope{{/if}}',
+          { notAnArray: "string" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Nope");
+      });
+
+      it("should compose with or helper", () => {
+        const result = renderTemplate(
+          '{{#or (inArray genres "Horror") (inArray genres "Thriller")}}Spooky{{/or}}',
+          { genres: ["Comedy", "Thriller"] },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Spooky");
+      });
+    });
+
     describe("ifNotEquals", () => {
       it("should render content when values are not equal", () => {
         const result = renderTemplate(
@@ -349,6 +544,53 @@ describe("templateEngine", () => {
         });
         expect(result.success).toBe(true);
         expect(result.output).toBe("Either");
+      });
+
+      it("should handle variadic OR with 3+ conditions", () => {
+        const result = renderTemplate(
+          '{{#or (eq lang "en") (eq lang "romaji") (eq lang "native")}}Match{{/or}}',
+          { lang: "native" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Match");
+      });
+
+      it("should handle variadic AND with 3+ conditions", () => {
+        const result = renderTemplate("{{#and a b c}}All{{else}}Nope{{/and}}", {
+          a: true,
+          b: true,
+          c: false,
+        });
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("Nope");
+      });
+
+      it("should handle variadic OR with all false", () => {
+        const result = renderTemplate(
+          '{{#or (eq x "a") (eq x "b") (eq x "c")}}Yes{{else}}No{{/or}}',
+          { x: "d" },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe("No");
+      });
+
+      it("should handle variadic OR in each loop for label filtering", () => {
+        const result = renderTemplate(
+          '{{#each titles}}{{#or (eq (lowercase this.label) "en") (eq (lowercase this.label) "romaji") (eq (lowercase this.label) "native")}}{{this.title}}, {{/or}}{{/each}}',
+          {
+            titles: [
+              { label: "Japanese", title: "ワンピース" },
+              { label: "Romaji", title: "One Piece" },
+              { label: "Native", title: "ワンピース" },
+              { label: "French", title: "One Piece FR" },
+              { label: "EN", title: "One Piece English" },
+            ],
+          },
+        );
+        expect(result.success).toBe(true);
+        expect(result.output).toBe(
+          "One Piece, ワンピース, One Piece English, ",
+        );
       });
     });
 

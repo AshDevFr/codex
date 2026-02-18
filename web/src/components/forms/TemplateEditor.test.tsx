@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import {
+  SAMPLE_BOOK_CONTEXT,
   SAMPLE_METADATA_FOR_TEMPLATE,
   SAMPLE_SERIES_CONTEXT,
 } from "@/utils/templateUtils";
@@ -106,6 +107,110 @@ describe("TemplateEditor", () => {
     });
   });
 
+  describe("context type switching", () => {
+    it("should show series/book toggle in context section", () => {
+      renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
+
+      // The segmented control should have both options
+      expect(screen.getByText("Series")).toBeInTheDocument();
+      expect(screen.getByText("Book")).toBeInTheDocument();
+    });
+
+    it("should switch to book context when Book is clicked", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
+
+      // Click the Book option in the segmented control
+      await user.click(screen.getByText("Book"));
+
+      // Title should change to "Book Context (Mock)"
+      expect(screen.getByText("Book Context (Mock)")).toBeInTheDocument();
+    });
+
+    it("should show book-specific hint text when book context is selected", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
+
+      await user.click(screen.getByText("Book"));
+
+      // Book context hints should mention series.* for cross-referencing
+      expect(screen.getAllByText(/series\.\*/).length).toBeGreaterThan(0);
+    });
+
+    it("should show book context helper text when expanded", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
+
+      // Switch to book context
+      await user.click(screen.getByText("Book"));
+      // Expand the context section
+      await user.click(screen.getByText("Book Context (Mock)"));
+
+      expect(
+        screen.getByText(
+          /This mock data represents the book context available in templates/,
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("should render preview with book context data", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <TemplateEditor value="# {{metadata.title}}" onChange={() => {}} />,
+      );
+
+      // Switch to book context
+      await user.click(screen.getByText("Book"));
+
+      // Preview should now render with SAMPLE_BOOK_CONTEXT title ("The Martian")
+      expect(screen.getByText("The Martian")).toBeInTheDocument();
+    });
+
+    it("should switch back to series context", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <TemplateEditor value="# {{metadata.title}}" onChange={() => {}} />,
+      );
+
+      // Switch to book, then back to series
+      await user.click(screen.getByText("Book"));
+      expect(screen.getByText("The Martian")).toBeInTheDocument();
+
+      await user.click(screen.getByText("Series"));
+      expect(screen.getByText("One Piece")).toBeInTheDocument();
+    });
+
+    it("should preserve customMetadata when switching context types", async () => {
+      const user = userEvent.setup();
+      const { container } = renderWithProviders(
+        <TemplateEditor
+          value="{{customMetadata.myField}}"
+          onChange={() => {}}
+        />,
+      );
+
+      // Default series context has customMetadata.myField = "preserved as-is"
+      expect(container.textContent).toContain("preserved as-is");
+
+      // Switch to book — customMetadata should carry over
+      await user.click(screen.getByText("Book"));
+      expect(container.textContent).toContain("preserved as-is");
+    });
+
+    it("should start in book mode when initialContext is a book context", () => {
+      renderWithProviders(
+        <TemplateEditor
+          value="# {{metadata.title}}"
+          onChange={() => {}}
+          initialContext={SAMPLE_BOOK_CONTEXT}
+        />,
+      );
+
+      expect(screen.getByText("Book Context (Mock)")).toBeInTheDocument();
+      expect(screen.getByText("The Martian")).toBeInTheDocument();
+    });
+  });
+
   describe("help section", () => {
     it("should show template syntax help section", () => {
       renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
@@ -120,9 +225,45 @@ describe("TemplateEditor", () => {
       // Click to expand the help section
       await user.click(screen.getByText("Template Syntax Help"));
 
-      // Should show the basic syntax help
+      // Should show the basic syntax help and helpers section
       expect(screen.getByText("Basic Syntax")).toBeInTheDocument();
-      expect(screen.getByText("Available Helpers")).toBeInTheDocument();
+      expect(screen.getByText(/Available Helpers/)).toBeInTheDocument();
+    });
+
+    it("should show helper example when a helper pill is clicked", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
+
+      // Expand help section
+      await user.click(screen.getByText("Template Syntax Help"));
+
+      // Click the "oneOf" helper pill
+      await user.click(screen.getByText("oneOf"));
+
+      // Should show the oneOf description and example
+      expect(
+        screen.getByText("Check if a value matches any of the given options"),
+      ).toBeInTheDocument();
+    });
+
+    it("should toggle helper example off when clicked again", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
+
+      await user.click(screen.getByText("Template Syntax Help"));
+      await user.click(screen.getByText("join"));
+
+      // Example should be visible
+      expect(
+        screen.getByText("Join array items with a separator"),
+      ).toBeInTheDocument();
+
+      // Click again to close
+      await user.click(screen.getByText("join"));
+
+      expect(
+        screen.queryByText("Join array items with a separator"),
+      ).not.toBeInTheDocument();
     });
 
     it("should show metadata fields documentation", async () => {
@@ -134,8 +275,18 @@ describe("TemplateEditor", () => {
 
       // Should show the available variables section
       expect(screen.getByText("Available Variables")).toBeInTheDocument();
-      // Should show the metadata fields section
-      expect(screen.getByText("Metadata Fields")).toBeInTheDocument();
+      // Should show both series and book metadata field sections
+      expect(screen.getByText("Series Metadata Fields")).toBeInTheDocument();
+      expect(screen.getByText("Book Metadata Fields")).toBeInTheDocument();
+    });
+
+    it("should show type-aware template documentation", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<TemplateEditor value="" onChange={() => {}} />);
+
+      await user.click(screen.getByText("Template Syntax Help"));
+
+      expect(screen.getByText("Type-Aware Templates")).toBeInTheDocument();
     });
 
     it("should document both customMetadata and metadata sources", async () => {
@@ -230,6 +381,33 @@ describe("TemplateEditor", () => {
         '[class*="Alert"][class*="red"]',
       );
       expect(validIndicator).toBeNull();
+    });
+
+    it("should show empty output message when template renders to nothing", () => {
+      renderWithProviders(
+        <TemplateEditor
+          value="{{#if missing}}content{{/if}}"
+          onChange={() => {}}
+        />,
+      );
+
+      expect(
+        screen.getByText("Template rendered but produced empty output"),
+      ).toBeInTheDocument();
+    });
+
+    it("should show validation error for invalid syntax", () => {
+      renderWithProviders(
+        <TemplateEditor
+          value={"{{#if condition}}content{{/if}"}
+          onChange={() => {}}
+        />,
+      );
+
+      // Malformed closing tag causes validation failure
+      expect(
+        screen.getByText("Fix template errors to see preview"),
+      ).toBeInTheDocument();
     });
   });
 

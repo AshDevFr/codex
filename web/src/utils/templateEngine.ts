@@ -87,6 +87,57 @@ function registerSafeHelpers(instance: typeof Handlebars): void {
   );
 
   /**
+   * Inline equality check — returns a boolean for use in subexpressions
+   * Usage: {{#if (eq value1 value2)}}...{{/if}}
+   *        {{#or (eq a "x") (eq b "y")}}...{{/or}}
+   */
+  instance.registerHelper("eq", (a: unknown, b: unknown) => a === b);
+
+  /**
+   * Inline not-equal check — returns a boolean for use in subexpressions
+   * Usage: {{#if (ne value1 value2)}}...{{/if}}
+   */
+  instance.registerHelper("ne", (a: unknown, b: unknown) => a !== b);
+
+  /**
+   * Check if a value matches any of the given options (variadic)
+   * Usage: {{#if (oneOf (lowercase this.label) "en" "romaji" "native")}}...{{/if}}
+   *        {{#oneOf type "book" "series"}}...{{/oneOf}}
+   * Works as both an inline helper (returns boolean) and a block helper.
+   */
+  instance.registerHelper(
+    "oneOf",
+    function (this: unknown, ...args: unknown[]) {
+      const options = args.pop() as Handlebars.HelperOptions;
+      const value = args.shift();
+      const found = args.some((candidate) => candidate === value);
+      if (typeof options?.fn !== "function") return found;
+      return found ? options.fn(this) : options.inverse(this);
+    },
+  );
+
+  /**
+   * Check if an array contains a value
+   * Usage: {{#if (inArray metadata.genres "Action")}}...{{/if}}
+   *        {{#inArray metadata.genres "Action"}}...{{/inArray}}
+   * Works as both an inline helper (returns boolean) and a block helper.
+   */
+  instance.registerHelper(
+    "inArray",
+    function (
+      this: unknown,
+      array: unknown,
+      value: unknown,
+      options: Handlebars.HelperOptions,
+    ) {
+      const found = Array.isArray(array) && array.includes(value);
+      // When used as a subexpression (inline), options.fn is undefined
+      if (typeof options?.fn !== "function") return found;
+      return found ? options.fn(this) : options.inverse(this);
+    },
+  );
+
+  /**
    * Output JSON representation of a value
    * Usage: {{json value}}
    */
@@ -230,36 +281,28 @@ function registerSafeHelpers(instance: typeof Handlebars): void {
   );
 
   /**
-   * Logical AND helper
+   * Logical AND helper (variadic — accepts 2+ conditions)
    * Usage: {{#and condition1 condition2}}...{{/and}}
+   *        {{#and (eq a "x") (eq b "y") (eq c "z")}}...{{/and}}
    */
-  instance.registerHelper(
-    "and",
-    function (
-      this: unknown,
-      v1: unknown,
-      v2: unknown,
-      options: Handlebars.HelperOptions,
-    ) {
-      return v1 && v2 ? options.fn(this) : options.inverse(this);
-    },
-  );
+  instance.registerHelper("and", function (this: unknown, ...args: unknown[]) {
+    const options = args.pop() as Handlebars.HelperOptions;
+    const result = args.length > 0 && args.every(Boolean);
+    if (typeof options?.fn !== "function") return result;
+    return result ? options.fn(this) : options.inverse(this);
+  });
 
   /**
-   * Logical OR helper
+   * Logical OR helper (variadic — accepts 2+ conditions)
    * Usage: {{#or condition1 condition2}}...{{/or}}
+   *        {{#or (eq a "x") (eq b "y") (eq c "z")}}...{{/or}}
    */
-  instance.registerHelper(
-    "or",
-    function (
-      this: unknown,
-      v1: unknown,
-      v2: unknown,
-      options: Handlebars.HelperOptions,
-    ) {
-      return v1 || v2 ? options.fn(this) : options.inverse(this);
-    },
-  );
+  instance.registerHelper("or", function (this: unknown, ...args: unknown[]) {
+    const options = args.pop() as Handlebars.HelperOptions;
+    const result = args.some(Boolean);
+    if (typeof options?.fn !== "function") return result;
+    return result ? options.fn(this) : options.inverse(this);
+  });
 
   /**
    * Lookup helper for accessing object properties dynamically
@@ -411,6 +454,10 @@ export function compileTemplate(
         formatDate: true,
         ifEquals: true,
         ifNotEquals: true,
+        eq: true,
+        ne: true,
+        oneOf: true,
+        inArray: true,
         json: true,
         truncate: true,
         lowercase: true,
@@ -529,6 +576,10 @@ export function getAvailableHelpers(): string[] {
     "formatDate",
     "ifEquals",
     "ifNotEquals",
+    "eq",
+    "ne",
+    "oneOf",
+    "inArray",
     "json",
     "truncate",
     "lowercase",
