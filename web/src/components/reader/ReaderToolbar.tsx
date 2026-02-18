@@ -359,6 +359,15 @@ export function ReaderToolbar({
                       readingDirection === "rtl" ? totalPages + 1 - val : val,
                     )
                   }
+                  // Blur the slider after click/drag so its built-in
+                  // keyboard handler doesn't conflict with useKeyboardNav.
+                  // In RTL the slider's arrow-key handler applies the
+                  // inverted onChange, fighting the global handler.
+                  onChangeEnd={() => {
+                    if (document.activeElement instanceof HTMLElement) {
+                      document.activeElement.blur();
+                    }
+                  }}
                   size="xs"
                   style={{
                     flex: 1,
@@ -367,8 +376,12 @@ export function ReaderToolbar({
                   }}
                   label={(value) => `Page ${value}`}
                   styles={{
-                    track: { backgroundColor: "var(--mantine-color-dark-4)" },
-                    bar: { backgroundColor: "var(--mantine-color-blue-6)" },
+                    track: {
+                      backgroundColor: "var(--mantine-color-dark-4)",
+                    },
+                    bar: {
+                      backgroundColor: "var(--mantine-color-blue-6)",
+                    },
                     thumb: {
                       backgroundColor: "var(--mantine-color-blue-6)",
                       borderColor: "var(--mantine-color-blue-6)",
