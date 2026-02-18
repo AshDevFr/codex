@@ -81,6 +81,19 @@ export type ReadProgress = Schemas["ReadProgressResponse"];
 export type BookTypeDto = Schemas["BookTypeDto"];
 
 // =============================================================================
+// Book Context types (for template evaluation)
+// =============================================================================
+/**
+ * Book context for template and condition evaluation.
+ * Used by CustomMetadataDisplay and template editors.
+ */
+export type BookContext = Schemas["BookContextDto"];
+/** Book metadata context within BookContext */
+export type BookMetadataContext = Schemas["BookMetadataContextDto"];
+/** Book award context within BookMetadataContext */
+export type BookAwardContext = Schemas["BookAwardContextDto"];
+
+// =============================================================================
 // Filesystem types
 // =============================================================================
 export type FileSystemEntry = Schemas["FileSystemEntry"];

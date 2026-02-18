@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { FullSeries, FullSeriesMetadata } from "@/types";
+import type { FullBook, FullSeries, FullSeriesMetadata } from "@/types";
+import type { components } from "@/types/api.generated";
 import {
+  SAMPLE_BOOK_CONTEXT,
   SAMPLE_SERIES_CONTEXT,
   type SeriesContext,
+  transformFullBookToBookContext,
   transformFullSeriesToMetadataForTemplate,
+  transformFullSeriesToSeriesContext,
   transformToMetadataForTemplate,
 } from "./templateUtils";
 
@@ -682,11 +686,16 @@ describe("templateUtils", () => {
   describe("SAMPLE_SERIES_CONTEXT", () => {
     it("should have correct top-level structure matching backend SeriesContext", () => {
       // Verify all required top-level fields exist
+      expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("type");
       expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("seriesId");
       expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("bookCount");
       expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("metadata");
       expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("externalIds");
       expect(SAMPLE_SERIES_CONTEXT).toHaveProperty("customMetadata");
+    });
+
+    it("should have type discriminator set to 'series'", () => {
+      expect(SAMPLE_SERIES_CONTEXT.type).toBe("series");
     });
 
     it("should use camelCase for all structured field names", () => {
@@ -827,6 +836,608 @@ describe("templateUtils", () => {
       expect(metadata.genresLock).toBe(false);
       expect(metadata.tagsLock).toBe(false);
       expect(metadata.customMetadataLock).toBe(false);
+      expect(metadata.coverLock).toBe(false);
+      expect(metadata.authorsJsonLock).toBe(false);
+    });
+
+    it("should have alternate titles in metadata", () => {
+      const { metadata } = SAMPLE_SERIES_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(metadata.alternateTitles).toBeDefined();
+      expect(Array.isArray(metadata.alternateTitles)).toBe(true);
+      expect(metadata.alternateTitles?.length).toBeGreaterThan(0);
+      expect(metadata.alternateTitles?.[0]).toHaveProperty("label");
+      expect(metadata.alternateTitles?.[0]).toHaveProperty("title");
+    });
+
+    it("should have authors in metadata", () => {
+      const { metadata } = SAMPLE_SERIES_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(metadata.authors).toBeDefined();
+      expect(Array.isArray(metadata.authors)).toBe(true);
+      expect(metadata.authors?.length).toBeGreaterThan(0);
+      expect(metadata.authors?.[0]).toHaveProperty("name");
+      expect(metadata.authors?.[0]).toHaveProperty("role");
+    });
+
+    it("should have external ratings in metadata", () => {
+      const { metadata } = SAMPLE_SERIES_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(metadata.externalRatings).toBeDefined();
+      expect(Array.isArray(metadata.externalRatings)).toBe(true);
+      expect(metadata.externalRatings?.length).toBeGreaterThan(0);
+      expect(metadata.externalRatings?.[0]).toHaveProperty("source");
+      expect(metadata.externalRatings?.[0]).toHaveProperty("rating");
+    });
+
+    it("should have external links in metadata", () => {
+      const { metadata } = SAMPLE_SERIES_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(metadata.externalLinks).toBeDefined();
+      expect(Array.isArray(metadata.externalLinks)).toBe(true);
+      expect(metadata.externalLinks?.length).toBeGreaterThan(0);
+      expect(metadata.externalLinks?.[0]).toHaveProperty("source");
+      expect(metadata.externalLinks?.[0]).toHaveProperty("url");
+    });
+  });
+
+  // ===========================================================================
+  // Book Context Tests
+  // ===========================================================================
+
+  describe("SAMPLE_BOOK_CONTEXT", () => {
+    it("should have type discriminator set to 'book'", () => {
+      expect(SAMPLE_BOOK_CONTEXT.type).toBe("book");
+    });
+
+    it("should have all required top-level fields", () => {
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("bookId");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("seriesId");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("libraryId");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("fileFormat");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("pageCount");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("fileSize");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("metadata");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("externalIds");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("customMetadata");
+      expect(SAMPLE_BOOK_CONTEXT).toHaveProperty("series");
+    });
+
+    it("should use camelCase for all top-level fields", () => {
+      expect("bookId" in SAMPLE_BOOK_CONTEXT).toBe(true);
+      expect("seriesId" in SAMPLE_BOOK_CONTEXT).toBe(true);
+      expect("libraryId" in SAMPLE_BOOK_CONTEXT).toBe(true);
+      expect("fileFormat" in SAMPLE_BOOK_CONTEXT).toBe(true);
+      expect("pageCount" in SAMPLE_BOOK_CONTEXT).toBe(true);
+      expect("fileSize" in SAMPLE_BOOK_CONTEXT).toBe(true);
+      expect("externalIds" in SAMPLE_BOOK_CONTEXT).toBe(true);
+      expect("customMetadata" in SAMPLE_BOOK_CONTEXT).toBe(true);
+
+      // Should NOT have snake_case
+      expect("book_id" in SAMPLE_BOOK_CONTEXT).toBe(false);
+      expect("series_id" in SAMPLE_BOOK_CONTEXT).toBe(false);
+      expect("file_format" in SAMPLE_BOOK_CONTEXT).toBe(false);
+    });
+
+    it("should have book-specific metadata fields", () => {
+      const { metadata } = SAMPLE_BOOK_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(metadata.title).toBe("The Martian");
+      expect(metadata.subtitle).toBe("A Novel");
+      expect(metadata.number).toBe(1);
+      expect(metadata.publisher).toBe("Crown Publishing");
+      expect(metadata.bookType).toBe("novel");
+      expect(metadata.languageIso).toBe("en");
+      expect(metadata.year).toBe(2014);
+      expect(metadata.isbns).toBe("978-0553418026");
+    });
+
+    it("should have authors array in metadata", () => {
+      const { metadata } = SAMPLE_BOOK_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(Array.isArray(metadata.authors)).toBe(true);
+      expect(metadata.authors?.length).toBeGreaterThan(0);
+      expect(metadata.authors?.[0]).toHaveProperty("name");
+      expect(metadata.authors?.[0]?.name).toBe("Andy Weir");
+    });
+
+    it("should have awards array in metadata", () => {
+      const { metadata } = SAMPLE_BOOK_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(Array.isArray(metadata.awards)).toBe(true);
+      expect(metadata.awards?.length).toBe(2);
+      expect(metadata.awards?.[0]).toHaveProperty("name");
+      expect(metadata.awards?.[0]).toHaveProperty("year");
+      expect(metadata.awards?.[0]).toHaveProperty("category");
+      expect(metadata.awards?.[0]).toHaveProperty("won");
+    });
+
+    it("should have genres and tags arrays", () => {
+      const { metadata } = SAMPLE_BOOK_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(Array.isArray(metadata.genres)).toBe(true);
+      expect(metadata.genres?.length).toBeGreaterThan(0);
+      expect(Array.isArray(metadata.tags)).toBe(true);
+      expect(metadata.tags?.length).toBeGreaterThan(0);
+    });
+
+    it("should have subjects array", () => {
+      const { metadata } = SAMPLE_BOOK_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(Array.isArray(metadata.subjects)).toBe(true);
+      expect(metadata.subjects?.length).toBeGreaterThan(0);
+    });
+
+    it("should have external links in metadata", () => {
+      const { metadata } = SAMPLE_BOOK_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      expect(Array.isArray(metadata.externalLinks)).toBe(true);
+      expect(metadata.externalLinks?.length).toBeGreaterThan(0);
+      expect(metadata.externalLinks?.[0]).toHaveProperty("source");
+      expect(metadata.externalLinks?.[0]).toHaveProperty("url");
+    });
+
+    it("should have lock fields in metadata", () => {
+      const { metadata } = SAMPLE_BOOK_CONTEXT;
+      expect(metadata).toBeDefined();
+      if (!metadata) return;
+
+      // Book-specific lock fields
+      expect(metadata).toHaveProperty("titleLock");
+      expect(metadata).toHaveProperty("numberLock");
+      expect(metadata).toHaveProperty("subtitleLock");
+      expect(metadata).toHaveProperty("bookTypeLock");
+      expect(metadata).toHaveProperty("languageIsoLock");
+      expect(metadata).toHaveProperty("isbnsLock");
+      expect(metadata).toHaveProperty("awardsJsonLock");
+      expect(metadata).toHaveProperty("subjectsLock");
+      expect(metadata).toHaveProperty("coverLock");
+      expect(metadata).toHaveProperty("customMetadataLock");
+    });
+
+    it("should have embedded parent series context", () => {
+      const { series } = SAMPLE_BOOK_CONTEXT;
+      expect(series).toBeDefined();
+      expect(series.type).toBe("series");
+      expect(series).toHaveProperty("seriesId");
+      expect(series).toHaveProperty("bookCount");
+      expect(series).toHaveProperty("metadata");
+      expect(series).toHaveProperty("externalIds");
+    });
+
+    it("should be JSON serializable/deserializable", () => {
+      const json = JSON.stringify(SAMPLE_BOOK_CONTEXT);
+      const parsed = JSON.parse(json);
+
+      expect(parsed.type).toBe("book");
+      expect(parsed.bookId).toBe(SAMPLE_BOOK_CONTEXT.bookId);
+      expect(parsed.fileFormat).toBe(SAMPLE_BOOK_CONTEXT.fileFormat);
+      expect(parsed.series.type).toBe("series");
+    });
+  });
+
+  describe("transformFullBookToBookContext", () => {
+    /**
+     * Creates a minimal valid FullBook object for testing
+     */
+    function createMockFullBook(overrides: Partial<FullBook> = {}): FullBook {
+      return {
+        id: "book-uuid-1",
+        libraryId: "lib-uuid-1",
+        libraryName: "Test Library",
+        seriesId: "series-uuid-1",
+        seriesName: "Test Series",
+        title: "Test Book",
+        titleSort: "test book",
+        filePath: "/path/to/book.epub",
+        fileFormat: "epub",
+        fileSize: 1024000,
+        fileHash: "abc123",
+        pageCount: 200,
+        number: 1,
+        deleted: false,
+        analyzed: true,
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-15T10:30:00Z",
+        genres: [],
+        tags: [],
+        metadata: {
+          title: "Test Book",
+          titleSort: "test book",
+          summary: null,
+          publisher: null,
+          imprint: null,
+          genre: null,
+          languageIso: null,
+          formatDetail: null,
+          blackAndWhite: null,
+          manga: null,
+          year: null,
+          month: null,
+          day: null,
+          volume: null,
+          count: null,
+          isbns: null,
+          bookType: null,
+          subtitle: null,
+          authors: null,
+          translator: null,
+          edition: null,
+          originalTitle: null,
+          originalYear: null,
+          seriesPosition: null,
+          seriesTotal: null,
+          subjects: null,
+          awards: null,
+          customMetadata: null,
+          colorists: [],
+          coverArtists: [],
+          editors: [],
+          inkers: [],
+          letterers: [],
+          pencillers: [],
+          writers: [],
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+          locks: {
+            titleLock: false,
+            titleSortLock: false,
+            numberLock: false,
+            summaryLock: false,
+            publisherLock: false,
+            imprintLock: false,
+            genreLock: false,
+            languageIsoLock: false,
+            formatDetailLock: false,
+            blackAndWhiteLock: false,
+            mangaLock: false,
+            yearLock: false,
+            monthLock: false,
+            dayLock: false,
+            volumeLock: false,
+            countLock: false,
+            isbnsLock: false,
+            bookTypeLock: false,
+            subtitleLock: false,
+            authorsJsonLock: false,
+            translatorLock: false,
+            editionLock: false,
+            originalTitleLock: false,
+            originalYearLock: false,
+            seriesPositionLock: false,
+            seriesTotalLock: false,
+            subjectsLock: false,
+            awardsJsonLock: false,
+            customMetadataLock: false,
+            coverLock: false,
+            writerLock: false,
+            pencillerLock: false,
+            inkerLock: false,
+            coloristLock: false,
+            lettererLock: false,
+            coverArtistLock: false,
+            editorLock: false,
+          },
+        },
+        ...overrides,
+      } as FullBook;
+    }
+
+    function createMockSeriesContext(): ReturnType<
+      typeof transformFullSeriesToSeriesContext
+    > {
+      const series = createMockFullSeries();
+      return transformFullSeriesToSeriesContext(series);
+    }
+
+    function createMockFullSeries(): FullSeries {
+      return {
+        id: "series-uuid-1",
+        name: "Test Series",
+        nameSort: "Test Series",
+        libraryId: "lib-uuid-1",
+        libraryName: "Test Library",
+        bookCount: 5,
+        deleted: false,
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+        genres: [],
+        tags: [],
+        alternateTitles: [],
+        externalRatings: [],
+        externalLinks: [],
+        externalIds: [],
+        metadata: {
+          title: "Test Series",
+          titleSort: "Test Series",
+          summary: null,
+          publisher: null,
+          imprint: null,
+          language: null,
+          ageRating: null,
+          year: null,
+          status: null,
+          totalBookCount: null,
+          readingDirection: null,
+          customMetadata: null,
+          authors: null,
+          locks: {
+            title: false,
+            titleSort: false,
+            summary: false,
+            publisher: false,
+            imprint: false,
+            language: false,
+            ageRating: false,
+            year: false,
+            status: false,
+            totalBookCount: false,
+            readingDirection: false,
+            customMetadata: false,
+            genres: false,
+            tags: false,
+            cover: false,
+            authorsJsonLock: false,
+          },
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+        },
+      } as FullSeries;
+    }
+
+    it("should set type discriminator to 'book'", () => {
+      const book = createMockFullBook();
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.type).toBe("book");
+    });
+
+    it("should transform top-level book fields", () => {
+      const book = createMockFullBook({
+        id: "my-book-id",
+        seriesId: "my-series-id",
+        libraryId: "my-lib-id",
+        fileFormat: "cbz",
+        pageCount: 32,
+        fileSize: 52428800,
+      });
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.bookId).toBe("my-book-id");
+      expect(result.seriesId).toBe("my-series-id");
+      expect(result.libraryId).toBe("my-lib-id");
+      expect(result.fileFormat).toBe("cbz");
+      expect(result.pageCount).toBe(32);
+      expect(result.fileSize).toBe(52428800);
+    });
+
+    it("should transform book metadata scalar fields", () => {
+      const book = createMockFullBook();
+      book.metadata.title = "The Martian";
+      book.metadata.titleSort = "Martian, The";
+      book.metadata.subtitle = "A Novel";
+      book.metadata.publisher = "Crown Publishing";
+      book.metadata.year = 2014;
+      book.metadata.languageIso = "en";
+      book.metadata.isbns = "978-0553418026";
+      book.metadata.bookType = "novel";
+
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.metadata?.title).toBe("The Martian");
+      expect(result.metadata?.titleSort).toBe("Martian, The");
+      expect(result.metadata?.subtitle).toBe("A Novel");
+      expect(result.metadata?.publisher).toBe("Crown Publishing");
+      expect(result.metadata?.year).toBe(2014);
+      expect(result.metadata?.languageIso).toBe("en");
+      expect(result.metadata?.isbns).toBe("978-0553418026");
+      expect(result.metadata?.bookType).toBe("novel");
+    });
+
+    it("should transform authors from metadata", () => {
+      const book = createMockFullBook();
+      book.metadata.authors = [
+        { name: "Andy Weir", role: "author", sortName: "Weir, Andy" },
+        { name: "John Doe", role: "illustrator" },
+      ];
+
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.metadata?.authors).toHaveLength(2);
+      expect(result.metadata?.authors?.[0]?.name).toBe("Andy Weir");
+      expect(result.metadata?.authors?.[0]?.role).toBe("author");
+      expect(result.metadata?.authors?.[0]?.sortName).toBe("Weir, Andy");
+      expect(result.metadata?.authors?.[1]?.name).toBe("John Doe");
+    });
+
+    it("should transform awards from metadata", () => {
+      const book = createMockFullBook();
+      book.metadata.awards = [
+        { name: "Hugo Award", year: 2015, category: "Best Novel", won: true },
+        { name: "Nebula Award", year: 2014, won: false },
+      ];
+
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.metadata?.awards).toHaveLength(2);
+      expect(result.metadata?.awards?.[0]?.name).toBe("Hugo Award");
+      expect(result.metadata?.awards?.[0]?.won).toBe(true);
+      expect(result.metadata?.awards?.[1]?.won).toBe(false);
+    });
+
+    it("should transform genres and tags from top-level arrays", () => {
+      const book = createMockFullBook({
+        genres: [
+          {
+            id: "g1",
+            name: "Science Fiction",
+            createdAt: "2024-01-01T00:00:00Z",
+          },
+          { id: "g2", name: "Adventure", createdAt: "2024-01-01T00:00:00Z" },
+        ],
+        tags: [
+          { id: "t1", name: "mars", createdAt: "2024-01-01T00:00:00Z" },
+          { id: "t2", name: "survival", createdAt: "2024-01-01T00:00:00Z" },
+        ],
+      });
+
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.metadata?.genres).toEqual(["Science Fiction", "Adventure"]);
+      expect(result.metadata?.tags).toEqual(["mars", "survival"]);
+    });
+
+    it("should build external IDs map from array", () => {
+      const book = createMockFullBook();
+      const seriesCtx = createMockSeriesContext();
+      const bookExternalIds: components["schemas"]["BookExternalIdDto"][] = [
+        {
+          id: "eid-1",
+          bookId: "book-uuid-1",
+          source: "plugin:goodreads",
+          externalId: "18007564",
+          externalUrl: "https://goodreads.com/book/show/18007564",
+          metadataHash: null,
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+        },
+      ];
+
+      const result = transformFullBookToBookContext(
+        book,
+        seriesCtx,
+        bookExternalIds,
+      );
+
+      expect(result.externalIds).toBeDefined();
+      expect(result.externalIds?.["plugin:goodreads"]).toBeDefined();
+      expect(result.externalIds?.["plugin:goodreads"]?.id).toBe("18007564");
+      expect(result.externalIds?.["plugin:goodreads"]?.url).toBe(
+        "https://goodreads.com/book/show/18007564",
+      );
+    });
+
+    it("should transform external links from separate array", () => {
+      const book = createMockFullBook();
+      const seriesCtx = createMockSeriesContext();
+      const bookExternalLinks: components["schemas"]["BookExternalLinkDto"][] =
+        [
+          {
+            id: "link-1",
+            bookId: "book-uuid-1",
+            sourceName: "Goodreads",
+            url: "https://goodreads.com/book/show/18007564",
+            externalId: "18007564",
+            createdAt: "2024-01-01T00:00:00Z",
+            updatedAt: "2024-01-01T00:00:00Z",
+          },
+        ];
+
+      const result = transformFullBookToBookContext(
+        book,
+        seriesCtx,
+        [],
+        bookExternalLinks,
+      );
+
+      expect(result.metadata?.externalLinks).toHaveLength(1);
+      expect(result.metadata?.externalLinks?.[0]?.source).toBe("Goodreads");
+      expect(result.metadata?.externalLinks?.[0]?.url).toBe(
+        "https://goodreads.com/book/show/18007564",
+      );
+      expect(result.metadata?.externalLinks?.[0]?.externalId).toBe("18007564");
+    });
+
+    it("should preserve custom metadata as-is", () => {
+      const book = createMockFullBook();
+      // Cast to bypass the restrictive Record<string, never> type
+      (book.metadata as Record<string, unknown>).customMetadata = {
+        myField: "value",
+        nested: { key: 42 },
+      };
+
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.customMetadata).toBeDefined();
+      expect(result.customMetadata?.myField).toBe("value");
+      expect(result.customMetadata?.nested).toEqual({ key: 42 });
+    });
+
+    it("should embed the parent series context", () => {
+      const book = createMockFullBook();
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.series).toBeDefined();
+      expect(result.series.type).toBe("series");
+      expect(result.series).toBe(seriesCtx);
+    });
+
+    it("should transform lock fields from metadata.locks", () => {
+      const book = createMockFullBook();
+      book.metadata.locks.titleLock = true;
+      book.metadata.locks.publisherLock = true;
+      book.metadata.locks.coverLock = true;
+
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.metadata?.titleLock).toBe(true);
+      expect(result.metadata?.publisherLock).toBe(true);
+      expect(result.metadata?.coverLock).toBe(true);
+      expect(result.metadata?.summaryLock).toBe(false);
+      expect(result.metadata?.yearLock).toBe(false);
+    });
+
+    it("should handle null/undefined optional fields gracefully", () => {
+      const book = createMockFullBook();
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx);
+
+      expect(result.metadata?.summary).toBeNull();
+      expect(result.metadata?.publisher).toBeNull();
+      expect(result.metadata?.subtitle).toBeNull();
+      expect(result.metadata?.authors).toEqual([]);
+      expect(result.metadata?.awards).toEqual([]);
+      expect(result.metadata?.subjects).toEqual([]);
+      expect(result.metadata?.genres).toEqual([]);
+      expect(result.metadata?.tags).toEqual([]);
+    });
+
+    it("should handle empty external IDs and links", () => {
+      const book = createMockFullBook();
+      const seriesCtx = createMockSeriesContext();
+      const result = transformFullBookToBookContext(book, seriesCtx, [], []);
+
+      expect(result.externalIds).toEqual({});
+      expect(result.metadata?.externalLinks).toEqual([]);
     });
   });
 });

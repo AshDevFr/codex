@@ -610,6 +610,15 @@ The following paths are exempt from rate limiting:
             v1::dto::SeriesContextDto,
             v1::dto::MetadataContextDto,
             v1::dto::ExternalIdContextDto,
+            v1::dto::AlternateTitleContextDto,
+            v1::dto::AuthorContextDto,
+            v1::dto::ExternalRatingContextDto,
+            v1::dto::ExternalLinkContextDto,
+
+            // Book Context DTOs (for template evaluation)
+            v1::dto::BookContextDto,
+            v1::dto::BookMetadataContextDto,
+            v1::dto::BookAwardContextDto,
 
             // Genre DTOs
             v1::dto::GenreDto,

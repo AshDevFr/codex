@@ -16001,6 +16001,26 @@
           }
         }
       },
+      "AlternateTitleContextDto": {
+        "type": "object",
+        "description": "Alternate title context for template evaluation.",
+        "required": [
+          "label",
+          "title"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Label for this alternate title (e.g., \"Japanese\", \"Romaji\")",
+            "example": "Japanese"
+          },
+          "title": {
+            "type": "string",
+            "description": "The alternate title text",
+            "example": "ワンピース"
+          }
+        }
+      },
       "AlternateTitleDto": {
         "type": "object",
         "description": "Alternate title data transfer object",
@@ -16184,6 +16204,36 @@
           }
         }
       },
+      "AuthorContextDto": {
+        "type": "object",
+        "description": "Author context for template evaluation.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Author name",
+            "example": "Oda Eiichiro"
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Role (e.g., \"author\", \"artist\", \"editor\")",
+            "example": "author"
+          },
+          "sortName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort name (e.g., \"Lastname, Firstname\")",
+            "example": "Oda, Eiichiro"
+          }
+        }
+      },
       "AvailablePluginDto": {
         "type": "object",
         "description": "Available plugin (not yet enabled by user)",
@@ -16298,6 +16348,45 @@
           "letterer",
           "cover_artist"
         ]
+      },
+      "BookAwardContextDto": {
+        "type": "object",
+        "description": "Book award context for template evaluation.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Award category (optional)",
+            "example": "Best Novel"
+          },
+          "name": {
+            "type": "string",
+            "description": "Award name",
+            "example": "Hugo Award"
+          },
+          "won": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book won (vs nominated)",
+            "example": true
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Year awarded (optional)",
+            "example": 2015
+          }
+        }
       },
       "BookAwardDto": {
         "type": "object",
@@ -16466,6 +16555,93 @@
           }
         ],
         "description": "Book-level search conditions"
+      },
+      "BookContextDto": {
+        "type": "object",
+        "description": "Book context for template and condition evaluation.\n\nThis structure provides a unified interface for evaluating templates\nand conditions against book data. It includes book-specific fields\nplus an embedded parent series context for cross-referencing.\n\n## Template Usage\n\nIn Handlebars templates, fields are accessible via:\n- `{{type}}` - Always \"book\"\n- `{{bookId}}` - Book UUID\n- `{{seriesId}}` - Parent series UUID\n- `{{metadata.title}}` - Book title\n- `{{metadata.authors}}` - Author array\n- `{{externalIds.plugin:source.id}}` - External ID from a source\n- `{{customMetadata.myField}}` - Custom metadata field\n- `{{series.metadata.title}}` - Parent series title (cross-reference)",
+        "required": [
+          "type",
+          "bookId",
+          "seriesId",
+          "libraryId",
+          "fileFormat",
+          "pageCount",
+          "fileSize",
+          "series"
+        ],
+        "properties": {
+          "bookId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Book UUID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "customMetadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Custom metadata fields (preserved as-is, no case transformation)."
+          },
+          "externalIds": {
+            "type": "object",
+            "description": "External IDs mapped by source name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ExternalIdContextDto"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "example": {
+              "plugin:goodreads": {
+                "id": "18007564",
+                "url": "https://goodreads.com/book/show/18007564"
+              }
+            }
+          },
+          "fileFormat": {
+            "type": "string",
+            "description": "File format (e.g., \"cbz\", \"epub\", \"pdf\")",
+            "example": "epub"
+          },
+          "fileSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "File size in bytes",
+            "example": 52428800
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library UUID",
+            "example": "550e8400-e29b-41d4-a716-446655440099"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/BookMetadataContextDto",
+            "description": "Book metadata"
+          },
+          "pageCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of pages",
+            "example": 369
+          },
+          "series": {
+            "$ref": "#/components/schemas/SeriesContextDto",
+            "description": "Parent series context for cross-referencing"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Parent series UUID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "type": {
+            "type": "string",
+            "description": "Type discriminator — always \"book\" for BookContextDto",
+            "example": "book"
+          }
+        }
       },
       "BookCoverDto": {
         "type": "object",
@@ -17368,6 +17544,396 @@
           "includeDeleted": {
             "type": "boolean",
             "description": "Include soft-deleted books in results (default: false)"
+          }
+        }
+      },
+      "BookMetadataContextDto": {
+        "type": "object",
+        "description": "Book metadata context for template evaluation.\n\nContains book metadata fields in a flat structure suitable for\ntemplate access via `metadata.*` syntax.",
+        "properties": {
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthorContextDto"
+            },
+            "description": "Structured author information"
+          },
+          "authorsJsonLock": {
+            "type": "boolean",
+            "description": "Whether authors_json is locked"
+          },
+          "awards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookAwardContextDto"
+            },
+            "description": "Awards information"
+          },
+          "awardsJsonLock": {
+            "type": "boolean",
+            "description": "Whether awards_json is locked"
+          },
+          "blackAndWhite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is black and white",
+            "example": false
+          },
+          "blackAndWhiteLock": {
+            "type": "boolean",
+            "description": "Whether black_and_white is locked"
+          },
+          "bookType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book type classification",
+            "example": "novel"
+          },
+          "bookTypeLock": {
+            "type": "boolean",
+            "description": "Whether book_type is locked"
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total count in series",
+            "example": 4
+          },
+          "countLock": {
+            "type": "boolean",
+            "description": "Whether count is locked"
+          },
+          "coverLock": {
+            "type": "boolean",
+            "description": "Whether cover is locked"
+          },
+          "customMetadataLock": {
+            "type": "boolean",
+            "description": "Whether custom_metadata is locked"
+          },
+          "day": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication day (1-31)",
+            "example": 15
+          },
+          "dayLock": {
+            "type": "boolean",
+            "description": "Whether day is locked"
+          },
+          "edition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Edition information",
+            "example": "First Edition"
+          },
+          "editionLock": {
+            "type": "boolean",
+            "description": "Whether edition is locked"
+          },
+          "externalLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkContextDto"
+            },
+            "description": "External links for this book"
+          },
+          "formatDetail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Format detail (e.g., \"Trade Paperback\")",
+            "example": "Trade Paperback"
+          },
+          "formatDetailLock": {
+            "type": "boolean",
+            "description": "Whether format_detail is locked"
+          },
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Genre (ComicInfo-style single genre field)",
+            "example": "Science Fiction"
+          },
+          "genreLock": {
+            "type": "boolean",
+            "description": "Whether genre is locked"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genre names for this book",
+            "example": [
+              "Science Fiction",
+              "Adventure"
+            ]
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)",
+            "example": "Broadway Books"
+          },
+          "imprintLock": {
+            "type": "boolean",
+            "description": "Whether imprint is locked"
+          },
+          "isbns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISBN(s)",
+            "example": "978-0553418026"
+          },
+          "isbnsLock": {
+            "type": "boolean",
+            "description": "Whether isbns is locked"
+          },
+          "languageIso": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language code (ISO format)",
+            "example": "en"
+          },
+          "languageIsoLock": {
+            "type": "boolean",
+            "description": "Whether language_iso is locked"
+          },
+          "manga": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is manga format",
+            "example": false
+          },
+          "mangaLock": {
+            "type": "boolean",
+            "description": "Whether manga is locked"
+          },
+          "month": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication month (1-12)",
+            "example": 2
+          },
+          "monthLock": {
+            "type": "boolean",
+            "description": "Whether month is locked"
+          },
+          "number": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Book number (e.g., issue/chapter number)",
+            "example": 1.0
+          },
+          "numberLock": {
+            "type": "boolean",
+            "description": "Whether number is locked"
+          },
+          "originalTitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Original title (for translated works)",
+            "example": "火星の人"
+          },
+          "originalTitleLock": {
+            "type": "boolean",
+            "description": "Whether original_title is locked"
+          },
+          "originalYear": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Original publication year",
+            "example": 2011
+          },
+          "originalYearLock": {
+            "type": "boolean",
+            "description": "Whether original_year is locked"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name",
+            "example": "Crown Publishing"
+          },
+          "publisherLock": {
+            "type": "boolean",
+            "description": "Whether publisher is locked"
+          },
+          "seriesPosition": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Position in a series",
+            "example": 1.0
+          },
+          "seriesPositionLock": {
+            "type": "boolean",
+            "description": "Whether series_position is locked"
+          },
+          "seriesTotal": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total number of books in the series",
+            "example": 3
+          },
+          "seriesTotalLock": {
+            "type": "boolean",
+            "description": "Whether series_total is locked"
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Subject/topic tags",
+            "example": [
+              "Science Fiction",
+              "Space Exploration"
+            ]
+          },
+          "subjectsLock": {
+            "type": "boolean",
+            "description": "Whether subjects are locked"
+          },
+          "subtitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book subtitle",
+            "example": "A Novel"
+          },
+          "subtitleLock": {
+            "type": "boolean",
+            "description": "Whether subtitle is locked"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book summary/description",
+            "example": "Astronaut Mark Watney is stranded on Mars..."
+          },
+          "summaryLock": {
+            "type": "boolean",
+            "description": "Whether summary is locked"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tag names for this book",
+            "example": [
+              "mars",
+              "survival",
+              "space"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book title",
+            "example": "The Martian"
+          },
+          "titleLock": {
+            "type": "boolean",
+            "description": "Whether title is locked"
+          },
+          "titleSort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Custom sort name",
+            "example": "Martian, The"
+          },
+          "titleSortLock": {
+            "type": "boolean",
+            "description": "Whether title_sort is locked"
+          },
+          "translator": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Translator name",
+            "example": "John Smith"
+          },
+          "translatorLock": {
+            "type": "boolean",
+            "description": "Whether translator is locked"
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Volume number",
+            "example": 1
+          },
+          "volumeLock": {
+            "type": "boolean",
+            "description": "Whether volume is locked"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Publication year",
+            "example": 2011
+          },
+          "yearLock": {
+            "type": "boolean",
+            "description": "Whether year is locked"
           }
         }
       },
@@ -20641,6 +21207,34 @@
           }
         }
       },
+      "ExternalLinkContextDto": {
+        "type": "object",
+        "description": "External link context for template evaluation.",
+        "required": [
+          "source",
+          "url"
+        ],
+        "properties": {
+          "externalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "External ID on the source (optional)",
+            "example": "123"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source name (e.g., \"mangadex\", \"myanimelist\")",
+            "example": "mangadex"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL to the external resource",
+            "example": "https://mangadex.org/title/123"
+          }
+        }
+      },
       "ExternalLinkDto": {
         "type": "object",
         "description": "External link data transfer object",
@@ -20710,6 +21304,36 @@
               "$ref": "#/components/schemas/ExternalLinkDto"
             },
             "description": "List of external links"
+          }
+        }
+      },
+      "ExternalRatingContextDto": {
+        "type": "object",
+        "description": "External rating context for template evaluation.",
+        "required": [
+          "source",
+          "rating"
+        ],
+        "properties": {
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "description": "Rating value (normalized to 0-100)",
+            "example": 85.5
+          },
+          "source": {
+            "type": "string",
+            "description": "Source name (e.g., \"myanimelist\", \"anilist\")",
+            "example": "myanimelist"
+          },
+          "votes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of votes (optional)",
+            "example": 12345
           }
         }
       },
@@ -24224,9 +24848,45 @@
             "type": "boolean",
             "description": "Whether age_rating is locked"
           },
+          "alternateTitles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlternateTitleContextDto"
+            },
+            "description": "Alternate titles (e.g., Japanese, Romaji, English)"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthorContextDto"
+            },
+            "description": "Structured author information"
+          },
+          "authorsJsonLock": {
+            "type": "boolean",
+            "description": "Whether authors_json is locked"
+          },
+          "coverLock": {
+            "type": "boolean",
+            "description": "Whether cover is locked"
+          },
           "customMetadataLock": {
             "type": "boolean",
             "description": "Whether custom_metadata is locked"
+          },
+          "externalLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalLinkContextDto"
+            },
+            "description": "External links to other sites"
+          },
+          "externalRatings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalRatingContextDto"
+            },
+            "description": "External ratings from various sources"
           },
           "genres": {
             "type": "array",
@@ -29929,6 +30589,7 @@
         "type": "object",
         "description": "Series context for template and condition evaluation.\n\nThis structure provides a unified interface for evaluating templates\nand conditions against series data. It aggregates data from various\nsources (series, metadata, external IDs, book count) into a single\ncontext object.\n\n## Template Usage\n\nIn Handlebars templates, fields are accessible via:\n- `{{seriesId}}` - Series UUID\n- `{{bookCount}}` - Number of books\n- `{{metadata.title}}` - Series title\n- `{{metadata.genres}}` - Genre array\n- `{{externalIds.plugin:mangabaka.id}}` - External ID from a source\n- `{{customMetadata.myField}}` - Custom metadata field\n\n## JSON Structure\n\n```json\n{\n  \"seriesId\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"bookCount\": 5,\n  \"metadata\": {\n    \"title\": \"One Piece\",\n    \"genres\": [\"Action\", \"Adventure\"],\n    \"tags\": [\"pirates\"]\n  },\n  \"externalIds\": {\n    \"plugin:mangabaka\": { \"id\": \"12345\", \"url\": \"...\" }\n  },\n  \"customMetadata\": { \"myField\": \"value\" }\n}\n```",
         "required": [
+          "type",
           "bookCount"
         ],
         "properties": {
@@ -29973,6 +30634,11 @@
             "format": "uuid",
             "description": "Series UUID",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "type": {
+            "type": "string",
+            "description": "Type discriminator — always \"series\" for SeriesContextDto",
+            "example": "series"
           }
         }
       },

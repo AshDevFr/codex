@@ -5826,6 +5826,19 @@ export interface components {
              */
             group: string;
         };
+        /** @description Alternate title context for template evaluation. */
+        AlternateTitleContextDto: {
+            /**
+             * @description Label for this alternate title (e.g., "Japanese", "Romaji")
+             * @example Japanese
+             */
+            label: string;
+            /**
+             * @description The alternate title text
+             * @example ワンピース
+             */
+            title: string;
+        };
         /** @description Alternate title data transfer object */
         AlternateTitleDto: {
             /**
@@ -5947,6 +5960,24 @@ export interface components {
              */
             version: string;
         };
+        /** @description Author context for template evaluation. */
+        AuthorContextDto: {
+            /**
+             * @description Author name
+             * @example Oda Eiichiro
+             */
+            name: string;
+            /**
+             * @description Role (e.g., "author", "artist", "editor")
+             * @example author
+             */
+            role?: string | null;
+            /**
+             * @description Sort name (e.g., "Lastname, Firstname")
+             * @example Oda, Eiichiro
+             */
+            sortName?: string | null;
+        };
         /** @description Available plugin (not yet enabled by user) */
         AvailablePluginDto: {
             /** @description Plugin capabilities */
@@ -5993,6 +6024,30 @@ export interface components {
          * @enum {string}
          */
         BookAuthorRole: "author" | "co_author" | "editor" | "translator" | "illustrator" | "contributor" | "writer" | "penciller" | "inker" | "colorist" | "letterer" | "cover_artist";
+        /** @description Book award context for template evaluation. */
+        BookAwardContextDto: {
+            /**
+             * @description Award category (optional)
+             * @example Best Novel
+             */
+            category?: string | null;
+            /**
+             * @description Award name
+             * @example Hugo Award
+             */
+            name: string;
+            /**
+             * @description Whether the book won (vs nominated)
+             * @example true
+             */
+            won?: boolean | null;
+            /**
+             * Format: int32
+             * @description Year awarded (optional)
+             * @example 2015
+             */
+            year?: number | null;
+        };
         /** @description Award information for a book */
         BookAwardDto: {
             /**
@@ -6038,6 +6093,85 @@ export interface components {
             hasError: components["schemas"]["BoolOperator"];
         } | {
             bookType: components["schemas"]["FieldOperator"];
+        };
+        /**
+         * @description Book context for template and condition evaluation.
+         *
+         *     This structure provides a unified interface for evaluating templates
+         *     and conditions against book data. It includes book-specific fields
+         *     plus an embedded parent series context for cross-referencing.
+         *
+         *     ## Template Usage
+         *
+         *     In Handlebars templates, fields are accessible via:
+         *     - `{{type}}` - Always "book"
+         *     - `{{bookId}}` - Book UUID
+         *     - `{{seriesId}}` - Parent series UUID
+         *     - `{{metadata.title}}` - Book title
+         *     - `{{metadata.authors}}` - Author array
+         *     - `{{externalIds.plugin:source.id}}` - External ID from a source
+         *     - `{{customMetadata.myField}}` - Custom metadata field
+         *     - `{{series.metadata.title}}` - Parent series title (cross-reference)
+         */
+        BookContextDto: {
+            /**
+             * Format: uuid
+             * @description Book UUID
+             * @example 550e8400-e29b-41d4-a716-446655440001
+             */
+            bookId: string;
+            /** @description Custom metadata fields (preserved as-is, no case transformation). */
+            customMetadata?: Record<string, never> | null;
+            /**
+             * @description External IDs mapped by source name.
+             * @example {
+             *       "plugin:goodreads": {
+             *         "id": "18007564",
+             *         "url": "https://goodreads.com/book/show/18007564"
+             *       }
+             *     }
+             */
+            externalIds?: {
+                [key: string]: components["schemas"]["ExternalIdContextDto"];
+            };
+            /**
+             * @description File format (e.g., "cbz", "epub", "pdf")
+             * @example epub
+             */
+            fileFormat: string;
+            /**
+             * Format: int64
+             * @description File size in bytes
+             * @example 52428800
+             */
+            fileSize: number;
+            /**
+             * Format: uuid
+             * @description Library UUID
+             * @example 550e8400-e29b-41d4-a716-446655440099
+             */
+            libraryId: string;
+            /** @description Book metadata */
+            metadata?: components["schemas"]["BookMetadataContextDto"];
+            /**
+             * Format: int32
+             * @description Number of pages
+             * @example 369
+             */
+            pageCount: number;
+            /** @description Parent series context for cross-referencing */
+            series: components["schemas"]["SeriesContextDto"];
+            /**
+             * Format: uuid
+             * @description Parent series UUID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            seriesId: string;
+            /**
+             * @description Type discriminator — always "book" for BookContextDto
+             * @example book
+             */
+            type: string;
         };
         /** @description Book cover data transfer object */
         BookCoverDto: {
@@ -6585,6 +6719,239 @@ export interface components {
             fullTextSearch?: string | null;
             /** @description Include soft-deleted books in results (default: false) */
             includeDeleted?: boolean;
+        };
+        /**
+         * @description Book metadata context for template evaluation.
+         *
+         *     Contains book metadata fields in a flat structure suitable for
+         *     template access via `metadata.*` syntax.
+         */
+        BookMetadataContextDto: {
+            /** @description Structured author information */
+            authors?: components["schemas"]["AuthorContextDto"][];
+            /** @description Whether authors_json is locked */
+            authorsJsonLock?: boolean;
+            /** @description Awards information */
+            awards?: components["schemas"]["BookAwardContextDto"][];
+            /** @description Whether awards_json is locked */
+            awardsJsonLock?: boolean;
+            /**
+             * @description Whether the book is black and white
+             * @example false
+             */
+            blackAndWhite?: boolean | null;
+            /** @description Whether black_and_white is locked */
+            blackAndWhiteLock?: boolean;
+            /**
+             * @description Book type classification
+             * @example novel
+             */
+            bookType?: string | null;
+            /** @description Whether book_type is locked */
+            bookTypeLock?: boolean;
+            /**
+             * Format: int32
+             * @description Total count in series
+             * @example 4
+             */
+            count?: number | null;
+            /** @description Whether count is locked */
+            countLock?: boolean;
+            /** @description Whether cover is locked */
+            coverLock?: boolean;
+            /** @description Whether custom_metadata is locked */
+            customMetadataLock?: boolean;
+            /**
+             * Format: int32
+             * @description Publication day (1-31)
+             * @example 15
+             */
+            day?: number | null;
+            /** @description Whether day is locked */
+            dayLock?: boolean;
+            /**
+             * @description Edition information
+             * @example First Edition
+             */
+            edition?: string | null;
+            /** @description Whether edition is locked */
+            editionLock?: boolean;
+            /** @description External links for this book */
+            externalLinks?: components["schemas"]["ExternalLinkContextDto"][];
+            /**
+             * @description Format detail (e.g., "Trade Paperback")
+             * @example Trade Paperback
+             */
+            formatDetail?: string | null;
+            /** @description Whether format_detail is locked */
+            formatDetailLock?: boolean;
+            /**
+             * @description Genre (ComicInfo-style single genre field)
+             * @example Science Fiction
+             */
+            genre?: string | null;
+            /** @description Whether genre is locked */
+            genreLock?: boolean;
+            /**
+             * @description Genre names for this book
+             * @example [
+             *       "Science Fiction",
+             *       "Adventure"
+             *     ]
+             */
+            genres?: string[];
+            /**
+             * @description Imprint (sub-publisher)
+             * @example Broadway Books
+             */
+            imprint?: string | null;
+            /** @description Whether imprint is locked */
+            imprintLock?: boolean;
+            /**
+             * @description ISBN(s)
+             * @example 978-0553418026
+             */
+            isbns?: string | null;
+            /** @description Whether isbns is locked */
+            isbnsLock?: boolean;
+            /**
+             * @description Language code (ISO format)
+             * @example en
+             */
+            languageIso?: string | null;
+            /** @description Whether language_iso is locked */
+            languageIsoLock?: boolean;
+            /**
+             * @description Whether the book is manga format
+             * @example false
+             */
+            manga?: boolean | null;
+            /** @description Whether manga is locked */
+            mangaLock?: boolean;
+            /**
+             * Format: int32
+             * @description Publication month (1-12)
+             * @example 2
+             */
+            month?: number | null;
+            /** @description Whether month is locked */
+            monthLock?: boolean;
+            /**
+             * Format: double
+             * @description Book number (e.g., issue/chapter number)
+             * @example 1
+             */
+            number?: number | null;
+            /** @description Whether number is locked */
+            numberLock?: boolean;
+            /**
+             * @description Original title (for translated works)
+             * @example 火星の人
+             */
+            originalTitle?: string | null;
+            /** @description Whether original_title is locked */
+            originalTitleLock?: boolean;
+            /**
+             * Format: int32
+             * @description Original publication year
+             * @example 2011
+             */
+            originalYear?: number | null;
+            /** @description Whether original_year is locked */
+            originalYearLock?: boolean;
+            /**
+             * @description Publisher name
+             * @example Crown Publishing
+             */
+            publisher?: string | null;
+            /** @description Whether publisher is locked */
+            publisherLock?: boolean;
+            /**
+             * Format: double
+             * @description Position in a series
+             * @example 1
+             */
+            seriesPosition?: number | null;
+            /** @description Whether series_position is locked */
+            seriesPositionLock?: boolean;
+            /**
+             * Format: int32
+             * @description Total number of books in the series
+             * @example 3
+             */
+            seriesTotal?: number | null;
+            /** @description Whether series_total is locked */
+            seriesTotalLock?: boolean;
+            /**
+             * @description Subject/topic tags
+             * @example [
+             *       "Science Fiction",
+             *       "Space Exploration"
+             *     ]
+             */
+            subjects?: string[];
+            /** @description Whether subjects are locked */
+            subjectsLock?: boolean;
+            /**
+             * @description Book subtitle
+             * @example A Novel
+             */
+            subtitle?: string | null;
+            /** @description Whether subtitle is locked */
+            subtitleLock?: boolean;
+            /**
+             * @description Book summary/description
+             * @example Astronaut Mark Watney is stranded on Mars...
+             */
+            summary?: string | null;
+            /** @description Whether summary is locked */
+            summaryLock?: boolean;
+            /**
+             * @description Tag names for this book
+             * @example [
+             *       "mars",
+             *       "survival",
+             *       "space"
+             *     ]
+             */
+            tags?: string[];
+            /**
+             * @description Book title
+             * @example The Martian
+             */
+            title?: string | null;
+            /** @description Whether title is locked */
+            titleLock?: boolean;
+            /**
+             * @description Custom sort name
+             * @example Martian, The
+             */
+            titleSort?: string | null;
+            /** @description Whether title_sort is locked */
+            titleSortLock?: boolean;
+            /**
+             * @description Translator name
+             * @example John Smith
+             */
+            translator?: string | null;
+            /** @description Whether translator is locked */
+            translatorLock?: boolean;
+            /**
+             * Format: int32
+             * @description Volume number
+             * @example 1
+             */
+            volume?: number | null;
+            /** @description Whether volume is locked */
+            volumeLock?: boolean;
+            /**
+             * Format: int32
+             * @description Publication year
+             * @example 2011
+             */
+            year?: number | null;
+            /** @description Whether year is locked */
+            yearLock?: boolean;
         };
         /** @description Book metadata DTO */
         BookMetadataDto: {
@@ -8362,6 +8729,24 @@ export interface components {
              */
             url?: string | null;
         };
+        /** @description External link context for template evaluation. */
+        ExternalLinkContextDto: {
+            /**
+             * @description External ID on the source (optional)
+             * @example 123
+             */
+            externalId?: string | null;
+            /**
+             * @description Source name (e.g., "mangadex", "myanimelist")
+             * @example mangadex
+             */
+            source: string;
+            /**
+             * @description URL to the external resource
+             * @example https://mangadex.org/title/123
+             */
+            url: string;
+        };
         /** @description External link data transfer object */
         ExternalLinkDto: {
             /**
@@ -8408,6 +8793,26 @@ export interface components {
         ExternalLinkListResponse: {
             /** @description List of external links */
             links: components["schemas"]["ExternalLinkDto"][];
+        };
+        /** @description External rating context for template evaluation. */
+        ExternalRatingContextDto: {
+            /**
+             * Format: double
+             * @description Rating value (normalized to 0-100)
+             * @example 85.5
+             */
+            rating: number;
+            /**
+             * @description Source name (e.g., "myanimelist", "anilist")
+             * @example myanimelist
+             */
+            source: string;
+            /**
+             * Format: int32
+             * @description Number of votes (optional)
+             * @example 12345
+             */
+            votes?: number | null;
         };
         /** @description External rating data transfer object */
         ExternalRatingDto: {
@@ -10176,8 +10581,20 @@ export interface components {
             ageRating?: number | null;
             /** @description Whether age_rating is locked */
             ageRatingLock?: boolean;
+            /** @description Alternate titles (e.g., Japanese, Romaji, English) */
+            alternateTitles?: components["schemas"]["AlternateTitleContextDto"][];
+            /** @description Structured author information */
+            authors?: components["schemas"]["AuthorContextDto"][];
+            /** @description Whether authors_json is locked */
+            authorsJsonLock?: boolean;
+            /** @description Whether cover is locked */
+            coverLock?: boolean;
             /** @description Whether custom_metadata is locked */
             customMetadataLock?: boolean;
+            /** @description External links to other sites */
+            externalLinks?: components["schemas"]["ExternalLinkContextDto"][];
+            /** @description External ratings from various sources */
+            externalRatings?: components["schemas"]["ExternalRatingContextDto"][];
             /**
              * @description Genre names
              * @example [
@@ -13505,6 +13922,11 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             seriesId?: string | null;
+            /**
+             * @description Type discriminator — always "series" for SeriesContextDto
+             * @example series
+             */
+            type: string;
         };
         /** @description Series cover data transfer object */
         SeriesCoverDto: {

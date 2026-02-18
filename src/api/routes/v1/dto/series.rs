@@ -1546,6 +1546,67 @@ pub struct ExternalIdContextDto {
     pub hash: Option<String>,
 }
 
+/// Alternate title context for template evaluation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AlternateTitleContextDto {
+    /// Label for this alternate title (e.g., "Japanese", "Romaji")
+    #[schema(example = "Japanese")]
+    pub label: String,
+    /// The alternate title text
+    #[schema(example = "ワンピース")]
+    pub title: String,
+}
+
+/// Author context for template evaluation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorContextDto {
+    /// Author name
+    #[schema(example = "Oda Eiichiro")]
+    pub name: String,
+    /// Role (e.g., "author", "artist", "editor")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "author")]
+    pub role: Option<String>,
+    /// Sort name (e.g., "Lastname, Firstname")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Oda, Eiichiro")]
+    pub sort_name: Option<String>,
+}
+
+/// External rating context for template evaluation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalRatingContextDto {
+    /// Source name (e.g., "myanimelist", "anilist")
+    #[schema(example = "myanimelist")]
+    pub source: String,
+    /// Rating value (normalized to 0-100)
+    #[schema(example = 85.5)]
+    pub rating: f64,
+    /// Number of votes (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 12345)]
+    pub votes: Option<i32>,
+}
+
+/// External link context for template evaluation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalLinkContextDto {
+    /// Source name (e.g., "mangadex", "myanimelist")
+    #[schema(example = "mangadex")]
+    pub source: String,
+    /// URL to the external resource
+    #[schema(example = "https://mangadex.org/title/123")]
+    pub url: String,
+    /// External ID on the source (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "123")]
+    pub external_id: Option<String>,
+}
+
 /// Metadata context for template evaluation.
 ///
 /// Contains series metadata fields in a flat structure suitable for
@@ -1618,6 +1679,22 @@ pub struct MetadataContextDto {
     #[schema(example = json!(["pirates", "treasure", "friendship"]))]
     pub tags: Vec<String>,
 
+    /// Alternate titles (e.g., Japanese, Romaji, English)
+    #[serde(default)]
+    pub alternate_titles: Vec<AlternateTitleContextDto>,
+
+    /// Structured author information
+    #[serde(default)]
+    pub authors: Vec<AuthorContextDto>,
+
+    /// External ratings from various sources
+    #[serde(default)]
+    pub external_ratings: Vec<ExternalRatingContextDto>,
+
+    /// External links to other sites
+    #[serde(default)]
+    pub external_links: Vec<ExternalLinkContextDto>,
+
     // Lock fields
     /// Whether title is locked
     #[serde(default)]
@@ -1674,6 +1751,14 @@ pub struct MetadataContextDto {
     /// Whether custom_metadata is locked
     #[serde(default)]
     pub custom_metadata_lock: bool,
+
+    /// Whether cover is locked
+    #[serde(default)]
+    pub cover_lock: bool,
+
+    /// Whether authors_json is locked
+    #[serde(default)]
+    pub authors_json_lock: bool,
 }
 
 /// Series context for template and condition evaluation.
@@ -1710,9 +1795,14 @@ pub struct MetadataContextDto {
 ///   "customMetadata": { "myField": "value" }
 /// }
 /// ```
-#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SeriesContextDto {
+    /// Type discriminator — always "series" for SeriesContextDto
+    #[serde(rename = "type")]
+    #[schema(example = "series")]
+    pub context_type: String,
+
     /// Series UUID
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
@@ -1748,6 +1838,7 @@ pub struct SeriesContextDto {
 impl From<crate::services::metadata::preprocessing::context::SeriesContext> for SeriesContextDto {
     fn from(ctx: crate::services::metadata::preprocessing::context::SeriesContext) -> Self {
         Self {
+            context_type: ctx.context_type,
             series_id: ctx.series_id,
             book_count: ctx.book_count,
             metadata: MetadataContextDto {
@@ -1764,6 +1855,45 @@ impl From<crate::services::metadata::preprocessing::context::SeriesContext> for 
                 total_book_count: ctx.metadata.total_book_count,
                 genres: ctx.metadata.genres,
                 tags: ctx.metadata.tags,
+                alternate_titles: ctx
+                    .metadata
+                    .alternate_titles
+                    .into_iter()
+                    .map(|at| AlternateTitleContextDto {
+                        label: at.label,
+                        title: at.title,
+                    })
+                    .collect(),
+                authors: ctx
+                    .metadata
+                    .authors
+                    .into_iter()
+                    .map(|a| AuthorContextDto {
+                        name: a.name,
+                        role: a.role,
+                        sort_name: a.sort_name,
+                    })
+                    .collect(),
+                external_ratings: ctx
+                    .metadata
+                    .external_ratings
+                    .into_iter()
+                    .map(|r| ExternalRatingContextDto {
+                        source: r.source,
+                        rating: r.rating,
+                        votes: r.votes,
+                    })
+                    .collect(),
+                external_links: ctx
+                    .metadata
+                    .external_links
+                    .into_iter()
+                    .map(|l| ExternalLinkContextDto {
+                        source: l.source,
+                        url: l.url,
+                        external_id: l.external_id,
+                    })
+                    .collect(),
                 title_lock: ctx.metadata.title_lock,
                 title_sort_lock: ctx.metadata.title_sort_lock,
                 summary_lock: ctx.metadata.summary_lock,
@@ -1778,6 +1908,8 @@ impl From<crate::services::metadata::preprocessing::context::SeriesContext> for 
                 genres_lock: ctx.metadata.genres_lock,
                 tags_lock: ctx.metadata.tags_lock,
                 custom_metadata_lock: ctx.metadata.custom_metadata_lock,
+                cover_lock: ctx.metadata.cover_lock,
+                authors_json_lock: ctx.metadata.authors_json_lock,
             },
             external_ids: ctx
                 .external_ids

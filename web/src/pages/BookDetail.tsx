@@ -48,6 +48,8 @@ import {
   pluginActionsApi,
   pluginsApi,
 } from "@/api/plugins";
+import { seriesApi } from "@/api/series";
+import { settingsApi } from "@/api/settings";
 import {
   AuthorsList,
   BookExternalIds,
@@ -57,11 +59,19 @@ import {
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
 import { ExternalIdEditModal } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
-import { ExternalLinks, GenreTagChips } from "@/components/series";
+import {
+  CustomMetadataDisplay,
+  ExternalLinks,
+  GenreTagChips,
+} from "@/components/series";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
+import {
+  transformFullBookToBookContext,
+  transformFullSeriesToSeriesContext,
+} from "@/utils/templateUtils";
 
 // Language code mapping
 const LANGUAGE_DISPLAY: Record<string, string> = {
@@ -153,6 +163,21 @@ export function BookDetail() {
     queryKey: ["books", bookId, "external-links"],
     queryFn: () => booksApi.listExternalLinks(bookId!),
     enabled: !!bookId,
+  });
+
+  // Fetch public settings (for custom metadata template)
+  const { data: publicSettings } = useQuery({
+    queryKey: ["public-settings"],
+    queryFn: () => settingsApi.getPublicSettings(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch parent series (full) for building the book context's embedded series context
+  const { data: parentSeries } = useQuery({
+    queryKey: ["series", bookDetail?.seriesId, "full"],
+    queryFn: () => seriesApi.getById(bookDetail!.seriesId, { full: true }),
+    enabled: !!bookDetail?.seriesId,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Set document title to book name for browser history
@@ -998,6 +1023,21 @@ export function BookDetail() {
             )}
           </Group>
         </Stack>
+
+        {/* Custom Metadata (template-rendered) */}
+        {book && parentSeries && (
+          <CustomMetadataDisplay
+            context={transformFullBookToBookContext(
+              book,
+              transformFullSeriesToSeriesContext(parentSeries),
+              externalIds,
+              externalLinks,
+            )}
+            template={
+              publicSettings?.["display.custom_metadata_template"]?.value
+            }
+          />
+        )}
 
         {/* Series navigation */}
         <Group justify="space-between" mt="md">

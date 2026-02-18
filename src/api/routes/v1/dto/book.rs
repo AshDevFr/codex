@@ -2164,3 +2164,480 @@ pub struct FullBookResponse {
     #[schema(example = "2024-01-15T10:30:00Z")]
     pub updated_at: DateTime<Utc>,
 }
+
+// =============================================================================
+// Book Context DTOs (for template evaluation)
+// =============================================================================
+
+/// Book award context for template evaluation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookAwardContextDto {
+    /// Award name
+    #[schema(example = "Hugo Award")]
+    pub name: String,
+
+    /// Year awarded (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 2015)]
+    pub year: Option<i32>,
+
+    /// Award category (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Best Novel")]
+    pub category: Option<String>,
+
+    /// Whether the book won (vs nominated)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = true)]
+    pub won: Option<bool>,
+}
+
+/// Book metadata context for template evaluation.
+///
+/// Contains book metadata fields in a flat structure suitable for
+/// template access via `metadata.*` syntax.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookMetadataContextDto {
+    // Display fields
+    /// Book title
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "The Martian")]
+    pub title: Option<String>,
+
+    /// Custom sort name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Martian, The")]
+    pub title_sort: Option<String>,
+
+    /// Book number (e.g., issue/chapter number)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1.0)]
+    pub number: Option<f64>,
+
+    /// Book subtitle
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "A Novel")]
+    pub subtitle: Option<String>,
+
+    // Content fields
+    /// Book summary/description
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Astronaut Mark Watney is stranded on Mars...")]
+    pub summary: Option<String>,
+
+    /// Publisher name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Crown Publishing")]
+    pub publisher: Option<String>,
+
+    /// Imprint (sub-publisher)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Broadway Books")]
+    pub imprint: Option<String>,
+
+    /// Genre (ComicInfo-style single genre field)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Science Fiction")]
+    pub genre: Option<String>,
+
+    /// Language code (ISO format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "en")]
+    pub language_iso: Option<String>,
+
+    /// Format detail (e.g., "Trade Paperback")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Trade Paperback")]
+    pub format_detail: Option<String>,
+
+    /// Whether the book is black and white
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub black_and_white: Option<bool>,
+
+    /// Whether the book is manga format
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub manga: Option<bool>,
+
+    /// Publication year
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 2011)]
+    pub year: Option<i32>,
+
+    /// Publication month (1-12)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 2)]
+    pub month: Option<i32>,
+
+    /// Publication day (1-31)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 15)]
+    pub day: Option<i32>,
+
+    /// Volume number
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1)]
+    pub volume: Option<i32>,
+
+    /// Total count in series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 4)]
+    pub count: Option<i32>,
+
+    /// ISBN(s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "978-0553418026")]
+    pub isbns: Option<String>,
+
+    /// Book type classification
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "novel")]
+    pub book_type: Option<String>,
+
+    // Structured fields
+    /// Structured author information
+    #[serde(default)]
+    pub authors: Vec<super::series::AuthorContextDto>,
+
+    /// Translator name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "John Smith")]
+    pub translator: Option<String>,
+
+    /// Edition information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "First Edition")]
+    pub edition: Option<String>,
+
+    /// Original title (for translated works)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "火星の人")]
+    pub original_title: Option<String>,
+
+    /// Original publication year
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 2011)]
+    pub original_year: Option<i32>,
+
+    /// Position in a series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1.0)]
+    pub series_position: Option<f64>,
+
+    /// Total number of books in the series
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 3)]
+    pub series_total: Option<i32>,
+
+    /// Subject/topic tags
+    #[serde(default)]
+    #[schema(example = json!(["Science Fiction", "Space Exploration"]))]
+    pub subjects: Vec<String>,
+
+    /// Awards information
+    #[serde(default)]
+    pub awards: Vec<BookAwardContextDto>,
+
+    /// Genre names for this book
+    #[serde(default)]
+    #[schema(example = json!(["Science Fiction", "Adventure"]))]
+    pub genres: Vec<String>,
+
+    /// Tag names for this book
+    #[serde(default)]
+    #[schema(example = json!(["mars", "survival", "space"]))]
+    pub tags: Vec<String>,
+
+    /// External links for this book
+    #[serde(default)]
+    pub external_links: Vec<super::series::ExternalLinkContextDto>,
+
+    // Lock fields
+    /// Whether title is locked
+    #[serde(default)]
+    pub title_lock: bool,
+    /// Whether title_sort is locked
+    #[serde(default)]
+    pub title_sort_lock: bool,
+    /// Whether number is locked
+    #[serde(default)]
+    pub number_lock: bool,
+    /// Whether summary is locked
+    #[serde(default)]
+    pub summary_lock: bool,
+    /// Whether publisher is locked
+    #[serde(default)]
+    pub publisher_lock: bool,
+    /// Whether imprint is locked
+    #[serde(default)]
+    pub imprint_lock: bool,
+    /// Whether genre is locked
+    #[serde(default)]
+    pub genre_lock: bool,
+    /// Whether language_iso is locked
+    #[serde(default)]
+    pub language_iso_lock: bool,
+    /// Whether format_detail is locked
+    #[serde(default)]
+    pub format_detail_lock: bool,
+    /// Whether black_and_white is locked
+    #[serde(default)]
+    pub black_and_white_lock: bool,
+    /// Whether manga is locked
+    #[serde(default)]
+    pub manga_lock: bool,
+    /// Whether year is locked
+    #[serde(default)]
+    pub year_lock: bool,
+    /// Whether month is locked
+    #[serde(default)]
+    pub month_lock: bool,
+    /// Whether day is locked
+    #[serde(default)]
+    pub day_lock: bool,
+    /// Whether volume is locked
+    #[serde(default)]
+    pub volume_lock: bool,
+    /// Whether count is locked
+    #[serde(default)]
+    pub count_lock: bool,
+    /// Whether isbns is locked
+    #[serde(default)]
+    pub isbns_lock: bool,
+    /// Whether book_type is locked
+    #[serde(default)]
+    pub book_type_lock: bool,
+    /// Whether subtitle is locked
+    #[serde(default)]
+    pub subtitle_lock: bool,
+    /// Whether authors_json is locked
+    #[serde(default)]
+    pub authors_json_lock: bool,
+    /// Whether translator is locked
+    #[serde(default)]
+    pub translator_lock: bool,
+    /// Whether edition is locked
+    #[serde(default)]
+    pub edition_lock: bool,
+    /// Whether original_title is locked
+    #[serde(default)]
+    pub original_title_lock: bool,
+    /// Whether original_year is locked
+    #[serde(default)]
+    pub original_year_lock: bool,
+    /// Whether series_position is locked
+    #[serde(default)]
+    pub series_position_lock: bool,
+    /// Whether series_total is locked
+    #[serde(default)]
+    pub series_total_lock: bool,
+    /// Whether subjects are locked
+    #[serde(default)]
+    pub subjects_lock: bool,
+    /// Whether awards_json is locked
+    #[serde(default)]
+    pub awards_json_lock: bool,
+    /// Whether custom_metadata is locked
+    #[serde(default)]
+    pub custom_metadata_lock: bool,
+    /// Whether cover is locked
+    #[serde(default)]
+    pub cover_lock: bool,
+}
+
+/// Book context for template and condition evaluation.
+///
+/// This structure provides a unified interface for evaluating templates
+/// and conditions against book data. It includes book-specific fields
+/// plus an embedded parent series context for cross-referencing.
+///
+/// ## Template Usage
+///
+/// In Handlebars templates, fields are accessible via:
+/// - `{{type}}` - Always "book"
+/// - `{{bookId}}` - Book UUID
+/// - `{{seriesId}}` - Parent series UUID
+/// - `{{metadata.title}}` - Book title
+/// - `{{metadata.authors}}` - Author array
+/// - `{{externalIds.plugin:source.id}}` - External ID from a source
+/// - `{{customMetadata.myField}}` - Custom metadata field
+/// - `{{series.metadata.title}}` - Parent series title (cross-reference)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BookContextDto {
+    /// Type discriminator — always "book" for BookContextDto
+    #[serde(rename = "type")]
+    #[schema(example = "book")]
+    pub context_type: String,
+
+    /// Book UUID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
+    pub book_id: uuid::Uuid,
+
+    /// Parent series UUID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub series_id: uuid::Uuid,
+
+    /// Library UUID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440099")]
+    pub library_id: uuid::Uuid,
+
+    /// File format (e.g., "cbz", "epub", "pdf")
+    #[schema(example = "epub")]
+    pub file_format: String,
+
+    /// Number of pages
+    #[schema(example = 369)]
+    pub page_count: i32,
+
+    /// File size in bytes
+    #[schema(example = 52428800)]
+    pub file_size: i64,
+
+    /// Book metadata
+    #[serde(default)]
+    pub metadata: BookMetadataContextDto,
+
+    /// External IDs mapped by source name.
+    #[serde(default)]
+    #[schema(
+        value_type = std::collections::HashMap<String, super::series::ExternalIdContextDto>,
+        example = json!({
+            "plugin:goodreads": { "id": "18007564", "url": "https://goodreads.com/book/show/18007564" }
+        })
+    )]
+    pub external_ids: std::collections::HashMap<String, super::series::ExternalIdContextDto>,
+
+    /// Custom metadata fields (preserved as-is, no case transformation).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Object, nullable = true, example = json!({"customField": "value"}))]
+    pub custom_metadata: Option<serde_json::Value>,
+
+    /// Parent series context for cross-referencing
+    pub series: super::series::SeriesContextDto,
+}
+
+// Conversion from internal BookContext to DTO
+impl From<crate::services::metadata::preprocessing::context::BookContext> for BookContextDto {
+    fn from(ctx: crate::services::metadata::preprocessing::context::BookContext) -> Self {
+        Self {
+            context_type: ctx.context_type,
+            book_id: ctx.book_id,
+            series_id: ctx.series_id,
+            library_id: ctx.library_id,
+            file_format: ctx.file_format,
+            page_count: ctx.page_count,
+            file_size: ctx.file_size,
+            metadata: BookMetadataContextDto {
+                title: ctx.metadata.title,
+                title_sort: ctx.metadata.title_sort,
+                number: ctx.metadata.number,
+                subtitle: ctx.metadata.subtitle,
+                summary: ctx.metadata.summary,
+                publisher: ctx.metadata.publisher,
+                imprint: ctx.metadata.imprint,
+                genre: ctx.metadata.genre,
+                language_iso: ctx.metadata.language_iso,
+                format_detail: ctx.metadata.format_detail,
+                black_and_white: ctx.metadata.black_and_white,
+                manga: ctx.metadata.manga,
+                year: ctx.metadata.year,
+                month: ctx.metadata.month,
+                day: ctx.metadata.day,
+                volume: ctx.metadata.volume,
+                count: ctx.metadata.count,
+                isbns: ctx.metadata.isbns,
+                book_type: ctx.metadata.book_type,
+                authors: ctx
+                    .metadata
+                    .authors
+                    .into_iter()
+                    .map(|a| super::series::AuthorContextDto {
+                        name: a.name,
+                        role: a.role,
+                        sort_name: a.sort_name,
+                    })
+                    .collect(),
+                translator: ctx.metadata.translator,
+                edition: ctx.metadata.edition,
+                original_title: ctx.metadata.original_title,
+                original_year: ctx.metadata.original_year,
+                series_position: ctx.metadata.series_position,
+                series_total: ctx.metadata.series_total,
+                subjects: ctx.metadata.subjects,
+                awards: ctx
+                    .metadata
+                    .awards
+                    .into_iter()
+                    .map(|a| BookAwardContextDto {
+                        name: a.name,
+                        year: a.year,
+                        category: a.category,
+                        won: a.won,
+                    })
+                    .collect(),
+                genres: ctx.metadata.genres,
+                tags: ctx.metadata.tags,
+                external_links: ctx
+                    .metadata
+                    .external_links
+                    .into_iter()
+                    .map(|l| super::series::ExternalLinkContextDto {
+                        source: l.source,
+                        url: l.url,
+                        external_id: l.external_id,
+                    })
+                    .collect(),
+                title_lock: ctx.metadata.title_lock,
+                title_sort_lock: ctx.metadata.title_sort_lock,
+                number_lock: ctx.metadata.number_lock,
+                summary_lock: ctx.metadata.summary_lock,
+                publisher_lock: ctx.metadata.publisher_lock,
+                imprint_lock: ctx.metadata.imprint_lock,
+                genre_lock: ctx.metadata.genre_lock,
+                language_iso_lock: ctx.metadata.language_iso_lock,
+                format_detail_lock: ctx.metadata.format_detail_lock,
+                black_and_white_lock: ctx.metadata.black_and_white_lock,
+                manga_lock: ctx.metadata.manga_lock,
+                year_lock: ctx.metadata.year_lock,
+                month_lock: ctx.metadata.month_lock,
+                day_lock: ctx.metadata.day_lock,
+                volume_lock: ctx.metadata.volume_lock,
+                count_lock: ctx.metadata.count_lock,
+                isbns_lock: ctx.metadata.isbns_lock,
+                book_type_lock: ctx.metadata.book_type_lock,
+                subtitle_lock: ctx.metadata.subtitle_lock,
+                authors_json_lock: ctx.metadata.authors_json_lock,
+                translator_lock: ctx.metadata.translator_lock,
+                edition_lock: ctx.metadata.edition_lock,
+                original_title_lock: ctx.metadata.original_title_lock,
+                original_year_lock: ctx.metadata.original_year_lock,
+                series_position_lock: ctx.metadata.series_position_lock,
+                series_total_lock: ctx.metadata.series_total_lock,
+                subjects_lock: ctx.metadata.subjects_lock,
+                awards_json_lock: ctx.metadata.awards_json_lock,
+                custom_metadata_lock: ctx.metadata.custom_metadata_lock,
+                cover_lock: ctx.metadata.cover_lock,
+            },
+            external_ids: ctx
+                .external_ids
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k,
+                        super::series::ExternalIdContextDto {
+                            id: v.id,
+                            url: v.url,
+                            hash: v.hash,
+                        },
+                    )
+                })
+                .collect(),
+            custom_metadata: ctx.custom_metadata,
+            series: ctx.series.into(),
+        }
+    }
+}

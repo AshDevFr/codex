@@ -7,11 +7,14 @@ Codex allows you to store and display custom metadata for your series beyond the
 
 ## Overview
 
-Custom metadata is a flexible JSON object that can contain any data you want to associate with a series. It's displayed on the series detail page using a configurable Handlebars template that renders to Markdown.
+Custom metadata is a flexible JSON object that can contain any data you want to associate with a series or book. It's displayed on detail pages using a configurable Handlebars template that renders to Markdown.
 
-Templates have access to two data sources:
-- **`customMetadata`** - Your custom JSON data stored on the series
-- **`metadata`** - Built-in series metadata (title, genres, publisher, ratings, etc.)
+Templates have access to multiple data sources:
+- **`type`** - Context type discriminator: `"series"` or `"book"`
+- **`customMetadata`** - Your custom JSON data stored on the entity
+- **`metadata`** - Built-in metadata fields (title, genres, publisher, etc.)
+- **`externalIds`** - External IDs from metadata providers
+- **`series`** - *(Book context only)* Embedded parent series context for cross-referencing
 
 **Use cases:**
 - Track reading progress and personal ratings
@@ -206,11 +209,30 @@ Status: {{default customMetadata.status "Not started"}}
 Rating: {{default customMetadata.rating "—"}}/10
 ```
 
-## Built-in Metadata Fields
+## Template Context
 
-In addition to `customMetadata`, templates have access to the series' built-in metadata via the `metadata` object. This allows you to combine your custom tracking data with standard series information.
+Templates receive a context object that varies depending on whether the template is rendered on a series or book detail page. Use the `type` field to distinguish between them.
 
-### Available Fields
+### Top-Level Fields
+
+| Field | Type | Series | Book | Description |
+|-------|------|--------|------|-------------|
+| `type` | string | `"series"` | `"book"` | Context type discriminator |
+| `seriesId` | string | Yes | Yes | Series UUID |
+| `bookCount` | number | Yes | No | Number of books in the series |
+| `bookId` | string | No | Yes | Book UUID |
+| `libraryId` | string | No | Yes | Library UUID |
+| `fileFormat` | string | No | Yes | File format (cbz, epub, pdf) |
+| `pageCount` | number | No | Yes | Number of pages |
+| `fileSize` | number | No | Yes | File size in bytes |
+| `metadata` | object | Yes | Yes | Metadata fields (structure differs) |
+| `externalIds` | object | Yes | Yes | External IDs mapped by source |
+| `customMetadata` | object | Yes | Yes | Custom metadata JSON |
+| `series` | object | No | Yes | Embedded parent series context |
+
+## Series Metadata Fields
+
+When `type` is `"series"`, the `metadata` object contains:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -223,11 +245,98 @@ In addition to `customMetadata`, templates have access to the series' built-in m
 | `metadata.totalBookCount` | number | Total number of books in the series |
 | `metadata.ageRating` | number | Age rating (e.g., 13, 18) |
 | `metadata.language` | string | Primary language |
+| `metadata.readingDirection` | string | Reading direction (ltr, rtl, ttb) |
 | `metadata.genres` | string[] | List of genres |
 | `metadata.tags` | string[] | List of tags |
+| `metadata.authors` | array | Authors (name, role, sortName) |
 | `metadata.externalRatings` | array | External ratings (source, rating, votes) |
 | `metadata.externalLinks` | array | External links (source, url) |
 | `metadata.alternateTitles` | array | Alternate titles (title, label) |
+
+## Book Metadata Fields
+
+When `type` is `"book"`, the `metadata` object contains book-specific fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `metadata.title` | string | Book title |
+| `metadata.titleSort` | string | Custom sort name |
+| `metadata.number` | number | Issue/chapter number |
+| `metadata.subtitle` | string | Book subtitle |
+| `metadata.summary` | string | Book description |
+| `metadata.publisher` | string | Publisher name |
+| `metadata.imprint` | string | Publisher imprint |
+| `metadata.genre` | string | Genre (ComicInfo-style single field) |
+| `metadata.languageIso` | string | Language code (ISO format) |
+| `metadata.year` | number | Publication year |
+| `metadata.month` | number | Publication month (1-12) |
+| `metadata.day` | number | Publication day (1-31) |
+| `metadata.volume` | number | Volume number |
+| `metadata.isbns` | string | ISBN(s) |
+| `metadata.bookType` | string | Book type (comic, manga, novel, etc.) |
+| `metadata.edition` | string | Edition info |
+| `metadata.translator` | string | Translator name |
+| `metadata.originalTitle` | string | Original title (translations) |
+| `metadata.originalYear` | number | Original publication year |
+| `metadata.genres` | string[] | Genre names |
+| `metadata.tags` | string[] | Tag names |
+| `metadata.subjects` | string[] | Subject/topic tags |
+| `metadata.authors` | array | Authors (name, role, sortName) |
+| `metadata.awards` | array | Awards (name, year, category, won) |
+| `metadata.externalLinks` | array | External links (source, url) |
+
+### Cross-Referencing Parent Series
+
+Book contexts include the full parent series context under `series.*`. This lets you reference series-level data from a book template:
+
+```handlebars
+{{!-- Book title with series name --}}
+# {{metadata.title}}
+*from {{series.metadata.title}}*
+
+{{!-- Show series publisher if book doesn't have one --}}
+**Publisher:** {{default metadata.publisher series.metadata.publisher}}
+
+{{!-- Series genres --}}
+{{#if series.metadata.genres}}
+**Series Genres:** {{join series.metadata.genres " • "}}
+{{/if}}
+```
+
+### Type-Aware Templates
+
+Use the `type` discriminator to create templates that work for both series and books:
+
+```handlebars
+{{#ifEquals type "book"}}
+## {{metadata.title}}
+{{#if metadata.subtitle}}*{{metadata.subtitle}}*{{/if}}
+**Format:** {{uppercase fileFormat}} ({{pageCount}} pages)
+{{#if metadata.authors}}
+**Author:** {{metadata.authors.[0].name}}
+{{/if}}
+{{/ifEquals}}
+
+{{#ifEquals type "series"}}
+## {{metadata.title}}
+**Books:** {{bookCount}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+{{#if metadata.status}}
+**Status:** {{capitalize metadata.status}}
+{{/if}}
+{{/ifEquals}}
+
+{{!-- Common sections work for both --}}
+{{#if metadata.genres}}
+**Genres:** {{join metadata.genres " • "}}
+{{/if}}
+
+{{#if customMetadata}}
+---
+{{#each customMetadata}}
+- **{{@key}}**: {{this}}
+{{/each}}
+{{/if}}
+```
 
 ### Metadata Examples
 
@@ -530,6 +639,39 @@ Display only built-in series metadata:
 {{/each}}
 {{/if}}
 {{/if}}
+```
+
+### Book Detail Template
+
+Display book-specific information with series cross-referencing:
+
+```handlebars
+{{#ifEquals type "book"}}
+{{#if metadata.authors}}
+### Authors
+{{#each metadata.authors}}
+- **{{this.name}}**{{#if this.role}} ({{this.role}}){{/if}}
+{{/each}}
+{{/if}}
+
+{{#if metadata.awards}}
+### Awards
+{{#each metadata.awards}}
+- **{{this.name}}**{{#if this.category}} — {{this.category}}{{/if}}{{#if this.year}} ({{this.year}}){{/if}} {{#if this.won}}Won{{else}}Nominated{{/if}}
+{{/each}}
+{{/if}}
+
+{{#if metadata.isbns}}
+**ISBN:** `{{metadata.isbns}}`
+{{/if}}
+
+{{#if series.metadata.externalRatings}}
+### Series Ratings
+{{#each series.metadata.externalRatings}}
+- **{{this.source}}**: {{this.rating}}{{#if this.votes}} ({{this.votes}} votes){{/if}}
+{{/each}}
+{{/if}}
+{{/ifEquals}}
 ```
 
 ### Complete Overview (Combined)

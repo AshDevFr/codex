@@ -10,6 +10,7 @@ function createMockContext(
   overrides: Partial<SeriesContextWithCustomMetadata> = {},
 ): SeriesContextWithCustomMetadata {
   return {
+    type: "series",
     seriesId: "550e8400-e29b-41d4-a716-446655440000",
     bookCount: 5,
     metadata: {
@@ -26,6 +27,10 @@ function createMockContext(
       totalBookCount: null,
       genres: [],
       tags: [],
+      alternateTitles: [],
+      authors: [],
+      externalRatings: [],
+      externalLinks: [],
       titleLock: false,
       titleSortLock: false,
       summaryLock: false,
@@ -40,6 +45,8 @@ function createMockContext(
       genresLock: false,
       tagsLock: false,
       customMetadataLock: false,
+      coverLock: false,
+      authorsJsonLock: false,
     },
     externalIds: {},
     customMetadata: null,

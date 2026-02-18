@@ -14,15 +14,15 @@ import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { renderTemplate } from "@/utils/templateEngine";
-import type { SeriesContextWithCustomMetadata } from "@/utils/templateUtils";
+import type { TemplateContext } from "@/utils/templateUtils";
 
 export interface CustomMetadataDisplayProps {
   /**
-   * The series context for template evaluation.
-   * Contains seriesId, bookCount, metadata, externalIds, and customMetadata.
-   * Use `transformFullSeriesToSeriesContext()` to create this from a FullSeries.
+   * The template context for evaluation — either a SeriesContext or BookContext.
+   * Use `transformFullSeriesToSeriesContext()` for series or
+   * `transformFullBookToBookContext()` for books.
    */
-  context: SeriesContextWithCustomMetadata | null | undefined;
+  context: TemplateContext | null | undefined;
   /**
    * The Handlebars template to use for rendering.
    * If empty or not provided, nothing will be rendered.

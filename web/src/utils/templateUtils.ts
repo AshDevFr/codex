@@ -1,17 +1,23 @@
 import type {
+  BookContext,
   ExternalIdContext,
+  FullBook,
   FullSeries,
   FullSeriesMetadata,
   MetadataContext,
   SeriesContext,
 } from "@/types";
+import type { components } from "@/types/api.generated";
 
 // =============================================================================
 // Re-export types from @/types for convenience
 // =============================================================================
 
 // Re-export the generated types for backwards compatibility with existing imports
-export type { ExternalIdContext, MetadataContext, SeriesContext };
+export type { BookContext, ExternalIdContext, MetadataContext, SeriesContext };
+
+type BookExternalIdDto = components["schemas"]["BookExternalIdDto"];
+type BookExternalLinkDto = components["schemas"]["BookExternalLinkDto"];
 
 // =============================================================================
 // Sample Series Context
@@ -39,7 +45,28 @@ export type SeriesContextWithCustomMetadata = Omit<
   customMetadata?: Record<string, unknown> | null;
 };
 
+/**
+ * Extended BookContext type that allows any JSON value in customMetadata.
+ * The generated type is too restrictive (Record<string, never>), so we override it.
+ */
+export type BookContextWithCustomMetadata = Omit<
+  BookContext,
+  "customMetadata" | "series"
+> & {
+  customMetadata?: Record<string, unknown> | null;
+  series: SeriesContextWithCustomMetadata;
+};
+
+/**
+ * Union type for template contexts — either a series or book context.
+ * Both share the same `type` discriminator field ("series" or "book").
+ */
+export type TemplateContext =
+  | SeriesContextWithCustomMetadata
+  | BookContextWithCustomMetadata;
+
 export const SAMPLE_SERIES_CONTEXT: SeriesContextWithCustomMetadata = {
+  type: "series",
   seriesId: "550e8400-e29b-41d4-a716-446655440000",
   bookCount: 5,
   metadata: {
@@ -57,6 +84,28 @@ export const SAMPLE_SERIES_CONTEXT: SeriesContextWithCustomMetadata = {
     totalBookCount: 110,
     genres: ["Action", "Adventure", "Comedy", "Fantasy"],
     tags: ["pirates", "treasure", "friendship", "manga"],
+    alternateTitles: [
+      { label: "Japanese", title: "ワンピース" },
+      { label: "Romaji", title: "Wan Pīsu" },
+    ],
+    authors: [
+      { name: "Oda Eiichiro", role: "author", sortName: "Oda, Eiichiro" },
+    ],
+    externalRatings: [
+      { source: "MyAnimeList", rating: 90.2, votes: 1500000 },
+      { source: "AniList", rating: 88.0, votes: 950000 },
+    ],
+    externalLinks: [
+      {
+        source: "MyAnimeList",
+        url: "https://myanimelist.net/manga/13",
+        externalId: "13",
+      },
+      {
+        source: "MangaDex",
+        url: "https://mangadex.org/title/a1c7c817",
+      },
+    ],
     titleLock: false,
     titleSortLock: false,
     summaryLock: false,
@@ -71,6 +120,8 @@ export const SAMPLE_SERIES_CONTEXT: SeriesContextWithCustomMetadata = {
     genresLock: false,
     tagsLock: false,
     customMetadataLock: false,
+    coverLock: false,
+    authorsJsonLock: false,
   },
   externalIds: {
     "plugin:mangabaka": {
@@ -124,6 +175,7 @@ export function transformFullSeriesToSeriesContext(
   }
 
   return {
+    type: "series",
     seriesId: series.id,
     bookCount: series.bookCount,
     metadata: {
@@ -140,6 +192,25 @@ export function transformFullSeriesToSeriesContext(
       totalBookCount: metadata.totalBookCount ?? null,
       genres: series.genres.map((g) => g.name),
       tags: series.tags.map((t) => t.name),
+      alternateTitles: series.alternateTitles.map((at) => ({
+        label: at.label,
+        title: at.title,
+      })),
+      authors: (series.metadata.authors ?? []).map((a) => ({
+        name: a.name,
+        ...(a.role && { role: a.role }),
+        ...(a.sortName && { sortName: a.sortName }),
+      })),
+      externalRatings: series.externalRatings.map((r) => ({
+        source: r.sourceName,
+        rating: r.rating,
+        ...(r.voteCount != null && { votes: r.voteCount }),
+      })),
+      externalLinks: series.externalLinks.map((l) => ({
+        source: l.sourceName,
+        url: l.url,
+        ...(l.externalId && { externalId: l.externalId }),
+      })),
       titleLock: metadata.locks.title ?? false,
       titleSortLock: metadata.locks.titleSort ?? false,
       summaryLock: metadata.locks.summary ?? false,
@@ -154,9 +225,256 @@ export function transformFullSeriesToSeriesContext(
       genresLock: metadata.locks.genres ?? false,
       tagsLock: metadata.locks.tags ?? false,
       customMetadataLock: metadata.locks.customMetadata ?? false,
+      coverLock: metadata.locks.cover ?? false,
+      authorsJsonLock: metadata.locks.authorsJsonLock ?? false,
     },
     externalIds,
     customMetadata: metadata.customMetadata as Record<string, unknown> | null,
+  };
+}
+
+// =============================================================================
+// Sample Book Context
+// =============================================================================
+
+/**
+ * Sample book context matching the backend `BookContext` structure exactly.
+ *
+ * Use this sample for:
+ * - Template editor previews (book mode)
+ * - Condition editor test data
+ * - Frontend validation
+ */
+export const SAMPLE_BOOK_CONTEXT: BookContextWithCustomMetadata = {
+  type: "book",
+  bookId: "660e8400-e29b-41d4-a716-446655440001",
+  seriesId: "550e8400-e29b-41d4-a716-446655440000",
+  libraryId: "440e8400-e29b-41d4-a716-446655440099",
+  fileFormat: "epub",
+  pageCount: 369,
+  fileSize: 2097152,
+  metadata: {
+    title: "The Martian",
+    titleSort: "Martian, The",
+    number: 1,
+    subtitle: "A Novel",
+    summary:
+      "Astronaut Mark Watney is stranded alone on Mars after a dust storm forces his crew to evacuate.",
+    publisher: "Crown Publishing",
+    imprint: "Broadway Books",
+    genre: "Science Fiction",
+    languageIso: "en",
+    formatDetail: "Trade Paperback",
+    blackAndWhite: false,
+    manga: false,
+    year: 2014,
+    month: 2,
+    day: 11,
+    volume: 1,
+    count: 1,
+    isbns: "978-0553418026",
+    bookType: "novel",
+    authors: [{ name: "Andy Weir", role: "author", sortName: "Weir, Andy" }],
+    translator: null,
+    edition: "First Edition",
+    originalTitle: null,
+    originalYear: 2011,
+    seriesPosition: 1,
+    seriesTotal: 1,
+    subjects: ["Science Fiction", "Space Exploration", "Survival"],
+    awards: [
+      {
+        name: "Hugo Award",
+        year: 2015,
+        category: "Best Novel",
+        won: false,
+      },
+      {
+        name: "Goodreads Choice Award",
+        year: 2014,
+        category: "Science Fiction",
+        won: true,
+      },
+    ],
+    genres: ["Science Fiction", "Adventure"],
+    tags: ["mars", "survival", "space", "nasa"],
+    externalLinks: [
+      {
+        source: "Goodreads",
+        url: "https://www.goodreads.com/book/show/18007564",
+        externalId: "18007564",
+      },
+      {
+        source: "OpenLibrary",
+        url: "https://openlibrary.org/works/OL17091818W",
+      },
+    ],
+    titleLock: false,
+    titleSortLock: false,
+    numberLock: false,
+    summaryLock: false,
+    publisherLock: false,
+    imprintLock: false,
+    genreLock: false,
+    languageIsoLock: false,
+    formatDetailLock: false,
+    blackAndWhiteLock: false,
+    mangaLock: false,
+    yearLock: false,
+    monthLock: false,
+    dayLock: false,
+    volumeLock: false,
+    countLock: false,
+    isbnsLock: false,
+    bookTypeLock: false,
+    subtitleLock: false,
+    authorsJsonLock: false,
+    translatorLock: false,
+    editionLock: false,
+    originalTitleLock: false,
+    originalYearLock: false,
+    seriesPositionLock: false,
+    seriesTotalLock: false,
+    subjectsLock: false,
+    awardsJsonLock: false,
+    customMetadataLock: false,
+    coverLock: false,
+  },
+  externalIds: {
+    "plugin:goodreads": {
+      id: "18007564",
+      url: "https://www.goodreads.com/book/show/18007564",
+      hash: null,
+    },
+  },
+  customMetadata: {
+    readingLevel: "Adult",
+    pageEstimate: 369,
+  },
+  series: SAMPLE_SERIES_CONTEXT,
+};
+
+// =============================================================================
+// Book Transform Functions
+// =============================================================================
+
+/**
+ * Transforms a FullBook response into a BookContext object for template evaluation.
+ *
+ * Since book external IDs and external links are fetched separately from the
+ * book detail, they must be passed as separate arguments.
+ *
+ * @param book - The full book response from the API
+ * @param seriesContext - The parent series context (pre-built)
+ * @param bookExternalIds - External IDs for this book (from separate API call)
+ * @param bookExternalLinks - External links for this book (from separate API call)
+ * @returns A BookContext object for template rendering
+ */
+export function transformFullBookToBookContext(
+  book: FullBook,
+  seriesContext: SeriesContextWithCustomMetadata,
+  bookExternalIds: BookExternalIdDto[] = [],
+  bookExternalLinks: BookExternalLinkDto[] = [],
+): BookContextWithCustomMetadata {
+  const metadata = book.metadata;
+
+  // Build external IDs map from array
+  const externalIds: Record<string, ExternalIdContext> = {};
+  for (const eid of bookExternalIds) {
+    externalIds[eid.source] = {
+      id: eid.externalId,
+      url: eid.externalUrl ?? null,
+      hash: eid.metadataHash ?? null,
+    };
+  }
+
+  return {
+    type: "book",
+    bookId: book.id,
+    seriesId: book.seriesId,
+    libraryId: book.libraryId,
+    fileFormat: book.fileFormat,
+    pageCount: book.pageCount,
+    fileSize: book.fileSize,
+    metadata: {
+      title: metadata.title ?? null,
+      titleSort: metadata.titleSort ?? null,
+      number: metadata.number != null ? Number(metadata.number) : null,
+      subtitle: metadata.subtitle ?? null,
+      summary: metadata.summary ?? null,
+      publisher: metadata.publisher ?? null,
+      imprint: metadata.imprint ?? null,
+      genre: metadata.genre ?? null,
+      languageIso: metadata.languageIso ?? null,
+      formatDetail: metadata.formatDetail ?? null,
+      blackAndWhite: metadata.blackAndWhite ?? null,
+      manga: metadata.manga ?? null,
+      year: metadata.year ?? null,
+      month: metadata.month ?? null,
+      day: metadata.day ?? null,
+      volume: metadata.volume ?? null,
+      count: metadata.count ?? null,
+      isbns: metadata.isbns ?? null,
+      bookType: metadata.bookType ?? null,
+      authors: (metadata.authors ?? []).map((a) => ({
+        name: a.name,
+        ...(a.role && { role: a.role }),
+        ...(a.sortName && { sortName: a.sortName }),
+      })),
+      translator: metadata.translator ?? null,
+      edition: metadata.edition ?? null,
+      originalTitle: metadata.originalTitle ?? null,
+      originalYear: metadata.originalYear ?? null,
+      seriesPosition: metadata.seriesPosition ?? null,
+      seriesTotal: metadata.seriesTotal ?? null,
+      subjects: metadata.subjects ?? [],
+      awards: (metadata.awards ?? []).map((a) => ({
+        name: a.name,
+        year: a.year ?? null,
+        category: a.category ?? null,
+        won: a.won,
+      })),
+      genres: book.genres.map((g) => g.name),
+      tags: book.tags.map((t) => t.name),
+      externalLinks: bookExternalLinks.map((l) => ({
+        source: l.sourceName,
+        url: l.url,
+        ...(l.externalId && { externalId: l.externalId }),
+      })),
+      titleLock: metadata.locks.titleLock ?? false,
+      titleSortLock: metadata.locks.titleSortLock ?? false,
+      numberLock: metadata.locks.numberLock ?? false,
+      summaryLock: metadata.locks.summaryLock ?? false,
+      publisherLock: metadata.locks.publisherLock ?? false,
+      imprintLock: metadata.locks.imprintLock ?? false,
+      genreLock: metadata.locks.genreLock ?? false,
+      languageIsoLock: metadata.locks.languageIsoLock ?? false,
+      formatDetailLock: metadata.locks.formatDetailLock ?? false,
+      blackAndWhiteLock: metadata.locks.blackAndWhiteLock ?? false,
+      mangaLock: metadata.locks.mangaLock ?? false,
+      yearLock: metadata.locks.yearLock ?? false,
+      monthLock: metadata.locks.monthLock ?? false,
+      dayLock: metadata.locks.dayLock ?? false,
+      volumeLock: metadata.locks.volumeLock ?? false,
+      countLock: metadata.locks.countLock ?? false,
+      isbnsLock: metadata.locks.isbnsLock ?? false,
+      bookTypeLock: metadata.locks.bookTypeLock ?? false,
+      subtitleLock: metadata.locks.subtitleLock ?? false,
+      authorsJsonLock: metadata.locks.authorsJsonLock ?? false,
+      translatorLock: metadata.locks.translatorLock ?? false,
+      editionLock: metadata.locks.editionLock ?? false,
+      originalTitleLock: metadata.locks.originalTitleLock ?? false,
+      originalYearLock: metadata.locks.originalYearLock ?? false,
+      seriesPositionLock: metadata.locks.seriesPositionLock ?? false,
+      seriesTotalLock: metadata.locks.seriesTotalLock ?? false,
+      subjectsLock: metadata.locks.subjectsLock ?? false,
+      awardsJsonLock: metadata.locks.awardsJsonLock ?? false,
+      customMetadataLock: metadata.locks.customMetadataLock ?? false,
+      coverLock: metadata.locks.coverLock ?? false,
+    },
+    externalIds,
+    customMetadata: metadata.customMetadata as Record<string, unknown> | null,
+    series: seriesContext,
   };
 }
 
