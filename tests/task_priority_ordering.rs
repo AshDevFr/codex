@@ -27,16 +27,88 @@ async fn test_task_type_priority_ordering() {
     let book_id = book.id;
 
     // Enqueue tasks in reverse priority order to ensure ordering is not based on creation time
-    // Priority order should be:
-    // 1. scan_library
-    // 2. purge_deleted
-    // 3. analyze_book
-    // 4. analyze_series
-    // 5. generate_thumbnails
-    // 6. find_duplicates
-    // 7. refresh_metadata
+    // Enqueue in reverse order (lowest priority first)
 
-    // Enqueue in reverse order
+    TaskRepository::enqueue(&db, TaskType::CleanupPluginData, 0, None)
+        .await
+        .unwrap();
+
+    TaskRepository::enqueue(&db, TaskType::CleanupPdfCache, 0, None)
+        .await
+        .unwrap();
+
+    TaskRepository::enqueue(&db, TaskType::CleanupOrphanedFiles, 0, None)
+        .await
+        .unwrap();
+
+    TaskRepository::enqueue(&db, TaskType::CleanupSeriesFiles { series_id }, 0, None)
+        .await
+        .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::CleanupBookFiles {
+            book_id,
+            thumbnail_path: None,
+            series_id: None,
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::UserPluginRecommendations {
+            plugin_id: uuid::Uuid::new_v4(),
+            user_id: uuid::Uuid::new_v4(),
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::UserPluginSync {
+            plugin_id: uuid::Uuid::new_v4(),
+            user_id: uuid::Uuid::new_v4(),
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::UserPluginRecommendationDismiss {
+            plugin_id: uuid::Uuid::new_v4(),
+            user_id: uuid::Uuid::new_v4(),
+            external_id: "test".to_string(),
+            reason: None,
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::PluginAutoMatch {
+            series_id,
+            plugin_id: uuid::Uuid::new_v4(),
+            source_scope: None,
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
     TaskRepository::enqueue(
         &db,
         TaskType::RefreshMetadata {
@@ -55,11 +127,52 @@ async fn test_task_type_priority_ordering() {
 
     TaskRepository::enqueue(
         &db,
+        TaskType::ReprocessSeriesTitles {
+            library_id: Some(library_id),
+            series_ids: None,
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(&db, TaskType::ReprocessSeriesTitle { series_id }, 0, None)
+        .await
+        .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::GenerateSeriesThumbnails {
+            library_id: Some(library_id),
+            series_ids: None,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
         TaskType::GenerateThumbnails {
             library_id: Some(library_id),
             series_id: None,
             series_ids: None,
             book_ids: None,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::GenerateSeriesThumbnail {
+            series_id,
             force: false,
         },
         0,
@@ -75,6 +188,18 @@ async fn test_task_type_priority_ordering() {
     TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
+        TaskType::GenerateThumbnail {
             book_id,
             force: false,
         },
@@ -102,18 +227,38 @@ async fn test_task_type_priority_ordering() {
 
     // Now claim tasks one by one and verify the order
     let expected_order = vec![
+        // 0-9: Scanning
         "scan_library",
         "purge_deleted",
+        // 10-19: Analysis
         "analyze_book",
         "analyze_series",
+        "reprocess_series_title",
+        "reprocess_series_titles",
+        // 20-29: Thumbnails
+        "generate_thumbnail",
+        "generate_series_thumbnail",
         "generate_thumbnails",
+        "generate_series_thumbnails",
+        // 30-39: Metadata
         "find_duplicates",
         "refresh_metadata",
+        "plugin_auto_match",
+        // 40-49: Plugins
+        "user_plugin_recommendation_dismiss",
+        "user_plugin_sync",
+        "user_plugin_recommendations",
+        // 50: Cleanup (all equal priority, FIFO by scheduled_for)
+        "cleanup_plugin_data",
+        "cleanup_pdf_cache",
+        "cleanup_orphaned_files",
+        "cleanup_series_files",
+        "cleanup_book_files",
     ];
 
     let mut actual_order = Vec::new();
 
-    for _ in 0..7 {
+    for _ in 0..expected_order.len() {
         let task = TaskRepository::claim_next(&db, "test-worker", 300, true)
             .await
             .unwrap();

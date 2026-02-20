@@ -18,31 +18,36 @@ pub struct TaskRepository;
 /// Used by both PostgreSQL and SQLite query builders.
 fn task_priority_order_by(prioritize_scans: bool) -> &'static str {
     if prioritize_scans {
-        // Task priority order (highest to lowest):
-        // 0. scan_library
-        // 1. purge_deleted
-        // 2. generate_thumbnail
-        // 3. generate_series_thumbnail
-        // 4. analyze_book
-        // 5. analyze_series
-        // 6. generate_thumbnails (batch)
-        // 7. find_duplicates
-        // 8. refresh_metadata
-        // 9-12. cleanup tasks (lowest priority - run after core operations)
+        // Task priority categories (ranges leave room for future tasks):
+        //  0-9:  Scanning - library discovery and post-scan cleanup
+        // 10-19: Analysis - book/series analysis and title reprocessing
+        // 20-29: Thumbnails - single and batch thumbnail generation
+        // 30-39: Metadata - deduplication, external lookups, plugin matching
+        // 40-49: Plugins - user-facing plugin operations
+        //    50: Cleanup - low-priority maintenance (all equal, ordered by priority/scheduled_for)
+        //    99: Unknown/unhandled task types
         "ORDER BY (CASE
             WHEN task_type = 'scan_library' THEN 0
             WHEN task_type = 'purge_deleted' THEN 1
-            WHEN task_type = 'generate_thumbnail' THEN 2
-            WHEN task_type = 'analyze_book' THEN 3
-            WHEN task_type = 'analyze_series' THEN 4
-            WHEN task_type = 'generate_series_thumbnail' THEN 5
-            WHEN task_type = 'generate_thumbnails' THEN 6
-            WHEN task_type = 'find_duplicates' THEN 7
-            WHEN task_type = 'refresh_metadata' THEN 8
-            WHEN task_type = 'cleanup_book_files' THEN 9
-            WHEN task_type = 'cleanup_series_files' THEN 10
-            WHEN task_type = 'cleanup_orphaned_files' THEN 11
-            WHEN task_type = 'cleanup_pdf_cache' THEN 12
+            WHEN task_type = 'analyze_book' THEN 10
+            WHEN task_type = 'analyze_series' THEN 11
+            WHEN task_type = 'reprocess_series_title' THEN 12
+            WHEN task_type = 'reprocess_series_titles' THEN 13
+            WHEN task_type = 'generate_thumbnail' THEN 20
+            WHEN task_type = 'generate_series_thumbnail' THEN 21
+            WHEN task_type = 'generate_thumbnails' THEN 22
+            WHEN task_type = 'generate_series_thumbnails' THEN 23
+            WHEN task_type = 'find_duplicates' THEN 30
+            WHEN task_type = 'refresh_metadata' THEN 31
+            WHEN task_type = 'plugin_auto_match' THEN 32
+            WHEN task_type = 'user_plugin_recommendation_dismiss' THEN 40
+            WHEN task_type = 'user_plugin_sync' THEN 41
+            WHEN task_type = 'user_plugin_recommendations' THEN 42
+            WHEN task_type = 'cleanup_book_files' THEN 50
+            WHEN task_type = 'cleanup_series_files' THEN 50
+            WHEN task_type = 'cleanup_orphaned_files' THEN 50
+            WHEN task_type = 'cleanup_pdf_cache' THEN 50
+            WHEN task_type = 'cleanup_plugin_data' THEN 50
             ELSE 99
         END), priority DESC, scheduled_for ASC"
     } else {
