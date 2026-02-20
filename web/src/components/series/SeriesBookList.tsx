@@ -20,6 +20,10 @@ import {
   selectIsSelectionMode,
   useBulkSelectionStore,
 } from "@/store/bulkSelectionStore";
+import {
+  DEFAULT_PAGE_SIZE,
+  useLibraryPreferencesStore,
+} from "@/store/libraryPreferencesStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import type { Book } from "@/types";
 
@@ -27,6 +31,7 @@ interface SeriesBookListProps {
   seriesId: string;
   seriesName: string;
   bookCount: number;
+  libraryId: string;
 }
 
 type SortOption = {
@@ -44,16 +49,44 @@ const SORT_OPTIONS: SortOption[] = [
   { value: "release_date,asc", label: "Release Date (Oldest)" },
 ];
 
-const PAGE_SIZES = [20, 50, 100];
+const PAGE_SIZES = [25, 50, 100, 200];
+const SERIES_BOOKS_TAB = "series-books";
+const DEFAULT_SORT = "number,asc";
 
 export function SeriesBookList({
   seriesId,
   seriesName: _seriesName,
   bookCount,
+  libraryId,
 }: SeriesBookListProps) {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
-  const [sort, setSort] = useState("number,asc");
+
+  // Read persisted preferences from the store (per-library)
+  const storedPrefs = useLibraryPreferencesStore((state) =>
+    state.getTabPreferences(libraryId, SERIES_BOOKS_TAB),
+  );
+  const setTabPreferences = useLibraryPreferencesStore(
+    (state) => state.setTabPreferences,
+  );
+
+  const pageSize = storedPrefs?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const sort = storedPrefs?.sort ?? DEFAULT_SORT;
+
+  const setPageSize = useCallback(
+    (newPageSize: number) => {
+      setTabPreferences(libraryId, SERIES_BOOKS_TAB, { pageSize: newPageSize });
+      setPage(1);
+    },
+    [libraryId, setTabPreferences],
+  );
+
+  const setSort = useCallback(
+    (newSort: string) => {
+      setTabPreferences(libraryId, SERIES_BOOKS_TAB, { sort: newSort });
+      setPage(1);
+    },
+    [libraryId, setTabPreferences],
+  );
 
   // Bulk selection state - use stable selectors to minimize re-renders
   const isSelectionMode = useBulkSelectionStore(selectIsSelectionMode);
@@ -205,10 +238,7 @@ export function SeriesBookList({
               {SORT_OPTIONS.map((option) => (
                 <Menu.Item
                   key={option.value}
-                  onClick={() => {
-                    setSort(option.value);
-                    setPage(1);
-                  }}
+                  onClick={() => setSort(option.value)}
                   style={{
                     fontWeight: sort === option.value ? 600 : 400,
                   }}
@@ -226,7 +256,6 @@ export function SeriesBookList({
             onChange={(value) => {
               if (value) {
                 setPageSize(parseInt(value, 10));
-                setPage(1);
               }
             }}
             data={PAGE_SIZES.map((size) => ({

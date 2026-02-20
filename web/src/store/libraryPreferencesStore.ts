@@ -42,7 +42,7 @@ export interface LibraryPreferencesState {
   clearLibraryPreferences: (libraryId: string) => void;
 }
 
-const VALID_TABS = ["recommended", "series", "books"];
+const VALID_TABS = ["recommended", "series", "books", "series-books"];
 const DEFAULT_TAB = "recommended";
 
 export const useLibraryPreferencesStore = create<LibraryPreferencesState>()(

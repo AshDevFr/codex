@@ -916,6 +916,7 @@ export function SeriesDetail() {
           seriesId={series.id}
           seriesName={seriesTitle}
           bookCount={series.bookCount ?? 0}
+          libraryId={series.libraryId}
         />
       </Stack>
 

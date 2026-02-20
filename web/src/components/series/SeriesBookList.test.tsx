@@ -1,7 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { seriesApi } from "@/api/series";
 import { createBook } from "@/mocks/data/factories";
 import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
+import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
 import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
 import { SeriesBookList } from "./SeriesBookList";
 
@@ -14,9 +23,19 @@ vi.mock("@/api/series", () => ({
 
 const mockSeriesApi = vi.mocked(seriesApi);
 
+// Mock scrollIntoView for Mantine Combobox (not available in jsdom)
+const originalScrollIntoView = Element.prototype.scrollIntoView;
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
+afterAll(() => {
+  Element.prototype.scrollIntoView = originalScrollIntoView;
+});
+
 describe("SeriesBookList", () => {
   const seriesId = "test-series-id";
   const seriesName = "Test Series";
+  const libraryId = "test-library-id";
   const bookCount = 5;
 
   const mockBooks = [
@@ -31,6 +50,8 @@ describe("SeriesBookList", () => {
     vi.clearAllMocks();
     // Reset the bulk selection store before each test
     useBulkSelectionStore.getState().clearSelection();
+    // Reset library preferences store before each test
+    useLibraryPreferencesStore.getState().clearLibraryPreferences(libraryId);
     // Default mock to return books
     mockSeriesApi.getBooks.mockResolvedValue(mockBooks);
   });
@@ -41,6 +62,7 @@ describe("SeriesBookList", () => {
         seriesId={seriesId}
         seriesName={seriesName}
         bookCount={bookCount}
+        libraryId={libraryId}
       />,
     );
   };
@@ -274,6 +296,7 @@ describe("SeriesBookList", () => {
           seriesId={seriesId}
           seriesName={seriesName}
           bookCount={55}
+          libraryId={libraryId}
         />,
       );
 
@@ -298,6 +321,125 @@ describe("SeriesBookList", () => {
       expect(
         container.querySelector(".mantine-Pagination-root"),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("preference persistence", () => {
+    it("should persist page size to the library preferences store", async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText("1 - Book One")).toBeInTheDocument();
+      });
+
+      // Find the page size select and change it
+      const select = screen.getByRole("textbox");
+      await user.click(select);
+
+      // Select "100" from dropdown
+      await user.click(screen.getByText("100"));
+
+      // Verify the store was updated
+      const prefs = useLibraryPreferencesStore
+        .getState()
+        .getTabPreferences(libraryId, "series-books");
+      expect(prefs?.pageSize).toBe(100);
+    });
+
+    it("should restore page size from the store on mount", async () => {
+      // Pre-populate the store with a custom page size
+      useLibraryPreferencesStore
+        .getState()
+        .setTabPreferences(libraryId, "series-books", { pageSize: 100 });
+
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText("1 - Book One")).toBeInTheDocument();
+      });
+
+      // The select should show the stored value
+      const select = screen.getByRole("textbox");
+      expect(select).toHaveValue("100");
+    });
+
+    it("should persist sort order to the library preferences store", async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText("1 - Book One")).toBeInTheDocument();
+      });
+
+      // Click the sort button to open the menu
+      const sortButton = screen.getByText("Number (Ascending)");
+      await user.click(sortButton);
+
+      // Select "Title (A-Z)" sort option
+      const titleOption = await screen.findByText("Title (A-Z)");
+      await user.click(titleOption);
+
+      // Verify the store was updated
+      const prefs = useLibraryPreferencesStore
+        .getState()
+        .getTabPreferences(libraryId, "series-books");
+      expect(prefs?.sort).toBe("title,asc");
+    });
+
+    it("should restore sort order from the store on mount", async () => {
+      // Pre-populate the store with a custom sort
+      useLibraryPreferencesStore
+        .getState()
+        .setTabPreferences(libraryId, "series-books", {
+          sort: "title,asc",
+        });
+
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText("Title (A-Z)")).toBeInTheDocument();
+      });
+    });
+
+    it("should use default values when no preferences are stored", async () => {
+      renderComponent();
+
+      await waitFor(() => {
+        expect(screen.getByText("1 - Book One")).toBeInTheDocument();
+      });
+
+      // Default page size should be 50
+      const select = screen.getByRole("textbox");
+      expect(select).toHaveValue("50");
+
+      // Default sort should be "Number (Ascending)"
+      expect(screen.getByText("Number (Ascending)")).toBeInTheDocument();
+    });
+
+    it("should share preferences across series in the same library", async () => {
+      // Set preferences for the library
+      useLibraryPreferencesStore
+        .getState()
+        .setTabPreferences(libraryId, "series-books", { pageSize: 25 });
+
+      // Render with a different series ID but same library
+      renderWithProviders(
+        <SeriesBookList
+          seriesId="different-series-id"
+          seriesName="Different Series"
+          bookCount={bookCount}
+          libraryId={libraryId}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("1 - Book One")).toBeInTheDocument();
+      });
+
+      // Should use the library-level preference
+      const select = screen.getByRole("textbox");
+      expect(select).toHaveValue("25");
     });
   });
 });
