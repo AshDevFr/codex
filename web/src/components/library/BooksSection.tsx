@@ -86,6 +86,7 @@ export function BooksSection({
   );
   // Get the Set directly for O(1) lookups - only re-renders when the Set changes
   const selectedIds = useBulkSelectionStore((state) => state.selectedIds);
+  const setPageItems = useBulkSelectionStore((state) => state.setPageItems);
 
   // Grid ID for range selection tracking
   const gridId = `books-${libraryId}`;
@@ -175,6 +176,19 @@ export function BooksSection({
   if (booksData?.data) {
     booksDataRef.current = booksData.data;
   }
+
+  // Register visible page items for Select All functionality
+  useEffect(() => {
+    if (booksData?.data && booksData.data.length > 0) {
+      setPageItems({
+        ids: booksData.data.map((b) => b.id),
+        type: "book",
+      });
+    } else {
+      setPageItems(null);
+    }
+    return () => setPageItems(null);
+  }, [booksData?.data, setPageItems]);
 
   // Handle selection with shift+click range support
   // This callback is stable because it uses refs for data that changes

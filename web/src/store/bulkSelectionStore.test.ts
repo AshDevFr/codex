@@ -17,6 +17,7 @@ describe("bulkSelectionStore", () => {
       selectionType: null,
       isSelectionMode: false,
       lastSelectedIndices: new Map<string, number>(),
+      pageItems: null,
     });
   });
 
@@ -498,6 +499,95 @@ describe("bulkSelectionStore", () => {
 
       expect(isSelected("series-1")).toBe(true);
       expect(useBulkSelectionStore.getState().selectionType).toBe("series");
+    });
+  });
+
+  describe("selectAll", () => {
+    it("should select all provided IDs", () => {
+      const { selectAll, isSelected } = useBulkSelectionStore.getState();
+
+      selectAll(["book-1", "book-2", "book-3"], "book");
+
+      expect(isSelected("book-1")).toBe(true);
+      expect(isSelected("book-2")).toBe(true);
+      expect(isSelected("book-3")).toBe(true);
+      expect(useBulkSelectionStore.getState().selectedIds.size).toBe(3);
+    });
+
+    it("should set selection type and enter selection mode", () => {
+      const { selectAll } = useBulkSelectionStore.getState();
+
+      selectAll(["series-1", "series-2"], "series");
+
+      const state = useBulkSelectionStore.getState();
+      expect(state.selectionType).toBe("series");
+      expect(state.isSelectionMode).toBe(true);
+    });
+
+    it("should replace existing selection of the same type", () => {
+      const { toggleSelection, selectAll, isSelected } =
+        useBulkSelectionStore.getState();
+
+      toggleSelection("book-1", "book");
+      selectAll(["book-2", "book-3"], "book");
+
+      expect(isSelected("book-1")).toBe(false);
+      expect(isSelected("book-2")).toBe(true);
+      expect(isSelected("book-3")).toBe(true);
+    });
+
+    it("should not select if type conflicts with existing selection", () => {
+      const { toggleSelection, selectAll, isSelected } =
+        useBulkSelectionStore.getState();
+
+      toggleSelection("book-1", "book");
+      selectAll(["series-1", "series-2"], "series");
+
+      expect(isSelected("book-1")).toBe(true);
+      expect(isSelected("series-1")).toBe(false);
+      expect(useBulkSelectionStore.getState().selectionType).toBe("book");
+    });
+
+    it("should handle empty array", () => {
+      const { selectAll } = useBulkSelectionStore.getState();
+
+      selectAll([], "book");
+
+      const state = useBulkSelectionStore.getState();
+      expect(state.selectedIds.size).toBe(0);
+      expect(state.isSelectionMode).toBe(false);
+    });
+
+    it("should clear lastSelectedIndices", () => {
+      const { toggleSelection, selectAll } = useBulkSelectionStore.getState();
+
+      toggleSelection("book-1", "book", "grid-1", 0);
+      expect(useBulkSelectionStore.getState().lastSelectedIndices.size).toBe(1);
+
+      selectAll(["book-1", "book-2"], "book");
+      expect(useBulkSelectionStore.getState().lastSelectedIndices.size).toBe(0);
+    });
+  });
+
+  describe("setPageItems", () => {
+    it("should store page items", () => {
+      const { setPageItems } = useBulkSelectionStore.getState();
+
+      setPageItems({ ids: ["book-1", "book-2"], type: "book" });
+
+      expect(useBulkSelectionStore.getState().pageItems).toEqual({
+        ids: ["book-1", "book-2"],
+        type: "book",
+      });
+    });
+
+    it("should clear page items with null", () => {
+      const { setPageItems } = useBulkSelectionStore.getState();
+
+      setPageItems({ ids: ["book-1"], type: "book" });
+      setPageItems(null);
+
+      expect(useBulkSelectionStore.getState().pageItems).toBeNull();
     });
   });
 });

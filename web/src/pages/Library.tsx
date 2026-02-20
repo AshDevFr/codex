@@ -35,7 +35,6 @@ import { SeriesSection } from "@/components/library/SeriesSection";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
-import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
 import {
   useLibraryPreferencesHydrated,
   useLibraryPreferencesStore,
@@ -106,14 +105,6 @@ export function LibraryPage() {
       setSeriesCount(null);
     }
   }, [currentTab]);
-
-  // Clear bulk selection when navigating away or changing tabs
-  const clearSelection = useBulkSelectionStore((state) => state.clearSelection);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally clear on library/tab change
-  useEffect(() => {
-    // Clear selection when library or tab changes
-    clearSelection();
-  }, [libraryId, currentTab]);
 
   // Fetch library data (if not "all")
   const {

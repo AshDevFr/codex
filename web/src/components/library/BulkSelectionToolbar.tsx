@@ -27,6 +27,7 @@ import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
+  selectPageItems,
   selectSelectionCount,
   selectSelectionType,
   useBulkSelectionStore,
@@ -62,6 +63,18 @@ export function BulkSelectionToolbar() {
     [selectedIdsSet],
   );
   const clearSelection = useBulkSelectionStore((state) => state.clearSelection);
+  const selectAllAction = useBulkSelectionStore((state) => state.selectAll);
+  const pageItems = useBulkSelectionStore(selectPageItems);
+
+  const allPageSelected =
+    pageItems !== null &&
+    pageItems.ids.length > 0 &&
+    pageItems.ids.every((id) => selectedIdsSet.has(id));
+
+  const handleSelectAll = () => {
+    if (!pageItems) return;
+    selectAllAction(pageItems.ids, pageItems.type);
+  };
 
   // Fetch plugin actions for series:bulk scope (only when series are selected)
   const { data: seriesPluginActions } = useQuery({
@@ -549,6 +562,22 @@ export function BulkSelectionToolbar() {
       <Text size="sm" fw={600} c="white" aria-live="polite">
         {count} {itemLabel} selected
       </Text>
+
+      {/* Select All on page - hidden when all are selected (X button handles deselect) */}
+      {pageItems && pageItems.ids.length > 0 && !allPageSelected && (
+        <Tooltip label="Select all on page">
+          <Button
+            variant="transparent"
+            size="xs"
+            c="white"
+            px="xs"
+            onClick={handleSelectAll}
+            style={{ textDecoration: "underline" }}
+          >
+            Select All
+          </Button>
+        </Tooltip>
+      )}
 
       {/* Action buttons */}
       <Group gap="xs" ml="auto">

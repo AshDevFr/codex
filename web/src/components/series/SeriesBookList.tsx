@@ -12,7 +12,7 @@ import {
 } from "@mantine/core";
 import { IconSortAscending } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { seriesApi } from "@/api/series";
 import { MediaCard } from "@/components/library/MediaCard";
 import {
@@ -100,6 +100,7 @@ export function SeriesBookList({
   );
   // Get the Set directly for O(1) lookups - only re-renders when the Set changes
   const selectedIds = useBulkSelectionStore((state) => state.selectedIds);
+  const setPageItems = useBulkSelectionStore((state) => state.setPageItems);
 
   // Grid ID for range selection tracking
   const gridId = `series-books-${seriesId}`;
@@ -171,6 +172,19 @@ export function SeriesBookList({
   if (paginatedBooks) {
     booksDataRef.current = paginatedBooks;
   }
+
+  // Register visible page items for Select All functionality
+  useEffect(() => {
+    if (paginatedBooks && paginatedBooks.length > 0) {
+      setPageItems({
+        ids: paginatedBooks.map((b) => b.id),
+        type: "book",
+      });
+    } else {
+      setPageItems(null);
+    }
+    return () => setPageItems(null);
+  }, [paginatedBooks, setPageItems]);
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 1;
 

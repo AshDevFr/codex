@@ -90,6 +90,7 @@ export function SeriesSection({
   );
   // Get the Set directly for O(1) lookups - only re-renders when the Set changes
   const selectedIds = useBulkSelectionStore((state) => state.selectedIds);
+  const setPageItems = useBulkSelectionStore((state) => state.setPageItems);
 
   // Grid ID for range selection tracking
   const gridId = `series-${libraryId}`;
@@ -245,6 +246,19 @@ export function SeriesSection({
   if (seriesData?.data) {
     seriesDataRef.current = seriesData.data;
   }
+
+  // Register visible page items for Select All functionality
+  useEffect(() => {
+    if (seriesData?.data && seriesData.data.length > 0) {
+      setPageItems({
+        ids: seriesData.data.map((s) => s.id),
+        type: "series",
+      });
+    } else {
+      setPageItems(null);
+    }
+    return () => setPageItems(null);
+  }, [seriesData?.data, setPageItems]);
 
   // Handle selection with shift+click range support
   // This callback is stable because it uses refs for data that changes

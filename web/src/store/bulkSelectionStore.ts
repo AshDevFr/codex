@@ -6,6 +6,14 @@ import { devtools } from "zustand/middleware";
  */
 export type SelectionType = "book" | "series";
 
+/**
+ * Registered page items from a grid section, used for Select All.
+ */
+export interface PageItems {
+  ids: string[];
+  type: SelectionType;
+}
+
 export interface BulkSelectionState {
   /**
    * Set of selected item IDs
@@ -29,6 +37,13 @@ export interface BulkSelectionState {
    * Key is gridId (e.g., "books-library-123", "keep-reading")
    */
   lastSelectedIndices: Map<string, number>;
+
+  /**
+   * Currently visible page items registered by grid sections.
+   * Used by the toolbar for Select All functionality.
+   * Only one grid registers at a time (last write wins).
+   */
+  pageItems: PageItems | null;
 
   // Actions
 
@@ -57,6 +72,12 @@ export interface BulkSelectionState {
   selectRange: (ids: string[], type: SelectionType) => void;
 
   /**
+   * Select all provided IDs at once (replaces current selection).
+   * Used for "Select All" on the current page.
+   */
+  selectAll: (ids: string[], type: SelectionType) => void;
+
+  /**
    * Clear all selection and exit selection mode
    */
   clearSelection: () => void;
@@ -76,6 +97,12 @@ export interface BulkSelectionState {
    * Get the last selected index for a specific grid
    */
   getLastSelectedIndex: (gridId: string) => number | undefined;
+
+  /**
+   * Register the currently visible page items from a grid section.
+   * Called by grid components when their data changes.
+   */
+  setPageItems: (items: PageItems | null) => void;
 }
 
 export const useBulkSelectionStore = create<BulkSelectionState>()(
@@ -85,6 +112,7 @@ export const useBulkSelectionStore = create<BulkSelectionState>()(
       selectionType: null,
       isSelectionMode: false,
       lastSelectedIndices: new Map<string, number>(),
+      pageItems: null,
 
       toggleSelection: (
         id: string,
@@ -177,6 +205,26 @@ export const useBulkSelectionStore = create<BulkSelectionState>()(
         });
       },
 
+      selectAll: (ids: string[], type: SelectionType) => {
+        if (ids.length === 0) {
+          return;
+        }
+
+        const state = get();
+
+        // If type doesn't match current selection type (and we have a selection), do nothing
+        if (state.selectionType !== null && state.selectionType !== type) {
+          return;
+        }
+
+        set({
+          selectedIds: new Set(ids),
+          selectionType: type,
+          isSelectionMode: true,
+          lastSelectedIndices: new Map(),
+        });
+      },
+
       clearSelection: () => {
         set({
           selectedIds: new Set(),
@@ -197,6 +245,10 @@ export const useBulkSelectionStore = create<BulkSelectionState>()(
 
       getLastSelectedIndex: (gridId: string) => {
         return get().lastSelectedIndices.get(gridId);
+      },
+
+      setPageItems: (items: PageItems | null) => {
+        set({ pageItems: items });
       },
     }),
     {
@@ -264,3 +316,9 @@ export const selectCanSelectType = (
  */
 export const selectSelectedIdsArray = (state: BulkSelectionState): string[] =>
   Array.from(state.selectedIds);
+
+/**
+ * Select the registered page items (for Select All functionality).
+ */
+export const selectPageItems = (state: BulkSelectionState): PageItems | null =>
+  state.pageItems;

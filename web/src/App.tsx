@@ -1,6 +1,6 @@
 import { notifications } from "@mantine/notifications";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -41,6 +41,7 @@ import {
 } from "@/pages/settings";
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
+import { useBulkSelectionStore } from "@/store/bulkSelectionStore";
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -51,6 +52,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+// Clear bulk selection when the route changes
+function BulkSelectionRouteGuard() {
+  const { pathname } = useLocation();
+  const prevPathname = useRef(pathname);
+  const clearSelection = useBulkSelectionStore((state) => state.clearSelection);
+
+  useEffect(() => {
+    if (prevPathname.current !== pathname) {
+      clearSelection();
+      prevPathname.current = pathname;
+    }
+  }, [pathname, clearSelection]);
+
+  return null;
 }
 
 // Component to initialize navigation service
@@ -126,6 +143,7 @@ function App() {
     <BrowserRouter>
       <NavigationServiceInitializer />
       <RateLimitNotificationHandler />
+      <BulkSelectionRouteGuard />
       <SetupRedirect />
       <Routes>
         {/* Setup route - highest priority, no auth required */}
