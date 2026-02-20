@@ -137,7 +137,9 @@ impl MetadataApplier {
 
         // Alternate Titles
         if should_apply_field("alternateTitles") && !metadata.alternate_titles.is_empty() {
-            let is_locked = current_metadata.map(|m| m.title_lock).unwrap_or(false);
+            let is_locked = current_metadata
+                .map(|m| m.alternate_titles_lock)
+                .unwrap_or(false);
             match check_field(
                 "alternateTitles",
                 is_locked,

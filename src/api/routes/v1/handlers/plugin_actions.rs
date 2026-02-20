@@ -845,9 +845,9 @@ pub async fn preview_series_metadata(
         },
         current_metadata
             .as_ref()
-            .map(|m| m.title_lock) // Use title_lock to control alternate titles too
+            .map(|m| m.alternate_titles_lock)
             .unwrap_or(false),
-        has_permission(PluginPermission::MetadataWriteTitle), // Use title permission
+        has_permission(PluginPermission::MetadataWriteTitle),
         &mut will_apply,
         &mut locked,
         &mut no_permission,

@@ -85,6 +85,7 @@ impl SeriesMetadataRepository {
             custom_metadata_lock: Set(false),
             authors_json_lock: Set(false),
             cover_lock: Set(false),
+            alternate_titles_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -366,6 +367,7 @@ impl SeriesMetadataRepository {
             "genres" => active_model.genres_lock = Set(locked),
             "tags" => active_model.tags_lock = Set(locked),
             "cover" => active_model.cover_lock = Set(locked),
+            "alternate_titles" => active_model.alternate_titles_lock = Set(locked),
             _ => return Err(anyhow::anyhow!("Unknown field: {}", field)),
         }
 
@@ -391,6 +393,7 @@ impl SeriesMetadataRepository {
             "genres" => metadata.genres_lock,
             "tags" => metadata.tags_lock,
             "cover" => metadata.cover_lock,
+            "alternate_titles" => metadata.alternate_titles_lock,
             _ => false,
         }
     }

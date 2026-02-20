@@ -103,6 +103,7 @@ interface LocksState {
   customMetadata: boolean;
   authorsJson: boolean;
   cover: boolean;
+  alternateTitles: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -185,6 +186,7 @@ function initializeLocksState(locks: MetadataLocks | undefined): LocksState {
     customMetadata: locks?.customMetadata || false,
     authorsJson: locks?.authorsJsonLock || false,
     cover: (locks as LocksState | undefined)?.cover || false,
+    alternateTitles: locks?.alternateTitles || false,
   };
 }
 
@@ -802,10 +804,40 @@ export function SeriesMetadataEditModal({
   // Alternate titles tab
   const renderAlternateTitlesTab = () => (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        Add alternate titles for this series (e.g., native title, romanized
-        title).
-      </Text>
+      <Group justify="space-between">
+        <Text size="sm" c="dimmed">
+          Add alternate titles for this series (e.g., native title, romanized
+          title).
+        </Text>
+        <Tooltip
+          label={
+            locksState.alternateTitles
+              ? "Locked: Protected from automatic updates"
+              : "Unlocked: Can be updated automatically"
+          }
+          position="left"
+          zIndex={1100}
+        >
+          <ActionIcon
+            variant="subtle"
+            color={locksState.alternateTitles ? "orange" : "gray"}
+            onClick={() =>
+              updateLock("alternateTitles", !locksState.alternateTitles)
+            }
+            aria-label={
+              locksState.alternateTitles
+                ? "Unlock alternate titles"
+                : "Lock alternate titles"
+            }
+          >
+            {locksState.alternateTitles ? (
+              <IconLock size={18} />
+            ) : (
+              <IconLockOpen size={18} />
+            )}
+          </ActionIcon>
+        </Tooltip>
+      </Group>
 
       <LockableListEditor
         items={formState.alternateTitles}

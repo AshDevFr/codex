@@ -836,7 +836,7 @@ async fn build_series_dto(
             links,
             links_lock: false,
             alternate_titles: alt_titles,
-            alternate_titles_lock: false,
+            alternate_titles_lock: m.alternate_titles_lock,
             created: m.created_at.to_rfc3339(),
             last_modified: m.updated_at.to_rfc3339(),
         }

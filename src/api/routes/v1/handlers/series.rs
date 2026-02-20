@@ -432,6 +432,7 @@ async fn series_to_full_dtos_batched(
                     custom_metadata: metadata.custom_metadata_lock,
                     cover: metadata.cover_lock,
                     authors_json_lock: metadata.authors_json_lock,
+                    alternate_titles: metadata.alternate_titles_lock,
                 },
                 created_at: metadata.created_at,
                 updated_at: metadata.updated_at,
@@ -780,6 +781,7 @@ pub async fn patch_series(
                 custom_metadata_lock: Set(false),
                 authors_json_lock: Set(false),
                 cover_lock: Set(false),
+                alternate_titles_lock: Set(false),
                 created_at: Set(now),
                 updated_at: Set(now),
             };
@@ -2713,6 +2715,7 @@ pub async fn reset_series_metadata(
             custom_metadata: metadata.custom_metadata_lock,
             cover: metadata.cover_lock,
             authors_json_lock: metadata.authors_json_lock,
+            alternate_titles: metadata.alternate_titles_lock,
         },
         genres: vec![],
         tags: vec![],
@@ -3037,6 +3040,7 @@ pub async fn get_series_metadata(
             custom_metadata: metadata.custom_metadata_lock,
             cover: metadata.cover_lock,
             authors_json_lock: metadata.authors_json_lock,
+            alternate_titles: metadata.alternate_titles_lock,
         },
         genres: genre_dtos,
         tags: tag_dtos,
@@ -3159,6 +3163,10 @@ pub async fn update_metadata_locks(
         active.authors_json_lock = Set(v);
         has_changes = true;
     }
+    if let Some(v) = request.alternate_titles {
+        active.alternate_titles_lock = Set(v);
+        has_changes = true;
+    }
 
     let updated = if has_changes {
         active.updated_at = Set(Utc::now());
@@ -3191,6 +3199,7 @@ pub async fn update_metadata_locks(
         custom_metadata: updated.custom_metadata_lock,
         cover: updated.cover_lock,
         authors_json_lock: updated.authors_json_lock,
+        alternate_titles: updated.alternate_titles_lock,
     }))
 }
 
@@ -3247,6 +3256,7 @@ pub async fn get_metadata_locks(
         tags: metadata.tags_lock,
         custom_metadata: metadata.custom_metadata_lock,
         cover: metadata.cover_lock,
+        alternate_titles: metadata.alternate_titles_lock,
         authors_json_lock: metadata.authors_json_lock,
     }))
 }

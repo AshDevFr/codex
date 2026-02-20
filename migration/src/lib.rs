@@ -111,6 +111,9 @@ mod m20260214_000055_create_book_genres_tags;
 // Consolidate individual author columns into authors_json
 mod m20260215_000056_consolidate_authors;
 
+// Alternate titles lock (independent from title_lock)
+mod m20260217_000057_add_alternate_titles_lock;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -199,6 +202,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260214_000055_create_book_genres_tags::Migration),
             // Consolidate individual author columns into authors_json
             Box::new(m20260215_000056_consolidate_authors::Migration),
+            // Alternate titles lock (independent from title_lock)
+            Box::new(m20260217_000057_add_alternate_titles_lock::Migration),
         ]
     }
 }

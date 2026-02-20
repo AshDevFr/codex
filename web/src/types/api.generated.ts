@@ -10711,6 +10711,11 @@ export interface components {
              */
             ageRating: boolean;
             /**
+             * @description Whether the alternate titles are locked
+             * @example false
+             */
+            alternateTitles: boolean;
+            /**
              * @description Whether the authors_json field is locked
              * @example false
              */
@@ -15610,6 +15615,11 @@ export interface components {
              * @example false
              */
             ageRating?: boolean | null;
+            /**
+             * @description Whether to lock the alternate titles
+             * @example false
+             */
+            alternateTitles?: boolean | null;
             /**
              * @description Whether to lock the authors_json field
              * @example false

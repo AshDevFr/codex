@@ -25094,12 +25094,18 @@
           "tags",
           "customMetadata",
           "cover",
-          "authorsJsonLock"
+          "authorsJsonLock",
+          "alternateTitles"
         ],
         "properties": {
           "ageRating": {
             "type": "boolean",
             "description": "Whether the age_rating field is locked",
+            "example": false
+          },
+          "alternateTitles": {
+            "type": "boolean",
+            "description": "Whether the alternate titles are locked",
             "example": false
           },
           "authorsJsonLock": {
@@ -33827,6 +33833,14 @@
               "null"
             ],
             "description": "Whether to lock the age_rating field",
+            "example": false
+          },
+          "alternateTitles": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the alternate titles",
             "example": false
           },
           "authorsJsonLock": {

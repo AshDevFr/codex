@@ -740,6 +740,7 @@ impl SeriesRepository {
             custom_metadata_lock: Set(false),
             authors_json_lock: Set(false),
             cover_lock: Set(false),
+            alternate_titles_lock: Set(false),
             created_at: Set(now),
             updated_at: Set(now),
         };

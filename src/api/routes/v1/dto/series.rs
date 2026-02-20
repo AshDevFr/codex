@@ -998,6 +998,10 @@ pub struct MetadataLocks {
     /// Whether the authors_json field is locked
     #[schema(example = false)]
     pub authors_json_lock: bool,
+
+    /// Whether the alternate titles are locked
+    #[schema(example = false)]
+    pub alternate_titles: bool,
 }
 
 /// Full series metadata response including all related data
@@ -1322,6 +1326,11 @@ pub struct UpdateMetadataLocksRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = false)]
     pub authors_json_lock: Option<bool>,
+
+    /// Whether to lock the alternate titles
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = false)]
+    pub alternate_titles: Option<bool>,
 }
 
 // ============================================================================

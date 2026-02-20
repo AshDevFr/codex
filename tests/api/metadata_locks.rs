@@ -238,6 +238,7 @@ async fn test_get_metadata_locks() {
     assert!(!body.genres);
     assert!(!body.tags);
     assert!(!body.custom_metadata);
+    assert!(!body.alternate_titles);
 }
 
 #[tokio::test]
@@ -296,6 +297,7 @@ async fn test_update_metadata_locks() {
         total_book_count: None,
         cover: None,
         authors_json_lock: None,
+        alternate_titles: None,
     };
 
     let request = put_json_request_with_auth(
@@ -365,6 +367,7 @@ async fn test_update_metadata_locks_partial() {
         total_book_count: None,
         cover: None,
         authors_json_lock: None,
+        alternate_titles: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -393,6 +396,7 @@ async fn test_update_metadata_locks_partial() {
         total_book_count: None,
         cover: None,
         authors_json_lock: None,
+        alternate_titles: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -445,6 +449,7 @@ async fn test_update_metadata_locks_all_fields() {
         total_book_count: Some(true),
         cover: Some(true),
         authors_json_lock: Some(true),
+        alternate_titles: Some(true),
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -470,6 +475,7 @@ async fn test_update_metadata_locks_all_fields() {
     assert!(locks.genres);
     assert!(locks.tags);
     assert!(locks.custom_metadata);
+    assert!(locks.alternate_titles);
 }
 
 #[tokio::test]
@@ -498,6 +504,7 @@ async fn test_update_metadata_locks_not_found() {
         total_book_count: None,
         cover: None,
         authors_json_lock: None,
+        alternate_titles: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", fake_id),
@@ -543,6 +550,7 @@ async fn test_update_metadata_locks_empty_request() {
         total_book_count: None,
         cover: None,
         authors_json_lock: None,
+        alternate_titles: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
@@ -558,6 +566,192 @@ async fn test_update_metadata_locks_empty_request() {
     // All locks should remain false
     assert!(!locks.title);
     assert!(!locks.summary);
+}
+
+// ============================================================================
+// Alternate Titles Lock Independence Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_alternate_titles_lock_independent_from_title_lock() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Lock title only, leave alternate_titles unlocked
+    let body = UpdateMetadataLocksRequest {
+        title: Some(true),
+        title_sort: None,
+        summary: None,
+        publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
+        reading_direction: None,
+        year: None,
+        genres: None,
+        tags: None,
+        custom_metadata: None,
+        total_book_count: None,
+        cover: None,
+        authors_json_lock: None,
+        alternate_titles: None,
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+
+    // Title should be locked, alternate_titles should NOT be locked
+    assert!(locks.title, "title should be locked");
+    assert!(
+        !locks.alternate_titles,
+        "alternate_titles should NOT be locked when only title is locked"
+    );
+}
+
+#[tokio::test]
+async fn test_alternate_titles_lock_without_affecting_title_lock() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Lock alternate_titles only, leave title unlocked
+    let body = UpdateMetadataLocksRequest {
+        title: None,
+        title_sort: None,
+        summary: None,
+        publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
+        reading_direction: None,
+        year: None,
+        genres: None,
+        tags: None,
+        custom_metadata: None,
+        total_book_count: None,
+        cover: None,
+        authors_json_lock: None,
+        alternate_titles: Some(true),
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+
+    // Alternate titles should be locked, title should NOT be locked
+    assert!(locks.alternate_titles, "alternate_titles should be locked");
+    assert!(
+        !locks.title,
+        "title should NOT be locked when only alternate_titles is locked"
+    );
+
+    // Verify via GET
+    let request = get_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &token,
+    );
+    let (status, response): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let locks = response.unwrap();
+    assert!(locks.alternate_titles);
+    assert!(!locks.title);
+}
+
+#[tokio::test]
+async fn test_alternate_titles_lock_in_full_metadata_response() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state.clone()).await;
+
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    // Lock alternate titles
+    let body = UpdateMetadataLocksRequest {
+        title: None,
+        title_sort: None,
+        summary: None,
+        publisher: None,
+        imprint: None,
+        status: None,
+        age_rating: None,
+        language: None,
+        reading_direction: None,
+        year: None,
+        genres: None,
+        tags: None,
+        custom_metadata: None,
+        total_book_count: None,
+        cover: None,
+        authors_json_lock: None,
+        alternate_titles: Some(true),
+    };
+    let request = put_json_request_with_auth(
+        &format!("/api/v1/series/{}/metadata/locks", series.id),
+        &body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<MetadataLocks>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Verify it shows up in full metadata response
+    let request = get_request_with_auth(&format!("/api/v1/series/{}/metadata", series.id), &token);
+    let (status, response): (StatusCode, Option<FullSeriesMetadataResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    assert!(
+        body.locks.alternate_titles,
+        "alternate_titles lock should be true in full metadata response"
+    );
+    assert!(!body.locks.title, "title lock should remain false");
 }
 
 // ============================================================================
@@ -605,6 +799,7 @@ async fn test_update_locks_requires_write_permission() {
         total_book_count: None,
         cover: None,
         authors_json_lock: None,
+        alternate_titles: None,
     };
     let request = put_json_request_with_auth(
         &format!("/api/v1/series/{}/metadata/locks", series.id),
