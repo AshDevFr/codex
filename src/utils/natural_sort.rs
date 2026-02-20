@@ -63,6 +63,38 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     }
 }
 
+/// Compare two filenames using natural sort order, stripping file extensions first
+///
+/// This prevents file extensions from interfering with fractional chapter/volume
+/// numbers. For example, "Chapter 032.cbz" vs "Chapter 032.2.cbz": without
+/// stripping extensions, the `.2` in "032.2" gets compared against `.c` in ".cbz",
+/// and since digits sort before letters in ASCII, "032.2" incorrectly sorts first.
+///
+/// By comparing stems ("Chapter 032" vs "Chapter 032.2"), the shorter string
+/// sorts first, giving the correct order: base chapter before sub-chapter.
+///
+/// When stems are equal, falls back to full filename comparison (including extension)
+/// for deterministic ordering of files with identical stems but different formats.
+pub fn natural_cmp_filename(a: &str, b: &str) -> Ordering {
+    let a_stem = strip_extension(a);
+    let b_stem = strip_extension(b);
+    let result = natural_cmp(a_stem, b_stem);
+    if result == Ordering::Equal {
+        // Stems are equal, fall back to comparing with extension
+        return natural_cmp(a, b);
+    }
+    result
+}
+
+/// Strip the file extension from a filename
+fn strip_extension(filename: &str) -> &str {
+    if let Some(pos) = filename.rfind('.') {
+        &filename[..pos]
+    } else {
+        filename
+    }
+}
+
 /// Consume consecutive digits from the iterator and return the numeric value
 fn consume_number(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> u64 {
     let mut num: u64 = 0;
@@ -536,5 +568,172 @@ mod tests {
         let mut items = vec!["same", "same", "same"];
         items.sort_by(|a, b| natural_cmp(a, b));
         assert_eq!(items, vec!["same", "same", "same"]);
+    }
+
+    // ===== Filename-aware natural sort (natural_cmp_filename) =====
+    //
+    // These tests verify that file extensions don't interfere with
+    // sorting of fractional chapter/volume numbers (e.g., 032 before 032.2).
+
+    #[test]
+    fn test_filename_fractional_chapter_after_base() {
+        // Core bug: "Chapter 032.2.cbz" was sorting before "Chapter 032.cbz"
+        let mut items = vec!["Chapter 032.2.cbz", "Chapter 032.cbz"];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(items, vec!["Chapter 032.cbz", "Chapter 032.2.cbz",]);
+    }
+
+    #[test]
+    fn test_filename_fractional_volumes() {
+        // Corrected version of test_fractional_volumes for filenames:
+        // base chapter/volume sorts before its fractional sub-chapters
+        let mut items = vec![
+            "Series Vol. 2.cbz",
+            "Series Vol. 1.5.cbz",
+            "Series Vol. 1.cbz",
+            "Series Vol. 10.cbz",
+        ];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(
+            items,
+            vec![
+                "Series Vol. 1.cbz",
+                "Series Vol. 1.5.cbz",
+                "Series Vol. 2.cbz",
+                "Series Vol. 10.cbz",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_filename_basic_ordering_preserved() {
+        // Normal sequential ordering must still work
+        let mut items = vec![
+            "Chapter 010.cbz",
+            "Chapter 002.cbz",
+            "Chapter 001.cbz",
+            "Chapter 020.cbz",
+            "Chapter 003.cbz",
+        ];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(
+            items,
+            vec![
+                "Chapter 001.cbz",
+                "Chapter 002.cbz",
+                "Chapter 003.cbz",
+                "Chapter 010.cbz",
+                "Chapter 020.cbz",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_filename_natural_sort_not_lexicographic() {
+        // Regression: must still sort 1,2,3,...,10 correctly (not 1,10,2,3,...)
+        let mut items = vec![
+            "Chapter 10.cbz",
+            "Chapter 1.cbz",
+            "Chapter 2.cbz",
+            "Chapter 3.cbz",
+            "Chapter 11.cbz",
+            "Chapter 20.cbz",
+        ];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(
+            items,
+            vec![
+                "Chapter 1.cbz",
+                "Chapter 2.cbz",
+                "Chapter 3.cbz",
+                "Chapter 10.cbz",
+                "Chapter 11.cbz",
+                "Chapter 20.cbz",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_filename_manga_with_sub_chapters() {
+        // Real-world scenario from the bug report: manga with .1, .2 sub-chapters
+        let mut items = vec![
+            "Chapter 024.3.cbz",
+            "Chapter 023.2.cbz",
+            "Chapter 024.1.cbz",
+            "Chapter 023.1.cbz",
+            "Chapter 025.5.cbz",
+            "Chapter 024.2.cbz",
+            "Chapter 025.cbz",
+        ];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(
+            items,
+            vec![
+                "Chapter 023.1.cbz",
+                "Chapter 023.2.cbz",
+                "Chapter 024.1.cbz",
+                "Chapter 024.2.cbz",
+                "Chapter 024.3.cbz",
+                "Chapter 025.cbz",
+                "Chapter 025.5.cbz",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_filename_mixed_formats() {
+        // Different file extensions should not affect ordering
+        let mut items = vec!["Book 3.epub", "Book 1.cbz", "Book 2.cbr", "Book 10.pdf"];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(
+            items,
+            vec!["Book 1.cbz", "Book 2.cbr", "Book 3.epub", "Book 10.pdf",]
+        );
+    }
+
+    #[test]
+    fn test_filename_no_extension() {
+        // Should still work for files without extensions
+        let mut items = vec!["Chapter 10", "Chapter 1", "Chapter 2"];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(items, vec!["Chapter 1", "Chapter 2", "Chapter 10"]);
+    }
+
+    #[test]
+    fn test_filename_full_manga_series() {
+        // Simulates the actual series from the bug report
+        let mut items = vec![
+            "Chapter 003.1.cbz",
+            "Chapter 003.cbz",
+            "Chapter 001.cbz",
+            "Chapter 009.1.cbz",
+            "Chapter 002.cbz",
+            "Chapter 009.cbz",
+            "Chapter 010.cbz",
+            "Chapter 004.cbz",
+        ];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        assert_eq!(
+            items,
+            vec![
+                "Chapter 001.cbz",
+                "Chapter 002.cbz",
+                "Chapter 003.cbz",
+                "Chapter 003.1.cbz",
+                "Chapter 004.cbz",
+                "Chapter 009.cbz",
+                "Chapter 009.1.cbz",
+                "Chapter 010.cbz",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_filename_same_stem_different_extension() {
+        // Files with identical stems but different extensions
+        let mut items = vec!["Book 1.epub", "Book 1.cbz"];
+        items.sort_by(|a, b| natural_cmp_filename(a, b));
+        // Stems are equal, so fall back to full comparison: cbz < epub
+        assert_eq!(items, vec!["Book 1.cbz", "Book 1.epub"]);
     }
 }

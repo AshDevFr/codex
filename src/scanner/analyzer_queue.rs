@@ -1168,7 +1168,7 @@ async fn get_book_position_in_series(
 
     // Sort by filename using natural sort order so "Vol. 2" comes before "Vol. 10"
     let mut sorted_names: Vec<&str> = books.iter().map(|b| b.file_name.as_str()).collect();
-    sorted_names.sort_by(|a, b| crate::utils::natural_cmp(a, b));
+    sorted_names.sort_by(|a, b| crate::utils::natural_cmp_filename(a, b));
 
     // Find position of this book (1-indexed)
     let position = sorted_names
@@ -1239,7 +1239,7 @@ pub async fn renumber_series_books(
     // Sort active filenames using natural sort to determine positions
     let mut sorted_filenames: Vec<&str> =
         active_books.iter().map(|b| b.file_name.as_str()).collect();
-    sorted_filenames.sort_by(|a, b| crate::utils::natural_cmp(a, b));
+    sorted_filenames.sort_by(|a, b| crate::utils::natural_cmp_filename(a, b));
 
     // Build a position map: filename -> 1-indexed position
     let position_map: std::collections::HashMap<&str, usize> = sorted_filenames
