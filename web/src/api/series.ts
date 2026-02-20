@@ -466,6 +466,42 @@ export const seriesApi = {
     );
     return response.data;
   },
+
+  /**
+   * Renumber all books in a series based on the library's number strategy.
+   * This is a synchronous operation (no task queue) since it only does DB operations.
+   * @param seriesId - Series ID to renumber books for
+   */
+  renumber: async (seriesId: string): Promise<{ updatedCount: number }> => {
+    const response = await api.post<{ updatedCount: number }>(
+      `/series/${seriesId}/renumber`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Renumber books in multiple series in bulk.
+   * Each series is renumbered using its library's number strategy.
+   * @param seriesIds - Array of series IDs to renumber books for
+   */
+  bulkRenumber: async (
+    seriesIds: string[],
+  ): Promise<{
+    results: Array<{
+      seriesId: string;
+      updatedCount: number;
+      error: string | null;
+    }>;
+  }> => {
+    const response = await api.post<{
+      results: Array<{
+        seriesId: string;
+        updatedCount: number;
+        error: string | null;
+      }>;
+    }>("/series/bulk/renumber", { seriesIds });
+    return response.data;
+  },
 };
 
 /** Alphabetical group with count */

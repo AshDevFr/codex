@@ -97,6 +97,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/:series_id/analyze-unanalyzed",
             post(handlers::trigger_series_unanalyzed_analysis),
         )
+        // Series renumber route
+        .route(
+            "/series/:series_id/renumber",
+            post(handlers::renumber_series),
+        )
         // Series download route
         .route(
             "/series/:series_id/download",
@@ -262,6 +267,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::bulk_mark_series_as_unread),
         )
         .route("/series/bulk/analyze", post(handlers::bulk_analyze_series))
+        .route(
+            "/series/bulk/renumber",
+            post(handlers::bulk_renumber_series),
+        )
         .route(
             "/series/bulk/thumbnails/generate",
             post(handlers::bulk_generate_series_thumbnails),

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
-use super::super::dto::{ScanStatusDto, TriggerScanQuery};
+use super::super::dto::{RenumberResponse, ScanStatusDto, TriggerScanQuery};
 use super::task_queue::CreateTaskResponse;
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{
@@ -851,4 +851,53 @@ pub async fn trigger_book_unanalyzed_analysis(
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
     Ok(Json(CreateTaskResponse { task_id }))
+}
+
+/// Renumber all books in a series
+///
+/// # Permission Required
+/// - `series:write`
+///
+/// # Behavior
+/// Calls `renumber_series_books()` directly to recalculate book numbers based on the
+/// library's number strategy and the current natural sort order of filenames.
+/// This is a synchronous operation (no task queue) since it only performs DB reads/writes.
+///
+/// Note: Returns `updated_count: 0` for libraries using the Metadata number strategy,
+/// since that strategy requires re-parsing files.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/{series_id}/renumber",
+    params(
+        ("series_id" = Uuid, Path, description = "Series ID")
+    ),
+    responses(
+        (status = 200, description = "Books renumbered successfully", body = RenumberResponse),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Series not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Scans"
+)]
+pub async fn renumber_series(
+    Path(series_id): Path<Uuid>,
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+) -> Result<Json<RenumberResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to check series: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    let updated_count =
+        crate::scanner::renumber_series_books(&state.db, series_id, series.library_id)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to renumber series: {}", e)))?;
+
+    Ok(Json(RenumberResponse { updated_count }))
 }

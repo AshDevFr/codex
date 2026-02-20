@@ -6,8 +6,9 @@
 use super::super::dto::{
     BulkAnalyzeBooksRequest, BulkAnalyzeResponse, BulkAnalyzeSeriesRequest, BulkBooksRequest,
     BulkGenerateBookThumbnailsRequest, BulkGenerateSeriesBookThumbnailsRequest,
-    BulkGenerateSeriesThumbnailsRequest, BulkMetadataResetResponse,
-    BulkReprocessSeriesTitlesRequest, BulkSeriesRequest, BulkTaskResponse, MarkReadResponse,
+    BulkGenerateSeriesThumbnailsRequest, BulkMetadataResetResponse, BulkRenumberResponse,
+    BulkRenumberSeriesRequest, BulkReprocessSeriesTitlesRequest, BulkSeriesRequest,
+    BulkTaskResponse, MarkReadResponse, SeriesRenumberResult,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{
@@ -818,4 +819,74 @@ pub async fn bulk_reset_series_metadata(
         count,
         message: format!("Reset metadata for {} series", count),
     }))
+}
+
+/// Bulk renumber books in multiple series
+///
+/// Renumbers all books in the specified series using each library's number strategy.
+/// Series that don't exist are silently skipped. This is a synchronous operation
+/// (no task queue) since renumbering only performs DB reads/writes.
+#[utoipa::path(
+    post,
+    path = "/api/v1/series/bulk/renumber",
+    request_body = BulkRenumberSeriesRequest,
+    responses(
+        (status = 200, description = "Books renumbered", body = BulkRenumberResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Bulk Operations"
+)]
+pub async fn bulk_renumber_series(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Json(request): Json<BulkRenumberSeriesRequest>,
+) -> Result<Json<BulkRenumberResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    if request.series_ids.is_empty() {
+        return Ok(Json(BulkRenumberResponse { results: vec![] }));
+    }
+
+    let mut results = Vec::with_capacity(request.series_ids.len());
+
+    for series_id in &request.series_ids {
+        let series = match SeriesRepository::get_by_id(&state.db, *series_id).await {
+            Ok(Some(s)) => s,
+            Ok(None) => continue,
+            Err(e) => {
+                results.push(SeriesRenumberResult {
+                    series_id: *series_id,
+                    updated_count: 0,
+                    error: Some(format!("Failed to fetch series: {}", e)),
+                });
+                continue;
+            }
+        };
+
+        match crate::scanner::renumber_series_books(&state.db, *series_id, series.library_id).await
+        {
+            Ok(updated_count) => {
+                results.push(SeriesRenumberResult {
+                    series_id: *series_id,
+                    updated_count,
+                    error: None,
+                });
+            }
+            Err(e) => {
+                tracing::error!("Failed to renumber series {}: {}", series_id, e);
+                results.push(SeriesRenumberResult {
+                    series_id: *series_id,
+                    updated_count: 0,
+                    error: Some(format!("Failed to renumber: {}", e)),
+                });
+            }
+        }
+    }
+
+    Ok(Json(BulkRenumberResponse { results }))
 }

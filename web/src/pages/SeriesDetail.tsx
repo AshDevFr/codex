@@ -29,6 +29,7 @@ import {
   IconDownload,
   IconEdit,
   IconInfoCircle,
+  IconListNumbers,
   IconPhoto,
   IconRefresh,
   IconRestore,
@@ -311,6 +312,30 @@ export function SeriesDetail() {
     onError: (error: Error) => {
       notifications.show({
         title: "Failed",
+        message: error.message,
+        color: "red",
+      });
+    },
+  });
+
+  // Renumber books mutation
+  const renumberMutation = useMutation({
+    mutationFn: () => seriesApi.renumber(seriesId!),
+    onSuccess: (data) => {
+      notifications.show({
+        title: "Books renumbered",
+        message:
+          data.updatedCount > 0
+            ? `${data.updatedCount} book${data.updatedCount === 1 ? "" : "s"} updated`
+            : "All book numbers are already correct",
+        color: "green",
+      });
+      queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
+      queryClient.invalidateQueries({ queryKey: ["seriesBooks"] });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Failed to renumber",
         message: error.message,
         color: "red",
       });
@@ -611,6 +636,13 @@ export function SeriesDetail() {
                           disabled={analyzeUnanalyzedMutation.isPending}
                         >
                           Analyze Unanalyzed Books
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<IconListNumbers size={14} />}
+                          onClick={() => renumberMutation.mutate()}
+                          disabled={renumberMutation.isPending}
+                        >
+                          Renumber Books
                         </Menu.Item>
                         <Menu.Divider />
                         <Menu.Label>Book Thumbnails</Menu.Label>

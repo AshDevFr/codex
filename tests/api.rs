@@ -33,6 +33,7 @@ mod api {
     mod rate_limit;
     mod read_progress;
     mod recommendations;
+    mod renumber;
     mod scan;
     mod series;
     mod series_external_ids;

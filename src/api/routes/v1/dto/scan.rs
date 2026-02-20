@@ -150,3 +150,45 @@ impl From<crate::scanner::AnalysisResult> for AnalysisResult {
         }
     }
 }
+
+/// Response for a series renumber operation
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RenumberResponse {
+    /// Number of books whose numbers were updated
+    #[schema(example = 5)]
+    pub updated_count: usize,
+}
+
+/// Request for bulk renumber operations on multiple series
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkRenumberSeriesRequest {
+    /// List of series IDs to renumber
+    #[schema(example = json!(["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]))]
+    pub series_ids: Vec<Uuid>,
+}
+
+/// Result for a single series in a bulk renumber operation
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesRenumberResult {
+    /// The series ID
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
+    pub series_id: Uuid,
+
+    /// Number of books whose numbers were updated
+    #[schema(example = 5)]
+    pub updated_count: usize,
+
+    /// Error message if renumbering failed for this series
+    pub error: Option<String>,
+}
+
+/// Response for a bulk renumber operation
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkRenumberResponse {
+    /// Results for each series
+    pub results: Vec<SeriesRenumberResult>,
+}

@@ -14,6 +14,7 @@ import {
   IconBook,
   IconBookOff,
   IconChevronDown,
+  IconListNumbers,
   IconPhotoPlus,
   IconRefresh,
   IconRestore,
@@ -363,6 +364,43 @@ export function BulkSelectionToolbar() {
     },
   });
 
+  // Bulk renumber books in series
+  const bulkRenumberSeriesMutation = useMutation({
+    mutationFn: (seriesIds: string[]) => seriesApi.bulkRenumber(seriesIds),
+    onSuccess: (data) => {
+      const totalUpdated = data.results.reduce(
+        (sum, r) => sum + r.updatedCount,
+        0,
+      );
+      const errors = data.results.filter((r) => r.error);
+      if (errors.length > 0) {
+        notifications.show({
+          title: "Renumbering completed with errors",
+          message: `${totalUpdated} books updated, ${errors.length} series had errors`,
+          color: "yellow",
+        });
+      } else {
+        notifications.show({
+          title: "Books renumbered",
+          message:
+            totalUpdated > 0
+              ? `${totalUpdated} book${totalUpdated === 1 ? "" : "s"} updated across ${data.results.length} series`
+              : "All book numbers are already correct",
+          color: "green",
+        });
+      }
+      refetchAll();
+      clearSelection();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Failed to renumber",
+        message: error.message || "Failed to renumber series books",
+        color: "red",
+      });
+    },
+  });
+
   // Bulk reset series metadata
   const bulkResetMetadataMutation = useMutation({
     mutationFn: (seriesIds: string[]) => seriesApi.bulkResetMetadata(seriesIds),
@@ -425,6 +463,7 @@ export function BulkSelectionToolbar() {
     bulkGenerateSeriesThumbnailsMutation.isPending ||
     bulkGenerateSeriesBookThumbnailsMutation.isPending ||
     bulkReprocessTitlesMutation.isPending ||
+    bulkRenumberSeriesMutation.isPending ||
     bulkResetMetadataMutation.isPending;
 
   // Determine if the "More" menu should be shown based on permissions
@@ -514,6 +553,10 @@ export function BulkSelectionToolbar() {
       seriesIds: selectedIds,
       force: true,
     });
+  };
+
+  const handleRenumber = () => {
+    bulkRenumberSeriesMutation.mutate(selectedIds);
   };
 
   const handleReprocessTitles = () => {
@@ -691,6 +734,13 @@ export function BulkSelectionToolbar() {
                     disabled={isAnyPending}
                   >
                     Analyze
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconListNumbers size={16} />}
+                    onClick={handleRenumber}
+                    disabled={isAnyPending}
+                  >
+                    Renumber Books
                   </Menu.Item>
                 </>
               )}

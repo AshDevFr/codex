@@ -7228,6 +7228,52 @@
         ]
       }
     },
+    "/api/v1/series/bulk/renumber": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk renumber books in multiple series",
+        "description": "Renumbers all books in the specified series using each library's number strategy.\nSeries that don't exist are silently skipped. This is a synchronous operation\n(no task queue) since renumbering only performs DB reads/writes.",
+        "operationId": "bulk_renumber_series",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRenumberSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Books renumbered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkRenumberResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/bulk/thumbnails/books/generate": {
       "post": {
         "tags": [
@@ -10403,6 +10449,54 @@
         "security": [
           {
             "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/renumber": {
+      "post": {
+        "tags": [
+          "Scans"
+        ],
+        "summary": "Renumber all books in a series",
+        "description": "# Permission Required\n- `series:write`\n\n# Behavior\nCalls `renumber_series_books()` directly to recalculate book numbers based on the\nlibrary's number strategy and the current natural sort order of filenames.\nThis is a synchronous operation (no task queue) since it only performs DB reads/writes.\n\nNote: Returns `updated_count: 0` for libraries using the Metadata number strategy,\nsince that strategy requires re-parsing files.",
+        "operationId": "renumber_series",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Books renumbered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenumberResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
           },
           {
             "api_key": []
@@ -19324,6 +19418,43 @@
             "type": "string",
             "description": "Message describing the operation",
             "example": "Reset metadata for 3 series"
+          }
+        }
+      },
+      "BulkRenumberResponse": {
+        "type": "object",
+        "description": "Response for a bulk renumber operation",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesRenumberResult"
+            },
+            "description": "Results for each series"
+          }
+        }
+      },
+      "BulkRenumberSeriesRequest": {
+        "type": "object",
+        "description": "Request for bulk renumber operations on multiple series",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "List of series IDs to renumber",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440001",
+              "550e8400-e29b-41d4-a716-446655440002"
+            ]
           }
         }
       },
@@ -29487,6 +29618,21 @@
           }
         }
       },
+      "RenumberResponse": {
+        "type": "object",
+        "description": "Response for a series renumber operation",
+        "required": [
+          "updatedCount"
+        ],
+        "properties": {
+          "updatedCount": {
+            "type": "integer",
+            "description": "Number of books whose numbers were updated",
+            "example": 5,
+            "minimum": 0
+          }
+        }
+      },
       "ReplaceBookMetadataRequest": {
         "type": "object",
         "description": "PUT request for full replacement of book metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
@@ -31282,6 +31428,35 @@
               "null"
             ],
             "description": "Sort parameter (e.g., \"metadata.titleSort,asc\", \"createdDate,desc\")"
+          }
+        }
+      },
+      "SeriesRenumberResult": {
+        "type": "object",
+        "description": "Result for a single series in a bulk renumber operation",
+        "required": [
+          "seriesId",
+          "updatedCount"
+        ],
+        "properties": {
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Error message if renumbering failed for this series"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The series ID",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "updatedCount": {
+            "type": "integer",
+            "description": "Number of books whose numbers were updated",
+            "example": 5,
+            "minimum": 0
           }
         }
       },
