@@ -2,6 +2,36 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.13.0] - 2026-02-21
+
+### 🚀 Features
+
+- *(templates)* Add book context support for custom metadata templates
+- *(templates)* Add inline helpers, improved error feedback, and interactive help section
+- *(ui)* Add select all and fix selection persistence across navigation
+- *(api)* Add series renumber endpoints and UI actions
+- *(tasks)* Convert series renumber to async task queue with fan-out pattern
+- *(api)* Add bulk metadata editing endpoints with JSON merge patch
+- *(ui)* Add bulk metadata editing modal with authors, custom metadata, tags, genres, and locks
+
+### 🐛 Bug Fixes
+
+- *(oauth)* Fix silent 429 failures and expired flow lockout
+- *(reader)* Fix RTL progress bar causing page alternation on arrow keys
+- *(ui)* Persist page size and sort selection on series detail page
+- *(metadata)* Add independent alternate_titles_lock field
+- *(scanner)* Sort base chapters before sub-chapters (032 before 032.2)
+- *(tasks)* Add missing task types to priority ordering with category-based numbering
+- *(ui)* Prevent JSON textarea from auto-reformatting during editing
+
+### 🚜 Refactor
+
+- *(tasks)* Centralize priority into TaskType::default_priority()
+
+### 📚 Documentation
+
+- Add AGPL-3.0-or-later license with dual-licensing notice
+
 ## [1.12.0] - 2026-02-16
 
 ### 🚀 Features
