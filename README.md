@@ -2,6 +2,8 @@
 
 A next-generation digital library server for comics, manga, and ebooks built in Rust. Designed to scale horizontally while remaining simple for homelab deployments.
 
+> **Note:** Codex is under active development. Architecture and APIs may still change as the project matures. There is a sizable backlog of planned work, so responses to feature requests may be slow. Bug reports are always welcome.
+
 ## Features
 
 - **Dual database support**: SQLite for simple setups, PostgreSQL for production
@@ -24,7 +26,7 @@ Start the server:
 codex serve --config codex.yaml
 ```
 
-See [codex-sample.yaml](codex-sample.yaml) for configuration options.
+See [config/config.sqlite.yaml](config/config.sqlite.yaml) for configuration options.
 
 ## Development Setup
 
@@ -73,30 +75,13 @@ cargo test --features rar cbr_parser
 
 For more details, see the [UnRAR license](https://www.rarlab.com/license.htm).
 
-## Recent Updates
-
-### Graceful Shutdown Fix (January 2026)
-
-Fixed critical performance issue where page reloads and container restarts would hang for 40-70 seconds:
-
-- ✅ Backend worker tasks now shutdown gracefully (2-5s instead of 10+s)
-- ✅ SSE connections properly detect disconnects (< 1s instead of 30-60s)
-- ✅ Page reloads are now instant (1-2s instead of 40-70s)
-
-See [Troubleshooting Guide](docs/docs/troubleshooting.md) for details.
-
 ## Documentation
 
-- [Getting Started](docs/docs/getting-started.md)
-- [Configuration](docs/docs/configuration.md)
-- [API Documentation](docs/docs/api.md)
-- [Troubleshooting](docs/docs/troubleshooting.md)
-- [Technical Details](GRACEFUL_SHUTDOWN.md)
+- [Getting Started](https://codex.4sh.dev/docs/getting-started)
+- [Configuration](https://codex.4sh.dev/docs/configuration)
+- [API Documentation](https://codex.4sh.dev/docs/api/codex-api)
+- [Troubleshooting](https://codex.4sh.dev/docs/troubleshooting)
 - [Changelog](CHANGELOG.md)
-
-## Project Status
-
-Currently in Phase 1 (MVP Core). See [implementation docs](tmp/impl/overview.md) for the roadmap.
 
 ## License
 

@@ -51,7 +51,7 @@ function QuickLinks(): ReactNode {
             </Link>
           </div>
           <div className="col col--4">
-            <Link to="/docs/api" className={styles.quickLink}>
+            <Link to="/docs/api/codex-api" className={styles.quickLink}>
               <span className={styles.quickLinkIcon}>🔌</span>
               <span className={styles.quickLinkText}>API Reference</span>
             </Link>

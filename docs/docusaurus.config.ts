@@ -150,8 +150,8 @@ const config: Config = {
           label: 'API',
         },
         {
-          href: 'https://codex.userjot.com',
-          label: 'Feature Board',
+          href: 'https://github.com/AshDevFr/codex',
+          label: 'GitHub',
           position: 'right',
         },
       ],
@@ -172,7 +172,7 @@ const config: Config = {
             },
             {
               label: 'API Reference',
-              to: '/docs/api',
+              to: '/docs/api/codex-api',
             },
           ],
         },
@@ -193,8 +193,12 @@ const config: Config = {
           title: 'Project',
           items: [
             {
-              label: 'Feature Board',
-              href: 'https://codex.userjot.com',
+              label: 'GitHub',
+              href: 'https://github.com/AshDevFr/codex',
+            },
+            {
+              label: 'Issues',
+              href: 'https://github.com/AshDevFr/codex/issues',
             },
             {
               label: 'Documentation',

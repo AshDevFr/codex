@@ -1,17 +1,5 @@
 # CI workflow for Pull Requests
 # Runs tests, linting, frontend checks, and Docker build with PR tag
-#
-# =============================================================================
-# SELF-HOSTED RUNNER MODIFICATIONS
-# =============================================================================
-# This workflow uses self-hosted runners (arc-runner-codex) with ubuntu:22.04
-# containers. To revert to paid GitHub runners:
-#
-# 1. Replace all `runs-on: arc-runner-codex` with `runs-on: ubuntu-latest`
-# 2. Remove all `container: ubuntu:22.04` lines
-# 3. Remove all "Install base dependencies" steps
-# 4. Remove all "Install Rust" steps (GitHub runners have Rust pre-installed)
-# =============================================================================
 
 name: CI
 
@@ -29,122 +17,67 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Shared cache directory on PVC mounted by ARC runners
-# Each workflow run gets its own isolated directory under /ci-cache
-env:
-  CI_CACHE: /ci-cache/${{ github.run_id }}
-
 jobs:
   # Build test binaries and create nextest archive
   build-tests:
     name: Build Tests
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_GHA_VERSION: test
       RUSTC_WRAPPER: sccache
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install mold linker
+        run: sudo apt-get update && sudo apt-get install -y mold
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Prepare cache directory
-        run: |
-          mkdir -p $CI_CACHE
-          if test -d $CI_CACHE; then
-            echo "CI_CACHE directory ready: $CI_CACHE"
-            ls -la $(dirname $CI_CACHE)
-          else
-            echo "::error::CI_CACHE directory $CI_CACHE is not available. Is the PVC mounted?"
-            exit 1
-          fi
       - name: Build and archive tests
-        run: |
-          cargo nextest archive --features rar --archive-file $CI_CACHE/nextest-archive.tar.zst
-          ls -lh $CI_CACHE/nextest-archive.tar.zst || { echo "::error::Failed to write nextest archive to cache"; exit 1; }
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Upload test archive
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: nextest-archive
-      #     path: nextest-archive.tar.zst
-      #     retention-days: 1
+        run: cargo nextest archive --features rar --archive-file nextest-archive.tar.zst
+      - name: Upload test archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+          retention-days: 1
 
   # Run tests in parallel partitions
   test:
     name: Test (${{ matrix.partition }}/5)
     needs: build-tests
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5]
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Download test archive
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: nextest-archive
+      - name: Download test archive
+        uses: actions/download-artifact@v4
+        with:
+          name: nextest-archive
       - name: Run tests (partition ${{ matrix.partition }}/5)
-        run: cargo nextest run --archive-file $CI_CACHE/nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
+        run: cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
 
   # Run linting checks
   lint:
     name: Lint
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_GHA_VERSION: lint
       RUSTC_WRAPPER: sccache
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
+      - name: Install mold linker
+        run: sudo apt-get update && sudo apt-get install -y mold
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -159,19 +92,9 @@ jobs:
   # Run frontend tests and build
   frontend:
     name: Frontend
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -198,9 +121,7 @@ jobs:
   # Run plugin checks (lint, typecheck, tests)
   plugins:
     name: Plugins (${{ matrix.plugin }})
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -213,14 +134,6 @@ jobs:
           - recommendations-anilist
           - sync-anilist
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -256,7 +169,7 @@ jobs:
   docker:
     name: Docker
     needs: [test, lint, frontend, plugins]
-    runs-on: arc-runner-codex
+    runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
@@ -292,31 +205,16 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest
           cache-to: type=registry,ref=ghcr.io/${{ env.DOCKER_REGISTRY }}-buildcache:latest,mode=max
 
-  # Clean up intermediate cache and artifacts that are no longer needed
+  # Clean up intermediate artifacts
   cleanup:
     name: Cleanup
     needs:
       - test
       - docker
-    # Only clean up when all jobs succeeded — preserve cache on failure so
-    # individual jobs can be re-run without starting from scratch.
-    # The 24h orphan cleanup below handles stale caches from old/cancelled runs.
     if: ${{ !failure() && !cancelled() }}
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-latest
     steps:
-      - name: Clean up CI cache
-        run: |
-          echo "Removing current run cache: $CI_CACHE"
-          rm -rf $CI_CACHE
-          # Remove orphaned cache directories older than 24 hours (from cancelled/crashed runs)
-          echo "Cleaning orphaned cache directories older than 24h..."
-          find /ci-cache -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec echo "Removing stale: {}" \; -exec rm -rf {} \;
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Delete intermediate artifacts
-      #   uses: geekyeggo/delete-artifact@v5
-      #   with:
-      #     name: nextest-archive
+      - name: Delete intermediate artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: nextest-archive

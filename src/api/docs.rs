@@ -19,7 +19,7 @@ use utoipa::OpenApi;
 
 You can explore and test this API interactively:
 
-- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api](https://codex.4sh.dev/docs/api) for the full API reference
+- **Hosted Documentation**: Visit [codex.4sh.dev/docs/api/codex-api](https://codex.4sh.dev/docs/api/codex-api) for the full API reference
 - **Your Instance**: If you have Scalar UI enabled, access `/api/docs` on your Codex server
 
 ## Authentication
