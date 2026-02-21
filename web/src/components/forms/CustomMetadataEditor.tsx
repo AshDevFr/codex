@@ -22,7 +22,7 @@ import {
   IconTree,
 } from "@tabler/icons-react";
 import { githubDarkTheme, githubLightTheme, JsonEditor } from "json-edit-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_TEMPLATE_EXAMPLE,
   EXTERNAL_LINKS_EXAMPLE,
@@ -63,11 +63,17 @@ export function CustomMetadataEditor({
   const [viewMode, setViewMode] = useState<ViewMode>("tree");
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [rawJson, setRawJson] = useState<string>("");
+  // Track whether the raw JSON textarea is the source of truth to avoid
+  // the useEffect overwriting user input mid-edit.
+  const isEditingRawJson = useRef(false);
 
-  // Sync rawJson with value when in tree mode or when value changes externally
+  // Sync rawJson with value only when the change came from outside the textarea
+  // (e.g. tree editor, loading an example, clearing, or external prop change).
   useEffect(() => {
-    setRawJson(value ? JSON.stringify(value, null, 2) : "{}");
-    setJsonError(null);
+    if (!isEditingRawJson.current) {
+      setRawJson(value ? JSON.stringify(value, null, 2) : "{}");
+      setJsonError(null);
+    }
   }, [value]);
 
   const handleTreeChange = useCallback(
@@ -88,6 +94,7 @@ export function CustomMetadataEditor({
 
   const handleRawJsonChange = useCallback(
     (newJson: string) => {
+      isEditingRawJson.current = true;
       setRawJson(newJson);
       try {
         const parsed = JSON.parse(newJson) as Record<string, unknown>;
@@ -115,7 +122,21 @@ export function CustomMetadataEditor({
     onLockChange(!locked);
   };
 
+  const handleRawJsonBlur = useCallback(() => {
+    isEditingRawJson.current = false;
+    // Pretty-print on blur if the JSON is valid
+    try {
+      const parsed = JSON.parse(rawJson);
+      if (typeof parsed === "object" && !Array.isArray(parsed)) {
+        setRawJson(JSON.stringify(parsed, null, 2));
+      }
+    } catch {
+      // Leave as-is if invalid
+    }
+  }, [rawJson]);
+
   const handleClear = () => {
+    isEditingRawJson.current = false;
     onChange(null);
     setRawJson("{}");
     setJsonError(null);
@@ -159,7 +180,17 @@ export function CustomMetadataEditor({
           <SegmentedControl
             size="xs"
             value={viewMode}
-            onChange={(v) => setViewMode(v as ViewMode)}
+            onChange={(v) => {
+              const mode = v as ViewMode;
+              if (mode === "json") {
+                // Re-sync rawJson from the canonical value when entering JSON mode
+                setRawJson(value ? JSON.stringify(value, null, 2) : "{}");
+                setJsonError(null);
+              }
+              // Clear the editing flag whenever we switch modes
+              isEditingRawJson.current = false;
+              setViewMode(mode);
+            }}
             data={[
               {
                 value: "tree",
@@ -309,6 +340,7 @@ export function CustomMetadataEditor({
           <textarea
             value={rawJson}
             onChange={(e) => handleRawJsonChange(e.target.value)}
+            onBlur={handleRawJsonBlur}
             style={{
               width: "100%",
               minHeight: 200,

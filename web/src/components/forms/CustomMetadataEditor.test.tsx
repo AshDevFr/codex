@@ -411,6 +411,81 @@ describe("CustomMetadataEditor", () => {
     });
   });
 
+  it("should not reformat textarea while user is typing valid JSON", async () => {
+    const user = userEvent.setup();
+
+    const TestComponent = () => {
+      const [value, setValue] = useState<Record<string, unknown> | null>({});
+      const [locked, setLocked] = useState(false);
+
+      return (
+        <CustomMetadataEditor
+          value={value}
+          onChange={setValue}
+          locked={locked}
+          onLockChange={setLocked}
+          autoLock={false}
+        />
+      );
+    };
+
+    renderWithProviders(<TestComponent />);
+
+    // Switch to JSON view
+    const jsonTab = screen.getByRole("radio", { name: /json/i });
+    await user.click(jsonTab);
+
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+    // Type valid JSON that would normally trigger reformatting via the
+    // value -> useEffect -> setRawJson loop. The textarea should keep the
+    // user's exact input (no pretty-printing mid-edit).
+    fireEvent.change(textarea, {
+      target: { value: '{ "a": 1 }' },
+    });
+
+    // The textarea should retain the user's exact text, not be reformatted
+    expect(textarea.value).toBe('{ "a": 1 }');
+  });
+
+  it("should pretty-print JSON on textarea blur", async () => {
+    const user = userEvent.setup();
+
+    const TestComponent = () => {
+      const [value, setValue] = useState<Record<string, unknown> | null>({});
+      const [locked, setLocked] = useState(false);
+
+      return (
+        <CustomMetadataEditor
+          value={value}
+          onChange={setValue}
+          locked={locked}
+          onLockChange={setLocked}
+          autoLock={false}
+        />
+      );
+    };
+
+    renderWithProviders(<TestComponent />);
+
+    // Switch to JSON view
+    const jsonTab = screen.getByRole("radio", { name: /json/i });
+    await user.click(jsonTab);
+
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+    // Enter compact valid JSON
+    fireEvent.change(textarea, {
+      target: { value: '{"a":1,"b":2}' },
+    });
+    expect(textarea.value).toBe('{"a":1,"b":2}');
+
+    // Blur should pretty-print
+    fireEvent.blur(textarea);
+
+    expect(textarea.value).toBe(JSON.stringify({ a: 1, b: 2 }, null, 2));
+  });
+
   it("should handle complex nested objects", () => {
     const complexData = {
       level1: {
