@@ -5,6 +5,7 @@
 pub mod api_key;
 pub mod auth;
 pub mod book;
+pub mod bulk_metadata;
 pub mod cleanup;
 pub mod common;
 pub mod duplicates;
@@ -33,6 +34,8 @@ pub mod user_preferences;
 pub use api_key::*;
 pub use auth::*;
 pub use book::*;
+#[allow(unused_imports)]
+pub use bulk_metadata::*;
 pub use cleanup::*;
 pub use common::*;
 pub use duplicates::*;

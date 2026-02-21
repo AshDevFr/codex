@@ -32,6 +32,41 @@ pub fn serialize_custom_metadata(value: Option<&Value>) -> Option<String> {
     })
 }
 
+/// Merge a JSON patch into a base value using RFC 7386 (JSON Merge Patch) semantics.
+///
+/// Rules:
+/// - If `patch` is an object and `base` is an object, merge keys recursively
+/// - If a patch key's value is `null`, remove that key from the result
+/// - If a patch key's value is non-null, set/overwrite that key recursively
+/// - If `patch` is not an object, it replaces `base` entirely
+///
+/// See: <https://datatracker.ietf.org/doc/html/rfc7386>
+pub fn json_merge_patch(base: &Value, patch: &Value) -> Value {
+    if let Value::Object(patch_map) = patch {
+        let mut result = if let Value::Object(_) = base {
+            base.clone()
+        } else {
+            Value::Object(serde_json::Map::new())
+        };
+
+        if let Value::Object(ref mut result_map) = result {
+            for (key, patch_value) in patch_map {
+                if patch_value.is_null() {
+                    result_map.remove(key);
+                } else if let Some(existing) = result_map.get(key).cloned() {
+                    result_map.insert(key.clone(), json_merge_patch(&existing, patch_value));
+                } else {
+                    result_map.insert(key.clone(), json_merge_patch(&Value::Null, patch_value));
+                }
+            }
+        }
+
+        result
+    } else {
+        patch.clone()
+    }
+}
+
 /// Validate custom metadata JSON size.
 /// Returns an error message if the JSON exceeds the maximum size.
 pub fn validate_custom_metadata_size(value: Option<&Value>) -> Result<(), String> {
@@ -113,6 +148,109 @@ mod tests {
         let large_string = "x".repeat(MAX_CUSTOM_METADATA_SIZE + 1);
         let value = json!({"data": large_string});
         assert!(validate_custom_metadata_size(Some(&value)).is_err());
+    }
+
+    // ========================================================================
+    // json_merge_patch tests (RFC 7386)
+    // ========================================================================
+
+    #[test]
+    fn test_json_merge_patch_add_field() {
+        let base = json!({"a": 1});
+        let patch = json!({"b": 2});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": 1, "b": 2}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_update_field() {
+        let base = json!({"a": 1, "b": "old"});
+        let patch = json!({"b": "new"});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": 1, "b": "new"}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_delete_field() {
+        let base = json!({"a": 1, "b": 2, "c": 3});
+        let patch = json!({"b": null});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": 1, "c": 3}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_nested_merge() {
+        let base = json!({"a": {"x": 1, "y": 2}, "b": 3});
+        let patch = json!({"a": {"y": 10, "z": 20}});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": {"x": 1, "y": 10, "z": 20}, "b": 3}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_nested_delete() {
+        let base = json!({"a": {"x": 1, "y": 2}});
+        let patch = json!({"a": {"x": null}});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": {"y": 2}}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_replace_non_object_base() {
+        let base = json!("string");
+        let patch = json!({"a": 1});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": 1}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_non_object_patch_replaces() {
+        let base = json!({"a": 1});
+        let patch = json!("replaced");
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!("replaced"));
+    }
+
+    #[test]
+    fn test_json_merge_patch_empty_patch_no_change() {
+        let base = json!({"a": 1, "b": 2});
+        let patch = json!({});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": 1, "b": 2}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_null_base() {
+        let base = Value::Null;
+        let patch = json!({"a": 1});
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(result, json!({"a": 1}));
+    }
+
+    #[test]
+    fn test_json_merge_patch_complex_scenario() {
+        // Simulates a real bulk edit scenario
+        let base = json!({
+            "rating": 5,
+            "notes": "Great series",
+            "tags": ["favorite"],
+            "nested": {"a": 1, "b": 2}
+        });
+        let patch = json!({
+            "rating": 8,
+            "notes": null,
+            "status": "completed",
+            "nested": {"b": null, "c": 3}
+        });
+        let result = json_merge_patch(&base, &patch);
+        assert_eq!(
+            result,
+            json!({
+                "rating": 8,
+                "tags": ["favorite"],
+                "status": "completed",
+                "nested": {"a": 1, "c": 3}
+            })
+        );
     }
 
     #[test]

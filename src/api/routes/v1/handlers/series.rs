@@ -36,7 +36,8 @@ use crate::db::repositories::{
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
 use crate::utils::{
-    parse_custom_metadata, serialize_custom_metadata, validate_custom_metadata_size,
+    json_merge_patch, parse_custom_metadata, serialize_custom_metadata,
+    validate_custom_metadata_size,
 };
 use axum::{
     Json,
@@ -2821,12 +2822,18 @@ pub async fn patch_series_metadata(
         has_changes = true;
     }
     if let Some(opt) = request.custom_metadata.into_nested_option() {
-        // Validate size if value is provided
-        if let Some(ref cm) = opt {
-            validate_custom_metadata_size(Some(cm)).map_err(ApiError::BadRequest)?;
-        }
-        // Convert from JSON Value to String for database storage
-        metadata_active.custom_metadata = Set(serialize_custom_metadata(opt.as_ref()));
+        let merged = if let Some(ref patch) = opt {
+            // Merge patch into existing custom_metadata (RFC 7386)
+            let existing_cm = parse_custom_metadata(existing_metadata.custom_metadata.as_deref())
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+            let merged = json_merge_patch(&existing_cm, patch);
+            validate_custom_metadata_size(Some(&merged)).map_err(ApiError::BadRequest)?;
+            Some(merged)
+        } else {
+            // Explicit null clears custom_metadata
+            None
+        };
+        metadata_active.custom_metadata = Set(serialize_custom_metadata(merged.as_ref()));
         has_changes = true;
     }
     if let Some(authors_opt) = request.authors.into_nested_option() {

@@ -287,6 +287,20 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/bulk/metadata/reset",
             post(handlers::bulk_reset_series_metadata),
         )
+        // Bulk metadata editing
+        .route(
+            "/series/bulk/metadata",
+            patch(handlers::bulk_patch_series_metadata),
+        )
+        .route(
+            "/series/bulk/metadata/locks",
+            put(handlers::bulk_update_series_locks),
+        )
+        .route("/series/bulk/tags", post(handlers::bulk_modify_series_tags))
+        .route(
+            "/series/bulk/genres",
+            post(handlers::bulk_modify_series_genres),
+        )
         // Series metadata from plugins (Phase 4)
         .route(
             "/series/:series_id/metadata/search-title",

@@ -24,6 +24,10 @@ use crate::db::repositories::{
 };
 use crate::require_permission;
 use crate::services::FilterService;
+use crate::utils::{
+    json_merge_patch, parse_custom_metadata, serialize_custom_metadata,
+    validate_custom_metadata_size,
+};
 use axum::{
     Json,
     body::Body,
@@ -2394,6 +2398,7 @@ pub async fn patch_book_metadata(
     let updated = if let Some(existing) = existing {
         // Partial update existing record with auto-locking
         let existing_authors_json = existing.authors_json.clone();
+        let existing_custom_metadata = existing.custom_metadata.clone();
         let mut active: book_metadata::ActiveModel = existing.into();
 
         if let Some(opt) = request.summary.into_nested_option() {
@@ -2638,10 +2643,17 @@ pub async fn patch_book_metadata(
             has_changes = true;
         }
         if let Some(opt) = request.custom_metadata.into_nested_option() {
-            let custom_str = opt
-                .as_ref()
-                .map(|v| serde_json::to_string(v).unwrap_or_default());
-            active.custom_metadata = Set(custom_str);
+            let merged = if let Some(ref patch) = opt {
+                // Merge patch into existing custom_metadata (RFC 7386)
+                let existing_cm = parse_custom_metadata(existing_custom_metadata.as_deref())
+                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                let merged = json_merge_patch(&existing_cm, patch);
+                validate_custom_metadata_size(Some(&merged)).map_err(ApiError::BadRequest)?;
+                Some(merged)
+            } else {
+                None
+            };
+            active.custom_metadata = Set(serialize_custom_metadata(merged.as_ref()));
             if opt.is_some() {
                 active.custom_metadata_lock = Set(true);
             }
