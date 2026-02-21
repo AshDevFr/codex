@@ -325,6 +325,14 @@ The following paths are exempt from rate limiting:
         v1::handlers::bulk_generate_series_book_thumbnails,
         v1::handlers::bulk_reprocess_series_titles,
         v1::handlers::bulk_reset_series_metadata,
+        v1::handlers::bulk_patch_series_metadata,
+        v1::handlers::bulk_patch_book_metadata,
+        v1::handlers::bulk_modify_series_tags,
+        v1::handlers::bulk_modify_series_genres,
+        v1::handlers::bulk_modify_book_tags,
+        v1::handlers::bulk_modify_book_genres,
+        v1::handlers::bulk_update_series_locks,
+        v1::handlers::bulk_update_book_locks,
 
         // User endpoints
         v1::handlers::list_users,
@@ -777,6 +785,15 @@ The following paths are exempt from rate limiting:
             v1::dto::BulkReprocessSeriesTitlesRequest,
             v1::dto::BulkTaskResponse,
             v1::dto::BulkMetadataResetResponse,
+            v1::dto::BulkPatchSeriesMetadataRequest,
+            v1::dto::BulkPatchBookMetadataRequest,
+            v1::dto::BulkModifySeriesTagsRequest,
+            v1::dto::BulkModifySeriesGenresRequest,
+            v1::dto::BulkModifyBookTagsRequest,
+            v1::dto::BulkModifyBookGenresRequest,
+            v1::dto::BulkUpdateSeriesLocksRequest,
+            v1::dto::BulkUpdateBookLocksRequest,
+            v1::dto::BulkMetadataUpdateResponse,
 
             // Filesystem DTOs
             v1::handlers::filesystem::FileSystemEntry,

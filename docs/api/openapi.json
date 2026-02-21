@@ -2175,6 +2175,151 @@
         ]
       }
     },
+    "/api/v1/books/bulk/genres": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk add/remove genres for multiple books",
+        "operationId": "bulk_modify_book_genres",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkModifyBookGenresRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Genres modified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/bulk/metadata": {
+      "patch": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk patch book metadata",
+        "description": "Applies the same partial metadata update to multiple books at once.\nOnly provided fields will be updated. Changed fields are auto-locked.\nNon-existent books are silently skipped.",
+        "operationId": "bulk_patch_book_metadata",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkPatchBookMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/bulk/metadata/locks": {
+      "put": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk update metadata locks for multiple books",
+        "operationId": "bulk_update_book_locks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateBookLocksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Locks updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/bulk/read": {
       "post": {
         "tags": [
@@ -2203,6 +2348,54 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/books/bulk/tags": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk add/remove tags for multiple books",
+        "operationId": "bulk_modify_book_tags",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkModifyBookTagsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tags modified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
           },
           "401": {
             "description": "Unauthorized"
@@ -7136,6 +7329,151 @@
         ]
       }
     },
+    "/api/v1/series/bulk/genres": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk add/remove genres for multiple series",
+        "operationId": "bulk_modify_series_genres",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkModifySeriesGenresRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Genres modified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/bulk/metadata": {
+      "patch": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk patch series metadata",
+        "description": "Applies the same partial metadata update to multiple series at once.\nOnly provided fields will be updated. Changed fields are auto-locked.\nNon-existent series are silently skipped.",
+        "operationId": "bulk_patch_series_metadata",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkPatchSeriesMetadataRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Metadata updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/bulk/metadata/locks": {
+      "put": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk update metadata locks for multiple series",
+        "operationId": "bulk_update_series_locks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateSeriesLocksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Locks updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/bulk/metadata/reset": {
       "post": {
         "tags": [
@@ -7256,6 +7594,54 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/bulk/tags": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk add/remove tags for multiple series",
+        "operationId": "bulk_modify_series_tags",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkModifySeriesTagsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tags modified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMetadataUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
           },
           "401": {
             "description": "Unauthorized"
@@ -19421,6 +19807,384 @@
           }
         }
       },
+      "BulkMetadataUpdateResponse": {
+        "type": "object",
+        "description": "Response for bulk metadata update operations",
+        "required": [
+          "updatedCount",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Descriptive message about the operation",
+            "example": "Updated metadata for 5 series"
+          },
+          "updatedCount": {
+            "type": "integer",
+            "description": "Number of items that were updated",
+            "example": 5,
+            "minimum": 0
+          }
+        }
+      },
+      "BulkModifyBookGenresRequest": {
+        "type": "object",
+        "description": "Request to add/remove genres for multiple books",
+        "required": [
+          "bookIds"
+        ],
+        "properties": {
+          "add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genre names to add to all specified books",
+            "example": [
+              "Action",
+              "Comedy"
+            ]
+          },
+          "bookIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Book IDs to modify (max 500)"
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genre names to remove from all specified books",
+            "example": [
+              "Romance"
+            ]
+          }
+        }
+      },
+      "BulkModifyBookTagsRequest": {
+        "type": "object",
+        "description": "Request to add/remove tags for multiple books",
+        "required": [
+          "bookIds"
+        ],
+        "properties": {
+          "add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tag names to add to all specified books",
+            "example": [
+              "Favorite",
+              "Reread"
+            ]
+          },
+          "bookIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Book IDs to modify (max 500)"
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tag names to remove from all specified books",
+            "example": [
+              "Dropped"
+            ]
+          }
+        }
+      },
+      "BulkModifySeriesGenresRequest": {
+        "type": "object",
+        "description": "Request to add/remove genres for multiple series",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genre names to add to all specified series",
+            "example": [
+              "Action",
+              "Comedy"
+            ]
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Genre names to remove from all specified series",
+            "example": [
+              "Romance"
+            ]
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Series IDs to modify (max 100)"
+          }
+        }
+      },
+      "BulkModifySeriesTagsRequest": {
+        "type": "object",
+        "description": "Request to add/remove tags for multiple series",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tag names to add to all specified series",
+            "example": [
+              "Action",
+              "Completed"
+            ]
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tag names to remove from all specified series",
+            "example": [
+              "Dropped"
+            ]
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Series IDs to modify (max 100)"
+          }
+        }
+      },
+      "BulkPatchBookMetadataRequest": {
+        "type": "object",
+        "description": "Bulk PATCH request for book metadata\n\nApplies the same partial update to all specified books.\nOnly provided fields will be updated. Absent fields are unchanged.\nTitle, title_sort, number, summary, subtitle are excluded (too unique per item).\nMax 500 books per request.",
+        "required": [
+          "bookIds"
+        ],
+        "properties": {
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information"
+          },
+          "blackAndWhite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is in black and white"
+          },
+          "bookIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Book IDs to update (max 500)"
+          },
+          "bookType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Book type (comic, manga, novel, etc.)"
+          },
+          "customMetadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Custom JSON metadata (uses RFC 7386 JSON Merge Patch semantics)"
+          },
+          "edition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Edition (e.g., \"Deluxe\", \"Omnibus\")"
+          },
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Genre (legacy single genre field)"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)"
+          },
+          "languageIso": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language ISO code"
+          },
+          "manga": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the book is manga format"
+          },
+          "originalTitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Original title (if translated)"
+          },
+          "originalYear": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Original publication year"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name"
+          },
+          "translator": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Translator name"
+          }
+        }
+      },
+      "BulkPatchSeriesMetadataRequest": {
+        "type": "object",
+        "description": "Bulk PATCH request for series metadata\n\nApplies the same partial update to all specified series.\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.\nTitle, title_sort, and summary are excluded (too unique per item).\nMax 100 series per request.",
+        "required": [
+          "seriesIds"
+        ],
+        "properties": {
+          "ageRating": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Age rating (e.g., 13, 16, 18)"
+          },
+          "authors": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BookAuthorDto"
+            },
+            "description": "Structured author information"
+          },
+          "customMetadata": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Custom JSON metadata (uses RFC 7386 JSON Merge Patch semantics)"
+          },
+          "imprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Imprint (sub-publisher)"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Language (BCP47 format: \"en\", \"ja\", \"ko\")"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Publisher name"
+          },
+          "readingDirection": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reading direction (ltr, rtl, ttb or webtoon)"
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Series IDs to update (max 100)"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)"
+          },
+          "totalBookCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total book count (for ongoing series)"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Release year"
+          }
+        }
+      },
       "BulkRenumberSeriesRequest": {
         "type": "object",
         "description": "Request for bulk renumber operations on multiple series",
@@ -19545,6 +20309,56 @@
             "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
+      },
+      "BulkUpdateBookLocksRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UpdateBookMetadataLocksRequest",
+            "description": "Lock states to apply to all specified books"
+          },
+          {
+            "type": "object",
+            "required": [
+              "bookIds"
+            ],
+            "properties": {
+              "bookIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "Book IDs to update locks for (max 500)"
+              }
+            }
+          }
+        ],
+        "description": "Request to update metadata locks for multiple books"
+      },
+      "BulkUpdateSeriesLocksRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/UpdateMetadataLocksRequest",
+            "description": "Lock states to apply to all specified series"
+          },
+          {
+            "type": "object",
+            "required": [
+              "seriesIds"
+            ],
+            "properties": {
+              "seriesIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "Series IDs to update locks for (max 100)"
+              }
+            }
+          }
+        ],
+        "description": "Request to update metadata locks for multiple series"
       },
       "BulkUpdateSettingsRequest": {
         "type": "object",

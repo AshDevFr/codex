@@ -14,6 +14,7 @@ import {
   IconBook,
   IconBookOff,
   IconChevronDown,
+  IconEdit,
   IconListNumbers,
   IconPhotoPlus,
   IconRefresh,
@@ -26,6 +27,7 @@ import { useEffect, useMemo, useState } from "react";
 import { booksApi } from "@/api/books";
 import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
+import { BulkMetadataEditModal } from "@/components/library/BulkMetadataEditModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   selectPageItems,
@@ -410,6 +412,9 @@ export function BulkSelectionToolbar() {
   // Confirmation modal state for destructive bulk reset
   const [resetConfirmOpened, setResetConfirmOpened] = useState(false);
 
+  // Bulk metadata edit modal state
+  const [metadataEditOpened, setMetadataEditOpened] = useState(false);
+
   // Keyboard shortcut: Escape to clear selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -634,6 +639,21 @@ export function BulkSelectionToolbar() {
             Mark Unread
           </Button>
         </Tooltip>
+
+        {/* Edit Metadata button (requires write permissions) */}
+        {((isBooks && canWriteBooks) || (!isBooks && canWriteSeries)) && (
+          <Tooltip label={`Edit metadata for ${count} ${itemLabel}`}>
+            <Button
+              variant="white"
+              size="xs"
+              leftSection={<IconEdit size={16} />}
+              onClick={() => setMetadataEditOpened(true)}
+              disabled={isAnyPending}
+            >
+              Edit Metadata
+            </Button>
+          </Tooltip>
+        )}
 
         {/* More actions menu - for books (requires write permissions) */}
         {showBooksMoreMenu && (
@@ -862,6 +882,18 @@ export function BulkSelectionToolbar() {
           </Button>
         </Group>
       </Modal>
+
+      {/* Bulk metadata edit modal */}
+      <BulkMetadataEditModal
+        opened={metadataEditOpened}
+        onClose={() => setMetadataEditOpened(false)}
+        selectedIds={selectedIds}
+        selectionType={selectionType ?? "book"}
+        onSuccess={() => {
+          refetchAll();
+          clearSelection();
+        }}
+      />
     </Group>
   );
 }

@@ -744,6 +744,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/bulk/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk add/remove genres for multiple books */
+        post: operations["bulk_modify_book_genres"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/bulk/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Bulk patch book metadata
+         * @description Applies the same partial metadata update to multiple books at once.
+         *     Only provided fields will be updated. Changed fields are auto-locked.
+         *     Non-existent books are silently skipped.
+         */
+        patch: operations["bulk_patch_book_metadata"];
+        trace?: never;
+    };
+    "/api/v1/books/bulk/metadata/locks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Bulk update metadata locks for multiple books */
+        put: operations["bulk_update_book_locks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/bulk/read": {
         parameters: {
             query?: never;
@@ -759,6 +815,23 @@ export interface paths {
          *     Books that don't exist are silently skipped.
          */
         post: operations["bulk_mark_books_as_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/bulk/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk add/remove tags for multiple books */
+        post: operations["bulk_modify_book_tags"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2435,6 +2508,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/bulk/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk add/remove genres for multiple series */
+        post: operations["bulk_modify_series_genres"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Bulk patch series metadata
+         * @description Applies the same partial metadata update to multiple series at once.
+         *     Only provided fields will be updated. Changed fields are auto-locked.
+         *     Non-existent series are silently skipped.
+         */
+        patch: operations["bulk_patch_series_metadata"];
+        trace?: never;
+    };
+    "/api/v1/series/bulk/metadata/locks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Bulk update metadata locks for multiple series */
+        put: operations["bulk_update_series_locks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/bulk/metadata/reset": {
         parameters: {
             query?: never;
@@ -2496,6 +2625,23 @@ export interface paths {
          *     using each library's number strategy. Returns a task ID for tracking progress via SSE.
          */
         post: operations["bulk_renumber_series"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk add/remove tags for multiple series */
+        post: operations["bulk_modify_series_tags"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7878,6 +8024,182 @@ export interface components {
              */
             message: string;
         };
+        /** @description Response for bulk metadata update operations */
+        BulkMetadataUpdateResponse: {
+            /**
+             * @description Descriptive message about the operation
+             * @example Updated metadata for 5 series
+             */
+            message: string;
+            /**
+             * @description Number of items that were updated
+             * @example 5
+             */
+            updatedCount: number;
+        };
+        /** @description Request to add/remove genres for multiple books */
+        BulkModifyBookGenresRequest: {
+            /**
+             * @description Genre names to add to all specified books
+             * @example [
+             *       "Action",
+             *       "Comedy"
+             *     ]
+             */
+            add?: string[];
+            /** @description Book IDs to modify (max 500) */
+            bookIds: string[];
+            /**
+             * @description Genre names to remove from all specified books
+             * @example [
+             *       "Romance"
+             *     ]
+             */
+            remove?: string[];
+        };
+        /** @description Request to add/remove tags for multiple books */
+        BulkModifyBookTagsRequest: {
+            /**
+             * @description Tag names to add to all specified books
+             * @example [
+             *       "Favorite",
+             *       "Reread"
+             *     ]
+             */
+            add?: string[];
+            /** @description Book IDs to modify (max 500) */
+            bookIds: string[];
+            /**
+             * @description Tag names to remove from all specified books
+             * @example [
+             *       "Dropped"
+             *     ]
+             */
+            remove?: string[];
+        };
+        /** @description Request to add/remove genres for multiple series */
+        BulkModifySeriesGenresRequest: {
+            /**
+             * @description Genre names to add to all specified series
+             * @example [
+             *       "Action",
+             *       "Comedy"
+             *     ]
+             */
+            add?: string[];
+            /**
+             * @description Genre names to remove from all specified series
+             * @example [
+             *       "Romance"
+             *     ]
+             */
+            remove?: string[];
+            /** @description Series IDs to modify (max 100) */
+            seriesIds: string[];
+        };
+        /** @description Request to add/remove tags for multiple series */
+        BulkModifySeriesTagsRequest: {
+            /**
+             * @description Tag names to add to all specified series
+             * @example [
+             *       "Action",
+             *       "Completed"
+             *     ]
+             */
+            add?: string[];
+            /**
+             * @description Tag names to remove from all specified series
+             * @example [
+             *       "Dropped"
+             *     ]
+             */
+            remove?: string[];
+            /** @description Series IDs to modify (max 100) */
+            seriesIds: string[];
+        };
+        /**
+         * @description Bulk PATCH request for book metadata
+         *
+         *     Applies the same partial update to all specified books.
+         *     Only provided fields will be updated. Absent fields are unchanged.
+         *     Title, title_sort, number, summary, subtitle are excluded (too unique per item).
+         *     Max 500 books per request.
+         */
+        BulkPatchBookMetadataRequest: {
+            /** @description Structured author information */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
+            /** @description Whether the book is in black and white */
+            blackAndWhite?: boolean | null;
+            /** @description Book IDs to update (max 500) */
+            bookIds: string[];
+            /** @description Book type (comic, manga, novel, etc.) */
+            bookType?: string | null;
+            /** @description Custom JSON metadata (uses RFC 7386 JSON Merge Patch semantics) */
+            customMetadata?: Record<string, never> | null;
+            /** @description Edition (e.g., "Deluxe", "Omnibus") */
+            edition?: string | null;
+            /** @description Genre (legacy single genre field) */
+            genre?: string | null;
+            /** @description Imprint (sub-publisher) */
+            imprint?: string | null;
+            /** @description Language ISO code */
+            languageIso?: string | null;
+            /** @description Whether the book is manga format */
+            manga?: boolean | null;
+            /** @description Original title (if translated) */
+            originalTitle?: string | null;
+            /**
+             * Format: int32
+             * @description Original publication year
+             */
+            originalYear?: number | null;
+            /** @description Publisher name */
+            publisher?: string | null;
+            /** @description Translator name */
+            translator?: string | null;
+        };
+        /**
+         * @description Bulk PATCH request for series metadata
+         *
+         *     Applies the same partial update to all specified series.
+         *     Only provided fields will be updated. Absent fields are unchanged.
+         *     Explicitly null fields will be cleared.
+         *     Title, title_sort, and summary are excluded (too unique per item).
+         *     Max 100 series per request.
+         */
+        BulkPatchSeriesMetadataRequest: {
+            /**
+             * Format: int32
+             * @description Age rating (e.g., 13, 16, 18)
+             */
+            ageRating?: number | null;
+            /** @description Structured author information */
+            authors?: components["schemas"]["BookAuthorDto"][] | null;
+            /** @description Custom JSON metadata (uses RFC 7386 JSON Merge Patch semantics) */
+            customMetadata?: Record<string, never> | null;
+            /** @description Imprint (sub-publisher) */
+            imprint?: string | null;
+            /** @description Language (BCP47 format: "en", "ja", "ko") */
+            language?: string | null;
+            /** @description Publisher name */
+            publisher?: string | null;
+            /** @description Reading direction (ltr, rtl, ttb or webtoon) */
+            readingDirection?: string | null;
+            /** @description Series IDs to update (max 100) */
+            seriesIds: string[];
+            /** @description Series status (ongoing, ended, hiatus, abandoned, unknown) */
+            status?: string | null;
+            /**
+             * Format: int32
+             * @description Expected total book count (for ongoing series)
+             */
+            totalBookCount?: number | null;
+            /**
+             * Format: int32
+             * @description Release year
+             */
+            year?: number | null;
+        };
         /** @description Request for bulk renumber operations on multiple series */
         BulkRenumberSeriesRequest: {
             /**
@@ -7950,6 +8272,16 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             taskId: string;
+        };
+        /** @description Request to update metadata locks for multiple books */
+        BulkUpdateBookLocksRequest: components["schemas"]["UpdateBookMetadataLocksRequest"] & {
+            /** @description Book IDs to update locks for (max 500) */
+            bookIds: string[];
+        };
+        /** @description Request to update metadata locks for multiple series */
+        BulkUpdateSeriesLocksRequest: components["schemas"]["UpdateMetadataLocksRequest"] & {
+            /** @description Series IDs to update locks for (max 100) */
+            seriesIds: string[];
         };
         /** @description Bulk update settings request */
         BulkUpdateSettingsRequest: {
@@ -18068,6 +18400,141 @@ export interface operations {
             };
         };
     };
+    bulk_modify_book_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkModifyBookGenresRequest"];
+            };
+        };
+        responses: {
+            /** @description Genres modified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_patch_book_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkPatchBookMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_update_book_locks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkUpdateBookLocksRequest"];
+            };
+        };
+        responses: {
+            /** @description Locks updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bulk_mark_books_as_read: {
         parameters: {
             query?: never;
@@ -18089,6 +18556,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MarkReadResponse"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_modify_book_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkModifyBookTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Tags modified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
@@ -21543,6 +22055,141 @@ export interface operations {
             };
         };
     };
+    bulk_modify_series_genres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkModifySeriesGenresRequest"];
+            };
+        };
+        responses: {
+            /** @description Genres modified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_patch_series_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkPatchSeriesMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_update_series_locks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkUpdateSeriesLocksRequest"];
+            };
+        };
+        responses: {
+            /** @description Locks updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bulk_reset_series_metadata: {
         parameters: {
             query?: never;
@@ -21640,6 +22287,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BulkTaskResponse"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_modify_series_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkModifySeriesTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Tags modified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMetadataUpdateResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
