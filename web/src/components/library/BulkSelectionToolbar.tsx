@@ -368,28 +368,11 @@ export function BulkSelectionToolbar() {
   const bulkRenumberSeriesMutation = useMutation({
     mutationFn: (seriesIds: string[]) => seriesApi.bulkRenumber(seriesIds),
     onSuccess: (data) => {
-      const totalUpdated = data.results.reduce(
-        (sum, r) => sum + r.updatedCount,
-        0,
-      );
-      const errors = data.results.filter((r) => r.error);
-      if (errors.length > 0) {
-        notifications.show({
-          title: "Renumbering completed with errors",
-          message: `${totalUpdated} books updated, ${errors.length} series had errors`,
-          color: "yellow",
-        });
-      } else {
-        notifications.show({
-          title: "Books renumbered",
-          message:
-            totalUpdated > 0
-              ? `${totalUpdated} book${totalUpdated === 1 ? "" : "s"} updated across ${data.results.length} series`
-              : "All book numbers are already correct",
-          color: "green",
-        });
-      }
-      refetchAll();
+      notifications.show({
+        title: "Renumber started",
+        message: data.message,
+        color: "blue",
+      });
       clearSelection();
     },
     onError: (error: Error) => {

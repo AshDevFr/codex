@@ -33,6 +33,8 @@ fn task_priority_order_by(prioritize_scans: bool) -> &'static str {
             WHEN task_type = 'analyze_series' THEN 11
             WHEN task_type = 'reprocess_series_title' THEN 12
             WHEN task_type = 'reprocess_series_titles' THEN 13
+            WHEN task_type = 'renumber_series' THEN 14
+            WHEN task_type = 'renumber_series_batch' THEN 15
             WHEN task_type = 'generate_thumbnail' THEN 20
             WHEN task_type = 'generate_series_thumbnail' THEN 21
             WHEN task_type = 'generate_thumbnails' THEN 22

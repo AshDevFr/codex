@@ -5,9 +5,12 @@
 mod common;
 
 use codex::api::error::ErrorResponse;
-use codex::api::routes::v1::dto::scan::{BulkRenumberResponse, RenumberResponse};
+use codex::api::routes::v1::dto::read_progress::BulkTaskResponse;
+use codex::api::routes::v1::handlers::task_queue::CreateTaskResponse;
 use codex::db::ScanningStrategy;
-use codex::db::repositories::{LibraryRepository, SeriesRepository, UserRepository};
+use codex::db::repositories::{
+    LibraryRepository, SeriesRepository, TaskRepository, UserRepository,
+};
 use codex::scanner::ScanMode;
 use codex::tasks::TaskWorker;
 use codex::utils::password;
@@ -48,8 +51,6 @@ async fn create_readonly_and_token(
 
 // Helper to scan a library and process all tasks
 async fn scan_and_process(db: &sea_orm::DatabaseConnection, library_id: uuid::Uuid) {
-    use codex::db::repositories::TaskRepository;
-
     trigger_scan_task(db, library_id, ScanMode::Normal)
         .await
         .unwrap();
@@ -111,13 +112,22 @@ async fn test_renumber_series_success() {
     let uri = format!("/api/v1/series/{}/renumber", series.id);
     let request = post_request_with_auth(&uri, &token);
 
-    let (status, response): (StatusCode, Option<RenumberResponse>) =
+    let (status, response): (StatusCode, Option<CreateTaskResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let result = response.unwrap();
-    // updated_count can be 0 if numbers haven't changed, that's fine
-    let _ = result.updated_count;
+    // Verify we got a valid task_id back
+    assert!(!result.task_id.is_nil(), "task_id should not be nil");
+
+    // Verify the task exists in the database
+    let task = TaskRepository::get_by_id(&db, result.task_id)
+        .await
+        .unwrap();
+    assert!(task.is_some(), "Task should exist in the database");
+    let task = task.unwrap();
+    assert_eq!(task.task_type, "renumber_series");
+    assert_eq!(task.series_id, Some(series.id));
 }
 
 #[tokio::test]
@@ -209,26 +219,26 @@ async fn test_bulk_renumber_series_success() {
     let body = json!({ "seriesIds": series_ids });
     let request = post_json_request_with_auth("/api/v1/series/bulk/renumber", &body, &token);
 
-    let (status, response): (StatusCode, Option<BulkRenumberResponse>) =
+    let (status, response): (StatusCode, Option<BulkTaskResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let result = response.unwrap();
-    assert_eq!(
-        result.results.len(),
-        series_ids.len(),
-        "Should have a result for each series"
+    // Verify we got a valid task_id back
+    assert!(!result.task_id.is_nil(), "task_id should not be nil");
+    assert!(
+        result.message.contains("Renumber task queued"),
+        "Message should mention renumber: {}",
+        result.message
     );
 
-    // All results should have no errors
-    for r in &result.results {
-        assert!(
-            r.error.is_none(),
-            "Series {} had error: {:?}",
-            r.series_id,
-            r.error
-        );
-    }
+    // Verify the fan-out task exists in the database
+    let task = TaskRepository::get_by_id(&db, result.task_id)
+        .await
+        .unwrap();
+    assert!(task.is_some(), "Task should exist in the database");
+    let task = task.unwrap();
+    assert_eq!(task.task_type, "renumber_series_batch");
 }
 
 #[tokio::test]
@@ -242,16 +252,14 @@ async fn test_bulk_renumber_empty_request() {
     let body = json!({ "seriesIds": [] });
     let request = post_json_request_with_auth("/api/v1/series/bulk/renumber", &body, &token);
 
-    let (status, response): (StatusCode, Option<BulkRenumberResponse>) =
-        make_json_request(app, request).await;
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
-    assert_eq!(status, StatusCode::OK);
-    let result = response.unwrap();
-    assert!(result.results.is_empty());
+    // Empty request now returns 400 BadRequest
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
-async fn test_bulk_renumber_skips_nonexistent_series() {
+async fn test_bulk_renumber_nonexistent_series_enqueues_task() {
     let (db, temp_dir) = setup_test_db().await;
 
     let state = create_test_app_state(db.clone()).await;
@@ -262,13 +270,13 @@ async fn test_bulk_renumber_skips_nonexistent_series() {
     let body = json!({ "seriesIds": fake_ids });
     let request = post_json_request_with_auth("/api/v1/series/bulk/renumber", &body, &token);
 
-    let (status, response): (StatusCode, Option<BulkRenumberResponse>) =
+    let (status, response): (StatusCode, Option<BulkTaskResponse>) =
         make_json_request(app, request).await;
 
+    // Task is still enqueued (validation happens at task execution time, not enqueue time)
     assert_eq!(status, StatusCode::OK);
     let result = response.unwrap();
-    // Non-existent series are silently skipped
-    assert!(result.results.is_empty());
+    assert!(!result.task_id.is_nil(), "task_id should not be nil");
 }
 
 #[tokio::test]

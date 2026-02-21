@@ -2492,9 +2492,8 @@ export interface paths {
         put?: never;
         /**
          * Bulk renumber books in multiple series
-         * @description Renumbers all books in the specified series using each library's number strategy.
-         *     Series that don't exist are silently skipped. This is a synchronous operation
-         *     (no task queue) since renumbering only performs DB reads/writes.
+         * @description Enqueues a fan-out task that will renumber books in the specified series
+         *     using each library's number strategy. Returns a task ID for tracking progress via SSE.
          */
         post: operations["bulk_renumber_series"];
         delete?: never;
@@ -3468,12 +3467,9 @@ export interface paths {
          *     - `series:write`
          *
          *     # Behavior
-         *     Calls `renumber_series_books()` directly to recalculate book numbers based on the
+         *     Enqueues a `RenumberSeries` task that recalculates book numbers based on the
          *     library's number strategy and the current natural sort order of filenames.
-         *     This is a synchronous operation (no task queue) since it only performs DB reads/writes.
-         *
-         *     Note: Returns `updated_count: 0` for libraries using the Metadata number strategy,
-         *     since that strategy requires re-parsing files.
+         *     Returns a task ID for tracking progress via SSE.
          */
         post: operations["renumber_series"];
         delete?: never;
@@ -7881,11 +7877,6 @@ export interface components {
              * @example Reset metadata for 3 series
              */
             message: string;
-        };
-        /** @description Response for a bulk renumber operation */
-        BulkRenumberResponse: {
-            /** @description Results for each series */
-            results: components["schemas"]["SeriesRenumberResult"][];
         };
         /** @description Request for bulk renumber operations on multiple series */
         BulkRenumberSeriesRequest: {
@@ -13337,14 +13328,6 @@ export interface components {
             /** @description User information */
             user: components["schemas"]["UserInfo"];
         };
-        /** @description Response for a series renumber operation */
-        RenumberResponse: {
-            /**
-             * @description Number of books whose numbers were updated
-             * @example 5
-             */
-            updatedCount: number;
-        };
         /**
          * @description PUT request for full replacement of book metadata
          *
@@ -14407,22 +14390,6 @@ export interface components {
             /** @description Sort parameter (e.g., "metadata.titleSort,asc", "createdDate,desc") */
             sort?: string | null;
         };
-        /** @description Result for a single series in a bulk renumber operation */
-        SeriesRenumberResult: {
-            /** @description Error message if renumbering failed for this series */
-            error?: string | null;
-            /**
-             * Format: uuid
-             * @description The series ID
-             * @example 550e8400-e29b-41d4-a716-446655440001
-             */
-            seriesId: string;
-            /**
-             * @description Number of books whose numbers were updated
-             * @example 5
-             */
-            updatedCount: number;
-        };
         /**
          * @description Series scanning strategy type for library organization
          *
@@ -15279,6 +15246,15 @@ export interface components {
             seriesIds?: string[] | null;
             /** @enum {string} */
             type: "reprocess_series_titles";
+        } | {
+            /** Format: uuid */
+            seriesId: string;
+            /** @enum {string} */
+            type: "renumber_series";
+        } | {
+            seriesIds?: string[] | null;
+            /** @enum {string} */
+            type: "renumber_series_batch";
         } | {
             /** @enum {string} */
             type: "cleanup_plugin_data";
@@ -21656,13 +21632,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Books renumbered */
+            /** @description Renumber task queued */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BulkRenumberResponse"];
+                    "application/json": components["schemas"]["BulkTaskResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -24078,13 +24054,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Books renumbered successfully */
+            /** @description Renumber task enqueued */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RenumberResponse"];
+                    "application/json": components["schemas"]["CreateTaskResponse"];
                 };
             };
             /** @description Permission denied */

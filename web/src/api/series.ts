@@ -469,11 +469,11 @@ export const seriesApi = {
 
   /**
    * Renumber all books in a series based on the library's number strategy.
-   * This is a synchronous operation (no task queue) since it only does DB operations.
+   * Enqueues a task and returns a task ID for tracking via SSE.
    * @param seriesId - Series ID to renumber books for
    */
-  renumber: async (seriesId: string): Promise<{ updatedCount: number }> => {
-    const response = await api.post<{ updatedCount: number }>(
+  renumber: async (seriesId: string): Promise<{ taskId: string }> => {
+    const response = await api.post<{ taskId: string }>(
       `/series/${seriesId}/renumber`,
     );
     return response.data;
@@ -481,25 +481,16 @@ export const seriesApi = {
 
   /**
    * Renumber books in multiple series in bulk.
-   * Each series is renumbered using its library's number strategy.
+   * Enqueues a fan-out task and returns a task ID for tracking via SSE.
    * @param seriesIds - Array of series IDs to renumber books for
    */
   bulkRenumber: async (
     seriesIds: string[],
-  ): Promise<{
-    results: Array<{
-      seriesId: string;
-      updatedCount: number;
-      error: string | null;
-    }>;
-  }> => {
-    const response = await api.post<{
-      results: Array<{
-        seriesId: string;
-        updatedCount: number;
-        error: string | null;
-      }>;
-    }>("/series/bulk/renumber", { seriesIds });
+  ): Promise<{ taskId: string; message: string }> => {
+    const response = await api.post<{ taskId: string; message: string }>(
+      "/series/bulk/renumber",
+      { seriesIds },
+    );
     return response.data;
   },
 };

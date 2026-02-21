@@ -142,6 +142,19 @@ pub enum TaskType {
         series_ids: Option<Vec<Uuid>>, // If set, process only these specific series (bulk selection)
     },
 
+    /// Renumber books in a single series using the library's number strategy
+    RenumberSeries {
+        #[serde(rename = "seriesId")]
+        series_id: Uuid,
+    },
+
+    /// Renumber books in multiple series (fan-out task)
+    /// This is a fan-out task that enqueues individual RenumberSeries tasks
+    RenumberSeriesBatch {
+        #[serde(rename = "seriesIds", default)]
+        series_ids: Option<Vec<Uuid>>,
+    },
+
     /// Clean up expired plugin storage data across all user plugins
     CleanupPluginData,
 
@@ -199,6 +212,8 @@ impl TaskType {
             TaskType::PluginAutoMatch { .. } => "plugin_auto_match",
             TaskType::ReprocessSeriesTitle { .. } => "reprocess_series_title",
             TaskType::ReprocessSeriesTitles { .. } => "reprocess_series_titles",
+            TaskType::RenumberSeries { .. } => "renumber_series",
+            TaskType::RenumberSeriesBatch { .. } => "renumber_series_batch",
             TaskType::CleanupPluginData => "cleanup_plugin_data",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
             TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",
@@ -276,6 +291,9 @@ impl TaskType {
             TaskType::ReprocessSeriesTitles { series_ids, .. } => {
                 serde_json::json!({ "series_ids": series_ids })
             }
+            TaskType::RenumberSeriesBatch { series_ids } => {
+                serde_json::json!({ "series_ids": series_ids })
+            }
             TaskType::UserPluginSync { plugin_id, user_id } => {
                 serde_json::json!({ "plugin_id": plugin_id, "user_id": user_id })
             }
@@ -308,6 +326,7 @@ impl TaskType {
             TaskType::GenerateSeriesThumbnail { series_id, .. } => Some(*series_id),
             TaskType::PluginAutoMatch { series_id, .. } => Some(*series_id),
             TaskType::ReprocessSeriesTitle { series_id } => Some(*series_id),
+            TaskType::RenumberSeries { series_id } => Some(*series_id),
             // CleanupSeriesFiles intentionally NOT included - series_id is stored in params
             // because the series may already be deleted when the task runs
             _ => None,
@@ -853,5 +872,90 @@ mod tests {
             deserialized.type_string(),
             "user_plugin_recommendation_dismiss"
         );
+    }
+
+    #[test]
+    fn test_renumber_series_extraction() {
+        let series_id = Uuid::new_v4();
+
+        let task = TaskType::RenumberSeries { series_id };
+
+        assert_eq!(task.type_string(), "renumber_series");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), Some(series_id));
+        assert_eq!(task.book_id(), None);
+
+        let (type_str, lib_id, extracted_series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "renumber_series");
+        assert_eq!(lib_id, None);
+        assert_eq!(extracted_series_id, Some(series_id));
+        assert_eq!(book_id, None);
+        // RenumberSeries has no special params, so params should be None (empty object)
+        assert!(params.is_none());
+    }
+
+    #[test]
+    fn test_renumber_series_serialization() {
+        let series_id = Uuid::new_v4();
+
+        let task = TaskType::RenumberSeries { series_id };
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("renumber_series"));
+        assert!(json.contains(&series_id.to_string()));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.type_string(), "renumber_series");
+        assert_eq!(deserialized.series_id(), Some(series_id));
+    }
+
+    #[test]
+    fn test_renumber_series_batch_extraction() {
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+
+        let task = TaskType::RenumberSeriesBatch {
+            series_ids: Some(vec![id1, id2]),
+        };
+
+        assert_eq!(task.type_string(), "renumber_series_batch");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+
+        let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "renumber_series_batch");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(book_id, None);
+        assert!(params.is_some());
+        let params = params.unwrap();
+        let ids = params["series_ids"].as_array().unwrap();
+        assert_eq!(ids.len(), 2);
+    }
+
+    #[test]
+    fn test_renumber_series_batch_empty() {
+        // Batch with None series_ids
+        let task = TaskType::RenumberSeriesBatch { series_ids: None };
+
+        assert_eq!(task.type_string(), "renumber_series_batch");
+        let params = task.params();
+        assert!(params["series_ids"].is_null());
+    }
+
+    #[test]
+    fn test_renumber_series_batch_serialization() {
+        let id1 = Uuid::new_v4();
+
+        let task = TaskType::RenumberSeriesBatch {
+            series_ids: Some(vec![id1]),
+        };
+
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("renumber_series_batch"));
+        assert!(json.contains(&id1.to_string()));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.type_string(), "renumber_series_batch");
     }
 }

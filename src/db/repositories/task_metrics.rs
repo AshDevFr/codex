@@ -993,9 +993,11 @@ mod tests {
         let db = db.sea_orm_connection();
 
         // Insert hourly records with period_start older than 7 days
-        let old_day = Utc::now() - Duration::days(10);
-        let hour1 = TaskMetricsRepository::hour_start(old_day);
-        let hour2 = hour1 + Duration::hours(1);
+        // Use day_start + fixed hours to avoid the two hours spanning a day boundary
+        // (which happens when Utc::now() is near midnight)
+        let old_day_start = TaskMetricsRepository::day_start(Utc::now() - Duration::days(10));
+        let hour1 = old_day_start + Duration::hours(10);
+        let hour2 = old_day_start + Duration::hours(11);
         let now = Utc::now();
 
         for (i, period_start) in [hour1, hour2].iter().enumerate() {

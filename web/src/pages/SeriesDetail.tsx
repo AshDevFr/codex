@@ -321,17 +321,12 @@ export function SeriesDetail() {
   // Renumber books mutation
   const renumberMutation = useMutation({
     mutationFn: () => seriesApi.renumber(seriesId!),
-    onSuccess: (data) => {
+    onSuccess: () => {
       notifications.show({
-        title: "Books renumbered",
-        message:
-          data.updatedCount > 0
-            ? `${data.updatedCount} book${data.updatedCount === 1 ? "" : "s"} updated`
-            : "All book numbers are already correct",
-        color: "green",
+        title: "Renumber started",
+        message: "Books will be renumbered using library rules",
+        color: "blue",
       });
-      queryClient.invalidateQueries({ queryKey: ["series", seriesId] });
-      queryClient.invalidateQueries({ queryKey: ["seriesBooks"] });
     },
     onError: (error: Error) => {
       notifications.show({

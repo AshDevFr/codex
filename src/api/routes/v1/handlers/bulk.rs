@@ -6,9 +6,8 @@
 use super::super::dto::{
     BulkAnalyzeBooksRequest, BulkAnalyzeResponse, BulkAnalyzeSeriesRequest, BulkBooksRequest,
     BulkGenerateBookThumbnailsRequest, BulkGenerateSeriesBookThumbnailsRequest,
-    BulkGenerateSeriesThumbnailsRequest, BulkMetadataResetResponse, BulkRenumberResponse,
-    BulkRenumberSeriesRequest, BulkReprocessSeriesTitlesRequest, BulkSeriesRequest,
-    BulkTaskResponse, MarkReadResponse, SeriesRenumberResult,
+    BulkGenerateSeriesThumbnailsRequest, BulkMetadataResetResponse, BulkRenumberSeriesRequest,
+    BulkReprocessSeriesTitlesRequest, BulkSeriesRequest, BulkTaskResponse, MarkReadResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{
@@ -823,15 +822,14 @@ pub async fn bulk_reset_series_metadata(
 
 /// Bulk renumber books in multiple series
 ///
-/// Renumbers all books in the specified series using each library's number strategy.
-/// Series that don't exist are silently skipped. This is a synchronous operation
-/// (no task queue) since renumbering only performs DB reads/writes.
+/// Enqueues a fan-out task that will renumber books in the specified series
+/// using each library's number strategy. Returns a task ID for tracking progress via SSE.
 #[utoipa::path(
     post,
     path = "/api/v1/series/bulk/renumber",
     request_body = BulkRenumberSeriesRequest,
     responses(
-        (status = 200, description = "Books renumbered", body = BulkRenumberResponse),
+        (status = 200, description = "Renumber task queued", body = BulkTaskResponse),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -845,48 +843,37 @@ pub async fn bulk_renumber_series(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
     Json(request): Json<BulkRenumberSeriesRequest>,
-) -> Result<Json<BulkRenumberResponse>, ApiError> {
+) -> Result<Json<BulkTaskResponse>, ApiError> {
     require_permission!(auth, Permission::SeriesWrite)?;
 
     if request.series_ids.is_empty() {
-        return Ok(Json(BulkRenumberResponse { results: vec![] }));
+        return Err(ApiError::BadRequest("No series specified".to_string()));
     }
 
-    let mut results = Vec::with_capacity(request.series_ids.len());
-
-    for series_id in &request.series_ids {
-        let series = match SeriesRepository::get_by_id(&state.db, *series_id).await {
-            Ok(Some(s)) => s,
-            Ok(None) => continue,
-            Err(e) => {
-                results.push(SeriesRenumberResult {
-                    series_id: *series_id,
-                    updated_count: 0,
-                    error: Some(format!("Failed to fetch series: {}", e)),
-                });
-                continue;
-            }
-        };
-
-        match crate::scanner::renumber_series_books(&state.db, *series_id, series.library_id).await
-        {
-            Ok(updated_count) => {
-                results.push(SeriesRenumberResult {
-                    series_id: *series_id,
-                    updated_count,
-                    error: None,
-                });
-            }
-            Err(e) => {
-                tracing::error!("Failed to renumber series {}: {}", series_id, e);
-                results.push(SeriesRenumberResult {
-                    series_id: *series_id,
-                    updated_count: 0,
-                    error: Some(format!("Failed to renumber: {}", e)),
-                });
-            }
-        }
+    // Limit bulk request size
+    const MAX_BULK_SERIES_COUNT: usize = 100;
+    if request.series_ids.len() > MAX_BULK_SERIES_COUNT {
+        return Err(ApiError::BadRequest(format!(
+            "Too many series in request. Maximum is {}, got {}. Please split into smaller batches.",
+            MAX_BULK_SERIES_COUNT,
+            request.series_ids.len()
+        )));
     }
 
-    Ok(Json(BulkRenumberResponse { results }))
+    // Create a fan-out task for renumbering series
+    let task_type = TaskType::RenumberSeriesBatch {
+        series_ids: Some(request.series_ids.clone()),
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
+
+    Ok(Json(BulkTaskResponse {
+        task_id,
+        message: format!(
+            "Renumber task queued for {} series",
+            request.series_ids.len()
+        ),
+    }))
 }

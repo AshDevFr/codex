@@ -143,6 +143,21 @@ async fn test_task_type_priority_ordering() {
 
     TaskRepository::enqueue(
         &db,
+        TaskType::RenumberSeriesBatch {
+            series_ids: Some(vec![series_id]),
+        },
+        0,
+        None,
+    )
+    .await
+    .unwrap();
+
+    TaskRepository::enqueue(&db, TaskType::RenumberSeries { series_id }, 0, None)
+        .await
+        .unwrap();
+
+    TaskRepository::enqueue(
+        &db,
         TaskType::GenerateSeriesThumbnails {
             library_id: Some(library_id),
             series_ids: None,
@@ -235,6 +250,8 @@ async fn test_task_type_priority_ordering() {
         "analyze_series",
         "reprocess_series_title",
         "reprocess_series_titles",
+        "renumber_series",
+        "renumber_series_batch",
         // 20-29: Thumbnails
         "generate_thumbnail",
         "generate_series_thumbnail",

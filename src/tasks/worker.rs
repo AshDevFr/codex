@@ -29,9 +29,10 @@ use crate::tasks::handlers::{
     CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesFilesHandler,
     FindDuplicatesHandler, GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler,
     GenerateThumbnailHandler, GenerateThumbnailsHandler, PluginAutoMatchHandler,
-    PurgeDeletedHandler, ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler,
-    ScanLibraryHandler, TaskHandler, UserPluginRecommendationDismissHandler,
-    UserPluginRecommendationsHandler, UserPluginSyncHandler,
+    PurgeDeletedHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
+    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
+    UserPluginSyncHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -83,6 +84,15 @@ impl TaskWorker {
         handlers.insert(
             "reprocess_series_titles".to_string(),
             Arc::new(ReprocessSeriesTitlesHandler::new()),
+        );
+        // Renumber series handlers (no dependencies)
+        handlers.insert(
+            "renumber_series".to_string(),
+            Arc::new(RenumberSeriesHandler::new()),
+        );
+        handlers.insert(
+            "renumber_series_batch".to_string(),
+            Arc::new(RenumberSeriesBatchHandler::new()),
         );
         // Plugin data cleanup handler (no dependencies)
         handlers.insert(

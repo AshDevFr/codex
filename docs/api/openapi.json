@@ -7234,7 +7234,7 @@
           "Bulk Operations"
         ],
         "summary": "Bulk renumber books in multiple series",
-        "description": "Renumbers all books in the specified series using each library's number strategy.\nSeries that don't exist are silently skipped. This is a synchronous operation\n(no task queue) since renumbering only performs DB reads/writes.",
+        "description": "Enqueues a fan-out task that will renumber books in the specified series\nusing each library's number strategy. Returns a task ID for tracking progress via SSE.",
         "operationId": "bulk_renumber_series",
         "requestBody": {
           "content": {
@@ -7248,11 +7248,11 @@
         },
         "responses": {
           "200": {
-            "description": "Books renumbered",
+            "description": "Renumber task queued",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BulkRenumberResponse"
+                  "$ref": "#/components/schemas/BulkTaskResponse"
                 }
               }
             }
@@ -10462,7 +10462,7 @@
           "Scans"
         ],
         "summary": "Renumber all books in a series",
-        "description": "# Permission Required\n- `series:write`\n\n# Behavior\nCalls `renumber_series_books()` directly to recalculate book numbers based on the\nlibrary's number strategy and the current natural sort order of filenames.\nThis is a synchronous operation (no task queue) since it only performs DB reads/writes.\n\nNote: Returns `updated_count: 0` for libraries using the Metadata number strategy,\nsince that strategy requires re-parsing files.",
+        "description": "# Permission Required\n- `series:write`\n\n# Behavior\nEnqueues a `RenumberSeries` task that recalculates book numbers based on the\nlibrary's number strategy and the current natural sort order of filenames.\nReturns a task ID for tracking progress via SSE.",
         "operationId": "renumber_series",
         "parameters": [
           {
@@ -10478,11 +10478,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Books renumbered successfully",
+            "description": "Renumber task enqueued",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RenumberResponse"
+                  "$ref": "#/components/schemas/CreateTaskResponse"
                 }
               }
             }
@@ -19418,22 +19418,6 @@
             "type": "string",
             "description": "Message describing the operation",
             "example": "Reset metadata for 3 series"
-          }
-        }
-      },
-      "BulkRenumberResponse": {
-        "type": "object",
-        "description": "Response for a bulk renumber operation",
-        "required": [
-          "results"
-        ],
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SeriesRenumberResult"
-            },
-            "description": "Results for each series"
           }
         }
       },
@@ -29618,21 +29602,6 @@
           }
         }
       },
-      "RenumberResponse": {
-        "type": "object",
-        "description": "Response for a series renumber operation",
-        "required": [
-          "updatedCount"
-        ],
-        "properties": {
-          "updatedCount": {
-            "type": "integer",
-            "description": "Number of books whose numbers were updated",
-            "example": 5,
-            "minimum": 0
-          }
-        }
-      },
       "ReplaceBookMetadataRequest": {
         "type": "object",
         "description": "PUT request for full replacement of book metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
@@ -31431,35 +31400,6 @@
           }
         }
       },
-      "SeriesRenumberResult": {
-        "type": "object",
-        "description": "Result for a single series in a bulk renumber operation",
-        "required": [
-          "seriesId",
-          "updatedCount"
-        ],
-        "properties": {
-          "error": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Error message if renumbering failed for this series"
-          },
-          "seriesId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The series ID",
-            "example": "550e8400-e29b-41d4-a716-446655440001"
-          },
-          "updatedCount": {
-            "type": "integer",
-            "description": "Number of books whose numbers were updated",
-            "example": 5,
-            "minimum": 0
-          }
-        }
-      },
       "SeriesStrategy": {
         "type": "string",
         "description": "Series scanning strategy type for library organization\n\nDetermines how series are detected and organized from the filesystem structure.",
@@ -33122,6 +33062,51 @@
                 "type": "string",
                 "enum": [
                   "reprocess_series_titles"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Renumber books in a single series using the library's number strategy",
+            "required": [
+              "seriesId",
+              "type"
+            ],
+            "properties": {
+              "seriesId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "renumber_series"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Renumber books in multiple series (fan-out task)\nThis is a fan-out task that enqueues individual RenumberSeries tasks",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "seriesIds": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "renumber_series_batch"
                 ]
               }
             }
