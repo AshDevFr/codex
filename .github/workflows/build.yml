@@ -5,22 +5,6 @@
 # Triggers:
 # - Push to main: test, lint, build artifacts, push Docker with 'main' tag
 # - Push version tag: test, lint, build artifacts, push Docker with version tags, create GitHub release
-#
-# Note: PRs are handled by ci.yml (test, lint, frontend, Docker build validation)
-#
-# =============================================================================
-# SELF-HOSTED RUNNER MODIFICATIONS
-# =============================================================================
-# The following changes were made to support self-hosted runners (arc-runner-codex)
-# instead of GitHub-hosted runners. To revert to paid GitHub runners:
-#
-# 1. Replace all `runs-on: arc-runner-codex` with `runs-on: ubuntu-latest` or `ubuntu-22.04`
-# 2. Remove all "Install build dependencies" steps (GitHub runners have these pre-installed)
-# 3. Remove the "Install Rust" step from the `plan` job (only needed for self-hosted)
-# 4. Remove the "Install build dependencies (Linux)" step from `build-local-artifacts`
-# 5. Update Cargo.toml: restore full targets list and remove custom runner configs
-#    (see comments in Cargo.toml under [workspace.metadata.dist])
-# =============================================================================
 
 name: Build
 
@@ -42,21 +26,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Shared cache directory on PVC mounted by ARC runners
-# Each workflow run gets its own isolated directory under /ci-cache
-env:
-  CI_CACHE: /ci-cache/${{ github.run_id }}
-
 jobs:
   # Build test binaries and create nextest archive
   build-tests:
     name: Build Tests
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       SCCACHE_GHA_ENABLED: "true"
@@ -64,101 +38,56 @@ jobs:
       RUSTC_WRAPPER: sccache
       CARGO_INCREMENTAL: "0"
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install mold linker
+        run: sudo apt-get update && sudo apt-get install -y mold
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Prepare cache directory
-        run: |
-          mkdir -p $CI_CACHE
-          if test -d $CI_CACHE; then
-            echo "CI_CACHE directory ready: $CI_CACHE"
-            ls -la $(dirname $CI_CACHE)
-          else
-            echo "::error::CI_CACHE directory $CI_CACHE is not available. Is the PVC mounted?"
-            exit 1
-          fi
       - name: Build and archive tests
-        run: |
-          cargo nextest archive --features rar --archive-file $CI_CACHE/nextest-archive.tar.zst
-          ls -lh $CI_CACHE/nextest-archive.tar.zst || { echo "::error::Failed to write nextest archive to cache"; exit 1; }
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Upload test archive
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: nextest-archive
-      #     path: nextest-archive.tar.zst
-      #     retention-days: 1
+        run: cargo nextest archive --features rar --archive-file nextest-archive.tar.zst
+      - name: Upload test archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-archive
+          path: nextest-archive.tar.zst
+          retention-days: 1
 
   # Run tests in parallel partitions
   test:
     name: Test (${{ matrix.partition }}/5)
     needs: build-tests
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5]
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Download test archive
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: nextest-archive
+      - name: Download test archive
+        uses: actions/download-artifact@v4
+        with:
+          name: nextest-archive
       - name: Run tests (partition ${{ matrix.partition }}/5)
-        run: cargo nextest run --archive-file $CI_CACHE/nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
+        run: cargo nextest run --archive-file nextest-archive.tar.zst --partition hash:${{ matrix.partition }}/5
 
   # Run linting checks
   lint:
     name: Lint
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_GHA_VERSION: lint
       RUSTC_WRAPPER: sccache
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl build-essential pkg-config clang mold
       - uses: actions/checkout@v4
+      - name: Install mold linker
+        run: sudo apt-get update && sudo apt-get install -y mold
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -173,22 +102,9 @@ jobs:
   # Run frontend tests and build
   frontend:
     name: Frontend
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -213,34 +129,17 @@ jobs:
       - name: Build frontend
         working-directory: web
         run: npm run build
-      - name: Prepare cache directory
-        run: |
-          mkdir -p $CI_CACHE
-          if test -d $CI_CACHE; then
-            echo "CI_CACHE directory ready: $CI_CACHE"
-            ls -la $(dirname $CI_CACHE)
-          else
-            echo "::error::CI_CACHE directory $CI_CACHE is not available. Is the PVC mounted?"
-            exit 1
-          fi
-      - name: Cache frontend build
-        run: |
-          cp -r web/dist $CI_CACHE/frontend-dist
-          ls -lh $CI_CACHE/frontend-dist/ || { echo "::error::Failed to cache frontend build"; exit 1; }
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Upload frontend build
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: frontend-dist
-      #     path: web/dist
-      #     retention-days: 1
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: web/dist
+          retention-days: 1
 
   # Run plugin checks (lint, typecheck, tests)
   plugins:
     name: Plugins (${{ matrix.plugin }})
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -253,14 +152,6 @@ jobs:
           - recommendations-anilist
           - sync-anilist
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -296,12 +187,7 @@ jobs:
   plan:
     name: Plan
     needs: [test, lint, frontend, plugins]
-    # SELF-HOSTED: Change to ubuntu-22.04 for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-22.04
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
       tag: ${{ steps.info.outputs.tag }}
@@ -312,19 +198,9 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl xz-utils jq bash
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
       - name: Determine build info
         id: info
         shell: bash
@@ -355,27 +231,12 @@ jobs:
       - name: Install dist
         shell: bash
         run: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/cargo-dist/releases/download/v0.30.3/cargo-dist-installer.sh | sh"
-      - name: Prepare cache directory
-        run: |
-          mkdir -p $CI_CACHE
-          if test -d $CI_CACHE; then
-            echo "CI_CACHE directory ready: $CI_CACHE"
-            ls -la $(dirname $CI_CACHE)
-          else
-            echo "::error::CI_CACHE directory $CI_CACHE is not available. Is the PVC mounted?"
-            exit 1
-          fi
-      - name: Cache dist binary
-        run: |
-          cp ~/.cargo/bin/dist $CI_CACHE/dist
-          ls -lh $CI_CACHE/dist || { echo "::error::Failed to cache dist binary"; exit 1; }
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Cache dist
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: cargo-dist-cache
-      #     path: ~/.cargo/bin/dist
-      #     retention-days: 1
+      - name: Upload cached dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-dist-cache
+          path: ~/.cargo/bin/dist
+          retention-days: 1
       - name: Run dist plan
         id: plan
         shell: bash
@@ -388,17 +249,12 @@ jobs:
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
-      - name: Cache dist-manifest.json
-        run: |
-          cp plan-dist-manifest.json $CI_CACHE/plan-dist-manifest.json
-          ls -lh $CI_CACHE/plan-dist-manifest.json || { echo "::error::Failed to cache dist manifest"; exit 1; }
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: "Upload dist-manifest.json"
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: artifacts-plan-dist-manifest
-      #     path: plan-dist-manifest.json
-      #     retention-days: 1
+      - name: Upload dist-manifest.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-plan-dist-manifest
+          path: plan-dist-manifest.json
+          retention-days: 1
 
   # Build and packages all the platform-specific things
   build-local-artifacts:
@@ -421,11 +277,6 @@ jobs:
       # - N "local" tasks that build each platform's binaries and platform-specific installers
       matrix: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}
     runs-on: ${{ matrix.runner }}
-    # SELF-HOSTED: Use ubuntu:22.04 container for consistent environment; remove for GitHub runners
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
@@ -434,58 +285,33 @@ jobs:
       "contents": "read"
       "id-token": "write"
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl xz-utils build-essential pkg-config lsb-release clang mold
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
       - name: Install dist
         run: ${{ matrix.install_dist.run }}
-      # Restore cached artifacts from PVC
-      - name: Restore plan manifest from cache
-        run: |
-          mkdir -p target/distrib/
-          cp $CI_CACHE/plan-dist-manifest.json target/distrib/
-      - name: Restore frontend dist from cache
-        run: |
-          mkdir -p web/dist/
-          cp -r $CI_CACHE/frontend-dist/* web/dist/
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Fetch local artifacts
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     pattern: artifacts-*
-      #     path: target/distrib/
-      #     merge-multiple: true
-      # - name: Download frontend dist
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: frontend-dist
-      #     path: web/dist/
+      - name: Fetch local artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: web/dist/
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
-      # TODO: Enable attestation when repository is public
-      # See: https://docs.github.com/rest/repos/attestations#create-an-attestation
-      # - name: Attest
-      #   uses: actions/attest-build-provenance@v2
-      #   with:
-      #     subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}*"
+      - name: Attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}*"
       - id: cargo-dist
         name: Post-build
-        # We force bash here just because github makes it really hard to get values up
-        # to "real" actions without writing to env-vars, and writing to env-vars has
-        # inconsistent syntax between shell and powershell.
         shell: bash
         run: |
           # Parse out what we just built and upload it to scratch storage
@@ -494,95 +320,44 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-      - name: Cache build artifacts
-        shell: bash
-        run: |
-          CACHE_DIR=$CI_CACHE/artifacts-build-local-${{ join(matrix.targets, '_') }}
-          mkdir -p "$CACHE_DIR"
-          if test -d "$CACHE_DIR"; then
-            echo "Cache directory ready: $CACHE_DIR"
-          else
-            echo "::error::Cache directory $CACHE_DIR is not available. Is the PVC mounted?"
-            exit 1
-          fi
-          # Copy upload files listed by dist
-          while IFS= read -r f; do
-            cp "$f" "$CACHE_DIR/"
-          done <<< "${{ steps.cargo-dist.outputs.paths }}"
-          cp "$BUILD_MANIFEST_NAME" "$CACHE_DIR/"
-          echo "Cached build artifacts:"
-          ls -lh "$CACHE_DIR/"
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: "Upload artifacts"
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: artifacts-build-local-${{ join(matrix.targets, '_') }}
-      #     path: |
-      #       ${{ steps.cargo-dist.outputs.paths }}
-      #       ${{ env.BUILD_MANIFEST_NAME }}
-      #     retention-days: 5
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-build-local-${{ join(matrix.targets, '_') }}
+          path: |
+            ${{ steps.cargo-dist.outputs.paths }}
+            ${{ env.BUILD_MANIFEST_NAME }}
+          retention-days: 5
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
     needs:
       - plan
       - build-local-artifacts
-    # SELF-HOSTED: Change to ubuntu-22.04 for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl jq
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Mark repository as safe
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      # Restore dist binary from PVC cache
-      - name: Restore cached dist
+      - name: Install cached dist
+        uses: actions/download-artifact@v4
+        with:
+          name: cargo-dist-cache
+          path: ~/.cargo/bin/
+      - name: Setup dist
         run: |
-          mkdir -p ~/.cargo/bin
-          cp $CI_CACHE/dist ~/.cargo/bin/dist
           chmod +x ~/.cargo/bin/dist
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Install cached dist
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: cargo-dist-cache
-      #     path: ~/.cargo/bin/
-      # - name: Setup dist
-      #   run: |
-      #     chmod +x ~/.cargo/bin/dist
-      #     echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       # Get all the local artifacts for the global tasks to use (for e.g. checksums)
-      - name: Restore local artifacts from cache
-        run: |
-          mkdir -p target/distrib/
-          for dir in $CI_CACHE/artifacts-build-local-*; do
-            [ -d "$dir" ] && cp -r "$dir"/* target/distrib/
-          done
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Fetch local artifacts
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     pattern: artifacts-*
-      #     path: target/distrib/
-      #     merge-multiple: true
+      - name: Fetch local artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
       - id: cargo-dist
         shell: bash
         run: |
@@ -595,32 +370,15 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
-      - name: Cache global artifacts
-        shell: bash
-        run: |
-          CACHE_DIR=$CI_CACHE/artifacts-build-global
-          mkdir -p "$CACHE_DIR"
-          if test -d "$CACHE_DIR"; then
-            echo "Cache directory ready: $CACHE_DIR"
-          else
-            echo "::error::Cache directory $CACHE_DIR is not available. Is the PVC mounted?"
-            exit 1
-          fi
-          while IFS= read -r f; do
-            cp "$f" "$CACHE_DIR/"
-          done < <(jq --raw-output ".upload_files[]" dist-manifest.json)
-          cp "$BUILD_MANIFEST_NAME" "$CACHE_DIR/"
-          echo "Cached global artifacts:"
-          ls -lh "$CACHE_DIR/"
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: "Upload artifacts"
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: artifacts-build-global
-      #     path: |
-      #       ${{ steps.cargo-dist.outputs.paths }}
-      #       ${{ env.BUILD_MANIFEST_NAME }}
-      #     retention-days: 5
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-build-global
+          path: |
+            ${{ steps.cargo-dist.outputs.paths }}
+            ${{ env.BUILD_MANIFEST_NAME }}
+          retention-days: 5
+
   # Build and push Docker images (multi-arch) using cross-compilation
   # Uses Dockerfile.cross which cross-compiles ARM on x86 (no QEMU emulation)
   docker:
@@ -628,9 +386,7 @@ jobs:
     needs: [test, lint, frontend, plugins]
     # Only build Docker on main branch or release tags
     if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners
-    # Note: Docker job runs directly on the host (not in a container) to use dind
-    runs-on: arc-runner-codex
+    runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
@@ -697,67 +453,28 @@ jobs:
     if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.is-release == 'true' && (needs.build-global-artifacts.result == 'skipped' || needs.build-global-artifacts.result == 'success') && (needs.build-local-artifacts.result == 'skipped' || needs.build-local-artifacts.result == 'success') }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    # SELF-HOSTED: Change to ubuntu-22.04 for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-22.04
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl jq
-            # Install GitHub CLI for creating releases
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            apt-get update
-            apt-get install -y gh
-      - name: Install Rust (required by cargo-dist)
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      # Restore dist binary from PVC cache
-      - name: Restore cached dist
+      - name: Install cached dist
+        uses: actions/download-artifact@v4
+        with:
+          name: cargo-dist-cache
+          path: ~/.cargo/bin/
+      - name: Setup dist
         run: |
-          mkdir -p ~/.cargo/bin
-          cp $CI_CACHE/dist ~/.cargo/bin/dist
           chmod +x ~/.cargo/bin/dist
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Install cached dist
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: cargo-dist-cache
-      #     path: ~/.cargo/bin/
-      # - name: Setup dist
-      #   run: |
-      #     chmod +x ~/.cargo/bin/dist
-      #     echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      # Fetch artifacts from PVC cache
-      - name: Restore artifacts from cache
-        run: |
-          mkdir -p target/distrib/
-          for dir in $CI_CACHE/artifacts-build-*; do
-            [ -d "$dir" ] && cp -r "$dir"/* target/distrib/
-          done
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Fetch artifacts
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     pattern: artifacts-*
-      #     path: target/distrib/
-      #     merge-multiple: true
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: target/distrib/
+          merge-multiple: true
       - id: host
         shell: bash
         run: |
@@ -765,34 +482,24 @@ jobs:
           echo "artifacts uploaded and released successfully"
           cat dist-manifest.json
           echo "manifest=$(jq -c "." dist-manifest.json)" >> "$GITHUB_OUTPUT"
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: "Upload dist-manifest.json"
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     # Overwrite the previous copy
-      #     name: artifacts-dist-manifest
-      #     path: dist-manifest.json
-      #     retention-days: 5
-      # Create a GitHub Release while uploading all files from cache
-      - name: Restore release artifacts from cache
+      - name: Upload dist-manifest.json
+        uses: actions/upload-artifact@v4
+        with:
+          # Overwrite the previous copy
+          name: artifacts-dist-manifest
+          path: dist-manifest.json
+          retention-days: 5
+      # Create a GitHub Release while uploading all files
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: artifacts
+          merge-multiple: true
+      - name: Cleanup
         run: |
-          mkdir -p artifacts/
-          for dir in $CI_CACHE/artifacts-build-*; do
-            [ -d "$dir" ] && cp -r "$dir"/* artifacts/
-          done
           # Remove the granular manifests
           rm -f artifacts/*-dist-manifest.json
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: "Download GitHub Artifacts"
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     pattern: artifacts-*
-      #     path: artifacts
-      #     merge-multiple: true
-      # - name: Cleanup
-      #   run: |
-      #     # Remove the granular manifests
-      #     rm -f artifacts/*-dist-manifest.json
       - name: Create GitHub Release
         env:
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
@@ -800,14 +507,6 @@ jobs:
           ANNOUNCEMENT_BODY: "${{ fromJson(steps.host.outputs.manifest).announcement_github_body }}"
           RELEASE_COMMIT: "${{ github.sha }}"
         run: |
-          # Fix $HOME mismatch in containers / self-hosted runners
-          export HOME=/github/home
-
-          # Mark directory as safe to avoid "dubious ownership" error in containers
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-          # gh uses GH_TOKEN from the environment automatically; no explicit login needed
-
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > "$RUNNER_TEMP/notes.txt"
 
@@ -821,18 +520,8 @@ jobs:
       - plan
       - host
     if: ${{ always() && needs.host.result == 'success' }}
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -849,10 +538,9 @@ jobs:
           rm -rf node_modules package-lock.json
           npm install
           npm run build
-      # Note: --provenance is not supported on self-hosted runners
       - name: Publish to npm
         working-directory: plugins/sdk-typescript
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -863,9 +551,7 @@ jobs:
       - plan
       - publish-sdk
     if: ${{ always() && needs.publish-sdk.result == 'success' }}
-    # SELF-HOSTED: Change to ubuntu-latest for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -876,14 +562,6 @@ jobs:
           - recommendations-anilist
           - sync-anilist
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git curl jq
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -909,10 +587,9 @@ jobs:
       - name: Build plugin
         working-directory: plugins/${{ matrix.plugin }}
         run: npm run build
-      # Note: --provenance is not supported on self-hosted runners
       - name: Publish to npm
         working-directory: plugins/${{ matrix.plugin }}
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -926,25 +603,15 @@ jobs:
     # still allowing individual publish jobs to skip themselves (for prereleases).
     # "host" however must run to completion, no skipping allowed!
     if: ${{ always() && needs.host.result == 'success' }}
-    # SELF-HOSTED: Change to ubuntu-22.04 for GitHub runners and remove container
-    runs-on: arc-runner-codex
-    container: ubuntu:22.04
+    runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Install base dependencies
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: |
-            apt-get update
-            apt-get install -y git
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-  # Clean up intermediate cache and artifacts that are no longer needed
+  # Clean up intermediate artifacts that are no longer needed
   cleanup:
     name: Cleanup
     needs:
@@ -954,29 +621,14 @@ jobs:
       - host
       - docker
       - announce
-    # Only clean up when all jobs succeeded — preserve cache on failure so
-    # individual jobs can be re-run without starting from scratch.
-    # The 24h orphan cleanup below handles stale caches from old/cancelled runs.
     if: ${{ !failure() && !cancelled() }}
-    runs-on: arc-runner-codex
-    container:
-      image: ubuntu:22.04
-      volumes:
-        - /ci-cache:/ci-cache
+    runs-on: ubuntu-latest
     steps:
-      - name: Clean up CI cache
-        run: |
-          echo "Removing current run cache: $CI_CACHE"
-          rm -rf $CI_CACHE
-          # Remove orphaned cache directories older than 24 hours (from cancelled/crashed runs)
-          echo "Cleaning orphaned cache directories older than 24h..."
-          find /ci-cache -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec echo "Removing stale: {}" \; -exec rm -rf {} \;
-      # Replaced by /ci-cache PVC - uncomment to revert to GitHub artifact storage
-      # - name: Delete intermediate artifacts
-      #   uses: geekyeggo/delete-artifact@v5
-      #   with:
-      #     name: |
-      #       nextest-archive
-      #       frontend-dist
-      #       cargo-dist-cache
-      #       artifacts-plan-dist-manifest
+      - name: Delete intermediate artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: |
+            nextest-archive
+            frontend-dist
+            cargo-dist-cache
+            artifacts-plan-dist-manifest

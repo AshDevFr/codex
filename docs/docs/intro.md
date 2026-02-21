@@ -140,7 +140,7 @@ Codex is actively developed and used in production environments. While the core 
 ## Getting Help
 
 - **Documentation**: You're reading it!
-- **Feature Board**: [Report bugs or request features](https://codex.userjot.com)
+- **Issues**: [Report bugs or request features](https://github.com/AshDevFr/codex/issues)
 
 ## License
 
