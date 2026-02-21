@@ -78,6 +78,7 @@ For more details, see the [UnRAR license](https://www.rarlab.com/license.htm).
 ### Graceful Shutdown Fix (January 2026)
 
 Fixed critical performance issue where page reloads and container restarts would hang for 40-70 seconds:
+
 - ✅ Backend worker tasks now shutdown gracefully (2-5s instead of 10+s)
 - ✅ SSE connections properly detect disconnects (< 1s instead of 30-60s)
 - ✅ Page reloads are now instant (1-2s instead of 40-70s)
@@ -99,4 +100,6 @@ Currently in Phase 1 (MVP Core). See [implementation docs](tmp/impl/overview.md)
 
 ## License
 
-MIT
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+For commercial licensing options, contact [@AshDevFr](https://github.com/AshDevFr).
