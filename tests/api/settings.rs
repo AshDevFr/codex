@@ -770,6 +770,15 @@ async fn test_application_name_in_public_settings() {
     let app_name = settings.get("application.name").unwrap();
     assert_eq!(app_name.key, "application.name");
     assert_eq!(app_name.value, "Codex"); // Default value
+
+    // scheduler.timezone should be included from server config
+    assert!(
+        settings.contains_key("scheduler.timezone"),
+        "Public settings should include scheduler.timezone"
+    );
+    let tz = settings.get("scheduler.timezone").unwrap();
+    assert_eq!(tz.key, "scheduler.timezone");
+    assert_eq!(tz.value, "UTC"); // Default from test AppState
 }
 
 // ============================================================================

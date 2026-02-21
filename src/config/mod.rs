@@ -7,7 +7,8 @@ mod types;
 pub use types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, EmailConfig,
     FilesConfig, KomgaApiConfig, LoggingConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig,
-    PdfConfig, PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+    PdfConfig, PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, SchedulerConfig,
+    TaskConfig,
 };
 
 pub use env_override::EnvOverride;

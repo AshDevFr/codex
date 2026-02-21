@@ -212,6 +212,11 @@ pub struct ScanningConfig {
     /// Accepts standard 5-part Unix cron (e.g., "0 */6 * * *") or 6-part with seconds
     /// (e.g., "0 0 */6 * * *"). 5-part expressions are normalized to 6-part at API level.
     pub cron_schedule: Option<String>,
+    /// IANA timezone for the cron schedule (e.g., "America/Los_Angeles").
+    /// Overrides the server-level `scheduler.timezone` config for this library.
+    /// If not set, falls back to the server default (which itself defaults to UTC).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cron_timezone: Option<String>,
     /// Default scan mode for scheduled scans ("normal" or "deep")
     #[serde(default = "default_scan_mode")]
     pub scan_mode: String,
@@ -435,6 +440,78 @@ mod tests {
             config.purge_deleted_on_scan,
             "purgeDeletedOnScan should be true"
         );
+    }
+
+    #[test]
+    fn test_scanning_config_with_timezone() {
+        let json = r#"{
+            "cronSchedule": "0 0 * * *",
+            "cronTimezone": "America/Los_Angeles",
+            "scanMode": "normal",
+            "enabled": true
+        }"#;
+
+        let config: ScanningConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            config.cron_timezone,
+            Some("America/Los_Angeles".to_string())
+        );
+    }
+
+    #[test]
+    fn test_scanning_config_without_timezone() {
+        let json = r#"{
+            "cronSchedule": "0 0 * * *",
+            "scanMode": "normal",
+            "enabled": true
+        }"#;
+
+        let config: ScanningConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.cron_timezone, None);
+    }
+
+    #[test]
+    fn test_scanning_config_timezone_null() {
+        let json = r#"{
+            "cronSchedule": "0 0 * * *",
+            "cronTimezone": null,
+            "scanMode": "normal",
+            "enabled": true
+        }"#;
+
+        let config: ScanningConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.cron_timezone, None);
+    }
+
+    #[test]
+    fn test_scanning_config_timezone_serialization_omits_none() {
+        let config = ScanningConfig {
+            cron_schedule: Some("0 0 * * *".to_string()),
+            cron_timezone: None,
+            scan_mode: "normal".to_string(),
+            enabled: true,
+            scan_on_start: false,
+            purge_deleted_on_scan: false,
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(!json.contains("cronTimezone"));
+    }
+
+    #[test]
+    fn test_scanning_config_timezone_serialization_includes_value() {
+        let config = ScanningConfig {
+            cron_schedule: Some("0 0 * * *".to_string()),
+            cron_timezone: Some("Europe/London".to_string()),
+            scan_mode: "normal".to_string(),
+            enabled: true,
+            scan_on_start: false,
+            purge_deleted_on_scan: false,
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("cronTimezone"));
+        assert!(json.contains("Europe/London"));
     }
 
     #[test]

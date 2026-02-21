@@ -40,6 +40,7 @@ import { capitalize } from "es-toolkit/string";
 import { useEffect, useState } from "react";
 import { filesystemApi } from "@/api/filesystem";
 import { librariesApi } from "@/api/libraries";
+import { useSchedulerTimezone } from "@/hooks/useSchedulerTimezone";
 import type {
   BookStrategy,
   CreateLibraryRequest,
@@ -83,6 +84,7 @@ const READING_DIRECTIONS = [
 export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
   const isEditMode = !!library;
   const queryClient = useQueryClient();
+  const schedulerTimezone = useSchedulerTimezone();
   const [currentPath, setCurrentPath] = useState<string | null>(null);
   const [libraryName, setLibraryName] = useState("");
   const [libraryPath, setLibraryPath] = useState("");
@@ -96,6 +98,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
   // Scanning configuration state
   const [scanStrategy, setScanStrategy] = useState<ScanStrategy>("manual");
   const [cronSchedule, setCronSchedule] = useState("0 0 * * *");
+  const [cronTimezone, setCronTimezone] = useState("");
   const [autoScanOnCreate, setAutoScanOnCreate] = useState(false);
   const [scanOnStart, setScanOnStart] = useState(false);
   const [purgeDeletedOnScan, setPurgeDeletedOnScan] = useState(false);
@@ -157,6 +160,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
 
       if (library.scanningConfig) {
         setCronSchedule(library.scanningConfig.cronSchedule || "0 0 * * *");
+        setCronTimezone(library.scanningConfig.cronTimezone || "");
         setScanOnStart(library.scanningConfig.scanOnStart ?? false);
         setPurgeDeletedOnScan(
           library.scanningConfig.purgeDeletedOnScan ?? false,
@@ -196,6 +200,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       setReadingDirection("ltr");
       setScanStrategy("manual");
       setCronSchedule("0 0 * * *");
+      setCronTimezone("");
       setAutoScanOnCreate(false);
       setScanOnStart(false);
       setPurgeDeletedOnScan(false);
@@ -328,6 +333,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       // Build scanning config based on strategy
       const scanningConfig: ScanningConfig = {
         cronSchedule: scanStrategy === "auto" ? cronSchedule : undefined,
+        cronTimezone:
+          scanStrategy === "auto" && cronTimezone.trim()
+            ? cronTimezone.trim()
+            : undefined,
         scanMode: "normal",
         enabled: scanStrategy === "auto",
         scanOnStart,
@@ -386,6 +395,10 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       // Build scanning config based on strategy
       const scanningConfig: ScanningConfig | undefined = {
         cronSchedule: scanStrategy === "auto" ? cronSchedule : undefined,
+        cronTimezone:
+          scanStrategy === "auto" && cronTimezone.trim()
+            ? cronTimezone.trim()
+            : undefined,
         scanMode: "normal",
         enabled: scanStrategy === "auto",
         scanOnStart,
@@ -690,14 +703,35 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       </Alert>
 
       {scanStrategy === "auto" && (
-        <CronInput
-          label="Cron Schedule"
-          description="Cron expression for automatic scanning (e.g., '0 0 * * *' for daily at midnight)"
-          placeholder="0 0 * * *"
-          value={cronSchedule}
-          onChange={setCronSchedule}
-          required
-        />
+        <>
+          <CronInput
+            label="Cron Schedule"
+            description="Cron expression for automatic scanning (e.g., '0 0 * * *' for daily at midnight)"
+            placeholder="0 0 * * *"
+            value={cronSchedule}
+            onChange={setCronSchedule}
+            required
+          />
+          <TextInput
+            label="Cron Timezone"
+            description={
+              <>
+                IANA timezone for the cron schedule. Leave empty to use the
+                server default ({schedulerTimezone}).{" "}
+                <Anchor
+                  href="https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
+                  target="_blank"
+                  size="xs"
+                >
+                  View all timezones
+                </Anchor>
+              </>
+            }
+            placeholder={schedulerTimezone}
+            value={cronTimezone}
+            onChange={(e) => setCronTimezone(e.currentTarget.value)}
+          />
+        </>
       )}
 
       <Paper p="md" withBorder>

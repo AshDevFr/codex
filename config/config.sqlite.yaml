@@ -106,6 +106,13 @@ task:
 scanner:
   max_concurrent_scans: 2 # Max concurrent library scans (override: CODEX_SCANNER_MAX_CONCURRENT_SCANS)
 
+# Scheduler Settings (Startup-Time - Require Restart)
+# ====================================================
+# Controls the timezone for all cron-based scheduled tasks (library scans,
+# deduplication, thumbnail generation, etc.).
+# scheduler:
+#   timezone: UTC  # IANA timezone (override: CODEX_SCHEDULER_TIMEZONE)
+
 # Files Settings (Startup-Time - Require Restart)
 # ================================================
 # Directory paths for thumbnails, user uploads, and plugin data.

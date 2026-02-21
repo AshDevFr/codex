@@ -125,12 +125,17 @@ services:
       CODEX_DATABASE_POSTGRES_USERNAME: codex
       CODEX_DATABASE_POSTGRES_PASSWORD: codex
       CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
+      # CODEX_SCHEDULER_TIMEZONE: America/Los_Angeles  # IANA timezone for cron jobs (default: UTC)
     restart: unless-stopped
 
 volumes:
   postgres-data:
   codex-data:
 ```
+
+:::tip Timezone for Cron Jobs
+The Docker `TZ` environment variable does **not** affect Codex cron scheduling. To run scheduled library scans in your local timezone, set `CODEX_SCHEDULER_TIMEZONE` to a valid [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) (e.g., `America/Los_Angeles`, `Europe/London`). Each library can also override this with its own timezone in the scanning configuration.
+:::
 
 ## Separate Worker Containers (Advanced)
 

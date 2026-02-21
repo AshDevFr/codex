@@ -221,6 +221,8 @@ pub struct AppState {
     /// Plugin file storage service for managing plugin data directories
     /// None when not configured (shouldn't happen in normal operation)
     pub plugin_file_storage: Option<Arc<crate::services::PluginFileStorage>>,
+    /// Server-level default timezone for cron scheduling (IANA name, e.g. "America/Los_Angeles")
+    pub scheduler_timezone: String,
 }
 
 // Legacy alias for backwards compatibility during transition

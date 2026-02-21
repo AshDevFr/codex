@@ -26,6 +26,7 @@
 # Override via environment variables if needed:
 #   CODEX_TASK_WORKER_COUNT=2
 #   CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
+#   CODEX_SCHEDULER_TIMEZONE=UTC              # IANA timezone for cron jobs
 #   CODEX_FILES_THUMBNAIL_DIR=data/thumbnails
 #   CODEX_FILES_UPLOADS_DIR=data/uploads
 #
@@ -70,6 +71,11 @@ task:
 
 scanner:
   max_concurrent_scans: 2 # Max concurrent library scans
+
+# Scheduler Settings (Startup-Time - Require Pod Restart)
+# =======================================================
+# scheduler:
+#   timezone: UTC  # IANA timezone for cron jobs (override: CODEX_SCHEDULER_TIMEZONE)
 
 files:
   thumbnail_dir: data/thumbnails # Thumbnail cache directory (persistent volume mount)

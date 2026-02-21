@@ -104,7 +104,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Initializing job scheduler...");
     let scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>> =
         Arc::new(tokio::sync::Mutex::new(
-            crate::scheduler::Scheduler::new(db.sea_orm_connection().clone()).await?,
+            crate::scheduler::Scheduler::new(
+                db.sea_orm_connection().clone(),
+                &config.scheduler.timezone,
+            )
+            .await?,
         ));
     scheduler.lock().await.start().await?;
     info!("Job scheduler started successfully");
@@ -368,6 +372,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         oidc_service,
         oauth_state_manager: oauth_state_manager.clone(),
         plugin_file_storage: Some(plugin_file_storage),
+        scheduler_timezone: config.scheduler.timezone.clone(),
     });
 
     // Build router using API module

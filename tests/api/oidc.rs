@@ -95,6 +95,7 @@ async fn create_test_state_with_oidc(
         oidc_service,
         oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
         plugin_file_storage: None,
+        scheduler_timezone: "UTC".to_string(),
     })
 }
 

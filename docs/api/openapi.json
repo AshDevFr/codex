@@ -31168,6 +31168,14 @@
             "description": "Cron expression for scheduled scans.\nAccepts standard 5-part Unix cron (e.g., \"0 */6 * * *\") or 6-part with seconds\n(e.g., \"0 0 */6 * * *\"). Stored as provided; normalization happens at scheduler level.",
             "example": "0 */6 * * *"
           },
+          "cronTimezone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "IANA timezone for the cron schedule (e.g., \"America/Los_Angeles\", \"Europe/London\").\nOverrides the server-level `scheduler.timezone` config for this library.\nIf not set, falls back to the server default (which itself defaults to UTC).",
+            "example": "America/Los_Angeles"
+          },
           "enabled": {
             "type": "boolean",
             "description": "Whether scheduled scanning is enabled",

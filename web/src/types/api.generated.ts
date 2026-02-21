@@ -14125,6 +14125,13 @@ export interface components {
              */
             cronSchedule?: string | null;
             /**
+             * @description IANA timezone for the cron schedule (e.g., "America/Los_Angeles", "Europe/London").
+             *     Overrides the server-level `scheduler.timezone` config for this library.
+             *     If not set, falls back to the server default (which itself defaults to UTC).
+             * @example America/Los_Angeles
+             */
+            cronTimezone?: string | null;
+            /**
              * @description Whether scheduled scanning is enabled
              * @example true
              */

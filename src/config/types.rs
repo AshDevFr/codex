@@ -238,6 +238,8 @@ pub struct Config {
     #[serde(default)]
     pub scanner: ScannerConfig,
     #[serde(default)]
+    pub scheduler: SchedulerConfig,
+    #[serde(default)]
     pub files: FilesConfig,
     #[serde(default)]
     pub pdf: PdfConfig,
@@ -368,6 +370,7 @@ impl Default for Config {
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
+            scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
@@ -726,6 +729,26 @@ impl Default for ScannerConfig {
     fn default() -> Self {
         Self {
             max_concurrent_scans: env_or("CODEX_SCANNER_MAX_CONCURRENT_SCANS", 2),
+        }
+    }
+}
+
+/// Configuration for the job scheduler
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct SchedulerConfig {
+    /// Default IANA timezone for all cron schedules (e.g., "America/Los_Angeles").
+    /// Individual libraries can override this via their scanning config's `cronTimezone`.
+    /// Defaults to "UTC" for backward compatibility.
+    /// This is a startup-time setting - changes require a restart.
+    pub timezone: String,
+}
+
+impl Default for SchedulerConfig {
+    fn default() -> Self {
+        Self {
+            timezone: env_string_opt("CODEX_SCHEDULER_TIMEZONE")
+                .unwrap_or_else(|| "UTC".to_string()),
         }
     }
 }
@@ -1136,6 +1159,7 @@ verification_url_base: https://codex.example.com
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
+            scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
@@ -1266,6 +1290,64 @@ verification_url_base: https://codex.example.com
 
         let deserialized: ScannerConfig = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(deserialized.max_concurrent_scans, 6);
+    }
+
+    #[test]
+    fn test_scheduler_config_default() {
+        let config = SchedulerConfig::default();
+        assert_eq!(config.timezone, "UTC");
+    }
+
+    #[test]
+    fn test_scheduler_config_serialization() {
+        let config = SchedulerConfig {
+            timezone: "America/Los_Angeles".to_string(),
+        };
+
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("timezone"));
+        assert!(yaml.contains("America/Los_Angeles"));
+
+        let deserialized: SchedulerConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(deserialized.timezone, "America/Los_Angeles");
+    }
+
+    #[test]
+    fn test_scheduler_config_from_yaml() {
+        let yaml_content = r#"
+timezone: "Europe/London"
+"#;
+
+        let config: SchedulerConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.timezone, "Europe/London");
+    }
+
+    #[test]
+    fn test_config_with_scheduler() {
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+scheduler:
+  timezone: "America/New_York"
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.scheduler.timezone, "America/New_York");
+    }
+
+    #[test]
+    fn test_config_scheduler_uses_defaults() {
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+"#;
+
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.scheduler.timezone, "UTC");
     }
 
     #[test]

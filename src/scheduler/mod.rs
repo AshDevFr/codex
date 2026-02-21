@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono_tz::Tz;
 use sea_orm::DatabaseConnection;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
@@ -8,22 +9,45 @@ use crate::db::repositories::{LibraryRepository, TaskRepository};
 use crate::scanner::{ScanMode, ScanningConfig};
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
-use crate::utils::cron::normalize_cron_expression;
+use crate::utils::cron::{normalize_cron_expression, parse_timezone};
 
 /// Generic scheduler for managing scheduled tasks (library scans, deduplication, etc.)
 pub struct Scheduler {
     scheduler: JobScheduler,
     db: DatabaseConnection,
+    /// Server-level default timezone for all cron schedules
+    default_tz: Tz,
 }
 
 impl Scheduler {
-    /// Create a new scheduler
-    pub async fn new(db: DatabaseConnection) -> Result<Self> {
+    /// Create a new scheduler with a default timezone
+    ///
+    /// The `timezone` parameter should be an IANA timezone string (e.g., "America/Los_Angeles").
+    /// Falls back to UTC if the string is invalid (with a warning).
+    pub async fn new(db: DatabaseConnection, timezone: &str) -> Result<Self> {
         let scheduler = JobScheduler::new()
             .await
             .context("Failed to create job scheduler")?;
 
-        Ok(Self { scheduler, db })
+        let default_tz = match parse_timezone(timezone) {
+            Ok(tz) => {
+                info!("Scheduler timezone: {}", timezone);
+                tz
+            }
+            Err(e) => {
+                warn!(
+                    "Invalid scheduler timezone '{}': {}. Falling back to UTC",
+                    timezone, e
+                );
+                Tz::UTC
+            }
+        };
+
+        Ok(Self {
+            scheduler,
+            db,
+            default_tz,
+        })
     }
 
     /// Start the scheduler and load all scheduled jobs
@@ -60,6 +84,24 @@ impl Scheduler {
         info!("Job scheduler started with {} jobs", job_count);
 
         Ok(())
+    }
+
+    /// Resolve the timezone for a library scan job.
+    ///
+    /// Priority: library's `cronTimezone` > server default timezone
+    fn resolve_library_timezone(&self, config: &ScanningConfig) -> Tz {
+        if let Some(ref tz_str) = config.cron_timezone {
+            match parse_timezone(tz_str) {
+                Ok(tz) => return tz,
+                Err(e) => {
+                    warn!(
+                        "Invalid library cron timezone '{}': {}. Using server default ({})",
+                        tz_str, e, self.default_tz
+                    );
+                }
+            }
+        }
+        self.default_tz
     }
 
     /// Load all library scan schedules
@@ -124,9 +166,10 @@ impl Scheduler {
         let cron = normalize_cron_expression(&cron)
             .context("Invalid cron expression for deduplication schedule")?;
 
-        // Create cron job
+        // Create cron job with timezone
         let db = self.db.clone();
-        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron.as_str(), tz, move |_uuid, _lock| {
             let db = db.clone();
             Box::pin(async move {
                 info!("Triggering scheduled duplicate detection");
@@ -145,7 +188,10 @@ impl Scheduler {
             .await
             .context("Failed to add deduplication job to scheduler")?;
 
-        info!("Added deduplication schedule: {}", cron);
+        info!(
+            "Added deduplication schedule: {} (timezone: {})",
+            cron, self.default_tz
+        );
 
         Ok(())
     }
@@ -167,9 +213,10 @@ impl Scheduler {
         let cron = normalize_cron_expression(&cron)
             .context("Invalid cron expression for PDF cache cleanup schedule")?;
 
-        // Create cron job
+        // Create cron job with timezone
         let db = self.db.clone();
-        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron.as_str(), tz, move |_uuid, _lock| {
             let db = db.clone();
             Box::pin(async move {
                 info!("Triggering scheduled PDF cache cleanup");
@@ -188,7 +235,10 @@ impl Scheduler {
             .await
             .context("Failed to add PDF cache cleanup job to scheduler")?;
 
-        info!("Added PDF cache cleanup schedule: {}", cron);
+        info!(
+            "Added PDF cache cleanup schedule: {} (timezone: {})",
+            cron, self.default_tz
+        );
 
         Ok(())
     }
@@ -203,7 +253,8 @@ impl Scheduler {
         let cron = "0 */15 * * * *";
 
         let db = self.db.clone();
-        let job = Job::new_async(cron, move |_uuid, _lock| {
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron, tz, move |_uuid, _lock| {
             let db = db.clone();
             Box::pin(async move {
                 debug!("Triggering scheduled plugin data cleanup");
@@ -248,9 +299,10 @@ impl Scheduler {
         let cron = normalize_cron_expression(&cron)
             .context("Invalid cron expression for book thumbnail schedule")?;
 
-        // Create cron job
+        // Create cron job with timezone
         let db = self.db.clone();
-        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron.as_str(), tz, move |_uuid, _lock| {
             let db = db.clone();
             Box::pin(async move {
                 info!("Triggering scheduled book thumbnail generation");
@@ -277,7 +329,10 @@ impl Scheduler {
             .await
             .context("Failed to add book thumbnail generation job to scheduler")?;
 
-        info!("Added book thumbnail generation schedule: {}", cron);
+        info!(
+            "Added book thumbnail generation schedule: {} (timezone: {})",
+            cron, self.default_tz
+        );
 
         Ok(())
     }
@@ -304,9 +359,10 @@ impl Scheduler {
         let cron = normalize_cron_expression(&cron)
             .context("Invalid cron expression for series thumbnail schedule")?;
 
-        // Create cron job
+        // Create cron job with timezone
         let db = self.db.clone();
-        let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron.as_str(), tz, move |_uuid, _lock| {
             let db = db.clone();
             Box::pin(async move {
                 info!("Triggering scheduled series thumbnail generation");
@@ -331,7 +387,10 @@ impl Scheduler {
             .await
             .context("Failed to add series thumbnail generation job to scheduler")?;
 
-        info!("Added series thumbnail generation schedule: {}", cron);
+        info!(
+            "Added series thumbnail generation schedule: {} (timezone: {})",
+            cron, self.default_tz
+        );
 
         Ok(())
     }
@@ -371,14 +430,17 @@ impl Scheduler {
         let cron_schedule = normalize_cron_expression(&cron_schedule)
             .context("Invalid cron expression for library schedule")?;
 
+        // Resolve timezone: library override > server default
+        let tz = self.resolve_library_timezone(&config);
+
         // Parse scan mode
         let scan_mode = config.get_scan_mode()?;
 
-        // Create cron job
+        // Create cron job with timezone
         let db = self.db.clone();
         let library_name = library.name.clone();
 
-        let job = Job::new_async(cron_schedule.as_str(), move |_uuid, _lock| {
+        let job = Job::new_async_tz(cron_schedule.as_str(), tz, move |_uuid, _lock| {
             let db = db.clone();
             let library_name = library_name.clone();
             let mode_str = scan_mode.to_string();
@@ -415,8 +477,8 @@ impl Scheduler {
             .context("Failed to add job to scheduler")?;
 
         info!(
-            "Added schedule for library {} with cron '{}' (mode: {})",
-            library.name, cron_schedule, scan_mode
+            "Added schedule for library {} with cron '{}' (mode: {}, timezone: {})",
+            library.name, cron_schedule, scan_mode, tz
         );
 
         Ok(())

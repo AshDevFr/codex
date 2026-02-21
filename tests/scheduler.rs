@@ -10,7 +10,7 @@ use common::{create_test_user, setup_test_db};
 async fn test_scheduler_creation() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -43,7 +43,7 @@ async fn test_scheduler_with_deduplication_disabled() {
     .await
     .expect("Failed to update setting");
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -101,7 +101,7 @@ async fn test_scheduler_with_empty_deduplication_cron() {
     .await
     .expect("Failed to update setting");
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -162,7 +162,7 @@ async fn test_scheduler_with_deduplication_enabled() {
     .await
     .expect("Failed to update setting");
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -185,7 +185,7 @@ async fn test_scheduler_reload_schedules() {
     let user = create_test_user("test", "test@example.com", &password_hash, true);
     let created_user = UserRepository::create(&db, &user).await.unwrap();
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -232,7 +232,7 @@ async fn test_scheduler_reload_schedules() {
 async fn test_scheduler_with_empty_book_thumbnail_cron() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -280,7 +280,7 @@ async fn test_scheduler_with_book_thumbnail_cron_enabled() {
     .await
     .expect("Failed to update setting");
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -298,7 +298,7 @@ async fn test_scheduler_with_book_thumbnail_cron_enabled() {
 async fn test_scheduler_with_empty_series_thumbnail_cron() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -346,7 +346,7 @@ async fn test_scheduler_with_series_thumbnail_cron_enabled() {
     .await
     .expect("Failed to update setting");
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -392,7 +392,7 @@ async fn test_scheduler_with_both_thumbnail_crons_enabled() {
     .await
     .expect("Failed to update setting");
 
-    let mut scheduler = Scheduler::new(db.clone())
+    let mut scheduler = Scheduler::new(db.clone(), "UTC")
         .await
         .expect("Failed to create scheduler");
 
@@ -401,5 +401,103 @@ async fn test_scheduler_with_both_thumbnail_crons_enabled() {
 
     // This test ensures both cron jobs can be loaded without conflicts
 
+    scheduler.shutdown().await.expect("Failed to shutdown");
+}
+
+// =============================================================================
+// Timezone Tests
+// =============================================================================
+
+/// Test that scheduler can be created with a valid IANA timezone
+#[tokio::test]
+async fn test_scheduler_with_valid_timezone() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let mut scheduler = Scheduler::new(db.clone(), "America/Los_Angeles")
+        .await
+        .expect("Failed to create scheduler with LA timezone");
+
+    scheduler.start().await.expect("Failed to start scheduler");
+    scheduler.shutdown().await.expect("Failed to shutdown");
+}
+
+/// Test that scheduler falls back to UTC for an invalid timezone string
+#[tokio::test]
+async fn test_scheduler_with_invalid_timezone_falls_back_to_utc() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Should not error; should warn and fall back to UTC
+    let mut scheduler = Scheduler::new(db.clone(), "Invalid/Timezone")
+        .await
+        .expect("Scheduler should fall back to UTC for invalid timezone");
+
+    scheduler.start().await.expect("Failed to start scheduler");
+    scheduler.shutdown().await.expect("Failed to shutdown");
+}
+
+/// Test that scheduler works with various valid IANA timezones
+#[tokio::test]
+async fn test_scheduler_with_various_timezones() {
+    let timezones = [
+        "UTC",
+        "America/New_York",
+        "Europe/London",
+        "Asia/Tokyo",
+        "Australia/Sydney",
+    ];
+
+    for tz in &timezones {
+        let (db, _temp_dir) = setup_test_db().await;
+
+        let mut scheduler = Scheduler::new(db.clone(), tz)
+            .await
+            .unwrap_or_else(|_| panic!("Failed to create scheduler with timezone {}", tz));
+
+        scheduler
+            .start()
+            .await
+            .unwrap_or_else(|_| panic!("Failed to start scheduler with timezone {}", tz));
+
+        scheduler.shutdown().await.expect("Failed to shutdown");
+    }
+}
+
+/// Test that scheduler with non-UTC timezone loads deduplication cron correctly
+#[tokio::test]
+async fn test_scheduler_timezone_with_deduplication_cron() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let password_hash = password::hash_password("test123").unwrap();
+    let user = create_test_user("test", "test@example.com", &password_hash, true);
+    let created_user = UserRepository::create(&db, &user).await.unwrap();
+
+    SettingsRepository::set(
+        &db,
+        "deduplication.enabled",
+        "true".to_string(),
+        created_user.id,
+        None,
+        None,
+    )
+    .await
+    .expect("Failed to update setting");
+    SettingsRepository::set(
+        &db,
+        "deduplication.cron_schedule",
+        "0 0 3 * * *".to_string(),
+        created_user.id,
+        None,
+        None,
+    )
+    .await
+    .expect("Failed to update setting");
+
+    // Create scheduler with non-UTC timezone
+    let mut scheduler = Scheduler::new(db.clone(), "America/Chicago")
+        .await
+        .expect("Failed to create scheduler");
+
+    // Should start and load the deduplication job with Chicago timezone
+    scheduler.start().await.expect("Failed to start scheduler");
     scheduler.shutdown().await.expect("Failed to shutdown");
 }

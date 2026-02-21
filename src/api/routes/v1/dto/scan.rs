@@ -85,6 +85,13 @@ pub struct ScanningConfigDto {
     #[schema(example = "0 */6 * * *")]
     pub cron_schedule: Option<String>,
 
+    /// IANA timezone for the cron schedule (e.g., "America/Los_Angeles", "Europe/London").
+    /// Overrides the server-level `scheduler.timezone` config for this library.
+    /// If not set, falls back to the server default (which itself defaults to UTC).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(example = "America/Los_Angeles")]
+    pub cron_timezone: Option<String>,
+
     /// Default scan mode for scheduled scans ("normal" or "deep")
     #[schema(example = "normal")]
     pub scan_mode: String,
@@ -105,14 +112,19 @@ pub struct ScanningConfigDto {
 }
 
 impl ScanningConfigDto {
-    /// Validate the cron expression without modifying it.
+    /// Validate the cron expression and timezone without modifying them.
     ///
     /// Accepts both standard 5-part Unix cron (e.g., "0 */6 * * *") and 6-part
     /// with seconds (e.g., "0 0 */6 * * *"). The original expression is preserved
     /// as-is for storage; normalization to 6-part happens at scheduler level.
+    ///
+    /// If `cron_timezone` is set, validates it as a valid IANA timezone name.
     pub fn validated(self) -> Result<Self, String> {
         if let Some(cron) = &self.cron_schedule {
             crate::utils::cron::validate_cron_expression(cron).map_err(|e| e.to_string())?;
+        }
+        if let Some(tz) = &self.cron_timezone {
+            crate::utils::cron::validate_timezone(tz).map_err(|e| e.to_string())?;
         }
         Ok(self)
     }
@@ -122,6 +134,7 @@ impl Default for ScanningConfigDto {
     fn default() -> Self {
         Self {
             cron_schedule: None,
+            cron_timezone: None,
             scan_mode: "normal".to_string(),
             enabled: true,
             scan_on_start: false,

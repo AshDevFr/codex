@@ -636,6 +636,7 @@ mod tests {
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
             FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
+            SchedulerConfig,
         };
         let mut config = Config {
             data_dir: "data".to_string(),
@@ -661,6 +662,7 @@ mod tests {
             scanner: ScannerConfig {
                 max_concurrent_scans: 2,
             },
+            scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
@@ -820,6 +822,7 @@ mod tests {
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
             FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
+            SchedulerConfig,
         };
         let mut config = Config {
             data_dir: "data".to_string(),
@@ -845,6 +848,7 @@ mod tests {
             scanner: ScannerConfig {
                 max_concurrent_scans: 2,
             },
+            scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig {

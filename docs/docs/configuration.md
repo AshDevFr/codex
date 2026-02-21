@@ -272,6 +272,31 @@ scanner:
 |---------|---------|-------------|
 | `max_concurrent_scans` | `2` | Maximum concurrent library scans |
 
+## Scheduler Configuration
+
+Controls the job scheduler that runs cron-based tasks (library scans, deduplication, thumbnail generation, etc.).
+
+```yaml
+scheduler:
+  timezone: "America/Los_Angeles"
+```
+
+| Setting | Default | Env Override | Description |
+|---------|---------|--------------|-------------|
+| `timezone` | `UTC` | `CODEX_SCHEDULER_TIMEZONE` | Default IANA timezone for all cron schedules |
+
+The timezone must be a valid IANA timezone name (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`). Abbreviations like `PST` or offsets like `UTC+8` are **not** supported.
+
+:::tip Per-Library Timezone Override
+Each library can override the server-level timezone via the `cronTimezone` field in its scanning configuration. This is useful when different libraries should run scans at different local times.
+
+Priority: **Library `cronTimezone`** > **Server `scheduler.timezone`** > **UTC**
+:::
+
+:::note Docker Users
+The Docker `TZ` environment variable does **not** affect the cron scheduler. You must set `CODEX_SCHEDULER_TIMEZONE` (or configure `scheduler.timezone` in your YAML) for cron jobs to run in your local timezone.
+:::
+
 ## Files Configuration
 
 Configuration for file storage directories (thumbnails and uploads).
@@ -636,6 +661,7 @@ Configuration paths are converted to environment variables:
 | `database.postgres.host` | `CODEX_DATABASE_POSTGRES_HOST` |
 | `auth.jwt_secret` | `CODEX_AUTH_JWT_SECRET` |
 | `logging.level` | `CODEX_LOGGING_LEVEL` |
+| `scheduler.timezone` | `CODEX_SCHEDULER_TIMEZONE` |
 
 ### Common Environment Variables
 
@@ -668,6 +694,9 @@ CODEX_TASK_WORKER_COUNT=4
 
 # Scanner
 CODEX_SCANNER_MAX_CONCURRENT_SCANS=2
+
+# Scheduler
+CODEX_SCHEDULER_TIMEZONE=America/Los_Angeles
 
 # Files (thumbnails and uploads)
 CODEX_FILES_THUMBNAIL_DIR=data/thumbnails

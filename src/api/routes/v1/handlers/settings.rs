@@ -435,6 +435,15 @@ pub async fn get_public_settings(
         }
     }
 
+    // Include server-level scheduler timezone (from config, not DB)
+    result.insert(
+        "scheduler.timezone".to_string(),
+        PublicSettingDto {
+            key: "scheduler.timezone".to_string(),
+            value: state.scheduler_timezone.clone(),
+        },
+    );
+
     Ok(Json(result))
 }
 

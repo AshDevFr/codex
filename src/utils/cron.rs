@@ -1,4 +1,5 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
+use chrono_tz::Tz;
 
 /// Normalize a cron expression to the 6-part format expected by `tokio-cron-scheduler`.
 ///
@@ -57,6 +58,24 @@ pub fn validate_cron_expression(expr: &str) -> Result<String> {
     })?;
 
     Ok(normalized)
+}
+
+/// Parse an IANA timezone string into a `chrono_tz::Tz`.
+///
+/// Accepts standard IANA timezone names (e.g., "America/Los_Angeles", "Europe/London", "UTC").
+/// Returns an error with a helpful message if the timezone string is invalid.
+pub fn parse_timezone(tz_str: &str) -> Result<Tz> {
+    tz_str
+        .parse::<Tz>()
+        .with_context(|| format!("Invalid IANA timezone '{}'. Use names like 'America/Los_Angeles', 'Europe/London', or 'UTC'", tz_str))
+}
+
+/// Validate that a timezone string is a valid IANA timezone name.
+///
+/// Returns the validated string on success, or an error if invalid.
+pub fn validate_timezone(tz_str: &str) -> Result<String> {
+    parse_timezone(tz_str)?;
+    Ok(tz_str.to_string())
 }
 
 #[cfg(test)]
@@ -169,5 +188,49 @@ mod tests {
             validate_cron_expression("*/30 * * * *").unwrap(),
             "0 */30 * * * *"
         );
+    }
+
+    // =============================================================================
+    // Timezone parsing tests
+    // =============================================================================
+
+    #[test]
+    fn test_parse_timezone_valid() {
+        assert_eq!(parse_timezone("UTC").unwrap(), Tz::UTC);
+        assert_eq!(
+            parse_timezone("America/Los_Angeles").unwrap(),
+            chrono_tz::America::Los_Angeles
+        );
+        assert_eq!(
+            parse_timezone("Europe/London").unwrap(),
+            chrono_tz::Europe::London
+        );
+        assert_eq!(
+            parse_timezone("Asia/Tokyo").unwrap(),
+            chrono_tz::Asia::Tokyo
+        );
+    }
+
+    #[test]
+    fn test_parse_timezone_invalid() {
+        assert!(parse_timezone("").is_err());
+        assert!(parse_timezone("Invalid/Timezone").is_err());
+        assert!(parse_timezone("PST").is_err()); // Abbreviations are not valid IANA names
+        assert!(parse_timezone("UTC+8").is_err()); // Fixed offsets are not valid IANA names
+    }
+
+    #[test]
+    fn test_validate_timezone_valid() {
+        assert_eq!(
+            validate_timezone("America/New_York").unwrap(),
+            "America/New_York"
+        );
+        assert_eq!(validate_timezone("UTC").unwrap(), "UTC");
+    }
+
+    #[test]
+    fn test_validate_timezone_invalid() {
+        assert!(validate_timezone("Not/A/Timezone").is_err());
+        assert!(validate_timezone("").is_err());
     }
 }

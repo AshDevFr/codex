@@ -23,7 +23,7 @@ mod tests {
     use crate::config::{
         ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
         FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
-        ScannerConfig, TaskConfig,
+        ScannerConfig, SchedulerConfig, TaskConfig,
     };
     use tempfile::NamedTempFile;
 
@@ -74,6 +74,7 @@ application:
             email: EmailConfig::default(),
             task: TaskConfig::default(),
             scanner: ScannerConfig::default(),
+            scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
@@ -158,6 +159,7 @@ scanner:
             scanner: ScannerConfig {
                 max_concurrent_scans: 4,
             },
+            scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
