@@ -79,7 +79,10 @@ async fn test_normal_scan_queues_unanalyzed_books() {
             "Task book_id should match one of the created books"
         );
         assert_eq!(task.status, "pending");
-        assert_eq!(task.priority, 0);
+        assert_eq!(
+            task.priority, 800,
+            "AnalyzeBook default priority should be 800"
+        );
     }
 }
 
@@ -391,7 +394,7 @@ async fn test_no_tasks_queued_on_scan_failure() {
     assert!(scan_task.attempts > 0, "Should have attempted once");
 }
 
-/// Test that tasks have correct priority (0 for auto-queued tasks)
+/// Test that tasks have correct default priority based on TaskType
 #[tokio::test]
 async fn test_queued_tasks_have_zero_priority() {
     let (db, temp_dir) = setup_test_db().await;
@@ -419,8 +422,8 @@ async fn test_queued_tasks_have_zero_priority() {
     let tasks = get_all_tasks(&db).await;
     assert_eq!(tasks.len(), 1);
     assert_eq!(
-        tasks[0].priority, 0,
-        "Auto-queued tasks should have priority 0"
+        tasks[0].priority, 1000,
+        "ScanLibrary tasks should have default priority 1000"
     );
 }
 

@@ -14,59 +14,20 @@ use crate::tasks::types::{TaskStats, TaskType};
 /// Repository for Task operations
 pub struct TaskRepository;
 
-/// Returns the ORDER BY clause for task priority ordering.
-/// Used by both PostgreSQL and SQLite query builders.
-fn task_priority_order_by(prioritize_scans: bool) -> &'static str {
-    if prioritize_scans {
-        // Task priority categories (ranges leave room for future tasks):
-        //  0-9:  Scanning - library discovery and post-scan cleanup
-        // 10-19: Analysis - book/series analysis and title reprocessing
-        // 20-29: Thumbnails - single and batch thumbnail generation
-        // 30-39: Metadata - deduplication, external lookups, plugin matching
-        // 40-49: Plugins - user-facing plugin operations
-        //    50: Cleanup - low-priority maintenance (all equal, ordered by priority/scheduled_for)
-        //    99: Unknown/unhandled task types
-        "ORDER BY (CASE
-            WHEN task_type = 'scan_library' THEN 0
-            WHEN task_type = 'purge_deleted' THEN 1
-            WHEN task_type = 'analyze_book' THEN 10
-            WHEN task_type = 'analyze_series' THEN 11
-            WHEN task_type = 'reprocess_series_title' THEN 12
-            WHEN task_type = 'reprocess_series_titles' THEN 13
-            WHEN task_type = 'renumber_series' THEN 14
-            WHEN task_type = 'renumber_series_batch' THEN 15
-            WHEN task_type = 'generate_thumbnail' THEN 20
-            WHEN task_type = 'generate_series_thumbnail' THEN 21
-            WHEN task_type = 'generate_thumbnails' THEN 22
-            WHEN task_type = 'generate_series_thumbnails' THEN 23
-            WHEN task_type = 'find_duplicates' THEN 30
-            WHEN task_type = 'refresh_metadata' THEN 31
-            WHEN task_type = 'plugin_auto_match' THEN 32
-            WHEN task_type = 'user_plugin_recommendation_dismiss' THEN 40
-            WHEN task_type = 'user_plugin_sync' THEN 41
-            WHEN task_type = 'user_plugin_recommendations' THEN 42
-            WHEN task_type = 'cleanup_book_files' THEN 50
-            WHEN task_type = 'cleanup_series_files' THEN 50
-            WHEN task_type = 'cleanup_orphaned_files' THEN 50
-            WHEN task_type = 'cleanup_pdf_cache' THEN 50
-            WHEN task_type = 'cleanup_plugin_data' THEN 50
-            ELSE 99
-        END), priority DESC, scheduled_for ASC"
-    } else {
-        // Standard priority-based ordering
-        "ORDER BY priority DESC, scheduled_for ASC"
-    }
-}
+/// Priority-based ordering clause for task claiming.
+/// Tasks are ordered by priority (higher = more urgent), then by scheduled time (earliest first).
+const TASK_ORDER_BY: &str = "ORDER BY priority DESC, scheduled_for ASC";
 
 impl TaskRepository {
     /// Enqueue a new task
-    /// If a task with the same entity and type is already pending/processing, returns the existing task's ID
+    /// If a task with the same entity and type is already pending/processing, returns the existing task's ID.
+    /// Priority is determined by the task type's `default_priority()`.
     pub async fn enqueue(
         db: &DatabaseConnection,
         task_type: TaskType,
-        priority: i32,
         scheduled_for: Option<DateTime<Utc>>,
     ) -> Result<Uuid> {
+        let priority = task_type.default_priority();
         let type_str = task_type.type_string();
         let library_id = task_type.library_id();
         let series_id = task_type.series_id();
@@ -143,15 +104,98 @@ impl TaskRepository {
         }
     }
 
+    /// Enqueue a new task with an explicit priority override.
+    /// Used by the API when a caller specifies a custom priority.
+    pub async fn enqueue_with_priority(
+        db: &DatabaseConnection,
+        task_type: TaskType,
+        priority: i32,
+        scheduled_for: Option<DateTime<Utc>>,
+    ) -> Result<Uuid> {
+        let type_str = task_type.type_string();
+        let library_id = task_type.library_id();
+        let series_id = task_type.series_id();
+        let book_id = task_type.book_id();
+        let params = task_type.params();
+
+        // Check if a task already exists for this entity
+        if let Some(existing_task) =
+            Self::find_existing_task(db, type_str, library_id, series_id, book_id).await?
+        {
+            info!(
+                "Task already exists: {} ({}) - skipping duplicate",
+                existing_task.id, type_str
+            );
+            return Ok(existing_task.id);
+        }
+
+        let task_id = Uuid::new_v4();
+        let now = Utc::now();
+
+        let task = tasks::ActiveModel {
+            id: Set(task_id),
+            task_type: Set(type_str.to_string()),
+            library_id: Set(library_id),
+            series_id: Set(series_id),
+            book_id: Set(book_id),
+            params: Set(Some(params)),
+            status: Set("pending".to_string()),
+            priority: Set(priority),
+            locked_by: Set(None),
+            locked_until: Set(None),
+            attempts: Set(0),
+            max_attempts: Set(3),
+            last_error: Set(None),
+            reschedule_count: Set(0),
+            max_reschedules: Set(DEFAULT_MAX_RESCHEDULES),
+            result: Set(None),
+            scheduled_for: Set(scheduled_for.unwrap_or(now)),
+            created_at: Set(now),
+            started_at: Set(None),
+            completed_at: Set(None),
+        };
+
+        match task.insert(db).await {
+            Ok(_) => {
+                info!(
+                    "Enqueued task {} ({}) with priority {}",
+                    task_id, type_str, priority
+                );
+                Ok(task_id)
+            }
+            Err(e) => {
+                let err_str = e.to_string().to_lowercase();
+                if err_str.contains("unique") || err_str.contains("duplicate") {
+                    if let Some(existing_task) =
+                        Self::find_existing_task(db, type_str, library_id, series_id, book_id)
+                            .await?
+                    {
+                        info!(
+                            "Task was created concurrently: {} ({}) - using existing task",
+                            existing_task.id, type_str
+                        );
+                        Ok(existing_task.id)
+                    } else {
+                        anyhow::bail!(
+                            "Unique constraint violation but could not find existing task"
+                        )
+                    }
+                } else {
+                    Err(e).context("Failed to enqueue task")
+                }
+            }
+        }
+    }
+
     /// Enqueue multiple tasks in a batch operation
     ///
     /// This is significantly more efficient than calling `enqueue()` for each task
     /// individually. Skips tasks that already exist (based on type and entity).
+    /// Priority is determined by each task type's `default_priority()`.
     ///
     /// # Arguments
     /// * `db` - Database connection
     /// * `task_types` - List of task types to enqueue
-    /// * `priority` - Priority for all tasks (higher = more urgent)
     /// * `scheduled_for` - Optional scheduled time for all tasks
     ///
     /// # Returns
@@ -159,7 +203,6 @@ impl TaskRepository {
     pub async fn enqueue_batch(
         db: &DatabaseConnection,
         task_types: Vec<TaskType>,
-        priority: i32,
         scheduled_for: Option<DateTime<Utc>>,
     ) -> Result<u64> {
         if task_types.is_empty() {
@@ -195,6 +238,7 @@ impl TaskRepository {
         };
 
         for task_type in task_types {
+            let priority = task_type.default_priority();
             let type_str = task_type.type_string();
             let library_id = task_type.library_id();
             let series_id = task_type.series_id();
@@ -447,16 +491,16 @@ impl TaskRepository {
 
     /// Claim next available task (atomic operation using SKIP LOCKED for Postgres, transaction for SQLite)
     ///
+    /// Tasks are claimed in priority order (highest first), then by scheduled time (earliest first).
+    ///
     /// # Arguments
     /// * `db` - Database connection
     /// * `worker_id` - ID of the worker claiming the task
     /// * `lock_duration_secs` - Duration in seconds to lock the task
-    /// * `prioritize_scans` - If true, scan_library tasks are prioritized over analysis tasks
     pub async fn claim_next(
         db: &DatabaseConnection,
         worker_id: &str,
         lock_duration_secs: i64,
-        prioritize_scans: bool,
     ) -> Result<Option<tasks::Model>> {
         let worker_id = worker_id.to_string(); // Clone for move into closure
         let is_postgres = db.get_database_backend() == DbBackend::Postgres;
@@ -470,7 +514,7 @@ impl TaskRepository {
 
                     let task_option = if is_postgres {
                         // PostgreSQL: Use FOR UPDATE SKIP LOCKED for multi-worker safety
-                        let order_by = task_priority_order_by(prioritize_scans);
+                        let order_by = TASK_ORDER_BY;
 
                         let sql = format!(
                             r#"
@@ -522,7 +566,7 @@ impl TaskRepository {
                     } else {
                         // SQLite: Use raw SQL query (similar to PostgreSQL but without SKIP LOCKED)
                         // SQLite serializes transactions, so we don't need SKIP LOCKED
-                        let order_by = task_priority_order_by(prioritize_scans);
+                        let order_by = TASK_ORDER_BY;
 
                         let sql = format!(
                             r#"

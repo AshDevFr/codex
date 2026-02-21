@@ -171,8 +171,8 @@ pub async fn trigger_cleanup(
 ) -> Result<Json<TriggerCleanupResponse>, ApiError> {
     require_permission!(auth, Permission::SystemAdmin)?;
 
-    // Enqueue the cleanup task with low priority (cleanup runs last)
-    let task_id = TaskRepository::enqueue(&state.db, TaskType::CleanupOrphanedFiles, -100, None)
+    // Enqueue the cleanup task
+    let task_id = TaskRepository::enqueue(&state.db, TaskType::CleanupOrphanedFiles, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue cleanup task: {}", e)))?;
 

@@ -803,7 +803,7 @@ pub async fn trigger_sync(
         user_id: auth.user_id,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue sync task: {}", e)))?;
 

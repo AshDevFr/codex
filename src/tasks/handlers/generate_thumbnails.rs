@@ -134,7 +134,7 @@ impl TaskHandler for GenerateThumbnailsHandler {
                     force,
                 };
 
-                match TaskRepository::enqueue(db, task_type, 0, None).await {
+                match TaskRepository::enqueue(db, task_type, None).await {
                     Ok(task_id) => {
                         debug!(
                             "Enqueued thumbnail task {} for book {} (force={})",

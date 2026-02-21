@@ -104,7 +104,7 @@ impl TaskHandler for GenerateThumbnailHandler {
                             series_id: book.series_id,
                             force: true,
                         };
-                        if let Err(e) = TaskRepository::enqueue(db, task_type, 0, None).await {
+                        if let Err(e) = TaskRepository::enqueue(db, task_type, None).await {
                             warn!(
                                 "Failed to queue series thumbnail regeneration for series {}: {}",
                                 book.series_id, e

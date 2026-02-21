@@ -154,7 +154,7 @@ impl TaskHandler for RenumberSeriesBatchHandler {
             for series_id in series_to_process {
                 let task_type = TaskType::RenumberSeries { series_id };
 
-                match TaskRepository::enqueue(db, task_type, 0, None).await {
+                match TaskRepository::enqueue(db, task_type, None).await {
                     Ok(task_id) => {
                         debug!(
                             "Enqueued renumber task {} for series {}",

@@ -51,5 +51,5 @@ pub async fn trigger_scan_task(
         mode: mode.to_string(),
     };
 
-    TaskRepository::enqueue(db, task_type, 0, None).await
+    TaskRepository::enqueue(db, task_type, None).await
 }

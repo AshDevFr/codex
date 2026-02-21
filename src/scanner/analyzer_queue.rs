@@ -315,7 +315,7 @@ async fn analyze_single_book(
             force: thumbnail_force,
         };
 
-        match TaskRepository::enqueue(db, task_type, 0, None).await {
+        match TaskRepository::enqueue(db, task_type, None).await {
             Ok(task_id) => {
                 debug!(
                     "Queued thumbnail generation task {} for book {} (force={})",

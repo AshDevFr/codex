@@ -124,8 +124,8 @@ pub async fn trigger_pdf_cache_cleanup(
         .await
         .unwrap_or(30) as u32;
 
-    // Enqueue the cleanup task with low priority (cleanup runs last)
-    let task_id = TaskRepository::enqueue(&state.db, TaskType::CleanupPdfCache, -100, None)
+    // Enqueue the cleanup task
+    let task_id = TaskRepository::enqueue(&state.db, TaskType::CleanupPdfCache, None)
         .await
         .map_err(|e| {
             ApiError::Internal(format!("Failed to enqueue PDF cache cleanup task: {}", e))

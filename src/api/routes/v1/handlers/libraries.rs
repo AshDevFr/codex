@@ -309,7 +309,7 @@ pub async fn create_library(
             mode: "normal".to_string(),
         };
 
-        crate::db::repositories::TaskRepository::enqueue(&state.db, task_type, 0, None)
+        crate::db::repositories::TaskRepository::enqueue(&state.db, task_type, None)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to trigger auto-scan: {}", e)))?;
     }

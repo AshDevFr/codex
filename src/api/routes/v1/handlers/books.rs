@@ -4390,7 +4390,6 @@ pub async fn retry_book_errors(
                 book_id,
                 force: true,
             },
-            10,   // Normal priority
             None, // No scheduled time - run immediately
         )
         .await
@@ -4407,7 +4406,6 @@ pub async fn retry_book_errors(
                 book_id,
                 force: true,
             },
-            10,   // Normal priority
             None, // No scheduled time - run immediately
         )
         .await
@@ -4530,7 +4528,7 @@ pub async fn retry_all_book_errors(
             })
             .collect();
 
-        let count = TaskRepository::enqueue_batch(&state.db, analysis_tasks, 10, None)
+        let count = TaskRepository::enqueue_batch(&state.db, analysis_tasks, None)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to enqueue analysis tasks: {}", e)))?;
         tasks_enqueued += count;
@@ -4546,7 +4544,7 @@ pub async fn retry_all_book_errors(
             })
             .collect();
 
-        let count = TaskRepository::enqueue_batch(&state.db, thumbnail_tasks, 10, None)
+        let count = TaskRepository::enqueue_batch(&state.db, thumbnail_tasks, None)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to enqueue thumbnail tasks: {}", e)))?;
         tasks_enqueued += count;

@@ -105,7 +105,7 @@ pub async fn trigger_duplicate_scan(
 
     // Enqueue the duplicate scan task
     let task_type = TaskType::FindDuplicates;
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue duplicate scan: {}", e)))?;
 

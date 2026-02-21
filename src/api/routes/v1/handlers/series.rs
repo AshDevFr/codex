@@ -1632,7 +1632,7 @@ pub async fn get_series_thumbnail(
         force: false, // Don't force if we somehow have a race condition
     };
 
-    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, None).await {
         tracing::warn!(
             "Failed to queue series thumbnail generation task for {}: {}",
             series_id,
@@ -5514,7 +5514,7 @@ async fn regenerate_series_thumbnail(state: &AuthState, series_id: Uuid) {
         force: true, // Force regeneration since we just deleted the cache
     };
 
-    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, None).await {
         tracing::warn!(
             "Failed to queue series thumbnail regeneration task for {}: {}",
             series_id,

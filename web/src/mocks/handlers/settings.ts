@@ -88,14 +88,6 @@ const mockSettings = [
     description: "Interval (in seconds) for cleaning up completed tasks",
     defaultValue: "30",
   }),
-  createSetting({
-    key: "task.prioritize_scans_over_analysis",
-    value: "true",
-    valueType: "boolean",
-    category: "Task",
-    description: "Prioritize scan tasks over analysis tasks in the queue",
-    defaultValue: "true",
-  }),
   // Deduplication settings
   createSetting({
     key: "deduplication.enabled",

@@ -114,6 +114,9 @@ mod m20260215_000056_consolidate_authors;
 // Alternate titles lock (independent from title_lock)
 mod m20260217_000057_add_alternate_titles_lock;
 
+// Remove prioritize_scans setting (priority now baked into TaskType::default_priority())
+mod m20260220_000058_remove_prioritize_scans_setting;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -204,6 +207,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260215_000056_consolidate_authors::Migration),
             // Alternate titles lock (independent from title_lock)
             Box::new(m20260217_000057_add_alternate_titles_lock::Migration),
+            // Remove prioritize_scans setting
+            Box::new(m20260220_000058_remove_prioritize_scans_setting::Migration),
         ]
     }
 }

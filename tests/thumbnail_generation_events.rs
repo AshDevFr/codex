@@ -64,9 +64,7 @@ async fn test_analyze_book_queues_thumbnail_task_on_cover_available() {
             force: false,
         };
 
-        TaskRepository::enqueue(&db, task_type, 0, None)
-            .await
-            .unwrap();
+        TaskRepository::enqueue(&db, task_type, None).await.unwrap();
     }
 
     // Check if thumbnail generation task was queued

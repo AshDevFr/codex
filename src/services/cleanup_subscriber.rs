@@ -110,10 +110,7 @@ impl CleanupEventSubscriber {
             series_id: Some(series_id),
         };
 
-        // Use lowest priority so cleanup doesn't interfere with more important tasks
-        let priority = -100;
-
-        match TaskRepository::enqueue(&self.db, task, priority, None).await {
+        match TaskRepository::enqueue(&self.db, task, None).await {
             Ok(task_id) => {
                 info!(
                     "Enqueued CleanupBookFiles task {} for deleted book {}",
@@ -138,10 +135,7 @@ impl CleanupEventSubscriber {
         // Enqueue cleanup task for this series' cover files
         let task = TaskType::CleanupSeriesFiles { series_id };
 
-        // Use lowest priority so cleanup doesn't interfere with more important tasks
-        let priority = -100;
-
-        match TaskRepository::enqueue(&self.db, task, priority, None).await {
+        match TaskRepository::enqueue(&self.db, task, None).await {
             Ok(task_id) => {
                 info!(
                     "Enqueued CleanupSeriesFiles task {} for deleted series {}",
@@ -173,10 +167,7 @@ impl CleanupEventSubscriber {
         // corresponding DB entries
         let task = TaskType::CleanupOrphanedFiles;
 
-        // Use lowest priority so cleanup doesn't interfere with more important tasks
-        let priority = -100;
-
-        match TaskRepository::enqueue(&self.db, task, priority, None).await {
+        match TaskRepository::enqueue(&self.db, task, None).await {
             Ok(task_id) => {
                 info!(
                     "Enqueued CleanupOrphanedFiles task {} after library {} deletion",
@@ -225,7 +216,7 @@ mod tests {
             thumbnail_path: None,
             series_id: None,
         };
-        let task_id = TaskRepository::enqueue(db.sea_orm_connection(), task, -100, None)
+        let task_id = TaskRepository::enqueue(db.sea_orm_connection(), task, None)
             .await
             .expect("Failed to enqueue task");
 

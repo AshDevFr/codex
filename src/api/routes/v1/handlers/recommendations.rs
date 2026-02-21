@@ -148,7 +148,7 @@ pub async fn get_recommendations(
             user_id: auth.user_id,
         };
 
-        match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+        match TaskRepository::enqueue(&state.db, task_type, None).await {
             Ok(task_id) => {
                 info!(
                     user_id = %auth.user_id,
@@ -272,7 +272,7 @@ pub async fn refresh_recommendations(
         user_id: auth.user_id,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| {
             ApiError::Internal(format!("Failed to enqueue recommendations task: {}", e))
@@ -458,7 +458,7 @@ pub async fn dismiss_recommendation(
         reason,
     };
 
-    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+    if let Err(e) = TaskRepository::enqueue(&state.db, task_type, None).await {
         warn!(
             plugin_id = %plugin.id,
             external_id = %external_id,

@@ -284,13 +284,17 @@ pub async fn create_task(
     // Check permission
     auth.require_permission(&Permission::TasksWrite)?;
 
-    let task_id = TaskRepository::enqueue(
-        &state.db,
-        request.task_type,
-        request.priority.unwrap_or(0),
-        request.scheduled_for,
-    )
-    .await
+    let task_id = if let Some(priority) = request.priority {
+        TaskRepository::enqueue_with_priority(
+            &state.db,
+            request.task_type,
+            priority,
+            request.scheduled_for,
+        )
+        .await
+    } else {
+        TaskRepository::enqueue(&state.db, request.task_type, request.scheduled_for).await
+    }
     .map_err(|e| ApiError::Internal(format!("Failed to create task: {}", e)))?;
 
     Ok(Json(CreateTaskResponse { task_id }))
@@ -647,7 +651,7 @@ pub async fn generate_book_thumbnails(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
 
@@ -711,7 +715,7 @@ pub async fn generate_library_book_thumbnails(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
 
@@ -764,7 +768,7 @@ pub async fn generate_book_thumbnail(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
 
@@ -818,7 +822,7 @@ pub async fn generate_series_thumbnail(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| {
             ApiError::Internal(format!(
@@ -885,7 +889,7 @@ pub async fn generate_series_thumbnails(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| {
             ApiError::Internal(format!(
@@ -942,7 +946,7 @@ pub async fn generate_library_series_thumbnails(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| {
             ApiError::Internal(format!(
@@ -1071,7 +1075,7 @@ pub async fn reprocess_series_title(
     // Enqueue the task
     let task_type = TaskType::ReprocessSeriesTitle { series_id };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
@@ -1210,7 +1214,7 @@ pub async fn reprocess_library_series_titles(
         series_ids: None,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
@@ -1288,7 +1292,7 @@ pub async fn reprocess_series_titles(
         series_ids: request.series_ids.clone(),
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 

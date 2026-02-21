@@ -192,6 +192,50 @@ fn default_mode() -> String {
 }
 
 impl TaskType {
+    /// Returns the default priority for this task type.
+    ///
+    /// Higher values = more urgent. Uses large gaps for future insertions.
+    /// Categories:
+    ///   1000-900: Scanning (library discovery, post-scan cleanup)
+    ///    800-750: Analysis (book/series analysis, title reprocessing)
+    ///    600-570: Thumbnails (single and batch generation)
+    ///    400-380: Metadata (deduplication, external lookups, plugin matching)
+    ///    200-180: Plugins (user-facing plugin operations)
+    ///        100: Cleanup (low-priority maintenance)
+    pub fn default_priority(&self) -> i32 {
+        match self {
+            // Scanning
+            TaskType::ScanLibrary { .. } => 1000,
+            TaskType::PurgeDeleted { .. } => 900,
+            // Analysis
+            TaskType::AnalyzeBook { .. } => 800,
+            TaskType::AnalyzeSeries { .. } => 790,
+            TaskType::ReprocessSeriesTitle { .. } => 780,
+            TaskType::ReprocessSeriesTitles { .. } => 770,
+            TaskType::RenumberSeries { .. } => 760,
+            TaskType::RenumberSeriesBatch { .. } => 750,
+            // Thumbnails
+            TaskType::GenerateThumbnail { .. } => 600,
+            TaskType::GenerateSeriesThumbnail { .. } => 590,
+            TaskType::GenerateThumbnails { .. } => 580,
+            TaskType::GenerateSeriesThumbnails { .. } => 570,
+            // Metadata
+            TaskType::FindDuplicates => 400,
+            TaskType::RefreshMetadata { .. } => 390,
+            TaskType::PluginAutoMatch { .. } => 380,
+            // Plugins
+            TaskType::UserPluginRecommendationDismiss { .. } => 200,
+            TaskType::UserPluginSync { .. } => 190,
+            TaskType::UserPluginRecommendations { .. } => 180,
+            // Cleanup
+            TaskType::CleanupBookFiles { .. }
+            | TaskType::CleanupSeriesFiles { .. }
+            | TaskType::CleanupOrphanedFiles
+            | TaskType::CleanupPdfCache
+            | TaskType::CleanupPluginData => 100,
+        }
+    }
+
     /// Extract task type string for database storage
     pub fn type_string(&self) -> &'static str {
         match self {
@@ -941,6 +985,214 @@ mod tests {
         assert_eq!(task.type_string(), "renumber_series_batch");
         let params = task.params();
         assert!(params["series_ids"].is_null());
+    }
+
+    #[test]
+    fn test_default_priority_values() {
+        let library_id = Uuid::new_v4();
+        let series_id = Uuid::new_v4();
+        let book_id = Uuid::new_v4();
+        let plugin_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+
+        // Scanning: highest priority
+        assert_eq!(
+            TaskType::ScanLibrary {
+                library_id,
+                mode: "normal".to_string()
+            }
+            .default_priority(),
+            1000
+        );
+        assert_eq!(
+            TaskType::PurgeDeleted { library_id }.default_priority(),
+            900
+        );
+
+        // Analysis
+        assert_eq!(
+            TaskType::AnalyzeBook {
+                book_id,
+                force: false
+            }
+            .default_priority(),
+            800
+        );
+        assert_eq!(
+            TaskType::AnalyzeSeries { series_id }.default_priority(),
+            790
+        );
+        assert_eq!(
+            TaskType::ReprocessSeriesTitle { series_id }.default_priority(),
+            780
+        );
+        assert_eq!(
+            TaskType::ReprocessSeriesTitles {
+                library_id: Some(library_id),
+                series_ids: None
+            }
+            .default_priority(),
+            770
+        );
+        assert_eq!(
+            TaskType::RenumberSeries { series_id }.default_priority(),
+            760
+        );
+        assert_eq!(
+            TaskType::RenumberSeriesBatch {
+                series_ids: Some(vec![series_id])
+            }
+            .default_priority(),
+            750
+        );
+
+        // Thumbnails
+        assert_eq!(
+            TaskType::GenerateThumbnail {
+                book_id,
+                force: false
+            }
+            .default_priority(),
+            600
+        );
+        assert_eq!(
+            TaskType::GenerateSeriesThumbnail {
+                series_id,
+                force: false
+            }
+            .default_priority(),
+            590
+        );
+        assert_eq!(
+            TaskType::GenerateThumbnails {
+                library_id: Some(library_id),
+                series_id: None,
+                series_ids: None,
+                book_ids: None,
+                force: false
+            }
+            .default_priority(),
+            580
+        );
+        assert_eq!(
+            TaskType::GenerateSeriesThumbnails {
+                library_id: Some(library_id),
+                series_ids: None,
+                force: false
+            }
+            .default_priority(),
+            570
+        );
+
+        // Metadata
+        assert_eq!(TaskType::FindDuplicates.default_priority(), 400);
+        assert_eq!(
+            TaskType::RefreshMetadata {
+                book_id,
+                source: "test".to_string()
+            }
+            .default_priority(),
+            390
+        );
+        assert_eq!(
+            TaskType::PluginAutoMatch {
+                series_id,
+                plugin_id,
+                source_scope: None
+            }
+            .default_priority(),
+            380
+        );
+
+        // Plugins
+        assert_eq!(
+            TaskType::UserPluginRecommendationDismiss {
+                plugin_id,
+                user_id,
+                external_id: "test".to_string(),
+                reason: None
+            }
+            .default_priority(),
+            200
+        );
+        assert_eq!(
+            TaskType::UserPluginSync { plugin_id, user_id }.default_priority(),
+            190
+        );
+        assert_eq!(
+            TaskType::UserPluginRecommendations { plugin_id, user_id }.default_priority(),
+            180
+        );
+
+        // Cleanup: lowest priority
+        assert_eq!(
+            TaskType::CleanupBookFiles {
+                book_id,
+                thumbnail_path: None,
+                series_id: None
+            }
+            .default_priority(),
+            100
+        );
+        assert_eq!(
+            TaskType::CleanupSeriesFiles { series_id }.default_priority(),
+            100
+        );
+        assert_eq!(TaskType::CleanupOrphanedFiles.default_priority(), 100);
+        assert_eq!(TaskType::CleanupPdfCache.default_priority(), 100);
+        assert_eq!(TaskType::CleanupPluginData.default_priority(), 100);
+    }
+
+    #[test]
+    fn test_default_priority_ordering_invariants() {
+        let library_id = Uuid::new_v4();
+        let _series_id = Uuid::new_v4();
+        let book_id = Uuid::new_v4();
+
+        // Scanning > Analysis > Thumbnails > Metadata > Plugins > Cleanup
+        let scan = TaskType::ScanLibrary {
+            library_id,
+            mode: "normal".to_string(),
+        }
+        .default_priority();
+        let analyze = TaskType::AnalyzeBook {
+            book_id,
+            force: false,
+        }
+        .default_priority();
+        let thumbnail = TaskType::GenerateThumbnail {
+            book_id,
+            force: false,
+        }
+        .default_priority();
+        let metadata = TaskType::FindDuplicates.default_priority();
+        let plugin = TaskType::UserPluginSync {
+            plugin_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+        }
+        .default_priority();
+        let cleanup = TaskType::CleanupOrphanedFiles.default_priority();
+
+        assert!(
+            scan > analyze,
+            "Scanning should have higher priority than analysis"
+        );
+        assert!(
+            analyze > thumbnail,
+            "Analysis should have higher priority than thumbnails"
+        );
+        assert!(
+            thumbnail > metadata,
+            "Thumbnails should have higher priority than metadata"
+        );
+        assert!(
+            metadata > plugin,
+            "Metadata should have higher priority than plugins"
+        );
+        assert!(
+            plugin > cleanup,
+            "Plugins should have higher priority than cleanup"
+        );
     }
 
     #[test]

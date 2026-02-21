@@ -210,7 +210,6 @@ async fn test_deep_scan_queues_with_force() -> Result<()> {
             book_id: book.id,
             force: true,
         },
-        0,
         None,
     )
     .await?;
@@ -246,7 +245,6 @@ async fn test_normal_scan_queues_without_force() -> Result<()> {
             book_id: book.id,
             force: false,
         },
-        0,
         None,
     )
     .await?;

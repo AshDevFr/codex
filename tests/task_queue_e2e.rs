@@ -8,7 +8,6 @@ use common::setup_test_db;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use uuid::Uuid;
 
 /// Test end-to-end task execution with worker
 #[tokio::test]
@@ -25,7 +24,6 @@ async fn test_e2e_task_execution() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -70,7 +68,7 @@ async fn test_worker_processes_multiple_tasks() {
 
     // Create multiple tasks (using FindDuplicates which doesn't require external data)
     for _ in 0..3 {
-        TaskRepository::enqueue(&db, TaskType::FindDuplicates, 0, None)
+        TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
             .await
             .expect("Failed to enqueue task");
     }
@@ -106,7 +104,6 @@ async fn test_task_retry_on_failure() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -151,7 +148,6 @@ async fn test_concurrent_workers_skip_locked() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -191,26 +187,26 @@ async fn test_concurrent_workers_skip_locked() {
     );
 }
 
-/// Test priority ordering
+/// Test priority ordering with explicit priority override
 #[tokio::test]
 async fn test_worker_respects_priority() {
     let (db, _temp_dir) = setup_test_db().await;
 
-    // Create low priority task first
-    let low_id = TaskRepository::enqueue(
+    // Create low priority task first (default priority for FindDuplicates is 400)
+    let low_id = TaskRepository::enqueue_with_priority(
         &db,
         TaskType::FindDuplicates,
-        0, // Low priority
+        10, // Override to low priority
         None,
     )
     .await
     .expect("Failed to enqueue");
 
     // Create high priority task second
-    let high_id = TaskRepository::enqueue(
+    let high_id = TaskRepository::enqueue_with_priority(
         &db,
         TaskType::FindDuplicates,
-        10, // High priority
+        500, // Override to high priority
         None,
     )
     .await
@@ -252,7 +248,6 @@ async fn test_cancelled_task_not_executed() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -294,14 +289,13 @@ async fn test_stale_task_recovery() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue");
 
     // Claim with very short lock duration (1 second)
-    TaskRepository::claim_next(&db, "crashed-worker", 1, false)
+    TaskRepository::claim_next(&db, "crashed-worker", 1)
         .await
         .expect("Failed to claim");
 
@@ -334,295 +328,39 @@ async fn test_stale_task_recovery() {
     assert!(task.attempts >= 1);
 }
 
-/// Test that worker reads prioritize_scans setting from SettingsService
+/// Test that default priorities produce correct ordering via claim_next
 #[tokio::test]
-async fn test_worker_reads_prioritize_scans_setting() {
-    use codex::db::repositories::SettingsRepository;
-    use codex::services::SettingsService;
-    use codex::tasks::TaskWorker;
-    use std::sync::Arc;
-
+async fn test_worker_default_priority_ordering() {
     let (db, _temp_dir) = setup_test_db().await;
-    let library_id = create_test_library(&db).await;
-    let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id, library_id).await;
 
-    // Create settings service
-    let settings_service = Arc::new(
-        SettingsService::new(db.clone())
-            .await
-            .expect("Failed to create settings service"),
+    // Enqueue a cleanup task (priority 100) first
+    let cleanup_id = TaskRepository::enqueue(&db, TaskType::CleanupOrphanedFiles, None)
+        .await
+        .expect("Failed to enqueue cleanup task");
+
+    // Enqueue a find_duplicates task (priority 400) second
+    let dup_id = TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
+        .await
+        .expect("Failed to enqueue find_duplicates task");
+
+    // Claim directly to verify ordering (avoid worker execution side effects)
+    let claimed = TaskRepository::claim_next(&db, "test-worker", 300)
+        .await
+        .expect("Failed to claim")
+        .expect("No task available");
+
+    // FindDuplicates should be claimed first (priority 400 > 100)
+    assert_eq!(
+        claimed.id, dup_id,
+        "Higher priority task should be claimed first"
     );
+    assert_eq!(claimed.task_type, "find_duplicates");
+    assert_eq!(claimed.priority, 400);
 
-    // Set prioritize_scans to false
-    SettingsRepository::set(
-        &db,
-        "task.prioritize_scans_over_analysis",
-        "false".to_string(),
-        uuid::Uuid::new_v4(),
-        Some("Test update".to_string()),
-        None,
-    )
-    .await
-    .expect("Failed to set setting");
-
-    // Reload settings service to pick up the change
-    settings_service.reload().await.expect("Failed to reload");
-
-    // Enqueue tasks with same priority
-    // Analysis task first
-    let analyze_task_id = TaskRepository::enqueue(
-        &db,
-        TaskType::AnalyzeBook {
-            book_id,
-            force: false,
-        },
-        0,
-        None,
-    )
-    .await
-    .expect("Failed to enqueue analyze task");
-
-    // Scan task second
-    let scan_task_id = TaskRepository::enqueue(
-        &db,
-        TaskType::ScanLibrary {
-            library_id,
-            mode: "normal".to_string(),
-        },
-        0,
-        None,
-    )
-    .await
-    .expect("Failed to enqueue scan task");
-
-    // Create worker with settings service
-    let worker = TaskWorker::new(db.clone())
-        .with_settings_service(settings_service)
-        .with_poll_interval(Duration::from_millis(50));
-
-    // Process task - should get analysis task first (prioritization disabled)
-    // With prioritization disabled and same priority, FIFO order applies
-    let processed = worker.process_once().await.expect("Failed to process");
-    assert!(processed, "Should have processed a task");
-
-    // Check which task was processed by looking at attempts or started_at
-    let analyze_task = TaskRepository::get_by_id(&db, analyze_task_id)
+    // Verify cleanup task is still pending
+    let cleanup_task = TaskRepository::get_by_id(&db, cleanup_id)
         .await
-        .expect("Failed to get analyze task")
-        .expect("Analyze task not found");
-
-    let scan_task = TaskRepository::get_by_id(&db, scan_task_id)
-        .await
-        .expect("Failed to get scan task")
-        .expect("Scan task not found");
-
-    let analyze_processed = analyze_task.attempts > 0 || analyze_task.started_at.is_some();
-    let scan_processed = scan_task.attempts > 0 || scan_task.started_at.is_some();
-
-    // Verify that a task was processed
-    assert!(
-        analyze_processed || scan_processed,
-        "At least one task should have been processed. Analyze: attempts={}, started_at={:?}, status={}. Scan: attempts={}, started_at={:?}, status={}",
-        analyze_task.attempts,
-        analyze_task.started_at,
-        analyze_task.status,
-        scan_task.attempts,
-        scan_task.started_at,
-        scan_task.status
-    );
-
-    // Note: This test verifies the worker reads the setting, not the exact ordering
-    // The exact ordering depends on timing and priority when prioritization is disabled
-}
-
-/// Test worker with prioritize_scans enabled via settings
-#[tokio::test]
-async fn test_worker_with_prioritize_scans_enabled() {
-    use codex::db::repositories::SettingsRepository;
-    use codex::services::SettingsService;
-    use codex::tasks::TaskWorker;
-    use std::sync::Arc;
-
-    let (db, _temp_dir) = setup_test_db().await;
-    let library_id = create_test_library(&db).await;
-    let series_id = create_test_series(&db, library_id).await;
-    let book_id = create_test_book(&db, series_id, library_id).await;
-
-    // Create settings service
-    let settings_service = Arc::new(
-        SettingsService::new(db.clone())
-            .await
-            .expect("Failed to create settings service"),
-    );
-
-    // Ensure prioritize_scans is true (default)
-    SettingsRepository::set(
-        &db,
-        "task.prioritize_scans_over_analysis",
-        "true".to_string(),
-        uuid::Uuid::new_v4(),
-        Some("Test update".to_string()),
-        None,
-    )
-    .await
-    .expect("Failed to set setting");
-
-    // Reload settings service
-    settings_service.reload().await.expect("Failed to reload");
-
-    // Enqueue tasks with same priority and scheduled_for
-    // Analysis task first
-    let analyze_task_id = TaskRepository::enqueue(
-        &db,
-        TaskType::AnalyzeBook {
-            book_id,
-            force: false,
-        },
-        0,
-        None,
-    )
-    .await
-    .expect("Failed to enqueue analyze task");
-
-    // Scan task second
-    let scan_task_id = TaskRepository::enqueue(
-        &db,
-        TaskType::ScanLibrary {
-            library_id,
-            mode: "normal".to_string(),
-        },
-        0,
-        None,
-    )
-    .await
-    .expect("Failed to enqueue scan task");
-
-    // Create worker with settings service
-    let worker = TaskWorker::new(db.clone())
-        .with_settings_service(settings_service)
-        .with_poll_interval(Duration::from_millis(50));
-
-    // Process task - should get scan task first (prioritization enabled)
-    let processed = worker.process_once().await.expect("Failed to process");
-    assert!(processed, "Should have processed a task");
-
-    // Check which task was processed by looking at attempts or started_at
-    // A processed task will have attempts > 0 or started_at set
-    let analyze_task = TaskRepository::get_by_id(&db, analyze_task_id)
-        .await
-        .expect("Failed to get analyze task")
-        .expect("Analyze task not found");
-
-    let scan_task = TaskRepository::get_by_id(&db, scan_task_id)
-        .await
-        .expect("Failed to get scan task")
-        .expect("Scan task not found");
-
-    // With prioritization enabled, scan_library should be processed first
-    // Check which task has been attempted (attempts > 0 or started_at is set)
-    let scan_processed = scan_task.attempts > 0 || scan_task.started_at.is_some();
-    let analyze_processed = analyze_task.attempts > 0 || analyze_task.started_at.is_some();
-
-    assert!(
-        scan_processed,
-        "Scan task should be prioritized when setting is enabled. Scan task: attempts={}, started_at={:?}, status={}. Analyze task: attempts={}, started_at={:?}, status={}",
-        scan_task.attempts,
-        scan_task.started_at,
-        scan_task.status,
-        analyze_task.attempts,
-        analyze_task.started_at,
-        analyze_task.status
-    );
-
-    // If scan was processed, analyze should not have been processed yet
-    if scan_processed {
-        assert!(
-            !analyze_processed,
-            "Analyze task should not be processed before scan task when prioritization is enabled"
-        );
-    }
-}
-
-/// Helper to create a test library
-async fn create_test_library(db: &sea_orm::DatabaseConnection) -> Uuid {
-    use codex::db::ScanningStrategy;
-    use codex::db::repositories::LibraryRepository;
-
-    let library = LibraryRepository::create(
-        db,
-        "Test Library",
-        "/tmp/test-library",
-        ScanningStrategy::Default,
-    )
-    .await
-    .expect("Failed to create library");
-    library.id
-}
-
-/// Helper to create a test series
-async fn create_test_series(db: &sea_orm::DatabaseConnection, library_id: Uuid) -> Uuid {
-    use chrono::Utc;
-    use codex::db::entities::{series, series_metadata};
-    use sea_orm::{ActiveModelTrait, Set};
-
-    let series_id = Uuid::new_v4();
-    let now = Utc::now();
-    let series = series::ActiveModel {
-        id: Set(series_id),
-        library_id: Set(library_id),
-        fingerprint: Set(Some(format!("test-series-{}", series_id))),
-        path: Set("/test/series".to_string()),
-        name: Set("Test Series".to_string()),
-        normalized_name: Set("test series".to_string()),
-        created_at: Set(now),
-        updated_at: Set(now),
-    };
-    series.insert(db).await.expect("Failed to create series");
-
-    // Also create series_metadata with the title
-    let series_meta = series_metadata::ActiveModel {
-        series_id: Set(series_id),
-        title: Set("Test Series".to_string()),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    };
-    series_meta
-        .insert(db)
-        .await
-        .expect("Failed to create series metadata");
-
-    series_id
-}
-
-/// Helper to create a test book
-async fn create_test_book(
-    db: &sea_orm::DatabaseConnection,
-    series_id: Uuid,
-    library_id: Uuid,
-) -> Uuid {
-    use chrono::Utc;
-    use codex::db::entities::books;
-    use sea_orm::{ActiveModelTrait, Set};
-
-    let book_id = Uuid::new_v4();
-    let now = Utc::now();
-    let book = books::ActiveModel {
-        id: Set(book_id),
-        series_id: Set(series_id),
-        library_id: Set(library_id),
-        file_path: Set("/tmp/test.cbz".to_string()),
-        file_name: Set("test.cbz".to_string()),
-        file_size: Set(1024),
-        file_hash: Set("test-hash".to_string()),
-        format: Set("cbz".to_string()),
-        page_count: Set(10),
-        modified_at: Set(now),
-        created_at: Set(now),
-        updated_at: Set(now),
-        ..Default::default()
-    };
-    book.insert(db).await.expect("Failed to create book");
-    book_id
+        .expect("Failed to get task")
+        .expect("Task not found");
+    assert_eq!(cleanup_task.status, "pending");
 }

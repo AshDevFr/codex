@@ -154,7 +154,6 @@ impl ScanLibraryHandler {
                         plugin_id: plugin.id,
                         source_scope: Some("library:scan".to_string()),
                     },
-                    0,    // priority (normal)
                     None, // schedule now
                 )
                 .await

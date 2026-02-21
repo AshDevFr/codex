@@ -183,7 +183,7 @@ pub async fn bulk_analyze_books(
             force: request.force,
         };
 
-        match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+        match TaskRepository::enqueue(&state.db, task_type, None).await {
             Ok(_) => enqueued += 1,
             Err(e) => {
                 tracing::error!("Failed to enqueue task for book {}: {}", book_id, e);
@@ -412,7 +412,7 @@ pub async fn bulk_analyze_series(
                 force: request.force,
             };
 
-            match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+            match TaskRepository::enqueue(&state.db, task_type, None).await {
                 Ok(_) => enqueued += 1,
                 Err(e) => {
                     tracing::error!("Failed to enqueue task for book {}: {}", book.id, e);
@@ -481,7 +481,7 @@ pub async fn bulk_generate_series_book_thumbnails(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
 
@@ -544,7 +544,7 @@ pub async fn bulk_generate_book_thumbnails(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to queue thumbnail generation: {}", e)))?;
 
@@ -604,7 +604,7 @@ pub async fn bulk_generate_series_thumbnails(
         force: request.force,
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| {
             ApiError::Internal(format!(
@@ -673,7 +673,7 @@ pub async fn bulk_reprocess_series_titles(
         series_ids: Some(request.series_ids.clone()),
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to queue title reprocessing: {}", e)))?;
 
@@ -865,7 +865,7 @@ pub async fn bulk_renumber_series(
         series_ids: Some(request.series_ids.clone()),
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 

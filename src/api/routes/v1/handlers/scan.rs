@@ -87,7 +87,7 @@ pub async fn trigger_scan(
         mode: mode.to_string(),
     };
 
-    let _task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let _task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue scan: {}", e)))?;
 
@@ -431,7 +431,7 @@ pub async fn trigger_series_analysis(
     // Enqueue AnalyzeSeries task (always forces re-analysis)
     let task_type = TaskType::AnalyzeSeries { series_id };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
@@ -483,7 +483,7 @@ pub async fn trigger_book_analysis(
         force: true, // Manual trigger always forces
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
@@ -559,7 +559,6 @@ pub async fn trigger_library_analysis(
                 book_id: book.id,
                 force: true, // Force reanalysis of all books
             },
-            0,
             None,
         )
         .await
@@ -584,7 +583,6 @@ pub async fn trigger_library_analysis(
             book_id: all_books[0].id,
             force: true,
         },
-        0,
         None,
     )
     .await
@@ -656,7 +654,6 @@ pub async fn trigger_library_unanalyzed_analysis(
                 book_id: book.id,
                 force: false, // Only analyze if not already analyzed
             },
-            0,
             None,
         )
         .await
@@ -682,7 +679,6 @@ pub async fn trigger_library_unanalyzed_analysis(
             book_id: first_book_id,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -754,7 +750,6 @@ pub async fn trigger_series_unanalyzed_analysis(
                 book_id: book.id,
                 force: false, // Only analyze if not already analyzed
             },
-            0,
             None,
         )
         .await
@@ -779,7 +774,6 @@ pub async fn trigger_series_unanalyzed_analysis(
             book_id: first_book_id,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -846,7 +840,7 @@ pub async fn trigger_book_unanalyzed_analysis(
         force: false, // Only analyze if not already analyzed
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
@@ -894,7 +888,7 @@ pub async fn renumber_series(
 
     let task_type = TaskType::RenumberSeries { series_id };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 

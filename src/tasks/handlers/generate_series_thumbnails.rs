@@ -124,7 +124,7 @@ impl TaskHandler for GenerateSeriesThumbnailsHandler {
                     force,
                 };
 
-                match TaskRepository::enqueue(db, task_type, 0, None).await {
+                match TaskRepository::enqueue(db, task_type, None).await {
                     Ok(task_id) => {
                         debug!(
                             "Enqueued series thumbnail task {} for series {} (force={})",

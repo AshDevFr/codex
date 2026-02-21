@@ -260,7 +260,7 @@ impl CoverService {
             series_id,
             force: true,
         };
-        if let Err(e) = TaskRepository::enqueue(db, task_type, 0, None).await {
+        if let Err(e) = TaskRepository::enqueue(db, task_type, None).await {
             warn!(
                 "Failed to queue series thumbnail regeneration task for {}: {}",
                 series_id, e
@@ -279,7 +279,7 @@ impl CoverService {
             book_id,
             force: true,
         };
-        if let Err(e) = TaskRepository::enqueue(db, task_type, 0, None).await {
+        if let Err(e) = TaskRepository::enqueue(db, task_type, None).await {
             warn!(
                 "Failed to queue book thumbnail regeneration task for {}: {}",
                 book_id, e

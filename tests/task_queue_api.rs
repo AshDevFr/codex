@@ -55,7 +55,6 @@ async fn test_api_list_tasks() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -107,7 +106,6 @@ async fn test_api_get_task() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -248,7 +246,6 @@ async fn test_api_cancel_task() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -299,13 +296,12 @@ async fn test_api_unlock_task() {
             book_ids: None,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to create task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .unwrap();
 

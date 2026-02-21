@@ -349,7 +349,7 @@ impl BookBatch {
                 })
                 .collect();
 
-            match TaskRepository::enqueue_batch(db, tasks, 0, None).await {
+            match TaskRepository::enqueue_batch(db, tasks, None).await {
                 Ok(count) => {
                     tasks_queued = count as usize;
                     debug!("Enqueued {} analysis tasks", tasks_queued);

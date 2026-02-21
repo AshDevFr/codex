@@ -85,7 +85,7 @@ impl Scheduler {
                     mode: scan_mode.to_string(),
                 };
 
-                if let Err(e) = TaskRepository::enqueue(&self.db, task_type, 0, None).await {
+                if let Err(e) = TaskRepository::enqueue(&self.db, task_type, None).await {
                     warn!(
                         "Failed to trigger scan-on-start for library {}: {}",
                         library.name, e
@@ -132,7 +132,7 @@ impl Scheduler {
                 info!("Triggering scheduled duplicate detection");
 
                 let task_type = TaskType::FindDuplicates;
-                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                match TaskRepository::enqueue(&db, task_type, None).await {
                     Ok(_) => debug!("Duplicate detection task enqueued"),
                     Err(e) => error!("Failed to enqueue duplicate detection: {}", e),
                 }
@@ -175,7 +175,7 @@ impl Scheduler {
                 info!("Triggering scheduled PDF cache cleanup");
 
                 let task_type = TaskType::CleanupPdfCache;
-                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                match TaskRepository::enqueue(&db, task_type, None).await {
                     Ok(_) => debug!("PDF cache cleanup task enqueued"),
                     Err(e) => error!("Failed to enqueue PDF cache cleanup: {}", e),
                 }
@@ -209,7 +209,7 @@ impl Scheduler {
                 debug!("Triggering scheduled plugin data cleanup");
 
                 let task_type = TaskType::CleanupPluginData;
-                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                match TaskRepository::enqueue(&db, task_type, None).await {
                     Ok(_) => debug!("Plugin data cleanup task enqueued"),
                     Err(e) => error!("Failed to enqueue plugin data cleanup: {}", e),
                 }
@@ -264,7 +264,7 @@ impl Scheduler {
                     force: false, // Only generate missing thumbnails
                 };
 
-                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                match TaskRepository::enqueue(&db, task_type, None).await {
                     Ok(_) => debug!("Book thumbnail generation task enqueued"),
                     Err(e) => error!("Failed to enqueue book thumbnail generation: {}", e),
                 }
@@ -318,7 +318,7 @@ impl Scheduler {
                     force: false, // Only generate missing thumbnails
                 };
 
-                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                match TaskRepository::enqueue(&db, task_type, None).await {
                     Ok(_) => debug!("Series thumbnail generation task enqueued"),
                     Err(e) => error!("Failed to enqueue series thumbnail generation: {}", e),
                 }
@@ -394,7 +394,7 @@ impl Scheduler {
                     mode: mode_str.clone(),
                 };
 
-                match TaskRepository::enqueue(&db, task_type, 0, None).await {
+                match TaskRepository::enqueue(&db, task_type, None).await {
                     Ok(_) => {
                         debug!("Successfully triggered scan for library {}", library_name);
                     }

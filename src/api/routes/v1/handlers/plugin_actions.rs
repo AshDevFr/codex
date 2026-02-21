@@ -2605,7 +2605,7 @@ pub async fn enqueue_auto_match_task(
         source_scope: Some("series:detail".to_string()),
     };
 
-    let task_id = TaskRepository::enqueue(&state.db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue task: {}", e)))?;
 
@@ -2705,7 +2705,7 @@ pub async fn enqueue_bulk_auto_match_tasks(
             source_scope: Some("series:bulk".to_string()),
         };
 
-        match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+        match TaskRepository::enqueue(&state.db, task_type, None).await {
             Ok(task_id) => {
                 task_ids.push(task_id);
                 enqueued += 1;
@@ -2840,7 +2840,7 @@ pub async fn enqueue_library_auto_match_tasks(
             source_scope: Some("library:detail".to_string()),
         };
 
-        match TaskRepository::enqueue(&state.db, task_type, 0, None).await {
+        match TaskRepository::enqueue(&state.db, task_type, None).await {
             Ok(task_id) => {
                 task_ids.push(task_id);
                 enqueued += 1;

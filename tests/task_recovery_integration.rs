@@ -40,12 +40,12 @@ async fn test_worker_crash_recovery_scenario() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
     // Step 2: Worker claims the task
-    let claimed_task = TaskRepository::claim_next(&db, "worker-crashed", 300, false)
+    let claimed_task = TaskRepository::claim_next(&db, "worker-crashed", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
@@ -94,7 +94,7 @@ async fn test_worker_crash_recovery_scenario() {
     assert_eq!(recovered_task.attempts, 1); // Still has 1 attempt from crash
 
     // Step 7: New worker can claim and complete the task
-    let reclaimed_task = TaskRepository::claim_next(&db, "worker-healthy", 300, false)
+    let reclaimed_task = TaskRepository::claim_next(&db, "worker-healthy", 300)
         .await
         .expect("Failed to reclaim task")
         .expect("No task available");
@@ -140,7 +140,6 @@ async fn test_multiple_worker_crashes() {
                 library_id: lib_id,
                 mode: "normal".to_string(),
             },
-            0,
             None,
         )
         .await
@@ -151,7 +150,7 @@ async fn test_multiple_worker_crashes() {
     // 5 different workers claim them
     for i in 0..5 {
         let worker_name = format!("worker-{}", i);
-        TaskRepository::claim_next(&db, &worker_name, 300, false)
+        TaskRepository::claim_next(&db, &worker_name, 300)
             .await
             .expect("Failed to claim task");
     }
@@ -198,14 +197,13 @@ async fn test_crashed_task_at_max_attempts() {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue task");
 
     // Claim task
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
 
@@ -243,7 +241,7 @@ async fn test_crashed_task_at_max_attempts() {
     assert_eq!(task.locked_by, None);
 
     // Should not be claimable again
-    let claim_attempt = TaskRepository::claim_next(&db, "worker-2", 300, false)
+    let claim_attempt = TaskRepository::claim_next(&db, "worker-2", 300)
         .await
         .expect("Failed to query tasks");
 
@@ -263,14 +261,13 @@ async fn test_periodic_stale_recovery() {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue task");
 
     // Claim it
-    TaskRepository::claim_next(&db, "worker-crashed", 300, false)
+    TaskRepository::claim_next(&db, "worker-crashed", 300)
         .await
         .expect("Failed to claim");
 
@@ -325,13 +322,12 @@ async fn test_active_tasks_not_recovered() {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue task");
 
-    let claimed_task = TaskRepository::claim_next(&db, "worker-active", 300, false)
+    let claimed_task = TaskRepository::claim_next(&db, "worker-active", 300)
         .await
         .expect("Failed to claim")
         .expect("No task");
@@ -377,7 +373,6 @@ async fn test_recovery_with_mixed_states() {
             library_id: library_id_stale,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
@@ -389,7 +384,6 @@ async fn test_recovery_with_mixed_states() {
             library_id: library_id_active,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
@@ -401,7 +395,6 @@ async fn test_recovery_with_mixed_states() {
             library_id: library_id_completed,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
@@ -413,27 +406,26 @@ async fn test_recovery_with_mixed_states() {
             library_id: library_id_pending,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue");
 
     // Stale task: claimed but lock expired long ago
-    let claimed_stale = TaskRepository::claim_next(&db, "worker-crashed", 300, false)
+    let claimed_stale = TaskRepository::claim_next(&db, "worker-crashed", 300)
         .await
         .expect("Failed to claim")
         .expect("No task");
     let stale_task_id = claimed_stale.id;
 
     // Active task: claimed with valid lock
-    let _claimed_active = TaskRepository::claim_next(&db, "worker-healthy", 300, false)
+    let _claimed_active = TaskRepository::claim_next(&db, "worker-healthy", 300)
         .await
         .expect("Failed to claim")
         .expect("No task");
 
     // Completed task: finished successfully
-    let claimed_completed = TaskRepository::claim_next(&db, "worker-done", 300, false)
+    let claimed_completed = TaskRepository::claim_next(&db, "worker-done", 300)
         .await
         .expect("Failed to claim")
         .expect("No task");
@@ -503,7 +495,7 @@ async fn test_rescan_no_duplicate_analyze_tasks() {
         mode: "normal".to_string(),
     };
 
-    let first_task_id = TaskRepository::enqueue(&db, task_type.clone(), 0, None)
+    let first_task_id = TaskRepository::enqueue(&db, task_type.clone(), None)
         .await
         .expect("Failed to enqueue first scan task");
 
@@ -515,7 +507,7 @@ async fn test_rescan_no_duplicate_analyze_tasks() {
     assert_eq!(stats.pending, 1);
 
     // Try to enqueue the same scan task again (simulating a re-scan)
-    let second_task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let second_task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to handle duplicate scan task");
 
@@ -553,7 +545,6 @@ async fn test_rescan_multiple_libraries_no_duplicates() {
                 library_id: *library_id,
                 mode: "normal".to_string(),
             },
-            0,
             None,
         )
         .await
@@ -574,7 +565,6 @@ async fn test_rescan_multiple_libraries_no_duplicates() {
                 library_id: *library_id,
                 mode: "normal".to_string(),
             },
-            0,
             None,
         )
         .await
@@ -603,12 +593,12 @@ async fn test_completed_task_allows_new_task() {
         library_id,
         mode: "normal".to_string(),
     };
-    let first_task_id = TaskRepository::enqueue(&db, task_type.clone(), 0, None)
+    let first_task_id = TaskRepository::enqueue(&db, task_type.clone(), None)
         .await
         .expect("Failed to enqueue first task");
 
     // Claim and complete the task
-    let claimed = TaskRepository::claim_next(&db, "worker-1", 300, false)
+    let claimed = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task to claim");
@@ -619,7 +609,7 @@ async fn test_completed_task_allows_new_task() {
         .expect("Failed to mark task completed");
 
     // Now enqueue the same task again - should create a new task since the previous one is completed
-    let second_task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let second_task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue second task");
 

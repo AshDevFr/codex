@@ -99,7 +99,7 @@ async fn test_enqueue_task() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -111,7 +111,7 @@ async fn test_enqueue_task() {
 
     assert_eq!(task.task_type, "scan_library");
     assert_eq!(task.status, "pending");
-    assert_eq!(task.priority, 0);
+    assert_eq!(task.priority, 1000);
     assert_eq!(task.attempts, 0);
 }
 
@@ -127,12 +127,12 @@ async fn test_claim_next_task() {
         mode: "normal".to_string(),
     };
 
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
     // Claim the task
-    let claimed = TaskRepository::claim_next(&db, "worker-1", 300, false)
+    let claimed = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
@@ -155,19 +155,19 @@ async fn test_skip_locked_prevents_double_claim() {
         mode: "normal".to_string(),
     };
 
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
     // First worker claims
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, false)
+    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
     assert!(claimed1.is_some());
 
     // Second worker tries to claim - should get nothing
-    let claimed2 = TaskRepository::claim_next(&db, "worker-2", 300, false)
+    let claimed2 = TaskRepository::claim_next(&db, "worker-2", 300)
         .await
         .expect("Failed to claim task");
 
@@ -186,11 +186,11 @@ async fn test_mark_completed() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -221,11 +221,11 @@ async fn test_mark_failed_retry() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -257,12 +257,12 @@ async fn test_max_attempts_reached() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
     // Claim and fail once (attempts = 1)
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
     TaskRepository::mark_failed(&db, task_id, "Error 1".to_string())
@@ -280,7 +280,7 @@ async fn test_max_attempts_reached() {
     }
 
     // Claim and fail again (attempts = 2)
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
     TaskRepository::mark_failed(&db, task_id, "Error 2".to_string())
@@ -298,7 +298,7 @@ async fn test_max_attempts_reached() {
     }
 
     // Claim and fail third time (attempts = 3, should reach max)
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
     TaskRepository::mark_failed(&db, task_id, "Error 3".to_string())
@@ -330,7 +330,7 @@ async fn test_cancel_task() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -357,12 +357,12 @@ async fn test_unlock_task() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
     // Claim task
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
 
@@ -400,22 +400,22 @@ async fn test_priority_ordering() {
         mode: "normal".to_string(),
     };
 
-    TaskRepository::enqueue(&db, low_priority, 0, None)
+    TaskRepository::enqueue(&db, low_priority, None)
         .await
         .expect("Failed to enqueue low priority");
 
-    let high_task_id = TaskRepository::enqueue(&db, high_priority, 10, None)
+    let high_task_id = TaskRepository::enqueue_with_priority(&db, high_priority, 10000, None)
         .await
         .expect("Failed to enqueue high priority");
 
     // Claim next - should get high priority task
-    let claimed = TaskRepository::claim_next(&db, "worker-1", 300, false)
+    let claimed = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim")
         .expect("No task");
 
     assert_eq!(claimed.id, high_task_id);
-    assert_eq!(claimed.priority, 10);
+    assert_eq!(claimed.priority, 10000);
 }
 
 /// Test duplicate task prevention
@@ -431,12 +431,12 @@ async fn test_duplicate_task_prevention() {
         mode: "normal".to_string(),
     };
 
-    let first_task_id = TaskRepository::enqueue(&db, task1.clone(), 0, None)
+    let first_task_id = TaskRepository::enqueue(&db, task1.clone(), None)
         .await
         .expect("Failed to enqueue first task");
 
     // Try to enqueue duplicate - should return the same task ID
-    let second_task_id = TaskRepository::enqueue(&db, task1, 0, None)
+    let second_task_id = TaskRepository::enqueue(&db, task1, None)
         .await
         .expect("Failed to handle duplicate task");
 
@@ -465,7 +465,6 @@ async fn test_queue_stats() {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
@@ -477,14 +476,13 @@ async fn test_queue_stats() {
             book_id,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue");
 
     // Claim one
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
 
@@ -517,13 +515,12 @@ async fn test_purge_old_tasks() {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
 
@@ -555,7 +552,6 @@ async fn test_nuke_all_tasks() {
                 library_id,
                 mode: "normal".to_string(),
             },
-            0,
             None,
         )
         .await
@@ -590,11 +586,11 @@ async fn test_recover_stale_tasks_basic() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -643,11 +639,11 @@ async fn test_recover_stale_tasks_max_attempts() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -700,11 +696,11 @@ async fn test_recover_stale_tasks_ignores_active() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -754,7 +750,6 @@ async fn test_recover_multiple_stale_tasks() {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
@@ -766,24 +761,23 @@ async fn test_recover_multiple_stale_tasks() {
             book_id,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue task 2");
 
-    let task3_id = TaskRepository::enqueue(&db, TaskType::AnalyzeSeries { series_id }, 0, None)
+    let task3_id = TaskRepository::enqueue(&db, TaskType::AnalyzeSeries { series_id }, None)
         .await
         .expect("Failed to enqueue task 3");
 
     // Claim all tasks
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim");
-    TaskRepository::claim_next(&db, "worker-2", 300, false)
+    TaskRepository::claim_next(&db, "worker-2", 300)
         .await
         .expect("Failed to claim");
-    TaskRepository::claim_next(&db, "worker-3", 300, false)
+    TaskRepository::claim_next(&db, "worker-3", 300)
         .await
         .expect("Failed to claim");
 
@@ -832,11 +826,11 @@ async fn test_recover_stale_tasks_ignores_completed() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -886,11 +880,11 @@ async fn test_stats_shows_stale_tasks() {
         mode: "normal".to_string(),
     };
 
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    let task = TaskRepository::claim_next(&db, "worker-1", 300, false)
+    let task = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task");
@@ -909,166 +903,113 @@ async fn test_stats_shows_stale_tasks() {
     assert_eq!(stats.stale, 1); // Should detect the stale task
 }
 
-/// Test that scan tasks are prioritized over analysis tasks when prioritize_scans is true
+/// Test that default_priority ordering works correctly (scan > analysis)
 #[tokio::test]
-async fn test_prioritize_scans_over_analysis() {
+async fn test_default_priority_scan_over_analysis() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
     let series_id = create_test_series(&db, library_id).await;
     let book_id = create_test_book(&db, series_id, library_id).await;
 
-    // Enqueue tasks with same priority and scheduled_for time
-    // Analysis task first (should be picked second if prioritization works)
+    // Enqueue analysis task first
     TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeBook {
             book_id,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue analyze task");
 
-    // Scan task second (should be picked first if prioritization works)
+    // Enqueue scan task second
     TaskRepository::enqueue(
         &db,
         TaskType::ScanLibrary {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue scan task");
 
-    // Claim with prioritization enabled - should get scan task first
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    // Should get scan task first (priority 1000 > 800)
+    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
 
     assert_eq!(
         claimed1.task_type, "scan_library",
-        "Scan task should be prioritized"
+        "Scan task should be claimed first due to higher default priority"
     );
+    assert_eq!(claimed1.priority, 1000);
 
-    // Complete the scan task
     TaskRepository::mark_completed(&db, claimed1.id, None)
         .await
         .expect("Failed to complete task");
 
-    // Now claim again - should get the analysis task
-    let claimed2 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    let claimed2 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
 
-    assert_eq!(
-        claimed2.task_type, "analyze_book",
-        "Analysis task should be picked after scan"
-    );
+    assert_eq!(claimed2.task_type, "analyze_book");
+    assert_eq!(claimed2.priority, 800);
 }
 
-/// Test that priority-based ordering is used when prioritize_scans is false
+/// Test that enqueue_with_priority overrides default_priority
 #[tokio::test]
-async fn test_no_prioritization_uses_priority() {
+async fn test_enqueue_with_priority_override() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id = create_test_library(&db).await;
-    let book_id =
-        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
+    let series_id = create_test_series(&db, library_id).await;
+    let book_id = create_test_book(&db, series_id, library_id).await;
 
-    // Enqueue scan task with lower priority
-    TaskRepository::enqueue(
+    // Enqueue scan with very low explicit priority
+    TaskRepository::enqueue_with_priority(
         &db,
         TaskType::ScanLibrary {
             library_id,
             mode: "normal".to_string(),
         },
-        0, // Lower priority
+        1, // Override default 1000 to very low
         None,
     )
     .await
     .expect("Failed to enqueue scan task");
 
-    // Enqueue analysis task with higher priority
-    TaskRepository::enqueue(
+    // Enqueue analysis with very high explicit priority
+    TaskRepository::enqueue_with_priority(
         &db,
         TaskType::AnalyzeBook {
             book_id,
             force: false,
         },
-        10, // Higher priority
+        9999, // Override default 800 to very high
         None,
     )
     .await
     .expect("Failed to enqueue analyze task");
 
-    // Claim with prioritization disabled - should get higher priority task first
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, false)
+    // Should get analysis first due to explicit priority override
+    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
 
     assert_eq!(
         claimed1.task_type, "analyze_book",
-        "Higher priority task should be picked first"
+        "Explicit high priority should override default ordering"
     );
-    assert_eq!(claimed1.priority, 10, "Should have priority 10");
+    assert_eq!(claimed1.priority, 9999);
 }
 
-/// Test that scan prioritization works even when scan has lower priority
+/// Test default priority ordering with multiple task categories
 #[tokio::test]
-async fn test_prioritize_scans_even_with_lower_priority() {
-    let (db, _temp_dir) = setup_test_db().await;
-    let library_id = create_test_library(&db).await;
-    let book_id =
-        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
-
-    // Enqueue analysis task with higher priority
-    TaskRepository::enqueue(
-        &db,
-        TaskType::AnalyzeBook {
-            book_id,
-            force: false,
-        },
-        10, // Higher priority
-        None,
-    )
-    .await
-    .expect("Failed to enqueue analyze task");
-
-    // Enqueue scan task with lower priority
-    TaskRepository::enqueue(
-        &db,
-        TaskType::ScanLibrary {
-            library_id,
-            mode: "normal".to_string(),
-        },
-        0, // Lower priority
-        None,
-    )
-    .await
-    .expect("Failed to enqueue scan task");
-
-    // Claim with prioritization enabled - should get scan task despite lower priority
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, true)
-        .await
-        .expect("Failed to claim task")
-        .expect("No task available");
-
-    assert_eq!(
-        claimed1.task_type, "scan_library",
-        "Scan task should be prioritized even with lower priority"
-    );
-    assert_eq!(claimed1.priority, 0, "Should have priority 0");
-}
-
-/// Test prioritization with multiple scan and analysis tasks
-#[tokio::test]
-async fn test_prioritize_multiple_scans_over_analysis() {
+async fn test_default_priority_multiple_categories() {
     let (db, _temp_dir) = setup_test_db().await;
     let library_id1 = create_test_library(&db).await;
     let library_id2 = create_test_library(&db).await;
@@ -1077,38 +1018,35 @@ async fn test_prioritize_multiple_scans_over_analysis() {
     let book_id2 =
         create_test_book(&db, create_test_series(&db, library_id2).await, library_id2).await;
 
-    // Enqueue analysis tasks first
+    // Enqueue tasks in reverse priority order
     TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeBook {
             book_id: book_id1,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue analyze task 1");
+
     TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeBook {
             book_id: book_id2,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue analyze task 2");
 
-    // Enqueue scan tasks second
     TaskRepository::enqueue(
         &db,
         TaskType::ScanLibrary {
             library_id: library_id1,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
@@ -1120,66 +1058,53 @@ async fn test_prioritize_multiple_scans_over_analysis() {
             library_id: library_id2,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue scan task 2");
 
-    // Claim with prioritization enabled - should get scan tasks first
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    // Should get scan tasks first, then analysis tasks
+    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
-    assert_eq!(
-        claimed1.task_type, "scan_library",
-        "First task should be scan"
-    );
+    assert_eq!(claimed1.task_type, "scan_library", "First should be scan");
 
-    // Complete it
     TaskRepository::mark_completed(&db, claimed1.id, None)
         .await
         .expect("Failed to complete task");
 
-    // Claim again - should get the other scan task
-    let claimed2 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    let claimed2 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
-    assert_eq!(
-        claimed2.task_type, "scan_library",
-        "Second task should be scan"
-    );
+    assert_eq!(claimed2.task_type, "scan_library", "Second should be scan");
 
-    // Complete it
     TaskRepository::mark_completed(&db, claimed2.id, None)
         .await
         .expect("Failed to complete task");
 
-    // Now should get analysis tasks
-    let claimed3 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    let claimed3 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
     assert_eq!(
         claimed3.task_type, "analyze_book",
-        "Third task should be analysis"
+        "Third should be analysis"
     );
 }
 
 // ============================================================================
 // PostgreSQL-specific tests
-// These tests verify that task prioritization works correctly with PostgreSQL
+// These tests verify that task priority ordering works correctly with PostgreSQL
 // which uses different SQL syntax ($1 parameters vs ?) and FOR UPDATE SKIP LOCKED
 // ============================================================================
 
-/// Test PostgreSQL task prioritization with scan tasks
-/// Verifies that PostgreSQL's CASE expression and FOR UPDATE SKIP LOCKED work correctly
+/// Test PostgreSQL default priority ordering
 #[tokio::test]
 #[ignore]
-async fn test_postgres_prioritize_scans_over_analysis() {
+async fn test_postgres_default_priority_ordering() {
     let Some(db) = setup_test_db_postgres().await else {
-        // Skip test if PostgreSQL is not available
         return;
     };
 
@@ -1187,173 +1112,59 @@ async fn test_postgres_prioritize_scans_over_analysis() {
     let series_id = create_test_series(&db, library_id).await;
     let book_id = create_test_book(&db, series_id, library_id).await;
 
-    // Enqueue tasks with same priority and scheduled_for time
-    // Analysis task first (should be picked second if prioritization works)
+    // Enqueue analysis first, scan second
     TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeBook {
             book_id,
             force: false,
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue analyze task");
 
-    // Scan task second (should be picked first if prioritization works)
     TaskRepository::enqueue(
         &db,
         TaskType::ScanLibrary {
             library_id,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue scan task");
 
-    // Claim with prioritization enabled - should get scan task first
-    // This verifies PostgreSQL's CASE expression in ORDER BY works correctly
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    // Scan should come first (priority 1000 > 800)
+    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
 
     assert_eq!(
         claimed1.task_type, "scan_library",
-        "PostgreSQL: Scan task should be prioritized"
+        "PostgreSQL: Scan should be prioritized via default_priority"
     );
 
-    // Complete the scan task
     TaskRepository::mark_completed(&db, claimed1.id, None)
         .await
         .expect("Failed to complete task");
 
-    // Now claim again - should get the analysis task
-    let claimed2 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    let claimed2 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
 
     assert_eq!(
         claimed2.task_type, "analyze_book",
-        "PostgreSQL: Analysis task should be picked after scan"
+        "PostgreSQL: Analysis should come after scan"
     );
 }
 
-/// Test PostgreSQL task prioritization with mixed priorities
-/// Verifies that scan tasks are prioritized even with lower priority
+/// Test PostgreSQL concurrent workers with default priorities
 #[tokio::test]
 #[ignore]
-async fn test_postgres_prioritize_scans_even_with_lower_priority() {
-    let Some(db) = setup_test_db_postgres().await else {
-        return;
-    };
-
-    let library_id = create_test_library(&db).await;
-    let book_id =
-        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
-
-    // Enqueue analysis task with higher priority
-    TaskRepository::enqueue(
-        &db,
-        TaskType::AnalyzeBook {
-            book_id,
-            force: false,
-        },
-        10, // Higher priority
-        None,
-    )
-    .await
-    .expect("Failed to enqueue analyze task");
-
-    // Enqueue scan task with lower priority
-    TaskRepository::enqueue(
-        &db,
-        TaskType::ScanLibrary {
-            library_id,
-            mode: "normal".to_string(),
-        },
-        0, // Lower priority
-        None,
-    )
-    .await
-    .expect("Failed to enqueue scan task");
-
-    // Claim with prioritization enabled - should get scan task despite lower priority
-    // This verifies PostgreSQL's CASE expression takes precedence over priority
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, true)
-        .await
-        .expect("Failed to claim task")
-        .expect("No task available");
-
-    assert_eq!(
-        claimed1.task_type, "scan_library",
-        "PostgreSQL: Scan task should be prioritized even with lower priority"
-    );
-    assert_eq!(claimed1.priority, 0, "Should have priority 0");
-}
-
-/// Test PostgreSQL task prioritization disabled (priority-based ordering)
-/// Verifies that when prioritization is disabled, PostgreSQL uses standard priority ordering
-#[tokio::test]
-#[ignore]
-async fn test_postgres_no_prioritization_uses_priority() {
-    let Some(db) = setup_test_db_postgres().await else {
-        return;
-    };
-
-    let library_id = create_test_library(&db).await;
-    let book_id =
-        create_test_book(&db, create_test_series(&db, library_id).await, library_id).await;
-
-    // Enqueue scan task with lower priority
-    TaskRepository::enqueue(
-        &db,
-        TaskType::ScanLibrary {
-            library_id,
-            mode: "normal".to_string(),
-        },
-        0, // Lower priority
-        None,
-    )
-    .await
-    .expect("Failed to enqueue scan task");
-
-    // Enqueue analysis task with higher priority
-    TaskRepository::enqueue(
-        &db,
-        TaskType::AnalyzeBook {
-            book_id,
-            force: false,
-        },
-        10, // Higher priority
-        None,
-    )
-    .await
-    .expect("Failed to enqueue analyze task");
-
-    // Claim with prioritization disabled - should get higher priority task first
-    // This verifies PostgreSQL's standard ORDER BY priority DESC works correctly
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, false)
-        .await
-        .expect("Failed to claim task")
-        .expect("No task available");
-
-    assert_eq!(
-        claimed1.task_type, "analyze_book",
-        "PostgreSQL: Higher priority task should be picked first when prioritization disabled"
-    );
-    assert_eq!(claimed1.priority, 10, "Should have priority 10");
-}
-
-/// Test PostgreSQL FOR UPDATE SKIP LOCKED with prioritization
-/// Verifies that multiple workers can claim different tasks concurrently
-#[tokio::test]
-#[ignore]
-async fn test_postgres_skip_locked_with_prioritization() {
+async fn test_postgres_skip_locked_with_default_priority() {
     let Some(db) = setup_test_db_postgres().await else {
         return;
     };
@@ -1363,14 +1174,13 @@ async fn test_postgres_skip_locked_with_prioritization() {
     let book_id =
         create_test_book(&db, create_test_series(&db, library_id1).await, library_id1).await;
 
-    // Enqueue multiple tasks
+    // Enqueue tasks
     TaskRepository::enqueue(
         &db,
         TaskType::AnalyzeBook {
             book_id,
             force: false,
         },
-        0,
         None,
     )
     .await
@@ -1382,7 +1192,6 @@ async fn test_postgres_skip_locked_with_prioritization() {
             library_id: library_id1,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
@@ -1394,45 +1203,41 @@ async fn test_postgres_skip_locked_with_prioritization() {
             library_id: library_id2,
             mode: "normal".to_string(),
         },
-        0,
         None,
     )
     .await
     .expect("Failed to enqueue scan task 2");
 
-    // Simulate concurrent workers claiming tasks
-    // Worker 1 should get first scan task (prioritized)
-    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300, true)
+    // Workers claim concurrently
+    let claimed1 = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
     assert_eq!(
         claimed1.task_type, "scan_library",
-        "Worker 1 should get scan task"
+        "Worker 1 should get scan"
     );
 
-    // Worker 2 should get second scan task (also prioritized, SKIP LOCKED prevents conflict)
-    let claimed2 = TaskRepository::claim_next(&db, "worker-2", 300, true)
+    let claimed2 = TaskRepository::claim_next(&db, "worker-2", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
     assert_eq!(
         claimed2.task_type, "scan_library",
-        "Worker 2 should get other scan task"
+        "Worker 2 should get scan"
     );
     assert_ne!(
         claimed1.id, claimed2.id,
         "Workers should get different tasks"
     );
 
-    // Worker 3 should get analysis task (only one left)
-    let claimed3 = TaskRepository::claim_next(&db, "worker-3", 300, true)
+    let claimed3 = TaskRepository::claim_next(&db, "worker-3", 300)
         .await
         .expect("Failed to claim task")
         .expect("No task available");
     assert_eq!(
         claimed3.task_type, "analyze_book",
-        "Worker 3 should get analysis task"
+        "Worker 3 should get analysis"
     );
 }
 
@@ -1500,7 +1305,7 @@ async fn test_enqueue_find_duplicates_task() {
 
     let task_type = TaskType::FindDuplicates;
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1512,7 +1317,7 @@ async fn test_enqueue_find_duplicates_task() {
 
     assert_eq!(task.task_type, "find_duplicates");
     assert_eq!(task.status, "pending");
-    assert_eq!(task.priority, 0);
+    assert_eq!(task.priority, 400);
     assert_eq!(task.attempts, 0);
     assert!(
         task.library_id.is_none(),
@@ -1543,7 +1348,7 @@ async fn test_find_duplicates_handler_with_duplicates() {
 
     // Create and enqueue FindDuplicates task
     let task_type = TaskType::FindDuplicates;
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1596,7 +1401,7 @@ async fn test_find_duplicates_handler_with_no_duplicates() {
 
     // Create and enqueue FindDuplicates task
     let task_type = TaskType::FindDuplicates;
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1649,7 +1454,7 @@ async fn test_find_duplicates_handler_with_multiple_groups() {
 
     // Create and enqueue FindDuplicates task
     let task_type = TaskType::FindDuplicates;
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1712,7 +1517,7 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
 
     // Run first scan
     let task_type = TaskType::FindDuplicates;
-    let task_id1 = TaskRepository::enqueue(&db, task_type.clone(), 0, None)
+    let task_id1 = TaskRepository::enqueue(&db, task_type.clone(), None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1741,7 +1546,7 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
     create_duplicate_books(&db, series_id, library_id).await;
 
     // Run second scan
-    let task_id2 = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id2 = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1781,12 +1586,12 @@ async fn test_mark_rate_limited_reschedules_task() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
     // Claim task (this increments attempts to 1)
-    let claimed = TaskRepository::claim_next(&db, "worker-1", 300, false)
+    let claimed = TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim")
         .expect("No task");
@@ -1832,7 +1637,7 @@ async fn test_mark_rate_limited_fails_after_max_reschedules() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1884,7 +1689,7 @@ async fn test_mark_rate_limited_tracks_reschedule_count() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -1934,7 +1739,7 @@ async fn test_new_task_has_reschedule_defaults() {
         mode: "normal".to_string(),
     };
 
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -2140,7 +1945,7 @@ async fn test_has_pending_or_processing_finds_pending_task() {
 
     // Enqueue a sync task
     let task_type = TaskType::UserPluginSync { plugin_id, user_id };
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -2162,11 +1967,11 @@ async fn test_has_pending_or_processing_finds_processing_task() {
 
     // Enqueue and claim (transitions to processing)
     let task_type = TaskType::UserPluginSync { plugin_id, user_id };
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -2188,11 +1993,11 @@ async fn test_has_pending_or_processing_ignores_completed_tasks() {
 
     // Enqueue, claim, and complete
     let task_type = TaskType::UserPluginSync { plugin_id, user_id };
-    let task_id = TaskRepository::enqueue(&db, task_type, 0, None)
+    let task_id = TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
-    TaskRepository::claim_next(&db, "worker-1", 300, false)
+    TaskRepository::claim_next(&db, "worker-1", 300)
         .await
         .expect("Failed to claim task");
 
@@ -2219,7 +2024,7 @@ async fn test_has_pending_or_processing_different_plugin_id() {
 
     // Enqueue task for one plugin
     let task_type = TaskType::UserPluginSync { plugin_id, user_id };
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -2247,7 +2052,7 @@ async fn test_has_pending_or_processing_different_user_id() {
 
     // Enqueue task for one user
     let task_type = TaskType::UserPluginSync { plugin_id, user_id };
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -2274,7 +2079,7 @@ async fn test_has_pending_or_processing_different_task_type() {
 
     // Enqueue a sync task
     let task_type = TaskType::UserPluginSync { plugin_id, user_id };
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 
@@ -2301,7 +2106,7 @@ async fn test_has_pending_or_processing_recommendations_task() {
 
     // Enqueue a recommendations task
     let task_type = TaskType::UserPluginRecommendations { plugin_id, user_id };
-    TaskRepository::enqueue(&db, task_type, 0, None)
+    TaskRepository::enqueue(&db, task_type, None)
         .await
         .expect("Failed to enqueue task");
 

@@ -64,7 +64,6 @@ impl TaskHandler for AnalyzeSeriesHandler {
                         book_id: book.id,
                         force: true, // ALWAYS force for series analysis
                     },
-                    0,    // priority
                     None, // schedule now
                 )
                 .await

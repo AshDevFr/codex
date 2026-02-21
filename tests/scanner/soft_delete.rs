@@ -371,9 +371,7 @@ async fn test_purge_deleted_on_scan_config() {
         library_id: library.id,
         mode: "normal".to_string(),
     };
-    TaskRepository::enqueue(db, task_type, 0, None)
-        .await
-        .unwrap();
+    TaskRepository::enqueue(db, task_type, None).await.unwrap();
 
     // Process the scan task (this should purge deleted books)
     let worker = TaskWorker::new(db.clone());

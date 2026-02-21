@@ -485,28 +485,11 @@ impl TaskWorker {
     /// Process the next available task
     /// Returns Ok(true) if a task was processed, Ok(false) if no tasks were available
     async fn process_next_task(&self) -> Result<bool> {
-        // Get prioritize_scans setting (hot-reload support)
-        let prioritize_scans = if let Some(ref settings) = self.settings_service {
-            settings
-                .get_bool("task.prioritize_scans_over_analysis", true)
-                .await
-                .unwrap_or(true)
-        } else {
-            true // Default to prioritizing scans if settings service not available
-        };
-
         // Claim next available task
         // Note: claim_next can fail due to race conditions (multiple workers competing
         // for the same task). This is expected behavior, not an error - treat it as
         // "no task available" and retry on the next poll interval.
-        let task = match TaskRepository::claim_next(
-            &self.db,
-            &self.worker_id,
-            300,
-            prioritize_scans,
-        )
-        .await
-        {
+        let task = match TaskRepository::claim_next(&self.db, &self.worker_id, 300).await {
             Ok(Some(t)) => t,
             Ok(None) => return Ok(false), // No tasks available
             Err(e) => {
