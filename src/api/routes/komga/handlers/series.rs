@@ -314,7 +314,7 @@ async fn search_series_with_read_status_filter(
         search: search_term,
         sort: parse_komga_series_sort_param(sort_param),
         page: 0,
-        page_size: u64::MAX, // Fetch all for filtering
+        page_size: i64::MAX as u64, // Fetch all for filtering (i64::MAX avoids SQLite/PG integer overflow)
     };
 
     let (series_list, _) = SeriesRepository::query(&state.db, options)
