@@ -58,6 +58,11 @@ describe("useTaskProgress", () => {
     mockUnsubscribe = vi.fn();
     mockHasPermission.mockReturnValue(true);
 
+    // Reset auth store mock to default (authenticated) state
+    vi.mocked(useAuthStore).mockReturnValue({
+      isAuthenticated: true,
+    } as ReturnType<typeof useAuthStore>);
+
     Storage.prototype.getItem = vi.fn((key) => {
       if (key === "jwt_token") return "test-token";
       return null;
@@ -78,7 +83,7 @@ describe("useTaskProgress", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
     vi.useRealTimers();
   });
 

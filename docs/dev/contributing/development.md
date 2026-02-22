@@ -7,7 +7,7 @@ This guide covers building Codex from source for development purposes.
 
 ## Prerequisites
 
-- **Rust** 1.92 or later
+- **Rust** 1.93 or later
 - **Cargo** (comes with Rust)
 - **OpenSSL** development libraries
 - **UnRAR** library (optional, for CBR support)

@@ -18,7 +18,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Rust build dependencies
-FROM rust:1.92-alpine AS chef
+FROM rust:1.93-alpine AS chef
 # clang is needed for some proc-macro build scripts (proc-macro2, quote, etc.)
 RUN apk add --no-cache \
     musl-dev \

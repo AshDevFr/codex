@@ -62,19 +62,19 @@ vi.mock("react-pdf", () => ({
 }));
 
 // Mock IntersectionObserver
-const mockIntersectionObserver = vi.fn();
 const mockObserve = vi.fn();
 const mockUnobserve = vi.fn();
 const mockDisconnect = vi.fn();
+let mockObserverCreated = false;
 
 // Mock ResizeObserver - needed for container dimension measurement
-const mockResizeObserver = vi.fn();
 const mockResizeObserve = vi.fn();
 const mockResizeDisconnect = vi.fn();
 
 beforeEach(() => {
   // Reset all mocks
   vi.clearAllMocks();
+  mockObserverCreated = false;
 
   // Mock scrollIntoView (not available in jsdom)
   Element.prototype.scrollIntoView = vi.fn();
@@ -89,30 +89,31 @@ beforeEach(() => {
     },
   });
 
-  // Setup IntersectionObserver mock
-  mockIntersectionObserver.mockImplementation(() => ({
-    observe: mockObserve,
-    unobserve: mockUnobserve,
-    disconnect: mockDisconnect,
-    takeRecords: () => [],
-    root: null,
-    rootMargin: "",
-    thresholds: [],
-  }));
-  global.IntersectionObserver = mockIntersectionObserver;
+  // Setup IntersectionObserver mock (class-based for vitest v4 compatibility)
+  global.IntersectionObserver = class MockIntersectionObserver {
+    observe = mockObserve;
+    unobserve = mockUnobserve;
+    disconnect = mockDisconnect;
+    takeRecords = () => [];
+    root = null;
+    rootMargin = "";
+    thresholds = [];
+    constructor() {
+      mockObserverCreated = true;
+    }
+  } as any;
 
   // Setup ResizeObserver mock - simulate container with dimensions
-  mockResizeObserver.mockImplementation((callback) => {
-    // Immediately call the callback with mock dimensions
-    queueMicrotask(() => {
-      callback([{ contentRect: { width: 800, height: 600 } }]);
-    });
-    return {
-      observe: mockResizeObserve,
-      disconnect: mockResizeDisconnect,
-    };
-  });
-  global.ResizeObserver = mockResizeObserver;
+  global.ResizeObserver = class MockResizeObserver {
+    observe = mockResizeObserve;
+    disconnect = mockResizeDisconnect;
+    constructor(callback: ResizeObserverCallback) {
+      // Immediately call the callback with mock dimensions
+      queueMicrotask(() => {
+        callback([{ contentRect: { width: 800, height: 600 } }] as any, this);
+      });
+    }
+  } as any;
 });
 
 describe("PdfContinuousScrollReader", () => {
@@ -409,14 +410,17 @@ describe("PdfContinuousScrollReader", () => {
     it("should create an IntersectionObserver for visibility tracking", () => {
       renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
 
-      expect(mockIntersectionObserver).toHaveBeenCalled();
+      expect(mockObserverCreated).toBe(true);
     });
 
-    it("should observe page elements", () => {
+    it("should observe page elements", async () => {
       renderWithProviders(<PdfContinuousScrollReader {...defaultProps} />);
 
-      // Observer should be set up
-      expect(mockIntersectionObserver).toHaveBeenCalled();
+      // Observer should be set up and observing elements
+      expect(mockObserverCreated).toBe(true);
+      await waitFor(() => {
+        expect(mockObserve).toHaveBeenCalled();
+      });
     });
 
     it("should disconnect observer on unmount", () => {
