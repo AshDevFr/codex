@@ -20,7 +20,7 @@ use axum::{
     response::Response,
 };
 use chrono::Utc;
-use rand::Rng;
+use rand::RngExt;
 use sea_orm::ActiveModelTrait;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -427,14 +427,14 @@ fn generate_api_key(
     name: String,
     permissions: &HashSet<Permission>,
 ) -> Result<(String, api_keys::Model), anyhow::Error> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Generate random components
     let prefix_random: String = (0..16)
-        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.random::<u8>() % 16))
         .collect();
     let suffix_random: String = (0..32)
-        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.random::<u8>() % 16))
         .collect();
 
     // Construct full key

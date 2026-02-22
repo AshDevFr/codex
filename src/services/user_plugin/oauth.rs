@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
-use rand::RngCore;
+use rand::Rng;
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -77,7 +77,7 @@ impl OAuthStateManager {
     /// Generate a cryptographically random state parameter
     fn generate_state() -> String {
         let mut bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        rand::rng().fill_bytes(&mut bytes);
         URL_SAFE_NO_PAD.encode(bytes)
     }
 
@@ -85,7 +85,7 @@ impl OAuthStateManager {
     fn generate_pkce() -> (String, String) {
         // Generate 32 bytes of random data for code verifier
         let mut verifier_bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut verifier_bytes);
+        rand::rng().fill_bytes(&mut verifier_bytes);
         let verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
 
         // S256 challenge: BASE64URL(SHA256(verifier))

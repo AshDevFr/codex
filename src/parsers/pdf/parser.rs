@@ -109,8 +109,8 @@ impl PdfParser {
                             {
                                 // Check if it's an image
                                 if let Ok(subtype) = stream.dict.get(b"Subtype")
-                                    && let Ok(subtype_name) = subtype.as_name_str()
-                                    && subtype_name == "Image"
+                                    && let Ok(subtype_name) = subtype.as_name()
+                                    && subtype_name == b"Image"
                                 {
                                     // Try to extract the image
                                     if let Some(image_data) =
@@ -129,8 +129,8 @@ impl PdfParser {
                             && let Ok(stream_obj) = doc.get_object(obj_id)
                             && let Ok(stream) = stream_obj.as_stream()
                             && let Ok(subtype) = stream.dict.get(b"Subtype")
-                            && let Ok(subtype_name) = subtype.as_name_str()
-                            && subtype_name == "Image"
+                            && let Ok(subtype_name) = subtype.as_name()
+                            && subtype_name == b"Image"
                             && let Some(image_data) = Self::extract_image_stream(doc, stream)
                         {
                             images.push(image_data);
@@ -221,7 +221,8 @@ impl PdfParser {
         let height = stream.dict.get(b"Height").ok()?.as_i64().ok()? as u32;
 
         // Check the PDF filter to determine how to handle the stream
-        let filter = stream.dict.get(b"Filter").ok()?.as_name_str().ok()?;
+        let filter_bytes = stream.dict.get(b"Filter").ok()?.as_name().ok()?;
+        let filter = std::str::from_utf8(filter_bytes).ok()?;
 
         match filter {
             // DCTDecode means the stream contains raw JPEG data
@@ -358,12 +359,12 @@ impl PdfParser {
         let node_type = node_dict
             .get(b"Type")
             .ok()
-            .and_then(|t| t.as_name_str().ok())
-            .unwrap_or("");
+            .and_then(|t| t.as_name().ok())
+            .unwrap_or(b"");
 
         match node_type {
-            "Page" => 1,
-            "Pages" => {
+            b"Page" => 1,
+            b"Pages" => {
                 // Get Kids array - may be inline or an indirect reference
                 let kids = match node_dict.get(b"Kids") {
                     Ok(Object::Array(arr)) => arr.clone(),
@@ -435,14 +436,14 @@ impl PdfParser {
         let node_type = node_dict
             .get(b"Type")
             .ok()
-            .and_then(|t| t.as_name_str().ok())
-            .unwrap_or("");
+            .and_then(|t| t.as_name().ok())
+            .unwrap_or(b"");
 
         match node_type {
-            "Page" => {
+            b"Page" => {
                 page_ids.push(node_id);
             }
-            "Pages" => {
+            b"Pages" => {
                 let kids = match node_dict.get(b"Kids") {
                     Ok(Object::Array(arr)) => arr.clone(),
                     Ok(Object::Reference(ref_id)) => match doc.get_object(*ref_id) {
