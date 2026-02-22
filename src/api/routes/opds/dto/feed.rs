@@ -146,7 +146,7 @@ impl OpdsFeed {
     }
 
     /// Serialize to XML string
-    pub fn to_xml(&self) -> Result<String, quick_xml::DeError> {
+    pub fn to_xml(&self) -> Result<String, quick_xml::SeError> {
         let mut buffer = String::new();
         buffer.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         buffer.push('\n');

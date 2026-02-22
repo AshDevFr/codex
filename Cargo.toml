@@ -42,7 +42,7 @@ pdfium-render = "0.8"
 # Image processing
 image = { version = "0.25", features = ["avif"] }
 resvg = "0.47"
-jxl-oxide = "0.11"
+jxl-oxide = "0.12"
 infer = "0.19"
 
 # Hashing
@@ -50,10 +50,10 @@ sha2 = "0.10"
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # XML parsing (for ComicInfo.xml)
-quick-xml = { version = "0.36", features = ["serialize"] }
+quick-xml = { version = "0.39", features = ["serialize"] }
 
 # Regular expressions (for ISBN extraction)
 regex = "1.10"
@@ -66,7 +66,7 @@ urlencoding = "2.1"
 
 # File system utilities
 walkdir = "2.5"
-dirs = "5.0"
+dirs = "6.0"
 globset = "0.4"
 
 # Date/time
