@@ -3,16 +3,35 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/utils";
 import { ContinuousScrollReader } from "./ContinuousScrollReader";
 
-// Mock the reader store
-const mockGoToPage = vi.fn();
-vi.mock("@/store/readerStore", () => ({
-  useReaderStore: (selector: (state: unknown) => unknown) => {
-    const state = {
-      goToPage: mockGoToPage,
-    };
-    return selector(state);
-  },
-}));
+// Mock the reader store with controllable currentPage
+const mockGoToPage = vi.fn((page: number) => {
+  mockCurrentPage = page;
+});
+const mockCorrectTotalPages = vi.fn();
+let mockCurrentPage = 1;
+
+function getMockState() {
+  return {
+    goToPage: mockGoToPage,
+    currentPage: mockCurrentPage,
+    correctTotalPages: mockCorrectTotalPages,
+  };
+}
+
+vi.mock("@/store/readerStore", () => {
+  const store = (
+    selector: (state: ReturnType<typeof getMockState>) => unknown,
+  ) => {
+    return selector(getMockState());
+  };
+  store.getState = () => getMockState();
+  // Minimal subscribe: listeners are never called in tests (store is a mock),
+  // but the method must exist so the useEffect that calls it doesn't throw.
+  store.subscribe = (_listener: unknown) => {
+    return () => {}; // unsubscribe no-op
+  };
+  return { useReaderStore: store };
+});
 
 // Mock IntersectionObserver
 class MockIntersectionObserver {
@@ -61,6 +80,7 @@ let mockObserverInstance: MockIntersectionObserver | null = null;
 beforeEach(() => {
   vi.clearAllMocks();
   mockObserverInstance = null;
+  mockCurrentPage = 1;
 
   // Mock IntersectionObserver (class-based for vitest v4 compatibility)
   global.IntersectionObserver = class extends MockIntersectionObserver {
@@ -343,6 +363,24 @@ describe("ContinuousScrollReader", () => {
   });
 
   describe("Progress Tracking", () => {
+    // Helper: mock the container's getBoundingClientRect so the intersection
+    // observer callback can compute visible ratios and update currentVisiblePage.
+    function mockContainerRect() {
+      const container = screen.getByTestId("continuous-scroll-container");
+      container.getBoundingClientRect = () =>
+        ({
+          top: 0,
+          bottom: 800,
+          left: 0,
+          right: 600,
+          width: 600,
+          height: 800,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        }) as DOMRect;
+    }
+
     it("should call goToPage when visible page changes", async () => {
       vi.useFakeTimers();
 
@@ -352,7 +390,9 @@ describe("ContinuousScrollReader", () => {
 
       // Clear initial calls
       mockGoToPage.mockClear();
+      mockContainerRect();
 
+      const scrollContainer = screen.getByTestId("continuous-scroll-container");
       const pageContainer3 = screen.getByTestId("page-container-3");
 
       act(() => {
@@ -361,9 +401,14 @@ describe("ContinuousScrollReader", () => {
           {
             target: pageContainer3,
             isIntersecting: true,
-            boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
           },
         ]);
+      });
+
+      // Dispatch scroll event to trigger the debounced handler
+      act(() => {
+        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
       });
 
       // Advance timers to trigger debounced page change
@@ -386,7 +431,9 @@ describe("ContinuousScrollReader", () => {
 
       // Clear initial calls
       mockGoToPage.mockClear();
+      mockContainerRect();
 
+      const scrollContainer = screen.getByTestId("continuous-scroll-container");
       const pageContainer2 = screen.getByTestId("page-container-2");
       const pageContainer3 = screen.getByTestId("page-container-3");
 
@@ -396,9 +443,10 @@ describe("ContinuousScrollReader", () => {
           {
             target: pageContainer2,
             isIntersecting: true,
-            boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
           },
         ]);
+        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
       });
 
       await act(async () => {
@@ -411,9 +459,10 @@ describe("ContinuousScrollReader", () => {
           {
             target: pageContainer3,
             isIntersecting: true,
-            boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
           },
         ]);
+        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
       });
 
       await act(async () => {
@@ -439,6 +488,9 @@ describe("ContinuousScrollReader", () => {
         />,
       );
 
+      mockContainerRect();
+
+      const scrollContainer = screen.getByTestId("continuous-scroll-container");
       const pageContainer5 = screen.getByTestId("page-container-5");
 
       act(() => {
@@ -446,9 +498,13 @@ describe("ContinuousScrollReader", () => {
           {
             target: pageContainer5,
             isIntersecting: true,
-            boundingClientRect: { top: 0, bottom: 100, height: 100 } as DOMRect,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
           },
         ]);
+      });
+
+      act(() => {
+        scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
       });
 
       await act(async () => {
@@ -633,6 +689,359 @@ describe("ContinuousScrollReader", () => {
         unmount();
         expect(disconnectSpy).toHaveBeenCalled();
       }
+    });
+  });
+
+  describe("External Page Sync", () => {
+    it("should scroll to page when store currentPage changes externally", async () => {
+      vi.useFakeTimers();
+      const scrollIntoViewSpy = vi.mocked(Element.prototype.scrollIntoView);
+      scrollIntoViewSpy.mockClear();
+
+      const { rerender } = renderWithProviders(
+        <ContinuousScrollReader {...defaultProps} initialPage={1} />,
+      );
+
+      scrollIntoViewSpy.mockClear();
+
+      // Simulate an external store change (e.g., toolbar slider)
+      mockCurrentPage = 5;
+
+      // Re-render to pick up the new store value
+      await act(async () => {
+        rerender(<ContinuousScrollReader {...defaultProps} initialPage={1} />);
+      });
+
+      // The component should scroll to the externally-requested page
+      expect(scrollIntoViewSpy).toHaveBeenCalled();
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe("Scroll Boundary Detection", () => {
+    // Helper: mock the container's getBoundingClientRect so the intersection
+    // observer callback can compute visible ratios and update currentVisiblePage.
+    function mockContainerRect() {
+      const container = screen.getByTestId("continuous-scroll-container");
+      container.getBoundingClientRect = () =>
+        ({
+          top: 0,
+          bottom: 800,
+          left: 0,
+          right: 600,
+          width: 600,
+          height: 800,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        }) as DOMRect;
+    }
+
+    // Helper: dispatch a scroll event on the scroll container so the
+    // debounced scroll handler picks up ref changes from the observer.
+    function fireScrollEvent() {
+      const scrollContainer = screen.getByTestId("continuous-scroll-container");
+      scrollContainer.dispatchEvent(new Event("scroll", { bubbles: false }));
+    }
+
+    // Helper: simulate a scroll to an intermediate page so the component
+    // registers that the user has scrolled (boundary detection is suppressed
+    // until the first real page change to avoid false notifications on mount).
+    async function simulateInitialScroll(pageNumber: number) {
+      const container = screen.getByTestId(`page-container-${pageNumber}`);
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: container,
+            isIntersecting: true,
+            boundingClientRect: {
+              top: 0,
+              bottom: 800,
+              height: 800,
+            } as DOMRect,
+          },
+        ]);
+      });
+      act(() => {
+        fireScrollEvent();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+    }
+
+    it("should not fire boundary callbacks on initial mount at page 1", async () => {
+      vi.useFakeTimers();
+      const onReachedStart = vi.fn();
+      const onReachedEnd = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={5}
+          initialPage={1}
+          onReachedStart={onReachedStart}
+          onReachedEnd={onReachedEnd}
+        />,
+      );
+
+      mockContainerRect();
+
+      // Let the initial debounce fire without any user scroll
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      // Neither callback should fire on mount
+      expect(onReachedStart).not.toHaveBeenCalled();
+      expect(onReachedEnd).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
+    });
+
+    it("should call onReachedEnd when scrolling to the last page", async () => {
+      vi.useFakeTimers();
+      const onReachedEnd = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={5}
+          initialPage={1}
+          onReachedEnd={onReachedEnd}
+        />,
+      );
+
+      mockContainerRect();
+
+      // Scroll to a middle page first so boundary detection is armed
+      await simulateInitialScroll(3);
+
+      // Now scroll to the last page (page 5)
+      const pageContainer5 = screen.getByTestId("page-container-5");
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer5,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+        ]);
+      });
+
+      act(() => {
+        fireScrollEvent();
+      });
+
+      // Let debounce fire
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(onReachedEnd).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
+
+    it("should call onReachedStart when scrolling to the first page", async () => {
+      vi.useFakeTimers();
+      const onReachedStart = vi.fn();
+      mockCurrentPage = 3;
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={5}
+          initialPage={3}
+          onReachedStart={onReachedStart}
+        />,
+      );
+
+      mockContainerRect();
+
+      // Initial scroll at page 3 to arm boundary detection
+      await simulateInitialScroll(3);
+
+      // Scroll to page 2 first (intermediate)
+      await simulateInitialScroll(2);
+
+      // Now simulate scrolling to the first page
+      const pageContainer1 = screen.getByTestId("page-container-1");
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer1,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+          {
+            target: screen.getByTestId("page-container-2"),
+            isIntersecting: false,
+          },
+        ]);
+      });
+
+      act(() => {
+        fireScrollEvent();
+      });
+
+      // Let debounce fire
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(onReachedStart).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
+
+    it("should re-fire boundary callback on each scroll attempt at boundary", async () => {
+      vi.useFakeTimers();
+      const onReachedEnd = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={5}
+          initialPage={1}
+          onReachedEnd={onReachedEnd}
+        />,
+      );
+
+      mockContainerRect();
+
+      // Scroll to middle page first to arm boundary detection
+      await simulateInitialScroll(3);
+
+      const pageContainer5 = screen.getByTestId("page-container-5");
+
+      // Scroll to last page
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer5,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+        ]);
+      });
+
+      act(() => {
+        fireScrollEvent();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(onReachedEnd).toHaveBeenCalledTimes(1);
+
+      // Simulate another scroll event while still on the last page
+      // (e.g. user scrolls again at the boundary for two-press navigation)
+      act(() => {
+        fireScrollEvent();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      // Should fire again: the two-press series navigation workflow
+      // requires each boundary scroll attempt to trigger the callback.
+      expect(onReachedEnd).toHaveBeenCalledTimes(2);
+
+      vi.useRealTimers();
+    });
+
+    it("should re-fire boundary callback after leaving and returning to boundary", async () => {
+      vi.useFakeTimers();
+      const onReachedEnd = vi.fn();
+
+      renderWithProviders(
+        <ContinuousScrollReader
+          {...defaultProps}
+          totalPages={5}
+          initialPage={1}
+          onReachedEnd={onReachedEnd}
+        />,
+      );
+
+      mockContainerRect();
+
+      // Scroll to middle page first to arm boundary detection
+      await simulateInitialScroll(3);
+
+      const pageContainer5 = screen.getByTestId("page-container-5");
+      const pageContainer3 = screen.getByTestId("page-container-3");
+
+      // Scroll to last page
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer5,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+        ]);
+      });
+
+      act(() => {
+        fireScrollEvent();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(onReachedEnd).toHaveBeenCalledTimes(1);
+
+      // Scroll away to middle
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer3,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+          {
+            target: pageContainer5,
+            isIntersecting: false,
+          },
+        ]);
+      });
+
+      act(() => {
+        fireScrollEvent();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      // Scroll back to last page
+      act(() => {
+        mockObserverInstance?.simulateIntersection([
+          {
+            target: pageContainer5,
+            isIntersecting: true,
+            boundingClientRect: { top: 0, bottom: 800, height: 800 } as DOMRect,
+          },
+        ]);
+      });
+
+      act(() => {
+        fireScrollEvent();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      // Should fire again after leaving and returning
+      expect(onReachedEnd).toHaveBeenCalledTimes(2);
+
+      vi.useRealTimers();
     });
   });
 });

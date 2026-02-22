@@ -121,20 +121,16 @@ export function ReaderToolbar({
   const fitMode = fitModeProp ?? globalFitMode;
   const cycleFitMode = onCycleFitMode ?? globalCycleFitMode;
 
-  // Adjust navigation based on reading direction
-  // In RTL mode, clicking the left chevron goes forward (next page)
-  // In LTR mode, clicking the left chevron goes backward (previous page)
-  // Icons stay visually consistent - only behavior and tooltips change
-  const onLeftClick = readingDirection === "ltr" ? prevPage : nextPage;
-  const onRightClick = readingDirection === "ltr" ? nextPage : prevPage;
-  const leftTooltip =
-    readingDirection === "ltr" ? "Previous page" : "Next page";
-  const rightTooltip =
-    readingDirection === "ltr" ? "Next page" : "Previous page";
-  const leftDisabled =
-    readingDirection === "ltr" ? currentPage <= 1 : currentPage >= totalPages;
-  const rightDisabled =
-    readingDirection === "ltr" ? currentPage >= totalPages : currentPage <= 1;
+  // Adjust navigation based on reading direction.
+  // Only RTL reverses the chevrons; LTR, TTB, and webtoon all use
+  // left=previous, right=next (matching the natural page order).
+  const isRtl = readingDirection === "rtl";
+  const onLeftClick = isRtl ? nextPage : prevPage;
+  const onRightClick = isRtl ? prevPage : nextPage;
+  const leftTooltip = isRtl ? "Next page" : "Previous page";
+  const rightTooltip = isRtl ? "Previous page" : "Next page";
+  const leftDisabled = isRtl ? currentPage >= totalPages : currentPage <= 1;
+  const rightDisabled = isRtl ? currentPage <= 1 : currentPage >= totalPages;
 
   return (
     <Transition mounted={visible} transition="slide-down" duration={200}>

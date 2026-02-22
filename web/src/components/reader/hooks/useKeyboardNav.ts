@@ -1,8 +1,37 @@
-import { useCallback, useEffect } from "react";
+import { type RefObject, useCallback, useEffect } from "react";
 import {
   selectEffectiveReadingDirection,
   useReaderStore,
 } from "@/store/readerStore";
+
+/** Fraction of the container height to scroll for Arrow keys */
+const ARROW_SCROLL_STEP = 0.75;
+
+/**
+ * scrollBy wrapper that detects when the container is at a scroll limit
+ * (top or bottom) and the position didn't change.  In that case the browser
+ * won't emit a native "scroll" event, so we dispatch one synthetically so
+ * the debounced handler in ContinuousScrollReader still runs (boundary
+ * detection depends on it).
+ */
+function scrollByWithBoundaryCheck(
+  container: HTMLDivElement,
+  options: ScrollToOptions,
+) {
+  const before = container.scrollTop;
+  container.scrollBy(options);
+  // For instant scrolls the position updates synchronously.  For smooth
+  // scrolls we use requestAnimationFrame to check after the first frame.
+  if (options.behavior === "smooth") {
+    requestAnimationFrame(() => {
+      if (container.scrollTop === before) {
+        container.dispatchEvent(new Event("scroll"));
+      }
+    });
+  } else if (container.scrollTop === before) {
+    container.dispatchEvent(new Event("scroll"));
+  }
+}
 
 interface UseKeyboardNavOptions {
   /** Whether keyboard navigation is enabled */
@@ -13,6 +42,14 @@ interface UseKeyboardNavOptions {
   onNextPage?: () => void;
   /** Custom handler for previous page (overrides default store action) */
   onPrevPage?: () => void;
+  /**
+   * Ref to the continuous-scroll container element.  When provided,
+   * directional keys (arrows, Space, PageDown/Up) scroll the container
+   * directly instead of going through the page store.
+   * Arrow keys scroll by 75% of the viewport; Space/PageDown/Up scroll
+   * by a full viewport height.
+   */
+  scrollContainerRef?: RefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -36,6 +73,7 @@ export function useKeyboardNav({
   onEscape,
   onNextPage,
   onPrevPage,
+  scrollContainerRef,
 }: UseKeyboardNavOptions = {}) {
   const storeNextPage = useReaderStore((state) => state.nextPage);
   const storePrevPage = useReaderStore((state) => state.prevPage);
@@ -62,6 +100,8 @@ export function useKeyboardNav({
         return;
       }
 
+      const container = scrollContainerRef?.current;
+
       // Navigation keys based on reading direction
       // LTR: Right = next, Left = prev
       // RTL: Right = prev, Left = next (reversed horizontal)
@@ -70,6 +110,7 @@ export function useKeyboardNav({
 
       switch (event.key) {
         case "ArrowRight":
+          if (container) break; // No horizontal page nav in continuous scroll
           event.preventDefault();
           if (isRtl) {
             prevPage();
@@ -79,6 +120,7 @@ export function useKeyboardNav({
           break;
 
         case "ArrowLeft":
+          if (container) break;
           event.preventDefault();
           if (isRtl) {
             nextPage();
@@ -88,25 +130,70 @@ export function useKeyboardNav({
           break;
 
         case "ArrowDown":
-        case "PageDown":
-        case " ": // Space
           event.preventDefault();
-          nextPage();
+          if (container) {
+            scrollByWithBoundaryCheck(container, {
+              top: container.clientHeight * ARROW_SCROLL_STEP,
+              behavior: "smooth",
+            });
+          } else {
+            nextPage();
+          }
           break;
 
         case "ArrowUp":
+          event.preventDefault();
+          if (container) {
+            scrollByWithBoundaryCheck(container, {
+              top: -container.clientHeight * ARROW_SCROLL_STEP,
+              behavior: "smooth",
+            });
+          } else {
+            prevPage();
+          }
+          break;
+
+        case "PageDown":
+        case " ": // Space
+          event.preventDefault();
+          if (container) {
+            scrollByWithBoundaryCheck(container, {
+              top: container.clientHeight,
+              behavior: "smooth",
+            });
+          } else {
+            nextPage();
+          }
+          break;
+
         case "PageUp":
           event.preventDefault();
-          prevPage();
+          if (container) {
+            scrollByWithBoundaryCheck(container, {
+              top: -container.clientHeight,
+              behavior: "smooth",
+            });
+          } else {
+            prevPage();
+          }
           break;
 
         case "Home":
           event.preventDefault();
+          if (container) {
+            container.scrollTo({ top: 0, behavior: "instant" });
+          }
           firstPage();
           break;
 
         case "End":
           event.preventDefault();
+          if (container) {
+            container.scrollTo({
+              top: container.scrollHeight,
+              behavior: "instant",
+            });
+          }
           lastPage();
           break;
 
@@ -140,6 +227,7 @@ export function useKeyboardNav({
     },
     [
       readingDirection,
+      scrollContainerRef,
       nextPage,
       prevPage,
       firstPage,

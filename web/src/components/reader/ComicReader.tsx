@@ -90,6 +90,7 @@ export function ComicReader({
   onClose,
 }: ComicReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const initializedBookIdRef = useRef<string | null>(null);
   const [settingsOpened, setSettingsOpened] = useState(false);
@@ -175,6 +176,8 @@ export function ComicReader({
   const {
     handleNextPage,
     handlePrevPage,
+    handleEndBoundary,
+    handleStartBoundary,
     goToNextBook,
     goToPrevBook,
     canGoNextBook,
@@ -358,6 +361,17 @@ export function ComicReader({
     }
   }, [pageLayout, hasSeriesOverride, updateSeriesSetting, setGlobalPageLayout]);
 
+  // Scroll boundary callbacks for continuous scroll mode.
+  // These read fresh boundaryState from the store to integrate with
+  // the two-press confirmation workflow in useSeriesNavigation.
+  const handleScrollReachedEnd = useCallback(() => {
+    handleEndBoundary(useReaderStore.getState().boundaryState);
+  }, [handleEndBoundary]);
+
+  const handleScrollReachedStart = useCallback(() => {
+    handleStartBoundary(useReaderStore.getState().boundaryState);
+  }, [handleStartBoundary]);
+
   // Handle click zones for single-page navigation
   const handleSinglePageClick = useCallback(
     (zone: "left" | "center" | "right") => {
@@ -530,11 +544,15 @@ export function ComicReader({
   );
 
   // Keyboard navigation with series navigation support
-  // In double-page mode, use spread-aware navigation
-  // In single-page mode, use wrapped handlers that set navigation direction for transitions
+  // In continuous/webtoon mode, scroll keys are left to the browser;
+  // in double-page mode, use spread-aware navigation;
+  // in single-page mode, use wrapped handlers that set navigation direction.
+  const isContinuousScroll =
+    pageLayout === "continuous" || readingDirection === "webtoon";
   useKeyboardNav({
     enabled: !settingsOpened,
     onEscape: onClose,
+    scrollContainerRef: isContinuousScroll ? scrollContainerRef : undefined,
     onNextPage:
       pageLayout === "double"
         ? handleSpreadNextPage
@@ -711,6 +729,9 @@ export function ComicReader({
           preloadBuffer={preloadPages}
           pageGap={webtoonPageGap}
           sidePadding={webtoonSidePadding}
+          onReachedEnd={handleScrollReachedEnd}
+          onReachedStart={handleScrollReachedStart}
+          scrollContainerRef={scrollContainerRef}
         />
       ) : (
         <Box

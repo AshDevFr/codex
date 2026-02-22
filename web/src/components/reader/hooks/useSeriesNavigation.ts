@@ -19,6 +19,14 @@ export interface SeriesNavigationResult {
   handleNextPage: () => void;
   /** Attempt to go to the previous page, handling boundary state */
   handlePrevPage: () => void;
+  /** Handle end-of-book boundary detection (for continuous scroll mode) */
+  handleEndBoundary: (
+    currentBoundaryState: "none" | "at-start" | "at-end",
+  ) => void;
+  /** Handle start-of-book boundary detection (for continuous scroll mode) */
+  handleStartBoundary: (
+    currentBoundaryState: "none" | "at-start" | "at-end",
+  ) => void;
   /** Current boundary state */
   boundaryState: "none" | "at-start" | "at-end";
   /** Message to display when at boundary (if any) */
@@ -227,6 +235,8 @@ export function useSeriesNavigation(
     goToNextBook,
     handleNextPage,
     handlePrevPage,
+    handleEndBoundary,
+    handleStartBoundary,
     boundaryState,
     boundaryMessage,
     isSeriesEnd,
