@@ -13,8 +13,8 @@
 //!
 //! - `GET /` - Root catalog (navigation feed)
 //! - `GET /libraries` - List all libraries
-//! - `GET /libraries/:id` - Library series catalog
-//! - `GET /series/:id` - Series books catalog (publications feed)
+//! - `GET /libraries/{id}` - Library series catalog
+//! - `GET /series/{id}` - Series books catalog (publications feed)
 //! - `GET /recent` - Recently added books
 //! - `GET /search` - Search endpoint
 

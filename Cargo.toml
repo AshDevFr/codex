@@ -29,8 +29,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1.0"
 
-# Configuration
-config = "0.14"
+# Configuration (config crate removed - not used, config loaded via serde_yaml)
 
 # Archive formats
 zip = "2.1"
@@ -97,9 +96,9 @@ tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
 # Web framework
-axum = { version = "0.7", features = ["multipart"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["trace", "cors"] }
+axum = { version = "0.8", features = ["multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
@@ -109,12 +108,12 @@ futures = "0.3"
 tokio-stream = "0.1"
 
 # Authentication & Security
-jsonwebtoken = "9.2"
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 argon2 = "0.5"
 rand = "0.8"
 lazy_static = "1.4"
 base64 = "0.22"
-openidconnect = "3"
+openidconnect = "4"
 
 # Encryption
 aes-gcm = "0.10"
@@ -128,9 +127,10 @@ lettre = { version = "0.11", default-features = false, features = [
 ] }
 
 # HTTP Client (for plugin cover downloads and OAuth token exchange)
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls",
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls",
     "json",
+    "form",
 ] }
 
 # API Documentation
@@ -140,11 +140,11 @@ utoipa = { version = "5.0", features = [
     "uuid",
     "yaml",
 ] }
-utoipa-scalar = { version = "0.2", features = ["axum"] }
+utoipa-scalar = { version = "0.3", features = ["axum"] }
 
 # Job Scheduling
-cron = "0.12"
-tokio-cron-scheduler = "0.10"
+cron = "0.13"
+tokio-cron-scheduler = "0.15"
 tokio-util = { version = "0.7", features = ["io"] }
 
 # Concurrent data structures
@@ -156,7 +156,7 @@ mime_guess = "2.0"
 
 [dev-dependencies]
 tempfile = "3.13"
-tower = { version = "0.4", features = ["util"] }
+tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 serial_test = "3.2"

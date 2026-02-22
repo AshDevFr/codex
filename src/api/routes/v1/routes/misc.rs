@@ -34,11 +34,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Global genre routes (cleanup/delete require admin)
         .route("/genres", get(handlers::list_genres))
         .route("/genres/cleanup", post(handlers::cleanup_genres))
-        .route("/genres/:genre_id", delete(handlers::delete_genre))
+        .route("/genres/{genre_id}", delete(handlers::delete_genre))
         // Global tag routes (cleanup/delete require admin)
         .route("/tags", get(handlers::list_tags))
         .route("/tags/cleanup", post(handlers::cleanup_tags))
-        .route("/tags/:tag_id", delete(handlers::delete_tag))
+        .route("/tags/{tag_id}", delete(handlers::delete_tag))
         // Metrics routes
         .route("/metrics/inventory", get(handlers::get_inventory_metrics))
         .route("/metrics/plugins", get(handlers::get_plugin_metrics))
@@ -62,7 +62,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/duplicates", get(handlers::list_duplicates))
         .route("/duplicates/scan", post(handlers::trigger_duplicate_scan))
         .route(
-            "/duplicates/:duplicate_id",
+            "/duplicates/{duplicate_id}",
             delete(handlers::delete_duplicate_group),
         )
         // Filesystem routes (admin only)

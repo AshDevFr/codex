@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// Routes:
 /// - GET /user/recommendations - Get personalized recommendations
 /// - POST /user/recommendations/refresh - Refresh cached recommendations
-/// - POST /user/recommendations/:external_id/dismiss - Dismiss a recommendation
+/// - POST /user/recommendations/{external_id}/dismiss - Dismiss a recommendation
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route(
@@ -29,7 +29,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::recommendations::refresh_recommendations),
         )
         .route(
-            "/user/recommendations/:external_id/dismiss",
+            "/user/recommendations/{external_id}/dismiss",
             post(handlers::recommendations::dismiss_recommendation),
         )
 }

@@ -1,4 +1,4 @@
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use axum::{extract::FromRequestParts, http::request::Parts};
 
 /// Client information extracted from request headers
 ///
@@ -42,7 +42,6 @@ impl ClientInfo {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for ClientInfo
 where
     S: Send + Sync,

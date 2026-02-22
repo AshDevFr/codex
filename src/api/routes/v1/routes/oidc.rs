@@ -22,6 +22,6 @@ use std::sync::Arc;
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/providers", get(oidc::list_providers))
-        .route("/:provider/login", post(oidc::login))
-        .route("/:provider/callback", get(oidc::callback))
+        .route("/{provider}/login", post(oidc::login))
+        .route("/{provider}/callback", get(oidc::callback))
 }

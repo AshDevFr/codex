@@ -115,15 +115,8 @@ impl JwtService {
     /// # Warning
     /// This does not verify the token signature! Only use for debugging.
     pub fn decode_unverified(&self, token: &str) -> Result<Claims> {
-        let mut validation = Validation::default();
-        validation.insecure_disable_signature_validation();
-
-        let token_data = decode::<Claims>(
-            token,
-            &DecodingKey::from_secret(self.secret.as_bytes()),
-            &validation,
-        )
-        .context("Failed to decode JWT token")?;
+        let token_data = jsonwebtoken::dangerous::insecure_decode::<Claims>(token)
+            .context("Failed to decode JWT token")?;
 
         Ok(token_data.claims)
     }

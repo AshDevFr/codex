@@ -8809,12 +8809,12 @@ export interface components {
             /** @description Publisher (for publisher_hierarchy strategy) */
             publisher?: string | null;
         };
-        /** @description Request body for POST /api/v1/user/recommendations/:id/dismiss */
+        /** @description Request body for POST /api/v1/user/recommendations/{id}/dismiss */
         DismissRecommendationRequest: {
             /** @description Reason for dismissal */
             reason?: string | null;
         };
-        /** @description Response from POST /api/v1/user/recommendations/:id/dismiss */
+        /** @description Response from POST /api/v1/user/recommendations/{id}/dismiss */
         DismissRecommendationResponse: {
             /** @description Whether the dismissal was recorded */
             dismissed: boolean;

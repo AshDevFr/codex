@@ -41,30 +41,30 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             put(handlers::user_preferences::set_bulk_preferences),
         )
         .route(
-            "/user/preferences/:key",
+            "/user/preferences/{key}",
             get(handlers::user_preferences::get_preference),
         )
         .route(
-            "/user/preferences/:key",
+            "/user/preferences/{key}",
             put(handlers::user_preferences::set_preference),
         )
         .route(
-            "/user/preferences/:key",
+            "/user/preferences/{key}",
             delete(handlers::user_preferences::delete_preference),
         )
         // API key routes
         .route("/api-keys", get(handlers::api_keys::list_api_keys))
         .route("/api-keys", post(handlers::api_keys::create_api_key))
         .route(
-            "/api-keys/:api_key_id",
+            "/api-keys/{api_key_id}",
             get(handlers::api_keys::get_api_key),
         )
         .route(
-            "/api-keys/:api_key_id",
+            "/api-keys/{api_key_id}",
             patch(handlers::api_keys::update_api_key),
         )
         .route(
-            "/api-keys/:api_key_id",
+            "/api-keys/{api_key_id}",
             delete(handlers::api_keys::delete_api_key),
         )
 }

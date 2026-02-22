@@ -2,13 +2,13 @@
 //!
 //! Provides endpoints for plugin action discovery and execution:
 //! - GET /api/v1/plugins/actions - Get available plugin actions for a scope
-//! - POST /api/v1/plugins/:id/execute - Execute a plugin method
+//! - POST /api/v1/plugins/{id}/execute - Execute a plugin method
 //!
 //! And metadata operations via plugins:
-//! - POST /api/v1/series/:id/metadata/preview - Preview metadata from a plugin
-//! - POST /api/v1/series/:id/metadata/apply - Apply metadata from a plugin
-//! - POST /api/v1/books/:id/metadata/preview - Preview metadata for a book
-//! - POST /api/v1/books/:id/metadata/apply - Apply metadata for a book
+//! - POST /api/v1/series/{id}/metadata/preview - Preview metadata from a plugin
+//! - POST /api/v1/series/{id}/metadata/apply - Apply metadata from a plugin
+//! - POST /api/v1/books/{id}/metadata/preview - Preview metadata for a book
+//! - POST /api/v1/books/{id}/metadata/apply - Apply metadata for a book
 
 use super::super::dto::{
     EnqueueAutoMatchRequest, EnqueueAutoMatchResponse, EnqueueBulkAutoMatchRequest,

@@ -11,14 +11,14 @@ use std::sync::Arc;
 ///
 /// Routes:
 /// - `GET /libraries` - List all libraries
-/// - `GET /libraries/:library_id` - Get library by ID
-/// - `GET /libraries/:library_id/thumbnail` - Get library thumbnail
+/// - `GET /libraries/{library_id}` - Get library by ID
+/// - `GET /libraries/{library_id}/thumbnail` - Get library thumbnail
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/libraries", get(handlers::list_libraries))
-        .route("/libraries/:library_id", get(handlers::get_library))
+        .route("/libraries/{library_id}", get(handlers::get_library))
         .route(
-            "/libraries/:library_id/thumbnail",
+            "/libraries/{library_id}/thumbnail",
             get(handlers::get_library_thumbnail),
         )
 }

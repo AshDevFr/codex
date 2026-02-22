@@ -14,9 +14,9 @@
 //!
 //! - `GET /` - Root catalog
 //! - `GET /libraries` - List all libraries
-//! - `GET /libraries/:id` - Library series catalog
-//! - `GET /series/:id` - Series books catalog
-//! - `GET /books/:id/pages` - Book pages (PSE)
+//! - `GET /libraries/{id}` - Library series catalog
+//! - `GET /series/{id}` - Series books catalog
+//! - `GET /books/{id}/pages` - Book pages (PSE)
 //! - `GET /search.xml` - OpenSearch descriptor
 //! - `GET /search` - Search endpoint
 
