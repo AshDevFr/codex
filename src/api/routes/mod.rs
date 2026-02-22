@@ -10,6 +10,7 @@ use crate::config::Config;
 use crate::web;
 use axum::{Router, routing::get};
 use std::sync::Arc;
+use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::cors::{Any, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
@@ -148,6 +149,17 @@ pub fn create_router(state: Arc<AppState>, config: &Config) -> Router {
 
         router = router.layer(cors);
     }
+
+    // Catch panics in handlers and return 500 instead of dropping the connection
+    router = router.layer(CatchPanicLayer::custom(
+        |_err: Box<dyn std::any::Any + Send>| {
+            tracing::error!("Handler panicked, returning 500");
+            axum::http::Response::builder()
+                .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+                .body(axum::body::Body::from("Internal Server Error"))
+                .unwrap()
+        },
+    ));
 
     // Add request tracing middleware (outermost layer)
     // This logs all HTTP requests/responses with method, path, status, and latency
