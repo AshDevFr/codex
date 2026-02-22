@@ -51,8 +51,8 @@ vi.mock("react-pdf", () => ({
 }));
 
 // Mock the CSS imports
-vi.mock("react-pdf/dist/esm/Page/TextLayer.css", () => ({}));
-vi.mock("react-pdf/dist/esm/Page/AnnotationLayer.css", () => ({}));
+vi.mock("react-pdf/dist/Page/TextLayer.css", () => ({}));
+vi.mock("react-pdf/dist/Page/AnnotationLayer.css", () => ({}));
 
 // Mock hooks
 vi.mock("./hooks", () => ({
@@ -86,7 +86,6 @@ vi.mock("./hooks", () => ({
 import { PdfReader } from "./PdfReader";
 
 // Mock ResizeObserver - needed for container dimension measurement
-const mockResizeObserver = vi.fn();
 const mockResizeObserve = vi.fn();
 const mockResizeDisconnect = vi.fn();
 
@@ -103,18 +102,17 @@ describe("PdfReader", () => {
     // Reset store state
     useReaderStore.getState().resetSession();
 
-    // Setup ResizeObserver mock - simulate container with dimensions
-    mockResizeObserver.mockImplementation((callback) => {
-      // Immediately call the callback with mock dimensions
-      queueMicrotask(() => {
-        callback([{ contentRect: { width: 800, height: 600 } }]);
-      });
-      return {
-        observe: mockResizeObserve,
-        disconnect: mockResizeDisconnect,
-      };
-    });
-    global.ResizeObserver = mockResizeObserver;
+    // Setup ResizeObserver mock (class-based for vitest v4 compatibility)
+    global.ResizeObserver = class MockResizeObserver {
+      observe = mockResizeObserve;
+      disconnect = mockResizeDisconnect;
+      constructor(callback: ResizeObserverCallback) {
+        // Immediately call the callback with mock dimensions
+        queueMicrotask(() => {
+          callback([{ contentRect: { width: 800, height: 600 } }] as any, this);
+        });
+      }
+    } as any;
   });
 
   it("should render PDF document with correct file URL", async () => {

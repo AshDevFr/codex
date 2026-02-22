@@ -25,8 +25,8 @@ import { PdfReaderSettings } from "./PdfReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
 
 // Import CSS for text layer and annotation layer
-import "react-pdf/dist/esm/Page/TextLayer.css";
-import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
+import "react-pdf/dist/Page/AnnotationLayer.css";
 
 // Configure PDF.js worker - use CDN with the exact version bundled in react-pdf
 // This avoids version mismatches when pdfjs-dist is also installed as a direct dependency

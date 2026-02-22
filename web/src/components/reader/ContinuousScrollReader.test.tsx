@@ -62,11 +62,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockObserverInstance = null;
 
-  // Mock IntersectionObserver
-  global.IntersectionObserver = vi.fn((callback) => {
-    mockObserverInstance = new MockIntersectionObserver(callback);
-    return mockObserverInstance as unknown as IntersectionObserver;
-  }) as unknown as typeof IntersectionObserver;
+  // Mock IntersectionObserver (class-based for vitest v4 compatibility)
+  global.IntersectionObserver = class extends MockIntersectionObserver {
+    constructor(callback: IntersectionObserverCallback) {
+      super(callback);
+      mockObserverInstance = this;
+    }
+  } as unknown as typeof IntersectionObserver;
 
   // Mock scrollIntoView
   Element.prototype.scrollIntoView = vi.fn();
@@ -308,7 +310,7 @@ describe("ContinuousScrollReader", () => {
     it("should create an IntersectionObserver", () => {
       renderWithProviders(<ContinuousScrollReader {...defaultProps} />);
 
-      expect(global.IntersectionObserver).toHaveBeenCalled();
+      expect(mockObserverInstance).not.toBeNull();
     });
 
     it("should observe page containers", () => {

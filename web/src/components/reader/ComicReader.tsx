@@ -57,6 +57,15 @@ interface ComicReaderProps {
   onClose: () => void;
 }
 
+/** Ordered cycle of fit modes for keyboard shortcut toggling */
+const FIT_MODE_CYCLE: FitMode[] = [
+  "screen",
+  "width",
+  "width-shrink",
+  "height",
+  "original",
+];
+
 /**
  * Main comic reader component.
  *
@@ -326,13 +335,6 @@ export function ComicReader({
   }, [setLastNavigationDirection, handlePrevPage]);
 
   // Cycle fit mode - respects series settings if override exists
-  const FIT_MODE_CYCLE: FitMode[] = [
-    "screen",
-    "width",
-    "width-shrink",
-    "height",
-    "original",
-  ];
   const handleCycleFitMode = useCallback(() => {
     const currentIndex = FIT_MODE_CYCLE.indexOf(fitMode);
     const nextIndex = (currentIndex + 1) % FIT_MODE_CYCLE.length;
