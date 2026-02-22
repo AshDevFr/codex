@@ -13,7 +13,7 @@ use crate::services::plugin::protocol::PluginScope;
 use crate::utils::password::hash_password;
 use anyhow::{Context, Result};
 use chrono::Utc;
-use rand::Rng;
+use rand::RngExt;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -440,11 +440,11 @@ async fn seed_libraries(
 fn generate_random_password(length: usize) -> String {
     const CHARSET: &[u8] =
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     (0..length)
         .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
+            let idx = rng.random_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect()
@@ -459,14 +459,14 @@ fn generate_api_key(
     name: String,
     permissions: &std::collections::HashSet<crate::api::permissions::Permission>,
 ) -> Result<(String, api_keys::Model)> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Generate random components
     let prefix_random: String = (0..16)
-        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.random::<u8>() % 16))
         .collect();
     let suffix_random: String = (0..32)
-        .map(|_| format!("{:x}", rng.r#gen::<u8>() % 16))
+        .map(|_| format!("{:x}", rng.random::<u8>() % 16))
         .collect();
 
     // Construct full key

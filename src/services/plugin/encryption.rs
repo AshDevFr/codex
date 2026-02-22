@@ -9,7 +9,7 @@ use aes_gcm::{
 };
 use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
-use rand::RngCore;
+use rand::Rng;
 use std::env;
 use std::sync::OnceLock;
 
@@ -79,7 +79,7 @@ impl CredentialEncryption {
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         // Generate a random 96-bit (12 byte) nonce
         let mut nonce_bytes = [0u8; 12];
-        rand::thread_rng().fill_bytes(&mut nonce_bytes);
+        rand::rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         // Encrypt the plaintext
@@ -142,7 +142,7 @@ impl CredentialEncryption {
     #[allow(dead_code)] // Operational utility: used by administrators for key generation
     pub fn generate_key() -> [u8; 32] {
         let mut key = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut key);
+        rand::rng().fill_bytes(&mut key);
         key
     }
 
