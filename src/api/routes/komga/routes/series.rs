@@ -18,9 +18,9 @@ use std::sync::Arc;
 /// - `GET /series/new` - Get recently added series
 /// - `GET /series/updated` - Get recently updated series
 /// - `GET /series/release-dates` - List release dates (stub)
-/// - `GET /series/:series_id` - Get series by ID
-/// - `GET /series/:series_id/thumbnail` - Get series thumbnail
-/// - `GET /series/:series_id/books` - Get books in series
+/// - `GET /series/{series_id}` - Get series by ID
+/// - `GET /series/{series_id}/thumbnail` - Get series thumbnail
+/// - `GET /series/{series_id}/books` - Get books in series
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/series", get(handlers::list_series))
@@ -31,10 +31,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/release-dates",
             get(handlers::list_series_release_dates),
         )
-        .route("/series/:series_id", get(handlers::get_series))
+        .route("/series/{series_id}", get(handlers::get_series))
         .route(
-            "/series/:series_id/thumbnail",
+            "/series/{series_id}/thumbnail",
             get(handlers::get_series_thumbnail),
         )
-        .route("/series/:series_id/books", get(handlers::get_series_books))
+        .route("/series/{series_id}/books", get(handlers::get_series_books))
 }

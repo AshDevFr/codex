@@ -90,7 +90,7 @@ pub struct RecommendationsRefreshResponse {
     pub message: String,
 }
 
-/// Request body for POST /api/v1/user/recommendations/:id/dismiss
+/// Request body for POST /api/v1/user/recommendations/{id}/dismiss
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DismissRecommendationRequest {
@@ -99,7 +99,7 @@ pub struct DismissRecommendationRequest {
     pub reason: Option<String>,
 }
 
-/// Response from POST /api/v1/user/recommendations/:id/dismiss
+/// Response from POST /api/v1/user/recommendations/{id}/dismiss
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DismissRecommendationResponse {

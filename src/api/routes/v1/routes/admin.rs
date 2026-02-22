@@ -24,11 +24,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Settings routes (admin only)
         .route("/admin/settings", get(handlers::settings::list_settings))
         .route(
-            "/admin/settings/:setting_key",
+            "/admin/settings/{setting_key}",
             get(handlers::settings::get_setting),
         )
         .route(
-            "/admin/settings/:setting_key",
+            "/admin/settings/{setting_key}",
             put(handlers::settings::update_setting),
         )
         .route(
@@ -36,11 +36,11 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::settings::bulk_update_settings),
         )
         .route(
-            "/admin/settings/:setting_key/reset",
+            "/admin/settings/{setting_key}/reset",
             post(handlers::settings::reset_setting),
         )
         .route(
-            "/admin/settings/:setting_key/history",
+            "/admin/settings/{setting_key}/history",
             get(handlers::settings::get_setting_history),
         )
         // Sharing tags routes (admin only)
@@ -53,15 +53,15 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::sharing_tags::create_sharing_tag),
         )
         .route(
-            "/admin/sharing-tags/:tag_id",
+            "/admin/sharing-tags/{tag_id}",
             get(handlers::sharing_tags::get_sharing_tag),
         )
         .route(
-            "/admin/sharing-tags/:tag_id",
+            "/admin/sharing-tags/{tag_id}",
             patch(handlers::sharing_tags::update_sharing_tag),
         )
         .route(
-            "/admin/sharing-tags/:tag_id",
+            "/admin/sharing-tags/{tag_id}",
             delete(handlers::sharing_tags::delete_sharing_tag),
         )
         // Cleanup routes (admin only)
@@ -96,47 +96,47 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::plugin_storage::get_all_plugin_storage_stats),
         )
         .route(
-            "/admin/plugin-storage/:name",
+            "/admin/plugin-storage/{name}",
             get(handlers::plugin_storage::get_plugin_storage_stats),
         )
         .route(
-            "/admin/plugin-storage/:name",
+            "/admin/plugin-storage/{name}",
             delete(handlers::plugin_storage::cleanup_plugin_storage),
         )
         // Plugin management routes (admin only)
         .route("/admin/plugins", get(handlers::plugins::list_plugins))
         .route("/admin/plugins", post(handlers::plugins::create_plugin))
-        .route("/admin/plugins/:id", get(handlers::plugins::get_plugin))
+        .route("/admin/plugins/{id}", get(handlers::plugins::get_plugin))
         .route(
-            "/admin/plugins/:id",
+            "/admin/plugins/{id}",
             patch(handlers::plugins::update_plugin),
         )
         .route(
-            "/admin/plugins/:id",
+            "/admin/plugins/{id}",
             delete(handlers::plugins::delete_plugin),
         )
         .route(
-            "/admin/plugins/:id/enable",
+            "/admin/plugins/{id}/enable",
             post(handlers::plugins::enable_plugin),
         )
         .route(
-            "/admin/plugins/:id/disable",
+            "/admin/plugins/{id}/disable",
             post(handlers::plugins::disable_plugin),
         )
         .route(
-            "/admin/plugins/:id/test",
+            "/admin/plugins/{id}/test",
             post(handlers::plugins::test_plugin),
         )
         .route(
-            "/admin/plugins/:id/health",
+            "/admin/plugins/{id}/health",
             get(handlers::plugins::get_plugin_health),
         )
         .route(
-            "/admin/plugins/:id/reset",
+            "/admin/plugins/{id}/reset",
             post(handlers::plugins::reset_plugin_failures),
         )
         .route(
-            "/admin/plugins/:id/failures",
+            "/admin/plugins/{id}/failures",
             get(handlers::plugins::get_plugin_failures),
         )
 }

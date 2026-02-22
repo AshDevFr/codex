@@ -29,7 +29,6 @@ use openidconnect::{
         CoreAuthenticationFlow, CoreClient, CoreGenderClaim, CoreProviderMetadata,
         CoreTokenResponse, CoreUserInfoClaims,
     },
-    reqwest::async_http_client,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -80,9 +79,10 @@ pub struct PendingAuth {
     pub provider_name: String,
 }
 
-/// Cached discovery document
+/// Cached provider metadata (instead of caching the client directly,
+/// we cache the discovery metadata and reconstruct clients as needed)
 struct CachedDiscovery {
-    client: CoreClient,
+    metadata: CoreProviderMetadata,
     expires_at: chrono::DateTime<Utc>,
 }
 
@@ -104,6 +104,9 @@ pub struct OidcService {
     pending_states: Arc<DashMap<String, PendingAuth>>,
     /// Redirect URI for callbacks
     redirect_uri_base: String,
+    /// Shared HTTP client for OIDC requests (reused across all providers)
+    /// Uses the reqwest version from openidconnect/oauth2, not the top-level reqwest crate
+    http_client: openidconnect::reqwest::Client,
 }
 
 impl OidcService {
@@ -114,11 +117,19 @@ impl OidcService {
     /// * `config` - OIDC configuration with provider settings
     /// * `redirect_uri_base` - Base URL for OAuth callbacks (e.g., "http://localhost:8080")
     pub fn new(config: OidcConfig, redirect_uri_base: String) -> Self {
+        // Build HTTP client with redirect disabled (SSRF prevention)
+        // Uses the reqwest version re-exported by openidconnect/oauth2
+        let http_client = openidconnect::reqwest::Client::builder()
+            .redirect(openidconnect::reqwest::redirect::Policy::none())
+            .build()
+            .expect("Failed to build OIDC HTTP client");
+
         Self {
             config,
             clients: Arc::new(DashMap::new()),
             pending_states: Arc::new(DashMap::new()),
             redirect_uri_base,
+            http_client,
         }
     }
 
@@ -183,15 +194,13 @@ impl OidcService {
         )
     }
 
-    /// Get or create an OIDC client for a provider
-    ///
-    /// This method handles discovery document fetching and caching.
-    async fn get_client(&self, provider_name: &str) -> Result<CoreClient> {
+    /// Get cached provider metadata, fetching if needed
+    async fn get_provider_metadata(&self, provider_name: &str) -> Result<CoreProviderMetadata> {
         // Check cache first
         if let Some(cached) = self.clients.get(provider_name) {
             if cached.expires_at > Utc::now() {
-                debug!(provider = %provider_name, "Using cached OIDC client");
-                return Ok(cached.client.clone());
+                debug!(provider = %provider_name, "Using cached OIDC provider metadata");
+                return Ok(cached.metadata.clone());
             }
             // Cache expired, remove it
             drop(cached);
@@ -216,9 +225,44 @@ impl OidcService {
             IssuerUrl::new(provider_config.issuer_url.clone()).context("Invalid issuer URL")?;
 
         // Fetch discovery document
-        let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, async_http_client)
+        let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, &self.http_client)
             .await
             .context("Failed to fetch OIDC discovery document")?;
+
+        // Cache the metadata
+        let cached = CachedDiscovery {
+            metadata: provider_metadata.clone(),
+            expires_at: Utc::now() + Duration::seconds(DISCOVERY_CACHE_TTL_SECS),
+        };
+        self.clients.insert(provider_name.to_string(), cached);
+
+        debug!(provider = %provider_name, "OIDC provider metadata fetched and cached");
+        Ok(provider_metadata)
+    }
+
+    /// Build an OIDC client for a provider from cached metadata
+    ///
+    /// This constructs the client with redirect URI set, using cached provider metadata.
+    async fn build_client(
+        &self,
+        provider_name: &str,
+    ) -> Result<
+        CoreClient<
+            openidconnect::EndpointSet,
+            openidconnect::EndpointNotSet,
+            openidconnect::EndpointNotSet,
+            openidconnect::EndpointNotSet,
+            openidconnect::EndpointMaybeSet,
+            openidconnect::EndpointMaybeSet,
+        >,
+    > {
+        let provider_metadata = self.get_provider_metadata(provider_name).await?;
+
+        let provider_config = self
+            .config
+            .providers
+            .get(provider_name)
+            .ok_or_else(|| anyhow!("Unknown OIDC provider: {}", provider_name))?;
 
         // Resolve client secret
         let client_secret = self
@@ -229,7 +273,7 @@ impl OidcService {
         let redirect_uri = RedirectUrl::new(self.build_redirect_uri(provider_name))
             .context("Invalid redirect URI")?;
 
-        // Create client
+        // Create client with redirect URI set
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
             ClientId::new(provider_config.client_id.clone()),
@@ -237,14 +281,6 @@ impl OidcService {
         )
         .set_redirect_uri(redirect_uri);
 
-        // Cache the client
-        let cached = CachedDiscovery {
-            client: client.clone(),
-            expires_at: Utc::now() + Duration::seconds(DISCOVERY_CACHE_TTL_SECS),
-        };
-        self.clients.insert(provider_name.to_string(), cached);
-
-        debug!(provider = %provider_name, "OIDC client created and cached");
         Ok(client)
     }
 
@@ -266,7 +302,7 @@ impl OidcService {
             .get(provider_name)
             .ok_or_else(|| anyhow!("Unknown OIDC provider: {}", provider_name))?;
 
-        let client = self.get_client(provider_name).await?;
+        let client = self.build_client(provider_name).await?;
 
         // Generate PKCE challenge
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -362,7 +398,7 @@ impl OidcService {
             .get(provider_name)
             .ok_or_else(|| anyhow!("Unknown OIDC provider: {}", provider_name))?;
 
-        let client = self.get_client(provider_name).await?;
+        let client = self.build_client(provider_name).await?;
 
         // Reconstruct PKCE verifier
         let pkce_verifier = PkceCodeVerifier::new(pending.pkce_verifier);
@@ -370,8 +406,9 @@ impl OidcService {
         // Exchange code for tokens
         let token_response: CoreTokenResponse = client
             .exchange_code(AuthorizationCode::new(code.to_string()))
+            .context("Token endpoint not configured")?
             .set_pkce_verifier(pkce_verifier)
-            .request_async(async_http_client)
+            .request_async(&self.http_client)
             .await
             .context("Failed to exchange authorization code")?;
 
@@ -445,7 +482,6 @@ impl OidcService {
             CoreGenderClaim,
             openidconnect::core::CoreJweContentEncryptionAlgorithm,
             openidconnect::core::CoreJwsSigningAlgorithm,
-            openidconnect::core::CoreJsonWebKeyType,
         >,
         groups_claim: &str,
     ) -> Vec<String> {
@@ -498,12 +534,12 @@ impl OidcService {
             .get(provider_name)
             .ok_or_else(|| anyhow!("Unknown OIDC provider: {}", provider_name))?;
 
-        let client = self.get_client(provider_name).await?;
+        let client = self.build_client(provider_name).await?;
 
         // Call UserInfo endpoint
         let userinfo: CoreUserInfoClaims = client
             .user_info(AccessToken::new(access_token.to_string()), None)?
-            .request_async(async_http_client)
+            .request_async(&self.http_client)
             .await
             .context("Failed to fetch UserInfo")?;
 

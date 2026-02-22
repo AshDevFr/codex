@@ -16,7 +16,7 @@ use std::sync::Arc;
 ///
 /// Routes:
 /// - GET /plugins/actions - Get available plugin actions for a scope
-/// - POST /plugins/:id/execute - Execute a plugin method
+/// - POST /plugins/{id}/execute - Execute a plugin method
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route(
@@ -24,7 +24,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             get(handlers::plugin_actions::get_plugin_actions),
         )
         .route(
-            "/plugins/:id/execute",
+            "/plugins/{id}/execute",
             post(handlers::plugin_actions::execute_plugin),
         )
 }

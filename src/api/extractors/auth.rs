@@ -3,7 +3,7 @@ use crate::api::permissions::{Permission, UserRole};
 use crate::db::repositories::{ApiKeyRepository, UserRepository};
 use crate::utils::{jwt::JwtService, password};
 use axum::http::header::COOKIE;
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use sea_orm::DatabaseConnection;
@@ -228,7 +228,6 @@ pub struct AppState {
 // Legacy alias for backwards compatibility during transition
 pub type AuthState = AppState;
 
-#[async_trait]
 impl FromRequestParts<Arc<AppState>> for AuthContext {
     type Rejection = ApiError;
 
@@ -483,7 +482,6 @@ async fn extract_from_basic_auth(
 #[derive(Debug, Clone)]
 pub struct FlexibleAuthContext(pub AuthContext);
 
-#[async_trait]
 impl FromRequestParts<Arc<AppState>> for FlexibleAuthContext {
     type Rejection = ApiError;
 

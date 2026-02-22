@@ -11,24 +11,24 @@ use std::sync::Arc;
 /// Create page routes for the Komga-compatible API
 ///
 /// Routes:
-/// - `GET /books/:book_id/pages` - List all pages for a book
-/// - `GET /books/:book_id/pages/:page_number` - Get a specific page image
-/// - `GET /books/:book_id/pages/:page_number/thumbnail` - Get a page thumbnail
+/// - `GET /books/{book_id}/pages` - List all pages for a book
+/// - `GET /books/{book_id}/pages/{page_number}` - Get a specific page image
+/// - `GET /books/{book_id}/pages/{page_number}/thumbnail` - Get a page thumbnail
 ///
 /// Note: These routes are nested under `/books` but defined separately
 /// for organizational clarity.
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // List all pages for a book
-        .route("/books/:book_id/pages", get(handlers::list_pages))
+        .route("/books/{book_id}/pages", get(handlers::list_pages))
         // Get a specific page image (must come before thumbnail route)
         .route(
-            "/books/:book_id/pages/:page_number",
+            "/books/{book_id}/pages/{page_number}",
             get(handlers::get_page),
         )
         // Get a page thumbnail
         .route(
-            "/books/:book_id/pages/:page_number/thumbnail",
+            "/books/{book_id}/pages/{page_number}/thumbnail",
             get(handlers::get_page_thumbnail),
         )
 }

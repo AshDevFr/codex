@@ -16,110 +16,110 @@ use std::sync::Arc;
 /// All routes are protected (authentication required).
 ///
 /// Routes include:
-/// - Book CRUD: /books, /books/:id
+/// - Book CRUD: /books, /books/{id}
 /// - Book collections: /books/in-progress, /books/recently-added, etc.
-/// - Metadata: /books/:id/metadata
-/// - Pages: /books/:id/pages/:page_number
-/// - Progress: /books/:id/progress, /books/:id/read, /books/:id/unread
-/// - Files: /books/:id/file, /books/:id/thumbnail
-/// - External IDs: /books/:id/external-ids
-/// - External Links: /books/:id/external-links
-/// - Covers: /books/:id/covers, /books/:id/covers/:cover_id
+/// - Metadata: /books/{id}/metadata
+/// - Pages: /books/{id}/pages/{page_number}
+/// - Progress: /books/{id}/progress, /books/{id}/read, /books/{id}/unread
+/// - Files: /books/{id}/file, /books/{id}/thumbnail
+/// - External IDs: /books/{id}/external-ids
+/// - External Links: /books/{id}/external-links
+/// - Covers: /books/{id}/covers, /books/{id}/covers/{cover_id}
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // Book CRUD routes
         .route("/books", get(handlers::list_books))
         .route("/books/list", post(handlers::list_books_filtered))
-        .route("/books/:book_id", get(handlers::get_book))
-        .route("/books/:book_id", patch(handlers::patch_book))
+        .route("/books/{book_id}", get(handlers::get_book))
+        .route("/books/{book_id}", patch(handlers::patch_book))
         .route(
-            "/books/:book_id/adjacent",
+            "/books/{book_id}/adjacent",
             get(handlers::get_adjacent_books),
         )
-        .route("/books/:book_id/file", get(handlers::get_book_file))
+        .route("/books/{book_id}/file", get(handlers::get_book_file))
         .route(
-            "/books/:book_id/thumbnail",
+            "/books/{book_id}/thumbnail",
             get(handlers::get_book_thumbnail),
         )
-        .route("/books/:book_id/cover", post(handlers::upload_book_cover))
+        .route("/books/{book_id}/cover", post(handlers::upload_book_cover))
         // Book external IDs routes
         .route(
-            "/books/:book_id/external-ids",
+            "/books/{book_id}/external-ids",
             get(handlers::list_book_external_ids),
         )
         .route(
-            "/books/:book_id/external-ids",
+            "/books/{book_id}/external-ids",
             post(handlers::create_book_external_id),
         )
         .route(
-            "/books/:book_id/external-ids/:external_id_id",
+            "/books/{book_id}/external-ids/{external_id_id}",
             delete(handlers::delete_book_external_id),
         )
         // Book external links routes
         .route(
-            "/books/:book_id/external-links",
+            "/books/{book_id}/external-links",
             get(handlers::list_book_external_links),
         )
         .route(
-            "/books/:book_id/external-links",
+            "/books/{book_id}/external-links",
             post(handlers::create_book_external_link),
         )
         .route(
-            "/books/:book_id/external-links/:source",
+            "/books/{book_id}/external-links/{source}",
             delete(handlers::delete_book_external_link),
         )
         // Book covers management routes
-        .route("/books/:book_id/covers", get(handlers::list_book_covers))
+        .route("/books/{book_id}/covers", get(handlers::list_book_covers))
         .route(
-            "/books/:book_id/covers/selected",
+            "/books/{book_id}/covers/selected",
             delete(handlers::reset_book_cover),
         )
         .route(
-            "/books/:book_id/covers/:cover_id/select",
+            "/books/{book_id}/covers/{cover_id}/select",
             put(handlers::select_book_cover),
         )
         .route(
-            "/books/:book_id/covers/:cover_id/image",
+            "/books/{book_id}/covers/{cover_id}/image",
             get(handlers::get_book_cover_image),
         )
         .route(
-            "/books/:book_id/covers/:cover_id",
+            "/books/{book_id}/covers/{cover_id}",
             delete(handlers::delete_book_cover),
         )
         // Book analysis routes
         .route(
-            "/books/:book_id/analyze",
+            "/books/{book_id}/analyze",
             post(handlers::trigger_book_analysis),
         )
         .route(
-            "/books/:book_id/analyze-unanalyzed",
+            "/books/{book_id}/analyze-unanalyzed",
             post(handlers::trigger_book_unanalyzed_analysis),
         )
         // Book metadata routes
         .route(
-            "/books/:book_id/metadata",
+            "/books/{book_id}/metadata",
             put(handlers::replace_book_metadata),
         )
         .route(
-            "/books/:book_id/metadata",
+            "/books/{book_id}/metadata",
             patch(handlers::patch_book_metadata),
         )
         // Book metadata lock routes
         .route(
-            "/books/:book_id/metadata/locks",
+            "/books/{book_id}/metadata/locks",
             get(handlers::get_book_metadata_locks),
         )
         .route(
-            "/books/:book_id/metadata/locks",
+            "/books/{book_id}/metadata/locks",
             put(handlers::update_book_metadata_locks),
         )
         // Book metadata plugin routes
         .route(
-            "/books/:book_id/metadata/preview",
+            "/books/{book_id}/metadata/preview",
             post(handlers::plugin_actions::preview_book_metadata),
         )
         .route(
-            "/books/:book_id/metadata/apply",
+            "/books/{book_id}/metadata/apply",
             post(handlers::plugin_actions::apply_book_metadata),
         )
         // Book collection routes
@@ -135,35 +135,35 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         // Error endpoints (grouped with retry)
         .route("/books/errors", get(handlers::list_books_with_errors))
-        .route("/books/:book_id/retry", post(handlers::retry_book_errors))
+        .route("/books/{book_id}/retry", post(handlers::retry_book_errors))
         .route(
             "/books/retry-all-errors",
             post(handlers::retry_all_book_errors),
         )
         // Page routes
-        .route("/books/:book_id/pages", get(handlers::list_book_pages))
+        .route("/books/{book_id}/pages", get(handlers::list_book_pages))
         .route(
-            "/books/:book_id/pages/:page_number",
+            "/books/{book_id}/pages/{page_number}",
             get(handlers::get_page_image),
         )
         // Reading progress routes
         .route(
-            "/books/:book_id/progress",
+            "/books/{book_id}/progress",
             put(handlers::update_reading_progress),
         )
         .route(
-            "/books/:book_id/progress",
+            "/books/{book_id}/progress",
             get(handlers::get_reading_progress),
         )
         .route(
-            "/books/:book_id/progress",
+            "/books/{book_id}/progress",
             delete(handlers::delete_reading_progress),
         )
         .route("/progress", get(handlers::get_user_progress))
         // Mark as read/unread routes
-        .route("/books/:book_id/read", post(handlers::mark_book_as_read))
+        .route("/books/{book_id}/read", post(handlers::mark_book_as_read))
         .route(
-            "/books/:book_id/unread",
+            "/books/{book_id}/unread",
             post(handlers::mark_book_as_unread),
         )
         // Bulk operations
@@ -192,19 +192,19 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::bulk_modify_book_genres),
         )
         // Book genre routes
-        .route("/books/:book_id/genres", get(handlers::get_book_genres))
-        .route("/books/:book_id/genres", put(handlers::set_book_genres))
-        .route("/books/:book_id/genres", post(handlers::add_book_genre))
+        .route("/books/{book_id}/genres", get(handlers::get_book_genres))
+        .route("/books/{book_id}/genres", put(handlers::set_book_genres))
+        .route("/books/{book_id}/genres", post(handlers::add_book_genre))
         .route(
-            "/books/:book_id/genres/:genre_id",
+            "/books/{book_id}/genres/{genre_id}",
             delete(handlers::remove_book_genre),
         )
         // Book tag routes
-        .route("/books/:book_id/tags", get(handlers::get_book_tags))
-        .route("/books/:book_id/tags", put(handlers::set_book_tags))
-        .route("/books/:book_id/tags", post(handlers::add_book_tag))
+        .route("/books/{book_id}/tags", get(handlers::get_book_tags))
+        .route("/books/{book_id}/tags", put(handlers::set_book_tags))
+        .route("/books/{book_id}/tags", post(handlers::add_book_tag))
         .route(
-            "/books/:book_id/tags/:tag_id",
+            "/books/{book_id}/tags/{tag_id}",
             delete(handlers::remove_book_tag),
         )
 }

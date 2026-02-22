@@ -21325,7 +21325,7 @@
       },
       "DismissRecommendationRequest": {
         "type": "object",
-        "description": "Request body for POST /api/v1/user/recommendations/:id/dismiss",
+        "description": "Request body for POST /api/v1/user/recommendations/{id}/dismiss",
         "properties": {
           "reason": {
             "type": [
@@ -21338,7 +21338,7 @@
       },
       "DismissRecommendationResponse": {
         "type": "object",
-        "description": "Response from POST /api/v1/user/recommendations/:id/dismiss",
+        "description": "Response from POST /api/v1/user/recommendations/{id}/dismiss",
         "required": [
           "dismissed"
         ],
