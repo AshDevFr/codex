@@ -52,7 +52,6 @@ const BACKGROUND_COLORS: Record<BackgroundColor, string> = {
 };
 
 const DEFAULT_PAGE_GAP = 16;
-const DEFAULT_PRELOAD_BUFFER = 2;
 const SCROLL_DEBOUNCE_MS = 100;
 
 // =============================================================================
@@ -76,7 +75,7 @@ export function PdfContinuousScrollReader({
   zoomLevel,
   backgroundColor,
   pageGap = DEFAULT_PAGE_GAP,
-  preloadBuffer = DEFAULT_PRELOAD_BUFFER,
+  preloadBuffer = 0,
   searchText,
   onPageChange,
   onDocumentLoadSuccess,

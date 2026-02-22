@@ -217,7 +217,7 @@ export interface ReaderSettings {
   epubLineHeight: number;
   /** EPUB margin as percentage (0-30) */
   epubMargin: number;
-  /** Number of pages to preload ahead/behind current page (0-5) */
+  /** Number of pages to preload ahead/behind current page (0-10) */
   preloadPages: number;
   /** In double-page mode, show landscape/wide pages alone (default: true) */
   doublePageShowWideAlone: boolean;
@@ -520,8 +520,8 @@ export const useReaderStore = create<ReaderState>()(
 
         setPreloadPages: (count) =>
           set((state) => {
-            // Clamp preload pages between 0 and 5
-            state.settings.preloadPages = Math.max(0, Math.min(5, count));
+            // Clamp preload pages between 0 and 10
+            state.settings.preloadPages = Math.max(0, Math.min(10, count));
           }),
 
         setDoublePageShowWideAlone: (enabled) =>

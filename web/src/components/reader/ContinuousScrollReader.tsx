@@ -51,7 +51,6 @@ const BACKGROUND_COLORS: Record<BackgroundColor, string> = {
 };
 
 const DEFAULT_PAGE_GAP = 0;
-const DEFAULT_PRELOAD_BUFFER = 2;
 const SCROLL_DEBOUNCE_MS = 100;
 
 // =============================================================================
@@ -81,7 +80,7 @@ export function ContinuousScrollReader({
 }: ContinuousScrollReaderProps) {
   // Use explicit undefined checks to allow 0 as a valid value
   const effectivePageGap = pageGap ?? DEFAULT_PAGE_GAP;
-  const effectivePreloadBuffer = preloadBuffer ?? DEFAULT_PRELOAD_BUFFER;
+  const effectivePreloadBuffer = preloadBuffer ?? 0;
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);

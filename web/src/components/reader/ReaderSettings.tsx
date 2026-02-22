@@ -616,11 +616,12 @@ export function ReaderSettings({
                   value={globalSettings.preloadPages}
                   onChange={setPreloadPages}
                   min={0}
-                  max={5}
+                  max={10}
                   step={1}
                   marks={[
                     { value: 0, label: "0" },
                     { value: 5, label: "5" },
+                    { value: 10, label: "10" },
                   ]}
                 />
               </Box>

@@ -565,25 +565,26 @@ export function ComicReader({
 
   // Preload adjacent pages and track in store
   // Also detect orientation for preloaded images
-  // In double-page mode, we always preload a few pages ahead to detect orientations
-  // before they're needed for spread calculation
   useEffect(() => {
-    // Build list of pages to preload (current page + adjacent pages)
+    // Build list of pages to preload (current page always included)
     const pagesToPreload = new Set<number>([currentPage]);
 
-    // Always preload pages around current position
-    const basePreloadCount = Math.max(preloadPages, 2); // At least 2 pages ahead
-    for (let i = 1; i <= basePreloadCount; i++) {
+    // Double-page mode doubles the preload count
+    const effectivePreload =
+      pageLayout === "double" ? preloadPages * 2 : preloadPages;
+
+    // Preload pages around current position
+    for (let i = 1; i <= effectivePreload; i++) {
       pagesToPreload.add(currentPage + i);
       pagesToPreload.add(currentPage - i);
     }
 
     // In double-page mode, also use spread-aware preloading
-    if (pageLayout === "double" && preloadPages > 0) {
+    if (pageLayout === "double" && effectivePreload > 0) {
       const spreadPreloadPages = getPreloadPages(
         currentPage,
         spreadConfig,
-        preloadPages * 2,
+        effectivePreload,
       );
       for (const p of spreadPreloadPages) {
         pagesToPreload.add(p);

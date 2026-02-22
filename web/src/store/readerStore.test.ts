@@ -322,12 +322,12 @@ describe("readerStore", () => {
       expect(useReaderStore.getState().settings.preloadPages).toBe(0);
     });
 
-    it("should clamp preload pages to maximum 5", () => {
+    it("should clamp preload pages to maximum 10", () => {
       const { setPreloadPages } = useReaderStore.getState();
 
-      setPreloadPages(10);
+      setPreloadPages(15);
 
-      expect(useReaderStore.getState().settings.preloadPages).toBe(5);
+      expect(useReaderStore.getState().settings.preloadPages).toBe(10);
     });
   });
 
