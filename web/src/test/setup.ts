@@ -59,6 +59,23 @@ process.on("unhandledRejection", (reason) => {
   // For other unhandled rejections, let them through (vitest will handle them)
 });
 
+// Suppress jsdom XMLHttpRequest AggregateError noise from stderr
+// jsdom's xhr-utils.js dispatches errors directly to stderr, bypassing console.error
+const originalStderrWrite = process.stderr.write.bind(process.stderr);
+process.stderr.write = ((...args: Parameters<typeof process.stderr.write>) => {
+  const chunk = args[0];
+  if (
+    typeof chunk === "string" &&
+    (chunk.includes("AggregateError") ||
+      chunk.includes("xhr-utils.js") ||
+      chunk.includes("XMLHttpRequest-impl.js") ||
+      chunk.includes("http-request.js"))
+  ) {
+    return true;
+  }
+  return originalStderrWrite(...args);
+}) as typeof process.stderr.write;
+
 // Cleanup after each test
 afterEach(() => {
   cleanup();

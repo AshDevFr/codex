@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
-import { renderWithProviders, screen, userEvent } from "@/test/utils";
+import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
 import { ReaderSettings } from "./ReaderSettings";
+
+// Mock the seriesMetadata API
+vi.mock("@/api/seriesMetadata", () => ({
+  seriesMetadataApi: {
+    patchMetadata: vi.fn().mockResolvedValue({}),
+    updateLocks: vi.fn().mockResolvedValue({}),
+  },
+}));
+
+import { seriesMetadataApi } from "@/api/seriesMetadata";
 
 // Reset store before each test
 beforeEach(() => {
+  vi.clearAllMocks();
   useReaderStore.setState({
     settings: {
       ...useReaderStore.getState().settings,
@@ -157,6 +168,64 @@ describe("ReaderSettings", () => {
       expect(
         screen.getByText("Re-open the book after changing to apply"),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("Reading Direction Lock", () => {
+    it("should lock reading direction when changing it with a series context", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <ReaderSettings
+          opened={true}
+          onClose={vi.fn()}
+          seriesId="test-series-123"
+        />,
+      );
+
+      // Open the reading mode Select dropdown
+      const selectInput = screen.getByText("Left to Right");
+      await user.click(selectInput);
+
+      // Select RTL option
+      await waitFor(() => {
+        expect(screen.getByText("Right to Left (Manga)")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Right to Left (Manga)"));
+
+      // Should call patchMetadata to save the direction
+      await waitFor(() => {
+        expect(seriesMetadataApi.patchMetadata).toHaveBeenCalledWith(
+          "test-series-123",
+          { readingDirection: "rtl" },
+        );
+      });
+
+      // Should also call updateLocks to lock the reading direction
+      await waitFor(() => {
+        expect(seriesMetadataApi.updateLocks).toHaveBeenCalledWith(
+          "test-series-123",
+          { readingDirection: true },
+        );
+      });
+    });
+
+    it("should not call updateLocks when there is no series context", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<ReaderSettings opened={true} onClose={vi.fn()} />);
+
+      // Open the reading mode Select dropdown
+      const selectInput = screen.getByText("Left to Right");
+      await user.click(selectInput);
+
+      // Select RTL option
+      await waitFor(() => {
+        expect(screen.getByText("Right to Left (Manga)")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Right to Left (Manga)"));
+
+      // Should NOT call any API without series context
+      expect(seriesMetadataApi.patchMetadata).not.toHaveBeenCalled();
+      expect(seriesMetadataApi.updateLocks).not.toHaveBeenCalled();
     });
   });
 

@@ -97,13 +97,17 @@ export function ReaderSettings({
   } = useSeriesReaderSettings(seriesId);
 
   // Mutation to update series reading direction in backend
+  // Also locks the reading direction field to prevent scans/imports from overwriting it
   const updateSeriesReadingDirection = useMutation({
     mutationFn: async (direction: ReadingDirection) => {
       if (!seriesId) {
         return;
       }
-      return seriesMetadataApi.patchMetadata(seriesId, {
+      await seriesMetadataApi.patchMetadata(seriesId, {
         readingDirection: direction,
+      });
+      await seriesMetadataApi.updateLocks(seriesId, {
+        readingDirection: true,
       });
     },
     onSuccess: () => {
