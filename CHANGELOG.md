@@ -2,6 +2,22 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.14.0] - 2026-02-23
+
+### 🚀 Features
+
+- *(scheduler)* Add IANA timezone support for cron job scheduling
+- *(search)* Add accent-insensitive Unicode search via search_title column
+
+### 🐛 Bug Fixes
+
+- *(komga)* Prevent panic on series list with readStatus condition filter
+- *(api)* Catch handler panics and return 500 instead of dropping connections
+- *(reader)* Auto-lock reading direction when changed from Reader Settings
+- *(reader)* Unify preload pages behavior to respect user setting exactly
+- *(reader)* Add keyboard scroll sync and boundary navigation to continuous scroll mode
+- *(web)* Add timeout to flaky AddLibraryModal cron schedule tests
+
 ## [1.13.0] - 2026-02-21
 
 ### 🚀 Features
