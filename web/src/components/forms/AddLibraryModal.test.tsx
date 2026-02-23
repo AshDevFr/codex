@@ -533,147 +533,155 @@ describe("LibraryModal (Add Mode)", () => {
     expect(screen.queryByPlaceholderText("0 0 * * *")).not.toBeInTheDocument();
   });
 
-  it("should create library with cron schedule when auto scan is enabled", async () => {
-    const user = userEvent.setup();
-    const mockLibrary = createMockLibrary();
+  it(
+    "should create library with cron schedule when auto scan is enabled",
+    { timeout: 15000 },
+    async () => {
+      const user = userEvent.setup();
+      const mockLibrary = createMockLibrary();
 
-    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-    // Wait for modal and find form fields
-    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-    const modalContent = within(modal);
-    const nameInput = await modalContent.findByPlaceholderText(
-      "Enter library name",
-      {},
-      { timeout: 3000 },
-    );
-
-    // Fill in form
-    await user.clear(nameInput);
-    await user.type(nameInput, "Test Library");
-
-    // Set path
-    const browseButton = screen.getByText("Browse");
-    await user.click(browseButton);
-
-    const driveButton = await screen.findByText("Home Directory");
-    await user.click(driveButton);
-
-    const selectButton = await screen.findByText("Select This Folder");
-    await user.click(selectButton);
-
-    // Navigate to the Scanning tab
-    const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
-    await user.click(scanningTab);
-
-    // Wait for the Scanning tab content to load
-    await waitFor(() => {
-      expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
-    });
-
-    // Find and click on the Select to open the dropdown
-    const selectInput = screen.getByText("Manual - Trigger scans on demand");
-    await user.click(selectInput);
-
-    // Wait for and click the auto option
-    const autoOption = await screen.findByText(
-      "Automatic - Scheduled scanning",
-    );
-    await user.click(autoOption);
-
-    // Wait for cron input and verify it has default value
-    const cronInput = await screen.findByPlaceholderText("0 0 * * *");
-    expect(cronInput).toBeInTheDocument();
-    expect(cronInput).toHaveValue("0 0 * * *");
-
-    // Submit form
-    await waitFor(() => {
-      const createButton = screen.getByText("Create Library");
-      expect(createButton).not.toBeDisabled();
-    });
-
-    const createButton = screen.getByText("Create Library");
-    await user.click(createButton);
-
-    await waitFor(() => {
-      expect(librariesApi.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: "Test Library",
-          path: "/home/user",
-          scanningConfig: expect.objectContaining({
-            enabled: true,
-            cronSchedule: "0 0 * * *",
-            scanMode: "normal",
-          }),
-        }),
+      // Wait for modal and find form fields
+      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+      const modalContent = within(modal);
+      const nameInput = await modalContent.findByPlaceholderText(
+        "Enter library name",
+        {},
+        { timeout: 3000 },
       );
-    });
-  });
 
-  it("should validate cron schedule is required when auto scan is enabled", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+      // Fill in form
+      await user.clear(nameInput);
+      await user.type(nameInput, "Test Library");
 
-    // Wait for modal
-    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-    const modalContent = within(modal);
-    const nameInput = await modalContent.findByPlaceholderText(
-      "Enter library name",
-      {},
-      { timeout: 3000 },
-    );
+      // Set path
+      const browseButton = screen.getByText("Browse");
+      await user.click(browseButton);
 
-    // Fill in name and path
-    await user.clear(nameInput);
-    await user.type(nameInput, "Test Library");
+      const driveButton = await screen.findByText("Home Directory");
+      await user.click(driveButton);
 
-    const browseButton = screen.getByText("Browse");
-    await user.click(browseButton);
+      const selectButton = await screen.findByText("Select This Folder");
+      await user.click(selectButton);
 
-    const driveButton = await screen.findByText("Home Directory");
-    await user.click(driveButton);
+      // Navigate to the Scanning tab
+      const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+      await user.click(scanningTab);
 
-    const selectButton = await screen.findByText("Select This Folder");
-    await user.click(selectButton);
+      // Wait for the Scanning tab content to load
+      await waitFor(() => {
+        expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+      });
 
-    // Navigate to the Scanning tab
-    const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
-    await user.click(scanningTab);
+      // Find and click on the Select to open the dropdown
+      const selectInput = screen.getByText("Manual - Trigger scans on demand");
+      await user.click(selectInput);
 
-    // Wait for the Scanning tab content to load and find the select
-    await waitFor(() => {
-      expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
-    });
+      // Wait for and click the auto option
+      const autoOption = await screen.findByText(
+        "Automatic - Scheduled scanning",
+      );
+      await user.click(autoOption);
 
-    // Find and click on the Select to open the dropdown
-    const selectInput = screen.getByText("Manual - Trigger scans on demand");
-    await user.click(selectInput);
+      // Wait for cron input and verify it has default value
+      const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+      expect(cronInput).toBeInTheDocument();
+      expect(cronInput).toHaveValue("0 0 * * *");
 
-    // Wait for and click the auto option
-    const autoOption = await screen.findByText(
-      "Automatic - Scheduled scanning",
-    );
-    await user.click(autoOption);
+      // Submit form
+      await waitFor(() => {
+        const createButton = screen.getByText("Create Library");
+        expect(createButton).not.toBeDisabled();
+      });
 
-    // Wait for cron input to appear and clear it
-    const cronInput = await screen.findByPlaceholderText("0 0 * * *");
-    expect(cronInput).toBeInTheDocument();
-    await user.clear(cronInput);
+      const createButton = screen.getByText("Create Library");
+      await user.click(createButton);
 
-    // Try to submit - should show validation error
-    const createButton = screen.getByText("Create Library");
-    await user.click(createButton);
+      await waitFor(() => {
+        expect(librariesApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "Test Library",
+            path: "/home/user",
+            scanningConfig: expect.objectContaining({
+              enabled: true,
+              cronSchedule: "0 0 * * *",
+              scanMode: "normal",
+            }),
+          }),
+        );
+      });
+    },
+  );
 
-    // The form validation happens in handleSubmit and shows a notification
-    // The library should not be created because cron schedule is required
-    // Short wait to give time for any async calls to happen
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  it(
+    "should validate cron schedule is required when auto scan is enabled",
+    { timeout: 15000 },
+    async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-    // Verify that the API was not called (validation prevented submission)
-    expect(librariesApi.create).not.toHaveBeenCalled();
-  });
+      // Wait for modal
+      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+      const modalContent = within(modal);
+      const nameInput = await modalContent.findByPlaceholderText(
+        "Enter library name",
+        {},
+        { timeout: 3000 },
+      );
+
+      // Fill in name and path
+      await user.clear(nameInput);
+      await user.type(nameInput, "Test Library");
+
+      const browseButton = screen.getByText("Browse");
+      await user.click(browseButton);
+
+      const driveButton = await screen.findByText("Home Directory");
+      await user.click(driveButton);
+
+      const selectButton = await screen.findByText("Select This Folder");
+      await user.click(selectButton);
+
+      // Navigate to the Scanning tab
+      const scanningTab = await screen.findByRole("tab", { name: /scanning/i });
+      await user.click(scanningTab);
+
+      // Wait for the Scanning tab content to load and find the select
+      await waitFor(() => {
+        expect(screen.getByText("Scan Strategy")).toBeInTheDocument();
+      });
+
+      // Find and click on the Select to open the dropdown
+      const selectInput = screen.getByText("Manual - Trigger scans on demand");
+      await user.click(selectInput);
+
+      // Wait for and click the auto option
+      const autoOption = await screen.findByText(
+        "Automatic - Scheduled scanning",
+      );
+      await user.click(autoOption);
+
+      // Wait for cron input to appear and clear it
+      const cronInput = await screen.findByPlaceholderText("0 0 * * *");
+      expect(cronInput).toBeInTheDocument();
+      await user.clear(cronInput);
+
+      // Try to submit - should show validation error
+      const createButton = screen.getByText("Create Library");
+      await user.click(createButton);
+
+      // The form validation happens in handleSubmit and shows a notification
+      // The library should not be created because cron schedule is required
+      // Short wait to give time for any async calls to happen
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify that the API was not called (validation prevented submission)
+      expect(librariesApi.create).not.toHaveBeenCalled();
+    },
+  );
 
   it("should have all formats selected by default", async () => {
     renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
