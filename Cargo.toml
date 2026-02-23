@@ -55,6 +55,9 @@ thiserror = "2.0"
 # XML parsing (for ComicInfo.xml)
 quick-xml = { version = "0.39", features = ["serialize"] }
 
+# Unicode normalization (for accent-insensitive search)
+unicode-normalization = "0.1"
+
 # Regular expressions (for ISBN extraction)
 regex = "1.10"
 

@@ -6,6 +6,7 @@ pub mod json;
 pub mod jwt;
 pub mod natural_sort;
 pub mod password;
+pub mod search;
 pub mod serde;
 
 #[allow(unused_imports)]
@@ -18,4 +19,5 @@ pub use json::{
 };
 #[allow(unused_imports)]
 pub use natural_sort::{natural_cmp, natural_cmp_filename};
+pub use search::normalize_for_search;
 pub use serde::{default_true, deserialize_optional_nullable, is_false};

@@ -673,11 +673,11 @@ mod tests {
     #[tokio::test]
     async fn test_rpc_client_drop_aborts_reader_task() {
         // Use `cat` as a trivial long-running process (reads stdin forever).
-        // We need to allow "cat" for the test by setting the env var.
-        unsafe { std::env::set_var("CODEX_PLUGIN_ALLOWED_COMMANDS", "cat") };
-
+        // We use spawn_unchecked to bypass the OnceLock-cached allowlist, which
+        // can't be modified at runtime and causes flaky failures when other tests
+        // initialize it first without `cat` in the list.
         let config = PluginProcessConfig::new("cat");
-        let process = PluginProcess::spawn(&config).await.unwrap();
+        let process = PluginProcess::spawn_unchecked(&config).await.unwrap();
 
         // Create RpcClient — this spawns the reader task
         let client = RpcClient::new(process, Duration::from_secs(5));

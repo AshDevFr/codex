@@ -159,19 +159,8 @@ pub async fn search(
 
     let total = publications.len() as i64;
 
-    // Simple URL encoding for the query parameter
-    let encoded_query = query
-        .chars()
-        .map(|c| match c {
-            ' ' => "%20".to_string(),
-            '&' => "%26".to_string(),
-            '=' => "%3D".to_string(),
-            '?' => "%3F".to_string(),
-            '#' => "%23".to_string(),
-            _ if c.is_ascii_alphanumeric() || "-_.~".contains(c) => c.to_string(),
-            _ => format!("%{:02X}", c as u8),
-        })
-        .collect::<String>();
+    // URL-encode the query parameter (handles Unicode correctly)
+    let encoded_query = urlencoding::encode(query);
 
     let feed = Opds2Feed::publications(
         format!("Search Results for '{}'", query),

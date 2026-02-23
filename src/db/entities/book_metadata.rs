@@ -114,6 +114,7 @@ pub struct Model {
     // Display fields (moved from books table)
     pub title: Option<String>,
     pub title_sort: Option<String>,
+    pub search_title: String,
     pub number: Option<Decimal>,
     // Content fields
     pub summary: Option<String>,

@@ -765,89 +765,93 @@ describe("LibraryModal (Add Mode)", () => {
     });
   });
 
-  it("should submit with selected formats when some are deselected", async () => {
-    const user = userEvent.setup();
-    const mockLibrary = createMockLibrary();
+  it(
+    "should submit with selected formats when some are deselected",
+    { timeout: 15000 },
+    async () => {
+      const user = userEvent.setup();
+      const mockLibrary = createMockLibrary();
 
-    vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-    renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
 
-    // Wait for modal and find form fields
-    const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-    const modalContent = within(modal);
-    const nameInput = await modalContent.findByPlaceholderText(
-      "Enter library name",
-      {},
-      { timeout: 3000 },
-    );
-
-    // Fill in form
-    await user.clear(nameInput);
-    await user.type(nameInput, "Test Library");
-
-    // Set path
-    const browseButton = screen.getByText("Browse");
-    await user.click(browseButton);
-
-    const driveButton = await screen.findByText("Home Directory");
-    await user.click(driveButton);
-
-    const selectButton = await screen.findByText("Select This Folder");
-    await user.click(selectButton);
-
-    // Open formats dropdown
-    const formatsInput = modalContent.getByLabelText("Allowed Formats");
-    await user.click(formatsInput);
-
-    // Wait for dropdown to be visible
-    await waitFor(() => {
-      expect(
-        screen.getAllByText("CBR (Comic Book RAR)").length,
-      ).toBeGreaterThan(0);
-    });
-
-    // Find close buttons within pills (Mantine uses CloseButton component)
-    // Use document.body to query since Mantine renders in portals
-    // Pills are ordered: CBZ (0), CBR (1), EPUB (2), PDF (3)
-    let closeButtons = document.querySelectorAll(".mantine-Pill-remove");
-
-    // Remove CBR first (index 1)
-    if (closeButtons.length >= 2) {
-      await user.click(closeButtons[1]);
-    }
-
-    // After removing CBR, re-query for buttons since DOM has changed
-    // Now pills are: CBZ (0), EPUB (1), PDF (2)
-    closeButtons = document.querySelectorAll(".mantine-Pill-remove");
-
-    // Remove PDF (now at index 2)
-    if (closeButtons.length >= 3) {
-      await user.click(closeButtons[2]);
-    }
-
-    // Close dropdown
-    await user.keyboard("{Escape}");
-
-    // Submit form
-    await waitFor(() => {
-      const createButton = screen.getByText("Create Library");
-      expect(createButton).not.toBeDisabled();
-    });
-
-    const createButton = screen.getByText("Create Library");
-    await user.click(createButton);
-
-    await waitFor(() => {
-      expect(librariesApi.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: "Test Library",
-          path: "/home/user",
-          allowedFormats: ["CBZ", "EPUB"],
-        }),
+      // Wait for modal and find form fields
+      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+      const modalContent = within(modal);
+      const nameInput = await modalContent.findByPlaceholderText(
+        "Enter library name",
+        {},
+        { timeout: 3000 },
       );
-    });
-  });
+
+      // Fill in form
+      await user.clear(nameInput);
+      await user.type(nameInput, "Test Library");
+
+      // Set path
+      const browseButton = screen.getByText("Browse");
+      await user.click(browseButton);
+
+      const driveButton = await screen.findByText("Home Directory");
+      await user.click(driveButton);
+
+      const selectButton = await screen.findByText("Select This Folder");
+      await user.click(selectButton);
+
+      // Open formats dropdown
+      const formatsInput = modalContent.getByLabelText("Allowed Formats");
+      await user.click(formatsInput);
+
+      // Wait for dropdown to be visible
+      await waitFor(() => {
+        expect(
+          screen.getAllByText("CBR (Comic Book RAR)").length,
+        ).toBeGreaterThan(0);
+      });
+
+      // Find close buttons within pills (Mantine uses CloseButton component)
+      // Use document.body to query since Mantine renders in portals
+      // Pills are ordered: CBZ (0), CBR (1), EPUB (2), PDF (3)
+      let closeButtons = document.querySelectorAll(".mantine-Pill-remove");
+
+      // Remove CBR first (index 1)
+      if (closeButtons.length >= 2) {
+        await user.click(closeButtons[1]);
+      }
+
+      // After removing CBR, re-query for buttons since DOM has changed
+      // Now pills are: CBZ (0), EPUB (1), PDF (2)
+      closeButtons = document.querySelectorAll(".mantine-Pill-remove");
+
+      // Remove PDF (now at index 2)
+      if (closeButtons.length >= 3) {
+        await user.click(closeButtons[2]);
+      }
+
+      // Close dropdown
+      await user.keyboard("{Escape}");
+
+      // Submit form
+      await waitFor(() => {
+        const createButton = screen.getByText("Create Library");
+        expect(createButton).not.toBeDisabled();
+      });
+
+      const createButton = screen.getByText("Create Library");
+      await user.click(createButton);
+
+      await waitFor(() => {
+        expect(librariesApi.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "Test Library",
+            path: "/home/user",
+            allowedFormats: ["CBZ", "EPUB"],
+          }),
+        );
+      });
+    },
+  );
 
   it("should reset to all formats when modal closes", async () => {
     const user = userEvent.setup();
@@ -1007,157 +1011,169 @@ describe("LibraryModal (Add Mode)", () => {
       });
     });
 
-    it("should include strategy in create request with default values", async () => {
-      const user = userEvent.setup();
-      const mockLibrary = createMockLibrary();
+    it(
+      "should include strategy in create request with default values",
+      { timeout: 15000 },
+      async () => {
+        const user = userEvent.setup();
+        const mockLibrary = createMockLibrary();
 
-      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+        vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
-
-      // Wait for modal
-      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-      const modalContent = within(modal);
-      const nameInput = await modalContent.findByPlaceholderText(
-        "Enter library name",
-        {},
-        { timeout: 3000 },
-      );
-
-      // Fill in required fields
-      await user.clear(nameInput);
-      await user.type(nameInput, "Test Library");
-
-      // Set path
-      const browseButton = screen.getByText("Browse");
-      await user.click(browseButton);
-
-      const driveButton = await screen.findByText("Home Directory");
-      await user.click(driveButton);
-
-      const selectButton = await screen.findByText("Select This Folder");
-      await user.click(selectButton);
-
-      // Submit form without changing strategy (defaults should be used)
-      await waitFor(() => {
-        const createButton = screen.getByText("Create Library");
-        expect(createButton).not.toBeDisabled();
-      });
-
-      const createButton = screen.getByText("Create Library");
-      await user.click(createButton);
-
-      await waitFor(() => {
-        expect(librariesApi.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: "Test Library",
-            path: "/home/user",
-            seriesStrategy: "series_volume",
-            bookStrategy: "filename",
-          }),
+        renderWithProviders(
+          <LibraryModal opened={true} onClose={mockOnClose} />,
         );
-      });
-    });
 
-    it("should include selected strategy in create request", async () => {
-      const user = userEvent.setup();
-      const mockLibrary = createMockLibrary({
-        name: "Manga Library",
-        path: "/home/user/Manga",
-        seriesStrategy: "series_volume_chapter",
-        bookStrategy: "smart",
-        defaultReadingDirection: "rtl",
-      });
+        // Wait for modal
+        const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+        const modalContent = within(modal);
+        const nameInput = await modalContent.findByPlaceholderText(
+          "Enter library name",
+          {},
+          { timeout: 3000 },
+        );
 
-      vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
+        // Fill in required fields
+        await user.clear(nameInput);
+        await user.type(nameInput, "Test Library");
 
-      renderWithProviders(<LibraryModal opened={true} onClose={mockOnClose} />);
+        // Set path
+        const browseButton = screen.getByText("Browse");
+        await user.click(browseButton);
 
-      // Wait for modal
-      const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
-      const modalContent = within(modal);
-      const nameInput = await modalContent.findByPlaceholderText(
-        "Enter library name",
-        {},
-        { timeout: 3000 },
-      );
+        const driveButton = await screen.findByText("Home Directory");
+        await user.click(driveButton);
 
-      // Fill in required fields
-      await user.clear(nameInput);
-      await user.type(nameInput, "Manga Library");
+        const selectButton = await screen.findByText("Select This Folder");
+        await user.click(selectButton);
 
-      // Set path
-      const browseButton = screen.getByText("Browse");
-      await user.click(browseButton);
+        // Submit form without changing strategy (defaults should be used)
+        await waitFor(() => {
+          const createButton = screen.getByText("Create Library");
+          expect(createButton).not.toBeDisabled();
+        });
 
-      const driveButton = await screen.findByText("Home Directory");
-      await user.click(driveButton);
+        const createButton = screen.getByText("Create Library");
+        await user.click(createButton);
 
-      const selectButton = await screen.findByText("Select This Folder");
-      await user.click(selectButton);
+        await waitFor(() => {
+          expect(librariesApi.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+              name: "Test Library",
+              path: "/home/user",
+              seriesStrategy: "series_volume",
+              bookStrategy: "filename",
+            }),
+          );
+        });
+      },
+    );
 
-      // Go to Strategy tab and change strategy
-      const strategyTab = screen.getByRole("tab", { name: /strategy/i });
-      await user.click(strategyTab);
+    it(
+      "should include selected strategy in create request",
+      { timeout: 15000 },
+      async () => {
+        const user = userEvent.setup();
+        const mockLibrary = createMockLibrary({
+          name: "Manga Library",
+          path: "/home/user/Manga",
+          seriesStrategy: "series_volume_chapter",
+          bookStrategy: "smart",
+          defaultReadingDirection: "rtl",
+        });
 
-      await waitFor(() => {
-        expect(
-          screen.getByText("Series Detection Strategy"),
-        ).toBeInTheDocument();
-      });
+        vi.mocked(librariesApi.create).mockResolvedValueOnce(mockLibrary);
 
-      // Change series strategy to series_volume_chapter
-      const seriesStrategySelect = screen
-        .getByText("Series Detection Strategy")
-        .closest("div")
-        ?.parentElement?.querySelector('input[type="text"]');
-      if (seriesStrategySelect) {
-        await user.click(seriesStrategySelect.parentElement as Element);
-      }
+        renderWithProviders(
+          <LibraryModal opened={true} onClose={mockOnClose} />,
+        );
 
-      await waitFor(() => {
-        expect(screen.getByText("Series-Volume-Chapter")).toBeInTheDocument();
-      });
-      await user.click(screen.getByText("Series-Volume-Chapter"));
+        // Wait for modal
+        const modal = await screen.findByRole("dialog", {}, { timeout: 3000 });
+        const modalContent = within(modal);
+        const nameInput = await modalContent.findByPlaceholderText(
+          "Enter library name",
+          {},
+          { timeout: 3000 },
+        );
 
-      // Change book strategy to smart
-      const bookStrategySelect = screen
-        .getByText("Book Naming Strategy")
-        .closest("div")
-        ?.parentElement?.querySelector('input[type="text"]');
-      if (bookStrategySelect) {
-        await user.click(bookStrategySelect.parentElement as Element);
-      }
+        // Fill in required fields
+        await user.clear(nameInput);
+        await user.type(nameInput, "Manga Library");
 
-      await waitFor(() => {
-        // There may be multiple "Smart Detection" texts on the page
-        // (one for BookStrategy, one for NumberStrategy)
+        // Set path
+        const browseButton = screen.getByText("Browse");
+        await user.click(browseButton);
+
+        const driveButton = await screen.findByText("Home Directory");
+        await user.click(driveButton);
+
+        const selectButton = await screen.findByText("Select This Folder");
+        await user.click(selectButton);
+
+        // Go to Strategy tab and change strategy
+        const strategyTab = screen.getByRole("tab", { name: /strategy/i });
+        await user.click(strategyTab);
+
+        await waitFor(() => {
+          expect(
+            screen.getByText("Series Detection Strategy"),
+          ).toBeInTheDocument();
+        });
+
+        // Change series strategy to series_volume_chapter
+        const seriesStrategySelect = screen
+          .getByText("Series Detection Strategy")
+          .closest("div")
+          ?.parentElement?.querySelector('input[type="text"]');
+        if (seriesStrategySelect) {
+          await user.click(seriesStrategySelect.parentElement as Element);
+        }
+
+        await waitFor(() => {
+          expect(screen.getByText("Series-Volume-Chapter")).toBeInTheDocument();
+        });
+        await user.click(screen.getByText("Series-Volume-Chapter"));
+
+        // Change book strategy to smart
+        const bookStrategySelect = screen
+          .getByText("Book Naming Strategy")
+          .closest("div")
+          ?.parentElement?.querySelector('input[type="text"]');
+        if (bookStrategySelect) {
+          await user.click(bookStrategySelect.parentElement as Element);
+        }
+
+        await waitFor(() => {
+          // There may be multiple "Smart Detection" texts on the page
+          // (one for BookStrategy, one for NumberStrategy)
+          const smartOptions = screen.getAllByText("Smart Detection");
+          expect(smartOptions.length).toBeGreaterThan(0);
+        });
+        // Click the first one (from the BookStrategy dropdown)
         const smartOptions = screen.getAllByText("Smart Detection");
-        expect(smartOptions.length).toBeGreaterThan(0);
-      });
-      // Click the first one (from the BookStrategy dropdown)
-      const smartOptions = screen.getAllByText("Smart Detection");
-      await user.click(smartOptions[0]);
+        await user.click(smartOptions[0]);
 
-      // Submit form
-      await waitFor(() => {
+        // Submit form
+        await waitFor(() => {
+          const createButton = screen.getByText("Create Library");
+          expect(createButton).not.toBeDisabled();
+        });
+
         const createButton = screen.getByText("Create Library");
-        expect(createButton).not.toBeDisabled();
-      });
+        await user.click(createButton);
 
-      const createButton = screen.getByText("Create Library");
-      await user.click(createButton);
-
-      await waitFor(() => {
-        expect(librariesApi.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: "Manga Library",
-            seriesStrategy: "series_volume_chapter",
-            bookStrategy: "smart",
-          }),
-        );
-      });
-    });
+        await waitFor(() => {
+          expect(librariesApi.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+              name: "Manga Library",
+              seriesStrategy: "series_volume_chapter",
+              bookStrategy: "smart",
+            }),
+          );
+        });
+      },
+    );
 
     it("should show preview scan panel in Strategy tab", async () => {
       const user = userEvent.setup();

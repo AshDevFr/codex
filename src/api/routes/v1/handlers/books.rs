@@ -25,7 +25,7 @@ use crate::db::repositories::{
 use crate::require_permission;
 use crate::services::FilterService;
 use crate::utils::{
-    json_merge_patch, parse_custom_metadata, serialize_custom_metadata,
+    json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
     validate_custom_metadata_size,
 };
 use axum::{
@@ -1159,6 +1159,7 @@ pub async fn patch_book(
 
         // Update title if provided (also lock it when set to non-null)
         if let Some(opt) = request.title.into_nested_option() {
+            active.search_title = Set(normalize_for_search(opt.as_deref().unwrap_or("")));
             active.title = Set(opt.clone());
             if opt.is_some() {
                 active.title_lock = Set(true);
@@ -1196,6 +1197,7 @@ pub async fn patch_book(
             book_id: Set(book_id),
             title: Set(title_opt.clone()),
             title_sort: Set(None),
+            search_title: Set(normalize_for_search(title_opt.as_deref().unwrap_or(""))),
             number: Set(decimal_opt),
             summary: Set(None),
             publisher: Set(None),
@@ -2158,6 +2160,7 @@ pub async fn replace_book_metadata(
             book_id: Set(book_id),
             title: Set(None), // Title is not set via this endpoint (use PATCH /books/{id})
             title_sort: Set(None), // Title sort is not set via this endpoint
+            search_title: Set(String::new()),
             number: Set(None), // Number is not set via this endpoint (use PATCH /books/{id})
             summary: Set(request.summary.clone()),
             publisher: Set(request.publisher.clone()),
@@ -2744,6 +2747,7 @@ pub async fn patch_book_metadata(
             book_id: Set(book_id),
             title: Set(None), // Title is not set via metadata replace (use PATCH /books/{id})
             title_sort: Set(None), // Title sort is not set via metadata replace
+            search_title: Set(String::new()),
             number: Set(None), // Number is not set via metadata replace (use PATCH /books/{id})
             summary: Set(summary_opt.clone()),
             publisher: Set(publisher_opt.clone()),

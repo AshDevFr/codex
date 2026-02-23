@@ -506,6 +506,51 @@ impl PluginProcess {
             .ok_or(ProcessError::ProcessTerminated)
     }
 
+    /// Spawn a new plugin process without command validation (test only).
+    ///
+    /// This bypasses the allowlist check, which uses a `OnceLock`-cached list
+    /// that cannot be modified after first initialization. Tests that need
+    /// arbitrary commands (like `cat`) should use this instead of `spawn`.
+    #[cfg(test)]
+    pub async fn spawn_unchecked(config: &PluginProcessConfig) -> Result<Self, ProcessError> {
+        let mut cmd = Command::new(&config.command);
+        cmd.args(&config.args);
+
+        let filtered_env = filter_blocked_env_vars(&config.env);
+        for (key, value) in &filtered_env {
+            cmd.env(key, value);
+        }
+
+        if let Some(ref dir) = config.working_directory {
+            cmd.current_dir(dir);
+        }
+
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+
+        let mut child = cmd.spawn()?;
+        let plugin_name = config.display_name().to_string();
+
+        let stdin = child.stdin.take().ok_or(ProcessError::StdinUnavailable)?;
+        let stdout = child.stdout.take().ok_or(ProcessError::StdoutUnavailable)?;
+        let stderr = child.stderr.take().ok_or(ProcessError::StderrUnavailable)?;
+
+        let (stdin_tx, stdin_rx) = mpsc::channel::<String>(32);
+        let (stdout_tx, stdout_rx) = mpsc::channel::<String>(32);
+
+        tokio::spawn(stdin_writer_task(stdin, stdin_rx));
+        tokio::spawn(stdout_reader_task(stdout, stdout_tx));
+        tokio::spawn(stderr_reader_task(stderr, plugin_name));
+
+        Ok(Self {
+            child,
+            stdin_tx,
+            stdout_rx,
+        })
+    }
+
     /// Kill the process
     pub async fn kill(&mut self) -> Result<(), ProcessError> {
         self.child.kill().await.map_err(ProcessError::SpawnFailed)

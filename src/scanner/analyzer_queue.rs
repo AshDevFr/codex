@@ -23,6 +23,7 @@ use crate::scanner::strategies::{
     create_number_strategy,
 };
 use crate::tasks::types::TaskType;
+use crate::utils::normalize_for_search;
 
 use super::types::ScanProgress;
 
@@ -402,16 +403,19 @@ async fn analyze_single_book(
 
         // Build metadata record, respecting locks on existing fields
         let metadata_record = if let Some(ref existing) = existing_metadata {
+            // Compute title respecting locks
+            let effective_title = if existing.title_lock {
+                existing.title.clone()
+            } else {
+                Some(resolved_title.clone())
+            };
             // Only update fields that are not locked
             book_metadata::Model {
                 id: metadata_id,
                 book_id: book.id,
                 // Display fields (title, title_sort, number)
-                title: if existing.title_lock {
-                    existing.title.clone()
-                } else {
-                    Some(resolved_title.clone())
-                },
+                search_title: normalize_for_search(effective_title.as_deref().unwrap_or("")),
+                title: effective_title,
                 title_sort: if existing.title_sort_lock {
                     existing.title_sort.clone()
                 } else {
@@ -550,6 +554,7 @@ async fn analyze_single_book(
                 id: metadata_id,
                 book_id: book.id,
                 // Display fields
+                search_title: normalize_for_search(&resolved_title),
                 title: Some(resolved_title.clone()),
                 title_sort: None, // title_sort is typically user-set
                 number: resolved_number_decimal,
@@ -697,15 +702,18 @@ async fn analyze_single_book(
             .unwrap_or_else(Uuid::new_v4);
 
         let metadata_record = if let Some(ref existing) = existing_metadata {
+            // Compute title respecting locks
+            let effective_title = if existing.title_lock {
+                existing.title.clone()
+            } else {
+                Some(resolved_title.clone())
+            };
             // Only update title/number if not locked
             book_metadata::Model {
                 id: metadata_id,
                 book_id: book.id,
-                title: if existing.title_lock {
-                    existing.title.clone()
-                } else {
-                    Some(resolved_title.clone())
-                },
+                search_title: normalize_for_search(effective_title.as_deref().unwrap_or("")),
+                title: effective_title,
                 title_sort: existing.title_sort.clone(),
                 number: if existing.number_lock {
                     existing.number
@@ -780,6 +788,7 @@ async fn analyze_single_book(
             book_metadata::Model {
                 id: metadata_id,
                 book_id: book.id,
+                search_title: normalize_for_search(&resolved_title),
                 title: Some(resolved_title.clone()),
                 title_sort: None,
                 number: resolved_number_decimal,
@@ -1473,6 +1482,7 @@ mod tests {
             // Display fields (moved from books table)
             title: Some("Test Title".to_string()),
             title_sort: None,
+            search_title: "test title".to_string(),
             number: None,
             // Content fields
             summary: Some("Test summary".to_string()),

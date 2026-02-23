@@ -847,6 +847,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "unicode-normalization",
  "unrar",
  "urlencoding",
  "utoipa",

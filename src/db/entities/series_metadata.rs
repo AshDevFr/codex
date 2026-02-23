@@ -87,6 +87,7 @@ pub struct Model {
     pub series_id: Uuid,
     pub title: String,
     pub title_sort: Option<String>,
+    pub search_title: String,
     pub summary: Option<String>,
     pub publisher: Option<String>,
     pub imprint: Option<String>,

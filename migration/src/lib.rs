@@ -117,6 +117,9 @@ mod m20260217_000057_add_alternate_titles_lock;
 // Remove prioritize_scans setting (priority now baked into TaskType::default_priority())
 mod m20260220_000058_remove_prioritize_scans_setting;
 
+// Add search_title column for accent-insensitive search
+mod m20260222_000059_add_search_title;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -209,6 +212,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260217_000057_add_alternate_titles_lock::Migration),
             // Remove prioritize_scans setting
             Box::new(m20260220_000058_remove_prioritize_scans_setting::Migration),
+            // Add search_title for accent-insensitive search
+            Box::new(m20260222_000059_add_search_title::Migration),
         ]
     }
 }

@@ -10,6 +10,7 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 use uuid::Uuid;
 
 use crate::db::entities::{series_metadata, series_metadata::Entity as SeriesMetadata};
+use crate::utils::normalize_for_search;
 
 /// Repository for series metadata operations
 pub struct SeriesMetadataRepository;
@@ -58,6 +59,7 @@ impl SeriesMetadataRepository {
             series_id: Set(series_id),
             title: Set(title.to_string()),
             title_sort: Set(None),
+            search_title: Set(normalize_for_search(title)),
             summary: Set(None),
             publisher: Set(None),
             imprint: Set(None),
@@ -147,6 +149,7 @@ impl SeriesMetadataRepository {
             })?;
 
         let mut active_model: series_metadata::ActiveModel = existing.into();
+        active_model.search_title = Set(normalize_for_search(&title));
         active_model.title = Set(title);
         active_model.title_sort = Set(title_sort);
         active_model.updated_at = Set(Utc::now());

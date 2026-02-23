@@ -19,6 +19,7 @@ use crate::db::entities::{
     user_series_ratings,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::utils::normalize_for_search;
 use std::sync::Arc;
 
 /// Options for querying series with filtering, sorting, and pagination
@@ -614,9 +615,9 @@ impl SeriesRepository {
         Ok((series_models, total))
     }
 
-    /// Normalize name for searching (lowercase, alphanumeric only)
+    /// Normalize name for matching (accent-stripped, lowercase, alphanumeric only)
     pub fn normalize_name(name: &str) -> String {
-        name.to_lowercase()
+        normalize_for_search(name)
             .chars()
             .filter(|c| c.is_alphanumeric() || c.is_whitespace())
             .collect::<String>()
@@ -712,6 +713,7 @@ impl SeriesRepository {
             series_id: Set(series_id),
             title: Set(title.to_string()),
             title_sort: Set(None),
+            search_title: Set(normalize_for_search(title)),
             summary: Set(None),
             publisher: Set(None),
             imprint: Set(None),
@@ -1472,14 +1474,16 @@ impl SeriesRepository {
             return Ok((vec![], 0));
         }
 
-        let pattern = format!("%{}%", query.to_lowercase());
+        let pattern = format!("%{}%", normalize_for_search(query));
 
-        // Use LOWER(title) LIKE pattern from series_metadata for case-insensitive search
-        let lower_title = Func::lower(Expr::col((
-            series_metadata::Entity,
-            series_metadata::Column::Title,
-        )));
-        let mut search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
+        // Use search_title LIKE pattern for accent-insensitive, case-insensitive search
+        let mut search_condition = Condition::all().add(
+            Expr::col((
+                series_metadata::Entity,
+                series_metadata::Column::SearchTitle,
+            ))
+            .like(&pattern),
+        );
 
         // Add library filter if specified
         if let Some(lib_id) = library_id {
@@ -2107,7 +2111,7 @@ mod tests {
     use super::*;
     use crate::db::ScanningStrategy;
     use crate::db::entities::books;
-    use crate::db::repositories::{BookRepository, LibraryRepository};
+    use crate::db::repositories::{BookRepository, LibraryRepository, SeriesMetadataRepository};
     use crate::db::test_helpers::create_test_db;
 
     #[tokio::test]
@@ -2229,6 +2233,141 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(metadata.title, "One Piece");
+    }
+
+    #[tokio::test]
+    async fn test_search_series_unicode_accent_insensitive() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        // Create series with accented titles
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "MÄR", None)
+            .await
+            .unwrap();
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Café Stories", None)
+            .await
+            .unwrap();
+        SeriesRepository::create(db.sea_orm_connection(), library.id, "Naruto", None)
+            .await
+            .unwrap();
+
+        // Searching "mar" should find "MÄR" (accent-insensitive + case-insensitive)
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "mar")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        let metadata =
+            SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), results[0].id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(metadata.title, "MÄR");
+
+        // Searching "MÄR" should also find "MÄR" (exact match still works)
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "MÄR")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Searching "cafe" should find "Café Stories"
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "cafe")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        let metadata =
+            SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), results[0].id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(metadata.title, "Café Stories");
+
+        // Searching "café" should also find "Café Stories"
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "café")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Searching "naruto" should still find "Naruto" (basic ASCII case-insensitive)
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "naruto")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_search_title_populated_on_create() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series =
+            SeriesRepository::create(db.sea_orm_connection(), library.id, "MÄR Omega", None)
+                .await
+                .unwrap();
+
+        // Verify search_title is populated correctly
+        let metadata =
+            SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(metadata.search_title, "mar omega");
+    }
+
+    #[tokio::test]
+    async fn test_search_title_updated_on_title_change() {
+        let (db, _temp_dir) = create_test_db().await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(db.sea_orm_connection(), library.id, "Test", None)
+            .await
+            .unwrap();
+
+        // Update title to an accented name
+        SeriesMetadataRepository::update_title(
+            db.sea_orm_connection(),
+            series.id,
+            "Crème Brûlée".to_string(),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let metadata =
+            SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series.id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(metadata.search_title, "creme brulee");
+
+        // Search should find it by accent-stripped query
+        let results = SeriesRepository::search_by_name(db.sea_orm_connection(), "creme brulee")
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 1);
     }
 
     #[tokio::test]
@@ -2883,6 +3022,10 @@ mod tests {
             SeriesRepository::normalize_name("MixedCase123"),
             "mixedcase123"
         );
+        // Unicode accent stripping
+        assert_eq!(SeriesRepository::normalize_name("MÄR"), "mar");
+        assert_eq!(SeriesRepository::normalize_name("Café"), "cafe");
+        assert_eq!(SeriesRepository::normalize_name("MÄR Omega"), "mar omega");
     }
 
     #[tokio::test]

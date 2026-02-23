@@ -10,6 +10,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Qu
 use uuid::Uuid;
 
 use crate::db::entities::{book_metadata, prelude::*};
+use crate::utils::normalize_for_search;
 
 /// Repository for BookMetadata operations
 pub struct BookMetadataRepository;
@@ -26,6 +27,9 @@ impl BookMetadataRepository {
             // Display fields (moved from books table)
             title: Set(metadata_model.title.clone()),
             title_sort: Set(metadata_model.title_sort.clone()),
+            search_title: Set(normalize_for_search(
+                metadata_model.title.as_deref().unwrap_or(""),
+            )),
             number: Set(metadata_model.number),
             // Content fields
             summary: Set(metadata_model.summary.clone()),
@@ -164,6 +168,9 @@ impl BookMetadataRepository {
             // Display fields (moved from books table)
             title: Set(metadata_model.title.clone()),
             title_sort: Set(metadata_model.title_sort.clone()),
+            search_title: Set(normalize_for_search(
+                metadata_model.title.as_deref().unwrap_or(""),
+            )),
             number: Set(metadata_model.number),
             // Content fields
             summary: Set(metadata_model.summary.clone()),
@@ -262,6 +269,7 @@ impl BookMetadataRepository {
         let metadata = book_metadata::ActiveModel {
             id: Set(Uuid::new_v4()),
             book_id: Set(book_id),
+            search_title: Set(normalize_for_search(title.as_deref().unwrap_or(""))),
             title: Set(title),
             title_sort: Set(None),
             number: Set(number),
@@ -395,6 +403,7 @@ mod tests {
             // Display fields (moved from books table)
             title: None,
             title_sort: None,
+            search_title: String::new(),
             number: None,
             // Content fields
             summary: None,

@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::db::entities::{books, prelude::*};
 use crate::db::repositories::SeriesRepository;
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::utils::normalize_for_search;
 
 /// Options for querying books with filtering, sorting, and pagination
 #[derive(Debug, Clone, Default)]
@@ -1367,14 +1368,12 @@ impl BookRepository {
             return Ok((vec![], 0));
         }
 
-        let pattern = format!("%{}%", query.to_lowercase());
+        let pattern = format!("%{}%", normalize_for_search(query));
 
-        // Use LOWER(title) LIKE pattern from book_metadata for case-insensitive search
-        let lower_title = Func::lower(Expr::col((
-            book_metadata::Entity,
-            book_metadata::Column::Title,
-        )));
-        let mut search_condition = Condition::all().add(Expr::expr(lower_title).like(&pattern));
+        // Use search_title LIKE pattern for accent-insensitive, case-insensitive search
+        let mut search_condition = Condition::all().add(
+            Expr::col((book_metadata::Entity, book_metadata::Column::SearchTitle)).like(&pattern),
+        );
 
         // Add library filter if specified
         if let Some(lib_id) = library_id {

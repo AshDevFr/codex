@@ -36,7 +36,7 @@ use crate::db::repositories::{
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
 use crate::utils::{
-    json_merge_patch, parse_custom_metadata, serialize_custom_metadata,
+    json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
     validate_custom_metadata_size,
 };
 use axum::{
@@ -732,6 +732,7 @@ pub async fn patch_series(
         // Update title if provided
         if let Some(Some(title)) = request.title.into_nested_option() {
             active.title = Set(title.clone());
+            active.search_title = Set(normalize_for_search(&title));
             active.title_lock = Set(true); // Auto-lock when user edits
             has_changes = true;
             updated_title = title;
@@ -753,8 +754,9 @@ pub async fn patch_series(
 
             let active = series_metadata::ActiveModel {
                 series_id: Set(series_id),
-                title: Set(title),
+                title: Set(title.clone()),
                 title_sort: Set(None),
+                search_title: Set(normalize_for_search(&title)),
                 summary: Set(None),
                 publisher: Set(None),
                 imprint: Set(None),
@@ -2482,6 +2484,7 @@ pub async fn replace_series_metadata(
 
     // Update title if provided, otherwise keep existing
     if let Some(title) = request.title.clone() {
+        active.search_title = Set(normalize_for_search(&title));
         active.title = Set(title);
         active.title_lock = Set(true); // Auto-lock when user edits
     }
@@ -2777,6 +2780,7 @@ pub async fn patch_series_metadata(
 
     // Handle title update with auto-lock
     if let Some(Some(title)) = request.title.into_nested_option() {
+        metadata_active.search_title = Set(normalize_for_search(&title));
         metadata_active.title = Set(title);
         metadata_active.title_lock = Set(true); // Auto-lock when user edits
         has_changes = true;
