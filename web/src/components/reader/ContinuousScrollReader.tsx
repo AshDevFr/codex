@@ -43,10 +43,6 @@ interface ContinuousScrollReaderProps {
   sidePadding?: number;
   /** Callback when the visible page changes (for progress tracking) */
   onPageChange?: (page: number) => void;
-  /** Callback when the user scrolls to the last page */
-  onReachedEnd?: () => void;
-  /** Callback when the user scrolls to the first page */
-  onReachedStart?: () => void;
   /** External ref to the scroll container (for keyboard scrolling) */
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
 }
@@ -88,8 +84,6 @@ export function ContinuousScrollReader({
   preloadBuffer,
   sidePadding = 0,
   onPageChange,
-  onReachedEnd,
-  onReachedStart,
   scrollContainerRef,
 }: ContinuousScrollReaderProps) {
   // Use explicit undefined checks to allow 0 as a valid value
@@ -112,9 +106,6 @@ export function ContinuousScrollReader({
   const hasScrolledToInitialRef = useRef(false);
   // Initialise to initialPage so the external-sync effect doesn't scroll on mount.
   const lastReportedPageRef = useRef<number>(initialPage);
-  // Suppresses boundary detection until the user has scrolled at least once,
-  // preventing false "start of book" notifications on initial mount.
-  const hasUserScrolledRef = useRef(false);
   // When set to a page number, indicates that an external sync is in progress.
   // The observer skips updating currentVisiblePageRef, the flush skips page
   // reporting, and image loads re-scroll to the target page to compensate for
@@ -177,14 +168,10 @@ export function ContinuousScrollReader({
   const callbacksRef = useRef({
     goToPage,
     onPageChange,
-    onReachedEnd,
-    onReachedStart,
   });
   callbacksRef.current = {
     goToPage,
     onPageChange,
-    onReachedEnd,
-    onReachedStart,
   };
   const totalPagesRef = useRef(totalPages);
   totalPagesRef.current = totalPages;
@@ -262,7 +249,6 @@ export function ContinuousScrollReader({
     let timeout: NodeJS.Timeout | null = null;
 
     const flush = () => {
-      const tp = totalPagesRef.current;
       const cbs = callbacksRef.current;
 
       // Sync visible pages to state only when the set contents actually changed,
@@ -273,8 +259,8 @@ export function ContinuousScrollReader({
         setVisiblePages(new Set(visiblePagesRef.current));
       }
 
-      // While an external sync is active, skip page reporting and boundary
-      // detection.  The observer is also locked, so currentVisiblePageRef
+      // While an external sync is active, skip page reporting.
+      // The observer is also locked, so currentVisiblePageRef
       // still holds the sync target.  We only flush visible-pages state
       // (above) so lazy loading keeps working.
       if (syncTargetPageRef.current != null) return;
@@ -282,27 +268,13 @@ export function ContinuousScrollReader({
       const page = currentVisiblePageRef.current;
 
       if (page !== lastReportedPageRef.current) {
-        // The first distinct page change means the user has scrolled.
-        // We don't arm on the very first report (which is the initial
-        // observer firing on mount) since lastReportedPageRef starts at
-        // initialPage and the first "change" is a real scroll.
-        hasUserScrolledRef.current = true;
         lastReportedPageRef.current = page;
         cbs.goToPage(page);
         cbs.onPageChange?.(page);
       }
 
-      // Boundary detection: fire every time the user scrolls/wheels/presses
-      // a key while at the first or last page.  The receiving side
-      // (useSeriesNavigation) manages its own two-press state machine, so
-      // we intentionally do NOT de-duplicate here.
-      if (!hasUserScrolledRef.current) return;
-
-      if (page === tp && tp > 0) {
-        cbs.onReachedEnd?.();
-      } else if (page === 1) {
-        cbs.onReachedStart?.();
-      }
+      // Boundary detection is handled by useKeyboardNav (arrow keys only)
+      // to prevent accidental triggers from casual scrolling/wheeling.
     };
 
     const scheduleFlush = () => {
@@ -318,8 +290,8 @@ export function ContinuousScrollReader({
     };
 
     // Also listen for wheel events: when the container is at a scroll limit,
-    // further wheel events don't produce "scroll" events, so boundary
-    // detection would never fire without this.
+    // further wheel events don't produce "scroll" events, so we schedule a
+    // flush to keep visible-pages state and page tracking up to date.
     const onWheel = () => {
       clearSyncLock();
       scheduleFlush();

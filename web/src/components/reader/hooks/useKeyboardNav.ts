@@ -8,29 +8,42 @@ import {
 const ARROW_SCROLL_STEP = 0.75;
 
 /**
- * scrollBy wrapper that detects when the container is at a scroll limit
- * (top or bottom) and the position didn't change.  In that case the browser
- * won't emit a native "scroll" event, so we dispatch one synthetically so
- * the debounced handler in ContinuousScrollReader still runs (boundary
- * detection depends on it).
+ * scrollBy wrapper that detects when the container is already at a scroll
+ * boundary before attempting to scroll.  If at the boundary, calls the
+ * optional onBoundary callback (used for next/previous book navigation).
+ *
+ * We check the boundary *before* calling scrollBy rather than comparing
+ * scrollTop before/after, because smooth scrolling is async and a single
+ * requestAnimationFrame is not enough to detect whether the position will
+ * change.
  */
 function scrollByWithBoundaryCheck(
   container: HTMLDivElement,
   options: ScrollToOptions,
+  onBoundary?: () => void,
 ) {
-  const before = container.scrollTop;
-  container.scrollBy(options);
-  // For instant scrolls the position updates synchronously.  For smooth
-  // scrolls we use requestAnimationFrame to check after the first frame.
-  if (options.behavior === "smooth") {
-    requestAnimationFrame(() => {
-      if (container.scrollTop === before) {
-        container.dispatchEvent(new Event("scroll"));
-      }
-    });
-  } else if (container.scrollTop === before) {
-    container.dispatchEvent(new Event("scroll"));
+  const scrollingDown = (options.top ?? 0) > 0;
+
+  if (scrollingDown) {
+    // At the bottom when we can't scroll any further down.
+    // Use a 1px tolerance to account for sub-pixel rounding.
+    const atBottom =
+      container.scrollTop + container.clientHeight >=
+      container.scrollHeight - 1;
+    if (atBottom) {
+      onBoundary?.();
+      return;
+    }
+  } else {
+    // At the top when scrollTop is 0 (or effectively 0).
+    const atTop = container.scrollTop <= 0;
+    if (atTop) {
+      onBoundary?.();
+      return;
+    }
   }
+
+  container.scrollBy(options);
 }
 
 interface UseKeyboardNavOptions {
@@ -50,6 +63,10 @@ interface UseKeyboardNavOptions {
    * by a full viewport height.
    */
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
+  /** Callback when a scroll-down key is pressed at the bottom of the scroll container */
+  onBoundaryEnd?: () => void;
+  /** Callback when a scroll-up key is pressed at the top of the scroll container */
+  onBoundaryStart?: () => void;
 }
 
 /**
@@ -74,6 +91,8 @@ export function useKeyboardNav({
   onNextPage,
   onPrevPage,
   scrollContainerRef,
+  onBoundaryEnd,
+  onBoundaryStart,
 }: UseKeyboardNavOptions = {}) {
   const storeNextPage = useReaderStore((state) => state.nextPage);
   const storePrevPage = useReaderStore((state) => state.prevPage);
@@ -132,10 +151,14 @@ export function useKeyboardNav({
         case "ArrowDown":
           event.preventDefault();
           if (container) {
-            scrollByWithBoundaryCheck(container, {
-              top: container.clientHeight * ARROW_SCROLL_STEP,
-              behavior: "smooth",
-            });
+            scrollByWithBoundaryCheck(
+              container,
+              {
+                top: container.clientHeight * ARROW_SCROLL_STEP,
+                behavior: "smooth",
+              },
+              onBoundaryEnd,
+            );
           } else {
             nextPage();
           }
@@ -144,10 +167,14 @@ export function useKeyboardNav({
         case "ArrowUp":
           event.preventDefault();
           if (container) {
-            scrollByWithBoundaryCheck(container, {
-              top: -container.clientHeight * ARROW_SCROLL_STEP,
-              behavior: "smooth",
-            });
+            scrollByWithBoundaryCheck(
+              container,
+              {
+                top: -container.clientHeight * ARROW_SCROLL_STEP,
+                behavior: "smooth",
+              },
+              onBoundaryStart,
+            );
           } else {
             prevPage();
           }
@@ -157,10 +184,14 @@ export function useKeyboardNav({
         case " ": // Space
           event.preventDefault();
           if (container) {
-            scrollByWithBoundaryCheck(container, {
-              top: container.clientHeight,
-              behavior: "smooth",
-            });
+            scrollByWithBoundaryCheck(
+              container,
+              {
+                top: container.clientHeight,
+                behavior: "smooth",
+              },
+              onBoundaryEnd,
+            );
           } else {
             nextPage();
           }
@@ -169,10 +200,14 @@ export function useKeyboardNav({
         case "PageUp":
           event.preventDefault();
           if (container) {
-            scrollByWithBoundaryCheck(container, {
-              top: -container.clientHeight,
-              behavior: "smooth",
-            });
+            scrollByWithBoundaryCheck(
+              container,
+              {
+                top: -container.clientHeight,
+                behavior: "smooth",
+              },
+              onBoundaryStart,
+            );
           } else {
             prevPage();
           }
@@ -236,6 +271,8 @@ export function useKeyboardNav({
       toggleToolbar,
       cycleFitMode,
       onEscape,
+      onBoundaryEnd,
+      onBoundaryStart,
     ],
   );
 

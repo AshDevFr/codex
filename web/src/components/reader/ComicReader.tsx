@@ -561,6 +561,8 @@ export function ComicReader({
       pageLayout === "double"
         ? handleSpreadPrevPage
         : handlePrevPageWithDirection,
+    onBoundaryEnd: isContinuousScroll ? handleScrollReachedEnd : undefined,
+    onBoundaryStart: isContinuousScroll ? handleScrollReachedStart : undefined,
   });
 
   // Touch/swipe navigation for mobile devices
@@ -707,6 +709,7 @@ export function ComicReader({
         pageLayout={pageLayout}
         onTogglePageLayout={handleTogglePageLayout}
         hasSeriesOverride={hasSeriesOverride}
+        isContinuousScroll={isContinuousScroll}
       />
 
       {/* Boundary notification */}
@@ -729,8 +732,6 @@ export function ComicReader({
           preloadBuffer={preloadPages}
           pageGap={webtoonPageGap}
           sidePadding={webtoonSidePadding}
-          onReachedEnd={handleScrollReachedEnd}
-          onReachedStart={handleScrollReachedStart}
           scrollContainerRef={scrollContainerRef}
         />
       ) : (

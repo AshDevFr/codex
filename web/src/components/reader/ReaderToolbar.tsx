@@ -65,6 +65,8 @@ interface ReaderToolbarProps {
   onTogglePageLayout?: () => void;
   /** Whether series-specific settings are active (shows blue tint on buttons) */
   hasSeriesOverride?: boolean;
+  /** Whether the reader is in continuous scroll mode (hides layout toggle) */
+  isContinuousScroll?: boolean;
 }
 
 const FIT_MODE_LABELS: Record<FitMode, string> = {
@@ -103,6 +105,7 @@ export function ReaderToolbar({
   pageLayout,
   onTogglePageLayout,
   hasSeriesOverride = false,
+  isContinuousScroll = false,
 }: ReaderToolbarProps) {
   const currentPage = useReaderStore((state) => state.currentPage);
   const totalPages = useReaderStore((state) => state.totalPages);
@@ -268,11 +271,12 @@ export function ReaderToolbar({
                 </Tooltip>
               )}
 
-              {/* Page layout toggle - only show for paginated modes */}
+              {/* Page layout toggle - only show for paginated modes (not continuous/webtoon) */}
               {showPageNavigation &&
                 onTogglePageLayout &&
                 pageLayout &&
-                pageLayout !== "continuous" && (
+                pageLayout !== "continuous" &&
+                !isContinuousScroll && (
                   <Tooltip
                     label={`Page layout: ${pageLayout === "single" ? "Single" : "Double"}`}
                   >
