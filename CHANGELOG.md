@@ -2,6 +2,13 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.14.1] - 2026-02-26
+
+### 🐛 Bug Fixes
+
+- *(reader)* Make webtoon boundary nav arrow-key-only and hide layout toggle
+- *(reader)* Mark book as read when navigating to next volume
+
 ## [1.14.0] - 2026-02-23
 
 ### 🚀 Features

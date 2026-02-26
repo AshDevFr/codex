@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-recommendations-anilist",
-  "version": "1.14.0",
+  "version": "1.14.1",
   "description": "AniList recommendation provider plugin for Codex - generates personalized manga recommendations based on your reading history",
   "main": "dist/index.js",
   "bin": "dist/index.js",
