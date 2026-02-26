@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
+import { booksApi } from "@/api/books";
 import { useReaderStore } from "@/store/readerStore";
 import { BoundaryNotification } from "./BoundaryNotification";
 import {
@@ -173,7 +174,15 @@ export function PdfReader({
     canGoPrevBook,
     isSeriesEnd,
     isSeriesStart,
-  } = useSeriesNavigation({ onBoundaryChange, clearNotification });
+  } = useSeriesNavigation({
+    onBoundaryChange,
+    clearNotification,
+    onBeforeNavigateToNext: incognito
+      ? undefined
+      : () => {
+          booksApi.markAsRead(bookId);
+        },
+  });
 
   // Spread-aware navigation: in double-page modes, move by 2 pages.
   // After the first step, check if we hit a boundary (boundaryState changed

@@ -184,7 +184,15 @@ export function ComicReader({
     canGoPrevBook,
     isSeriesEnd,
     isSeriesStart,
-  } = useSeriesNavigation({ onBoundaryChange, clearNotification });
+  } = useSeriesNavigation({
+    onBoundaryChange,
+    clearNotification,
+    onBeforeNavigateToNext: incognito
+      ? undefined
+      : () => {
+          booksApi.markAsRead(bookId);
+        },
+  });
 
   // Read progress hook (disabled in incognito mode)
   const { initialPage, isLoading: progressLoading } = useReadProgress({

@@ -8,6 +8,7 @@ import {
   ReactReaderStyle,
 } from "react-reader";
 
+import { booksApi } from "@/api/books";
 import { useReaderStore } from "@/store/readerStore";
 
 import { BoundaryNotification } from "./BoundaryNotification";
@@ -208,7 +209,15 @@ export function EpubReader({
     boundaryState,
     isSeriesEnd,
     isSeriesStart,
-  } = useSeriesNavigation({ onBoundaryChange, clearNotification });
+  } = useSeriesNavigation({
+    onBoundaryChange,
+    clearNotification,
+    onBeforeNavigateToNext: incognito
+      ? undefined
+      : () => {
+          booksApi.markAsRead(bookId);
+        },
+  });
 
   // Use ref for saveLocation to avoid re-creating handleGetRendition
   const saveLocationRef = useRef(saveLocation);

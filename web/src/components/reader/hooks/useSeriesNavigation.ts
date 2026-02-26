@@ -45,6 +45,8 @@ export interface UseSeriesNavigationOptions {
   ) => void;
   /** Callback to clear both notification and boundary state (cancels auto-hide timeout) */
   clearNotification?: () => void;
+  /** Callback fired before navigating to the next book (e.g., to mark current book as read). Fire-and-forget. */
+  onBeforeNavigateToNext?: () => void;
 }
 
 /**
@@ -60,7 +62,8 @@ export interface UseSeriesNavigationOptions {
 export function useSeriesNavigation(
   options: UseSeriesNavigationOptions = {},
 ): SeriesNavigationResult {
-  const { onBoundaryChange, clearNotification } = options;
+  const { onBoundaryChange, clearNotification, onBeforeNavigateToNext } =
+    options;
   const navigate = useNavigate();
 
   // Store state
@@ -92,14 +95,20 @@ export function useSeriesNavigation(
     }
   }, [adjacentBooks?.prev, navigate, clearBoundaryState]);
 
-  // Navigate to next book at page 1
+  // Navigate to next book at page 1, marking current book as read first
   const goToNextBook = useCallback(() => {
     const nextBook = adjacentBooks?.next;
     if (nextBook) {
+      onBeforeNavigateToNext?.();
       clearBoundaryState();
       navigate(`/reader/${nextBook.id}?page=1`);
     }
-  }, [adjacentBooks?.next, navigate, clearBoundaryState]);
+  }, [
+    adjacentBooks?.next,
+    navigate,
+    clearBoundaryState,
+    onBeforeNavigateToNext,
+  ]);
 
   // Boundary logic for end-of-book
   const handleEndBoundary = useCallback(

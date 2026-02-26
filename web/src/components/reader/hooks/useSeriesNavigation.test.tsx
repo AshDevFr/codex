@@ -117,6 +117,75 @@ describe("useSeriesNavigation", () => {
 
       expect(mockNavigate).toHaveBeenCalledWith("/reader/book-2?page=1");
     });
+
+    it("should call onBeforeNavigateToNext when navigating to next book", () => {
+      const onBeforeNavigateToNext = vi.fn();
+
+      act(() => {
+        useReaderStore.getState().setAdjacentBooks({
+          prev: null,
+          next: { id: "book-2", title: "Next Book", pageCount: 100 },
+        });
+      });
+
+      const { result } = renderHook(
+        () => useSeriesNavigation({ onBeforeNavigateToNext }),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current.goToNextBook();
+      });
+
+      expect(onBeforeNavigateToNext).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith("/reader/book-2?page=1");
+    });
+
+    it("should not call onBeforeNavigateToNext when navigating to prev book", () => {
+      const onBeforeNavigateToNext = vi.fn();
+
+      act(() => {
+        useReaderStore.getState().setAdjacentBooks({
+          prev: { id: "book-0", title: "Prev Book", pageCount: 50 },
+          next: { id: "book-2", title: "Next Book", pageCount: 100 },
+        });
+      });
+
+      const { result } = renderHook(
+        () => useSeriesNavigation({ onBeforeNavigateToNext }),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current.goToPrevBook();
+      });
+
+      expect(onBeforeNavigateToNext).not.toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenCalledWith("/reader/book-0?page=50");
+    });
+
+    it("should not call onBeforeNavigateToNext when no next book exists", () => {
+      const onBeforeNavigateToNext = vi.fn();
+
+      act(() => {
+        useReaderStore.getState().setAdjacentBooks({
+          prev: { id: "book-0", title: "Prev Book", pageCount: 50 },
+          next: null,
+        });
+      });
+
+      const { result } = renderHook(
+        () => useSeriesNavigation({ onBeforeNavigateToNext }),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current.goToNextBook();
+      });
+
+      expect(onBeforeNavigateToNext).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
   });
 
   describe("handleNextPage", () => {
@@ -179,6 +248,31 @@ describe("useSeriesNavigation", () => {
         result.current.handleNextPage();
       });
 
+      expect(mockNavigate).toHaveBeenCalledWith("/reader/book-2?page=1");
+    });
+
+    it("should call onBeforeNavigateToNext when boundary navigation triggers goToNextBook", () => {
+      const onBeforeNavigateToNext = vi.fn();
+
+      act(() => {
+        useReaderStore.getState().initializeReader("book-1", 10, 10);
+        useReaderStore.getState().setAdjacentBooks({
+          prev: null,
+          next: { id: "book-2", title: "Next Book", pageCount: 100 },
+        });
+        useReaderStore.getState().setBoundaryState("at-end");
+      });
+
+      const { result } = renderHook(
+        () => useSeriesNavigation({ onBeforeNavigateToNext }),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current.handleNextPage();
+      });
+
+      expect(onBeforeNavigateToNext).toHaveBeenCalledTimes(1);
       expect(mockNavigate).toHaveBeenCalledWith("/reader/book-2?page=1");
     });
 
