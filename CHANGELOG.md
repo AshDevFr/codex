@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.14.2] - 2026-02-27
+
+### 🚀 Features
+
+- *(reader)* Add separate fit mode for webtoon vs comic reader
+
 ## [1.14.1] - 2026-02-26
 
 ### 🐛 Bug Fixes
