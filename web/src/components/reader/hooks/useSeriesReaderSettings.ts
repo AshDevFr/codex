@@ -11,6 +11,7 @@ import {
   type ReadingDirection,
   type SeriesReaderOverride,
   useReaderStore,
+  type WebtoonFitMode,
 } from "@/store/readerStore";
 
 // =============================================================================
@@ -225,6 +226,7 @@ export function useSeriesReaderSettings(
     // Series override takes precedence for all forkable settings
     return {
       fitMode: seriesOverride.fitMode,
+      webtoonFitMode: seriesOverride.webtoonFitMode,
       pageLayout: seriesOverride.pageLayout,
       readingDirection: seriesOverride.readingDirection,
       backgroundColor: seriesOverride.backgroundColor,
@@ -268,6 +270,9 @@ export function useSeriesReaderSettings(
         switch (key) {
           case "fitMode":
             state.setFitMode(value as FitMode);
+            break;
+          case "webtoonFitMode":
+            state.setWebtoonFitMode(value as WebtoonFitMode);
             break;
           case "pageLayout":
             state.setPageLayout(value as PageLayout);

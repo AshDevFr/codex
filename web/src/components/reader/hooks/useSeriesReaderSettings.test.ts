@@ -29,6 +29,7 @@ describe("useSeriesReaderSettings", () => {
     useReaderStore.setState({
       settings: {
         fitMode: "screen",
+        webtoonFitMode: "width",
         pageLayout: "single",
         readingDirection: "ltr",
         backgroundColor: "black",
@@ -153,6 +154,7 @@ describe("useSeriesReaderSettings", () => {
         storageKey,
         JSON.stringify({
           fitMode: "width",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "rtl",
           backgroundColor: "white",
@@ -206,6 +208,7 @@ describe("useSeriesReaderSettings", () => {
         storageKey,
         JSON.stringify({
           fitMode: "width",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "rtl",
           backgroundColor: "white",
@@ -336,6 +339,7 @@ describe("useSeriesReaderSettings", () => {
         storageKey,
         JSON.stringify({
           fitMode: "width",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "rtl",
           backgroundColor: "white",
@@ -426,6 +430,7 @@ describe("useSeriesReaderSettings", () => {
         storageKey,
         JSON.stringify({
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "double",
           readingDirection: "rtl",
           backgroundColor: "black",
@@ -528,6 +533,7 @@ describe("useSeriesReaderSettings", () => {
         storageKey1,
         JSON.stringify({
           fitMode: "width",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "rtl",
           backgroundColor: "white",
@@ -620,6 +626,7 @@ describe("useSeriesReaderSettings", () => {
         user1Key,
         JSON.stringify({
           fitMode: "width",
+          webtoonFitMode: "width",
           pageLayout: "double",
           readingDirection: "rtl",
           backgroundColor: "white",
@@ -788,6 +795,7 @@ describe("useSeriesReaderSettings", () => {
         series1Key,
         JSON.stringify({
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "rtl",
           backgroundColor: "black",
@@ -803,6 +811,7 @@ describe("useSeriesReaderSettings", () => {
         series2Key,
         JSON.stringify({
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "double",
           readingDirection: "ltr",
           backgroundColor: "white",
@@ -847,6 +856,7 @@ describe("useSeriesReaderSettings", () => {
         series1Key,
         JSON.stringify({
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "rtl",
           backgroundColor: "black",
@@ -894,6 +904,7 @@ describe("localStorage cleanup utilities", () => {
   const createValidOverride = () =>
     JSON.stringify({
       fitMode: "screen",
+      webtoonFitMode: "width",
       pageLayout: "single",
       readingDirection: "ltr",
       backgroundColor: "black",
@@ -976,6 +987,7 @@ describe("localStorage cleanup utilities", () => {
         key,
         JSON.stringify({
           fitMode: "width",
+          webtoonFitMode: "width",
           pageLayout: "double",
           readingDirection: "rtl",
           backgroundColor: "white",
@@ -1263,6 +1275,7 @@ describe("localStorage cleanup utilities", () => {
         wrongVersionKey,
         JSON.stringify({
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "ltr",
           backgroundColor: "black",

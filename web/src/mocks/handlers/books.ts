@@ -893,6 +893,67 @@ export const bookHandlers = [
     return HttpResponse.json({ prev, next });
   }),
 
+  // List external IDs for a book
+  http.get("/api/v1/books/:id/external-ids", async () => {
+    await delay(50);
+    return HttpResponse.json({ externalIds: [] });
+  }),
+
+  // List external links for a book
+  http.get("/api/v1/books/:id/external-links", async () => {
+    await delay(50);
+    return HttpResponse.json({ links: [] });
+  }),
+
+  // Create/upsert an external ID for a book
+  http.post("/api/v1/books/:id/external-ids", async ({ request }) => {
+    await delay(100);
+    const body = (await request.json()) as {
+      source: string;
+      externalId: string;
+      externalUrl?: string;
+    };
+    return HttpResponse.json({
+      id: crypto.randomUUID(),
+      source: body.source,
+      externalId: body.externalId,
+      externalUrl: body.externalUrl ?? null,
+      metadataHash: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }),
+
+  // Delete an external ID
+  http.delete("/api/v1/books/:id/external-ids/:eidId", async () => {
+    await delay(100);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  // Create/upsert an external link for a book
+  http.post("/api/v1/books/:id/external-links", async ({ request }) => {
+    await delay(100);
+    const body = (await request.json()) as {
+      sourceName: string;
+      url: string;
+      externalId?: string;
+    };
+    return HttpResponse.json({
+      id: crypto.randomUUID(),
+      sourceName: body.sourceName,
+      url: body.url,
+      externalId: body.externalId ?? null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }),
+
+  // Delete an external link
+  http.delete("/api/v1/books/:id/external-links/:source", async () => {
+    await delay(100);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   // Generate thumbnail for a book (queues a background task)
   http.post("/api/v1/books/:id/thumbnail/generate", async () => {
     await delay(100);
@@ -1303,6 +1364,36 @@ export const bookHandlers = [
  * Convert a BookDto to FullBookResponse format
  * Used when ?full=true query parameter is specified
  */
+/**
+ * Genre names keyed by series name (books inherit their series' genres)
+ */
+const bookSeriesGenres: Record<string, string[]> = {
+  "Batman: Year One": ["Superhero", "Crime", "Noir"],
+  "Batman: The Dark Knight Returns": ["Superhero", "Dystopian"],
+  "Spider-Man: Blue": ["Superhero", "Romance"],
+  "One Piece": ["Action", "Adventure", "Comedy", "Fantasy"],
+  Naruto: ["Action", "Adventure", "Martial Arts"],
+  "Attack on Titan": ["Dark Fantasy", "Action", "Post-Apocalyptic"],
+  Saga: ["Science Fiction", "Fantasy", "Drama", "Romance"],
+  "The Walking Dead": ["Horror", "Drama", "Post-Apocalyptic"],
+  Sandman: ["Fantasy", "Horror", "Mythology"],
+};
+
+/**
+ * Tag names keyed by series name (books inherit their series' tags)
+ */
+const bookSeriesTags: Record<string, string[]> = {
+  "Batman: Year One": ["origin story", "classic"],
+  "Batman: The Dark Knight Returns": ["dark", "classic"],
+  "Spider-Man: Blue": ["romance", "nostalgia"],
+  "One Piece": ["pirates", "adventure"],
+  Naruto: ["ninja", "shonen"],
+  "Attack on Titan": ["titans", "survival"],
+  Saga: ["space opera", "mature"],
+  "The Walking Dead": ["zombies", "survival"],
+  Sandman: ["mythology", "literary"],
+};
+
 function toFullBookResponse(book: (typeof mockBooks)[0]) {
   // Determine publisher based on series
   const publisherMap: Record<string, string> = {
@@ -1328,12 +1419,40 @@ function toFullBookResponse(book: (typeof mockBooks)[0]) {
     publisher.includes("Viz") || publisher.includes("Kodansha");
   const language = isJapanese ? "ja" : "en";
 
+  // Build genre/tag DTO arrays
+  const genreNames = bookSeriesGenres[book.seriesName] || [];
+  const genres = genreNames.map((name, index) => ({
+    id: `genre-book-${book.id}-${index}`,
+    name,
+    seriesCount: null,
+    createdAt: book.createdAt,
+  }));
+
+  const tagNames = bookSeriesTags[book.seriesName] || [];
+  const tags = tagNames.map((name, index) => ({
+    id: `tag-book-${book.id}-${index}`,
+    name,
+    seriesCount: null,
+    createdAt: book.createdAt,
+  }));
+
+  const writer = team.writers[writerIndex];
+  const artist = team.artists[artistIndex];
+  const colorist =
+    team.colorists.length > 0
+      ? team.colorists[writerIndex % team.colorists.length]
+      : null;
+  const letterer = team.letterers[writerIndex % team.letterers.length];
+  const editor = team.editors[writerIndex % team.editors.length];
+
   return {
     id: book.id,
     seriesId: book.seriesId,
     seriesName: book.seriesName,
     libraryId: book.libraryId,
     libraryName: book.libraryName || "Unknown Library",
+    title: book.title,
+    titleSort: book.title.toLowerCase().replace(/[^a-z0-9 ]/g, ""),
     number: book.number,
     pageCount: book.pageCount,
     filePath: `/media/comics/${book.seriesName}/${book.title}.${book.fileFormat}`,
@@ -1341,35 +1460,84 @@ function toFullBookResponse(book: (typeof mockBooks)[0]) {
     fileFormat: book.fileFormat,
     fileHash: book.fileHash || `hash-${book.id}`,
     deleted: book.deleted || false,
+    analyzed: true,
     analysisError: null,
     readingDirection: isJapanese ? "rtl" : "ltr",
     readProgress: book.readProgress,
     createdAt: book.createdAt,
     updatedAt: book.updatedAt,
+    genres,
+    tags,
     metadata: {
       title: book.title,
-      series: book.seriesName,
+      titleSort: book.title.toLowerCase().replace(/[^a-z0-9 ]/g, ""),
       number: book.number?.toString() ?? null,
+      subtitle: null,
       summary: getBookSummary(book.seriesName, book.number ?? null),
       publisher,
       imprint: publisher.includes("Vertigo") ? "Vertigo" : null,
-      genre: null,
-      releaseDate: null,
-      pageCount: book.pageCount,
+      genre: genreNames[0] ?? null,
       languageIso: language,
-      writers: [team.writers[writerIndex]],
-      pencillers: [team.artists[artistIndex]],
-      inkers: [team.artists[artistIndex]],
-      colorists:
-        team.colorists.length > 0
-          ? [team.colorists[writerIndex % team.colorists.length]]
-          : [],
-      letterers: [team.letterers[writerIndex % team.letterers.length]],
-      coverArtists: [team.artists[artistIndex]],
-      editors: [team.editors[writerIndex % team.editors.length]],
+      formatDetail: null,
+      blackAndWhite: false,
+      manga: isJapanese,
+      year: 2020,
+      month: null,
+      day: null,
+      volume: null,
+      count: null,
+      isbns: null,
+      bookType: null,
+      releaseDate: null,
+      seriesPosition: book.number ?? null,
+      seriesTotal: null,
+      subjects: [],
+      authors: [
+        { name: writer, role: "writer", sortName: null },
+        { name: artist, role: "penciller", sortName: null },
+      ],
+      awards: [],
+      translator: null,
+      edition: null,
+      originalTitle: null,
+      originalYear: null,
+      writer,
+      writers: [writer],
+      penciller: artist,
+      pencillers: [artist],
+      inker: artist,
+      inkers: [artist],
+      colorist,
+      colorists: colorist ? [colorist] : [],
+      letterer,
+      letterers: [letterer],
+      coverArtist: artist,
+      coverArtists: [artist],
+      editor,
+      editors: [editor],
       customMetadata: null,
+      createdAt: book.createdAt,
+      updatedAt: book.updatedAt,
       locks: {
+        titleLock: false,
+        titleSortLock: false,
+        numberLock: false,
+        subtitleLock: false,
         summaryLock: false,
+        publisherLock: false,
+        imprintLock: false,
+        genreLock: false,
+        languageIsoLock: false,
+        formatDetailLock: false,
+        blackAndWhiteLock: false,
+        mangaLock: false,
+        yearLock: false,
+        monthLock: false,
+        dayLock: false,
+        volumeLock: false,
+        countLock: false,
+        isbnsLock: false,
+        bookTypeLock: false,
         writerLock: false,
         pencillerLock: false,
         inkerLock: false,
@@ -1377,15 +1545,16 @@ function toFullBookResponse(book: (typeof mockBooks)[0]) {
         lettererLock: false,
         coverArtistLock: false,
         editorLock: false,
-        publisherLock: false,
-        imprintLock: false,
-        genreLock: false,
-        pageCountLock: false,
-        languageIsoLock: false,
-        releaseDateLock: false,
-        seriesLock: false,
-        numberLock: false,
-        titleLock: false,
+        coverLock: false,
+        authorsJsonLock: false,
+        translatorLock: false,
+        editionLock: false,
+        originalTitleLock: false,
+        originalYearLock: false,
+        seriesPositionLock: false,
+        seriesTotalLock: false,
+        subjectsLock: false,
+        awardsJsonLock: false,
         customMetadataLock: false,
       },
     },

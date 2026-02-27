@@ -50,6 +50,8 @@ export type EpubFontFamily =
   | "sans-serif"
   | "monospace"
   | "dyslexic";
+/** Fit mode for webtoon reader (only width and original make sense for continuous scroll) */
+export type WebtoonFitMode = "width" | "original";
 export type BoundaryState = "none" | "at-start" | "at-end";
 export type PageTransition = "none" | "fade" | "slide";
 export type NavigationDirection = "next" | "prev" | null;
@@ -65,6 +67,7 @@ export type NavigationDirection = "next" | "prev" | null;
  */
 export interface ForkableReaderSettings {
   fitMode: FitMode;
+  webtoonFitMode: WebtoonFitMode;
   pageLayout: PageLayout;
   readingDirection: ReadingDirection;
   backgroundColor: BackgroundColor;
@@ -79,6 +82,7 @@ export interface ForkableReaderSettings {
 export const FORKABLE_SETTING_KEYS: readonly (keyof ForkableReaderSettings)[] =
   [
     "fitMode",
+    "webtoonFitMode",
     "pageLayout",
     "readingDirection",
     "backgroundColor",
@@ -143,6 +147,13 @@ export function isSeriesReaderOverride(
     return false;
   }
 
+  if (
+    typeof obj.webtoonFitMode !== "string" ||
+    !["width", "original"].includes(obj.webtoonFitMode)
+  ) {
+    return false;
+  }
+
   if (typeof obj.doublePageShowWideAlone !== "boolean") return false;
   if (typeof obj.doublePageStartOnOdd !== "boolean") return false;
 
@@ -157,6 +168,7 @@ export function extractForkableSettings(
 ): ForkableReaderSettings {
   return {
     fitMode: settings.fitMode,
+    webtoonFitMode: settings.webtoonFitMode,
     pageLayout: settings.pageLayout,
     readingDirection: settings.readingDirection,
     backgroundColor: settings.backgroundColor,
@@ -189,8 +201,10 @@ export interface AdjacentBook {
 export type PageOrientation = "portrait" | "landscape";
 
 export interface ReaderSettings {
-  /** How the image is scaled to fit the viewport */
+  /** How the image is scaled to fit the viewport (paged/comic reader) */
   fitMode: FitMode;
+  /** How the image is scaled in webtoon/continuous scroll mode */
+  webtoonFitMode: WebtoonFitMode;
   /** Page layout mode */
   pageLayout: PageLayout;
   /** Reading direction (left-to-right or right-to-left for manga) */
@@ -276,6 +290,7 @@ export interface ReaderState {
   // Actions - Settings
   // ==========================================================================
   setFitMode: (mode: FitMode) => void;
+  setWebtoonFitMode: (mode: WebtoonFitMode) => void;
   cycleFitMode: () => void;
   setPageLayout: (layout: PageLayout) => void;
   setReadingDirection: (direction: ReadingDirection) => void;
@@ -365,6 +380,7 @@ export interface ReaderState {
 
 const DEFAULT_SETTINGS: ReaderSettings = {
   fitMode: "screen",
+  webtoonFitMode: "width",
   pageLayout: "single",
   readingDirection: "ltr",
   backgroundColor: "black",
@@ -429,6 +445,11 @@ export const useReaderStore = create<ReaderState>()(
         setFitMode: (mode) =>
           set((state) => {
             state.settings.fitMode = mode;
+          }),
+
+        setWebtoonFitMode: (mode) =>
+          set((state) => {
+            state.settings.webtoonFitMode = mode;
           }),
 
         cycleFitMode: () =>

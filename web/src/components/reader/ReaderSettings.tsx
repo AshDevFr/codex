@@ -26,6 +26,7 @@ import {
   type ReadingDirection,
   selectEffectiveReadingDirection,
   useReaderStore,
+  type WebtoonFitMode,
 } from "@/store/readerStore";
 import { useSeriesReaderSettings } from "./hooks/useSeriesReaderSettings";
 
@@ -86,6 +87,9 @@ export function ReaderSettings({
     (state) => state.setReadingDirectionOverride,
   );
   const setGlobalFitMode = useReaderStore((state) => state.setFitMode);
+  const setGlobalWebtoonFitMode = useReaderStore(
+    (state) => state.setWebtoonFitMode,
+  );
 
   // Per-series settings hook
   const {
@@ -126,22 +130,6 @@ export function ReaderSettings({
     // If we have series context with an existing override, save to series-specific settings
     if (seriesId && hasSeriesOverride) {
       updateSetting("readingDirection", direction);
-
-      // Auto-adjust fit mode for webtoon
-      if (
-        direction === "webtoon" &&
-        !["width", "original"].includes(effectiveSettings.fitMode)
-      ) {
-        updateSetting("fitMode", "width");
-      }
-    } else {
-      // No series override - adjust fit mode in global store if needed
-      if (
-        direction === "webtoon" &&
-        !["width", "original"].includes(globalSettings.fitMode)
-      ) {
-        setGlobalFitMode("width");
-      }
     }
 
     // Persist to backend if we have series context (always, regardless of override)
@@ -156,6 +144,14 @@ export function ReaderSettings({
       updateSetting("fitMode", fitMode);
     } else {
       setGlobalFitMode(fitMode);
+    }
+  };
+
+  const handleWebtoonFitModeChange = (mode: WebtoonFitMode) => {
+    if (seriesId && hasSeriesOverride) {
+      updateSetting("webtoonFitMode", mode);
+    } else {
+      setGlobalWebtoonFitMode(mode);
     }
   };
 
@@ -352,14 +348,9 @@ export function ReaderSettings({
                   {isContinuousMode ? (
                     <SegmentedControl
                       fullWidth
-                      value={
-                        displaySettings.fitMode === "width" ||
-                        displaySettings.fitMode === "original"
-                          ? displaySettings.fitMode
-                          : "width"
-                      }
+                      value={displaySettings.webtoonFitMode}
                       onChange={(value) =>
-                        handleFitModeChange(value as FitMode)
+                        handleWebtoonFitModeChange(value as WebtoonFitMode)
                       }
                       data={[
                         { label: "Fit width", value: "width" },

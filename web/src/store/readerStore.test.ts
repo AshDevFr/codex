@@ -25,6 +25,7 @@ describe("readerStore", () => {
     useReaderStore.setState({
       settings: {
         fitMode: "screen",
+        webtoonFitMode: "width",
         pageLayout: "single",
         readingDirection: "ltr",
         backgroundColor: "black",
@@ -200,6 +201,34 @@ describe("readerStore", () => {
 
       cycleFitMode();
       expect(useReaderStore.getState().settings.fitMode).toBe("screen");
+    });
+
+    it("should set webtoon fit mode", () => {
+      const { setWebtoonFitMode } = useReaderStore.getState();
+
+      expect(useReaderStore.getState().settings.webtoonFitMode).toBe("width");
+
+      setWebtoonFitMode("original");
+
+      expect(useReaderStore.getState().settings.webtoonFitMode).toBe(
+        "original",
+      );
+    });
+
+    it("should keep webtoonFitMode independent from fitMode", () => {
+      const { setFitMode, setWebtoonFitMode } = useReaderStore.getState();
+
+      // Change fitMode - webtoonFitMode should stay the same
+      setFitMode("height");
+      expect(useReaderStore.getState().settings.fitMode).toBe("height");
+      expect(useReaderStore.getState().settings.webtoonFitMode).toBe("width");
+
+      // Change webtoonFitMode - fitMode should stay the same
+      setWebtoonFitMode("original");
+      expect(useReaderStore.getState().settings.fitMode).toBe("height");
+      expect(useReaderStore.getState().settings.webtoonFitMode).toBe(
+        "original",
+      );
     });
 
     it("should set page layout", () => {
@@ -1214,6 +1243,7 @@ describe("readerStore", () => {
     describe("isSeriesReaderOverride", () => {
       const validOverride: SeriesReaderOverride = {
         fitMode: "screen",
+        webtoonFitMode: "width",
         pageLayout: "single",
         readingDirection: "ltr",
         backgroundColor: "black",
@@ -1300,6 +1330,34 @@ describe("readerStore", () => {
         ).toBe(false);
       });
 
+      it("should return false for missing webtoonFitMode", () => {
+        const { webtoonFitMode: _, ...noWebtoonFitMode } = validOverride;
+        expect(isSeriesReaderOverride(noWebtoonFitMode)).toBe(false);
+      });
+
+      it("should return false for invalid webtoonFitMode", () => {
+        expect(
+          isSeriesReaderOverride({
+            ...validOverride,
+            webtoonFitMode: "screen",
+          }),
+        ).toBe(false);
+        expect(
+          isSeriesReaderOverride({
+            ...validOverride,
+            webtoonFitMode: 123,
+          }),
+        ).toBe(false);
+      });
+
+      it("should accept all valid webtoonFitMode values", () => {
+        for (const webtoonFitMode of ["width", "original"]) {
+          expect(
+            isSeriesReaderOverride({ ...validOverride, webtoonFitMode }),
+          ).toBe(true);
+        }
+      });
+
       it("should accept all valid fitMode values", () => {
         const fitModes = [
           "screen",
@@ -1350,6 +1408,7 @@ describe("readerStore", () => {
 
         expect(forkable).toEqual({
           fitMode: fullSettings.fitMode,
+          webtoonFitMode: fullSettings.webtoonFitMode,
           pageLayout: fullSettings.pageLayout,
           readingDirection: fullSettings.readingDirection,
           backgroundColor: fullSettings.backgroundColor,
@@ -1379,6 +1438,7 @@ describe("readerStore", () => {
           settings: {
             ...useReaderStore.getState().settings,
             fitMode: "width",
+            webtoonFitMode: "original",
             pageLayout: "double",
             readingDirection: "rtl",
             backgroundColor: "white",
@@ -1392,6 +1452,7 @@ describe("readerStore", () => {
         );
 
         expect(forkable.fitMode).toBe("width");
+        expect(forkable.webtoonFitMode).toBe("original");
         expect(forkable.pageLayout).toBe("double");
         expect(forkable.readingDirection).toBe("rtl");
         expect(forkable.backgroundColor).toBe("white");
@@ -1404,6 +1465,7 @@ describe("readerStore", () => {
       it("should create override with all forkable settings", () => {
         const forkable: ForkableReaderSettings = {
           fitMode: "width",
+          webtoonFitMode: "original",
           pageLayout: "double",
           readingDirection: "rtl",
           backgroundColor: "gray",
@@ -1424,6 +1486,7 @@ describe("readerStore", () => {
       it("should set version to 1", () => {
         const forkable: ForkableReaderSettings = {
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "ltr",
           backgroundColor: "black",
@@ -1441,6 +1504,7 @@ describe("readerStore", () => {
 
         const forkable: ForkableReaderSettings = {
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "ltr",
           backgroundColor: "black",
@@ -1458,6 +1522,7 @@ describe("readerStore", () => {
       it("should pass type guard validation", () => {
         const forkable: ForkableReaderSettings = {
           fitMode: "screen",
+          webtoonFitMode: "width",
           pageLayout: "single",
           readingDirection: "ltr",
           backgroundColor: "black",

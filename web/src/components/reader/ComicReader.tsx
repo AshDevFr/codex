@@ -7,6 +7,7 @@ import {
   type PageOrientation,
   selectEffectiveReadingDirection,
   useReaderStore,
+  type WebtoonFitMode,
 } from "@/store/readerStore";
 import { BoundaryNotification } from "./BoundaryNotification";
 import { ComicReaderPage } from "./ComicReaderPage";
@@ -110,7 +111,8 @@ export function ComicReader({
 
   // Extract forkable settings from effective settings
   const {
-    fitMode,
+    fitMode: comicFitMode,
+    webtoonFitMode,
     backgroundColor,
     pageLayout,
     doublePageShowWideAlone,
@@ -131,6 +133,11 @@ export function ComicReader({
   const preloadPages = useReaderStore((state) => state.settings.preloadPages);
   const pageOrientations = useReaderStore((state) => state.pageOrientations);
   const readingDirection = useReaderStore(selectEffectiveReadingDirection);
+
+  // Resolve the active fit mode based on reading direction
+  const isWebtoon = readingDirection === "webtoon";
+  const fitMode: FitMode = isWebtoon ? webtoonFitMode : comicFitMode;
+
   const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
   const boundaryState = useReaderStore((state) => state.boundaryState);
   const pageTransition = useReaderStore(
@@ -167,6 +174,9 @@ export function ComicReader({
   );
   const addPreloadedImage = useReaderStore((state) => state.addPreloadedImage);
   const setGlobalFitMode = useReaderStore((state) => state.setFitMode);
+  const setGlobalWebtoonFitMode = useReaderStore(
+    (state) => state.setWebtoonFitMode,
+  );
   const setGlobalPageLayout = useReaderStore((state) => state.setPageLayout);
 
   // Fetch adjacent books for series navigation
@@ -346,17 +356,35 @@ export function ComicReader({
   }, [setLastNavigationDirection, handlePrevPage]);
 
   // Cycle fit mode - respects series settings if override exists
+  // In webtoon mode, cycles between "width" and "original" only
   const handleCycleFitMode = useCallback(() => {
-    const currentIndex = FIT_MODE_CYCLE.indexOf(fitMode);
-    const nextIndex = (currentIndex + 1) % FIT_MODE_CYCLE.length;
-    const nextMode = FIT_MODE_CYCLE[nextIndex];
-
-    if (hasSeriesOverride) {
-      updateSeriesSetting("fitMode", nextMode);
+    if (isWebtoon) {
+      const nextMode: WebtoonFitMode =
+        webtoonFitMode === "width" ? "original" : "width";
+      if (hasSeriesOverride) {
+        updateSeriesSetting("webtoonFitMode", nextMode);
+      } else {
+        setGlobalWebtoonFitMode(nextMode);
+      }
     } else {
-      setGlobalFitMode(nextMode);
+      const currentIndex = FIT_MODE_CYCLE.indexOf(comicFitMode);
+      const nextIndex = (currentIndex + 1) % FIT_MODE_CYCLE.length;
+      const nextMode = FIT_MODE_CYCLE[nextIndex];
+      if (hasSeriesOverride) {
+        updateSeriesSetting("fitMode", nextMode);
+      } else {
+        setGlobalFitMode(nextMode);
+      }
     }
-  }, [fitMode, hasSeriesOverride, updateSeriesSetting, setGlobalFitMode]);
+  }, [
+    isWebtoon,
+    webtoonFitMode,
+    comicFitMode,
+    hasSeriesOverride,
+    updateSeriesSetting,
+    setGlobalFitMode,
+    setGlobalWebtoonFitMode,
+  ]);
 
   // Toggle page layout - respects series settings if override exists
   const handleTogglePageLayout = useCallback(() => {
