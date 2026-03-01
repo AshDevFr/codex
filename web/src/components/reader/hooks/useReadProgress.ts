@@ -23,6 +23,8 @@ interface UseReadProgressReturn {
   isCompleted: boolean;
   /** Save progress immediately */
   saveProgress: (page: number) => void;
+  /** Cancel any pending debounced save and suppress the unmount save */
+  cancelPendingSave: () => void;
 }
 
 /**
@@ -132,6 +134,17 @@ export function useReadProgress({
     [saveToBackend],
   );
 
+  // Cancel any pending debounced save and suppress the unmount save.
+  // Used before markAsRead to prevent stale progress from overwriting it.
+  const cancelledRef = useRef(false);
+  const cancelPendingSave = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    cancelledRef.current = true;
+  }, []);
+
   // Watch for page changes and trigger debounced save
   useEffect(() => {
     if (!enabled || currentPage === 0) return;
@@ -150,12 +163,13 @@ export function useReadProgress({
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
-        // Save final progress before unmount (only if tracking is enabled)
-        if (enabledRef.current) {
-          const finalPage = useReaderStore.getState().currentPage;
-          if (finalPage !== lastSavedPageRef.current && finalPage > 0) {
-            saveToBackend(finalPage);
-          }
+      }
+      // Save final progress before unmount, unless cancelled (e.g. markAsRead
+      // was called and we don't want to overwrite it with stale page data)
+      if (!cancelledRef.current && enabledRef.current) {
+        const finalPage = useReaderStore.getState().currentPage;
+        if (finalPage !== lastSavedPageRef.current && finalPage > 0) {
+          saveToBackend(finalPage);
         }
       }
     };
@@ -171,5 +185,6 @@ export function useReadProgress({
     isLoading,
     isCompleted: progress?.completed ?? false,
     saveProgress,
+    cancelPendingSave,
   };
 }

@@ -200,12 +200,17 @@ export function ComicReader({
     onBeforeNavigateToNext: incognito
       ? undefined
       : () => {
+          cancelPendingSave();
           booksApi.markAsRead(bookId);
         },
   });
 
   // Read progress hook (disabled in incognito mode)
-  const { initialPage, isLoading: progressLoading } = useReadProgress({
+  const {
+    initialPage,
+    isLoading: progressLoading,
+    cancelPendingSave,
+  } = useReadProgress({
     bookId,
     totalPages,
     enabled: !incognito,

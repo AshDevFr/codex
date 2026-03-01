@@ -194,7 +194,7 @@ export function ContinuousScrollReader({
     observerRef.current = new IntersectionObserver((entries) => {
       const currentVisible = visiblePagesRef.current;
       let topMostPage = currentVisiblePageRef.current;
-      let topMostRatio = 0;
+      let topMostVisibleHeight = 0;
 
       for (const entry of entries) {
         const pageNum = Number(entry.target.getAttribute("data-page"));
@@ -207,11 +207,15 @@ export function ContinuousScrollReader({
           const visibleTop = Math.max(rect.top, containerRect.top);
           const visibleBottom = Math.min(rect.bottom, containerRect.bottom);
           const visibleHeight = visibleBottom - visibleTop;
-          const ratio = visibleHeight / rect.height;
 
-          if (rect.top <= containerRect.top + 100 && ratio > topMostRatio) {
+          // The "topmost" page is the one with the most visible area in the
+          // viewport.  This correctly handles the last page of a webtoon
+          // that may extend well beyond the viewport (its top edge is far
+          // above the container top, but it still has the largest visible
+          // portion when fully scrolled to the bottom).
+          if (visibleHeight > topMostVisibleHeight) {
             topMostPage = pageNum;
-            topMostRatio = ratio;
+            topMostVisibleHeight = visibleHeight;
           }
         } else {
           currentVisible.delete(pageNum);
