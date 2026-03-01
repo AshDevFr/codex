@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.14.3] - 2026-03-01
+
+### 🐛 Bug Fixes
+
+- *(reader)* Prevent webtoon progress stuck at 99% when navigating to next volume
+
 ## [1.14.2] - 2026-02-27
 
 ### 🚀 Features
