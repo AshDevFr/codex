@@ -234,6 +234,7 @@ async fn test_user_read_progress() {
         started_at: Set(Utc::now()),
         updated_at: Set(Utc::now()),
         completed_at: Set(None),
+        r2_progression: Set(None),
     };
     let progress = progress.insert(conn).await.unwrap();
 

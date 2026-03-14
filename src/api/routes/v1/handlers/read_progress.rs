@@ -7,6 +7,7 @@ use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
 };
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -21,6 +22,8 @@ use uuid::Uuid;
         get_user_progress,
         mark_book_as_read,
         mark_book_as_unread,
+        get_progression,
+        put_progression,
     ),
     components(schemas(
         UpdateProgressRequest,
@@ -88,6 +91,7 @@ pub async fn update_reading_progress(
         request.current_page,
         request.progress_percentage,
         completed,
+        None,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update reading progress: {}", e)))?;
@@ -267,6 +271,118 @@ pub async fn mark_book_as_unread(
     ReadProgressRepository::mark_as_unread(&state.db, auth.user_id, book_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to mark book as unread: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get book progression (R2Progression / Readium standard)
+///
+/// Returns the stored R2Progression JSON for EPUB reading position sync.
+/// Returns 200 with the progression data, or 204 if no progression exists.
+#[utoipa::path(
+    get,
+    path = "/api/v1/books/{book_id}/progression",
+    responses(
+        (status = 200, description = "Progression data", content_type = "application/json"),
+        (status = 204, description = "No progression exists"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn get_progression(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    auth.require_permission(&Permission::BooksRead)?;
+
+    BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let progress = ReadProgressRepository::get_by_user_and_book(&state.db, auth.user_id, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch progress: {}", e)))?;
+
+    match progress.and_then(|p| p.r2_progression) {
+        Some(json_str) => {
+            let json_value: serde_json::Value = serde_json::from_str(&json_str)
+                .map_err(|e| ApiError::Internal(format!("Invalid R2Progression JSON: {}", e)))?;
+            Ok(Json(json_value).into_response())
+        }
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
+}
+
+/// Update book progression (R2Progression / Readium standard)
+///
+/// Stores R2Progression JSON and also updates the underlying read progress
+/// (current_page, progress_percentage, completed) for backwards compatibility.
+#[utoipa::path(
+    put,
+    path = "/api/v1/books/{book_id}/progression",
+    request_body = serde_json::Value,
+    responses(
+        (status = 204, description = "Progression updated successfully"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Book not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Reading Progress"
+)]
+pub async fn put_progression(
+    State(state): State<Arc<AppState>>,
+    auth: AuthContext,
+    Path(book_id): Path<Uuid>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::BooksRead)?;
+
+    let book = BookRepository::get_by_id(&state.db, book_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
+
+    let total_progression = body
+        .get("locator")
+        .and_then(|l| l.get("locations"))
+        .and_then(|l| l.get("totalProgression"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+
+    let current_page = if book.page_count > 0 {
+        (total_progression * book.page_count as f64)
+            .round()
+            .max(1.0) as i32
+    } else {
+        1
+    };
+    let completed =
+        total_progression >= 0.98 || (book.page_count > 0 && current_page >= book.page_count);
+
+    let json_str = serde_json::to_string(&body)
+        .map_err(|e| ApiError::Internal(format!("Failed to serialize R2Progression: {}", e)))?;
+
+    ReadProgressRepository::upsert_with_percentage(
+        &state.db,
+        auth.user_id,
+        book_id,
+        current_page,
+        Some(total_progression),
+        completed,
+        Some(json_str),
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to update progression: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

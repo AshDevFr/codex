@@ -4648,3 +4648,255 @@ async fn test_komga_search_series_sort_by_title_mixed_null_and_set() {
         titles
     );
 }
+
+// ============================================================================
+// R2Progression (Readium) Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_komga_get_progression_returns_204_when_no_progression() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.epub",
+        "issue1.epub",
+        "hash1",
+        "epub",
+        50,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/books/{}/progression", created_book.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, _) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn test_komga_put_and_get_progression_round_trip() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.epub",
+        "issue1.epub",
+        "hash1",
+        "epub",
+        50,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // PUT progression
+    let progression_json = serde_json::json!({
+        "device": { "id": "komic", "name": "Komic" },
+        "locator": {
+            "href": "OEBPS/chapter1.xhtml",
+            "locations": {
+                "position": 10,
+                "progression": 0.3,
+                "totalProgression": 0.5
+            },
+            "type": "application/xhtml+xml"
+        },
+        "modified": "2026-03-14T21:44:34.922Z"
+    });
+
+    let app = create_test_router_with_komga(state.clone());
+    let uri = format!("/komga/api/v1/books/{}/progression", created_book.id);
+    let request = put_request_with_auth(&uri, &progression_json.to_string(), &token);
+    let (status, _) = make_raw_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // GET progression - should return what we stored
+    let app = create_test_router_with_komga(state.clone());
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.unwrap();
+    assert_eq!(response["device"]["id"], "komic");
+    assert_eq!(response["locator"]["href"], "OEBPS/chapter1.xhtml");
+    assert_eq!(response["locator"]["locations"]["totalProgression"], 0.5);
+}
+
+#[tokio::test]
+async fn test_komga_put_progression_updates_read_progress() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.epub",
+        "issue1.epub",
+        "hash1",
+        "epub",
+        100,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let admin = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    // PUT progression with 50% totalProgression
+    let progression_json = serde_json::json!({
+        "device": { "id": "komic", "name": "Komic" },
+        "locator": {
+            "href": "OEBPS/chapter5.xhtml",
+            "locations": { "totalProgression": 0.5 },
+            "type": "application/xhtml+xml"
+        },
+        "modified": "2026-03-14T21:44:34.922Z"
+    });
+
+    let app = create_test_router_with_komga(state.clone());
+    let uri = format!("/komga/api/v1/books/{}/progression", created_book.id);
+    let request = put_request_with_auth(&uri, &progression_json.to_string(), &token);
+    let (status, _) = make_raw_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // Verify read_progress was also updated
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, admin.id, created_book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(progress.current_page, 50); // 0.5 * 100 pages
+    assert_eq!(progress.progress_percentage, Some(0.5));
+    assert!(!progress.completed);
+}
+
+#[tokio::test]
+async fn test_komga_put_progression_auto_completes_at_98_percent() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.epub",
+        "issue1.epub",
+        "hash1",
+        "epub",
+        100,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let admin = UserRepository::get_by_username(&db, "admin")
+        .await
+        .unwrap()
+        .unwrap();
+
+    // PUT progression with 99% totalProgression
+    let progression_json = serde_json::json!({
+        "device": { "id": "komic", "name": "Komic" },
+        "locator": {
+            "href": "OEBPS/last_chapter.xhtml",
+            "locations": { "totalProgression": 0.99 },
+            "type": "application/xhtml+xml"
+        },
+        "modified": "2026-03-14T22:00:00.000Z"
+    });
+
+    let app = create_test_router_with_komga(state.clone());
+    let uri = format!("/komga/api/v1/books/{}/progression", created_book.id);
+    let request = put_request_with_auth(&uri, &progression_json.to_string(), &token);
+    let (status, _) = make_raw_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // Should be marked as completed
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, admin.id, created_book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(progress.completed);
+    assert!(progress.completed_at.is_some());
+}
+
+#[tokio::test]
+async fn test_komga_put_progression_without_auth() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Batman", None)
+        .await
+        .unwrap();
+    let book = create_test_book(
+        series.id,
+        library.id,
+        "/comics/Batman/issue1.epub",
+        "issue1.epub",
+        "hash1",
+        "epub",
+        50,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/books/{}/progression", created_book.id);
+    let body = r#"{"device":{"id":"test","name":"Test"},"locator":{"href":"x","locations":{"totalProgression":0.1},"type":"text/html"},"modified":"2026-01-01T00:00:00Z"}"#;
+    let request = put_request_with_auth(&uri, body, "invalid-token");
+    let (status, _) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_komga_put_progression_book_not_found() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let fake_id = uuid::Uuid::new_v4();
+    let uri = format!("/komga/api/v1/books/{}/progression", fake_id);
+    let body = r#"{"device":{"id":"test","name":"Test"},"locator":{"href":"x","locations":{"totalProgression":0.1},"type":"text/html"},"modified":"2026-01-01T00:00:00Z"}"#;
+    let request = put_request_with_auth(&uri, body, &token);
+    let (status, _) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

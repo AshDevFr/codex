@@ -172,6 +172,7 @@ export function EpubReader({
   const {
     getSavedLocation,
     initialPercentage,
+    initialCfi,
     isLoadingProgress,
     saveLocation,
   } = useEpubProgress({
@@ -379,23 +380,29 @@ export function EpubReader({
   }, [locationsReady, hasAppliedStartPercent, startPercent]);
 
   // Apply API progress for cross-device sync (only if no localStorage CFI and no startPercent)
+  // Priority: initialCfi (from R2Progression, precise) > initialPercentage (approximate)
   useEffect(() => {
     if (
       locationsReady &&
       !isLoadingProgress &&
-      initialPercentage !== null &&
+      (initialCfi !== null || initialPercentage !== null) &&
       !hasAppliedApiProgress &&
       !hasAppliedStartPercent &&
       !initialLocationLoadedRef.current &&
       renditionRef.current &&
       startPercent == null // Don't apply API progress if startPercent is provided
     ) {
-      // Navigate to percentage-based location from API
-      const book = renditionRef.current.book;
-      if (book?.locations?.length()) {
-        const cfi = book.locations.cfiFromPercentage(initialPercentage);
-        if (cfi) {
-          setLocation(cfi);
+      if (initialCfi) {
+        // Use precise CFI from R2Progression (saved by Codex web on another device)
+        setLocation(initialCfi);
+      } else if (initialPercentage !== null) {
+        // Fall back to percentage-based location (from Komic or legacy progress)
+        const book = renditionRef.current.book;
+        if (book?.locations?.length()) {
+          const cfi = book.locations.cfiFromPercentage(initialPercentage);
+          if (cfi) {
+            setLocation(cfi);
+          }
         }
       }
       setHasAppliedApiProgress(true);
@@ -403,6 +410,7 @@ export function EpubReader({
   }, [
     locationsReady,
     isLoadingProgress,
+    initialCfi,
     initialPercentage,
     hasAppliedApiProgress,
     hasAppliedStartPercent,
@@ -511,7 +519,7 @@ export function EpubReader({
 
       // Save progress - the hook handles debouncing and duplicate detection
       // Note: percentage can be 0 at the start of the book, which is valid
-      saveLocationRef.current(cfi, percentage);
+      saveLocationRef.current(cfi, percentage, location.start.href);
     });
   }, []);
 
