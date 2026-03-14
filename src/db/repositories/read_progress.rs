@@ -48,11 +48,13 @@ impl ReadProgressRepository {
         current_page: i32,
         completed: bool,
     ) -> Result<read_progress::Model> {
-        Self::upsert_with_percentage(db, user_id, book_id, current_page, None, completed).await
+        Self::upsert_with_percentage(db, user_id, book_id, current_page, None, completed, None)
+            .await
     }
 
     /// Create or update reading progress for a user and book with optional percentage
-    /// The percentage field is primarily used for EPUB books with reflowable content
+    /// The percentage field is primarily used for EPUB books with reflowable content.
+    /// The r2_progression field stores the full R2Progression JSON for Readium/OPDS 2.0 sync.
     pub async fn upsert_with_percentage(
         db: &DatabaseConnection,
         user_id: Uuid,
@@ -60,6 +62,7 @@ impl ReadProgressRepository {
         current_page: i32,
         progress_percentage: Option<f64>,
         completed: bool,
+        r2_progression: Option<String>,
     ) -> Result<read_progress::Model> {
         // Check if progress already exists
         let existing = Self::get_by_user_and_book(db, user_id, book_id).await?;
@@ -75,6 +78,7 @@ impl ReadProgressRepository {
                 progress_percentage,
                 completed,
                 now,
+                r2_progression,
             )
             .await
         } else {
@@ -89,6 +93,7 @@ impl ReadProgressRepository {
                 started_at: Set(now),
                 updated_at: Set(now),
                 completed_at: Set(if completed { Some(now) } else { None }),
+                r2_progression: Set(r2_progression.clone()),
             };
 
             match new_progress.insert(db).await {
@@ -107,6 +112,7 @@ impl ReadProgressRepository {
                         progress_percentage,
                         completed,
                         now,
+                        r2_progression,
                     )
                     .await
                 }
@@ -123,12 +129,14 @@ impl ReadProgressRepository {
         progress_percentage: Option<f64>,
         completed: bool,
         now: chrono::DateTime<Utc>,
+        r2_progression: Option<String>,
     ) -> Result<read_progress::Model> {
         let mut active_model: read_progress::ActiveModel = existing_model.clone().into();
         active_model.current_page = Set(current_page);
         active_model.progress_percentage = Set(progress_percentage);
         active_model.completed = Set(completed);
         active_model.updated_at = Set(now);
+        active_model.r2_progression = Set(r2_progression);
 
         // Set completed_at if just marked as completed
         if completed && existing_model.completed_at.is_none() {

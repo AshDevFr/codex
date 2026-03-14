@@ -112,6 +112,7 @@ pub async fn update_progress(
         current_page,
         Some(request.percentage),
         completed,
+        None,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update progress: {}", e)))?;

@@ -17,6 +17,9 @@ pub struct Model {
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    /// R2Progression JSON (Readium standard) for EPUB position sync
+    #[sea_orm(column_type = "Text", nullable)]
+    pub r2_progression: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

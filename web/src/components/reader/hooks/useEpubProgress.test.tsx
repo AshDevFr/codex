@@ -9,6 +9,9 @@ import { useEpubProgress } from "./useEpubProgress";
 vi.mock("@/api/readProgress", () => ({
   readProgressApi: {
     update: vi.fn().mockResolvedValue({}),
+    updateProgression: vi.fn().mockResolvedValue(undefined),
+    get: vi.fn().mockResolvedValue(null),
+    getProgression: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -95,7 +98,7 @@ describe("useEpubProgress", () => {
       );
 
       act(() => {
-        result.current.saveLocation(mockCfi, mockPercentage);
+        result.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
       });
 
       // Should not be saved yet (debounce)
@@ -122,7 +125,7 @@ describe("useEpubProgress", () => {
       );
 
       act(() => {
-        result.current.saveLocation(mockCfi, mockPercentage);
+        result.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
         vi.advanceTimersByTime(2000);
       });
 
@@ -141,7 +144,7 @@ describe("useEpubProgress", () => {
       );
 
       act(() => {
-        result.current.saveLocation(mockCfi, mockPercentage);
+        result.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
       });
 
       act(() => {
@@ -149,7 +152,11 @@ describe("useEpubProgress", () => {
       });
 
       act(() => {
-        result.current.saveLocation(mockCfi2, mockPercentage2);
+        result.current.saveLocation(
+          mockCfi2,
+          mockPercentage2,
+          "chapter2.xhtml",
+        );
       });
 
       act(() => {
@@ -180,7 +187,7 @@ describe("useEpubProgress", () => {
 
       // Save first CFI
       act(() => {
-        result.current.saveLocation(mockCfi, mockPercentage);
+        result.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
         vi.advanceTimersByTime(1000);
       });
 
@@ -191,7 +198,7 @@ describe("useEpubProgress", () => {
       setItemSpy.mockClear();
 
       act(() => {
-        result.current.saveLocation(mockCfi, mockPercentage);
+        result.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
         vi.advanceTimersByTime(1000);
       });
 
@@ -214,7 +221,7 @@ describe("useEpubProgress", () => {
 
       // Save first location
       act(() => {
-        result.current.saveLocation(mockCfi, 0.25);
+        result.current.saveLocation(mockCfi, 0.25, "chapter1.xhtml");
         vi.advanceTimersByTime(1000);
       });
 
@@ -226,7 +233,7 @@ describe("useEpubProgress", () => {
 
       act(() => {
         // Same CFI, tiny percentage change (0.001 = 0.1%, below 0.5% threshold)
-        result.current.saveLocation(mockCfi, 0.251);
+        result.current.saveLocation(mockCfi, 0.251, "chapter1.xhtml");
         vi.advanceTimersByTime(1000);
       });
 
@@ -267,7 +274,7 @@ describe("useEpubProgress", () => {
       );
 
       act(() => {
-        result.current.saveLocation(mockCfi, mockPercentage);
+        result.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
       });
 
       // Progress should not be saved yet (debounce is 5s)
@@ -313,7 +320,7 @@ describe("useEpubProgress", () => {
 
       // Try to save a location (will be ignored due to enabled=false)
       act(() => {
-        result.current.saveLocation(mockCfi, mockPercentage);
+        result.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
       });
 
       const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
@@ -343,8 +350,12 @@ describe("useEpubProgress", () => {
       );
 
       act(() => {
-        result1.current.saveLocation(mockCfi, mockPercentage);
-        result2.current.saveLocation(mockCfi2, mockPercentage2);
+        result1.current.saveLocation(mockCfi, mockPercentage, "chapter1.xhtml");
+        result2.current.saveLocation(
+          mockCfi2,
+          mockPercentage2,
+          "chapter2.xhtml",
+        );
         vi.advanceTimersByTime(2000);
       });
 

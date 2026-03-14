@@ -6,7 +6,7 @@ use super::super::handlers;
 use crate::api::extractors::AppState;
 use axum::{
     Router,
-    routing::{patch, post},
+    routing::{get, patch, post},
 };
 use std::sync::Arc;
 
@@ -15,6 +15,8 @@ use std::sync::Arc;
 /// Routes:
 /// - `PATCH /books/{book_id}/read-progress` - Update reading progress
 /// - `DELETE /books/{book_id}/read-progress` - Delete reading progress (mark as unread)
+/// - `GET /books/{book_id}/progression` - Get R2Progression (Readium)
+/// - `PUT /books/{book_id}/progression` - Update R2Progression (Readium)
 /// - `POST /series/{series_id}/read-progress` - Mark all books in series as read
 /// - `DELETE /series/{series_id}/read-progress` - Mark all books in series as unread
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
@@ -22,6 +24,10 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/books/{book_id}/read-progress",
             patch(handlers::update_progress).delete(handlers::delete_progress),
+        )
+        .route(
+            "/books/{book_id}/progression",
+            get(handlers::get_progression).put(handlers::put_progression),
         )
         .route(
             "/series/{series_id}/read-progress",

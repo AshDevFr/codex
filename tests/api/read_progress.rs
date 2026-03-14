@@ -694,3 +694,144 @@ async fn test_update_progress_returns_not_found_for_missing_book() {
         error.message
     );
 }
+
+// ============================================================================
+// R2Progression (Readium) Tests - V1 API
+// ============================================================================
+
+#[tokio::test]
+async fn test_v1_get_progression_returns_204_when_no_progression() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/comics/test.epub",
+        "test.epub",
+        None,
+        50,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let (state, app) = setup_test_app(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let uri = format!("/api/v1/books/{}/progression", created_book.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, _) = make_raw_request(app, request).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn test_v1_put_and_get_progression_round_trip() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/comics/test.epub",
+        "test.epub",
+        None,
+        50,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let (state, _app) = setup_test_app(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let progression_json = serde_json::json!({
+        "device": { "id": "codex-web", "name": "Codex Web Reader" },
+        "locator": {
+            "href": "OEBPS/chapter3.xhtml",
+            "locations": {
+                "position": 15,
+                "totalProgression": 0.6,
+                "cfi": "/6/14!/4/2/1:0"
+            },
+            "type": "application/xhtml+xml"
+        },
+        "modified": "2026-03-14T21:44:34.922Z"
+    });
+
+    // PUT progression
+    let (_, app) = setup_test_app(db.clone()).await;
+    let uri = format!("/api/v1/books/{}/progression", created_book.id);
+    let request = put_request_with_auth(&uri, &progression_json.to_string(), &token);
+    let (status, _) = make_raw_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // GET progression
+    let (_, app) = setup_test_app(db.clone()).await;
+    let request = get_request_with_auth(&uri, &token);
+    let (status, response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.unwrap();
+    assert_eq!(response["device"]["id"], "codex-web");
+    assert_eq!(response["locator"]["href"], "OEBPS/chapter3.xhtml");
+    assert_eq!(response["locator"]["locations"]["totalProgression"], 0.6);
+    assert_eq!(response["locator"]["locations"]["cfi"], "/6/14!/4/2/1:0");
+}
+
+#[tokio::test]
+async fn test_v1_put_progression_updates_legacy_progress() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        "/comics/test.epub",
+        "test.epub",
+        None,
+        200,
+    );
+    let created_book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let (state, app) = setup_test_app(db.clone()).await;
+    let (user_id, token) = create_admin_and_token(&db, &state).await;
+
+    let progression_json = serde_json::json!({
+        "device": { "id": "codex-web", "name": "Codex Web Reader" },
+        "locator": {
+            "href": "OEBPS/chapter5.xhtml",
+            "locations": { "totalProgression": 0.75 },
+            "type": "application/xhtml+xml"
+        },
+        "modified": "2026-03-14T22:00:00.000Z"
+    });
+
+    let uri = format!("/api/v1/books/{}/progression", created_book.id);
+    let request = put_request_with_auth(&uri, &progression_json.to_string(), &token);
+    let (status, _) = make_raw_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // Verify legacy read_progress fields
+    let progress = ReadProgressRepository::get_by_user_and_book(&db, user_id, created_book.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(progress.current_page, 150); // 0.75 * 200
+    assert_eq!(progress.progress_percentage, Some(0.75));
+    assert!(!progress.completed);
+    assert!(progress.r2_progression.is_some());
+}
