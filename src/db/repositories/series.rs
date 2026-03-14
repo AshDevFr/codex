@@ -2450,6 +2450,7 @@ mod tests {
             updated_at: Utc::now(),
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -2544,6 +2545,7 @@ mod tests {
             updated_at: Utc::now(),
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
         let book1: books::Model = BookRepository::create(db.sea_orm_connection(), &book1, None)
             .await
@@ -2569,6 +2571,7 @@ mod tests {
             updated_at: Utc::now(),
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
         let book2: books::Model = BookRepository::create(db.sea_orm_connection(), &book2, None)
             .await
@@ -2594,6 +2597,7 @@ mod tests {
             updated_at: Utc::now(),
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
         let book3: books::Model = BookRepository::create(db.sea_orm_connection(), &book3, None)
             .await

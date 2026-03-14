@@ -29,6 +29,8 @@ pub struct Model {
     pub updated_at: DateTime<Utc>,
     pub thumbnail_path: Option<String>,
     pub thumbnail_generated_at: Option<DateTime<Utc>>,
+    /// KOReader partial MD5 hash for KOReader sync progress tracking
+    pub koreader_hash: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

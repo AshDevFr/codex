@@ -47,6 +47,7 @@ infer = "0.19"
 
 # Hashing
 sha2 = "0.10"
+md-5 = "0.10"
 
 # Error handling
 anyhow = "1.0"

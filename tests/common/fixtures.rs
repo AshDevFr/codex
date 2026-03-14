@@ -84,6 +84,7 @@ pub fn create_test_book(
         updated_at: now,
         thumbnail_path: None,
         thumbnail_generated_at: None,
+        koreader_hash: None,
     }
 }
 
@@ -204,6 +205,7 @@ pub async fn create_test_book_with_hash(
         created_at: Utc::now(),
         thumbnail_path: None,
         thumbnail_generated_at: None,
+        koreader_hash: None,
         updated_at: Utc::now(),
     };
 

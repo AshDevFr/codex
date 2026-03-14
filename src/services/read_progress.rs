@@ -274,6 +274,7 @@ mod tests {
             updated_at: Utc::now(),
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
         BookRepository::create(db, &book, None).await.unwrap()
     }

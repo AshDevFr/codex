@@ -1,6 +1,7 @@
+use md5::Md5;
 use sha2::{Digest, Sha256};
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 
 /// Compute SHA-256 hash of byte slice
@@ -54,6 +55,44 @@ pub fn hash_file_partial<P: AsRef<Path>>(path: P) -> io::Result<String> {
     };
 
     hasher.update(&buffer[..bytes_read]);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Compute KOReader-compatible partial MD5 hash of a file.
+///
+/// KOReader uses a custom partial hashing algorithm that reads 1024-byte chunks
+/// at exponentially increasing offsets throughout the file:
+///   - For i in -1..=10: seek to (1024 << (2*i)) and read 1024 bytes
+///   - Offsets: 256, 1024, 4096, 16384, 65536, ..., 1073741824
+///
+/// This produces a fast fingerprint without reading the entire file.
+pub fn hash_file_koreader<P: AsRef<Path>>(path: P) -> io::Result<String> {
+    const CHUNK_SIZE: usize = 1024;
+
+    let mut file = File::open(path)?;
+    let file_size = file.metadata()?.len();
+    let mut hasher = Md5::new();
+    let mut buffer = [0u8; CHUNK_SIZE];
+
+    for i in -1i32..=10 {
+        let offset = if i < 0 {
+            // For i=-1: 1024 >> 2 = 256
+            (CHUNK_SIZE as u64) >> ((-i as u32) * 2)
+        } else {
+            (CHUNK_SIZE as u64) << ((i as u32) * 2)
+        };
+
+        if offset >= file_size {
+            break;
+        }
+
+        file.seek(SeekFrom::Start(offset))?;
+        let bytes_to_read = CHUNK_SIZE.min((file_size - offset) as usize);
+        let buf = &mut buffer[..bytes_to_read];
+        file.read_exact(buf)?;
+        hasher.update(buf);
+    }
+
     Ok(format!("{:x}", hasher.finalize()))
 }
 
@@ -212,5 +251,62 @@ mod tests {
 
         // Hashes should differ (partial only reads first 1MB)
         assert_ne!(partial_hash, full_hash);
+    }
+
+    #[test]
+    fn test_hash_file_koreader_small() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(b"Hello, World!").unwrap();
+        temp_file.flush().unwrap();
+
+        let hash = hash_file_koreader(temp_file.path()).unwrap();
+        // Should produce a valid MD5 hash (32 hex chars)
+        assert_eq!(hash.len(), 32);
+    }
+
+    #[test]
+    fn test_hash_file_koreader_deterministic() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let data = vec![42u8; 100_000];
+        temp_file.write_all(&data).unwrap();
+        temp_file.flush().unwrap();
+
+        let hash1 = hash_file_koreader(temp_file.path()).unwrap();
+        let hash2 = hash_file_koreader(temp_file.path()).unwrap();
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_file_koreader_large() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        // Write 2MB of data to exercise multiple offset reads
+        let data = vec![99u8; 2 * 1024 * 1024];
+        temp_file.write_all(&data).unwrap();
+        temp_file.flush().unwrap();
+
+        let hash = hash_file_koreader(temp_file.path()).unwrap();
+        assert_eq!(hash.len(), 32);
+    }
+
+    #[test]
+    fn test_hash_file_koreader_different_content_different_hash() {
+        let mut file1 = NamedTempFile::new().unwrap();
+        let mut file2 = NamedTempFile::new().unwrap();
+
+        file1.write_all(&vec![1u8; 10_000]).unwrap();
+        file1.flush().unwrap();
+
+        file2.write_all(&vec![2u8; 10_000]).unwrap();
+        file2.flush().unwrap();
+
+        let hash1 = hash_file_koreader(file1.path()).unwrap();
+        let hash2 = hash_file_koreader(file2.path()).unwrap();
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_file_koreader_nonexistent() {
+        let result = hash_file_koreader("/nonexistent/path/to/file.txt");
+        assert!(result.is_err());
     }
 }

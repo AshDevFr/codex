@@ -227,6 +227,7 @@ mod tests {
             updated_at: Utc::now(),
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
 
         BookRepository::create(db, &book_model, None).await.unwrap()
@@ -600,6 +601,7 @@ mod tests {
             updated_at: Utc::now(),
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
 
         let book2_model = books::Model {

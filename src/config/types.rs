@@ -30,6 +30,24 @@ fn default_komga_prefix() -> String {
     "komga".to_string()
 }
 
+/// Configuration for the KOReader sync API
+/// Enables KOReader e-readers to sync reading progress with Codex
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct KoreaderApiConfig {
+    /// Enable KOReader sync API endpoints
+    /// When enabled, routes are mounted at /koreader/*
+    pub enabled: bool,
+}
+
+impl Default for KoreaderApiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_KOREADER_API_ENABLED", false),
+        }
+    }
+}
+
 /// Configuration for API rate limiting
 /// Uses token bucket algorithm with per-client tracking
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -246,6 +264,8 @@ pub struct Config {
     #[serde(default)]
     pub komga_api: KomgaApiConfig,
     #[serde(default)]
+    pub koreader_api: KoreaderApiConfig,
+    #[serde(default)]
     pub rate_limit: RateLimitConfig,
 }
 
@@ -374,6 +394,7 @@ impl Default for Config {
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
         }
     }
@@ -1163,6 +1184,7 @@ verification_url_base: https://codex.example.com
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
         };
 

@@ -43,6 +43,7 @@ async fn create_analyzed_book(
         updated_at: Utc::now(),
         thumbnail_path: None,
         thumbnail_generated_at: None,
+        koreader_hash: None,
     };
     BookRepository::create(db_conn, &book, None).await?;
 

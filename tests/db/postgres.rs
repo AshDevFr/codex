@@ -145,6 +145,7 @@ async fn test_postgres_series_book_relationship() {
         updated_at: now,
         thumbnail_path: None,
         thumbnail_generated_at: None,
+        koreader_hash: None,
     };
 
     let book = BookRepository::create(conn, &book_model, None)
@@ -291,6 +292,7 @@ async fn test_postgres_metrics_repository() {
             updated_at: now,
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
 
         BookRepository::create(conn, &book_model, None)

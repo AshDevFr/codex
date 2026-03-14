@@ -1,7 +1,8 @@
+#[allow(unused_imports)]
 use super::types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, FilesConfig,
-    KomgaApiConfig, LogLevel, LoggingConfig, OidcConfig, OidcDefaultRole, OidcProviderConfig,
-    PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+    KomgaApiConfig, KoreaderApiConfig, LogLevel, LoggingConfig, OidcConfig, OidcDefaultRole,
+    OidcProviderConfig, PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
 };
 use std::collections::HashMap;
 use std::env;
@@ -666,6 +667,7 @@ mod tests {
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
             komga_api: KomgaApiConfig::default(),
+            koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
         };
 
@@ -855,6 +857,7 @@ mod tests {
                 enabled: false,
                 prefix: "default".to_string(),
             },
+            koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
         };
 
