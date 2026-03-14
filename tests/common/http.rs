@@ -235,6 +235,26 @@ pub async fn setup_test_app_with_komga(db: DatabaseConnection) -> (Arc<AppState>
     (state, router)
 }
 
+/// Helper to create a test config with KOReader API enabled
+pub fn create_test_config_with_koreader() -> Config {
+    let mut config = create_test_config();
+    config.koreader_api.enabled = true;
+    config
+}
+
+/// Helper to create the API router with KOReader API enabled
+pub fn create_test_router_with_koreader(state: Arc<AppState>) -> Router {
+    let config = create_test_config_with_koreader();
+    create_router(state, &config)
+}
+
+/// Helper to set up a test app with KOReader API enabled
+pub async fn setup_test_app_with_koreader(db: DatabaseConnection) -> (Arc<AppState>, Router) {
+    let state = create_test_app_state(db).await;
+    let router = create_test_router_with_koreader(state.clone());
+    (state, router)
+}
+
 /// Helper to create a GET request with Basic Auth header
 pub fn get_request_with_basic_auth(uri: &str, username: &str, password: &str) -> Request<String> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};

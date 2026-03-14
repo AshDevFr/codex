@@ -370,6 +370,7 @@ mod tests {
             updated_at: now,
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
 
         BookRepository::create(db.sea_orm_connection(), &book_model, None)
@@ -438,6 +439,7 @@ mod tests {
                 updated_at: now,
                 thumbnail_path: None,
                 thumbnail_generated_at: None,
+                koreader_hash: None,
             };
 
             BookRepository::create(db.sea_orm_connection(), &book_model, None)
@@ -509,6 +511,7 @@ mod tests {
             updated_at: now,
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         };
 
         BookRepository::create(db.sea_orm_connection(), &book_model, None)

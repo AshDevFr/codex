@@ -1,4 +1,5 @@
 pub mod komga;
+pub mod koreader;
 pub mod opds;
 pub mod opds2;
 pub mod v1;
@@ -48,6 +49,12 @@ pub fn create_router(state: Arc<AppState>, config: &Config) -> Router {
             config.komga_api.prefix
         );
         router = router.nest(&komga_path, komga::router(state.clone()));
+    }
+
+    // Conditionally mount KOReader sync API if enabled
+    if config.koreader_api.enabled {
+        tracing::info!("KOReader sync API enabled at /koreader");
+        router = router.nest("/koreader", koreader::router(state.clone()));
     }
 
     // Conditionally mount Scalar API docs if enabled

@@ -769,6 +769,7 @@ struct FileHashResult {
     path: PathBuf,
     path_str: String,
     partial_hash: String,
+    koreader_hash: Option<String>,
     file_size: u64,
     modified_at: DateTime<Utc>,
     format: String,
@@ -780,11 +781,13 @@ struct FileHashResult {
 async fn hash_file_with_metadata(file_path: PathBuf) -> Result<FileHashResult> {
     let path_str = file_path.to_string_lossy().to_string();
 
-    // Calculate current partial hash (blocking I/O operation - fast, only first 1MB)
+    // Calculate current partial hash and KOReader hash (blocking I/O)
     let file_path_clone = file_path.clone();
-    let current_partial_hash = tokio::task::spawn_blocking(move || {
-        use crate::utils::hasher::hash_file_partial;
-        hash_file_partial(&file_path_clone)
+    let (current_partial_hash, koreader_hash) = tokio::task::spawn_blocking(move || {
+        use crate::utils::hasher::{hash_file_koreader, hash_file_partial};
+        let partial = hash_file_partial(&file_path_clone)?;
+        let koreader = hash_file_koreader(&file_path_clone).ok();
+        Ok::<_, std::io::Error>((partial, koreader))
     })
     .await
     .map_err(|e| anyhow::anyhow!("Failed to spawn hash calculation task: {}", e))??;
@@ -812,6 +815,7 @@ async fn hash_file_with_metadata(file_path: PathBuf) -> Result<FileHashResult> {
         path: file_path,
         path_str,
         partial_hash: current_partial_hash,
+        koreader_hash,
         file_size,
         modified_at,
         format,
@@ -1027,6 +1031,7 @@ async fn process_series_batched(
                             updated_at: now,
                             thumbnail_path: None,
                             thumbnail_generated_at: None,
+                            koreader_hash: file_hash.koreader_hash,
                         };
 
                         batch.add_create(book_model, true);

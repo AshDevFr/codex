@@ -398,6 +398,7 @@ impl BookRepository {
             updated_at: Set(book_model.updated_at),
             thumbnail_path: Set(book_model.thumbnail_path.clone()),
             thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+            koreader_hash: Set(book_model.koreader_hash.clone()),
         };
 
         let created_book = book.insert(db).await.context("Failed to create book")?;
@@ -491,6 +492,38 @@ impl BookRepository {
             .one(db)
             .await
             .context("Failed to get book by hash")
+    }
+
+    /// Find books by KOReader hash (for KOReader sync)
+    /// Returns all matching books (should normally be 0 or 1)
+    pub async fn find_by_koreader_hash(
+        db: &DatabaseConnection,
+        hash: &str,
+    ) -> Result<Vec<books::Model>> {
+        Books::find()
+            .filter(books::Column::KoreaderHash.eq(hash))
+            .filter(books::Column::Deleted.eq(false))
+            .all(db)
+            .await
+            .context("Failed to find books by KOReader hash")
+    }
+
+    /// Update KOReader hash for a book
+    pub async fn update_koreader_hash(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        koreader_hash: &str,
+    ) -> Result<()> {
+        Books::update_many()
+            .col_expr(
+                books::Column::KoreaderHash,
+                sea_orm::sea_query::Expr::value(koreader_hash.to_string()),
+            )
+            .filter(books::Column::Id.eq(book_id))
+            .exec(db)
+            .await
+            .context("Failed to update KOReader hash")?;
+        Ok(())
     }
 
     /// Get a book by file path and library ID
@@ -1450,6 +1483,7 @@ impl BookRepository {
             updated_at: Set(Utc::now()),
             thumbnail_path: Set(book_model.thumbnail_path.clone()),
             thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+            koreader_hash: Set(book_model.koreader_hash.clone()),
         };
 
         active.update(db).await.context("Failed to update book")?;
@@ -2166,6 +2200,7 @@ impl BookRepository {
                 updated_at: Set(book_model.updated_at),
                 thumbnail_path: Set(book_model.thumbnail_path.clone()),
                 thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+                koreader_hash: Set(book_model.koreader_hash.clone()),
             })
             .collect();
 
@@ -2227,6 +2262,7 @@ impl BookRepository {
                 updated_at: Set(book_model.updated_at),
                 thumbnail_path: Set(book_model.thumbnail_path.clone()),
                 thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
+                koreader_hash: Set(book_model.koreader_hash.clone()),
             };
 
             active
@@ -2454,6 +2490,7 @@ mod tests {
             updated_at: now,
             thumbnail_path: None,
             thumbnail_generated_at: None,
+            koreader_hash: None,
         }
     }
 

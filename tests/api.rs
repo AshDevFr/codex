@@ -20,6 +20,7 @@ mod api {
     mod genres;
     mod info;
     mod komga;
+    mod koreader;
     mod libraries;
     mod metadata_locks;
     mod metadata_reset;

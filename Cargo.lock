@@ -818,6 +818,7 @@ dependencies = [
  "lettre",
  "log",
  "lopdf",
+ "md-5",
  "migration",
  "mime_guess",
  "openidconnect",
