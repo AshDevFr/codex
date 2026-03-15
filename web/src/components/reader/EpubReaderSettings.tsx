@@ -12,6 +12,7 @@ import {
 } from "@mantine/core";
 import {
   type EpubFontFamily,
+  type EpubSpread,
   type EpubTheme,
   useReaderStore,
 } from "@/store/readerStore";
@@ -37,6 +38,13 @@ const THEME_OPTIONS = [
   { value: "night", label: "Night (OLED)" },
   { value: "ocean", label: "Ocean" },
   { value: "forest", label: "Forest" },
+];
+
+/** Page layout (spread) options */
+const SPREAD_OPTIONS = [
+  { value: "auto", label: "Auto (responsive)" },
+  { value: "none", label: "Single page" },
+  { value: "always", label: "Double page" },
 ];
 
 /** Font family options for display in select */
@@ -69,6 +77,7 @@ export function EpubReaderSettings({
   const setEpubFontFamily = useReaderStore((state) => state.setEpubFontFamily);
   const setEpubLineHeight = useReaderStore((state) => state.setEpubLineHeight);
   const setEpubMargin = useReaderStore((state) => state.setEpubMargin);
+  const setEpubSpread = useReaderStore((state) => state.setEpubSpread);
   const setAutoHideToolbar = useReaderStore(
     (state) => state.setAutoHideToolbar,
   );
@@ -188,6 +197,21 @@ export function EpubReaderSettings({
                     { value: 15, label: "Normal" },
                     { value: 30, label: "Max" },
                   ]}
+                />
+              </Box>
+
+              {/* Page Layout */}
+              <Box>
+                <Text size="sm" fw={500} mb="xs">
+                  Page Layout
+                </Text>
+                <Select
+                  value={settings.epubSpread}
+                  onChange={(value) =>
+                    value && setEpubSpread(value as EpubSpread)
+                  }
+                  data={SPREAD_OPTIONS}
+                  allowDeselect={false}
                 />
               </Box>
             </Stack>

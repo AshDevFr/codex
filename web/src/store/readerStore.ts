@@ -50,6 +50,7 @@ export type EpubFontFamily =
   | "sans-serif"
   | "monospace"
   | "dyslexic";
+export type EpubSpread = "auto" | "none" | "always";
 /** Fit mode for webtoon reader (only width and original make sense for continuous scroll) */
 export type WebtoonFitMode = "width" | "original";
 export type BoundaryState = "none" | "at-start" | "at-end";
@@ -231,6 +232,8 @@ export interface ReaderSettings {
   epubLineHeight: number;
   /** EPUB margin as percentage (0-30) */
   epubMargin: number;
+  /** EPUB page spread mode (auto, none=single, always=double) */
+  epubSpread: EpubSpread;
   /** Number of pages to preload ahead/behind current page (0-10) */
   preloadPages: number;
   /** In double-page mode, show landscape/wide pages alone (default: true) */
@@ -306,6 +309,7 @@ export interface ReaderState {
   setEpubFontFamily: (family: EpubFontFamily) => void;
   setEpubLineHeight: (height: number) => void;
   setEpubMargin: (margin: number) => void;
+  setEpubSpread: (spread: EpubSpread) => void;
   setPreloadPages: (count: number) => void;
   setDoublePageShowWideAlone: (enabled: boolean) => void;
   setDoublePageStartOnOdd: (enabled: boolean) => void;
@@ -394,6 +398,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   epubFontFamily: "default",
   epubLineHeight: 140,
   epubMargin: 10,
+  epubSpread: "auto",
   preloadPages: 1,
   doublePageShowWideAlone: true,
   doublePageStartOnOdd: true,
@@ -537,6 +542,11 @@ export const useReaderStore = create<ReaderState>()(
           set((state) => {
             // Clamp margin between 0% and 30%
             state.settings.epubMargin = Math.max(0, Math.min(30, margin));
+          }),
+
+        setEpubSpread: (spread) =>
+          set((state) => {
+            state.settings.epubSpread = spread;
           }),
 
         setPreloadPages: (count) =>

@@ -88,7 +88,7 @@ impl EpubParser {
     }
 
     /// Parse the EPUB container.xml to find the root file (usually content.opf)
-    fn find_root_file(archive: &mut ZipArchive<File>) -> Result<String> {
+    pub(crate) fn find_root_file(archive: &mut ZipArchive<File>) -> Result<String> {
         let mut container_file = archive
             .by_name("META-INF/container.xml")
             .map_err(|_| CodexError::ParseError("META-INF/container.xml not found".to_string()))?;
@@ -160,7 +160,7 @@ impl EpubParser {
     ///
     /// Returns (manifest: id -> (href, media_type), spine_order: Vec<(href, media_type)>)
     #[allow(clippy::type_complexity)]
-    fn parse_opf(
+    pub(crate) fn parse_opf(
         archive: &mut ZipArchive<File>,
         opf_path: &str,
     ) -> Result<(HashMap<String, (String, String)>, Vec<(String, String)>)> {

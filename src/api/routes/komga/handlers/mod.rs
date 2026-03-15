@@ -5,6 +5,7 @@
 
 pub mod books;
 pub mod libraries;
+pub mod manifest;
 pub mod pages;
 pub mod read_progress;
 pub mod series;
@@ -17,6 +18,7 @@ pub use books::{
     get_previous_book, search_books,
 };
 pub use libraries::{get_library, get_library_thumbnail, list_libraries};
+pub use manifest::{get_epub_manifest, get_epub_resource};
 pub use pages::{get_page, get_page_thumbnail, list_pages};
 pub use read_progress::{
     delete_progress, get_progression, mark_series_as_read, mark_series_as_unread, put_progression,
@@ -43,6 +45,9 @@ pub use books::{
 #[doc(hidden)]
 #[allow(unused_imports)]
 pub use libraries::{__path_get_library, __path_get_library_thumbnail, __path_list_libraries};
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub use manifest::{__path_get_epub_manifest, __path_get_epub_resource};
 #[doc(hidden)]
 #[allow(unused_imports)]
 pub use pages::{__path_get_page, __path_get_page_thumbnail, __path_list_pages};
