@@ -167,6 +167,7 @@ impl FormatParser for CbrParser {
             // RELATED: EPUB and PDF parsers successfully extract ISBNs from metadata
             // (see epub/parser.rs and pdf/parser.rs for implemented approaches)
             isbns: Vec::new(),
+            epub_positions: None,
         })
     }
 }

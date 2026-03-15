@@ -58,6 +58,7 @@ fn create_test_book_model(
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     }
 }
 
