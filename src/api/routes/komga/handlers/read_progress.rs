@@ -303,24 +303,76 @@ pub async fn put_progression(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    // Extract totalProgression from the R2Progression locator
-    let total_progression = body
+    // Extract totalProgression and href from the R2Progression locator
+    let client_total_progression = body
         .get("locator")
         .and_then(|l| l.get("locations"))
         .and_then(|l| l.get("totalProgression"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
 
-    // Derive page and completion from totalProgression
-    let current_page = if book.page_count > 0 {
-        (total_progression * book.page_count as f64)
-            .round()
-            .max(1.0) as i32
+    let client_href = body
+        .get("locator")
+        .and_then(|l| l.get("href"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    // Normalize totalProgression using server-side positions if available
+    let (total_progression, current_page) = if let Some(ref positions_json) = book.epub_positions {
+        if let Ok(positions) =
+            serde_json::from_str::<Vec<crate::parsers::EpubPosition>>(positions_json)
+        {
+            if let Some((normalized, position)) = crate::parsers::normalize_progression(
+                &positions,
+                client_href,
+                client_total_progression,
+            ) {
+                (normalized, position)
+            } else {
+                // Fallback: no matching position found
+                let page = if book.page_count > 0 {
+                    (client_total_progression * book.page_count as f64)
+                        .round()
+                        .max(1.0) as i32
+                } else {
+                    1
+                };
+                (client_total_progression, page)
+            }
+        } else {
+            // Fallback: couldn't parse positions JSON
+            let page = if book.page_count > 0 {
+                (client_total_progression * book.page_count as f64)
+                    .round()
+                    .max(1.0) as i32
+            } else {
+                1
+            };
+            (client_total_progression, page)
+        }
     } else {
-        1
+        // No positions available, use client value directly
+        let page = if book.page_count > 0 {
+            (client_total_progression * book.page_count as f64)
+                .round()
+                .max(1.0) as i32
+        } else {
+            1
+        };
+        (client_total_progression, page)
     };
+
     let completed =
         total_progression >= 0.98 || (book.page_count > 0 && current_page >= book.page_count);
+
+    // Store the R2Progression with server-normalized totalProgression
+    let mut body = body;
+    if let Some(locator) = body.get_mut("locator")
+        && let Some(locations) = locator.get_mut("locations")
+    {
+        locations["totalProgression"] = serde_json::json!(total_progression);
+        locations["position"] = serde_json::json!(current_page);
+    }
 
     let json_str = serde_json::to_string(&body)
         .map_err(|e| ApiError::Internal(format!("Failed to serialize R2Progression: {}", e)))?;

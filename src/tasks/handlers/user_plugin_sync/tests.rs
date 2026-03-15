@@ -56,6 +56,7 @@ async fn create_test_book(
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
     BookRepository::create(db, &book, None).await.unwrap()
 }

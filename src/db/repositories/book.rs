@@ -399,6 +399,7 @@ impl BookRepository {
             thumbnail_path: Set(book_model.thumbnail_path.clone()),
             thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
             koreader_hash: Set(book_model.koreader_hash.clone()),
+            epub_positions: Set(book_model.epub_positions.clone()),
         };
 
         let created_book = book.insert(db).await.context("Failed to create book")?;
@@ -1484,6 +1485,7 @@ impl BookRepository {
             thumbnail_path: Set(book_model.thumbnail_path.clone()),
             thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
             koreader_hash: Set(book_model.koreader_hash.clone()),
+            epub_positions: Set(book_model.epub_positions.clone()),
         };
 
         active.update(db).await.context("Failed to update book")?;
@@ -2201,6 +2203,7 @@ impl BookRepository {
                 thumbnail_path: Set(book_model.thumbnail_path.clone()),
                 thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
                 koreader_hash: Set(book_model.koreader_hash.clone()),
+                epub_positions: Set(book_model.epub_positions.clone()),
             })
             .collect();
 
@@ -2263,6 +2266,7 @@ impl BookRepository {
                 thumbnail_path: Set(book_model.thumbnail_path.clone()),
                 thumbnail_generated_at: Set(book_model.thumbnail_generated_at),
                 koreader_hash: Set(book_model.koreader_hash.clone()),
+                epub_positions: Set(book_model.epub_positions.clone()),
             };
 
             active
@@ -2491,6 +2495,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         }
     }
 

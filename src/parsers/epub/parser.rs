@@ -1,5 +1,6 @@
 use crate::parsers::image_utils::{get_image_format, get_svg_dimensions, is_image_file};
 use crate::parsers::isbn_utils::extract_isbns;
+use crate::parsers::metadata::{SpineItem, compute_epub_positions};
 use crate::parsers::opf;
 use crate::parsers::traits::FormatParser;
 use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
@@ -156,10 +157,13 @@ impl EpubParser {
     }
 
     /// Parse the OPF file to get metadata and spine (reading order)
+    ///
+    /// Returns (manifest: id -> (href, media_type), spine_order: Vec<(href, media_type)>)
+    #[allow(clippy::type_complexity)]
     fn parse_opf(
         archive: &mut ZipArchive<File>,
         opf_path: &str,
-    ) -> Result<(HashMap<String, String>, Vec<String>)> {
+    ) -> Result<(HashMap<String, (String, String)>, Vec<(String, String)>)> {
         let mut opf_file = archive
             .by_name(opf_path)
             .map_err(|_| CodexError::ParseError(format!("OPF file not found: {}", opf_path)))?;
@@ -174,8 +178,8 @@ impl EpubParser {
             ""
         };
 
-        // Parse manifest to get id -> href mapping
-        let mut manifest: HashMap<String, String> = HashMap::new();
+        // Parse manifest to get id -> (href, media_type) mapping
+        let mut manifest: HashMap<String, (String, String)> = HashMap::new();
 
         // Simple XML parsing for manifest items (handles both <item> and <opf:item>)
         let mut remaining = &xml_content[..];
@@ -203,10 +207,21 @@ impl EpubParser {
                     None
                 };
 
+                // Extract media-type
+                let media_type = if let Some(mt_start) = item_tag.find("media-type=\"") {
+                    let mt_value_start = mt_start + 12;
+                    item_tag[mt_value_start..]
+                        .find('"')
+                        .map(|mt_end| &item_tag[mt_value_start..mt_value_start + mt_end])
+                } else {
+                    None
+                };
+
                 if let (Some(id), Some(href)) = (id, href) {
                     // Combine base path with href
                     let full_path = format!("{}{}", base_path, href);
-                    manifest.insert(id.to_string(), full_path);
+                    let mt = media_type.unwrap_or("application/octet-stream").to_string();
+                    manifest.insert(id.to_string(), (full_path, mt));
                 }
 
                 remaining = &item_section[item_end..];
@@ -217,7 +232,7 @@ impl EpubParser {
 
         // Parse spine to get reading order (idref list)
         // Handles both <spine> and <opf:spine>, <itemref> and <opf:itemref>
-        let mut spine_order: Vec<String> = Vec::new();
+        let mut spine_order: Vec<(String, String)> = Vec::new();
         remaining = &xml_content[..];
 
         if let Some((_pos, spine_section)) = find_xml_tag(remaining, "spine")
@@ -237,8 +252,8 @@ impl EpubParser {
                         if let Some(idref_end) = itemref_tag[idref_value_start..].find('"') {
                             let idref =
                                 &itemref_tag[idref_value_start..idref_value_start + idref_end];
-                            if let Some(path) = manifest.get(idref) {
-                                spine_order.push(path.clone());
+                            if let Some((path, mt)) = manifest.get(idref) {
+                                spine_order.push((path.clone(), mt.clone()));
                             }
                         }
                     }
@@ -312,6 +327,21 @@ impl FormatParser for EpubParser {
         // Parse the OPF to get manifest and spine
         let (_manifest, spine_order) = Self::parse_opf(&mut archive, &opf_path)?;
 
+        // Build spine items with file sizes for Readium positions computation
+        let spine_items: Vec<SpineItem> = spine_order
+            .iter()
+            .filter_map(|(href, media_type)| {
+                archive.by_name(href).ok().map(|entry| SpineItem {
+                    href: href.clone(),
+                    media_type: media_type.clone(),
+                    file_size: entry.size(),
+                })
+            })
+            .collect();
+
+        // Compute Readium positions (1 position per 1024 bytes)
+        let epub_positions = compute_epub_positions(&spine_items);
+
         // Collect and sort image files
         let mut image_entries: Vec<(usize, String)> = Vec::new();
         for i in 0..archive.len() {
@@ -371,15 +401,14 @@ impl FormatParser for EpubParser {
         }
 
         // Page count logic for EPUB:
-        // EPUBs are primarily text-based documents with a spine (reading order) and optional images.
-        // We use the maximum of:
-        // - spine_order.len(): Number of content items (chapters/sections) in reading order
-        // - pages.len(): Number of extracted images (covers, illustrations)
-        //
-        // This gives a reasonable page count estimate, though EPUBs don't have fixed "pages"
-        // like comics do. For pure image-based EPUBs (like converted manga), pages.len()
-        // will be higher. For text-heavy novels, spine_order.len() will be higher.
-        let page_count = spine_order.len().max(pages.len());
+        // Use the Readium positions count if available (the standard way to count EPUB "pages").
+        // This matches Komga's approach and provides consistent page counts across apps.
+        // Fall back to max(spine items, image count) for edge cases.
+        let page_count = if !epub_positions.is_empty() {
+            epub_positions.len()
+        } else {
+            spine_order.len().max(pages.len())
+        };
 
         Ok(BookMetadata {
             file_path: path.to_string_lossy().to_string(),
@@ -391,6 +420,11 @@ impl FormatParser for EpubParser {
             pages,
             comic_info,
             isbns,
+            epub_positions: if epub_positions.is_empty() {
+                None
+            } else {
+                Some(epub_positions)
+            },
         })
     }
 }

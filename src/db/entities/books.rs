@@ -31,6 +31,8 @@ pub struct Model {
     pub thumbnail_generated_at: Option<DateTime<Utc>>,
     /// KOReader partial MD5 hash for KOReader sync progress tracking
     pub koreader_hash: Option<String>,
+    /// EPUB Readium positions list as JSON (for cross-app progression sync)
+    pub epub_positions: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

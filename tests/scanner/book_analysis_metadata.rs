@@ -62,6 +62,7 @@ async fn create_test_book(
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     let created_book = BookRepository::create(db.sea_orm_connection(), &book, None).await?;
@@ -107,6 +108,7 @@ async fn create_test_book_with_strategy(
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     let created_book = BookRepository::create(db.sea_orm_connection(), &book, None).await?;
@@ -869,6 +871,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book1, None).await?;
@@ -928,6 +931,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book2, None).await?;
@@ -1097,6 +1101,7 @@ async fn test_series_title_sort_populated_from_title() -> Result<()> {
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book, None).await?;
@@ -1194,6 +1199,7 @@ async fn test_series_title_sort_respects_lock() -> Result<()> {
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book, None).await?;
@@ -1298,6 +1304,7 @@ async fn test_series_title_sort_not_overwritten_if_already_set() -> Result<()> {
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book, None).await?;
@@ -1376,6 +1383,7 @@ async fn test_series_title_sort_populated_without_comic_info() -> Result<()> {
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
 
     BookRepository::create(db.sea_orm_connection(), &book, None).await?;

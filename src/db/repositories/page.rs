@@ -183,6 +183,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -238,6 +239,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -296,6 +298,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -354,6 +357,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -414,6 +418,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -473,6 +478,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -537,6 +543,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             koreader_hash: None,
+            epub_positions: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await

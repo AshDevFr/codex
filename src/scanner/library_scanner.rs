@@ -1032,6 +1032,7 @@ async fn process_series_batched(
                             thumbnail_path: None,
                             thumbnail_generated_at: None,
                             koreader_hash: file_hash.koreader_hash,
+                            epub_positions: None,
                         };
 
                         batch.add_create(book_model, true);

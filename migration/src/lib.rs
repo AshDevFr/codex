@@ -126,6 +126,9 @@ mod m20260309_000060_add_koreader_hash;
 // Add r2_progression column for Readium/OPDS 2.0 EPUB progress sync
 mod m20260314_000061_add_r2_progression;
 
+// Add epub_positions column for Readium positions list (cross-app sync)
+mod m20260315_000062_add_epub_positions;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -224,6 +227,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260309_000060_add_koreader_hash::Migration),
             // Add r2_progression for Readium EPUB progress sync
             Box::new(m20260314_000061_add_r2_progression::Migration),
+            // Add epub_positions for Readium positions list (cross-app sync)
+            Box::new(m20260315_000062_add_epub_positions::Migration),
         ]
     }
 }

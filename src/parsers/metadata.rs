@@ -238,6 +238,119 @@ pub struct ComicInfo {
     pub manga: Option<String>,
 }
 
+/// A single position in the Readium positions list for EPUB books.
+///
+/// Positions are computed using the Readium algorithm (1 position per 1024 bytes
+/// of each spine resource). This provides a canonical coordinate system for
+/// cross-app reading position sync, matching Komga's implementation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EpubPosition {
+    /// Resource href within the EPUB (e.g., "OEBPS/chapter1.xhtml")
+    pub href: String,
+    /// Media type of the resource (e.g., "application/xhtml+xml")
+    pub media_type: String,
+    /// Progression within the resource (0.0-1.0)
+    pub progression: f64,
+    /// Sequential position number (1-based) across the entire book
+    pub position: i32,
+    /// Overall progression within the entire book (0.0-1.0)
+    pub total_progression: f64,
+}
+
+/// Spine item extracted from the EPUB OPF manifest
+#[derive(Debug, Clone)]
+pub struct SpineItem {
+    /// Full path within the EPUB archive
+    pub href: String,
+    /// Media type from the manifest
+    pub media_type: String,
+    /// Uncompressed file size in bytes
+    pub file_size: u64,
+}
+
+/// Compute Readium positions list from spine items.
+///
+/// Uses the Readium algorithm: 1 position per 1024 bytes of each spine resource.
+/// This matches Komga's implementation for cross-app compatibility.
+pub fn compute_epub_positions(spine_items: &[SpineItem]) -> Vec<EpubPosition> {
+    let mut positions = Vec::new();
+    let mut next_position: i32 = 1;
+
+    for item in spine_items {
+        let position_count = (item.file_size as f64 / 1024.0).ceil().max(1.0) as usize;
+
+        for p in 0..position_count {
+            let progression = p as f64 / position_count as f64;
+            positions.push(EpubPosition {
+                href: item.href.clone(),
+                media_type: item.media_type.clone(),
+                progression,
+                position: next_position,
+                total_progression: 0.0, // computed below
+            });
+            next_position += 1;
+        }
+    }
+
+    // Compute total_progression for each position
+    let total = positions.len() as f64;
+    for pos in &mut positions {
+        pos.total_progression = pos.position as f64 / total;
+    }
+
+    positions
+}
+
+/// Normalize a client's totalProgression using the server's positions list.
+///
+/// Given the client's `href` and `total_progression`, finds the closest matching
+/// position in the server's positions list and returns its authoritative
+/// `total_progression` value along with the derived page number.
+///
+/// Returns `None` if positions is empty or href doesn't match any position.
+pub fn normalize_progression(
+    positions: &[EpubPosition],
+    client_href: &str,
+    client_total_progression: f64,
+) -> Option<(f64, i32)> {
+    if positions.is_empty() {
+        return None;
+    }
+
+    // Strip fragment from href and URL-decode
+    let href_clean = client_href.split('#').next().unwrap_or(client_href);
+    let href_decoded = urlencoding::decode(href_clean).unwrap_or_else(|_| href_clean.into());
+
+    // Find positions matching the href (try exact match, then suffix match)
+    let matching: Vec<&EpubPosition> = positions
+        .iter()
+        .filter(|p| {
+            p.href == href_decoded.as_ref()
+                || href_decoded.ends_with(&p.href)
+                || p.href.ends_with(href_decoded.as_ref())
+        })
+        .collect();
+
+    if matching.is_empty() {
+        // No href match; fall back to closest totalProgression across all positions
+        let closest = positions.iter().min_by(|a, b| {
+            let da = (a.total_progression - client_total_progression).abs();
+            let db = (b.total_progression - client_total_progression).abs();
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })?;
+        return Some((closest.total_progression, closest.position));
+    }
+
+    // Among matching positions, find the one closest to client's totalProgression
+    let closest = matching.iter().min_by(|a, b| {
+        let da = (a.total_progression - client_total_progression).abs();
+        let db = (b.total_progression - client_total_progression).abs();
+        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+    })?;
+
+    Some((closest.total_progression, closest.position))
+}
+
 /// Complete book metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BookMetadata {
@@ -259,6 +372,9 @@ pub struct BookMetadata {
     pub comic_info: Option<ComicInfo>,
     /// Detected ISBNs/barcodes
     pub isbns: Vec<String>,
+    /// EPUB Readium positions list (only for EPUB format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epub_positions: Option<Vec<EpubPosition>>,
 }
 
 #[cfg(test)]
@@ -562,6 +678,105 @@ mod tests {
                 FileFormat::detect_from_bytes(&[]),
                 FileFormatDetection::Unknown
             );
+        }
+    }
+
+    mod epub_positions {
+        use super::*;
+
+        fn sample_spine() -> Vec<SpineItem> {
+            vec![
+                SpineItem {
+                    href: "OEBPS/chapter1.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 2048, // 2 positions
+                },
+                SpineItem {
+                    href: "OEBPS/chapter2.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 3072, // 3 positions
+                },
+            ]
+        }
+
+        #[test]
+        fn test_compute_positions_count() {
+            let positions = compute_epub_positions(&sample_spine());
+            assert_eq!(positions.len(), 5); // 2 + 3
+        }
+
+        #[test]
+        fn test_compute_positions_sequential() {
+            let positions = compute_epub_positions(&sample_spine());
+            for (i, pos) in positions.iter().enumerate() {
+                assert_eq!(pos.position, (i + 1) as i32);
+            }
+        }
+
+        #[test]
+        fn test_compute_positions_total_progression() {
+            let positions = compute_epub_positions(&sample_spine());
+            assert!((positions[0].total_progression - 1.0 / 5.0).abs() < 1e-10);
+            assert!((positions[4].total_progression - 5.0 / 5.0).abs() < 1e-10);
+        }
+
+        #[test]
+        fn test_compute_positions_min_one_per_resource() {
+            let spine = vec![SpineItem {
+                href: "tiny.xhtml".to_string(),
+                media_type: "application/xhtml+xml".to_string(),
+                file_size: 100,
+            }];
+            let positions = compute_epub_positions(&spine);
+            assert_eq!(positions.len(), 1);
+        }
+
+        #[test]
+        fn test_normalize_exact_match() {
+            let positions = compute_epub_positions(&sample_spine());
+            let (tp, pos) = normalize_progression(&positions, "OEBPS/chapter1.xhtml", 0.2).unwrap();
+            assert_eq!(pos, 1);
+            assert!((tp - 1.0 / 5.0).abs() < 1e-10);
+        }
+
+        #[test]
+        fn test_normalize_suffix_match() {
+            let positions = compute_epub_positions(&sample_spine());
+            let result = normalize_progression(&positions, "chapter2.xhtml", 0.7);
+            assert!(result.is_some());
+            let (_, pos) = result.unwrap();
+            assert!((3..=5).contains(&pos));
+        }
+
+        #[test]
+        fn test_normalize_with_fragment() {
+            let positions = compute_epub_positions(&sample_spine());
+            let result = normalize_progression(&positions, "OEBPS/chapter1.xhtml#section1", 0.2);
+            assert!(result.is_some());
+        }
+
+        #[test]
+        fn test_normalize_url_encoded() {
+            let spine = vec![SpineItem {
+                href: "OEBPS/chapter 1.xhtml".to_string(),
+                media_type: "application/xhtml+xml".to_string(),
+                file_size: 1024,
+            }];
+            let positions = compute_epub_positions(&spine);
+            let result = normalize_progression(&positions, "OEBPS/chapter%201.xhtml", 0.5);
+            assert!(result.is_some());
+        }
+
+        #[test]
+        fn test_normalize_empty_positions() {
+            assert!(normalize_progression(&[], "test.xhtml", 0.5).is_none());
+        }
+
+        #[test]
+        fn test_normalize_no_href_match_falls_back() {
+            let positions = compute_epub_positions(&sample_spine());
+            let result = normalize_progression(&positions, "nonexistent.xhtml", 0.6);
+            assert!(result.is_some());
         }
     }
 }

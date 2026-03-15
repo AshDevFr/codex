@@ -44,6 +44,7 @@ async fn create_analyzed_book(
         thumbnail_path: None,
         thumbnail_generated_at: None,
         koreader_hash: None,
+        epub_positions: None,
     };
     BookRepository::create(db_conn, &book, None).await?;
 

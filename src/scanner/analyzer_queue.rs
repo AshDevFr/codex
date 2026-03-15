@@ -297,6 +297,10 @@ async fn analyze_single_book(
     book.analyzed = true; // Mark as analyzed
     book.analysis_error = None; // Clear any previous error on successful analysis
     book.updated_at = now;
+    book.epub_positions = metadata
+        .epub_positions
+        .as_ref()
+        .map(|positions| serde_json::to_string(positions).unwrap_or_default());
 
     BookRepository::update(db, &book, event_broadcaster).await?;
 
