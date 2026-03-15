@@ -30,8 +30,14 @@ interface UseEpubProgressReturn {
   initialPercentage: number | null;
   /** Get the initial CFI from R2Progression (for cross-device sync with Codex web) */
   initialCfi: string | null;
+  /** Get the href from R2Progression locator (for cross-app spine navigation) */
+  initialHref: string | null;
+  /** Get the within-resource progression from R2Progression (0.0-1.0 within the href) */
+  initialProgression: number | null;
   /** Get the R2Progression modified timestamp (for cross-device sync) */
   apiTimestamp: string | null;
+  /** Get the device ID that last saved the R2Progression */
+  apiDeviceId: string | null;
   /** Whether API progress is still loading */
   isLoadingProgress: boolean;
   /** Save the current CFI location, percentage, and chapter href */
@@ -93,8 +99,16 @@ export function useEpubProgress({
   // Get CFI from R2Progression if it was saved by Codex web (has cfi extension)
   const initialCfi = r2Progression?.locator?.locations?.cfi ?? null;
 
+  // Get href and within-resource progression for cross-app spine-based navigation
+  const initialHref = r2Progression?.locator?.href ?? null;
+  const initialProgression =
+    r2Progression?.locator?.locations?.progression ?? null;
+
   // Get the R2Progression modified timestamp for cross-device comparison
   const apiTimestamp = r2Progression?.modified ?? null;
+
+  // Get the device ID that last saved the R2Progression
+  const apiDeviceId = r2Progression?.device?.id ?? null;
 
   // Store refs to avoid dependency issues
   const bookIdRef = useRef(bookId);
@@ -334,7 +348,10 @@ export function useEpubProgress({
     getLocalTimestamp,
     initialPercentage,
     initialCfi,
+    initialHref,
+    initialProgression,
     apiTimestamp,
+    apiDeviceId,
     isLoadingProgress: isLoadingProgress || isLoadingProgression,
     saveLocation,
     clearProgress,

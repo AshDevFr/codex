@@ -37,4 +37,12 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/books/{book_id}/previous",
             get(handlers::get_previous_book),
         )
+        .route(
+            "/books/{book_id}/manifest/epub",
+            get(handlers::get_epub_manifest),
+        )
+        .route(
+            "/books/{book_id}/resource/{*resource}",
+            get(handlers::get_epub_resource),
+        )
 }

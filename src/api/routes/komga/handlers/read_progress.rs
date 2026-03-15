@@ -365,15 +365,9 @@ pub async fn put_progression(
     let completed =
         total_progression >= 0.98 || (book.page_count > 0 && current_page >= book.page_count);
 
-    // Store the R2Progression with server-normalized totalProgression
-    let mut body = body;
-    if let Some(locator) = body.get_mut("locator")
-        && let Some(locations) = locator.get_mut("locations")
-    {
-        locations["totalProgression"] = serde_json::json!(total_progression);
-        locations["position"] = serde_json::json!(current_page);
-    }
-
+    // Store the R2Progression as-is from the client.
+    // Each client uses its own locator (href + progression/CFI) for navigation.
+    // The normalized values are only used for internal tracking (current_page, percentage).
     let json_str = serde_json::to_string(&body)
         .map_err(|e| ApiError::Internal(format!("Failed to serialize R2Progression: {}", e)))?;
 

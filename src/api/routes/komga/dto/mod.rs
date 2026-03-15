@@ -5,6 +5,7 @@
 
 pub mod book;
 pub mod library;
+pub mod manifest;
 pub mod page;
 pub mod pagination;
 pub mod series;

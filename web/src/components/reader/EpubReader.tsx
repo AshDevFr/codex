@@ -169,8 +169,9 @@ export function EpubReader({
   const {
     getSavedLocation,
     getLocalTimestamp,
-    initialPercentage,
     initialCfi,
+    initialHref,
+    initialProgression,
     apiTimestamp,
     isLoadingProgress,
     saveLocation,
@@ -262,6 +263,7 @@ export function EpubReader({
     (state) => state.settings.epubLineHeight,
   );
   const epubMargin = useReaderStore((state) => state.settings.epubMargin);
+  const epubSpread = useReaderStore((state) => state.settings.epubSpread);
 
   // Use refs for initial styles to avoid re-creating handleGetRendition
   const epubThemeRef = useRef(epubTheme);
@@ -344,58 +346,127 @@ export function EpubReader({
     }
   }, [epubMargin]);
 
-  // Apply API progress for cross-device sync.
-  // Compares localStorage timestamp with API (R2Progression) timestamp.
-  // If API is newer (e.g., progress updated from another device/app), use API data.
-  // If localStorage is newer or no API data, keep the localStorage position.
-  // Priority: initialCfi (precise) > initialPercentage (approximate)
+  // Apply spread mode to rendition
+  useEffect(() => {
+    if (renditionRef.current) {
+      // epub.js spread() accepts "none" (single), "always" (double), or "auto" (responsive)
+      // For "always", set minSpreadWidth to 0 so it never collapses to single page
+      const minWidth = epubSpread === "always" ? 0 : 800;
+      renditionRef.current.spread(epubSpread, minWidth);
+    }
+  }, [epubSpread]);
+
+  // Helper: check if API progress is newer than localStorage
+  const isApiNewer = useCallback(() => {
+    if (!initialLocationLoadedRef.current) return true; // No local data, always apply
+    if (!apiTimestamp) return false;
+    const localTs = getLocalTimestamp();
+    if (!localTs) return true; // No local timestamp, prefer API
+    return new Date(apiTimestamp).getTime() > new Date(localTs).getTime();
+  }, [apiTimestamp, getLocalTimestamp]);
+
+  // Apply CFI-based API progress immediately (no need to wait for locations generation).
+  // This handles cross-device sync when the R2Progression was saved by another Codex web
+  // instance (which includes a precise CFI).
+  useEffect(() => {
+    if (
+      !isLoadingProgress &&
+      initialCfi !== null &&
+      !hasAppliedApiProgress &&
+      renditionRef.current &&
+      isApiNewer()
+    ) {
+      setLocation(initialCfi);
+      setHasAppliedApiProgress(true);
+    }
+  }, [isLoadingProgress, initialCfi, hasAppliedApiProgress, isApiNewer]);
+
+  // Whether we need cross-app sync (Komic/Readium): no CFI, but has href, and API is newer.
+  // When true, we show a loading spinner until locations are ready for precise positioning.
+  const needsCrossAppSync = useMemo(() => {
+    if (isLoadingProgress) return false;
+    return initialCfi === null && initialHref !== null && isApiNewer();
+  }, [isLoadingProgress, initialCfi, initialHref, isApiNewer]);
+
+  // Ref so the relocated callback can check if cross-app sync is pending
+  const pendingCrossAppSyncRef = useRef(false);
+  useEffect(() => {
+    pendingCrossAppSyncRef.current =
+      needsCrossAppSync && !hasAppliedApiProgress;
+  }, [needsCrossAppSync, hasAppliedApiProgress]);
+
+  // Cross-app sync: navigate precisely using href + within-resource progression.
+  // Waits for locations to be generated so we can position accurately within the chapter.
+  // The loading spinner stays visible until this completes.
   useEffect(() => {
     if (
       locationsReady &&
-      !isLoadingProgress &&
-      (initialCfi !== null || initialPercentage !== null) &&
+      needsCrossAppSync &&
       !hasAppliedApiProgress &&
       renditionRef.current
     ) {
-      // Check if API data is newer than localStorage
-      let shouldApplyApi = !initialLocationLoadedRef.current; // No local data, always apply
+      const book = renditionRef.current.book;
+      if (book?.locations?.length()) {
+        const spine = book.spine as {
+          items?: Array<{ href: string; cfiBase: string }>;
+        };
+        const spineItem = spine.items?.find(
+          (item) =>
+            item.href === initialHref ||
+            item.href.endsWith(initialHref!) ||
+            initialHref!.endsWith(item.href),
+        );
 
-      if (initialLocationLoadedRef.current && apiTimestamp) {
-        // Both local and API data exist; compare timestamps
-        const localTs = getLocalTimestamp();
-        if (!localTs) {
-          // No local timestamp (old data before timestamps were stored), prefer API
-          shouldApplyApi = true;
-        } else {
-          const localTime = new Date(localTs).getTime();
-          const apiTime = new Date(apiTimestamp).getTime();
-          shouldApplyApi = apiTime > localTime;
-        }
-      }
+        if (
+          spineItem &&
+          initialProgression !== null &&
+          initialProgression > 0
+        ) {
+          // Interpolate within the section's book-level percentage range
+          const locations = book.locations;
+          const total = locations.length();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const allLocs: string[] = (locations as any)._locations ?? [];
 
-      if (shouldApplyApi) {
-        if (initialCfi) {
-          setLocation(initialCfi);
-        } else if (initialPercentage !== null) {
-          const book = renditionRef.current.book;
-          if (book?.locations?.length()) {
-            const cfi = book.locations.cfiFromPercentage(initialPercentage);
+          let firstIdx = -1;
+          let lastIdx = -1;
+          for (let i = 0; i < allLocs.length; i++) {
+            if (allLocs[i].includes(spineItem.cfiBase)) {
+              if (firstIdx === -1) firstIdx = i;
+              lastIdx = i;
+            }
+          }
+
+          if (firstIdx >= 0 && total > 0) {
+            const sectionStart = firstIdx / total;
+            const sectionEnd = (lastIdx + 1) / total;
+            const targetPct =
+              sectionStart + initialProgression * (sectionEnd - sectionStart);
+            const cfi = locations.cfiFromPercentage(
+              Math.min(targetPct, 0.9999),
+            );
             if (cfi) {
               setLocation(cfi);
             }
+          } else {
+            // No locations for this section, navigate to href start
+            setLocation(initialHref!);
           }
+        } else {
+          // progression is 0/null, navigate to start of chapter
+          setLocation(initialHref!);
         }
       }
       setHasAppliedApiProgress(true);
+      // Clear the loading spinner now that we've navigated to the right spot
+      setIsLoading(false);
     }
   }, [
     locationsReady,
-    isLoadingProgress,
-    initialCfi,
-    initialPercentage,
-    apiTimestamp,
+    needsCrossAppSync,
+    initialHref,
+    initialProgression,
     hasAppliedApiProgress,
-    getLocalTimestamp,
   ]);
 
   // Ref for onClose to keep handleGetRendition stable
@@ -453,7 +524,10 @@ export function EpubReader({
     // Track current chapter for TOC highlighting and save progress
     rendition.on("relocated", (location: Location) => {
       setCurrentHref(location.start.href);
-      setIsLoading(false);
+      // Keep spinner visible while waiting for cross-app position sync
+      if (!pendingCrossAppSyncRef.current) {
+        setIsLoading(false);
+      }
 
       // Get percentage from book locations using the CFI
       const cfi = location.start.cfi;
@@ -897,6 +971,7 @@ export function EpubReader({
           }}
           epubOptions={{
             allowScriptedContent: false,
+            spread: epubSpread,
           }}
         />
       </Box>

@@ -136,7 +136,11 @@ impl ReadProgressRepository {
         active_model.progress_percentage = Set(progress_percentage);
         active_model.completed = Set(completed);
         active_model.updated_at = Set(now);
-        active_model.r2_progression = Set(r2_progression);
+        // Only update r2_progression if a new value is provided;
+        // passing None means "don't change", not "clear it"
+        if r2_progression.is_some() {
+            active_model.r2_progression = Set(r2_progression);
+        }
 
         // Set completed_at if just marked as completed
         if completed && existing_model.completed_at.is_none() {
