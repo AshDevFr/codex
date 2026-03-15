@@ -5,7 +5,6 @@ import { type R2Progression, readProgressApi } from "@/api/readProgress";
 const STORAGE_KEY_PREFIX = "epub-cfi-";
 
 // Threshold for considering percentage as "changed" (avoids saving tiny changes)
-const PERCENTAGE_CHANGE_THRESHOLD = 0.005; // 0.5%
 
 const CODEX_DEVICE_ID = "codex-web";
 const CODEX_DEVICE_NAME = "Codex Web Reader";
@@ -54,7 +53,6 @@ export function useEpubProgress({
   const queryClient = useQueryClient();
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedCfiRef = useRef<string | null>(null);
-  const lastSavedPercentageRef = useRef<number>(0);
   const pendingCfiRef = useRef<string | null>(null);
   const pendingPercentageRef = useRef<number>(0);
   const pendingHrefRef = useRef<string>("");
@@ -98,17 +96,6 @@ export function useEpubProgress({
     bookIdRef.current = bookId;
     totalPagesRef.current = totalPages;
   }, [bookId, totalPages]);
-
-  // Initialize lastSavedPercentageRef from API progress to avoid duplicate saves
-  useEffect(() => {
-    if (r2Progression?.locator?.locations?.totalProgression != null) {
-      lastSavedPercentageRef.current =
-        r2Progression.locator.locations.totalProgression;
-    } else if (progressWithPercentage?.progress_percentage != null) {
-      lastSavedPercentageRef.current =
-        progressWithPercentage.progress_percentage;
-    }
-  }, [r2Progression, progressWithPercentage]);
 
   const storageKey = `${STORAGE_KEY_PREFIX}${bookId}`;
 
@@ -175,7 +162,6 @@ export function useEpubProgress({
         readProgressApi.updateProgression(currentBookId, progression),
       ])
         .then(() => {
-          lastSavedPercentageRef.current = percentage;
           queryClient.invalidateQueries({
             queryKey: ["readProgress", currentBookId],
           });
@@ -209,15 +195,9 @@ export function useEpubProgress({
       pendingPercentageRef.current = percentage;
       pendingHrefRef.current = href;
 
-      // Skip CFI save if same as last saved
+      // Skip if nothing changed
       const cfiChanged = cfi !== lastSavedCfiRef.current;
-
-      // Check if percentage changed significantly
-      const percentageChanged =
-        Math.abs(percentage - lastSavedPercentageRef.current) >
-        PERCENTAGE_CHANGE_THRESHOLD;
-
-      if (!cfiChanged && !percentageChanged) {
+      if (!cfiChanged) {
         return;
       }
 
@@ -226,19 +206,13 @@ export function useEpubProgress({
         clearTimeout(debounceTimerRef.current);
       }
 
-      const shouldSaveCfi = cfiChanged;
-      const shouldSavePercentage = percentageChanged;
       const cfiToSave = cfi;
       const percentageToSave = percentage;
       const hrefToSave = href;
 
       debounceTimerRef.current = setTimeout(() => {
-        if (shouldSaveCfi) {
-          saveToStorage(cfiToSave);
-        }
-        if (shouldSavePercentage) {
-          saveToBackend(percentageToSave, cfiToSave, hrefToSave);
-        }
+        saveToStorage(cfiToSave);
+        saveToBackend(percentageToSave, cfiToSave, hrefToSave);
         pendingCfiRef.current = null;
         pendingPercentageRef.current = 0;
         pendingHrefRef.current = "";
@@ -301,37 +275,32 @@ export function useEpubProgress({
             ? Math.max(1, Math.round(percentage * currentTotalPages))
             : Math.max(1, Math.round(percentage * 100));
 
-        if (
-          Math.abs(percentage - lastSavedPercentageRef.current) >
-          PERCENTAGE_CHANGE_THRESHOLD
-        ) {
-          const isCompleted = percentage >= 0.98;
+        const isCompleted = percentage >= 0.98;
 
-          // Save both legacy progress and R2Progression on unmount
-          readProgressApi
-            .update(currentBookId, {
-              currentPage,
-              progressPercentage: percentage,
-              completed: isCompleted,
-            })
-            .catch(() => {});
+        // Save both legacy progress and R2Progression on unmount
+        readProgressApi
+          .update(currentBookId, {
+            currentPage,
+            progressPercentage: percentage,
+            completed: isCompleted,
+          })
+          .catch(() => {});
 
-          readProgressApi
-            .updateProgression(currentBookId, {
-              device: { id: CODEX_DEVICE_ID, name: CODEX_DEVICE_NAME },
-              locator: {
-                href,
-                locations: {
-                  position: currentPage,
-                  totalProgression: percentage,
-                  cfi,
-                },
-                type: "application/xhtml+xml",
+        readProgressApi
+          .updateProgression(currentBookId, {
+            device: { id: CODEX_DEVICE_ID, name: CODEX_DEVICE_NAME },
+            locator: {
+              href,
+              locations: {
+                position: currentPage,
+                totalProgression: percentage,
+                cfi,
               },
-              modified: new Date().toISOString(),
-            })
-            .catch(() => {});
-        }
+              type: "application/xhtml+xml",
+            },
+            modified: new Date().toISOString(),
+          })
+          .catch(() => {});
       }
     };
   }, [storageKey]);

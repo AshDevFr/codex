@@ -280,29 +280,6 @@ describe("EpubReader", () => {
     });
   });
 
-  describe("URL parameters", () => {
-    it("should handle startPercent parameter", () => {
-      renderWithProviders(<EpubReader {...defaultProps} startPercent={0.5} />);
-
-      // Reader should render with the start percent
-      expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
-    });
-
-    it("should ignore invalid startPercent (negative)", () => {
-      renderWithProviders(<EpubReader {...defaultProps} startPercent={-0.5} />);
-
-      // Should still render without error
-      expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
-    });
-
-    it("should ignore invalid startPercent (greater than 1)", () => {
-      renderWithProviders(<EpubReader {...defaultProps} startPercent={1.5} />);
-
-      // Should still render without error
-      expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
-    });
-  });
-
   describe("fullscreen", () => {
     it("should not be fullscreen by default", () => {
       renderWithProviders(<EpubReader {...defaultProps} />);

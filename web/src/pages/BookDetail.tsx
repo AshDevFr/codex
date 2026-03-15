@@ -387,10 +387,17 @@ export function BookDetail() {
     { title: displayTitle, href: `/books/${book.id}` },
   ];
 
-  // Calculate reading progress (current_page is 1-indexed)
+  // Calculate reading progress
+  // For EPUBs, prefer progressPercentage (from totalProgression) since page_count
+  // is just spine items and doesn't represent actual pages.
+  // For other formats, use currentPage / pageCount.
   const currentPage = book.readProgress ? book.readProgress.currentPage : 0;
   const percentage =
-    book.pageCount > 0 ? (currentPage / book.pageCount) * 100 : 0;
+    book.readProgress?.progressPercentage != null
+      ? book.readProgress.progressPercentage * 100
+      : book.pageCount > 0
+        ? (currentPage / book.pageCount) * 100
+        : 0;
 
   // Extract metadata values
   const languageDisplay = metadata?.languageIso
@@ -641,8 +648,13 @@ export function BookDetail() {
                   variant="filled"
                   leftSection={<IconBook size={14} />}
                   onClick={() => {
-                    const page = book.readProgress?.currentPage ?? 1;
-                    navigate(`/reader/${book.id}?page=${page}`);
+                    if (book.fileFormat === "epub") {
+                      // EPUB reader restores position from R2Progression CFI automatically
+                      navigate(`/reader/${book.id}`);
+                    } else {
+                      const page = book.readProgress?.currentPage ?? 1;
+                      navigate(`/reader/${book.id}?page=${page}`);
+                    }
                   }}
                 >
                   {hasProgress && !isCompleted ? "Continue" : "Read"}
@@ -653,7 +665,11 @@ export function BookDetail() {
                     variant="outline"
                     leftSection={<IconEyeOff size={14} />}
                     onClick={() =>
-                      navigate(`/reader/${book.id}?page=1&incognito=true`)
+                      navigate(
+                        book.fileFormat === "epub"
+                          ? `/reader/${book.id}?incognito=true`
+                          : `/reader/${book.id}?page=1&incognito=true`,
+                      )
                     }
                   >
                     Incognito
