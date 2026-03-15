@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { type R2Progression, readProgressApi } from "@/api/readProgress";
 
 const STORAGE_KEY_PREFIX = "epub-cfi-";
+const STORAGE_TIMESTAMP_PREFIX = "epub-cfi-ts-";
 
 // Threshold for considering percentage as "changed" (avoids saving tiny changes)
 
@@ -23,10 +24,14 @@ interface UseEpubProgressOptions {
 interface UseEpubProgressReturn {
   /** Get the saved CFI location for this book (null if none saved) */
   getSavedLocation: () => string | null;
+  /** Get the localStorage timestamp for this book (null if none saved) */
+  getLocalTimestamp: () => string | null;
   /** Get the initial percentage from API (for cross-device sync) */
   initialPercentage: number | null;
   /** Get the initial CFI from R2Progression (for cross-device sync with Codex web) */
   initialCfi: string | null;
+  /** Get the R2Progression modified timestamp (for cross-device sync) */
+  apiTimestamp: string | null;
   /** Whether API progress is still loading */
   isLoadingProgress: boolean;
   /** Save the current CFI location, percentage, and chapter href */
@@ -88,6 +93,9 @@ export function useEpubProgress({
   // Get CFI from R2Progression if it was saved by Codex web (has cfi extension)
   const initialCfi = r2Progression?.locator?.locations?.cfi ?? null;
 
+  // Get the R2Progression modified timestamp for cross-device comparison
+  const apiTimestamp = r2Progression?.modified ?? null;
+
   // Store refs to avoid dependency issues
   const bookIdRef = useRef(bookId);
   const totalPagesRef = useRef(totalPages);
@@ -98,6 +106,7 @@ export function useEpubProgress({
   }, [bookId, totalPages]);
 
   const storageKey = `${STORAGE_KEY_PREFIX}${bookId}`;
+  const timestampKey = `${STORAGE_TIMESTAMP_PREFIX}${bookId}`;
 
   // Get saved location from localStorage
   const getSavedLocation = useCallback((): string | null => {
@@ -110,18 +119,29 @@ export function useEpubProgress({
     }
   }, [storageKey, enabled]);
 
+  // Get saved timestamp from localStorage
+  const getLocalTimestamp = useCallback((): string | null => {
+    if (!enabled) return null;
+    try {
+      return localStorage.getItem(timestampKey);
+    } catch {
+      return null;
+    }
+  }, [timestampKey, enabled]);
+
   // Save location to localStorage (internal, immediate)
   const saveToStorage = useCallback(
     (cfi: string) => {
       if (!enabled) return;
       try {
         localStorage.setItem(storageKey, cfi);
+        localStorage.setItem(timestampKey, new Date().toISOString());
         lastSavedCfiRef.current = cfi;
       } catch {
         console.warn("Failed to save EPUB progress to localStorage");
       }
     },
-    [storageKey, enabled],
+    [storageKey, timestampKey, enabled],
   );
 
   // Save progress to backend API (both legacy progress and R2Progression)
@@ -258,6 +278,10 @@ export function useEpubProgress({
       ) {
         try {
           localStorage.setItem(currentStorageKey, pendingCfiRef.current);
+          localStorage.setItem(
+            `${STORAGE_TIMESTAMP_PREFIX}${bookIdRef.current}`,
+            new Date().toISOString(),
+          );
         } catch {
           // Ignore errors on unmount
         }
@@ -307,8 +331,10 @@ export function useEpubProgress({
 
   return {
     getSavedLocation,
+    getLocalTimestamp,
     initialPercentage,
     initialCfi,
+    apiTimestamp,
     isLoadingProgress: isLoadingProgress || isLoadingProgression,
     saveLocation,
     clearProgress,

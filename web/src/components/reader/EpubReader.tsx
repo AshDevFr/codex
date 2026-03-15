@@ -168,8 +168,10 @@ export function EpubReader({
   // CFI-based progress tracking (also syncs to backend, disabled in incognito mode)
   const {
     getSavedLocation,
+    getLocalTimestamp,
     initialPercentage,
     initialCfi,
+    apiTimestamp,
     isLoadingProgress,
     saveLocation,
   } = useEpubProgress({
@@ -226,6 +228,8 @@ export function EpubReader({
   totalPagesRef.current = totalPages;
 
   // Local state - initialize with saved CFI location from localStorage
+  // Note: This provides instant restore, but the cross-device sync effect
+  // below may override it if the API has newer progress.
   const [location, setLocation] = useState<string | number>(() => {
     const saved = getSavedLocation();
     if (saved) {
@@ -340,27 +344,45 @@ export function EpubReader({
     }
   }, [epubMargin]);
 
-  // Apply API progress for cross-device sync (only if no localStorage CFI)
-  // Priority: initialCfi (from R2Progression, precise) > initialPercentage (approximate)
+  // Apply API progress for cross-device sync.
+  // Compares localStorage timestamp with API (R2Progression) timestamp.
+  // If API is newer (e.g., progress updated from another device/app), use API data.
+  // If localStorage is newer or no API data, keep the localStorage position.
+  // Priority: initialCfi (precise) > initialPercentage (approximate)
   useEffect(() => {
     if (
       locationsReady &&
       !isLoadingProgress &&
       (initialCfi !== null || initialPercentage !== null) &&
       !hasAppliedApiProgress &&
-      !initialLocationLoadedRef.current &&
       renditionRef.current
     ) {
-      if (initialCfi) {
-        // Use precise CFI from R2Progression (saved by Codex web on another device)
-        setLocation(initialCfi);
-      } else if (initialPercentage !== null) {
-        // Fall back to percentage-based location (from Komic or legacy progress)
-        const book = renditionRef.current.book;
-        if (book?.locations?.length()) {
-          const cfi = book.locations.cfiFromPercentage(initialPercentage);
-          if (cfi) {
-            setLocation(cfi);
+      // Check if API data is newer than localStorage
+      let shouldApplyApi = !initialLocationLoadedRef.current; // No local data, always apply
+
+      if (initialLocationLoadedRef.current && apiTimestamp) {
+        // Both local and API data exist; compare timestamps
+        const localTs = getLocalTimestamp();
+        if (!localTs) {
+          // No local timestamp (old data before timestamps were stored), prefer API
+          shouldApplyApi = true;
+        } else {
+          const localTime = new Date(localTs).getTime();
+          const apiTime = new Date(apiTimestamp).getTime();
+          shouldApplyApi = apiTime > localTime;
+        }
+      }
+
+      if (shouldApplyApi) {
+        if (initialCfi) {
+          setLocation(initialCfi);
+        } else if (initialPercentage !== null) {
+          const book = renditionRef.current.book;
+          if (book?.locations?.length()) {
+            const cfi = book.locations.cfiFromPercentage(initialPercentage);
+            if (cfi) {
+              setLocation(cfi);
+            }
           }
         }
       }
@@ -371,7 +393,9 @@ export function EpubReader({
     isLoadingProgress,
     initialCfi,
     initialPercentage,
+    apiTimestamp,
     hasAppliedApiProgress,
+    getLocalTimestamp,
   ]);
 
   // Ref for onClose to keep handleGetRendition stable
