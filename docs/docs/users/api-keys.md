@@ -141,14 +141,16 @@ The prefix is stored in plaintext for lookup, but the secret is hashed - Codex c
 
 ### OPDS / Reader Apps
 
-Minimal permissions for read-only access:
+Permissions for e-reader apps, OPDS clients, and KOReader sync:
 
 ```json
 {
   "name": "OPDS Reader",
-  "permissions": ["LibrariesRead", "SeriesRead", "BooksRead", "PagesRead"]
+  "permissions": ["LibrariesRead", "SeriesRead", "BooksRead", "PagesRead", "ProgressRead", "ProgressWrite"]
 }
 ```
+
+`ProgressRead` and `ProgressWrite` are needed for apps that sync reading progress (e.g., KOReader).
 
 ### Automation Script
 

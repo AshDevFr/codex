@@ -25,6 +25,7 @@ import { notifications } from "@mantine/notifications";
 import {
   IconCheck,
   IconCopy,
+  IconEdit,
   IconKey,
   IconPalette,
   IconPlus,
@@ -64,6 +65,8 @@ export function ProfileSettings() {
   const [selectedPermissions, setSelectedPermissions] = useState<Permission[]>(
     [],
   );
+  const [editingKey, setEditingKey] = useState<ApiKeyDto | null>(null);
+  const [editPermissions, setEditPermissions] = useState<Permission[]>([]);
 
   useDocumentTitle("Profile Settings");
 
@@ -218,6 +221,34 @@ export function ProfileSettings() {
       notifications.show({
         title: "Error",
         message: "Failed to delete API key",
+        color: "red",
+      });
+    },
+  });
+
+  const updateApiKeyMutation = useMutation({
+    mutationFn: async ({
+      keyId,
+      permissions,
+    }: {
+      keyId: string;
+      permissions: Permission[];
+    }) => {
+      await api.patch(`/api-keys/${keyId}`, { permissions });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      setEditingKey(null);
+      notifications.show({
+        title: "Success",
+        message: "API key permissions updated",
+        color: "green",
+      });
+    },
+    onError: () => {
+      notifications.show({
+        title: "Error",
+        message: "Failed to update API key",
         color: "red",
       });
     },
@@ -477,16 +508,29 @@ export function ProfileSettings() {
                                   : "Never"}
                               </Table.Td>
                               <Table.Td>
-                                <ActionIcon
-                                  color="red"
-                                  variant="light"
-                                  onClick={() =>
-                                    deleteApiKeyMutation.mutate(key.id)
-                                  }
-                                  loading={deleteApiKeyMutation.isPending}
-                                >
-                                  <IconTrash size={16} />
-                                </ActionIcon>
+                                <Group gap="xs">
+                                  <Tooltip label="Edit permissions">
+                                    <ActionIcon
+                                      variant="light"
+                                      onClick={() => {
+                                        setEditingKey(key);
+                                        setEditPermissions(permissions);
+                                      }}
+                                    >
+                                      <IconEdit size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <ActionIcon
+                                    color="red"
+                                    variant="light"
+                                    onClick={() =>
+                                      deleteApiKeyMutation.mutate(key.id)
+                                    }
+                                    loading={deleteApiKeyMutation.isPending}
+                                  >
+                                    <IconTrash size={16} />
+                                  </ActionIcon>
+                                </Group>
                               </Table.Td>
                             </Table.Tr>
                           );
@@ -676,6 +720,65 @@ export function ProfileSettings() {
             </Stack>
           </form>
         )}
+      </Modal>
+      {/* Edit API Key Permissions Modal */}
+      <Modal
+        opened={editingKey !== null}
+        onClose={() => setEditingKey(null)}
+        title={`Edit Permissions: ${editingKey?.name}`}
+        size="lg"
+      >
+        <Stack gap="md">
+          <Card withBorder p="md">
+            <Stack gap="md">
+              <div>
+                <Text size="sm" fw={500}>
+                  Permissions
+                </Text>
+                <Text size="xs" c="dimmed">
+                  You can only grant permissions your role has
+                </Text>
+              </div>
+              <PermissionPicker
+                selectedPermissions={editPermissions}
+                onPermissionsChange={setEditPermissions}
+                disabledUncheckedPermissions={
+                  ALL_PERMISSIONS.filter((p) => {
+                    const rolePerms = getPermissionsForRole(
+                      user?.role || "reader",
+                    );
+                    const customPerms = parsePermissions(
+                      user?.permissions || [],
+                    );
+                    const allUserPerms = [
+                      ...new Set([...rolePerms, ...customPerms]),
+                    ];
+                    return !allUserPerms.includes(p);
+                  }) as Permission[]
+                }
+              />
+            </Stack>
+          </Card>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setEditingKey(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingKey) {
+                  updateApiKeyMutation.mutate({
+                    keyId: editingKey.id,
+                    permissions: editPermissions,
+                  });
+                }
+              }}
+              loading={updateApiKeyMutation.isPending}
+              disabled={editPermissions.length === 0}
+            >
+              Save
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </Box>
   );

@@ -136,7 +136,6 @@ komga_api:
   enabled: true
   prefix: komga # URL prefix: /{prefix}/api/v1/...
 
-
 # Rate Limiting (enabled by default)
 # ==================================
 # Protects API endpoints from abuse using token bucket algorithm
@@ -153,3 +152,6 @@ komga_api:
 #     - /api/v1/books/*/thumbnail   # Exempt book thumbnails
 #   cleanup_interval_secs: 60  # How often to clean up stale buckets
 #   bucket_ttl_secs: 300       # Time before a bucket is considered stale
+
+koreader_api:
+  enabled: true
