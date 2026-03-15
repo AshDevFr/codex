@@ -155,10 +155,14 @@ export const MediaCard = memo(function MediaCard({
   };
 
   // Calculate progress percentage for books
+  // Prefer progressPercentage (from R2Progression) for EPUBs where page_count
+  // is spine items, not actual pages.
   const progressPercentage =
-    book?.readProgress && book.pageCount
-      ? (book.readProgress.currentPage / book.pageCount) * 100
-      : 0;
+    book?.readProgress?.progressPercentage != null
+      ? book.readProgress.progressPercentage * 100
+      : book?.readProgress && book.pageCount
+        ? (book.readProgress.currentPage / book.pageCount) * 100
+        : 0;
 
   // Book analysis mutation
   const bookAnalyzeMutation = useMutation({

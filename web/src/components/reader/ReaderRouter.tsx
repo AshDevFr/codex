@@ -26,8 +26,6 @@ interface ReaderRouterProps {
   analyzed?: boolean;
   /** Starting page from URL parameter (overrides saved progress) - for comics/PDFs */
   startPage?: number;
-  /** Starting percentage from URL parameter (0.0-1.0) - for EPUBs */
-  startPercent?: number;
   /** Incognito mode - when true, progress tracking is disabled */
   incognito?: boolean;
   /** Callback when reader should close */
@@ -52,7 +50,6 @@ export function ReaderRouter({
   readingDirection,
   analyzed,
   startPage,
-  startPercent,
   incognito,
   onClose,
 }: ReaderRouterProps) {
@@ -143,7 +140,6 @@ export function ReaderRouter({
           seriesId={seriesId}
           title={title}
           totalPages={totalPages}
-          startPercent={startPercent}
           incognito={incognito}
           onClose={onClose}
         />

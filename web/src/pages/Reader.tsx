@@ -20,13 +20,6 @@ export function Reader() {
   const pageParam = searchParams.get("page");
   const startPage = pageParam ? Number.parseInt(pageParam, 10) : undefined;
 
-  // Extract percent query parameter (e.g., ?percent=45) for EPUBs
-  // Accepts 0-100 and converts to 0.0-1.0
-  const percentParam = searchParams.get("percent");
-  const startPercent = percentParam
-    ? Number.parseFloat(percentParam) / 100
-    : undefined;
-
   // Extract incognito parameter (e.g., ?incognito=true) for reading without progress tracking
   const incognito = searchParams.get("incognito") === "true";
 
@@ -92,7 +85,6 @@ export function Reader() {
       readingDirection={book.readingDirection ?? null}
       analyzed={book.analyzed}
       startPage={startPage}
-      startPercent={startPercent}
       incognito={incognito}
       onClose={handleClose}
     />

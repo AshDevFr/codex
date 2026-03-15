@@ -14,6 +14,73 @@ use zip::ZipArchive;
 
 pub struct EpubParser;
 
+/// Find the next occurrence of an XML tag, handling optional namespace prefixes.
+/// For example, searching for "item" will match both `<item ` and `<opf:item `.
+/// Returns the byte offset of the `<` character and the full tag prefix length
+/// (e.g., `<item ` or `<opf:item `).
+fn find_xml_tag<'a>(haystack: &'a str, local_name: &str) -> Option<(usize, &'a str)> {
+    let bare_space = format!("<{} ", local_name);
+    let bare_gt = format!("<{}>", local_name);
+    let mut search_from = 0;
+    while search_from < haystack.len() {
+        let remaining = &haystack[search_from..];
+        // Try bare tag first: `<tag ` (with attributes) or `<tag>` (no attributes)
+        if let Some(pos) = remaining
+            .find(bare_space.as_str())
+            .or_else(|| remaining.find(bare_gt.as_str()))
+        {
+            return Some((search_from + pos, &haystack[search_from + pos..]));
+        }
+        // Try namespace-prefixed: look for `:<local_name> ` or `:<local_name>` preceded by `<` and a prefix
+        let prefixed_suffix = format!(":{}", local_name);
+        if let Some(colon_pos) = remaining.find(prefixed_suffix.as_str()) {
+            // Check the character after the local_name to ensure it's a complete tag name
+            let after_pos = colon_pos + prefixed_suffix.len();
+            if after_pos < remaining.len() {
+                let next_char = remaining.as_bytes()[after_pos];
+                if next_char == b' ' || next_char == b'>' || next_char == b'/' {
+                    // Walk backwards from colon to find `<`
+                    let before_colon = &remaining[..colon_pos];
+                    if let Some(lt_pos) = before_colon.rfind('<') {
+                        // Verify the prefix between `<` and `:` is a valid XML name (no spaces)
+                        let prefix = &before_colon[lt_pos + 1..];
+                        if !prefix.is_empty() && !prefix.contains(' ') && !prefix.contains('>') {
+                            let abs_pos = search_from + lt_pos;
+                            return Some((abs_pos, &haystack[abs_pos..]));
+                        }
+                    }
+                }
+            }
+            search_from += colon_pos + prefixed_suffix.len();
+        } else {
+            break;
+        }
+    }
+    None
+}
+
+/// Find the closing tag for an XML element, handling optional namespace prefixes.
+/// For example, searching for "spine" will match both `</spine>` and `</opf:spine>`.
+fn find_xml_closing_tag(haystack: &str, local_name: &str) -> Option<usize> {
+    let bare = format!("</{}>", local_name);
+    if let Some(pos) = haystack.find(bare.as_str()) {
+        return Some(pos);
+    }
+    // Try namespace-prefixed closing tags
+    let suffix = format!(":{}>", local_name);
+    if let Some(suffix_pos) = haystack.find(suffix.as_str()) {
+        // Walk backwards to find `</`
+        let before = &haystack[..suffix_pos];
+        if let Some(lt_pos) = before.rfind("</") {
+            let prefix = &before[lt_pos + 2..];
+            if !prefix.is_empty() && !prefix.contains(' ') && !prefix.contains('>') {
+                return Some(lt_pos);
+            }
+        }
+    }
+    None
+}
+
 impl EpubParser {
     pub fn new() -> Self {
         Self
@@ -110,10 +177,9 @@ impl EpubParser {
         // Parse manifest to get id -> href mapping
         let mut manifest: HashMap<String, String> = HashMap::new();
 
-        // Simple XML parsing for manifest items
+        // Simple XML parsing for manifest items (handles both <item> and <opf:item>)
         let mut remaining = &xml_content[..];
-        while let Some(item_start) = remaining.find("<item ") {
-            let item_section = &remaining[item_start..];
+        while let Some((_pos, item_section)) = find_xml_tag(remaining, "item") {
             if let Some(item_end) = item_section.find('>') {
                 let item_tag = &item_section[..item_end];
 
@@ -150,37 +216,36 @@ impl EpubParser {
         }
 
         // Parse spine to get reading order (idref list)
+        // Handles both <spine> and <opf:spine>, <itemref> and <opf:itemref>
         let mut spine_order: Vec<String> = Vec::new();
         remaining = &xml_content[..];
 
-        if let Some(spine_start) = remaining.find("<spine") {
-            let spine_section = &remaining[spine_start..];
-            if let Some(spine_end) = spine_section.find("</spine>") {
-                let spine_content = &spine_section[..spine_end];
+        if let Some((_pos, spine_section)) = find_xml_tag(remaining, "spine")
+            && let Some(spine_end) = find_xml_closing_tag(spine_section, "spine")
+        {
+            let spine_content = &spine_section[..spine_end];
 
-                // Extract itemrefs
-                let mut itemref_remaining = spine_content;
-                while let Some(itemref_start) = itemref_remaining.find("<itemref ") {
-                    let itemref_section = &itemref_remaining[itemref_start..];
-                    if let Some(itemref_end) = itemref_section.find('>') {
-                        let itemref_tag = &itemref_section[..itemref_end];
+            // Extract itemrefs
+            let mut itemref_remaining = spine_content;
+            while let Some((_pos, itemref_section)) = find_xml_tag(itemref_remaining, "itemref") {
+                if let Some(itemref_end) = itemref_section.find('>') {
+                    let itemref_tag = &itemref_section[..itemref_end];
 
-                        // Extract idref
-                        if let Some(idref_start) = itemref_tag.find("idref=\"") {
-                            let idref_value_start = idref_start + 7;
-                            if let Some(idref_end) = itemref_tag[idref_value_start..].find('"') {
-                                let idref =
-                                    &itemref_tag[idref_value_start..idref_value_start + idref_end];
-                                if let Some(path) = manifest.get(idref) {
-                                    spine_order.push(path.clone());
-                                }
+                    // Extract idref
+                    if let Some(idref_start) = itemref_tag.find("idref=\"") {
+                        let idref_value_start = idref_start + 7;
+                        if let Some(idref_end) = itemref_tag[idref_value_start..].find('"') {
+                            let idref =
+                                &itemref_tag[idref_value_start..idref_value_start + idref_end];
+                            if let Some(path) = manifest.get(idref) {
+                                spine_order.push(path.clone());
                             }
                         }
-
-                        itemref_remaining = &itemref_section[itemref_end..];
-                    } else {
-                        break;
                     }
+
+                    itemref_remaining = &itemref_section[itemref_end..];
+                } else {
+                    break;
                 }
             }
         }
@@ -375,12 +440,12 @@ fn find_cover_image_from_opf(archive: &mut ZipArchive<File>) -> Option<String> {
     };
 
     // Build a map of manifest item IDs to hrefs
+    // Handles both <item> and <opf:item> namespace-prefixed tags
     let mut manifest_items: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
     let mut remaining = &opf_content[..];
 
-    while let Some(item_start) = remaining.find("<item ") {
-        let item_section = &remaining[item_start..];
+    while let Some((_pos, item_section)) = find_xml_tag(remaining, "item") {
         if let Some(item_end) = item_section.find('>') {
             let item_tag = &item_section[..item_end];
 
@@ -878,5 +943,174 @@ mod tests {
         let isbns = EpubParser::extract_isbns_from_opf(opf_content);
         assert_eq!(isbns.len(), 1);
         assert_eq!(isbns[0], "9780306406157");
+    }
+
+    #[test]
+    fn test_find_xml_tag_bare() {
+        let xml = r#"<item id="ch1" href="ch1.xhtml"/>"#;
+        let result = find_xml_tag(xml, "item");
+        assert!(result.is_some());
+        let (pos, _section) = result.unwrap();
+        assert_eq!(pos, 0);
+    }
+
+    #[test]
+    fn test_find_xml_tag_namespaced() {
+        let xml = r#"<opf:item id="ch1" href="ch1.xhtml"/>"#;
+        let result = find_xml_tag(xml, "item");
+        assert!(result.is_some());
+        let (pos, _section) = result.unwrap();
+        assert_eq!(pos, 0);
+    }
+
+    #[test]
+    fn test_find_xml_tag_no_match() {
+        let xml = r#"<spine toc="ncx">"#;
+        let result = find_xml_tag(xml, "item");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_xml_closing_tag_bare() {
+        let xml = r#"<spine toc="ncx"><itemref idref="ch1"/></spine>"#;
+        let result = find_xml_closing_tag(xml, "spine");
+        assert!(result.is_some());
+        assert_eq!(&xml[result.unwrap()..], "</spine>");
+    }
+
+    #[test]
+    fn test_find_xml_closing_tag_namespaced() {
+        let xml = r#"<opf:spine toc="ncx"><opf:itemref idref="ch1"/></opf:spine>"#;
+        let result = find_xml_closing_tag(xml, "spine");
+        assert!(result.is_some());
+        assert_eq!(&xml[result.unwrap()..], "</opf:spine>");
+    }
+
+    #[test]
+    fn test_parse_opf_with_namespace_prefixed_tags() {
+        // Create a minimal EPUB with namespace-prefixed OPF tags
+        use std::io::Write;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let epub_path = temp_dir.path().join("test.epub");
+
+        let mut zip = zip::ZipWriter::new(File::create(&epub_path).unwrap());
+
+        // mimetype
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", options).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+
+        // container.xml
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("META-INF/container.xml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+        )
+        .unwrap();
+
+        // OPF with opf: namespace prefix (like the Merlin EPUB)
+        zip.start_file("OEBPS/content.opf", options).unwrap();
+        zip.write_all(br#"<?xml version="1.0" encoding="utf-8"?>
+<opf:package xmlns:opf="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" unique-identifier="id" version="2.0">
+  <opf:metadata>
+    <dc:title>Test Book</dc:title>
+    <dc:creator>Test Author</dc:creator>
+  </opf:metadata>
+  <opf:manifest>
+    <opf:item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <opf:item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+    <opf:item id="ch3" href="ch3.xhtml" media-type="application/xhtml+xml"/>
+  </opf:manifest>
+  <opf:spine toc="ncx">
+    <opf:itemref idref="ch1"/>
+    <opf:itemref idref="ch2"/>
+    <opf:itemref idref="ch3"/>
+  </opf:spine>
+</opf:package>"#).unwrap();
+
+        // Create dummy XHTML files
+        for name in &["OEBPS/ch1.xhtml", "OEBPS/ch2.xhtml", "OEBPS/ch3.xhtml"] {
+            zip.start_file(*name, options).unwrap();
+            zip.write_all(b"<html><body><p>Content</p></body></html>")
+                .unwrap();
+        }
+
+        zip.finish().unwrap();
+
+        // Parse and verify
+        let parser = EpubParser::new();
+        let metadata = parser.parse(&epub_path).unwrap();
+        // Should find 3 spine items (not fall back to 0 due to namespace issues)
+        assert_eq!(
+            metadata.page_count, 3,
+            "Should parse 3 spine items from namespace-prefixed OPF"
+        );
+    }
+
+    #[test]
+    fn test_parse_opf_without_namespace_prefix() {
+        // Verify bare tags still work
+        use std::io::Write;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let epub_path = temp_dir.path().join("test.epub");
+
+        let mut zip = zip::ZipWriter::new(File::create(&epub_path).unwrap());
+
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", options).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("META-INF/container.xml", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#,
+        )
+        .unwrap();
+
+        zip.start_file("content.opf", options).unwrap();
+        zip.write_all(
+            br#"<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Test</dc:title>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"#,
+        )
+        .unwrap();
+
+        for name in &["ch1.xhtml", "ch2.xhtml"] {
+            zip.start_file(*name, options).unwrap();
+            zip.write_all(b"<html><body><p>Content</p></body></html>")
+                .unwrap();
+        }
+
+        zip.finish().unwrap();
+
+        let parser = EpubParser::new();
+        let metadata = parser.parse(&epub_path).unwrap();
+        assert_eq!(
+            metadata.page_count, 2,
+            "Should parse 2 spine items from bare OPF tags"
+        );
     }
 }

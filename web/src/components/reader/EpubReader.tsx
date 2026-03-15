@@ -134,8 +134,6 @@ interface EpubReaderProps {
   title: string;
   /** Total pages in the book (for progress calculation) */
   totalPages: number;
-  /** Starting percentage from URL parameter (0.0-1.0, overrides saved progress) */
-  startPercent?: number;
   /** Incognito mode - when true, progress tracking is disabled */
   incognito?: boolean;
   /** Callback when reader should close */
@@ -158,7 +156,6 @@ export function EpubReader({
   seriesId,
   title,
   totalPages,
-  startPercent,
   incognito,
   onClose,
 }: EpubReaderProps) {
@@ -229,12 +226,7 @@ export function EpubReader({
   totalPagesRef.current = totalPages;
 
   // Local state - initialize with saved CFI location from localStorage
-  // Note: startPercent from URL is handled after locations are generated
   const [location, setLocation] = useState<string | number>(() => {
-    // If startPercent is provided, don't load from localStorage - we'll navigate after locations are ready
-    if (startPercent != null && startPercent >= 0 && startPercent <= 1) {
-      return 0; // Start at 0, will navigate to startPercent after locations are generated
-    }
     const saved = getSavedLocation();
     if (saved) {
       initialLocationLoadedRef.current = true;
@@ -242,7 +234,6 @@ export function EpubReader({
     }
     return 0;
   });
-  const [hasAppliedStartPercent, setHasAppliedStartPercent] = useState(false);
   const [hasAppliedApiProgress, setHasAppliedApiProgress] = useState(false);
   const [locationsReady, setLocationsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -301,11 +292,6 @@ export function EpubReader({
   // Generate EPUB file URL
   const epubUrl = `/api/v1/books/${bookId}/file`;
 
-  // Track if we need to wait for startPercent navigation before showing content
-  const needsStartPercentNavigation =
-    startPercent != null && startPercent >= 0 && startPercent <= 1;
-  const startPercentAppliedRef = useRef(!needsStartPercentNavigation);
-
   // Handle location change (CFI-based progress)
   // Note: Progress is saved in the 'relocated' event handler below,
   // where we have access to the accurate percentage value
@@ -354,32 +340,7 @@ export function EpubReader({
     }
   }, [epubMargin]);
 
-  // Apply startPercent from URL (highest priority - overrides saved progress)
-  useEffect(() => {
-    if (
-      locationsReady &&
-      !hasAppliedStartPercent &&
-      startPercent != null &&
-      startPercent >= 0 &&
-      startPercent <= 1 &&
-      renditionRef.current
-    ) {
-      // Navigate directly to percentage
-      const book = renditionRef.current.book;
-      if (book?.locations?.length()) {
-        const cfi = book.locations.cfiFromPercentage(startPercent);
-        if (cfi) {
-          setLocation(cfi);
-        }
-      }
-      setHasAppliedStartPercent(true);
-      startPercentAppliedRef.current = true;
-      // Clear loading now that we've navigated to the correct position
-      setIsLoading(false);
-    }
-  }, [locationsReady, hasAppliedStartPercent, startPercent]);
-
-  // Apply API progress for cross-device sync (only if no localStorage CFI and no startPercent)
+  // Apply API progress for cross-device sync (only if no localStorage CFI)
   // Priority: initialCfi (from R2Progression, precise) > initialPercentage (approximate)
   useEffect(() => {
     if (
@@ -387,10 +348,8 @@ export function EpubReader({
       !isLoadingProgress &&
       (initialCfi !== null || initialPercentage !== null) &&
       !hasAppliedApiProgress &&
-      !hasAppliedStartPercent &&
       !initialLocationLoadedRef.current &&
-      renditionRef.current &&
-      startPercent == null // Don't apply API progress if startPercent is provided
+      renditionRef.current
     ) {
       if (initialCfi) {
         // Use precise CFI from R2Progression (saved by Codex web on another device)
@@ -413,8 +372,6 @@ export function EpubReader({
     initialCfi,
     initialPercentage,
     hasAppliedApiProgress,
-    hasAppliedStartPercent,
-    startPercent,
   ]);
 
   // Ref for onClose to keep handleGetRendition stable
@@ -472,10 +429,7 @@ export function EpubReader({
     // Track current chapter for TOC highlighting and save progress
     rendition.on("relocated", (location: Location) => {
       setCurrentHref(location.start.href);
-      // Only clear loading if we don't need to wait for startPercent navigation
-      if (startPercentAppliedRef.current) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
 
       // Get percentage from book locations using the CFI
       const cfi = location.start.cfi;
@@ -519,7 +473,19 @@ export function EpubReader({
 
       // Save progress - the hook handles debouncing and duplicate detection
       // Note: percentage can be 0 at the start of the book, which is valid
-      saveLocationRef.current(cfi, percentage, location.start.href);
+      // Resolve href to full EPUB-internal path (e.g., "OEBPS/chapter1.xhtml")
+      // epub.js returns href relative to the OPF directory, but Readium-based
+      // apps (like Komic) expect the full path within the EPUB archive.
+      const bookDir =
+        (rendition.book.path as { directory?: string })?.directory ?? "";
+      const stripped = bookDir === "/" ? "" : bookDir;
+      const normalizedDir = stripped.startsWith("/")
+        ? stripped.slice(1)
+        : stripped;
+      const fullHref = normalizedDir
+        ? `${normalizedDir}${location.start.href}`
+        : location.start.href;
+      saveLocationRef.current(cfi, percentage, fullHref);
     });
   }, []);
 
