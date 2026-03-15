@@ -62,8 +62,13 @@ pub fn hash_file_partial<P: AsRef<Path>>(path: P) -> io::Result<String> {
 ///
 /// KOReader uses a custom partial hashing algorithm that reads 1024-byte chunks
 /// at exponentially increasing offsets throughout the file:
-///   - For i in -1..=10: seek to (1024 << (2*i)) and read 1024 bytes
-///   - Offsets: 256, 1024, 4096, 16384, 65536, ..., 1073741824
+///   - For i in -1..=10: seek to lshift(1024, 2*i) and read 1024 bytes
+///
+/// LuaJIT's bit.lshift masks the shift count to lower 5 bits and operates on
+/// 32-bit integers. For i=-1: shift count = -2, masked to 30, and
+/// lshift(1024, 30) = 2^40 which overflows 32-bit to 0. So offset for i=-1 is 0.
+///
+/// Offsets: 0, 1024, 4096, 16384, 65536, ..., 1073741824
 ///
 /// This produces a fast fingerprint without reading the entire file.
 pub fn hash_file_koreader<P: AsRef<Path>>(path: P) -> io::Result<String> {
@@ -74,13 +79,10 @@ pub fn hash_file_koreader<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let mut hasher = Md5::new();
     let mut buffer = [0u8; CHUNK_SIZE];
 
+    // Replicate LuaJIT's bit.lshift(1024, 2*i) with 32-bit wrapping semantics.
     for i in -1i32..=10 {
-        let offset = if i < 0 {
-            // For i=-1: 1024 >> 2 = 256
-            (CHUNK_SIZE as u64) >> ((-i as u32) * 2)
-        } else {
-            (CHUNK_SIZE as u64) << ((i as u32) * 2)
-        };
+        let shift = (2 * i).rem_euclid(32) as u32;
+        let offset = (1024u32.wrapping_shl(shift)) as u64;
 
         if offset >= file_size {
             break;

@@ -288,9 +288,18 @@ async fn analyze_single_book(
     let resolved_number_decimal =
         resolved_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
 
+    // Recompute KOReader hash during analysis
+    let file_path_clone = file_path.clone();
+    let koreader_hash = tokio::task::spawn_blocking(move || {
+        crate::utils::hasher::hash_file_koreader(&file_path_clone).ok()
+    })
+    .await
+    .unwrap_or(None);
+
     book.file_size = metadata.file_size as i64;
     book.file_hash = metadata.file_hash.clone();
     book.partial_hash = partial_hash;
+    book.koreader_hash = koreader_hash;
     book.format = format!("{:?}", metadata.format).to_lowercase();
     book.page_count = metadata.page_count as i32;
     book.modified_at = metadata.modified_at;

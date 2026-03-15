@@ -206,8 +206,6 @@ export function useTaskProgress() {
     }, 10000);
 
     const handleEvent = (event: TaskProgressEvent) => {
-      console.debug("Task progress event received:", event);
-
       setActiveTasks((prev) => {
         const next = new Map(prev);
 

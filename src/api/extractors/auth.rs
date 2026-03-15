@@ -1,3 +1,5 @@
+use tracing::debug;
+
 use crate::api::error::ApiError;
 use crate::api::permissions::{Permission, UserRole};
 use crate::db::repositories::{ApiKeyRepository, UserRepository};
@@ -256,6 +258,14 @@ impl FromRequestParts<Arc<AppState>> for AuthContext {
             return extract_from_api_key(api_key, state).await;
         }
 
+        // Try KOReader-style x-auth-user header (value is an API key, x-auth-key is ignored)
+        if let Some(api_key_header) = parts.headers.get("x-auth-user")
+            && let Ok(api_key) = api_key_header.to_str()
+        {
+            debug!("Attempting KOReader x-auth-user API key authentication");
+            return extract_from_api_key(api_key, state).await;
+        }
+
         Err(ApiError::Unauthorized(
             "Missing or invalid authentication credentials".to_string(),
         ))
@@ -433,6 +443,17 @@ async fn extract_from_basic_auth(
     let username = parts[0];
     let password = parts[1];
 
+    extract_from_credentials(username, password, state).await
+}
+
+/// Extract auth context from username/password credentials
+///
+/// Shared by Basic Auth and KOReader x-auth-user/x-auth-key header authentication.
+async fn extract_from_credentials(
+    username: &str,
+    password: &str,
+    state: &AppState,
+) -> Result<AuthContext, ApiError> {
     // Look up user by username
     let user = UserRepository::get_by_username(&state.db, username)
         .await
@@ -509,6 +530,15 @@ impl FromRequestParts<Arc<AppState>> for FlexibleAuthContext {
 
         // Try X-API-Key header
         if let Some(api_key_header) = parts.headers.get("x-api-key")
+            && let Ok(api_key) = api_key_header.to_str()
+        {
+            return extract_from_api_key(api_key, state)
+                .await
+                .map(FlexibleAuthContext);
+        }
+
+        // Try KOReader-style x-auth-user header (API key)
+        if let Some(api_key_header) = parts.headers.get("x-auth-user")
             && let Ok(api_key) = api_key_header.to_str()
         {
             return extract_from_api_key(api_key, state)

@@ -158,13 +158,13 @@ async fn test_permission_sets() {
     assert!(READONLY_PERMISSIONS.contains(&Permission::LibrariesRead));
     assert!(READONLY_PERMISSIONS.contains(&Permission::BooksRead));
     assert!(!READONLY_PERMISSIONS.contains(&Permission::LibrariesWrite));
-    assert_eq!(READONLY_PERMISSIONS.len(), 5);
+    assert_eq!(READONLY_PERMISSIONS.len(), 7);
 
     // Test ADMIN permissions
     assert!(ADMIN_PERMISSIONS.contains(&Permission::SystemAdmin));
     assert!(ADMIN_PERMISSIONS.contains(&Permission::UsersWrite));
     assert!(ADMIN_PERMISSIONS.contains(&Permission::LibrariesDelete));
-    assert_eq!(ADMIN_PERMISSIONS.len(), 21);
+    assert_eq!(ADMIN_PERMISSIONS.len(), 23);
 
     // Test permission serialization roundtrip
     let perms = READONLY_PERMISSIONS.clone();
@@ -217,9 +217,9 @@ async fn test_user_with_multiple_api_keys() {
     for key in &user_keys {
         let perms: HashSet<Permission> = serde_json::from_value(key.permissions.clone()).unwrap();
         if key.name == "Mobile App" {
-            assert_eq!(perms.len(), 5); // READONLY
+            assert_eq!(perms.len(), 7); // READONLY
         } else if key.name == "Admin Tool" {
-            assert_eq!(perms.len(), 21); // ADMIN
+            assert_eq!(perms.len(), 23); // ADMIN
         } else if key.name == "CI/CD" {
             assert_eq!(perms.len(), 1);
             assert!(perms.contains(&Permission::BooksRead));

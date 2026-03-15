@@ -38,6 +38,76 @@ While Codex is primarily tested with Komic, other Komga-compatible apps may also
 Compatibility with apps other than Komic is not officially tested. Your experience may vary.
 :::
 
+### KOReader
+
+[KOReader](https://koreader.rocks/) is an open-source e-book reader for E Ink devices and other platforms. Codex supports the KOReader sync protocol, allowing you to sync reading progress between KOReader and Codex.
+
+**Supported formats:** EPUB, PDF, CBZ, CBR
+
+#### Prerequisites
+
+1. **Enable the KOReader API** in your Codex configuration (see [Enabling the KOReader API](#enabling-the-koreader-api) below)
+2. **Create an API key** in Codex (see [API Keys](./users/api-keys))
+3. **Run a deep scan** so Codex computes KOReader-compatible hashes for your books (see [Deep Scan](./libraries#deep-scan))
+
+#### Setup in KOReader
+
+1. Open a book in KOReader
+2. Go to **Top Menu** > **Tools** (🔧) > **Progress sync**
+3. Select **Custom sync server**
+4. Enter the server settings:
+   - **Server URL**: `http://your-server:8080/koreader`
+   - **Username**: Your Codex **API key** (e.g., `codex_abc12345_secretpart123456789`)
+   - **Password**: Any value (ignored by Codex)
+5. Tap **Login** to verify the connection
+
+:::info
+KOReader uses the `x-auth-user` header to send the username, which Codex treats as an API key. The password field (`x-auth-key`) is ignored because KOReader MD5-hashes the password before sending it, making direct password verification impossible.
+:::
+
+#### How It Works
+
+KOReader identifies books by computing an MD5 hash of the first 4096 bytes of the file. When you enable the KOReader API and run a **deep scan**, Codex computes the same hash for each book and stores it. This allows KOReader to look up books and sync progress.
+
+- **Progress sync is per-user**: Each user's reading progress is tracked independently
+- **EPUB progress**: Codex converts between KOReader's DocFragment format and its internal position tracking
+- **PDF/CBZ/CBR progress**: Page numbers are synced directly
+
+#### Troubleshooting KOReader
+
+**"Login failed" or 401 Unauthorized:**
+- Make sure you're using a Codex **API key** as the username, not your regular username/password
+- Verify the API key hasn't expired or been revoked
+- Check that `koreader_api.enabled` is `true` in your config
+
+**"Book not found" (404):**
+- Run a **deep scan** on your library so Codex computes KOReader hashes
+- The book must be in a Codex library; KOReader identifies books by file hash, not filename
+
+**Progress not syncing:**
+- Ensure both devices are using the same Codex server and user account
+- Check that the book files are identical (same hash) across devices
+
+## Enabling the KOReader API
+
+The KOReader sync API is disabled by default. To enable it:
+
+### Via Configuration File
+
+```yaml
+# codex.yaml
+koreader_api:
+  enabled: true
+```
+
+### Via Environment Variables
+
+```bash
+CODEX_KOREADER_API_ENABLED=true
+```
+
+After enabling, restart Codex and run a **deep scan** on your libraries to compute KOReader-compatible file hashes.
+
 ## Enabling the Komga API
 
 The Komga-compatible API is disabled by default for security. To enable it:

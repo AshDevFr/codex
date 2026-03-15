@@ -973,10 +973,17 @@ async fn process_series_batched(
                             || modified_changed
                             || series_changed;
 
+                        // Always update koreader_hash (it may have been computed
+                        // with a corrected algorithm or may be newly available)
+                        let koreader_hash_changed =
+                            existing_book.koreader_hash != file_hash.koreader_hash;
+                        let anything_changed = anything_changed || koreader_hash_changed;
+
                         if anything_changed {
                             let mut updated_book = existing_book.clone();
                             updated_book.file_size = file_hash.file_size as i64;
                             updated_book.partial_hash = file_hash.partial_hash;
+                            updated_book.koreader_hash = file_hash.koreader_hash;
                             updated_book.format = file_hash.format;
                             updated_book.modified_at = file_hash.modified_at;
                             updated_book.updated_at = now;

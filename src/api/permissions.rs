@@ -94,6 +94,10 @@ pub enum Permission {
     // Pages (image serving)
     PagesRead,
 
+    // Progress (reading progress tracking)
+    ProgressRead,
+    ProgressWrite,
+
     // Users (admin only)
     UsersRead,
     UsersWrite,
@@ -131,6 +135,8 @@ impl Permission {
             Permission::BooksWrite => "books:write",
             Permission::BooksDelete => "books:delete",
             Permission::PagesRead => "pages:read",
+            Permission::ProgressRead => "progress:read",
+            Permission::ProgressWrite => "progress:write",
             Permission::UsersRead => "users:read",
             Permission::UsersWrite => "users:write",
             Permission::UsersDelete => "users:delete",
@@ -161,6 +167,8 @@ impl FromStr for Permission {
             "books:write" => Ok(Permission::BooksWrite),
             "books:delete" => Ok(Permission::BooksDelete),
             "pages:read" => Ok(Permission::PagesRead),
+            "progress:read" => Ok(Permission::ProgressRead),
+            "progress:write" => Ok(Permission::ProgressWrite),
             "users:read" => Ok(Permission::UsersRead),
             "users:write" => Ok(Permission::UsersWrite),
             "users:delete" => Ok(Permission::UsersDelete),
@@ -199,6 +207,8 @@ lazy_static::lazy_static! {
         set.insert(Permission::SeriesRead);
         set.insert(Permission::BooksRead);
         set.insert(Permission::PagesRead);
+        set.insert(Permission::ProgressRead);
+        set.insert(Permission::ProgressWrite);
         set.insert(Permission::SystemHealth);
         set
     };
@@ -217,6 +227,9 @@ lazy_static::lazy_static! {
         set.insert(Permission::SeriesRead);
         set.insert(Permission::BooksRead);
         set.insert(Permission::PagesRead);
+        // Progress tracking
+        set.insert(Permission::ProgressRead);
+        set.insert(Permission::ProgressWrite);
         // Own API keys
         set.insert(Permission::ApiKeysRead);
         set.insert(Permission::ApiKeysWrite);
@@ -333,7 +346,7 @@ mod tests {
         assert!(READONLY_PERMISSIONS.contains(&Permission::LibrariesRead));
         assert!(READONLY_PERMISSIONS.contains(&Permission::BooksRead));
         assert!(!READONLY_PERMISSIONS.contains(&Permission::LibrariesWrite));
-        assert_eq!(READONLY_PERMISSIONS.len(), 5);
+        assert_eq!(READONLY_PERMISSIONS.len(), 7);
     }
 
     // ============== Role permission preset tests ==============
@@ -354,6 +367,9 @@ mod tests {
         // Reader cannot view or manage tasks
         assert!(!READER_PERMISSIONS.contains(&Permission::TasksRead));
         assert!(!READER_PERMISSIONS.contains(&Permission::TasksWrite));
+        // Reader can track reading progress
+        assert!(READER_PERMISSIONS.contains(&Permission::ProgressRead));
+        assert!(READER_PERMISSIONS.contains(&Permission::ProgressWrite));
         // Reader cannot modify content
         assert!(!READER_PERMISSIONS.contains(&Permission::BooksWrite));
         assert!(!READER_PERMISSIONS.contains(&Permission::SeriesWrite));
@@ -362,7 +378,7 @@ mod tests {
         assert!(!READER_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(!READER_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(READER_PERMISSIONS.len(), 8);
+        assert_eq!(READER_PERMISSIONS.len(), 10);
     }
 
     #[test]
@@ -389,7 +405,7 @@ mod tests {
         assert!(!MAINTAINER_PERMISSIONS.contains(&Permission::UsersRead));
         assert!(!MAINTAINER_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(MAINTAINER_PERMISSIONS.len(), 15);
+        assert_eq!(MAINTAINER_PERMISSIONS.len(), 17);
     }
 
     #[test]
@@ -413,7 +429,7 @@ mod tests {
         // Admin has system admin
         assert!(ADMIN_PERMISSIONS.contains(&Permission::SystemAdmin));
 
-        assert_eq!(ADMIN_PERMISSIONS.len(), 21); // All permissions
+        assert_eq!(ADMIN_PERMISSIONS.len(), 23); // All permissions
     }
 
     // ============== UserRole tests ==============

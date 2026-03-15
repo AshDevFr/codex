@@ -6481,6 +6481,8 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             id: string;
+            /** @description KOReader-compatible partial MD5 hash for sync */
+            koreaderHash?: string | null;
             /**
              * Format: uuid
              * @description Library this book belongs to
@@ -9414,6 +9416,8 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             id: string;
+            /** @description KOReader-compatible partial MD5 hash for sync */
+            koreaderHash?: string | null;
             /**
              * Format: uuid
              * @description Library this book belongs to
@@ -11713,6 +11717,8 @@ export interface components {
                  * @example 550e8400-e29b-41d4-a716-446655440001
                  */
                 id: string;
+                /** @description KOReader-compatible partial MD5 hash for sync */
+                koreaderHash?: string | null;
                 /**
                  * Format: uuid
                  * @description Library this book belongs to

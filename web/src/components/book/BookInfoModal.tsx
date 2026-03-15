@@ -165,6 +165,12 @@ export function BookInfoModal({ opened, onClose, book }: BookInfoModalProps) {
             <InfoRow label="Pages" value={book.pageCount} />
             <InfoRow label="Path" value={book.filePath} copyable monospace />
             <InfoRow label="Hash" value={book.fileHash} copyable monospace />
+            <InfoRow
+              label="KOReader Hash"
+              value={book.koreaderHash}
+              copyable
+              monospace
+            />
           </Stack>
         </Paper>
 

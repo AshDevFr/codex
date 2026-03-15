@@ -21,6 +21,10 @@ export const PERMISSIONS = {
   // Pages (image serving)
   PAGES_READ: "pages-read",
 
+  // Progress (reading progress tracking)
+  PROGRESS_READ: "progress-read",
+  PROGRESS_WRITE: "progress-write",
+
   // Users (admin only)
   USERS_READ: "users-read",
   USERS_WRITE: "users-write",
@@ -84,6 +88,22 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         value: PERMISSIONS.PAGES_READ,
         label: "Read Pages",
         description: "View book pages/images",
+      },
+    ],
+  },
+  {
+    label: "Progress",
+    description: "Track reading progress across devices",
+    permissions: [
+      {
+        value: PERMISSIONS.PROGRESS_READ,
+        label: "Read Progress",
+        description: "View reading progress",
+      },
+      {
+        value: PERMISSIONS.PROGRESS_WRITE,
+        label: "Write Progress",
+        description: "Update reading progress",
       },
     ],
   },
@@ -208,6 +228,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.SERIES_READ,
     PERMISSIONS.BOOKS_READ,
     PERMISSIONS.PAGES_READ,
+    PERMISSIONS.PROGRESS_READ,
+    PERMISSIONS.PROGRESS_WRITE,
     PERMISSIONS.API_KEYS_READ,
     PERMISSIONS.API_KEYS_WRITE,
     PERMISSIONS.API_KEYS_DELETE,
@@ -219,6 +241,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.SERIES_READ,
     PERMISSIONS.BOOKS_READ,
     PERMISSIONS.PAGES_READ,
+    PERMISSIONS.PROGRESS_READ,
+    PERMISSIONS.PROGRESS_WRITE,
     PERMISSIONS.API_KEYS_READ,
     PERMISSIONS.API_KEYS_WRITE,
     PERMISSIONS.API_KEYS_DELETE,
@@ -260,12 +284,14 @@ export const PERMISSION_PRESETS = [
   {
     value: "opds",
     label: "OPDS/Reader Apps",
-    description: "For e-reader apps and OPDS clients",
+    description: "For e-reader apps, OPDS clients, and KOReader sync",
     getPermissions: () => [
       PERMISSIONS.LIBRARIES_READ,
       PERMISSIONS.SERIES_READ,
       PERMISSIONS.BOOKS_READ,
       PERMISSIONS.PAGES_READ,
+      PERMISSIONS.PROGRESS_READ,
+      PERMISSIONS.PROGRESS_WRITE,
     ],
   },
   {

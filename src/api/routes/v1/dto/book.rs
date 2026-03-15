@@ -556,6 +556,10 @@ pub struct BookDto {
     #[schema(example = "a1b2c3d4e5f6g7h8i9j0")]
     pub file_hash: String,
 
+    /// KOReader-compatible partial MD5 hash for sync
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub koreader_hash: Option<String>,
+
     /// Number of pages in the book
     #[schema(example = 32)]
     pub page_count: i32,
@@ -2115,6 +2119,10 @@ pub struct FullBookResponse {
     /// File hash for deduplication
     #[schema(example = "a1b2c3d4e5f6g7h8i9j0")]
     pub file_hash: String,
+
+    /// KOReader-compatible partial MD5 hash for sync
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub koreader_hash: Option<String>,
 
     /// Number of pages in the book
     #[schema(example = 32)]

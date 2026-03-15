@@ -17307,6 +17307,13 @@
             "description": "Book unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
+          "koreaderHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "KOReader-compatible partial MD5 hash for sync"
+          },
           "libraryId": {
             "type": "string",
             "format": "uuid",
@@ -22701,6 +22708,13 @@
             "description": "Book unique identifier",
             "example": "550e8400-e29b-41d4-a716-446655440001"
           },
+          "koreaderHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "KOReader-compatible partial MD5 hash for sync"
+          },
           "libraryId": {
             "type": "string",
             "format": "uuid",
@@ -27013,6 +27027,13 @@
                   "format": "uuid",
                   "description": "Book unique identifier",
                   "example": "550e8400-e29b-41d4-a716-446655440001"
+                },
+                "koreaderHash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "KOReader-compatible partial MD5 hash for sync"
                 },
                 "libraryId": {
                   "type": "string",
