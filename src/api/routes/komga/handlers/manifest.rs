@@ -13,7 +13,6 @@ use crate::db::repositories::{BookMetadataRepository, BookRepository};
 use crate::parsers::epub::EpubParser;
 use crate::require_permission;
 use axum::{
-    Json,
     body::Body,
     extract::{OriginalUri, Path, State},
     http::{StatusCode, header},
@@ -61,7 +60,7 @@ pub async fn get_epub_manifest(
     FlexibleAuthContext(auth): FlexibleAuthContext,
     OriginalUri(uri): OriginalUri,
     Path(book_id): Path<Uuid>,
-) -> Result<Json<WebPubManifest>, ApiError> {
+) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
 
     let book = BookRepository::get_by_id(&state.db, book_id)
@@ -144,6 +143,7 @@ pub async fn get_epub_manifest(
         .map(|(href, media_type)| WebPubLink {
             href: format!("{}/resource/{}", base_url, encode_resource_path(href)),
             media_type: media_type.clone(),
+            rel: None,
         })
         .collect();
 
@@ -154,6 +154,7 @@ pub async fn get_epub_manifest(
         .map(|(href, media_type)| WebPubLink {
             href: format!("{}/resource/{}", base_url, encode_resource_path(href)),
             media_type: media_type.clone(),
+            rel: None,
         })
         .collect();
 
@@ -163,21 +164,54 @@ pub async fn get_epub_manifest(
         .map(|entry| rewrite_toc_hrefs(entry, base_url))
         .collect();
 
+    // Build self and acquisition links (matches Komga format)
+    let manifest_href = format!("{}/manifest", base_url);
+    let file_href = format!("{}/file", base_url);
+    let links = vec![
+        WebPubLink {
+            href: manifest_href,
+            media_type: "application/webpub+json".to_string(),
+            rel: Some("self".to_string()),
+        },
+        WebPubLink {
+            href: file_href,
+            media_type: "application/epub+zip".to_string(),
+            rel: Some("http://opds-spec.org/acquisition".to_string()),
+        },
+    ];
+
     let manifest = WebPubManifest {
         context: "https://readium.org/webpub-manifest/context.jsonld".to_string(),
         metadata: WebPubMetadata {
             identifier: format!("urn:uuid:{}", book_id),
             title,
-            schema_type: "http://schema.org/Book".to_string(),
-            author: authors,
+            conforms_to: "https://readium.org/webpub-manifest/profiles/epub".to_string(),
+            contributor: authors,
+            language: None,
+            modified: None,
             number_of_pages: book.page_count,
+            rendition: super::super::dto::manifest::WebPubRendition {
+                layout: "reflowable".to_string(),
+            },
         },
         reading_order,
         resources,
         toc,
+        images: Vec::new(),
+        landmarks: Vec::new(),
+        links,
+        page_list: Vec::new(),
     };
 
-    Ok(Json(manifest))
+    let body = serde_json::to_vec(&manifest)
+        .map_err(|e| ApiError::Internal(format!("Failed to serialize manifest: {}", e)))?;
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/webpub+json")
+        .header(header::CONTENT_LENGTH, body.len())
+        .body(Body::from(body))
+        .unwrap())
 }
 
 /// Get a resource file from within an EPUB
