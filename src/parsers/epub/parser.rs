@@ -15,6 +15,57 @@ use zip::ZipArchive;
 
 pub struct EpubParser;
 
+/// Count text characters in XHTML content, excluding HTML markup, scripts, and styles.
+///
+/// Uses a simple state-machine to strip tags and count visible text characters.
+/// Returns 0 for empty or non-UTF-8 content.
+pub fn count_text_chars(xhtml: &[u8]) -> u64 {
+    let text = match std::str::from_utf8(xhtml) {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+
+    let mut char_count: u64 = 0;
+    let mut in_tag = false;
+    let mut in_script = false;
+    let mut in_style = false;
+    let mut tag_buf = String::new();
+
+    for ch in text.chars() {
+        if ch == '<' {
+            in_tag = true;
+            tag_buf.clear();
+            continue;
+        }
+
+        if in_tag {
+            if ch == '>' {
+                in_tag = false;
+                let tag_lower = tag_buf.to_ascii_lowercase();
+                let tag_name = tag_lower
+                    .split(|c: char| c.is_whitespace())
+                    .next()
+                    .unwrap_or("");
+
+                match tag_name.trim_start_matches('/') {
+                    "script" => in_script = !tag_name.starts_with('/'),
+                    "style" => in_style = !tag_name.starts_with('/'),
+                    _ => {}
+                }
+            } else {
+                tag_buf.push(ch);
+            }
+            continue;
+        }
+
+        if !in_script && !in_style {
+            char_count += 1;
+        }
+    }
+
+    char_count
+}
+
 /// Find the next occurrence of an XML tag, handling optional namespace prefixes.
 /// For example, searching for "item" will match both `<item ` and `<opf:item `.
 /// Returns the byte offset of the `<` character and the full tag prefix length
@@ -327,14 +378,27 @@ impl FormatParser for EpubParser {
         // Parse the OPF to get manifest and spine
         let (_manifest, spine_order) = Self::parse_opf(&mut archive, &opf_path)?;
 
-        // Build spine items with file sizes for Readium positions computation
+        // Build spine items with file sizes and character counts for position normalization
         let spine_items: Vec<SpineItem> = spine_order
             .iter()
             .filter_map(|(href, media_type)| {
-                archive.by_name(href).ok().map(|entry| SpineItem {
+                let mut entry = archive.by_name(href).ok()?;
+                let file_size = entry.size();
+
+                // Count text characters for XHTML spine items
+                let char_count = if media_type.contains("xhtml") || media_type.contains("html") {
+                    let mut content = Vec::new();
+                    std::io::Read::read_to_end(&mut entry, &mut content).ok();
+                    count_text_chars(&content)
+                } else {
+                    0
+                };
+
+                Some(SpineItem {
                     href: href.clone(),
                     media_type: media_type.clone(),
-                    file_size: entry.size(),
+                    file_size,
+                    char_count,
                 })
             })
             .collect();
@@ -424,6 +488,11 @@ impl FormatParser for EpubParser {
                 None
             } else {
                 Some(epub_positions)
+            },
+            epub_spine_items: if spine_items.is_empty() {
+                None
+            } else {
+                Some(spine_items)
             },
         })
     }
@@ -1146,5 +1215,59 @@ mod tests {
             metadata.page_count, 2,
             "Should parse 2 spine items from bare OPF tags"
         );
+    }
+
+    mod count_text_chars_tests {
+        use super::*;
+
+        #[test]
+        fn test_plain_xhtml() {
+            let xhtml = b"<html><body><p>Hello world</p></body></html>";
+            assert_eq!(count_text_chars(xhtml), 11);
+        }
+
+        #[test]
+        fn test_script_excluded() {
+            let xhtml =
+                b"<html><body><p>Hello</p><script>var x = 1;</script><p>World</p></body></html>";
+            assert_eq!(count_text_chars(xhtml), 10); // "Hello" + "World"
+        }
+
+        #[test]
+        fn test_style_excluded() {
+            let xhtml =
+                b"<html><head><style>body { color: red; }</style></head><body>Text</body></html>";
+            assert_eq!(count_text_chars(xhtml), 4);
+        }
+
+        #[test]
+        fn test_cjk_characters() {
+            let xhtml = "<html><body><p>\u{4F60}\u{597D}\u{4E16}\u{754C}</p></body></html>";
+            assert_eq!(count_text_chars(xhtml.as_bytes()), 4);
+        }
+
+        #[test]
+        fn test_empty_content() {
+            assert_eq!(count_text_chars(b""), 0);
+        }
+
+        #[test]
+        fn test_whitespace_counted() {
+            let xhtml = b"<p>Hello World</p>";
+            // "Hello World" = 11 chars including the space
+            assert_eq!(count_text_chars(xhtml), 11);
+        }
+
+        #[test]
+        fn test_nested_tags() {
+            let xhtml = b"<div><span>A</span><em>B</em></div>";
+            assert_eq!(count_text_chars(xhtml), 2);
+        }
+
+        #[test]
+        fn test_invalid_utf8() {
+            let invalid = [0xFF, 0xFE, 0x00];
+            assert_eq!(count_text_chars(&invalid), 0);
+        }
     }
 }

@@ -258,7 +258,7 @@ pub struct EpubPosition {
 }
 
 /// Spine item extracted from the EPUB OPF manifest
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpineItem {
     /// Full path within the EPUB archive
     pub href: String,
@@ -266,6 +266,8 @@ pub struct SpineItem {
     pub media_type: String,
     /// Uncompressed file size in bytes
     pub file_size: u64,
+    /// Number of text characters (excluding HTML markup, scripts, styles)
+    pub char_count: u64,
 }
 
 /// Compute Readium positions list from spine items.
@@ -351,6 +353,84 @@ pub fn normalize_progression(
     Some((closest.total_progression, closest.position))
 }
 
+/// Convert character-based totalProgression (epub.js) to byte-based (Readium canonical).
+///
+/// epub.js divides the book into character-weighted chunks, while Readium uses
+/// byte-weighted chunks. For multi-byte content (CJK, accented text), these
+/// diverge significantly. This function maps a char-based percentage to the
+/// equivalent byte-based percentage using per-spine-item char/byte counts.
+pub fn char_to_byte_progression(spine_items: &[SpineItem], char_prog: f64) -> f64 {
+    if spine_items.is_empty() {
+        return char_prog;
+    }
+
+    let total_chars: u64 = spine_items.iter().map(|s| s.char_count.max(1)).sum();
+    let total_bytes: u64 = spine_items.iter().map(|s| s.file_size).sum();
+
+    if total_chars == 0 || total_bytes == 0 {
+        return char_prog;
+    }
+
+    let target_chars = (char_prog * total_chars as f64) as u64;
+    let mut accumulated_chars: u64 = 0;
+    let mut accumulated_bytes: u64 = 0;
+
+    for item in spine_items {
+        let item_chars = item.char_count.max(1);
+        if accumulated_chars + item_chars >= target_chars {
+            let within_item_frac = if item_chars > 0 {
+                (target_chars - accumulated_chars) as f64 / item_chars as f64
+            } else {
+                0.0
+            };
+            let byte_offset = accumulated_bytes as f64 + within_item_frac * item.file_size as f64;
+            return (byte_offset / total_bytes as f64).clamp(0.0, 1.0);
+        }
+        accumulated_chars += item_chars;
+        accumulated_bytes += item.file_size;
+    }
+
+    1.0
+}
+
+/// Convert byte-based totalProgression (Readium/KOReader) to character-based (epub.js).
+///
+/// Inverse of `char_to_byte_progression`. Maps a byte-weighted percentage to
+/// the equivalent character-weighted percentage.
+pub fn byte_to_char_progression(spine_items: &[SpineItem], byte_prog: f64) -> f64 {
+    if spine_items.is_empty() {
+        return byte_prog;
+    }
+
+    let total_chars: u64 = spine_items.iter().map(|s| s.char_count.max(1)).sum();
+    let total_bytes: u64 = spine_items.iter().map(|s| s.file_size).sum();
+
+    if total_chars == 0 || total_bytes == 0 {
+        return byte_prog;
+    }
+
+    let target_bytes = (byte_prog * total_bytes as f64) as u64;
+    let mut accumulated_chars: u64 = 0;
+    let mut accumulated_bytes: u64 = 0;
+
+    for item in spine_items {
+        if accumulated_bytes + item.file_size >= target_bytes {
+            let within_item_frac = if item.file_size > 0 {
+                (target_bytes - accumulated_bytes) as f64 / item.file_size as f64
+            } else {
+                0.0
+            };
+            let char_offset =
+                accumulated_chars as f64 + within_item_frac * item.char_count.max(1) as f64;
+            return (char_offset / total_chars as f64).clamp(0.0, 1.0);
+        }
+        accumulated_chars += item.char_count.max(1);
+        accumulated_bytes += item.file_size;
+    }
+
+    1.0
+}
+
 /// Complete book metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BookMetadata {
@@ -375,6 +455,9 @@ pub struct BookMetadata {
     /// EPUB Readium positions list (only for EPUB format)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub epub_positions: Option<Vec<EpubPosition>>,
+    /// EPUB spine items with byte/char counts (for cross-device sync normalization)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub epub_spine_items: Option<Vec<SpineItem>>,
 }
 
 #[cfg(test)]
@@ -690,11 +773,13 @@ mod tests {
                     href: "OEBPS/chapter1.xhtml".to_string(),
                     media_type: "application/xhtml+xml".to_string(),
                     file_size: 2048, // 2 positions
+                    char_count: 1500,
                 },
                 SpineItem {
                     href: "OEBPS/chapter2.xhtml".to_string(),
                     media_type: "application/xhtml+xml".to_string(),
                     file_size: 3072, // 3 positions
+                    char_count: 2500,
                 },
             ]
         }
@@ -726,6 +811,7 @@ mod tests {
                 href: "tiny.xhtml".to_string(),
                 media_type: "application/xhtml+xml".to_string(),
                 file_size: 100,
+                char_count: 80,
             }];
             let positions = compute_epub_positions(&spine);
             assert_eq!(positions.len(), 1);
@@ -761,6 +847,7 @@ mod tests {
                 href: "OEBPS/chapter 1.xhtml".to_string(),
                 media_type: "application/xhtml+xml".to_string(),
                 file_size: 1024,
+                char_count: 800,
             }];
             let positions = compute_epub_positions(&spine);
             let result = normalize_progression(&positions, "OEBPS/chapter%201.xhtml", 0.5);
@@ -777,6 +864,163 @@ mod tests {
             let positions = compute_epub_positions(&sample_spine());
             let result = normalize_progression(&positions, "nonexistent.xhtml", 0.6);
             assert!(result.is_some());
+        }
+    }
+
+    mod progression_conversion {
+        use super::*;
+
+        /// ASCII-heavy content: chars ~= bytes minus markup, so conversion is near-identity
+        fn ascii_spine() -> Vec<SpineItem> {
+            vec![
+                SpineItem {
+                    href: "ch1.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 1000,
+                    char_count: 800, // ~80% text, 20% markup
+                },
+                SpineItem {
+                    href: "ch2.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 1000,
+                    char_count: 800,
+                },
+            ]
+        }
+
+        /// CJK content: 3 bytes per char, so char_count << file_size
+        fn cjk_spine() -> Vec<SpineItem> {
+            vec![
+                SpineItem {
+                    href: "ch1.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 3000, // 1000 CJK chars * 3 bytes each
+                    char_count: 1000,
+                },
+                SpineItem {
+                    href: "ch2.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 6000, // 2000 CJK chars * 3 bytes each
+                    char_count: 2000,
+                },
+            ]
+        }
+
+        /// Mixed content: one ASCII chapter, one CJK chapter
+        fn mixed_spine() -> Vec<SpineItem> {
+            vec![
+                SpineItem {
+                    href: "ch1.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 1000, // ASCII
+                    char_count: 1000,
+                },
+                SpineItem {
+                    href: "ch2.xhtml".to_string(),
+                    media_type: "application/xhtml+xml".to_string(),
+                    file_size: 3000, // CJK: 1000 chars * 3 bytes
+                    char_count: 1000,
+                },
+            ]
+        }
+
+        #[test]
+        fn test_ascii_near_identity() {
+            let spine = ascii_spine();
+            // For uniform char/byte ratio, conversion should be near-identity
+            let result = char_to_byte_progression(&spine, 0.5);
+            assert!(
+                (result - 0.5).abs() < 0.01,
+                "ASCII content should be near-identity, got {}",
+                result
+            );
+        }
+
+        #[test]
+        fn test_cjk_uniform_ratio_near_identity() {
+            let spine = cjk_spine();
+            // Both chapters have same 3:1 byte:char ratio, so conversion is near-identity
+            let result = char_to_byte_progression(&spine, 0.5);
+            assert!(
+                (result - 0.5).abs() < 0.01,
+                "Uniform CJK ratio should be near-identity, got {}",
+                result
+            );
+        }
+
+        #[test]
+        fn test_mixed_content_diverges() {
+            let spine = mixed_spine();
+            // 50% chars = halfway through (1000 of 2000 chars = end of ch1)
+            // In bytes: ch1 is 1000 bytes, total is 4000 bytes
+            // So 50% char = 25% bytes
+            let result = char_to_byte_progression(&spine, 0.5);
+            assert!(
+                (result - 0.25).abs() < 0.01,
+                "Mixed content: 50% chars should map to ~25% bytes, got {}",
+                result
+            );
+        }
+
+        #[test]
+        fn test_roundtrip() {
+            let spine = mixed_spine();
+            for prog in [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0] {
+                let byte_prog = char_to_byte_progression(&spine, prog);
+                let back = byte_to_char_progression(&spine, byte_prog);
+                assert!(
+                    (back - prog).abs() < 0.01,
+                    "Roundtrip failed for {}: got {} -> {} -> {}",
+                    prog,
+                    prog,
+                    byte_prog,
+                    back
+                );
+            }
+        }
+
+        #[test]
+        fn test_boundaries() {
+            let spine = mixed_spine();
+            let start = char_to_byte_progression(&spine, 0.0);
+            let end = char_to_byte_progression(&spine, 1.0);
+            assert!((start - 0.0).abs() < 0.01);
+            assert!((end - 1.0).abs() < 0.01);
+        }
+
+        #[test]
+        fn test_empty_spine() {
+            assert!((char_to_byte_progression(&[], 0.5) - 0.5).abs() < f64::EPSILON);
+            assert!((byte_to_char_progression(&[], 0.5) - 0.5).abs() < f64::EPSILON);
+        }
+
+        #[test]
+        fn test_single_item() {
+            let spine = vec![SpineItem {
+                href: "ch1.xhtml".to_string(),
+                media_type: "application/xhtml+xml".to_string(),
+                file_size: 3000,
+                char_count: 1000,
+            }];
+            // Single item: conversion should still be identity (all within one resource)
+            let result = char_to_byte_progression(&spine, 0.5);
+            assert!(
+                (result - 0.5).abs() < 0.01,
+                "Single item should be near-identity, got {}",
+                result
+            );
+        }
+
+        #[test]
+        fn test_byte_to_char_mixed() {
+            let spine = mixed_spine();
+            // 25% bytes = end of ch1 (1000/4000 bytes) = 50% chars (1000/2000 chars)
+            let result = byte_to_char_progression(&spine, 0.25);
+            assert!(
+                (result - 0.5).abs() < 0.01,
+                "25% bytes should map to ~50% chars in mixed content, got {}",
+                result
+            );
         }
     }
 }

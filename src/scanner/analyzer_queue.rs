@@ -310,6 +310,10 @@ async fn analyze_single_book(
         .epub_positions
         .as_ref()
         .map(|positions| serde_json::to_string(positions).unwrap_or_default());
+    book.epub_spine_items = metadata
+        .epub_spine_items
+        .as_ref()
+        .map(|items| serde_json::to_string(items).unwrap_or_default());
 
     BookRepository::update(db, &book, event_broadcaster).await?;
 

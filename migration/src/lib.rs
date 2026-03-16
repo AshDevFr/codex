@@ -128,6 +128,7 @@ mod m20260314_000061_add_r2_progression;
 
 // Add epub_positions column for Readium positions list (cross-app sync)
 mod m20260315_000062_add_epub_positions;
+mod m20260316_000063_add_epub_spine_items;
 
 pub struct Migrator;
 
@@ -229,6 +230,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260314_000061_add_r2_progression::Migration),
             // Add epub_positions for Readium positions list (cross-app sync)
             Box::new(m20260315_000062_add_epub_positions::Migration),
+            // Add epub_spine_items for char/byte position normalization (cross-device sync)
+            Box::new(m20260316_000063_add_epub_spine_items::Migration),
         ]
     }
 }

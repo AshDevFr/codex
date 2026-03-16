@@ -2452,6 +2452,7 @@ mod tests {
             thumbnail_generated_at: None,
             koreader_hash: None,
             epub_positions: None,
+            epub_spine_items: None,
         };
         BookRepository::create(db.sea_orm_connection(), &book, None)
             .await
@@ -2548,6 +2549,7 @@ mod tests {
             thumbnail_generated_at: None,
             koreader_hash: None,
             epub_positions: None,
+            epub_spine_items: None,
         };
         let book1: books::Model = BookRepository::create(db.sea_orm_connection(), &book1, None)
             .await
@@ -2575,6 +2577,7 @@ mod tests {
             thumbnail_generated_at: None,
             koreader_hash: None,
             epub_positions: None,
+            epub_spine_items: None,
         };
         let book2: books::Model = BookRepository::create(db.sea_orm_connection(), &book2, None)
             .await
@@ -2602,6 +2605,7 @@ mod tests {
             thumbnail_generated_at: None,
             koreader_hash: None,
             epub_positions: None,
+            epub_spine_items: None,
         };
         let book3: books::Model = BookRepository::create(db.sea_orm_connection(), &book3, None)
             .await

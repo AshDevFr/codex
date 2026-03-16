@@ -33,6 +33,8 @@ pub struct Model {
     pub koreader_hash: Option<String>,
     /// EPUB Readium positions list as JSON (for cross-app progression sync)
     pub epub_positions: Option<String>,
+    /// EPUB spine items with byte/char counts as JSON (for char-to-byte progression conversion)
+    pub epub_spine_items: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
