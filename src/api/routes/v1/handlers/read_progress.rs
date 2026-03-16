@@ -352,9 +352,9 @@ pub async fn put_progression(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch book: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
-    let client_total_progression = body
-        .get("locator")
-        .and_then(|l| l.get("locations"))
+    let locations = body.get("locator").and_then(|l| l.get("locations"));
+
+    let client_total_progression = locations
         .and_then(|l| l.get("totalProgression"))
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
@@ -365,6 +365,29 @@ pub async fn put_progression(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
+    // Detect if the client is character-based (epub.js sends CFI, Readium clients don't)
+    let has_cfi = locations
+        .and_then(|l| l.get("cfi"))
+        .and_then(|v| v.as_str())
+        .is_some_and(|s| !s.is_empty());
+
+    // Convert char-based progression to byte-based if spine items are available
+    let canonical_progression = if has_cfi {
+        if let Some(ref spine_json) = book.epub_spine_items {
+            if let Ok(spine_items) =
+                serde_json::from_str::<Vec<crate::parsers::SpineItem>>(spine_json)
+            {
+                crate::parsers::char_to_byte_progression(&spine_items, client_total_progression)
+            } else {
+                client_total_progression
+            }
+        } else {
+            client_total_progression
+        }
+    } else {
+        client_total_progression
+    };
+
     // Normalize totalProgression using server-side positions if available
     let (total_progression, current_page) = if let Some(ref positions_json) = book.epub_positions {
         if let Ok(positions) =
@@ -373,38 +396,38 @@ pub async fn put_progression(
             if let Some((normalized, position)) = crate::parsers::normalize_progression(
                 &positions,
                 client_href,
-                client_total_progression,
+                canonical_progression,
             ) {
                 (normalized, position)
             } else {
                 let page = if book.page_count > 0 {
-                    (client_total_progression * book.page_count as f64)
+                    (canonical_progression * book.page_count as f64)
                         .round()
                         .max(1.0) as i32
                 } else {
                     1
                 };
-                (client_total_progression, page)
+                (canonical_progression, page)
             }
         } else {
             let page = if book.page_count > 0 {
-                (client_total_progression * book.page_count as f64)
+                (canonical_progression * book.page_count as f64)
                     .round()
                     .max(1.0) as i32
             } else {
                 1
             };
-            (client_total_progression, page)
+            (canonical_progression, page)
         }
     } else {
         let page = if book.page_count > 0 {
-            (client_total_progression * book.page_count as f64)
+            (canonical_progression * book.page_count as f64)
                 .round()
                 .max(1.0) as i32
         } else {
             1
         };
-        (client_total_progression, page)
+        (canonical_progression, page)
     };
 
     let completed =

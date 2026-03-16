@@ -312,6 +312,7 @@ impl FormatParser for PdfParser {
             comic_info: None, // PDF doesn't use ComicInfo.xml
             isbns,
             epub_positions: None,
+            epub_spine_items: None,
         })
     }
 }

@@ -348,6 +348,7 @@ mod tests {
             thumbnail_path: None,
             thumbnail_generated_at: None,
             epub_positions: Some(serde_json::to_string(positions).unwrap()),
+            epub_spine_items: None,
         }
     }
 

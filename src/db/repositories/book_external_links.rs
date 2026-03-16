@@ -229,6 +229,7 @@ mod tests {
             thumbnail_generated_at: None,
             koreader_hash: None,
             epub_positions: None,
+            epub_spine_items: None,
         };
 
         BookRepository::create(db, &book_model, None).await.unwrap()
@@ -604,6 +605,7 @@ mod tests {
             thumbnail_generated_at: None,
             koreader_hash: None,
             epub_positions: None,
+            epub_spine_items: None,
         };
 
         let book2_model = books::Model {

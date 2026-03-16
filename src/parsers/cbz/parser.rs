@@ -143,6 +143,7 @@ impl FormatParser for CbzParser {
             // (see epub/parser.rs and pdf/parser.rs for implemented approaches)
             isbns: Vec::new(),
             epub_positions: None,
+            epub_spine_items: None,
         })
     }
 }
