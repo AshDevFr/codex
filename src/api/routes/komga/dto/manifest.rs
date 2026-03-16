@@ -10,6 +10,7 @@ use utoipa::ToSchema;
 ///
 /// Root structure for the manifest returned by the EPUB manifest endpoint.
 /// Matches Komga's WebPub Manifest output for maximum compatibility.
+#[allow(dead_code)]
 #[derive(Debug, Serialize, ToSchema)]
 pub struct WebPubManifest {
     pub context: String,
@@ -26,6 +27,7 @@ pub struct WebPubManifest {
 }
 
 /// Metadata section of the WebPub Manifest
+#[allow(dead_code)]
 #[derive(Debug, Serialize, ToSchema)]
 pub struct WebPubMetadata {
     pub identifier: String,
@@ -44,6 +46,7 @@ pub struct WebPubMetadata {
 }
 
 /// Rendition properties for EPUB layout
+#[allow(dead_code)]
 #[derive(Debug, Serialize, ToSchema)]
 pub struct WebPubRendition {
     pub layout: String,

@@ -3,13 +3,13 @@
 //! Provides endpoints for streaming EPUB reading via the Readium WebPub Manifest format.
 //! This enables apps like Komic to read EPUBs without downloading the entire file.
 
-use super::super::dto::manifest::{WebPubLink, WebPubManifest, WebPubMetadata, WebPubTocEntry};
+use super::super::dto::manifest::{WebPubLink, WebPubManifest, WebPubTocEntry};
 use crate::api::{
     error::ApiError,
     extractors::{AuthState, FlexibleAuthContext},
     permissions::Permission,
 };
-use crate::db::repositories::{BookMetadataRepository, BookRepository};
+use crate::db::repositories::{BookMetadataRepository, BookRepository, SeriesRepository};
 use crate::parsers::epub::EpubParser;
 use crate::require_permission;
 use axum::{
@@ -59,6 +59,7 @@ pub async fn get_epub_manifest(
     State(state): State<Arc<AuthState>>,
     FlexibleAuthContext(auth): FlexibleAuthContext,
     OriginalUri(uri): OriginalUri,
+    headers: axum::http::HeaderMap,
     Path(book_id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::BooksRead)?;
@@ -74,14 +75,26 @@ pub async fn get_epub_manifest(
         ));
     }
 
-    // Derive base URL for resource links from the request URI.
-    // URI is like: /{prefix}/api/v1/books/{id}/manifest/epub
-    // We need:     /{prefix}/api/v1/books/{id}/resource/
+    // Build absolute base URL for resource links (Komga returns absolute URLs).
+    // Derive scheme from X-Forwarded-Proto or default to http.
+    // Derive host from X-Forwarded-Host, Host header, or fallback.
+    let scheme = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("http");
+    let host = headers
+        .get("x-forwarded-host")
+        .or_else(|| headers.get("host"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost");
+
     let uri_path = uri.path().to_string();
-    let base_url = uri_path
+    let book_path = uri_path
         .rfind("/manifest/epub")
+        .or_else(|| uri_path.rfind("/manifest"))
         .map(|pos| &uri_path[..pos])
         .unwrap_or(&uri_path);
+    let base_url = format!("{}://{}{}", scheme, host, book_path);
 
     // Open EPUB as ZIP
     let file_path = book.file_path.clone();
@@ -147,21 +160,28 @@ pub async fn get_epub_manifest(
         })
         .collect();
 
-    // Build resources (manifest items not in spine)
-    let resources: Vec<WebPubLink> = manifest_items
-        .values()
-        .filter(|(href, _)| !spine_hrefs.contains(href.as_str()))
-        .map(|(href, media_type)| WebPubLink {
-            href: format!("{}/resource/{}", base_url, encode_resource_path(href)),
-            media_type: media_type.clone(),
-            rel: None,
-        })
-        .collect();
+    // Build resources: thumbnail first (matches Komga), then manifest items not in spine
+    let mut resources: Vec<WebPubLink> = Vec::new();
+    resources.push(WebPubLink {
+        href: format!("{}/thumbnail", base_url),
+        media_type: "image/jpeg".to_string(),
+        rel: None,
+    });
+    resources.extend(
+        manifest_items
+            .values()
+            .filter(|(href, _)| !spine_hrefs.contains(href.as_str()))
+            .map(|(href, media_type)| WebPubLink {
+                href: format!("{}/resource/{}", base_url, encode_resource_path(href)),
+                media_type: media_type.clone(),
+                rel: None,
+            }),
+    );
 
     // Build TOC with rewritten hrefs
     let toc: Vec<WebPubTocEntry> = toc_entries
         .into_iter()
-        .map(|entry| rewrite_toc_hrefs(entry, base_url))
+        .map(|entry| rewrite_toc_hrefs(entry, &base_url))
         .collect();
 
     // Build self and acquisition links (matches Komga format)
@@ -180,30 +200,165 @@ pub async fn get_epub_manifest(
         },
     ];
 
-    let manifest = WebPubManifest {
-        context: "https://readium.org/webpub-manifest/context.jsonld".to_string(),
-        metadata: WebPubMetadata {
-            identifier: format!("urn:uuid:{}", book_id),
-            title,
-            conforms_to: "https://readium.org/webpub-manifest/profiles/epub".to_string(),
-            contributor: authors,
-            language: None,
-            modified: None,
-            number_of_pages: book.page_count,
-            rendition: super::super::dto::manifest::WebPubRendition {
-                layout: "reflowable".to_string(),
-            },
-        },
-        reading_order,
-        resources,
-        toc,
-        images: Vec::new(),
-        landmarks: Vec::new(),
-        links,
-        page_list: Vec::new(),
-    };
+    // Fetch series info for belongsTo (matches Komga's output)
+    let series = SeriesRepository::get_by_id(&state.db, book.series_id)
+        .await
+        .ok()
+        .flatten();
 
-    let body = serde_json::to_vec(&manifest)
+    // Build manifest as raw JSON to exactly match Komga's Jackson output.
+    // Komga uses @JsonInclude(NON_NULL) on WPPublicationDto, so null fields
+    // are omitted but empty arrays are kept. Keys are alphabetical (Jackson default).
+    let mut metadata_obj = serde_json::Map::new();
+
+    // belongsTo (series info) - Komga includes this
+    if let Some(ref series) = series {
+        let position: f64 = book_metadata
+            .as_ref()
+            .and_then(|m| m.number)
+            .and_then(|n| n.to_string().parse::<f64>().ok())
+            .unwrap_or(0.0);
+        // Use integer if whole number, to match Komga's output
+        let position = if position.fract() == 0.0 {
+            serde_json::json!(position as i64)
+        } else {
+            serde_json::json!(position)
+        };
+        metadata_obj.insert(
+            "belongsTo".to_string(),
+            serde_json::json!({
+                "series": [{
+                    "name": series.name,
+                    "position": position
+                }]
+            }),
+        );
+    }
+
+    metadata_obj.insert(
+        "conformsTo".to_string(),
+        serde_json::Value::String("https://readium.org/webpub-manifest/profiles/epub".to_string()),
+    );
+    if !authors.is_empty() {
+        metadata_obj.insert(
+            "contributor".to_string(),
+            serde_json::Value::Array(authors.into_iter().map(serde_json::Value::String).collect()),
+        );
+    }
+
+    // Use ISBN if available, fall back to UUID
+    let identifier = book_metadata
+        .as_ref()
+        .and_then(|m| m.isbns.as_ref())
+        .and_then(|isbns| {
+            // isbns may be comma-separated or JSON array; take first one
+            let isbn = isbns.trim().trim_start_matches('[').trim_start_matches('"');
+            let end = isbn.find(['"', ',', ']']).unwrap_or(isbn.len());
+            let isbn = isbn[..end].trim();
+            if isbn.is_empty() {
+                None
+            } else {
+                Some(format!("urn:isbn:{}", isbn))
+            }
+        })
+        .unwrap_or_else(|| format!("urn:uuid:{}", book_id));
+    metadata_obj.insert(
+        "identifier".to_string(),
+        serde_json::Value::String(identifier),
+    );
+
+    // Language
+    if let Some(ref lang) = book_metadata.as_ref().and_then(|m| m.language_iso.clone()) {
+        metadata_obj.insert(
+            "language".to_string(),
+            serde_json::Value::String(lang.clone()),
+        );
+    }
+
+    // Modified timestamp
+    metadata_obj.insert(
+        "modified".to_string(),
+        serde_json::Value::String(book.modified_at.to_rfc3339()),
+    );
+
+    metadata_obj.insert(
+        "numberOfPages".to_string(),
+        serde_json::Value::Number(book.page_count.into()),
+    );
+    metadata_obj.insert(
+        "rendition".to_string(),
+        serde_json::json!({"layout": "reflowable"}),
+    );
+    metadata_obj.insert("title".to_string(), serde_json::Value::String(title));
+
+    fn links_to_json(links: &[WebPubLink]) -> serde_json::Value {
+        serde_json::Value::Array(
+            links
+                .iter()
+                .map(|l| {
+                    let mut m = serde_json::Map::new();
+                    m.insert(
+                        "href".to_string(),
+                        serde_json::Value::String(l.href.clone()),
+                    );
+                    if let Some(ref rel) = l.rel {
+                        m.insert("rel".to_string(), serde_json::Value::String(rel.clone()));
+                    }
+                    m.insert(
+                        "type".to_string(),
+                        serde_json::Value::String(l.media_type.clone()),
+                    );
+                    serde_json::Value::Object(m)
+                })
+                .collect(),
+        )
+    }
+
+    fn toc_to_json(entries: &[WebPubTocEntry]) -> serde_json::Value {
+        serde_json::Value::Array(
+            entries
+                .iter()
+                .map(|e| {
+                    let mut m = serde_json::Map::new();
+                    if !e.children.is_empty() {
+                        m.insert("children".to_string(), toc_to_json(&e.children));
+                    }
+                    m.insert(
+                        "href".to_string(),
+                        serde_json::Value::String(e.href.clone()),
+                    );
+                    m.insert(
+                        "title".to_string(),
+                        serde_json::Value::String(e.title.clone()),
+                    );
+                    serde_json::Value::Object(m)
+                })
+                .collect(),
+        )
+    }
+
+    // Build top-level object with keys in alphabetical order (matching Komga/Jackson)
+    let mut root = serde_json::Map::new();
+    root.insert(
+        "context".to_string(),
+        serde_json::Value::String("https://readium.org/webpub-manifest/context.jsonld".to_string()),
+    );
+    root.insert("images".to_string(), serde_json::Value::Array(Vec::new()));
+    root.insert(
+        "landmarks".to_string(),
+        serde_json::Value::Array(Vec::new()),
+    );
+    root.insert("links".to_string(), links_to_json(&links));
+    root.insert(
+        "metadata".to_string(),
+        serde_json::Value::Object(metadata_obj),
+    );
+    root.insert("pageList".to_string(), serde_json::Value::Array(Vec::new()));
+    root.insert("readingOrder".to_string(), links_to_json(&reading_order));
+    root.insert("resources".to_string(), links_to_json(&resources));
+    root.insert("toc".to_string(), toc_to_json(&toc));
+
+    let body = serde_json::to_vec(&serde_json::Value::Object(root))
         .map_err(|e| ApiError::Internal(format!("Failed to serialize manifest: {}", e)))?;
 
     Ok(Response::builder()
@@ -315,23 +470,16 @@ pub async fn get_epub_resource(
 // Helper Functions
 // ============================================================================
 
+/// Well-known manifest item IDs for NCX files (matches Komga's fallback)
+const POSSIBLE_NCX_ITEM_IDS: &[&str] = &["toc", "ncx", "ncxtoc"];
+
 /// Parse TOC from NCX (EPUB 2) or nav document (EPUB 3)
 fn parse_toc(
     archive: &mut ZipArchive<std::fs::File>,
     manifest: &std::collections::HashMap<String, (String, String)>,
     _opf_path: &str,
 ) -> Vec<WebPubTocEntry> {
-    // Try NCX first (EPUB 2) - look for application/x-dtbncx+xml in manifest
-    if let Some((ncx_href, _)) = manifest
-        .values()
-        .find(|(_, mt)| mt == "application/x-dtbncx+xml")
-        && let Ok(entries) = parse_ncx(archive, ncx_href)
-        && !entries.is_empty()
-    {
-        return entries;
-    }
-
-    // Try EPUB 3 nav document: check all xhtml files for epub:type="toc"
+    // Try EPUB 3 nav document first: check all xhtml files for epub:type="toc"
     for (nav_href, _) in manifest
         .values()
         .filter(|(_, mt)| mt == "application/xhtml+xml")
@@ -341,6 +489,25 @@ fn parse_toc(
         {
             return entries;
         }
+    }
+
+    // Try EPUB 2 NCX: first by media type, then by well-known item IDs
+    let ncx_href = manifest
+        .values()
+        .find(|(_, mt)| mt == "application/x-dtbncx+xml")
+        .map(|(href, _)| href.as_str())
+        .or_else(|| {
+            manifest
+                .iter()
+                .find(|(id, _)| POSSIBLE_NCX_ITEM_IDS.contains(&id.to_lowercase().as_str()))
+                .map(|(_, (href, _))| href.as_str())
+        });
+
+    if let Some(ncx_href) = ncx_href
+        && let Ok(entries) = parse_ncx(archive, ncx_href)
+        && !entries.is_empty()
+    {
+        return entries;
     }
 
     Vec::new()
@@ -372,11 +539,18 @@ fn parse_nav_points(content: &str, base_path: &str) -> Vec<WebPubTocEntry> {
     while let Some(np_start) = remaining.find("<navPoint") {
         let section = &remaining[np_start..];
 
-        // Find the matching closing tag, accounting for nesting
-        let Some(inner_start) = section.find('>') else {
+        // Find the full extent of this navPoint (including nested ones)
+        let Some(close_pos) = find_closing_nav_point(section) else {
             break;
         };
-        let inner = &section[inner_start + 1..];
+        // Bounded content: everything from opening tag to closing tag
+        let nav_point_content = &section[..close_pos];
+
+        // Find the end of the opening <navPoint ...> tag
+        let Some(inner_start) = nav_point_content.find('>') else {
+            break;
+        };
+        let inner = &nav_point_content[inner_start + 1..];
 
         // Extract navLabel > text
         let title = extract_between(inner, "<text>", "</text>")
@@ -399,11 +573,9 @@ fn parse_nav_points(content: &str, base_path: &str) -> Vec<WebPubTocEntry> {
             format!("{}{}", base_path, href)
         };
 
-        // Find nested navPoints (children)
-        // Look for the next </navPoint> to delimit this entry
-        let children_content = find_nav_point_children(inner);
-        let children = if !children_content.is_empty() {
-            parse_nav_points(children_content, base_path)
+        // Find nested navPoints (children) within this bounded content
+        let children = if inner.contains("<navPoint") {
+            parse_nav_points(inner, base_path)
         } else {
             Vec::new()
         };
@@ -416,28 +588,11 @@ fn parse_nav_points(content: &str, base_path: &str) -> Vec<WebPubTocEntry> {
             });
         }
 
-        // Move past this navPoint's opening tag to find the next sibling
-        // We need to skip past nested navPoints, so find the closing </navPoint>
-        if let Some(close_pos) = find_closing_nav_point(section) {
-            remaining = &section[close_pos..];
-        } else {
-            break;
-        }
+        // Move past this navPoint to find the next sibling
+        remaining = &section[close_pos..];
     }
 
     entries
-}
-
-/// Find the content between the first nested navPoint and the closing </navPoint>
-fn find_nav_point_children(content: &str) -> &str {
-    // Check if there are nested navPoints
-    if let Some(first_child) = content.find("<navPoint")
-        && let Some(close) = content.rfind("</navPoint>")
-        && first_child < close
-    {
-        return &content[first_child..close];
-    }
-    ""
 }
 
 /// Find the position after the matching closing </navPoint> tag
@@ -635,4 +790,127 @@ fn percent_decode(path: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&result).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_nav_points_flat() {
+        let ncx = r#"
+        <navPoint id="ncx1" playOrder="1">
+            <navLabel><text>Cover</text></navLabel>
+            <content src="cover.xhtml"/>
+        </navPoint>
+        <navPoint id="ncx2" playOrder="2">
+            <navLabel><text>Chapter 1</text></navLabel>
+            <content src="ch1.xhtml"/>
+        </navPoint>
+        "#;
+        let entries = parse_nav_points(ncx, "OEBPS/");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].title, "Cover");
+        assert_eq!(entries[0].href, "OEBPS/cover.xhtml");
+        assert_eq!(entries[1].title, "Chapter 1");
+        assert!(entries[0].children.is_empty());
+    }
+
+    #[test]
+    fn test_parse_nav_points_nested() {
+        let ncx = r#"
+        <navPoint id="ncx1" playOrder="1">
+            <navLabel><text>Prologue</text></navLabel>
+            <content src="prologue.xhtml"/>
+        </navPoint>
+        <navPoint id="ncx2" playOrder="2">
+            <navLabel><text>Book One: King</text></navLabel>
+            <content src="part1.xhtml"/>
+            <navPoint id="ncx3" playOrder="3">
+                <navLabel><text>Chapter 1</text></navLabel>
+                <content src="ch1-1.xhtml"/>
+            </navPoint>
+            <navPoint id="ncx4" playOrder="4">
+                <navLabel><text>Chapter 2</text></navLabel>
+                <content src="ch1-2.xhtml"/>
+            </navPoint>
+        </navPoint>
+        <navPoint id="ncx5" playOrder="5">
+            <navLabel><text>Epilogue</text></navLabel>
+            <content src="epilogue.xhtml"/>
+        </navPoint>
+        "#;
+        let entries = parse_nav_points(ncx, "OEBPS/");
+        assert_eq!(entries.len(), 3, "Should have 3 top-level entries");
+        assert_eq!(entries[0].title, "Prologue");
+        assert!(entries[0].children.is_empty());
+
+        assert_eq!(entries[1].title, "Book One: King");
+        assert_eq!(entries[1].children.len(), 2);
+        assert_eq!(entries[1].children[0].title, "Chapter 1");
+        assert_eq!(entries[1].children[0].href, "OEBPS/ch1-1.xhtml");
+        assert_eq!(entries[1].children[1].title, "Chapter 2");
+
+        assert_eq!(entries[2].title, "Epilogue");
+        assert!(entries[2].children.is_empty());
+    }
+
+    #[test]
+    fn test_parse_toc_ncx_found_by_item_id() {
+        // Simulates the case where NCX has media-type="text/xml" (not the standard
+        // application/x-dtbncx+xml), but the manifest item ID is "ncx"
+        let epub_path = "docker/data/libraries/Books/Stephen R. Lawhead/Merlin/2 - Stephen R. Lawhead - Merlin.epub";
+        let Ok(file) = std::fs::File::open(epub_path) else {
+            return;
+        };
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+
+        // Build manifest map matching what parse_opf produces for this EPUB:
+        // id="ncx", href="OEBPS/toc.ncx", media-type="text/xml"
+        let mut manifest = std::collections::HashMap::new();
+        manifest.insert(
+            "ncx".to_string(),
+            ("OEBPS/toc.ncx".to_string(), "text/xml".to_string()),
+        );
+
+        let entries = parse_toc(&mut archive, &manifest, "OEBPS/content.opf");
+        assert!(
+            !entries.is_empty(),
+            "TOC should be found via NCX item ID fallback"
+        );
+
+        let titles: Vec<&str> = entries.iter().map(|e| e.title.as_str()).collect();
+        assert!(titles.contains(&"Cover"));
+    }
+
+    #[test]
+    fn test_parse_ncx_real_epub() {
+        // Test with the actual Merlin EPUB if available
+        let epub_path = "docker/data/libraries/Books/Stephen R. Lawhead/Merlin/2 - Stephen R. Lawhead - Merlin.epub";
+        let Ok(file) = std::fs::File::open(epub_path) else {
+            // Skip if fixture not available
+            return;
+        };
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let entries = parse_ncx(&mut archive, "OEBPS/toc.ncx").unwrap();
+
+        assert!(!entries.is_empty(), "TOC should not be empty");
+
+        // Komga produces these top-level entries for this book
+        let titles: Vec<&str> = entries.iter().map(|e| e.title.as_str()).collect();
+        assert!(titles.contains(&"Cover"));
+        assert!(titles.contains(&"Prologue"));
+        assert!(titles.contains(&"Epilogue"));
+
+        // "Book One: King" should have chapter children
+        let book_one = entries
+            .iter()
+            .find(|e| e.title.contains("Book One"))
+            .unwrap();
+        assert!(
+            !book_one.children.is_empty(),
+            "Book One should have chapter children"
+        );
+        assert_eq!(book_one.children[0].title, "Chapter 1");
+    }
 }
