@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.15.1] - 2026-03-17
+
+### 🐛 Bug Fixes
+
+- *(epub)* Fix cross-app progress sync when within-resource progression is zero
+
 ## [1.15.0] - 2026-03-17
 
 ### 🚀 Features
