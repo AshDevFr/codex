@@ -169,6 +169,7 @@ export function EpubReader({
   const {
     getSavedLocation,
     getLocalTimestamp,
+    initialPercentage,
     initialCfi,
     initialHref,
     initialProgression,
@@ -417,14 +418,15 @@ export function EpubReader({
             initialHref!.endsWith(item.href),
         );
 
+        const locations = book.locations;
+        const total = locations.length();
+
         if (
           spineItem &&
           initialProgression !== null &&
           initialProgression > 0
         ) {
           // Interpolate within the section's book-level percentage range
-          const locations = book.locations;
-          const total = locations.length();
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const allLocs: string[] = (locations as any)._locations ?? [];
 
@@ -448,13 +450,27 @@ export function EpubReader({
             if (cfi) {
               setLocation(cfi);
             }
-          } else {
-            // No locations for this section, navigate to href start
-            setLocation(initialHref!);
+          } else if (spineItem) {
+            renditionRef.current?.display(spineItem.href);
           }
-        } else {
-          // progression is 0/null, navigate to start of chapter
-          setLocation(initialHref!);
+        } else if (
+          initialPercentage !== null &&
+          initialPercentage > 0 &&
+          total > 0
+        ) {
+          // No within-resource progression, but we have totalProgression.
+          // Use it directly to position via book-level percentage.
+          const cfi = locations.cfiFromPercentage(
+            Math.min(initialPercentage, 0.9999),
+          );
+          if (cfi) {
+            setLocation(cfi);
+          } else if (spineItem) {
+            renditionRef.current?.display(spineItem.href);
+          }
+        } else if (spineItem) {
+          // No progression data at all, navigate to start of chapter
+          renditionRef.current?.display(spineItem.href);
         }
       }
       setHasAppliedApiProgress(true);
@@ -466,6 +482,7 @@ export function EpubReader({
     needsCrossAppSync,
     initialHref,
     initialProgression,
+    initialPercentage,
     hasAppliedApiProgress,
   ]);
 
