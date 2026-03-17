@@ -2,6 +2,28 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.15.0] - 2026-03-17
+
+### 🚀 Features
+
+- *(koreader)* Add KOReader sync API for reading progress synchronization
+- *(reader)* Add R2Progression support for cross-device EPUB reading sync
+- *(epub)* Add server-side Readium positions for cross-app progression sync
+- *(koreader)* Add EPUB progress sync, permission model, and API key editing
+- *(epub)* Add char-to-byte progression conversion for accurate cross-device sync
+
+### 🐛 Bug Fixes
+
+- *(epub)* Fix page count, progress sync, and cross-app compatibility
+- *(reader)* Prefer API progress over localStorage when newer for cross-device sync
+- *(epub)* Stop overwriting client R2Progression locator with server-normalized values
+- *(komga)* Match Komga's WebPub Manifest format for Komic EPUB TOC compatibility
+- *(komga)* Fix EPUB manifest metadata serialization breaking Komic TOC display
+
+### ⚙️ Miscellaneous Tasks
+
+- Prepare repository for open-source release
+
 ## [1.14.3] - 2026-03-01
 
 ### 🐛 Bug Fixes
