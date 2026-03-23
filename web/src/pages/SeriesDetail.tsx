@@ -20,6 +20,7 @@ import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAnalyze,
+  IconBook,
   IconBookOff,
   IconCheck,
   IconChevronDown,
@@ -37,7 +38,7 @@ import {
   IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   type PluginActionDto,
@@ -155,6 +156,29 @@ export function SeriesDetail() {
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     enabled: canEditSeries && !!series, // Only fetch if user can edit series and series is loaded
   });
+
+  // Fetch books for this series to determine the next book to continue reading
+  const { data: seriesBooks } = useQuery({
+    queryKey: ["series-books", seriesId, false],
+    queryFn: () => seriesApi.getBooks(seriesId!),
+    enabled: !!seriesId,
+  });
+
+  // Find the next book to read: first in-progress book (by number), or first unread book
+  const nextBook = useMemo(() => {
+    if (!seriesBooks?.length) return null;
+    const sorted = [...seriesBooks].sort(
+      (a, b) => (a.number ?? 0) - (b.number ?? 0),
+    );
+    // Prefer the first book that is in-progress (has progress but not completed)
+    const inProgress = sorted.find(
+      (b) => b.readProgress && !b.readProgress.completed,
+    );
+    if (inProgress) return inProgress;
+    // Otherwise, the first book with no progress at all
+    const unread = sorted.find((b) => !b.readProgress);
+    return unread ?? null;
+  }, [seriesBooks]);
 
   // Mutation to fetch preprocessed search title before opening modal
   const searchTitleMutation = useMutation({
@@ -752,9 +776,26 @@ export function SeriesDetail() {
 
               {/* Action buttons */}
               <Group gap="sm" mt="xs">
+                {nextBook && (
+                  <Button
+                    size="xs"
+                    variant="filled"
+                    leftSection={<IconBook size={14} />}
+                    onClick={() => {
+                      if (nextBook.fileFormat === "epub") {
+                        navigate(`/reader/${nextBook.id}`);
+                      } else {
+                        const page = nextBook.readProgress?.currentPage ?? 1;
+                        navigate(`/reader/${nextBook.id}?page=${page}`);
+                      }
+                    }}
+                  >
+                    {nextBook.readProgress ? "Continue" : "Read"}
+                  </Button>
+                )}
                 <Button
                   size="xs"
-                  variant="filled"
+                  variant={nextBook ? "light" : "filled"}
                   component="a"
                   href={`/api/v1/series/${series.id}/download`}
                   leftSection={<IconDownload size={14} />}
