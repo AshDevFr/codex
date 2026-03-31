@@ -2,6 +2,13 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.16.0] - 2026-03-31
+
+### 🚀 Features
+
+- *(ui)* Add Continue/Read button to series detail page
+- *(recommendations)* Add metadata fields, plugin-side filters, and frontend filter UI
+
 ## [1.15.1] - 2026-03-17
 
 ### 🐛 Bug Fixes
