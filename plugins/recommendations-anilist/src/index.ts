@@ -36,10 +36,56 @@ import { EXTERNAL_ID_SOURCE_ANILIST, manifest } from "./manifest.js";
 
 const logger = createLogger({ name: "recommendations-anilist", level: "debug" });
 
+// =============================================================================
+// Filter Configuration
+// =============================================================================
+
+/** Plugin-side filters applied during recommendation generation */
+export interface RecommendationFilters {
+  /** Allowed country codes (empty = no filter) */
+  allowedCountries: Set<string>;
+  /** Genres to exclude */
+  excludedGenres: Set<string>;
+  /** Formats to exclude (e.g. "NOVEL", "ONE_SHOT") */
+  excludedFormats: Set<string>;
+  /** Minimum AniList average score (0-100, 0 = disabled) */
+  minAniListScore: number;
+}
+
+const DEFAULT_FILTERS: RecommendationFilters = {
+  allowedCountries: new Set(),
+  excludedGenres: new Set(),
+  excludedFormats: new Set(),
+  minAniListScore: 0,
+};
+
+/** Parse a comma-separated string into a Set of trimmed, uppercased values */
+function parseCommaSet(value: unknown): Set<string> {
+  if (typeof value !== "string" || value.trim() === "") return new Set();
+  return new Set(
+    value
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => s.length > 0),
+  );
+}
+
+/** Parse a comma-separated string into a Set of trimmed values (case-preserved) */
+function parseCommaSetPreserveCase(value: unknown): Set<string> {
+  if (typeof value !== "string" || value.trim() === "") return new Set();
+  return new Set(
+    value
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  );
+}
+
 // Plugin state (set during initialization)
 let client: AniListRecommendationClient | null = null;
 let viewerId: number | null = null;
 let searchFallback = true;
+let filters: RecommendationFilters = { ...DEFAULT_FILTERS };
 let storage: PluginStorage | null = null;
 
 /** Set the AniList client (exported for testing) */
@@ -50,6 +96,21 @@ export function setClient(c: AniListRecommendationClient | null): void {
 /** Set the searchFallback flag (exported for testing) */
 export function setSearchFallback(enabled: boolean): void {
   searchFallback = enabled;
+}
+
+/** Set the recommendation filters (exported for testing) */
+export function setFilters(f: RecommendationFilters): void {
+  filters = f;
+}
+
+/** Reset filters to defaults (exported for testing) */
+export function resetFilters(): void {
+  filters = {
+    allowedCountries: new Set(),
+    excludedGenres: new Set(),
+    excludedFormats: new Set(),
+    minAniListScore: 0,
+  };
 }
 
 /** Storage key for persisted dismissed recommendation IDs */
@@ -169,6 +230,7 @@ export function mapAniListStatus(status: AniListMediaStatus | null): SeriesStatu
 
 /**
  * Convert AniList recommendation nodes into Recommendation objects.
+ * Applies plugin-side filters (from user config) to exclude unwanted results.
  */
 export function convertRecommendations(
   nodes: AniListRecommendationNode[],
@@ -187,6 +249,31 @@ export function convertRecommendations(
     // Skip if excluded or dismissed
     if (excludeIds.has(externalId) || dismissedIds.has(externalId)) continue;
 
+    // Apply plugin-side filters from user config
+    if (
+      filters.allowedCountries.size > 0 &&
+      (!media.countryOfOrigin || !filters.allowedCountries.has(media.countryOfOrigin.toUpperCase()))
+    ) {
+      continue;
+    }
+
+    if (
+      filters.excludedFormats.size > 0 &&
+      media.format &&
+      filters.excludedFormats.has(media.format.toUpperCase())
+    ) {
+      continue;
+    }
+
+    if (filters.excludedGenres.size > 0 && media.genres) {
+      const hasExcludedGenre = media.genres.some((g) => filters.excludedGenres.has(g));
+      if (hasExcludedGenre) continue;
+    }
+
+    if (filters.minAniListScore > 0 && (media.averageScore ?? 0) < filters.minAniListScore) {
+      continue;
+    }
+
     const inLibrary = userMangaIds.has(media.id);
 
     // Compute a relevance score based on community rating and AniList average score
@@ -204,11 +291,15 @@ export function convertRecommendations(
       coverUrl: media.coverImage.large ?? undefined,
       summary: stripHtml(media.description),
       genres: media.genres ?? [],
+      tags: media.tags?.map((t) => ({ name: t.name, rank: t.rank, category: t.category })),
       score: Math.max(0, Math.min(score, 1)),
       reason: `Recommended because you liked ${basedOnTitle}`,
       basedOn: [basedOnTitle],
       inLibrary,
       status,
+      format: media.format ?? undefined,
+      countryOfOrigin: media.countryOfOrigin ?? undefined,
+      startYear: media.startDate?.year ?? undefined,
       totalBookCount,
       rating: media.averageScore ?? undefined,
       popularity: media.popularity ?? undefined,
@@ -234,7 +325,7 @@ const provider: RecommendationProvider = {
     }
 
     const { library, limit, excludeIds: rawExcludeIds = [] } = params;
-    const effectiveLimit = Math.min(limit ?? 20, 50);
+    const effectiveLimit = Math.min(limit ?? 20, 100);
     const excludeIds = new Set(rawExcludeIds);
 
     // Library entries are pre-curated seeds from Codex server (rated + recent reads).
@@ -340,6 +431,30 @@ createRecommendationPlugin({
     if (uc && typeof uc.searchFallback === "boolean") {
       searchFallback = uc.searchFallback;
       logger.info(`Search fallback set to: ${searchFallback}`);
+    }
+
+    // Read recommendation filters from userConfig
+    if (uc) {
+      filters = {
+        allowedCountries: parseCommaSet(uc.allowedCountries),
+        excludedGenres: parseCommaSetPreserveCase(uc.excludedGenres),
+        excludedFormats: parseCommaSet(uc.excludedFormats),
+        minAniListScore:
+          typeof uc.minAniListScore === "number"
+            ? Math.max(0, Math.min(uc.minAniListScore, 100))
+            : 0,
+      };
+      const activeFilters: string[] = [];
+      if (filters.allowedCountries.size > 0)
+        activeFilters.push(`countries=[${[...filters.allowedCountries].join(",")}]`);
+      if (filters.excludedGenres.size > 0)
+        activeFilters.push(`excludedGenres=[${[...filters.excludedGenres].join(",")}]`);
+      if (filters.excludedFormats.size > 0)
+        activeFilters.push(`excludedFormats=[${[...filters.excludedFormats].join(",")}]`);
+      if (filters.minAniListScore > 0) activeFilters.push(`minScore=${filters.minAniListScore}`);
+      if (activeFilters.length > 0) {
+        logger.info(`Recommendation filters: ${activeFilters.join(", ")}`);
+      }
     }
 
     // Capture the storage client and restore persisted dismissed IDs

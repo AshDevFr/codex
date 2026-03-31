@@ -43,6 +43,45 @@ export const manifest = {
         required: false,
         default: true,
       },
+      {
+        key: "allowedCountries",
+        label: "Country of Origin Filter",
+        description:
+          'Comma-separated ISO country codes to include (e.g. "JP" for manga, "KR" for manhwa, "CN" for manhua). Leave empty for no filter.',
+        type: "string" as const,
+        required: false,
+        default: "",
+        example: "JP,KR",
+      },
+      {
+        key: "excludedGenres",
+        label: "Excluded Genres",
+        description:
+          'Comma-separated genres to exclude from recommendations (e.g. "Hentai,Ecchi").',
+        type: "string" as const,
+        required: false,
+        default: "",
+        example: "Hentai",
+      },
+      {
+        key: "excludedFormats",
+        label: "Excluded Formats",
+        description:
+          'Comma-separated formats to exclude (e.g. "NOVEL,ONE_SHOT"). Valid values: MANGA, NOVEL, ONE_SHOT.',
+        type: "string" as const,
+        required: false,
+        default: "",
+        example: "NOVEL",
+      },
+      {
+        key: "minAniListScore",
+        label: "Minimum AniList Score",
+        description:
+          "Minimum average score (0-100) on AniList to include a recommendation. Set to 0 to disable.",
+        type: "number" as const,
+        required: false,
+        default: 0,
+      },
     ],
   },
   oauth: {

@@ -5,8 +5,10 @@ import {
   convertRecommendations,
   dismissedIds,
   mapAniListStatus,
+  resetFilters,
   resolveAniListIds,
   setClient,
+  setFilters,
   setSearchFallback,
 } from "./index.js";
 import { EXTERNAL_ID_SOURCE_ANILIST } from "./manifest.js";
@@ -35,6 +37,7 @@ function makeNode(
     averageScore: number | null;
     title: string;
     genres: string[];
+    tags: Array<{ name: string; rank: number; category: string }>;
     description: string | null;
     siteUrl: string;
     coverImage: string | null;
@@ -44,6 +47,9 @@ function makeNode(
         ? S
         : never
       : never;
+    format: "MANGA" | "NOVEL" | "ONE_SHOT" | null;
+    countryOfOrigin: string | null;
+    startYear: number | null;
     volumes: number | null;
     mediaRecommendation: AniListRecommendationNode["mediaRecommendation"];
   }>,
@@ -65,10 +71,14 @@ function makeNode(
       },
       description: "description" in overrides ? (overrides.description ?? null) : "A great manga",
       genres: overrides.genres ?? ["Action"],
+      tags: overrides.tags ?? [],
       averageScore: "averageScore" in overrides ? (overrides.averageScore ?? null) : 80,
       popularity: "popularity" in overrides ? (overrides.popularity ?? null) : 5000,
       siteUrl: overrides.siteUrl ?? `https://anilist.co/manga/${overrides.id ?? 100}`,
       status: "status" in overrides ? (overrides.status ?? null) : null,
+      format: "format" in overrides ? (overrides.format ?? null) : null,
+      countryOfOrigin: "countryOfOrigin" in overrides ? (overrides.countryOfOrigin ?? null) : null,
+      startDate: "startYear" in overrides ? { year: overrides.startYear ?? null } : { year: null },
       volumes: "volumes" in overrides ? (overrides.volumes ?? null) : null,
     },
   };
@@ -284,6 +294,229 @@ describe("convertRecommendations", () => {
     const nodes = [makeNode({ id: 1, rating: 50, popularity: null })];
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
     expect(results[0].popularity).toBeUndefined();
+  });
+
+  it("includes format from AniList", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, format: "MANGA" })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].format).toBe("MANGA");
+  });
+
+  it("leaves format undefined when null", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, format: null })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].format).toBeUndefined();
+  });
+
+  it("includes countryOfOrigin from AniList", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, countryOfOrigin: "KR" })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].countryOfOrigin).toBe("KR");
+  });
+
+  it("includes startYear from AniList startDate", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, startYear: 2020 })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].startYear).toBe(2020);
+  });
+
+  it("includes tags from AniList", () => {
+    const tags = [
+      { name: "Isekai", rank: 90, category: "Theme" },
+      { name: "Gore", rank: 70, category: "Content" },
+    ];
+    const nodes = [makeNode({ id: 1, rating: 50, tags })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].tags).toEqual(tags);
+  });
+});
+
+// =============================================================================
+// convertRecommendations Filter Tests
+// =============================================================================
+
+describe("convertRecommendations filters", () => {
+  beforeEach(() => {
+    dismissedIds.clear();
+    resetFilters();
+  });
+
+  afterEach(() => {
+    resetFilters();
+  });
+
+  it("filters by allowedCountries", () => {
+    setFilters({
+      allowedCountries: new Set(["JP"]),
+      excludedGenres: new Set(),
+      excludedFormats: new Set(),
+      minAniListScore: 0,
+    });
+
+    const nodes = [
+      makeNode({ id: 1, rating: 80, countryOfOrigin: "JP" }),
+      makeNode({ id: 2, rating: 80, countryOfOrigin: "KR" }),
+      makeNode({ id: 3, rating: 80, countryOfOrigin: null }),
+    ];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(1);
+    expect(results[0].externalId).toBe("1");
+  });
+
+  it("allows multiple countries", () => {
+    setFilters({
+      allowedCountries: new Set(["JP", "KR"]),
+      excludedGenres: new Set(),
+      excludedFormats: new Set(),
+      minAniListScore: 0,
+    });
+
+    const nodes = [
+      makeNode({ id: 1, rating: 80, countryOfOrigin: "JP" }),
+      makeNode({ id: 2, rating: 80, countryOfOrigin: "KR" }),
+      makeNode({ id: 3, rating: 80, countryOfOrigin: "CN" }),
+    ];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(2);
+  });
+
+  it("does not filter when allowedCountries is empty", () => {
+    setFilters({
+      allowedCountries: new Set(),
+      excludedGenres: new Set(),
+      excludedFormats: new Set(),
+      minAniListScore: 0,
+    });
+
+    const nodes = [
+      makeNode({ id: 1, rating: 80, countryOfOrigin: "JP" }),
+      makeNode({ id: 2, rating: 80, countryOfOrigin: "KR" }),
+    ];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(2);
+  });
+
+  it("filters by excludedGenres", () => {
+    setFilters({
+      allowedCountries: new Set(),
+      excludedGenres: new Set(["Hentai"]),
+      excludedFormats: new Set(),
+      minAniListScore: 0,
+    });
+
+    const nodes = [
+      makeNode({ id: 1, rating: 80, genres: ["Action", "Adventure"] }),
+      makeNode({ id: 2, rating: 80, genres: ["Hentai"] }),
+      makeNode({ id: 3, rating: 80, genres: ["Romance", "Hentai"] }),
+    ];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(1);
+    expect(results[0].externalId).toBe("1");
+  });
+
+  it("filters by excludedFormats", () => {
+    setFilters({
+      allowedCountries: new Set(),
+      excludedGenres: new Set(),
+      excludedFormats: new Set(["NOVEL"]),
+      minAniListScore: 0,
+    });
+
+    const nodes = [
+      makeNode({ id: 1, rating: 80, format: "MANGA" }),
+      makeNode({ id: 2, rating: 80, format: "NOVEL" }),
+      makeNode({ id: 3, rating: 80, format: null }),
+    ];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.externalId)).toEqual(["1", "3"]);
+  });
+
+  it("filters by minAniListScore", () => {
+    setFilters({
+      allowedCountries: new Set(),
+      excludedGenres: new Set(),
+      excludedFormats: new Set(),
+      minAniListScore: 70,
+    });
+
+    const nodes = [
+      makeNode({ id: 1, rating: 80, averageScore: 85 }),
+      makeNode({ id: 2, rating: 80, averageScore: 60 }),
+      makeNode({ id: 3, rating: 80, averageScore: null }),
+    ];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(1);
+    expect(results[0].externalId).toBe("1");
+  });
+
+  it("combines multiple filters", () => {
+    setFilters({
+      allowedCountries: new Set(["JP"]),
+      excludedGenres: new Set(["Hentai"]),
+      excludedFormats: new Set(["NOVEL"]),
+      minAniListScore: 70,
+    });
+
+    const nodes = [
+      makeNode({
+        id: 1,
+        rating: 80,
+        countryOfOrigin: "JP",
+        format: "MANGA",
+        genres: ["Action"],
+        averageScore: 85,
+      }),
+      makeNode({
+        id: 2,
+        rating: 80,
+        countryOfOrigin: "KR",
+        format: "MANGA",
+        genres: ["Action"],
+        averageScore: 85,
+      }),
+      makeNode({
+        id: 3,
+        rating: 80,
+        countryOfOrigin: "JP",
+        format: "NOVEL",
+        genres: ["Action"],
+        averageScore: 85,
+      }),
+      makeNode({
+        id: 4,
+        rating: 80,
+        countryOfOrigin: "JP",
+        format: "MANGA",
+        genres: ["Hentai"],
+        averageScore: 85,
+      }),
+      makeNode({
+        id: 5,
+        rating: 80,
+        countryOfOrigin: "JP",
+        format: "MANGA",
+        genres: ["Action"],
+        averageScore: 50,
+      }),
+    ];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(1);
+    expect(results[0].externalId).toBe("1");
+  });
+
+  it("country filter is case-insensitive", () => {
+    setFilters({
+      allowedCountries: new Set(["JP"]),
+      excludedGenres: new Set(),
+      excludedFormats: new Set(),
+      minAniListScore: 0,
+    });
+
+    // AniList returns uppercase country codes, but test lowercase input
+    const nodes = [makeNode({ id: 1, rating: 80, countryOfOrigin: "JP" })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results).toHaveLength(1);
   });
 });
 

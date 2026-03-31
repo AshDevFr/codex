@@ -44,7 +44,7 @@ const CODEX_CONFIG_NAMESPACE: &str = "_codex";
 /// The plugin never reads these; they control server-side behavior.
 #[derive(Debug, Clone)]
 struct CodexRecommendationSettings {
-    /// Maximum number of recommendations to request from the plugin (1-50). Default: 20.
+    /// Maximum number of recommendations to request from the plugin (1-100). Default: 20.
     max_recommendations: u32,
     /// Maximum number of seed titles to send to the plugin (1-25). Default: 10.
     max_seeds: u32,
@@ -64,7 +64,7 @@ impl CodexRecommendationSettings {
         let max_recommendations = codex
             .get("maxRecommendations")
             .and_then(|v| v.as_u64())
-            .map(|v| (v as u32).clamp(1, 50))
+            .map(|v| (v as u32).clamp(1, 100))
             .unwrap_or(20);
 
         let max_seeds = codex

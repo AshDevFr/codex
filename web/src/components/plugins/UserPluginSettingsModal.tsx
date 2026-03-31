@@ -258,9 +258,9 @@ function UserPluginSettingsContent({
           />
           <NumberInput
             label="Maximum recommendations"
-            description="How many recommendations to generate per refresh (1–50)"
+            description="How many recommendations to generate per refresh (1–100)"
             min={1}
-            max={50}
+            max={100}
             {...form.getInputProps("_codex_maxRecommendations")}
           />
           <NumberInput

@@ -17,12 +17,18 @@ import {
   IconSparkles,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type RecommendationsResponse,
   recommendationsApi,
 } from "@/api/recommendations";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
+import {
+  applyFilters,
+  DEFAULT_FILTERS,
+  type RecommendationFilterState,
+  RecommendationFilters,
+} from "@/components/recommendations/RecommendationFilters";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { ApiError } from "@/types";
@@ -133,6 +139,16 @@ export function Recommendations() {
     },
   });
 
+  // Filter state — must be before early returns to satisfy hooks rules
+  const [filters, setFilters] = useState<RecommendationFilterState>({
+    ...DEFAULT_FILTERS,
+  });
+  const recommendations = recData?.recommendations ?? [];
+  const filteredRecommendations = useMemo(
+    () => applyFilters(recommendations, filters),
+    [recommendations, filters],
+  );
+
   // Loading state
   if (isLoading) {
     return (
@@ -190,7 +206,6 @@ export function Recommendations() {
     );
   }
 
-  const recommendations = recData?.recommendations ?? [];
   const isEmpty = recommendations.length === 0;
 
   return (
@@ -236,6 +251,24 @@ export function Recommendations() {
           </Text>
         )}
 
+        {/* Filters */}
+        {recommendations.length > 0 && (
+          <RecommendationFilters
+            recommendations={recommendations}
+            filters={filters}
+            onChange={setFilters}
+          />
+        )}
+
+        {/* Filtered count */}
+        {recommendations.length > 0 &&
+          filteredRecommendations.length !== recommendations.length && (
+            <Text size="sm" c="dimmed">
+              Showing {filteredRecommendations.length} of{" "}
+              {recommendations.length} recommendations
+            </Text>
+          )}
+
         {/* Empty state */}
         {isEmpty && !isTaskActive && (
           <Alert
@@ -263,7 +296,7 @@ export function Recommendations() {
 
         {/* Recommendation cards */}
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-          {recommendations.map((rec) => (
+          {filteredRecommendations.map((rec) => (
             <RecommendationCard
               key={rec.externalId}
               recommendation={rec}

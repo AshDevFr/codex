@@ -6,6 +6,18 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+/// A tag with relevance rank from the source service
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RecommendationTagDto {
+    /// Tag name (e.g., "Isekai", "Gore")
+    pub name: String,
+    /// Relevance rank (0-100)
+    pub rank: i32,
+    /// Tag category (e.g., "Genre", "Theme")
+    pub category: String,
+}
+
 /// A single recommendation for the user
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +38,9 @@ pub struct RecommendationDto {
     /// Genres
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub genres: Vec<String>,
+    /// Tags with relevance rank
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<RecommendationTagDto>>,
     /// Confidence/relevance score (0.0 to 1.0)
     pub score: f64,
     /// Human-readable reason for this recommendation
@@ -45,6 +60,15 @@ pub struct RecommendationDto {
     /// Publication status (ongoing, ended, hiatus, abandoned, unknown)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+    /// Media format (e.g., "MANGA", "NOVEL", "ONE_SHOT")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    /// Country of origin ISO code (e.g., "JP", "KR", "CN")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub country_of_origin: Option<String>,
+    /// Year the series started
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_year: Option<i32>,
     /// Total expected number of books/volumes in the series
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_book_count: Option<i32>,
@@ -120,6 +144,7 @@ mod tests {
             cover_url: None,
             summary: None,
             genres: vec![],
+            tags: None,
             score: 0.5,
             reason: "test".to_string(),
             based_on: vec![],
@@ -127,6 +152,9 @@ mod tests {
             in_library: false,
             in_codex: false,
             status: None,
+            format: None,
+            country_of_origin: None,
+            start_year: None,
             total_book_count: None,
             rating: None,
             popularity: None,

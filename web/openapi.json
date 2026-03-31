@@ -30206,6 +30206,13 @@
             ],
             "description": "Codex series ID if matched to an existing series"
           },
+          "countryOfOrigin": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Country of origin ISO code (e.g., \"JP\", \"KR\", \"CN\")"
+          },
           "coverUrl": {
             "type": [
               "string",
@@ -30223,6 +30230,13 @@
               "null"
             ],
             "description": "URL to the entry on the external service"
+          },
+          "format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Media format (e.g., \"MANGA\", \"NOVEL\", \"ONE_SHOT\")"
           },
           "genres": {
             "type": "array",
@@ -30264,6 +30278,14 @@
             "format": "double",
             "description": "Confidence/relevance score (0.0 to 1.0)"
           },
+          "startYear": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Year the series started"
+          },
           "status": {
             "type": [
               "string",
@@ -30278,6 +30300,16 @@
             ],
             "description": "Summary/description"
           },
+          "tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/RecommendationTagDto"
+            },
+            "description": "Tags with relevance rank"
+          },
           "title": {
             "type": "string",
             "description": "Title of the recommended series/book"
@@ -30289,6 +30321,30 @@
             ],
             "format": "int32",
             "description": "Total expected number of books/volumes in the series"
+          }
+        }
+      },
+      "RecommendationTagDto": {
+        "type": "object",
+        "description": "A tag with relevance rank from the source service",
+        "required": [
+          "name",
+          "rank",
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Tag category (e.g., \"Genre\", \"Theme\")"
+          },
+          "name": {
+            "type": "string",
+            "description": "Tag name (e.g., \"Isekai\", \"Gore\")"
+          },
+          "rank": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Relevance rank (0-100)"
           }
         }
       },

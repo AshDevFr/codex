@@ -48,10 +48,20 @@ const MEDIA_RECOMMENDATIONS_QUERY = `
             }
             description(asHtml: false)
             genres
+            tags {
+              name
+              rank
+              category
+            }
             averageScore
             popularity
             siteUrl
             status
+            format
+            countryOfOrigin
+            startDate {
+              year
+            }
             volumes
           }
         }
@@ -100,6 +110,16 @@ export type AniListMediaStatus =
   | "CANCELLED"
   | "HIATUS";
 
+/** AniList media format values (manga-relevant subset) */
+export type AniListMediaFormat = "MANGA" | "NOVEL" | "ONE_SHOT";
+
+/** AniList tag on a media entry */
+export interface AniListTag {
+  name: string;
+  rank: number;
+  category: string;
+}
+
 export interface AniListRecommendationNode {
   rating: number;
   mediaRecommendation: {
@@ -108,10 +128,14 @@ export interface AniListRecommendationNode {
     coverImage: { large?: string };
     description: string | null;
     genres: string[];
+    tags: AniListTag[];
     averageScore: number | null;
     popularity: number | null;
     siteUrl: string;
     status: AniListMediaStatus | null;
+    format: AniListMediaFormat | null;
+    countryOfOrigin: string | null;
+    startDate: { year: number | null } | null;
     volumes: number | null;
   } | null;
 }
@@ -223,7 +247,7 @@ export class AniListRecommendationClient {
   async getRecommendationsForMedia(
     mediaId: number,
     perPage = 10,
-    maxPages = 3,
+    maxPages = 5,
   ): Promise<AniListRecommendationNode[]> {
     const allNodes: AniListRecommendationNode[] = [];
     let page = 1;

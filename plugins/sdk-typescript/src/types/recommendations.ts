@@ -89,6 +89,8 @@ export interface Recommendation {
   summary?: string;
   /** Genres */
   genres: string[];
+  /** Tags with relevance rank (e.g. from AniList) */
+  tags?: Array<{ name: string; rank: number; category: string }>;
   /** Confidence/relevance score (0.0 to 1.0) */
   score: number;
   /** Human-readable reason for this recommendation */
@@ -101,6 +103,12 @@ export interface Recommendation {
   inLibrary: boolean;
   /** Publication status (ongoing, ended, hiatus, abandoned, unknown) */
   status?: SeriesStatus;
+  /** Media format (e.g. "MANGA", "NOVEL", "ONE_SHOT") */
+  format?: string;
+  /** Country of origin ISO code (e.g. "JP", "KR", "CN") */
+  countryOfOrigin?: string;
+  /** Year the series started */
+  startYear?: number;
   /** Total expected number of books/volumes in the series */
   totalBookCount?: number;
   /** Average user rating on the source service (0-100 scale) */

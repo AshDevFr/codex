@@ -13548,12 +13548,16 @@ export interface components {
             basedOn?: string[];
             /** @description Codex series ID if matched to an existing series */
             codexSeriesId?: string | null;
+            /** @description Country of origin ISO code (e.g., "JP", "KR", "CN") */
+            countryOfOrigin?: string | null;
             /** @description Cover image URL */
             coverUrl?: string | null;
             /** @description External ID on the source service */
             externalId: string;
             /** @description URL to the entry on the external service */
             externalUrl?: string | null;
+            /** @description Media format (e.g., "MANGA", "NOVEL", "ONE_SHOT") */
+            format?: string | null;
             /** @description Genres */
             genres?: string[];
             /** @description Whether this series exists in the Codex library (matched via external IDs) */
@@ -13577,10 +13581,17 @@ export interface components {
              * @description Confidence/relevance score (0.0 to 1.0)
              */
             score: number;
+            /**
+             * Format: int32
+             * @description Year the series started
+             */
+            startYear?: number | null;
             /** @description Publication status (ongoing, ended, hiatus, abandoned, unknown) */
             status?: string | null;
             /** @description Summary/description */
             summary?: string | null;
+            /** @description Tags with relevance rank */
+            tags?: components["schemas"]["RecommendationTagDto"][] | null;
             /** @description Title of the recommended series/book */
             title: string;
             /**
@@ -13588,6 +13599,18 @@ export interface components {
              * @description Total expected number of books/volumes in the series
              */
             totalBookCount?: number | null;
+        };
+        /** @description A tag with relevance rank from the source service */
+        RecommendationTagDto: {
+            /** @description Tag category (e.g., "Genre", "Theme") */
+            category: string;
+            /** @description Tag name (e.g., "Isekai", "Gore") */
+            name: string;
+            /**
+             * Format: int32
+             * @description Relevance rank (0-100)
+             */
+            rank: number;
         };
         /** @description Response from POST /api/v1/user/recommendations/refresh */
         RecommendationsRefreshResponse: {

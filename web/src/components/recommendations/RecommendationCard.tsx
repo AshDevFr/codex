@@ -78,6 +78,8 @@ export function RecommendationCard({
     codexSeriesId,
     inCodex,
     status,
+    format,
+    countryOfOrigin,
     totalBookCount,
     rating,
     popularity,
@@ -159,6 +161,26 @@ export function RecommendationCard({
           {status && status !== "unknown" && (
             <Badge size="xs" variant="filled" color={statusColor(status)}>
               {formatStatus(status)}
+            </Badge>
+          )}
+          {countryOfOrigin && (
+            <Badge size="xs" variant="light" color="teal">
+              {countryOfOrigin === "JP"
+                ? "Manga"
+                : countryOfOrigin === "KR"
+                  ? "Manhwa"
+                  : countryOfOrigin === "CN"
+                    ? "Manhua"
+                    : countryOfOrigin}
+            </Badge>
+          )}
+          {format && format !== "MANGA" && (
+            <Badge size="xs" variant="light" color="indigo">
+              {format === "ONE_SHOT"
+                ? "One Shot"
+                : format === "NOVEL"
+                  ? "Novel"
+                  : format}
             </Badge>
           )}
           {totalBookCount != null && (
