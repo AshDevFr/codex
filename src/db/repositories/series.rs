@@ -131,6 +131,37 @@ impl From<SeriesWithBookCount> for series::Model {
     }
 }
 
+/// Result type for series with last-read aggregate (used for date_read sorting)
+#[derive(Debug, FromQueryResult)]
+pub struct SeriesWithLastRead {
+    pub id: Uuid,
+    pub library_id: Uuid,
+    pub fingerprint: Option<String>,
+    pub path: String,
+    pub name: String,
+    pub normalized_name: String,
+    pub created_at: chrono::DateTime<Utc>,
+    pub updated_at: chrono::DateTime<Utc>,
+    /// Aggregated last-read timestamp - used for SQL ORDER BY mapping
+    #[allow(dead_code)]
+    pub last_read_at: Option<chrono::DateTime<Utc>>,
+}
+
+impl From<SeriesWithLastRead> for series::Model {
+    fn from(s: SeriesWithLastRead) -> Self {
+        series::Model {
+            id: s.id,
+            library_id: s.library_id,
+            fingerprint: s.fingerprint,
+            path: s.path,
+            name: s.name,
+            normalized_name: s.normalized_name,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+        }
+    }
+}
+
 /// Result type for series with rating aggregate (used for rating sorting)
 #[derive(Debug, FromQueryResult)]
 pub struct SeriesWithRating {
@@ -1131,7 +1162,9 @@ impl SeriesRepository {
         let series = match sort.field {
             SeriesSortField::Name => {
                 // Use COALESCE(title_sort, title) so that series with NULL title_sort
-                // are sorted by title rather than clustering at the start/end
+                // are sorted by title rather than clustering at the start/end.
+                // Tie-break on series.id so pagination is stable when many series
+                // share the same sort title.
                 let sort_expr = Func::coalesce([
                     Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
                     Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),
@@ -1139,7 +1172,8 @@ impl SeriesRepository {
                 Series::find()
                     .filter(base_condition)
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-                    .order_by(Expr::expr(sort_expr), order)
+                    .order_by(Expr::expr(sort_expr), order.clone())
+                    .order_by(series::Column::Id, Order::Asc)
                     .offset(offset)
                     .limit(limit)
                     .all(db)
@@ -1148,7 +1182,8 @@ impl SeriesRepository {
             }
             SeriesSortField::DateAdded => Series::find()
                 .filter(base_condition)
-                .order_by(series::Column::CreatedAt, order)
+                .order_by(series::Column::CreatedAt, order.clone())
+                .order_by(series::Column::Id, Order::Asc)
                 .offset(offset)
                 .limit(limit)
                 .all(db)
@@ -1156,18 +1191,20 @@ impl SeriesRepository {
                 .context("Failed to list series by IDs with date added sort")?,
             SeriesSortField::DateUpdated => Series::find()
                 .filter(base_condition)
-                .order_by(series::Column::UpdatedAt, order)
+                .order_by(series::Column::UpdatedAt, order.clone())
+                .order_by(series::Column::Id, Order::Asc)
                 .offset(offset)
                 .limit(limit)
                 .all(db)
                 .await
                 .context("Failed to list series by IDs with date updated sort")?,
             SeriesSortField::ReleaseDate => {
-                // Sort by year from series_metadata
+                // Sort by year from series_metadata, tie-break on series.id
                 Series::find()
                     .filter(base_condition)
                     .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
-                    .order_by(series_metadata::Column::Year, order)
+                    .order_by(series_metadata::Column::Year, order.clone())
+                    .order_by(series::Column::Id, Order::Asc)
                     .offset(offset)
                     .limit(limit)
                     .all(db)
@@ -1175,15 +1212,36 @@ impl SeriesRepository {
                     .context("Failed to list series by IDs with release date sort")?
             }
             SeriesSortField::BookCount => {
-                let results = Series::find()
+                // Count only non-deleted books, and use select_only() + explicit
+                // columns so the query is valid under PostgreSQL's strict GROUP BY.
+                // The soft-delete filter lives in the JOIN's on_condition so that
+                // series with zero live books still appear with a count of 0.
+                let results: Vec<SeriesWithBookCount> = Series::find()
                     .filter(base_condition)
-                    .join(JoinType::LeftJoin, series::Relation::Books.def())
+                    .join(
+                        JoinType::LeftJoin,
+                        series::Relation::Books.def().on_condition(|_left, right| {
+                            Expr::col((right, books::Column::Deleted))
+                                .eq(false)
+                                .into_condition()
+                        }),
+                    )
+                    .select_only()
+                    .column(series::Column::Id)
+                    .column(series::Column::LibraryId)
+                    .column(series::Column::Fingerprint)
+                    .column(series::Column::Path)
+                    .column(series::Column::Name)
+                    .column(series::Column::NormalizedName)
+                    .column(series::Column::CreatedAt)
+                    .column(series::Column::UpdatedAt)
                     .column_as(
                         Expr::col((books::Entity, books::Column::Id)).count(),
                         "book_count",
                     )
                     .group_by(series::Column::Id)
-                    .order_by(Expr::col(Alias::new("book_count")), order)
+                    .order_by(Expr::col(Alias::new("book_count")), order.clone())
+                    .order_by(series::Column::Id, Order::Asc)
                     .offset(offset)
                     .limit(limit)
                     .into_model::<SeriesWithBookCount>()
@@ -1317,6 +1375,9 @@ impl SeriesRepository {
                     NullOrdering::Last
                 },
             )
+            // Tie-breaker for deterministic pagination when many series share
+            // the same rating (or all have NULL ratings).
+            .order_by(series::Column::Id, Order::Asc)
             .offset(offset)
             .limit(limit)
             .into_model::<SeriesWithRating>()
@@ -1340,33 +1401,73 @@ impl SeriesRepository {
 
         let base_condition = series::Column::Id.is_in(ids.to_vec());
 
-        let mut query = Series::find()
-            .filter(base_condition)
-            .join(JoinType::LeftJoin, series::Relation::Books.def())
-            .join(JoinType::LeftJoin, books::Relation::ReadProgress.def());
+        // LEFT JOIN books filtered to non-deleted, then LEFT JOIN read_progress
+        // with the user filter living in the JOIN's on_condition. Keeping the
+        // user filter in the JOIN (not the WHERE clause) means a series with
+        // no progress for this user still appears with NULL last_read_at rather
+        // than being filtered out when another user has progress on it.
+        let mut query = Series::find().filter(base_condition).join(
+            JoinType::LeftJoin,
+            series::Relation::Books.def().on_condition(|_left, right| {
+                Expr::col((right, books::Column::Deleted))
+                    .eq(false)
+                    .into_condition()
+            }),
+        );
 
-        // Filter by user if provided
         if let Some(uid) = user_id {
-            query = query.filter(
-                Condition::any()
-                    .add(read_progress::Column::UserId.eq(uid))
-                    .add(read_progress::Column::UserId.is_null()),
+            query = query.join(
+                JoinType::LeftJoin,
+                books::Relation::ReadProgress
+                    .def()
+                    .on_condition(move |_left, right| {
+                        Expr::col((right, read_progress::Column::UserId))
+                            .eq(uid)
+                            .into_condition()
+                    }),
             );
+        } else {
+            query = query.join(JoinType::LeftJoin, books::Relation::ReadProgress.def());
         }
 
-        // Group by series and order by max read_at
-        query
+        // Use select_only with explicit columns so the query is valid under
+        // PostgreSQL's strict GROUP BY rules.
+        let null_order = if matches!(order, Order::Asc) {
+            NullOrdering::First
+        } else {
+            NullOrdering::Last
+        };
+
+        let results: Vec<SeriesWithLastRead> = query
+            .select_only()
+            .column(series::Column::Id)
+            .column(series::Column::LibraryId)
+            .column(series::Column::Fingerprint)
+            .column(series::Column::Path)
+            .column(series::Column::Name)
+            .column(series::Column::NormalizedName)
+            .column(series::Column::CreatedAt)
+            .column(series::Column::UpdatedAt)
             .column_as(
                 Expr::col((read_progress::Entity, read_progress::Column::UpdatedAt)).max(),
                 "last_read_at",
             )
             .group_by(series::Column::Id)
-            .order_by(Expr::col(Alias::new("last_read_at")), order.clone())
+            .order_by_with_nulls(
+                Expr::col(Alias::new("last_read_at")),
+                order.clone(),
+                null_order,
+            )
+            // Tie-breaker for deterministic pagination across ties / all-NULL pages.
+            .order_by(series::Column::Id, Order::Asc)
             .offset(offset)
             .limit(limit)
+            .into_model::<SeriesWithLastRead>()
             .all(db)
             .await
-            .context("Failed to list series by IDs with date read sort")
+            .context("Failed to list series by IDs with date read sort")?;
+
+        Ok(results.into_iter().map(Into::into).collect())
     }
 
     /// List series sorted by last read date (user-specific)

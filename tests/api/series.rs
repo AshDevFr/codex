@@ -4229,6 +4229,84 @@ async fn test_list_series_sort_with_pagination() {
     assert_eq!(titles, vec!["Gamma"]);
 }
 
+/// Regression test: when many series share the same sort key (here, the same
+/// title_sort), pagination must still be deterministic: each series must appear
+/// in exactly one page, with no duplicates or missing entries across the whole
+/// dataset. Without a secondary tie-breaker in the ORDER BY clause the database
+/// can return rows in any order for equal keys, causing page boundaries to
+/// shuffle between calls and items to appear on multiple pages or vanish.
+#[tokio::test]
+async fn test_list_series_sort_pagination_stable_with_ties() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Create 10 series that all share the same title_sort value, so the
+    // primary sort column is a complete tie for every row.
+    let mut expected_names: Vec<String> = Vec::new();
+    for i in 0..10 {
+        let name = format!("Series {:02}", i);
+        expected_names.push(name.clone());
+        let s = SeriesRepository::create(&db, library.id, &name, None)
+            .await
+            .unwrap();
+        SeriesMetadataRepository::update_title(
+            &db,
+            s.id,
+            name.clone(),
+            Some("SAME_SORT_KEY".to_string()),
+        )
+        .await
+        .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Page through the full dataset in 3-item pages and collect everything.
+    let mut collected: Vec<String> = Vec::new();
+    for page in 1..=4 {
+        let app = create_test_router(state.clone()).await;
+        let url = format!("/api/v1/series?sort=name,asc&page={}&pageSize=3", page);
+        let request = get_request_with_auth(&url, &token);
+        let (status, response): (StatusCode, Option<SeriesListResponse>) =
+            make_json_request(app, request).await;
+        assert_eq!(status, StatusCode::OK);
+        let series_list = response.unwrap();
+        assert_eq!(series_list.total, 10);
+        for s in series_list.data {
+            collected.push(s.title);
+        }
+    }
+
+    // Every original series must appear exactly once across all pages.
+    collected.sort();
+    let mut sorted_expected = expected_names.clone();
+    sorted_expected.sort();
+    assert_eq!(
+        collected, sorted_expected,
+        "pagination must return every series exactly once even when all rows share the same sort key"
+    );
+
+    // Fetching the same page twice must return identical results.
+    let app_a = create_test_router(state.clone()).await;
+    let app_b = create_test_router(state.clone()).await;
+    let request_a = get_request_with_auth("/api/v1/series?sort=name,asc&page=2&pageSize=3", &token);
+    let request_b = get_request_with_auth("/api/v1/series?sort=name,asc&page=2&pageSize=3", &token);
+    let (_, response_a): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app_a, request_a).await;
+    let (_, response_b): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app_b, request_b).await;
+    let ids_a: Vec<_> = response_a.unwrap().data.into_iter().map(|s| s.id).collect();
+    let ids_b: Vec<_> = response_b.unwrap().data.into_iter().map(|s| s.id).collect();
+    assert_eq!(
+        ids_a, ids_b,
+        "the same page must be stable across repeated requests"
+    );
+}
+
 // ============================================================================
 // NULL title_sort handling tests
 // ============================================================================
