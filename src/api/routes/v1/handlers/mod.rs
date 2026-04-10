@@ -62,6 +62,7 @@ pub mod read_progress;
 pub mod recommendations;
 pub mod scan;
 pub mod series;
+pub mod series_exports;
 pub mod settings;
 pub mod setup;
 pub mod sharing_tags;

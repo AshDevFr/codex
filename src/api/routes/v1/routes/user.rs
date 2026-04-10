@@ -20,6 +20,7 @@ use std::sync::Arc;
 /// - Ratings: /user/ratings
 /// - Sharing tags: /user/sharing-tags
 /// - API keys: /api-keys
+/// - Exports: /user/exports/series
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         // Current user profile route
@@ -51,6 +52,31 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route(
             "/user/preferences/{key}",
             delete(handlers::user_preferences::delete_preference),
+        )
+        // Series export routes
+        .route(
+            "/user/exports/series",
+            post(handlers::series_exports::create_export),
+        )
+        .route(
+            "/user/exports/series",
+            get(handlers::series_exports::list_exports),
+        )
+        .route(
+            "/user/exports/series/fields",
+            get(handlers::series_exports::get_field_catalog),
+        )
+        .route(
+            "/user/exports/series/{id}",
+            get(handlers::series_exports::get_export),
+        )
+        .route(
+            "/user/exports/series/{id}",
+            delete(handlers::series_exports::delete_export),
+        )
+        .route(
+            "/user/exports/series/{id}/download",
+            get(handlers::series_exports::download_export),
         )
         // API key routes
         .route("/api-keys", get(handlers::api_keys::list_api_keys))

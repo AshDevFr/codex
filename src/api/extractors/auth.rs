@@ -223,6 +223,9 @@ pub struct AppState {
     /// Plugin file storage service for managing plugin data directories
     /// None when not configured (shouldn't happen in normal operation)
     pub plugin_file_storage: Option<Arc<crate::services::PluginFileStorage>>,
+    /// Export storage service for managing series export files on disk
+    /// None in test environments or when not configured
+    pub export_storage: Option<Arc<crate::services::ExportStorage>>,
     /// Server-level default timezone for cron scheduling (IANA name, e.g. "America/Los_Angeles")
     pub scheduler_timezone: String,
 }

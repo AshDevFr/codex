@@ -23,6 +23,7 @@ pub mod read_progress;
 pub mod recommendations;
 pub mod scan;
 pub mod series;
+pub mod series_export;
 pub mod settings;
 pub mod setup;
 pub mod sharing_tag;
@@ -53,6 +54,8 @@ pub use read_progress::*;
 pub use recommendations::*;
 pub use scan::*;
 pub use series::*;
+#[allow(unused_imports)]
+pub use series_export::*;
 pub use settings::*;
 pub use setup::*;
 pub use sharing_tag::*;
