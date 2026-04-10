@@ -1,4 +1,5 @@
 pub mod auth_tracking;
+pub mod book_export_collector;
 pub mod cleanup_subscriber;
 pub mod email;
 pub mod export_storage;

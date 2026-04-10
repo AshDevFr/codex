@@ -670,6 +670,7 @@ The following paths are exempt from rate limiting:
             v1::dto::series_export::SeriesExportListResponse,
             v1::dto::series_export::ExportFieldDto,
             v1::dto::series_export::ExportFieldCatalogResponse,
+            v1::dto::series_export::ExportPresetsDto,
 
             // Alternate Title DTOs
             v1::dto::AlternateTitleDto,

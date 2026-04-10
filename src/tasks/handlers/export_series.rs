@@ -17,8 +17,9 @@ use crate::db::entities::tasks;
 use crate::db::repositories::SeriesExportRepository;
 use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::SettingsService;
+use crate::services::book_export_collector::{self, BookExportField, BookExportRow};
 use crate::services::export_storage::ExportStorage;
-use crate::services::series_export_collector::{self, ExportField};
+use crate::services::series_export_collector::{self, ExportField, SeriesExportRow};
 use crate::services::series_export_writer;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
@@ -155,107 +156,187 @@ impl ExportSeriesHandler {
         event_broadcaster: Option<&Arc<EventBroadcaster>>,
         started_at: chrono::DateTime<Utc>,
     ) -> Result<TaskResult> {
-        // Parse library_ids and fields from the export record
+        // Parse library_ids from the export record
         let library_ids: Vec<Uuid> = serde_json::from_value(export.library_ids.clone())
             .context("Failed to parse library_ids from export record")?;
 
-        let field_keys: Vec<String> = serde_json::from_value(export.fields.clone())
-            .context("Failed to parse fields from export record")?;
+        let export_type = export.export_type.as_str();
+        let include_series = export_type != "books";
+        let include_books = export_type != "series";
 
-        let fields: Vec<ExportField> = field_keys
-            .iter()
-            .filter_map(|k| ExportField::parse(k))
-            .collect();
-
-        // Ensure anchor fields are included
-        let mut all_fields = fields.clone();
-        for anchor in ExportField::ANCHORS {
-            if !all_fields.contains(anchor) {
-                all_fields.push(*anchor);
+        // Parse series fields
+        let mut all_series_fields = Vec::new();
+        if include_series {
+            let field_keys: Vec<String> = serde_json::from_value(export.fields.clone())
+                .context("Failed to parse fields from export record")?;
+            let fields: Vec<ExportField> = field_keys
+                .iter()
+                .filter_map(|k| ExportField::parse(k))
+                .collect();
+            all_series_fields = fields;
+            for anchor in ExportField::ANCHORS {
+                if !all_series_fields.contains(anchor) {
+                    all_series_fields.push(*anchor);
+                }
             }
         }
 
-        // Resolve visible series IDs
-        info!(
-            "Task {task_id}: Resolving series for {} libraries",
-            library_ids.len()
-        );
-        let series_ids =
-            series_export_collector::resolve_series_ids(db, user_id, &library_ids).await?;
-
-        let total = series_ids.len();
-        info!("Task {task_id}: Found {total} series to export");
-
-        // Emit progress: series resolved
-        if let Some(broadcaster) = event_broadcaster {
-            let _ = broadcaster.emit_task(TaskProgressEvent::progress(
-                task_id,
-                "export_series",
-                0,
-                total,
-                Some(format!("Found {total} series to export")),
-                None,
-                None,
-                None,
-            ));
+        // Parse book fields
+        let mut all_book_fields = Vec::new();
+        if include_books {
+            let book_field_keys: Vec<String> = export
+                .book_fields
+                .as_ref()
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let book_fields: Vec<BookExportField> = book_field_keys
+                .iter()
+                .filter_map(|k| BookExportField::parse(k))
+                .collect();
+            all_book_fields = book_fields;
+            for anchor in BookExportField::ANCHORS {
+                if !all_book_fields.contains(anchor) {
+                    all_book_fields.push(*anchor);
+                }
+            }
         }
 
-        // Collect all rows, emitting progress along the way
-        let mut rows = Vec::with_capacity(total);
-        let mut progress_counter = 0usize;
-        let broadcaster_ref = event_broadcaster;
+        let mut series_rows: Vec<SeriesExportRow> = Vec::new();
+        let mut book_rows: Vec<BookExportRow> = Vec::new();
+        let mut total_row_count = 0usize;
 
-        series_export_collector::collect_batched(db, user_id, &series_ids, &all_fields, |row| {
-            rows.push(row);
-            progress_counter += 1;
+        // Collect series data
+        if include_series {
+            info!(
+                "Task {task_id}: Resolving series for {} libraries",
+                library_ids.len()
+            );
+            let series_ids =
+                series_export_collector::resolve_series_ids(db, user_id, &library_ids).await?;
+            let total = series_ids.len();
+            info!("Task {task_id}: Found {total} series to export");
 
-            // Emit progress every 50 rows
-            if (progress_counter.is_multiple_of(50) || progress_counter == total)
-                && let Some(broadcaster) = broadcaster_ref
-            {
+            if let Some(broadcaster) = event_broadcaster {
                 let _ = broadcaster.emit_task(TaskProgressEvent::progress(
                     task_id,
                     "export_series",
-                    progress_counter,
+                    0,
                     total,
-                    Some(format!(
-                        "Collecting series data ({progress_counter}/{total})"
-                    )),
+                    Some(format!("Found {total} series to export")),
                     None,
                     None,
                     None,
                 ));
             }
-        })
-        .await?;
+
+            let mut progress_counter = 0usize;
+            let broadcaster_ref = event_broadcaster;
+
+            series_export_collector::collect_batched(
+                db,
+                user_id,
+                &series_ids,
+                &all_series_fields,
+                |row| {
+                    series_rows.push(row);
+                    progress_counter += 1;
+                    if (progress_counter.is_multiple_of(50) || progress_counter == total)
+                        && let Some(broadcaster) = broadcaster_ref
+                    {
+                        let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                            task_id,
+                            "export_series",
+                            progress_counter,
+                            total,
+                            Some(format!(
+                                "Collecting series data ({progress_counter}/{total})"
+                            )),
+                            None,
+                            None,
+                            None,
+                        ));
+                    }
+                },
+            )
+            .await?;
+            total_row_count += progress_counter;
+        }
+
+        // Collect book data
+        if include_books {
+            info!(
+                "Task {task_id}: Resolving books for {} libraries",
+                library_ids.len()
+            );
+            let book_ids =
+                book_export_collector::resolve_book_ids(db, user_id, &library_ids).await?;
+            let total_books = book_ids.len();
+            info!("Task {task_id}: Found {total_books} books to export");
+
+            let mut book_progress = 0usize;
+            let broadcaster_ref = event_broadcaster;
+
+            book_export_collector::collect_batched(
+                db,
+                user_id,
+                &book_ids,
+                &all_book_fields,
+                |row| {
+                    book_rows.push(row);
+                    book_progress += 1;
+                    if (book_progress.is_multiple_of(50) || book_progress == total_books)
+                        && let Some(broadcaster) = broadcaster_ref
+                    {
+                        let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                            task_id,
+                            "export_series",
+                            book_progress,
+                            total_books,
+                            Some(format!(
+                                "Collecting book data ({book_progress}/{total_books})"
+                            )),
+                            None,
+                            None,
+                            None,
+                        ));
+                    }
+                },
+            )
+            .await?;
+            total_row_count += book_progress;
+        }
 
         // Write the file atomically
         let format = &export.format;
-        info!(
-            "Task {task_id}: Writing {format} export ({} rows)",
-            rows.len()
-        );
+        let export_type_str = export_type.to_string();
+        info!("Task {task_id}: Writing {format} {export_type_str} export ({total_row_count} rows)");
 
         let (final_path, file_size) = self
             .export_storage
             .write_atomic(user_id, export_id, format, |tmp_path| {
-                let rows = rows;
+                let series_rows = series_rows;
+                let book_rows = book_rows;
                 let format = format.clone();
-                let all_fields = all_fields.clone();
+                let all_series_fields = all_series_fields.clone();
+                let all_book_fields = all_book_fields.clone();
+                let export_type_str = export_type_str.clone();
                 async move {
-                    match format.as_str() {
-                        "csv" => series_export_writer::write_csv(tmp_path, all_fields, rows)
-                            .await
-                            .map(|_| ()),
-                        _ => series_export_writer::write_json(tmp_path, rows)
-                            .await
-                            .map(|_| ()),
-                    }
+                    series_export_writer::write_export(
+                        tmp_path,
+                        &format,
+                        &export_type_str,
+                        all_series_fields,
+                        series_rows,
+                        all_book_fields,
+                        book_rows,
+                    )
+                    .await
+                    .map(|_| ())
                 }
             })
             .await?;
 
-        let row_count = progress_counter as i32;
+        let row_count = total_row_count as i32;
         let file_path_str = final_path.to_string_lossy().to_string();
 
         // Mark completed in DB

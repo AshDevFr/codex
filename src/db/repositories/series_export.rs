@@ -16,12 +16,15 @@ impl SeriesExportRepository {
     // =========================================================================
 
     /// Create a new export record in "pending" status.
+    #[allow(clippy::too_many_arguments)]
     pub async fn create(
         db: &DatabaseConnection,
         user_id: Uuid,
         format: &str,
+        export_type: &str,
         library_ids: serde_json::Value,
         fields: serde_json::Value,
+        book_fields: Option<serde_json::Value>,
         expires_at: DateTime<Utc>,
     ) -> Result<series_exports::Model> {
         let now = Utc::now();
@@ -30,8 +33,10 @@ impl SeriesExportRepository {
             user_id: Set(user_id),
             format: Set(format.to_string()),
             status: Set("pending".to_string()),
+            export_type: Set(export_type.to_string()),
             library_ids: Set(library_ids),
             fields: Set(fields),
+            book_fields: Set(book_fields),
             file_path: Set(None),
             file_size_bytes: Set(None),
             row_count: Set(None),
@@ -288,8 +293,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -317,8 +324,10 @@ mod tests {
             &db,
             user1.id,
             "csv",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -347,8 +356,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -358,8 +369,10 @@ mod tests {
             &db,
             user.id,
             "csv",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -386,8 +399,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -397,8 +412,10 @@ mod tests {
             &db,
             user.id,
             "csv",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -434,8 +451,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -461,8 +480,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -490,8 +511,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -516,8 +539,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -556,8 +581,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -570,8 +597,10 @@ mod tests {
             &db,
             user.id,
             "csv",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -597,8 +626,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             now - Duration::hours(1),
         )
         .await
@@ -612,8 +643,10 @@ mod tests {
             &db,
             user.id,
             "csv",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             now + Duration::days(7),
         )
         .await
@@ -627,8 +660,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             now - Duration::hours(2),
         )
         .await
@@ -654,8 +689,10 @@ mod tests {
                 &db,
                 user.id,
                 "json",
+                "series",
                 default_library_ids(),
                 default_fields(),
+                None,
                 expires,
             )
             .await
@@ -686,8 +723,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -697,8 +736,10 @@ mod tests {
             &db,
             user.id,
             "csv",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await
@@ -711,8 +752,10 @@ mod tests {
             &db,
             user.id,
             "json",
+            "series",
             default_library_ids(),
             default_fields(),
+            None,
             expires,
         )
         .await

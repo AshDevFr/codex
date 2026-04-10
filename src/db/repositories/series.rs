@@ -871,6 +871,18 @@ impl SeriesRepository {
         }
     }
 
+    /// Find multiple series by their IDs.
+    pub async fn find_by_ids(db: &DatabaseConnection, ids: &[Uuid]) -> Result<Vec<series::Model>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        Series::find()
+            .filter(series::Column::Id.is_in(ids.to_vec()))
+            .all(db)
+            .await
+            .context("Failed to find series by IDs")
+    }
+
     /// Get all series in a library
     pub async fn list_by_library(
         db: &DatabaseConnection,

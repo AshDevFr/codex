@@ -15,14 +15,18 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
-    /// "json" or "csv"
+    /// "json", "csv", or "md"
     pub format: String,
     /// "pending", "running", "completed", "failed", or "cancelled"
     pub status: String,
+    /// "series", "books", or "both"
+    pub export_type: String,
     /// JSON array of library UUIDs selected for this export
     pub library_ids: serde_json::Value,
-    /// JSON array of field key strings selected for this export
+    /// JSON array of series field key strings selected for this export
     pub fields: serde_json::Value,
+    /// JSON array of book field key strings (for "books" or "both" export types)
+    pub book_fields: Option<serde_json::Value>,
     /// Relative path to the generated file (set on completion)
     pub file_path: Option<String>,
     pub file_size_bytes: Option<i64>,

@@ -8,6 +8,7 @@ import {
   Loader,
   Modal,
   MultiSelect,
+  Radio,
   SegmentedControl,
   Stack,
   Table,
@@ -20,6 +21,7 @@ import {
   IconDownload,
   IconFileExport,
   IconPlus,
+  IconRobot,
   IconTrash,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -78,10 +80,17 @@ interface FieldGroup {
   keys: string[];
 }
 
-const FIELD_GROUPS: FieldGroup[] = [
+const SERIES_FIELD_GROUPS: FieldGroup[] = [
   {
     label: "Identity",
-    keys: ["library_name", "path", "created_at", "updated_at"],
+    keys: [
+      "series_id",
+      "library_id",
+      "library_name",
+      "path",
+      "created_at",
+      "updated_at",
+    ],
   },
   {
     label: "Metadata",
@@ -99,8 +108,13 @@ const FIELD_GROUPS: FieldGroup[] = [
     ],
   },
   {
-    label: "Counts",
-    keys: ["expected_book_count", "actual_book_count", "unread_book_count"],
+    label: "Counts & Progress",
+    keys: [
+      "expected_book_count",
+      "actual_book_count",
+      "unread_book_count",
+      "progress",
+    ],
   },
   {
     label: "Ratings",
@@ -110,6 +124,43 @@ const FIELD_GROUPS: FieldGroup[] = [
       "community_avg_rating",
       "external_ratings",
     ],
+  },
+];
+
+const BOOK_FIELD_GROUPS: FieldGroup[] = [
+  {
+    label: "Identity",
+    keys: ["book_id", "series_id", "library_id", "series_name", "library_name"],
+  },
+  {
+    label: "File Info",
+    keys: [
+      "file_name",
+      "file_path",
+      "file_size",
+      "book_format",
+      "page_count",
+      "number",
+      "created_at",
+      "updated_at",
+    ],
+  },
+  {
+    label: "Metadata",
+    keys: [
+      "title",
+      "summary",
+      "publisher",
+      "year",
+      "language",
+      "authors",
+      "genres",
+      "tags",
+    ],
+  },
+  {
+    label: "Progress",
+    keys: ["progress", "current_page", "completed", "completed_at"],
   },
 ];
 
@@ -124,8 +175,7 @@ function CreateExportModal({
   opened: boolean;
   onClose: () => void;
 }) {
-  const { data: fieldCatalog, isLoading: fieldsLoading } =
-    useExportFieldCatalog();
+  const { data: catalog, isLoading: fieldsLoading } = useExportFieldCatalog();
   const { data: libraries, isLoading: librariesLoading } = useQuery({
     queryKey: ["libraries"],
     queryFn: librariesApi.getAll,
@@ -135,13 +185,24 @@ function CreateExportModal({
   const form = useForm({
     initialValues: {
       format: "json",
+      exportType: "series",
       libraryIds: [] as string[],
       fields: [] as string[],
+      bookFields: [] as string[],
     },
     validate: {
       libraryIds: (v) =>
         v.length === 0 ? "Select at least one library" : null,
-      fields: (v) => (v.length === 0 ? "Select at least one field" : null),
+      fields: (v, values) => {
+        if (values.exportType !== "books" && v.length === 0)
+          return "Select at least one series field";
+        return null;
+      },
+      bookFields: (v, values) => {
+        if (values.exportType !== "series" && v.length === 0)
+          return "Select at least one book field";
+        return null;
+      },
     },
   });
 
@@ -149,57 +210,112 @@ function CreateExportModal({
     const validation = form.validate();
     if (validation.hasErrors) return;
 
-    createMutation.mutate(form.values, {
-      onSuccess: () => {
-        form.reset();
-        onClose();
+    createMutation.mutate(
+      {
+        format: form.values.format,
+        exportType: form.values.exportType,
+        libraryIds: form.values.libraryIds,
+        fields: form.values.fields,
+        bookFields: form.values.bookFields,
       },
-    });
+      {
+        onSuccess: () => {
+          form.reset();
+          onClose();
+        },
+      },
+    );
   };
 
-  const selectAllFields = () => {
-    if (fieldCatalog) {
-      // Exclude anchor fields (always included server-side)
-      const allKeys = fieldCatalog
-        .filter(
-          (f) => !["series_id", "series_name", "library_id"].includes(f.key),
-        )
-        .map((f) => f.key);
-      form.setFieldValue("fields", allKeys);
+  const seriesFields = catalog?.fields || [];
+  const bookFieldCatalog = catalog?.bookFields || [];
+
+  // Build lookup maps
+  const seriesFieldMap = new Map<string, ExportFieldDto>(
+    seriesFields.map((f) => [f.key, f]),
+  );
+  const bookFieldMap = new Map<string, ExportFieldDto>(
+    bookFieldCatalog.map((f) => [f.key, f]),
+  );
+
+  const showSeriesFields = form.values.exportType !== "books";
+  const showBookFields = form.values.exportType !== "series";
+
+  // Select helpers
+  const selectAllSeriesFields = () => {
+    const allKeys = seriesFields.filter((f) => !f.isAnchor).map((f) => f.key);
+    form.setFieldValue("fields", allKeys);
+  };
+
+  const selectAllBookFields = () => {
+    const allKeys = bookFieldCatalog
+      .filter((f) => !f.isAnchor)
+      .map((f) => f.key);
+    form.setFieldValue("bookFields", allKeys);
+  };
+
+  const llmSelectSeries = () => {
+    if (catalog?.presets?.llmSelect) {
+      form.setFieldValue("fields", catalog.presets.llmSelect);
     }
   };
 
-  const clearAllFields = () => {
-    form.setFieldValue("fields", []);
+  const llmSelectBooks = () => {
+    if (catalog?.presets?.llmSelectBooks) {
+      form.setFieldValue("bookFields", catalog.presets.llmSelectBooks);
+    }
   };
 
-  // Build a lookup map for field catalog
-  const fieldMap = new Map<string, ExportFieldDto>(
-    (fieldCatalog || []).map((f) => [f.key, f]),
-  );
+  const clearSeriesFields = () => form.setFieldValue("fields", []);
+  const clearBookFields = () => form.setFieldValue("bookFields", []);
 
   const libraryOptions = (libraries || []).map((lib) => ({
     value: lib.id,
     label: lib.name,
   }));
 
+  // Auto-switch format when "both" selected with CSV
+  const handleExportTypeChange = (value: string) => {
+    form.setFieldValue("exportType", value);
+    if (value === "both" && form.values.format === "csv") {
+      form.setFieldValue("format", "json");
+    }
+  };
+
+  const anchorLabel =
+    form.values.exportType === "books"
+      ? "Book Name is always included."
+      : "Series Name is always included.";
+
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title="Create Series Export"
-      size="lg"
-    >
+    <Modal opened={opened} onClose={onClose} title="Create Export" size="lg">
       {fieldsLoading || librariesLoading ? (
         <Group justify="center" py="xl">
           <Loader />
         </Group>
       ) : (
         <Stack gap="md">
+          <Radio.Group
+            label="Export Type"
+            value={form.values.exportType}
+            onChange={handleExportTypeChange}
+          >
+            <Group>
+              <Radio value="series" label="Series" />
+              <Radio value="books" label="Books" />
+              <Radio value="both" label="Both" />
+            </Group>
+          </Radio.Group>
+
           <SegmentedControl
             data={[
               { label: "JSON", value: "json" },
-              { label: "CSV", value: "csv" },
+              {
+                label: "CSV",
+                value: "csv",
+                disabled: form.values.exportType === "both",
+              },
+              { label: "Markdown", value: "md" },
             ]}
             {...form.getInputProps("format")}
           />
@@ -214,72 +330,41 @@ function CreateExportModal({
             {...form.getInputProps("libraryIds")}
           />
 
-          <div>
-            <Group justify="space-between" mb="xs">
-              <Text fw={500} size="sm">
-                Fields
-              </Text>
-              <Group gap="xs">
-                <Button variant="subtle" size="xs" onClick={selectAllFields}>
-                  Select all
-                </Button>
-                <Button variant="subtle" size="xs" onClick={clearAllFields}>
-                  Clear
-                </Button>
-              </Group>
-            </Group>
+          <Text size="xs" c="dimmed">
+            {anchorLabel}
+          </Text>
 
-            <Text size="xs" c="dimmed" mb="sm">
-              Series ID, Name, and Library ID are always included.
-            </Text>
+          {/* Series Fields */}
+          {showSeriesFields && (
+            <FieldSection
+              title="Series Fields"
+              fieldGroups={SERIES_FIELD_GROUPS}
+              fieldMap={seriesFieldMap}
+              selectedFields={form.values.fields}
+              onFieldsChange={(fields) => form.setFieldValue("fields", fields)}
+              onSelectAll={selectAllSeriesFields}
+              onLlmSelect={llmSelectSeries}
+              onClear={clearSeriesFields}
+              error={form.errors.fields as string | undefined}
+            />
+          )}
 
-            {form.errors.fields && (
-              <Text size="xs" c="red" mb="xs">
-                {form.errors.fields}
-              </Text>
-            )}
-
-            <Stack gap="sm">
-              {FIELD_GROUPS.map((group) => (
-                <Card key={group.label} withBorder padding="xs">
-                  <Text size="xs" fw={600} c="dimmed" mb="xs">
-                    {group.label}
-                  </Text>
-                  <Checkbox.Group
-                    value={form.values.fields.filter((f) =>
-                      group.keys.includes(f),
-                    )}
-                    onChange={(selected) => {
-                      // Merge: keep fields from other groups, replace this group
-                      const otherFields = form.values.fields.filter(
-                        (f) => !group.keys.includes(f),
-                      );
-                      form.setFieldValue("fields", [
-                        ...otherFields,
-                        ...selected,
-                      ]);
-                    }}
-                  >
-                    <Group gap="sm">
-                      {group.keys
-                        .filter((k) => fieldMap.has(k))
-                        .map((k) => {
-                          const field = fieldMap.get(k)!;
-                          return (
-                            <Checkbox
-                              key={k}
-                              value={k}
-                              label={field.label}
-                              size="xs"
-                            />
-                          );
-                        })}
-                    </Group>
-                  </Checkbox.Group>
-                </Card>
-              ))}
-            </Stack>
-          </div>
+          {/* Book Fields */}
+          {showBookFields && (
+            <FieldSection
+              title="Book Fields"
+              fieldGroups={BOOK_FIELD_GROUPS}
+              fieldMap={bookFieldMap}
+              selectedFields={form.values.bookFields}
+              onFieldsChange={(fields) =>
+                form.setFieldValue("bookFields", fields)
+              }
+              onSelectAll={selectAllBookFields}
+              onLlmSelect={llmSelectBooks}
+              onClear={clearBookFields}
+              error={form.errors.bookFields as string | undefined}
+            />
+          )}
 
           <Group justify="flex-end" mt="md">
             <Button variant="subtle" onClick={onClose}>
@@ -296,6 +381,118 @@ function CreateExportModal({
         </Stack>
       )}
     </Modal>
+  );
+}
+
+// =============================================================================
+// Reusable field section component
+// =============================================================================
+
+function FieldSection({
+  title,
+  fieldGroups,
+  fieldMap,
+  selectedFields,
+  onFieldsChange,
+  onSelectAll,
+  onLlmSelect,
+  onClear,
+  error,
+}: {
+  title: string;
+  fieldGroups: FieldGroup[];
+  fieldMap: Map<string, ExportFieldDto>;
+  selectedFields: string[];
+  onFieldsChange: (fields: string[]) => void;
+  onSelectAll: () => void;
+  onLlmSelect: () => void;
+  onClear: () => void;
+  error?: string;
+}) {
+  return (
+    <div>
+      <Group justify="space-between" mb="xs">
+        <Text fw={500} size="sm">
+          {title}
+        </Text>
+        <Group gap="xs">
+          <Tooltip label="Select fields useful for LLM context">
+            <Button
+              variant="subtle"
+              size="xs"
+              leftSection={<IconRobot size={14} />}
+              onClick={onLlmSelect}
+            >
+              LLM Select
+            </Button>
+          </Tooltip>
+          <Button variant="subtle" size="xs" onClick={onSelectAll}>
+            Select all
+          </Button>
+          <Button variant="subtle" size="xs" onClick={onClear}>
+            Clear
+          </Button>
+        </Group>
+      </Group>
+
+      {error && (
+        <Text size="xs" c="red" mb="xs">
+          {error}
+        </Text>
+      )}
+
+      <Stack gap="sm">
+        {fieldGroups.map((group) => (
+          <Card key={group.label} withBorder padding="xs">
+            <Text size="xs" fw={600} c="dimmed" mb="xs">
+              {group.label}
+            </Text>
+            <Checkbox.Group
+              value={selectedFields.filter((f) => group.keys.includes(f))}
+              onChange={(selected) => {
+                const otherFields = selectedFields.filter(
+                  (f) => !group.keys.includes(f),
+                );
+                onFieldsChange([...otherFields, ...selected]);
+              }}
+            >
+              <Group gap="sm">
+                {group.keys
+                  .filter((k) => fieldMap.has(k))
+                  .map((k) => {
+                    const field = fieldMap.get(k)!;
+                    return (
+                      <Checkbox
+                        key={k}
+                        value={k}
+                        label={field.label}
+                        size="xs"
+                      />
+                    );
+                  })}
+              </Group>
+            </Checkbox.Group>
+          </Card>
+        ))}
+      </Stack>
+    </div>
+  );
+}
+
+// =============================================================================
+// Export type label
+// =============================================================================
+
+function ExportTypeBadge({ exportType }: { exportType: string }) {
+  const colorMap: Record<string, string> = {
+    series: "blue",
+    books: "violet",
+    both: "teal",
+  };
+  return (
+    <Badge color={colorMap[exportType] || "gray"} variant="outline" size="sm">
+      {exportType}
+    </Badge>
   );
 }
 
@@ -329,9 +526,9 @@ export function SeriesExportsSettings() {
     <Stack gap="lg">
       <Group justify="space-between">
         <div>
-          <Title order={2}>Series Exports</Title>
+          <Title order={2}>Data Exports</Title>
           <Text c="dimmed" size="sm">
-            Export your series data as JSON or CSV files.
+            Export your library data as JSON, CSV, or Markdown files.
           </Text>
         </div>
         <Button
@@ -352,7 +549,7 @@ export function SeriesExportsSettings() {
             <IconFileExport size={48} color="gray" opacity={0.5} />
             <Text c="dimmed">No exports yet</Text>
             <Text c="dimmed" size="sm">
-              Create your first export to download series data.
+              Create your first export to download library data.
             </Text>
           </Stack>
         </Card>
@@ -362,6 +559,7 @@ export function SeriesExportsSettings() {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Created</Table.Th>
+                <Table.Th>Type</Table.Th>
                 <Table.Th>Format</Table.Th>
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Rows</Table.Th>
@@ -377,6 +575,9 @@ export function SeriesExportsSettings() {
                     <Text size="sm">
                       {new Date(exp.createdAt).toLocaleString()}
                     </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <ExportTypeBadge exportType={exp.exportType} />
                   </Table.Td>
                   <Table.Td>
                     <Badge variant="outline" size="sm">

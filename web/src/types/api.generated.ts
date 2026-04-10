@@ -8743,9 +8743,13 @@ export interface components {
         };
         /** @description Request body for creating a new series export */
         CreateSeriesExportRequest: {
-            /** @description Field keys to include (from the field catalog) */
+            /** @description Book field keys to include (for "books" or "both" export types) */
+            bookFields?: string[];
+            /** @description Export type: "series" (default), "books", or "both" */
+            exportType?: string;
+            /** @description Series field keys to include (from the field catalog) */
             fields: string[];
-            /** @description Export format: "json" or "csv" */
+            /** @description Export format: "json", "csv", or "md" */
             format: string;
             /** @description Library IDs to include in the export */
             libraryIds: string[];
@@ -9182,14 +9186,27 @@ export interface components {
         };
         /** @description Response for the field catalog */
         ExportFieldCatalogResponse: {
+            /** @description Book export fields */
+            bookFields: components["schemas"]["ExportFieldDto"][];
+            /** @description Series export fields */
             fields: components["schemas"]["ExportFieldDto"][];
+            /** @description Available presets */
+            presets: components["schemas"]["ExportPresetsDto"];
         };
         /** @description DTO describing a single exportable field */
         ExportFieldDto: {
+            isAnchor: boolean;
             key: string;
             label: string;
             multiValue: boolean;
             userSpecific: boolean;
+        };
+        /** @description Available field presets for quick selection */
+        ExportPresetsDto: {
+            /** @description LLM-friendly series field preset */
+            llmSelect: string[];
+            /** @description LLM-friendly book field preset */
+            llmSelectBooks: string[];
         };
         /**
          * @description External ID context for template evaluation.
@@ -14595,10 +14612,12 @@ export interface components {
         };
         /** @description Response DTO for a series export record */
         SeriesExportDto: {
+            bookFields: string[];
             completedAt?: string | null;
             createdAt: string;
             error?: string | null;
             expiresAt: string;
+            exportType: string;
             fields: string[];
             /** Format: int64 */
             fileSizeBytes?: number | null;

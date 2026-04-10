@@ -651,7 +651,7 @@ export function Sidebar() {
                   <NavLink
                     component={Link}
                     to="/settings/exports"
-                    label="Series Exports"
+                    label="Data Exports"
                     leftSection={<IconFileExport size={16} />}
                     active={currentPath.startsWith("/settings/exports")}
                   />

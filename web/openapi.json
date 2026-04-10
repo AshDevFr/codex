@@ -21291,16 +21291,27 @@
           "fields"
         ],
         "properties": {
+          "bookFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Book field keys to include (for \"books\" or \"both\" export types)"
+          },
+          "exportType": {
+            "type": "string",
+            "description": "Export type: \"series\" (default), \"books\", or \"both\""
+          },
           "fields": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Field keys to include (from the field catalog)"
+            "description": "Series field keys to include (from the field catalog)"
           },
           "format": {
             "type": "string",
-            "description": "Export format: \"json\" or \"csv\""
+            "description": "Export format: \"json\", \"csv\", or \"md\""
           },
           "libraryIds": {
             "type": "array",
@@ -22371,14 +22382,28 @@
         "type": "object",
         "description": "Response for the field catalog",
         "required": [
-          "fields"
+          "fields",
+          "bookFields",
+          "presets"
         ],
         "properties": {
+          "bookFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportFieldDto"
+            },
+            "description": "Book export fields"
+          },
           "fields": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExportFieldDto"
-            }
+            },
+            "description": "Series export fields"
+          },
+          "presets": {
+            "$ref": "#/components/schemas/ExportPresetsDto",
+            "description": "Available presets"
           }
         }
       },
@@ -22389,9 +22414,13 @@
           "key",
           "label",
           "multiValue",
-          "userSpecific"
+          "userSpecific",
+          "isAnchor"
         ],
         "properties": {
+          "isAnchor": {
+            "type": "boolean"
+          },
           "key": {
             "type": "string"
           },
@@ -22403,6 +22432,30 @@
           },
           "userSpecific": {
             "type": "boolean"
+          }
+        }
+      },
+      "ExportPresetsDto": {
+        "type": "object",
+        "description": "Available field presets for quick selection",
+        "required": [
+          "llmSelect",
+          "llmSelectBooks"
+        ],
+        "properties": {
+          "llmSelect": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "LLM-friendly series field preset"
+          },
+          "llmSelectBooks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "LLM-friendly book field preset"
           }
         }
       },
@@ -32169,13 +32222,21 @@
         "required": [
           "id",
           "format",
+          "exportType",
           "status",
           "libraryIds",
           "fields",
+          "bookFields",
           "createdAt",
           "expiresAt"
         ],
         "properties": {
+          "bookFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "completedAt": {
             "type": [
               "string",
@@ -32192,6 +32253,9 @@
             ]
           },
           "expiresAt": {
+            "type": "string"
+          },
+          "exportType": {
             "type": "string"
           },
           "fields": {

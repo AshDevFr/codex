@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
   type CreateSeriesExportRequest,
-  type ExportFieldDto,
+  type ExportFieldCatalogResponse,
   type SeriesExportDto,
   seriesExportsApi,
 } from "@/api/seriesExports";
@@ -26,9 +26,18 @@ export function useSeriesExportsList() {
   const query = useQuery<SeriesExportDto[]>({
     queryKey: [...QUERY_KEY],
     queryFn: () => seriesExportsApi.list(),
+    // Poll every 5s while any export is pending/running, stop once all are terminal
+    refetchInterval: (query) => {
+      const exports = query.state.data;
+      if (!exports) return false;
+      const hasActive = exports.some(
+        (e) => e.status === "pending" || e.status === "running",
+      );
+      return hasActive ? 5000 : false;
+    },
   });
 
-  // Refresh when export tasks complete or fail
+  // Also refresh immediately when SSE reports an export task completing
   const prevTasksRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     const prevStatuses = prevTasksRef.current;
@@ -59,7 +68,7 @@ export function useSeriesExportsList() {
  * Hook for the export field catalog (rarely changes, cached aggressively).
  */
 export function useExportFieldCatalog() {
-  return useQuery<ExportFieldDto[]>({
+  return useQuery<ExportFieldCatalogResponse>({
     queryKey: [...FIELDS_QUERY_KEY],
     queryFn: () => seriesExportsApi.getFieldCatalog(),
     staleTime: Number.POSITIVE_INFINITY,
@@ -136,12 +145,12 @@ export function useDownloadSeriesExport() {
       createdAt: string;
     }) => {
       const blob = await seriesExportsApi.download(id);
-      const ext = format === "csv" ? "csv" : "json";
+      const ext = format === "csv" ? "csv" : format === "md" ? "md" : "json";
       const timestamp = new Date(createdAt)
         .toISOString()
         .replace(/[:.]/g, "-")
         .slice(0, 19);
-      const filename = `codex-series-export-${timestamp}.${ext}`;
+      const filename = `codex-export-${timestamp}.${ext}`;
 
       // Trigger browser download
       const url = URL.createObjectURL(blob);

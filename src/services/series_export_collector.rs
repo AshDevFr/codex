@@ -30,10 +30,10 @@ use crate::db::repositories::{
 #[serde(rename_all = "snake_case")]
 pub enum ExportField {
     // Always included (anchor fields)
-    SeriesId,
     SeriesName,
+    // Optional identity
+    SeriesId,
     LibraryId,
-    // Optional identity / metadata
     LibraryName,
     Path,
     CreatedAt,
@@ -52,6 +52,8 @@ pub enum ExportField {
     ExpectedBookCount,
     ActualBookCount,
     UnreadBookCount,
+    // Progress
+    Progress,
     // Ratings
     UserRating,
     UserNotes,
@@ -62,8 +64,8 @@ pub enum ExportField {
 impl ExportField {
     /// All fields in display order.
     pub const ALL: &'static [ExportField] = &[
-        ExportField::SeriesId,
         ExportField::SeriesName,
+        ExportField::SeriesId,
         ExportField::LibraryId,
         ExportField::LibraryName,
         ExportField::Path,
@@ -82,6 +84,7 @@ impl ExportField {
         ExportField::ExpectedBookCount,
         ExportField::ActualBookCount,
         ExportField::UnreadBookCount,
+        ExportField::Progress,
         ExportField::UserRating,
         ExportField::UserNotes,
         ExportField::CommunityAvgRating,
@@ -89,16 +92,28 @@ impl ExportField {
     ];
 
     /// Anchor fields that are always included regardless of user selection.
-    pub const ANCHORS: &'static [ExportField] = &[
-        ExportField::SeriesId,
-        ExportField::SeriesName,
-        ExportField::LibraryId,
+    pub const ANCHORS: &'static [ExportField] = &[ExportField::SeriesName];
+
+    /// LLM-friendly field preset for quick selection.
+    pub const LLM_SELECT: &'static [ExportField] = &[
+        ExportField::Title,
+        ExportField::Summary,
+        ExportField::Status,
+        ExportField::Year,
+        ExportField::Authors,
+        ExportField::Genres,
+        ExportField::ActualBookCount,
+        ExportField::UnreadBookCount,
+        ExportField::CommunityAvgRating,
+        ExportField::UserRating,
+        ExportField::UserNotes,
+        ExportField::Progress,
     ];
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            ExportField::SeriesId => "series_id",
             ExportField::SeriesName => "series_name",
+            ExportField::SeriesId => "series_id",
             ExportField::LibraryId => "library_id",
             ExportField::LibraryName => "library_name",
             ExportField::Path => "path",
@@ -117,6 +132,7 @@ impl ExportField {
             ExportField::ExpectedBookCount => "expected_book_count",
             ExportField::ActualBookCount => "actual_book_count",
             ExportField::UnreadBookCount => "unread_book_count",
+            ExportField::Progress => "progress",
             ExportField::UserRating => "user_rating",
             ExportField::UserNotes => "user_notes",
             ExportField::CommunityAvgRating => "community_avg_rating",
@@ -126,8 +142,8 @@ impl ExportField {
 
     pub fn parse(s: &str) -> Option<ExportField> {
         match s {
-            "series_id" => Some(ExportField::SeriesId),
             "series_name" => Some(ExportField::SeriesName),
+            "series_id" => Some(ExportField::SeriesId),
             "library_id" => Some(ExportField::LibraryId),
             "library_name" => Some(ExportField::LibraryName),
             "path" => Some(ExportField::Path),
@@ -146,6 +162,7 @@ impl ExportField {
             "expected_book_count" => Some(ExportField::ExpectedBookCount),
             "actual_book_count" => Some(ExportField::ActualBookCount),
             "unread_book_count" => Some(ExportField::UnreadBookCount),
+            "progress" => Some(ExportField::Progress),
             "user_rating" => Some(ExportField::UserRating),
             "user_notes" => Some(ExportField::UserNotes),
             "community_avg_rating" => Some(ExportField::CommunityAvgRating),
@@ -154,11 +171,50 @@ impl ExportField {
         }
     }
 
+    /// Human-readable label for display in field catalog and markdown exports.
+    pub fn label(&self) -> &'static str {
+        match self {
+            ExportField::SeriesName => "Series Name",
+            ExportField::SeriesId => "Series ID",
+            ExportField::LibraryId => "Library ID",
+            ExportField::LibraryName => "Library Name",
+            ExportField::Path => "Path",
+            ExportField::CreatedAt => "Created At",
+            ExportField::UpdatedAt => "Updated At",
+            ExportField::Title => "Title",
+            ExportField::Summary => "Summary",
+            ExportField::Publisher => "Publisher",
+            ExportField::Status => "Status",
+            ExportField::Year => "Year",
+            ExportField::Language => "Language",
+            ExportField::Authors => "Authors",
+            ExportField::Genres => "Genres",
+            ExportField::Tags => "Tags",
+            ExportField::AlternateTitles => "Alternate Titles",
+            ExportField::ExpectedBookCount => "Expected Book Count",
+            ExportField::ActualBookCount => "Actual Book Count",
+            ExportField::UnreadBookCount => "Unread Book Count",
+            ExportField::Progress => "Progress",
+            ExportField::UserRating => "User Rating",
+            ExportField::UserNotes => "User Notes",
+            ExportField::CommunityAvgRating => "Community Avg Rating",
+            ExportField::ExternalRatings => "External Ratings",
+        }
+    }
+
+    /// Whether this field is an anchor (always included in the export).
+    pub fn is_anchor(&self) -> bool {
+        ExportField::ANCHORS.contains(self)
+    }
+
     /// Whether this field is user-specific (changes per user).
     pub fn is_user_specific(&self) -> bool {
         matches!(
             self,
-            ExportField::UserRating | ExportField::UserNotes | ExportField::UnreadBookCount
+            ExportField::UserRating
+                | ExportField::UserNotes
+                | ExportField::UnreadBookCount
+                | ExportField::Progress
         )
     }
 
@@ -189,11 +245,13 @@ impl fmt::Display for ExportField {
 /// Uses Option for all non-anchor fields so unselected fields are null/absent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeriesExportRow {
-    // Anchors (always present)
-    pub series_id: String,
+    // Anchor (always present)
     pub series_name: String,
-    pub library_id: String,
-    // Optional fields
+    // Optional identity fields (IDs are now optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub library_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -229,6 +287,8 @@ pub struct SeriesExportRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unread_book_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_rating: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_notes: Option<String>,
@@ -241,9 +301,9 @@ pub struct SeriesExportRow {
 impl SeriesExportRow {
     fn from_series(s: &series::Model) -> Self {
         Self {
-            series_id: s.id.to_string(),
             series_name: s.name.clone(),
-            library_id: s.library_id.to_string(),
+            series_id: None,
+            library_id: None,
             library_name: None,
             path: None,
             created_at: None,
@@ -261,6 +321,39 @@ impl SeriesExportRow {
             expected_book_count: None,
             actual_book_count: None,
             unread_book_count: None,
+            progress: None,
+            user_rating: None,
+            user_notes: None,
+            community_avg_rating: None,
+            external_ratings: None,
+        }
+    }
+
+    /// Create a row with only the anchor populated (for testing / non-DB contexts).
+    #[cfg(test)]
+    pub fn from_series_raw(name: &str, series_id: Option<&str>, library_id: Option<&str>) -> Self {
+        Self {
+            series_name: name.to_string(),
+            series_id: series_id.map(|s| s.to_string()),
+            library_id: library_id.map(|s| s.to_string()),
+            library_name: None,
+            path: None,
+            created_at: None,
+            updated_at: None,
+            title: None,
+            summary: None,
+            publisher: None,
+            status: None,
+            year: None,
+            language: None,
+            authors: None,
+            genres: None,
+            tags: None,
+            alternate_titles: None,
+            expected_book_count: None,
+            actual_book_count: None,
+            unread_book_count: None,
+            progress: None,
             user_rating: None,
             user_notes: None,
             community_avg_rating: None,
@@ -269,12 +362,12 @@ impl SeriesExportRow {
     }
 
     /// Get the string value for a given export field.
-    /// Used by the CSV writer to emit columns in a consistent order.
+    /// Used by the CSV and Markdown writers to emit values.
     pub fn get_field_value(&self, field: &ExportField) -> String {
         match field {
-            ExportField::SeriesId => self.series_id.clone(),
             ExportField::SeriesName => self.series_name.clone(),
-            ExportField::LibraryId => self.library_id.clone(),
+            ExportField::SeriesId => self.series_id.clone().unwrap_or_default(),
+            ExportField::LibraryId => self.library_id.clone().unwrap_or_default(),
             ExportField::LibraryName => self.library_name.clone().unwrap_or_default(),
             ExportField::Path => self.path.clone().unwrap_or_default(),
             ExportField::CreatedAt => self.created_at.clone().unwrap_or_default(),
@@ -301,6 +394,7 @@ impl SeriesExportRow {
                 .unread_book_count
                 .map(|c| c.to_string())
                 .unwrap_or_default(),
+            ExportField::Progress => self.progress.map(|p| format!("{p:.1}")).unwrap_or_default(),
             ExportField::UserRating => self.user_rating.map(|r| r.to_string()).unwrap_or_default(),
             ExportField::UserNotes => self.user_notes.clone().unwrap_or_default(),
             ExportField::CommunityAvgRating => self
@@ -436,13 +530,15 @@ pub async fn collect_batched(
             HashMap::new()
         };
 
-        let book_counts = if has(ExportField::ActualBookCount) {
+        let needs_book_counts = has(ExportField::ActualBookCount) || has(ExportField::Progress);
+        let book_counts = if needs_book_counts {
             SeriesRepository::get_book_counts_for_series_ids(db, chunk).await?
         } else {
             HashMap::new()
         };
 
-        let unread_counts = if has(ExportField::UnreadBookCount) {
+        let needs_unread = has(ExportField::UnreadBookCount) || has(ExportField::Progress);
+        let unread_counts = if needs_unread {
             BookRepository::count_unread_in_series_ids(db, chunk, user_id).await?
         } else {
             HashMap::new()
@@ -472,6 +568,14 @@ pub async fn collect_batched(
                 continue;
             };
             let mut row = SeriesExportRow::from_series(s);
+
+            // Optional ID fields
+            if has(ExportField::SeriesId) {
+                row.series_id = Some(s.id.to_string());
+            }
+            if has(ExportField::LibraryId) {
+                row.library_id = Some(s.library_id.to_string());
+            }
 
             // Library name
             if has(ExportField::LibraryName) {
@@ -558,6 +662,18 @@ pub async fn collect_batched(
             }
             if has(ExportField::UnreadBookCount) {
                 row.unread_book_count = unread_counts.get(&sid).copied();
+            }
+
+            // Progress: completed_books / total_books * 100
+            if has(ExportField::Progress) {
+                let total = book_counts.get(&sid).copied().unwrap_or(0);
+                let unread = unread_counts.get(&sid).copied().unwrap_or(0);
+                if total > 0 {
+                    let completed = total - unread;
+                    row.progress = Some(completed as f64 / total as f64 * 100.0);
+                } else {
+                    row.progress = Some(0.0);
+                }
             }
 
             // User-specific ratings
@@ -679,6 +795,7 @@ mod tests {
         assert!(ExportField::UserRating.is_user_specific());
         assert!(ExportField::UserNotes.is_user_specific());
         assert!(ExportField::UnreadBookCount.is_user_specific());
+        assert!(ExportField::Progress.is_user_specific());
         assert!(!ExportField::Title.is_user_specific());
         assert!(!ExportField::CommunityAvgRating.is_user_specific());
     }
@@ -692,5 +809,46 @@ mod tests {
         assert!(ExportField::ExternalRatings.is_multi_value());
         assert!(!ExportField::Title.is_multi_value());
         assert!(!ExportField::UserRating.is_multi_value());
+        assert!(!ExportField::Progress.is_multi_value());
+    }
+
+    #[test]
+    fn test_anchor_fields() {
+        assert!(ExportField::SeriesName.is_anchor());
+        assert!(!ExportField::SeriesId.is_anchor());
+        assert!(!ExportField::LibraryId.is_anchor());
+    }
+
+    #[test]
+    fn test_llm_select_subset_of_all() {
+        for field in ExportField::LLM_SELECT {
+            assert!(
+                ExportField::ALL.contains(field),
+                "LLM_SELECT field {:?} not in ALL",
+                field
+            );
+        }
+    }
+
+    #[test]
+    fn test_field_labels() {
+        assert_eq!(ExportField::SeriesName.label(), "Series Name");
+        assert_eq!(ExportField::Progress.label(), "Progress");
+        assert_eq!(
+            ExportField::CommunityAvgRating.label(),
+            "Community Avg Rating"
+        );
+    }
+
+    #[test]
+    fn test_progress_field_value() {
+        let mut row = SeriesExportRow::from_series_raw("Test", None, None);
+        assert_eq!(row.get_field_value(&ExportField::Progress), "");
+
+        row.progress = Some(75.0);
+        assert_eq!(row.get_field_value(&ExportField::Progress), "75.0");
+
+        row.progress = Some(33.333);
+        assert_eq!(row.get_field_value(&ExportField::Progress), "33.3");
     }
 }

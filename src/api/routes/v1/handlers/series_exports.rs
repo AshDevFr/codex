@@ -13,12 +13,13 @@ use uuid::Uuid;
 use crate::api::error::ApiError;
 use crate::api::extractors::auth::{AppState, AuthContext};
 use crate::db::repositories::{SeriesExportRepository, TaskRepository};
+use crate::services::book_export_collector::BookExportField;
 use crate::services::series_export_collector::ExportField;
 use crate::tasks::types::TaskType;
 
 use super::super::dto::series_export::{
-    CreateSeriesExportRequest, ExportFieldCatalogResponse, ExportFieldDto, SeriesExportDto,
-    SeriesExportListResponse,
+    CreateSeriesExportRequest, ExportFieldCatalogResponse, ExportFieldDto, ExportPresetsDto,
+    SeriesExportDto, SeriesExportListResponse,
 };
 
 /// Default concurrent export limit per user
@@ -47,9 +48,23 @@ pub async fn create_export(
     let user_id = auth.user_id;
 
     // Validate format
-    if request.format != "json" && request.format != "csv" {
+    if !["json", "csv", "md"].contains(&request.format.as_str()) {
         return Err(ApiError::BadRequest(
-            "Format must be 'json' or 'csv'".to_string(),
+            "Format must be 'json', 'csv', or 'md'".to_string(),
+        ));
+    }
+
+    // Validate export type
+    if !["series", "books", "both"].contains(&request.export_type.as_str()) {
+        return Err(ApiError::BadRequest(
+            "Export type must be 'series', 'books', or 'both'".to_string(),
+        ));
+    }
+
+    // "both" mode does not support CSV (two different schemas)
+    if request.export_type == "both" && request.format == "csv" {
+        return Err(ApiError::BadRequest(
+            "CSV format is not supported for 'both' export type. Use JSON or Markdown.".to_string(),
         ));
     }
 
@@ -60,10 +75,29 @@ pub async fn create_export(
         ));
     }
 
-    // Validate fields - must all be valid field keys
+    // Validate series fields (required for "series" and "both")
+    let needs_series_fields = request.export_type != "books";
+    if needs_series_fields && request.fields.is_empty() {
+        return Err(ApiError::BadRequest(
+            "At least one series field must be selected".to_string(),
+        ));
+    }
     for key in &request.fields {
         if ExportField::parse(key).is_none() {
-            return Err(ApiError::BadRequest(format!("Unknown field: {key}")));
+            return Err(ApiError::BadRequest(format!("Unknown series field: {key}")));
+        }
+    }
+
+    // Validate book fields (required for "books" and "both")
+    let needs_book_fields = request.export_type != "series";
+    if needs_book_fields && request.book_fields.is_empty() {
+        return Err(ApiError::BadRequest(
+            "At least one book field must be selected".to_string(),
+        ));
+    }
+    for key in &request.book_fields {
+        if BookExportField::parse(key).is_none() {
+            return Err(ApiError::BadRequest(format!("Unknown book field: {key}")));
         }
     }
 
@@ -96,13 +130,23 @@ pub async fn create_export(
         .map_err(|e| ApiError::Internal(format!("Failed to serialize library_ids: {e}")))?;
     let fields_json = serde_json::to_value(&request.fields)
         .map_err(|e| ApiError::Internal(format!("Failed to serialize fields: {e}")))?;
+    let book_fields_json = if request.book_fields.is_empty() {
+        None
+    } else {
+        Some(
+            serde_json::to_value(&request.book_fields)
+                .map_err(|e| ApiError::Internal(format!("Failed to serialize book_fields: {e}")))?,
+        )
+    };
 
     let export = SeriesExportRepository::create(
         &state.db,
         user_id,
         &request.format,
+        &request.export_type,
         library_ids_json,
         fields_json,
+        book_fields_json,
         expires_at,
     )
     .await
@@ -215,11 +259,13 @@ pub async fn download_export(
 
     let content_type = match export.format.as_str() {
         "csv" => "text/csv; charset=utf-8",
+        "md" => "text/markdown; charset=utf-8",
         _ => "application/json; charset=utf-8",
     };
 
     let ext = match export.format.as_str() {
         "csv" => "csv",
+        "md" => "md",
         _ => "json",
     };
 
@@ -290,42 +336,38 @@ pub async fn get_field_catalog() -> Json<ExportFieldCatalogResponse> {
         .iter()
         .map(|f| ExportFieldDto {
             key: f.as_str().to_string(),
-            label: field_label(f),
+            label: f.label().to_string(),
             multi_value: f.is_multi_value(),
             user_specific: f.is_user_specific(),
+            is_anchor: f.is_anchor(),
         })
         .collect();
 
-    Json(ExportFieldCatalogResponse { fields })
-}
+    let book_fields: Vec<ExportFieldDto> = BookExportField::ALL
+        .iter()
+        .map(|f| ExportFieldDto {
+            key: f.as_str().to_string(),
+            label: f.label().to_string(),
+            multi_value: f.is_multi_value(),
+            user_specific: f.is_user_specific(),
+            is_anchor: f.is_anchor(),
+        })
+        .collect();
 
-/// Human-readable label for each export field
-fn field_label(field: &ExportField) -> String {
-    match field {
-        ExportField::SeriesId => "Series ID",
-        ExportField::SeriesName => "Series Name",
-        ExportField::LibraryId => "Library ID",
-        ExportField::LibraryName => "Library Name",
-        ExportField::Path => "Path",
-        ExportField::CreatedAt => "Created At",
-        ExportField::UpdatedAt => "Updated At",
-        ExportField::Title => "Title",
-        ExportField::Summary => "Summary",
-        ExportField::Publisher => "Publisher",
-        ExportField::Status => "Status",
-        ExportField::Year => "Year",
-        ExportField::Language => "Language",
-        ExportField::Authors => "Authors",
-        ExportField::Genres => "Genres",
-        ExportField::Tags => "Tags",
-        ExportField::AlternateTitles => "Alternate Titles",
-        ExportField::ExpectedBookCount => "Expected Book Count",
-        ExportField::ActualBookCount => "Actual Book Count",
-        ExportField::UnreadBookCount => "Unread Book Count",
-        ExportField::UserRating => "User Rating",
-        ExportField::UserNotes => "User Notes",
-        ExportField::CommunityAvgRating => "Community Avg Rating",
-        ExportField::ExternalRatings => "External Ratings",
-    }
-    .to_string()
+    let presets = ExportPresetsDto {
+        llm_select: ExportField::LLM_SELECT
+            .iter()
+            .map(|f| f.as_str().to_string())
+            .collect(),
+        llm_select_books: BookExportField::LLM_SELECT
+            .iter()
+            .map(|f| f.as_str().to_string())
+            .collect(),
+    };
+
+    Json(ExportFieldCatalogResponse {
+        fields,
+        book_fields,
+        presets,
+    })
 }

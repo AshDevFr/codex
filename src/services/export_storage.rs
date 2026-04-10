@@ -38,22 +38,25 @@ impl ExportStorage {
         self.root.join(user_id.to_string())
     }
 
+    /// Map format string to file extension.
+    fn ext_for(format: &str) -> &'static str {
+        match format {
+            "csv" => "csv",
+            "md" => "md",
+            _ => "json",
+        }
+    }
+
     /// Full path for an export file.
     pub fn path_for(&self, user_id: Uuid, export_id: Uuid, format: &str) -> PathBuf {
-        let ext = match format {
-            "csv" => "csv",
-            _ => "json",
-        };
+        let ext = Self::ext_for(format);
         self.user_dir(user_id)
             .join(format!("{}.{}", export_id, ext))
     }
 
     /// Path for the temporary file used during atomic writes.
     fn tmp_path_for(&self, user_id: Uuid, export_id: Uuid, format: &str) -> PathBuf {
-        let ext = match format {
-            "csv" => "csv",
-            _ => "json",
-        };
+        let ext = Self::ext_for(format);
         self.user_dir(user_id)
             .join(format!("{}.{}.tmp", export_id, ext))
     }

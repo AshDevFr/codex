@@ -10,6 +10,7 @@ export type SeriesExportListResponse =
 export type ExportFieldDto = components["schemas"]["ExportFieldDto"];
 export type ExportFieldCatalogResponse =
   components["schemas"]["ExportFieldCatalogResponse"];
+export type ExportPresetsDto = components["schemas"]["ExportPresetsDto"];
 
 export const seriesExportsApi = {
   /** Create a new series export job */
@@ -45,11 +46,11 @@ export const seriesExportsApi = {
   },
 
   /** Get the field catalog */
-  getFieldCatalog: async (): Promise<ExportFieldDto[]> => {
+  getFieldCatalog: async (): Promise<ExportFieldCatalogResponse> => {
     const response = await api.get<ExportFieldCatalogResponse>(
       "/user/exports/series/fields",
     );
-    return response.data.fields;
+    return response.data;
   },
 
   /** Download an export file as blob (auth handled by client interceptor) */

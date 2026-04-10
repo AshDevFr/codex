@@ -8,6 +8,7 @@ use crate::db::entities::{read_progress, read_progress::Entity as ReadProgress};
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::*;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub struct ReadProgressRepository;
@@ -174,6 +175,26 @@ impl ReadProgressRepository {
             .await?;
 
         Ok(progress_list)
+    }
+
+    /// Get reading progress for a user and a batch of book IDs.
+    /// Returns a HashMap keyed by book_id.
+    pub async fn get_by_user_books(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        book_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, read_progress::Model>> {
+        if book_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let results = ReadProgress::find()
+            .filter(read_progress::Column::UserId.eq(user_id))
+            .filter(read_progress::Column::BookId.is_in(book_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        Ok(results.into_iter().map(|p| (p.book_id, p)).collect())
     }
 
     /// Get currently reading books (not completed, sorted by most recently updated)
