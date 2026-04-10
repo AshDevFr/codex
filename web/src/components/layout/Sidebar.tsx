@@ -20,6 +20,7 @@ import {
   IconCopy,
   IconDatabase,
   IconDotsVertical,
+  IconFileExport,
   IconFileTypePdf,
   IconHome,
   IconLink,
@@ -638,6 +639,21 @@ export function Sidebar() {
                     label="Plugin Storage"
                     leftSection={<IconDatabase size={16} />}
                     active={currentPath.startsWith("/settings/plugin-storage")}
+                  />
+
+                  {/* Data Export Section */}
+                  <Divider
+                    label="Data"
+                    labelPosition="left"
+                    my="xs"
+                    styles={{ label: { fontSize: 11, fontWeight: 600 } }}
+                  />
+                  <NavLink
+                    component={Link}
+                    to="/settings/exports"
+                    label="Series Exports"
+                    leftSection={<IconFileExport size={16} />}
+                    active={currentPath.startsWith("/settings/exports")}
                   />
 
                   {/* Account Section */}

@@ -34,6 +34,7 @@ import {
   PluginStorageSettings,
   PluginsSettings,
   ProfileSettings,
+  SeriesExportsSettings,
   ServerSettings,
   SharingTagsSettings,
   TasksSettings,
@@ -369,6 +370,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <PluginStorageSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/exports"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <SeriesExportsSettings />
               </AppLayout>
             </ProtectedRoute>
           }
