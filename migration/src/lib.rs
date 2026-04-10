@@ -132,6 +132,7 @@ mod m20260316_000063_add_epub_spine_items;
 
 // Series data export
 mod m20260408_000064_create_series_exports;
+mod m20260408_000065_seed_series_export_settings;
 
 pub struct Migrator;
 
@@ -237,6 +238,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260316_000063_add_epub_spine_items::Migration),
             // Series data export
             Box::new(m20260408_000064_create_series_exports::Migration),
+            Box::new(m20260408_000065_seed_series_export_settings::Migration),
         ]
     }
 }
