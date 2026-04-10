@@ -12291,6 +12291,229 @@
         ]
       }
     },
+    "/api/v1/user/exports/series": {
+      "get": {
+        "tags": [
+          "Series Exports"
+        ],
+        "summary": "GET /user/exports/series - List current user's exports",
+        "operationId": "list_exports",
+        "responses": {
+          "200": {
+            "description": "List of exports",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesExportListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Series Exports"
+        ],
+        "summary": "POST /user/exports/series - Create a new series export job",
+        "operationId": "create_export",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSeriesExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Export job created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesExportDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "409": {
+            "description": "Concurrent export limit reached"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/exports/series/fields": {
+      "get": {
+        "tags": [
+          "Series Exports"
+        ],
+        "summary": "GET /user/exports/series/fields - Get the field catalog",
+        "operationId": "get_field_catalog",
+        "responses": {
+          "200": {
+            "description": "Field catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportFieldCatalogResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/exports/series/{id}": {
+      "get": {
+        "tags": [
+          "Series Exports"
+        ],
+        "summary": "GET /user/exports/series/{id} - Get a single export's details",
+        "operationId": "get_export",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Export ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Export details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesExportDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Export not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Series Exports"
+        ],
+        "summary": "DELETE /user/exports/series/{id} - Delete an export and its file",
+        "operationId": "delete_export",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Export ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Export deleted"
+          },
+          "404": {
+            "description": "Export not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/exports/series/{id}/download": {
+      "get": {
+        "tags": [
+          "Series Exports"
+        ],
+        "summary": "GET /user/exports/series/{id}/download - Download the export file",
+        "operationId": "download_export",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Export ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Export file",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "404": {
+            "description": "Export not found or file missing"
+          },
+          "409": {
+            "description": "Export not yet completed"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/user/plugins": {
       "get": {
         "tags": [
@@ -21059,6 +21282,36 @@
           }
         }
       },
+      "CreateSeriesExportRequest": {
+        "type": "object",
+        "description": "Request body for creating a new series export",
+        "required": [
+          "format",
+          "libraryIds",
+          "fields"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Field keys to include (from the field catalog)"
+          },
+          "format": {
+            "type": "string",
+            "description": "Export format: \"json\" or \"csv\""
+          },
+          "libraryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Library IDs to include in the export"
+          }
+        }
+      },
       "CreateSeriesExternalIdRequest": {
         "type": "object",
         "description": "Request to create or update a series external ID",
@@ -22111,6 +22364,45 @@
           "success": {
             "type": "boolean",
             "description": "Whether the execution succeeded"
+          }
+        }
+      },
+      "ExportFieldCatalogResponse": {
+        "type": "object",
+        "description": "Response for the field catalog",
+        "required": [
+          "fields"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportFieldDto"
+            }
+          }
+        }
+      },
+      "ExportFieldDto": {
+        "type": "object",
+        "description": "DTO describing a single exportable field",
+        "required": [
+          "key",
+          "label",
+          "multiValue",
+          "userSpecific"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "multiValue": {
+            "type": "boolean"
+          },
+          "userSpecific": {
+            "type": "boolean"
           }
         }
       },
@@ -31871,6 +32163,97 @@
           }
         }
       },
+      "SeriesExportDto": {
+        "type": "object",
+        "description": "Response DTO for a series export record",
+        "required": [
+          "id",
+          "format",
+          "status",
+          "libraryIds",
+          "fields",
+          "createdAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fileSizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "libraryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "rowCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "SeriesExportListResponse": {
+        "type": "object",
+        "description": "Response for listing exports",
+        "required": [
+          "exports"
+        ],
+        "properties": {
+          "exports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesExportDto"
+            }
+          }
+        }
+      },
       "SeriesExternalIdDto": {
         "type": "object",
         "description": "External ID from a metadata provider (plugin, comicinfo, etc.)",
@@ -34027,6 +34410,21 @@
           },
           {
             "type": "object",
+            "description": "Clean up expired series exports (files + DB records)",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_series_exports"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Sync user plugin data with external service",
             "required": [
               "pluginId",
@@ -34067,6 +34465,31 @@
                 "type": "string",
                 "enum": [
                   "user_plugin_recommendations"
+                ]
+              },
+              "userId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Export series data to a JSON or CSV file",
+            "required": [
+              "exportId",
+              "userId",
+              "type"
+            ],
+            "properties": {
+              "exportId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "export_series"
                 ]
               },
               "userId": {

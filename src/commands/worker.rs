@@ -132,6 +132,16 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     plugin_manager.start_health_checks().await;
     info!("  Plugin health checks started (60s interval)");
 
+    // Create export storage for series export tasks
+    let exports_dir = settings_service
+        .get_string(
+            "exports.dir",
+            crate::services::export_storage::DEFAULT_EXPORTS_DIR,
+        )
+        .await
+        .unwrap_or_else(|_| crate::services::export_storage::DEFAULT_EXPORTS_DIR.to_string());
+    let export_storage = Arc::new(crate::services::ExportStorage::new(exports_dir));
+
     // Spawn multiple workers for parallel task processing
     let (worker_handles, worker_shutdown_channels) = spawn_workers(
         db.sea_orm_connection(),
@@ -144,6 +154,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         Some(pdf_page_cache),
         Some(plugin_manager),
         None, // No OAuth state manager in standalone worker (no API state to clean)
+        export_storage,
     );
 
     info!("All {} task workers started successfully", worker_count);

@@ -397,7 +397,9 @@ export function SeriesExportsSettings() {
                     <Text size="sm">{exp.rowCount ?? "-"}</Text>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="sm">{formatBytes(exp.fileSizeBytes)}</Text>
+                    <Text size="sm">
+                      {formatBytes(exp.fileSizeBytes ?? null)}
+                    </Text>
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm">

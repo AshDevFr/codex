@@ -28,6 +28,7 @@ impl ExportStorage {
     }
 
     /// Root directory for all exports.
+    #[allow(dead_code)] // pub API, used in tests
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -127,6 +128,7 @@ impl ExportStorage {
     }
 
     /// Get the size of an export file. Returns None if the file doesn't exist.
+    #[allow(dead_code)] // pub API, used in tests; production callers come in later phases
     pub async fn size(&self, user_id: Uuid, export_id: Uuid, format: &str) -> Result<Option<u64>> {
         let path = self.path_for(user_id, export_id, format);
         match fs::metadata(&path).await {
@@ -137,6 +139,7 @@ impl ExportStorage {
     }
 
     /// Check if an export file exists on disk.
+    #[allow(dead_code)] // pub API, used in tests; production callers come in later phases
     pub async fn exists(&self, user_id: Uuid, export_id: Uuid, format: &str) -> bool {
         let path = self.path_for(user_id, export_id, format);
         fs::metadata(&path).await.is_ok()

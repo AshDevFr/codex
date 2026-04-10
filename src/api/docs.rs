@@ -225,6 +225,14 @@ The following paths are exempt from rate limiting:
         v1::handlers::user_preferences::set_bulk_preferences,
         v1::handlers::user_preferences::delete_preference,
 
+        // Series Exports
+        v1::handlers::series_exports::create_export,
+        v1::handlers::series_exports::list_exports,
+        v1::handlers::series_exports::get_export,
+        v1::handlers::series_exports::download_export,
+        v1::handlers::series_exports::delete_export,
+        v1::handlers::series_exports::get_field_catalog,
+
         // Alternate title endpoints
         v1::handlers::get_series_alternate_titles,
         v1::handlers::create_alternate_title,
@@ -655,6 +663,13 @@ The following paths are exempt from rate limiting:
             v1::dto::BulkSetPreferencesRequest,
             v1::dto::SetPreferencesResponse,
             v1::dto::DeletePreferenceResponse,
+
+            // Series Export DTOs
+            v1::dto::series_export::CreateSeriesExportRequest,
+            v1::dto::series_export::SeriesExportDto,
+            v1::dto::series_export::SeriesExportListResponse,
+            v1::dto::series_export::ExportFieldDto,
+            v1::dto::series_export::ExportFieldCatalogResponse,
 
             // Alternate Title DTOs
             v1::dto::AlternateTitleDto,

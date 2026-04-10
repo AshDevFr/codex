@@ -4176,6 +4176,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/exports/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /user/exports/series - List current user's exports */
+        get: operations["list_exports"];
+        put?: never;
+        /** POST /user/exports/series - Create a new series export job */
+        post: operations["create_export"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/exports/series/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /user/exports/series/fields - Get the field catalog */
+        get: operations["get_field_catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/exports/series/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /user/exports/series/{id} - Get a single export's details */
+        get: operations["get_export"];
+        put?: never;
+        post?: never;
+        /** DELETE /user/exports/series/{id} - Delete an export and its file */
+        delete: operations["delete_export"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/exports/series/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /user/exports/series/{id}/download - Download the export file */
+        get: operations["download_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/plugins": {
         parameters: {
             query?: never;
@@ -8671,6 +8741,15 @@ export interface components {
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
         };
+        /** @description Request body for creating a new series export */
+        CreateSeriesExportRequest: {
+            /** @description Field keys to include (from the field catalog) */
+            fields: string[];
+            /** @description Export format: "json" or "csv" */
+            format: string;
+            /** @description Library IDs to include in the export */
+            libraryIds: string[];
+        };
         /** @description Request to create or update a series external ID */
         CreateSeriesExternalIdRequest: {
             /**
@@ -9100,6 +9179,17 @@ export interface components {
             result?: unknown;
             /** @description Whether the execution succeeded */
             success: boolean;
+        };
+        /** @description Response for the field catalog */
+        ExportFieldCatalogResponse: {
+            fields: components["schemas"]["ExportFieldDto"][];
+        };
+        /** @description DTO describing a single exportable field */
+        ExportFieldDto: {
+            key: string;
+            label: string;
+            multiValue: boolean;
+            userSpecific: boolean;
         };
         /**
          * @description External ID context for template evaluation.
@@ -14503,6 +14593,28 @@ export interface components {
              */
             year?: number | null;
         };
+        /** @description Response DTO for a series export record */
+        SeriesExportDto: {
+            completedAt?: string | null;
+            createdAt: string;
+            error?: string | null;
+            expiresAt: string;
+            fields: string[];
+            /** Format: int64 */
+            fileSizeBytes?: number | null;
+            format: string;
+            /** Format: uuid */
+            id: string;
+            libraryIds: string[];
+            /** Format: int32 */
+            rowCount?: number | null;
+            startedAt?: string | null;
+            status: string;
+        };
+        /** @description Response for listing exports */
+        SeriesExportListResponse: {
+            exports: components["schemas"]["SeriesExportDto"][];
+        };
         /** @description External ID from a metadata provider (plugin, comicinfo, etc.) */
         SeriesExternalIdDto: {
             /**
@@ -15627,6 +15739,9 @@ export interface components {
             /** @enum {string} */
             type: "cleanup_plugin_data";
         } | {
+            /** @enum {string} */
+            type: "cleanup_series_exports";
+        } | {
             /** Format: uuid */
             pluginId: string;
             /** @enum {string} */
@@ -15638,6 +15753,13 @@ export interface components {
             pluginId: string;
             /** @enum {string} */
             type: "user_plugin_recommendations";
+            /** Format: uuid */
+            userId: string;
+        } | {
+            /** Format: uuid */
+            exportId: string;
+            /** @enum {string} */
+            type: "export_series";
             /** Format: uuid */
             userId: string;
         } | {
@@ -25880,6 +26002,179 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_exports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of exports */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesExportListResponse"];
+                };
+            };
+        };
+    };
+    create_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSeriesExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Export job created */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesExportDto"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Concurrent export limit reached */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_field_catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Field catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportFieldCatalogResponse"];
+                };
+            };
+        };
+    };
+    get_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Export ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesExportDto"];
+                };
+            };
+            /** @description Export not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Export ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Export ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Export not found or file missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export not yet completed */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

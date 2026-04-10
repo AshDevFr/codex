@@ -34,11 +34,11 @@ export function useSeriesExportsList() {
     const prevStatuses = prevTasksRef.current;
     const currentStatuses = new Map<string, string>();
 
-    for (const [taskId, task] of activeTasks) {
+    for (const task of activeTasks) {
       if (EXPORT_TASK_TYPES.includes(task.taskType)) {
-        currentStatuses.set(taskId, task.status);
+        currentStatuses.set(task.taskId, task.status);
 
-        const prevStatus = prevStatuses.get(taskId);
+        const prevStatus = prevStatuses.get(task.taskId);
         if (
           prevStatus &&
           prevStatus !== task.status &&

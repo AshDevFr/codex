@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(map.len(), 2);
         assert_eq!(map.get(&s1.id).unwrap().rating, 80);
         assert_eq!(map.get(&s2.id).unwrap().rating, 60);
-        assert!(map.get(&s3.id).is_none());
+        assert!(!map.contains_key(&s3.id));
 
         // Empty input
         let empty = UserSeriesRatingRepository::get_for_user_and_series_ids(

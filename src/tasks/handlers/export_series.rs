@@ -3,6 +3,7 @@
 //! Loads the series export record, collects data, writes to a file via
 //! ExportStorage, and emits SSE progress events. On completion, enforces
 //! the per-user export cap by evicting the oldest exports.
+//! On failure, marks the export record as failed and cleans up partial files.
 
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -75,6 +76,7 @@ impl TaskHandler for ExportSeriesHandler {
             // Mark as running
             SeriesExportRepository::mark_running(db, export_id, task_id).await?;
             let started_at = Utc::now();
+            let format = export.format.clone();
 
             // Emit started event
             if let Some(broadcaster) = event_broadcaster {
@@ -87,205 +89,241 @@ impl TaskHandler for ExportSeriesHandler {
                 ));
             }
 
-            // Parse library_ids and fields from the export record
-            let library_ids: Vec<Uuid> = serde_json::from_value(export.library_ids.clone())
-                .context("Failed to parse library_ids from export record")?;
-
-            let field_keys: Vec<String> = serde_json::from_value(export.fields.clone())
-                .context("Failed to parse fields from export record")?;
-
-            let fields: Vec<ExportField> = field_keys
-                .iter()
-                .filter_map(|k| ExportField::parse(k))
-                .collect();
-
-            // Ensure anchor fields are included
-            let mut all_fields = fields.clone();
-            for anchor in ExportField::ANCHORS {
-                if !all_fields.contains(anchor) {
-                    all_fields.push(*anchor);
-                }
-            }
-
-            // Resolve visible series IDs
-            info!(
-                "Task {task_id}: Resolving series for {} libraries",
-                library_ids.len()
-            );
-            let series_ids =
-                series_export_collector::resolve_series_ids(db, user_id, &library_ids).await?;
-
-            let total = series_ids.len();
-            info!("Task {task_id}: Found {total} series to export");
-
-            // Emit progress: series resolved
-            if let Some(broadcaster) = event_broadcaster {
-                let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+            // Run the export; on error, mark the record as failed before propagating
+            let result = self
+                .run_export(
                     task_id,
-                    "export_series",
-                    0,
-                    total,
-                    Some(format!("Found {total} series to export")),
-                    None,
-                    None,
-                    None,
-                ));
-            }
+                    export_id,
+                    user_id,
+                    &export,
+                    db,
+                    event_broadcaster,
+                    started_at,
+                )
+                .await;
 
-            // Collect all rows, emitting progress along the way
-            let mut rows = Vec::with_capacity(total);
-            let mut progress_counter = 0usize;
-            let broadcaster_ref = event_broadcaster;
+            match result {
+                Ok(task_result) => Ok(task_result),
+                Err(e) => {
+                    let error_msg = format!("{e:#}");
+                    error!("Task {task_id}: Export {export_id} failed: {error_msg}");
 
-            series_export_collector::collect_batched(
-                db,
-                user_id,
-                &series_ids,
-                &all_fields,
-                |row| {
-                    rows.push(row);
-                    progress_counter += 1;
-
-                    // Emit progress every 50 rows
-                    if (progress_counter.is_multiple_of(50) || progress_counter == total)
-                        && let Some(broadcaster) = broadcaster_ref
+                    // Mark export as failed in DB
+                    if let Err(mark_err) =
+                        SeriesExportRepository::mark_failed(db, export_id, &error_msg).await
                     {
-                        let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                        error!("Task {task_id}: Failed to mark export as failed: {mark_err}");
+                    }
+
+                    // Clean up any partial file
+                    let _ = self
+                        .export_storage
+                        .delete(user_id, export_id, &format)
+                        .await;
+
+                    // Emit failed event
+                    if let Some(broadcaster) = event_broadcaster {
+                        let _ = broadcaster.emit_task(TaskProgressEvent::failed(
                             task_id,
                             "export_series",
-                            progress_counter,
-                            total,
-                            Some(format!(
-                                "Collecting series data ({progress_counter}/{total})"
-                            )),
+                            &error_msg,
+                            started_at,
                             None,
                             None,
                             None,
                         ));
                     }
-                },
-            )
-            .await?;
 
-            // Write the file atomically
-            let format = &export.format;
-            info!(
-                "Task {task_id}: Writing {format} export ({} rows)",
-                rows.len()
-            );
-
-            let (final_path, file_size) = self
-                .export_storage
-                .write_atomic(user_id, export_id, format, |tmp_path| {
-                    let rows = rows;
-                    let format = format.clone();
-                    let all_fields = all_fields.clone();
-                    async move {
-                        match format.as_str() {
-                            "csv" => series_export_writer::write_csv(tmp_path, all_fields, rows)
-                                .await
-                                .map(|_| ()),
-                            _ => series_export_writer::write_json(tmp_path, rows)
-                                .await
-                                .map(|_| ()),
-                        }
-                    }
-                })
-                .await?;
-
-            let row_count = progress_counter as i32;
-            let file_path_str = final_path.to_string_lossy().to_string();
-
-            // Mark completed in DB
-            SeriesExportRepository::mark_completed(
-                db,
-                export_id,
-                &file_path_str,
-                file_size as i64,
-                row_count,
-            )
-            .await?;
-
-            info!(
-                "Task {task_id}: Export completed - {row_count} rows, {file_size} bytes at {}",
-                final_path.display()
-            );
-
-            // Enforce per-user cap: evict oldest completed exports
-            let max_per_user = self
-                .settings_service
-                .get_uint("exports.max_per_user", DEFAULT_MAX_PER_USER)
-                .await
-                .unwrap_or(DEFAULT_MAX_PER_USER);
-
-            let to_evict =
-                SeriesExportRepository::list_oldest_for_user(db, user_id, max_per_user).await?;
-
-            for old_export in &to_evict {
-                // Delete file
-                let _ = self
-                    .export_storage
-                    .delete(user_id, old_export.id, &old_export.format)
-                    .await;
-                // Delete DB record
-                if let Err(e) = SeriesExportRepository::delete_by_id(db, old_export.id).await {
-                    warn!(
-                        "Task {task_id}: Failed to evict old export {}: {e}",
-                        old_export.id
-                    );
+                    Err(e)
                 }
             }
+        })
+    }
+}
 
-            if !to_evict.is_empty() {
-                info!(
-                    "Task {task_id}: Evicted {} old exports (cap: {max_per_user})",
-                    to_evict.len()
-                );
+impl ExportSeriesHandler {
+    /// Inner export logic, separated so errors can be caught and the export
+    /// record marked as failed.
+    #[allow(clippy::too_many_arguments)]
+    async fn run_export(
+        &self,
+        task_id: Uuid,
+        export_id: Uuid,
+        user_id: Uuid,
+        export: &crate::db::entities::series_exports::Model,
+        db: &DatabaseConnection,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+        started_at: chrono::DateTime<Utc>,
+    ) -> Result<TaskResult> {
+        // Parse library_ids and fields from the export record
+        let library_ids: Vec<Uuid> = serde_json::from_value(export.library_ids.clone())
+            .context("Failed to parse library_ids from export record")?;
+
+        let field_keys: Vec<String> = serde_json::from_value(export.fields.clone())
+            .context("Failed to parse fields from export record")?;
+
+        let fields: Vec<ExportField> = field_keys
+            .iter()
+            .filter_map(|k| ExportField::parse(k))
+            .collect();
+
+        // Ensure anchor fields are included
+        let mut all_fields = fields.clone();
+        for anchor in ExportField::ANCHORS {
+            if !all_fields.contains(anchor) {
+                all_fields.push(*anchor);
             }
+        }
 
-            // Emit completed event
-            if let Some(broadcaster) = event_broadcaster {
-                let _ = broadcaster.emit_task(TaskProgressEvent::completed(
+        // Resolve visible series IDs
+        info!(
+            "Task {task_id}: Resolving series for {} libraries",
+            library_ids.len()
+        );
+        let series_ids =
+            series_export_collector::resolve_series_ids(db, user_id, &library_ids).await?;
+
+        let total = series_ids.len();
+        info!("Task {task_id}: Found {total} series to export");
+
+        // Emit progress: series resolved
+        if let Some(broadcaster) = event_broadcaster {
+            let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                task_id,
+                "export_series",
+                0,
+                total,
+                Some(format!("Found {total} series to export")),
+                None,
+                None,
+                None,
+            ));
+        }
+
+        // Collect all rows, emitting progress along the way
+        let mut rows = Vec::with_capacity(total);
+        let mut progress_counter = 0usize;
+        let broadcaster_ref = event_broadcaster;
+
+        series_export_collector::collect_batched(db, user_id, &series_ids, &all_fields, |row| {
+            rows.push(row);
+            progress_counter += 1;
+
+            // Emit progress every 50 rows
+            if (progress_counter.is_multiple_of(50) || progress_counter == total)
+                && let Some(broadcaster) = broadcaster_ref
+            {
+                let _ = broadcaster.emit_task(TaskProgressEvent::progress(
                     task_id,
                     "export_series",
-                    started_at,
+                    progress_counter,
+                    total,
+                    Some(format!(
+                        "Collecting series data ({progress_counter}/{total})"
+                    )),
                     None,
                     None,
                     None,
                 ));
             }
-
-            Ok(TaskResult::success_with_data(
-                format!("Exported {row_count} series to {format}"),
-                json!({
-                    "export_id": export_id.to_string(),
-                    "format": format,
-                    "row_count": row_count,
-                    "file_size_bytes": file_size,
-                    "evicted_count": to_evict.len(),
-                }),
-            ))
         })
-    }
-}
+        .await?;
 
-/// Handle export task failure: mark the export record as failed and clean up.
-///
-/// This is called by the worker when the handler returns an error, to ensure
-/// the export record reflects the failure.
-pub async fn on_export_failure(
-    db: &DatabaseConnection,
-    export_id: Uuid,
-    error_msg: &str,
-    export_storage: &ExportStorage,
-    user_id: Uuid,
-    format: &str,
-) {
-    // Mark as failed in DB
-    if let Err(e) = SeriesExportRepository::mark_failed(db, export_id, error_msg).await {
-        error!("Failed to mark export {export_id} as failed: {e}");
-    }
+        // Write the file atomically
+        let format = &export.format;
+        info!(
+            "Task {task_id}: Writing {format} export ({} rows)",
+            rows.len()
+        );
 
-    // Clean up any partial file
-    let _ = export_storage.delete(user_id, export_id, format).await;
+        let (final_path, file_size) = self
+            .export_storage
+            .write_atomic(user_id, export_id, format, |tmp_path| {
+                let rows = rows;
+                let format = format.clone();
+                let all_fields = all_fields.clone();
+                async move {
+                    match format.as_str() {
+                        "csv" => series_export_writer::write_csv(tmp_path, all_fields, rows)
+                            .await
+                            .map(|_| ()),
+                        _ => series_export_writer::write_json(tmp_path, rows)
+                            .await
+                            .map(|_| ()),
+                    }
+                }
+            })
+            .await?;
+
+        let row_count = progress_counter as i32;
+        let file_path_str = final_path.to_string_lossy().to_string();
+
+        // Mark completed in DB
+        SeriesExportRepository::mark_completed(
+            db,
+            export_id,
+            &file_path_str,
+            file_size as i64,
+            row_count,
+        )
+        .await?;
+
+        info!(
+            "Task {task_id}: Export completed - {row_count} rows, {file_size} bytes at {}",
+            final_path.display()
+        );
+
+        // Enforce per-user cap: evict oldest completed exports
+        let max_per_user = self
+            .settings_service
+            .get_uint("exports.max_per_user", DEFAULT_MAX_PER_USER)
+            .await
+            .unwrap_or(DEFAULT_MAX_PER_USER);
+
+        let to_evict =
+            SeriesExportRepository::list_oldest_for_user(db, user_id, max_per_user).await?;
+
+        for old_export in &to_evict {
+            let _ = self
+                .export_storage
+                .delete(user_id, old_export.id, &old_export.format)
+                .await;
+            if let Err(e) = SeriesExportRepository::delete_by_id(db, old_export.id).await {
+                warn!(
+                    "Task {task_id}: Failed to evict old export {}: {e}",
+                    old_export.id
+                );
+            }
+        }
+
+        if !to_evict.is_empty() {
+            info!(
+                "Task {task_id}: Evicted {} old exports (cap: {max_per_user})",
+                to_evict.len()
+            );
+        }
+
+        // Emit completed event
+        if let Some(broadcaster) = event_broadcaster {
+            let _ = broadcaster.emit_task(TaskProgressEvent::completed(
+                task_id,
+                "export_series",
+                started_at,
+                None,
+                None,
+                None,
+            ));
+        }
+
+        Ok(TaskResult::success_with_data(
+            format!("Exported {row_count} series to {format}"),
+            json!({
+                "export_id": export_id.to_string(),
+                "format": format,
+                "row_count": row_count,
+                "file_size_bytes": file_size,
+                "evicted_count": to_evict.len(),
+            }),
+        ))
+    }
 }

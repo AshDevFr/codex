@@ -420,6 +420,7 @@ pub fn spawn_workers(
     pdf_page_cache: Option<Arc<crate::services::PdfPageCache>>,
     plugin_manager: Option<Arc<crate::services::plugin::PluginManager>>,
     oauth_state_manager: Option<Arc<crate::services::user_plugin::OAuthStateManager>>,
+    export_storage: Arc<crate::services::ExportStorage>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -462,6 +463,9 @@ pub fn spawn_workers(
         if let Some(ref osm) = oauth_state_manager {
             task_worker = task_worker.with_oauth_state_manager(osm.clone());
         }
+
+        // Add export storage for series export tasks
+        task_worker = task_worker.with_export_storage(export_storage.clone());
 
         let (mut task_worker, worker_shutdown_tx) = task_worker.with_shutdown();
         worker_shutdown_channels.push(worker_shutdown_tx);

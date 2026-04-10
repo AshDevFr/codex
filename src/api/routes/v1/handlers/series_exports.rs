@@ -13,7 +13,6 @@ use uuid::Uuid;
 use crate::api::error::ApiError;
 use crate::api::extractors::auth::{AppState, AuthContext};
 use crate::db::repositories::{SeriesExportRepository, TaskRepository};
-use crate::services::export_storage::{DEFAULT_EXPORTS_DIR, ExportStorage};
 use crate::services::series_export_collector::ExportField;
 use crate::tasks::types::TaskType;
 
@@ -28,6 +27,18 @@ const DEFAULT_MAX_CONCURRENT: u64 = 3;
 const DEFAULT_RETENTION_DAYS: u64 = 7;
 
 /// POST /user/exports/series - Create a new series export job
+#[utoipa::path(
+    post,
+    path = "/api/v1/user/exports/series",
+    request_body = CreateSeriesExportRequest,
+    responses(
+        (status = 202, description = "Export job created", body = SeriesExportDto),
+        (status = 400, description = "Invalid request"),
+        (status = 409, description = "Concurrent export limit reached"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "Series Exports"
+)]
 pub async fn create_export(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -112,6 +123,15 @@ pub async fn create_export(
 }
 
 /// GET /user/exports/series - List current user's exports
+#[utoipa::path(
+    get,
+    path = "/api/v1/user/exports/series",
+    responses(
+        (status = 200, description = "List of exports", body = SeriesExportListResponse),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "Series Exports"
+)]
 pub async fn list_exports(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -126,6 +146,17 @@ pub async fn list_exports(
 }
 
 /// GET /user/exports/series/{id} - Get a single export's details
+#[utoipa::path(
+    get,
+    path = "/api/v1/user/exports/series/{id}",
+    params(("id" = Uuid, Path, description = "Export ID")),
+    responses(
+        (status = 200, description = "Export details", body = SeriesExportDto),
+        (status = 404, description = "Export not found"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "Series Exports"
+)]
 pub async fn get_export(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -140,6 +171,18 @@ pub async fn get_export(
 }
 
 /// GET /user/exports/series/{id}/download - Download the export file
+#[utoipa::path(
+    get,
+    path = "/api/v1/user/exports/series/{id}/download",
+    params(("id" = Uuid, Path, description = "Export ID")),
+    responses(
+        (status = 200, description = "Export file", content_type = "application/octet-stream"),
+        (status = 404, description = "Export not found or file missing"),
+        (status = 409, description = "Export not yet completed"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "Series Exports"
+)]
 pub async fn download_export(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -196,6 +239,17 @@ pub async fn download_export(
 }
 
 /// DELETE /user/exports/series/{id} - Delete an export and its file
+#[utoipa::path(
+    delete,
+    path = "/api/v1/user/exports/series/{id}",
+    params(("id" = Uuid, Path, description = "Export ID")),
+    responses(
+        (status = 204, description = "Export deleted"),
+        (status = 404, description = "Export not found"),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "Series Exports"
+)]
 pub async fn delete_export(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
@@ -206,14 +260,12 @@ pub async fn delete_export(
         .map_err(|e| ApiError::Internal(format!("Failed to get export: {e}")))?
         .ok_or_else(|| ApiError::NotFound("Export not found".to_string()))?;
 
-    // Delete file if it exists
-    if let Some(ref file_path) = export.file_path {
+    // Delete file via ExportStorage if available, otherwise by path directly
+    if let Some(ref storage) = state.export_storage {
+        let _ = storage.delete(auth.user_id, id, &export.format).await;
+    } else if let Some(ref file_path) = export.file_path {
         let _ = tokio::fs::remove_file(file_path).await;
     }
-
-    // Also try deleting via ExportStorage if available
-    let storage = get_export_storage(&state).await;
-    let _ = storage.delete(auth.user_id, id, &export.format).await;
 
     // Delete DB record
     SeriesExportRepository::delete_by_id(&state.db, id)
@@ -224,6 +276,15 @@ pub async fn delete_export(
 }
 
 /// GET /user/exports/series/fields - Get the field catalog
+#[utoipa::path(
+    get,
+    path = "/api/v1/user/exports/series/fields",
+    responses(
+        (status = 200, description = "Field catalog", body = ExportFieldCatalogResponse),
+    ),
+    security(("jwt_bearer" = []), ("api_key" = [])),
+    tag = "Series Exports"
+)]
 pub async fn get_field_catalog() -> Json<ExportFieldCatalogResponse> {
     let fields: Vec<ExportFieldDto> = ExportField::ALL
         .iter()
@@ -267,14 +328,4 @@ fn field_label(field: &ExportField) -> String {
         ExportField::ExternalRatings => "External Ratings",
     }
     .to_string()
-}
-
-/// Get or create an ExportStorage from settings
-async fn get_export_storage(state: &AppState) -> ExportStorage {
-    let dir = state
-        .settings_service
-        .get_string("exports.dir", DEFAULT_EXPORTS_DIR)
-        .await
-        .unwrap_or_else(|_| DEFAULT_EXPORTS_DIR.to_string());
-    ExportStorage::new(dir)
 }

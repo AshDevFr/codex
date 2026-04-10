@@ -20,6 +20,7 @@ import { pluginStorageHandlers } from "./pluginStorage";
 import { pluginsHandlers } from "./plugins";
 import { recommendationsHandlers } from "./recommendations";
 import { seriesHandlers } from "./series";
+import { seriesExportsHandlers } from "./seriesExports";
 import { settingsHandlers } from "./settings";
 import { sharingTagsHandlers } from "./sharingTags";
 import { tasksHandlers } from "./tasks";
@@ -128,6 +129,7 @@ export const handlers = [
   ...pluginStorageHandlers,
   ...recommendationsHandlers,
   ...userPluginsHandlers,
+  ...seriesExportsHandlers,
   ...utilityHandlers,
 ];
 
@@ -147,6 +149,7 @@ export { pluginStorageHandlers } from "./pluginStorage";
 export { pluginsHandlers } from "./plugins";
 export { recommendationsHandlers } from "./recommendations";
 export { seriesHandlers } from "./series";
+export { seriesExportsHandlers } from "./seriesExports";
 export { settingsHandlers } from "./settings";
 export { sharingTagsHandlers } from "./sharingTags";
 export { tasksHandlers } from "./tasks";

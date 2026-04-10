@@ -99,6 +99,7 @@ impl SeriesExportRepository {
     }
 
     /// Count all exports for a user.
+    #[allow(dead_code)]
     pub async fn count_by_user(db: &DatabaseConnection, user_id: Uuid) -> Result<u64> {
         let count = SeriesExport::find()
             .filter(series_exports::Column::UserId.eq(user_id))

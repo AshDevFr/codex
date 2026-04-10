@@ -38,6 +38,7 @@ mod api {
     mod renumber;
     mod scan;
     mod series;
+    mod series_exports;
     mod series_external_ids;
     mod settings;
     mod setup;

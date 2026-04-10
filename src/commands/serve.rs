@@ -299,6 +299,16 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Initialize OAuth state manager (shared between API and workers for cleanup)
     let oauth_state_manager = Arc::new(crate::services::user_plugin::OAuthStateManager::new());
 
+    // Create export storage for series export tasks (shared between workers and API)
+    let exports_dir = settings_service
+        .get_string(
+            "exports.dir",
+            crate::services::export_storage::DEFAULT_EXPORTS_DIR,
+        )
+        .await
+        .unwrap_or_else(|_| crate::services::export_storage::DEFAULT_EXPORTS_DIR.to_string());
+    let export_storage = Arc::new(crate::services::ExportStorage::new(exports_dir));
+
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
     let mut worker_shutdown_channels = Vec::new();
@@ -342,6 +352,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             Some(pdf_page_cache.clone()),
             Some(plugin_manager.clone()),
             Some(oauth_state_manager.clone()),
+            export_storage.clone(),
         );
         worker_handles = handles;
         worker_shutdown_channels = channels;
@@ -380,7 +391,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         plugin_metrics_service,
         oidc_service,
         oauth_state_manager: oauth_state_manager.clone(),
-        export_storage: None, // Initialized lazily via settings when first export is created
+        export_storage: Some(export_storage.clone()),
         plugin_file_storage: Some(plugin_file_storage),
         scheduler_timezone: config.scheduler.timezone.clone(),
     });

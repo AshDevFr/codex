@@ -204,6 +204,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         plugin_metrics_service,
         oidc_service: None, // Tests disable OIDC by default
         oauth_state_manager: Arc::new(codex::services::user_plugin::OAuthStateManager::new()),
+        export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
     });

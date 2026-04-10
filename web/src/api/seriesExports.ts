@@ -1,42 +1,15 @@
+import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
-// Types (manually defined since not yet in OpenAPI)
-
-export interface SeriesExportDto {
-  id: string;
-  format: string;
-  status: string;
-  libraryIds: string[];
-  fields: string[];
-  fileSizeBytes: number | null;
-  rowCount: number | null;
-  error: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  expiresAt: string;
-}
-
-export interface CreateSeriesExportRequest {
-  format: string;
-  libraryIds: string[];
-  fields: string[];
-}
-
-export interface SeriesExportListResponse {
-  exports: SeriesExportDto[];
-}
-
-export interface ExportFieldDto {
-  key: string;
-  label: string;
-  multiValue: boolean;
-  userSpecific: boolean;
-}
-
-export interface ExportFieldCatalogResponse {
-  fields: ExportFieldDto[];
-}
+// Re-export generated types for convenience
+export type SeriesExportDto = components["schemas"]["SeriesExportDto"];
+export type CreateSeriesExportRequest =
+  components["schemas"]["CreateSeriesExportRequest"];
+export type SeriesExportListResponse =
+  components["schemas"]["SeriesExportListResponse"];
+export type ExportFieldDto = components["schemas"]["ExportFieldDto"];
+export type ExportFieldCatalogResponse =
+  components["schemas"]["ExportFieldCatalogResponse"];
 
 export const seriesExportsApi = {
   /** Create a new series export job */
@@ -79,7 +52,7 @@ export const seriesExportsApi = {
     return response.data.fields;
   },
 
-  /** Get the download URL for an export (uses auth from client interceptor) */
+  /** Download an export file as blob (auth handled by client interceptor) */
   download: async (id: string): Promise<Blob> => {
     const response = await api.get(`/user/exports/series/${id}/download`, {
       responseType: "blob",
