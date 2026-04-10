@@ -20,6 +20,7 @@ use crate::config::FilesConfig;
 use crate::db::repositories::TaskRepository;
 use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use crate::services::PdfPageCache;
+use crate::services::export_storage::ExportStorage;
 use crate::services::plugin::PluginManager;
 use crate::services::user_plugin::OAuthStateManager;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
@@ -27,9 +28,9 @@ use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
     CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesFilesHandler,
-    FindDuplicatesHandler, GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler,
-    GenerateThumbnailHandler, GenerateThumbnailsHandler, PluginAutoMatchHandler,
-    PurgeDeletedHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
+    ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
+    GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
+    PluginAutoMatchHandler, PurgeDeletedHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
     ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
@@ -307,6 +308,27 @@ impl TaskWorker {
             "cleanup_pdf_cache".to_string(),
             Arc::new(CleanupPdfCacheHandler::new(pdf_cache, settings_service)),
         );
+        self
+    }
+
+    /// Set the export storage for the series export handler.
+    ///
+    /// Requires `with_settings_service` to be called first.
+    pub fn with_export_storage(mut self, export_storage: Arc<ExportStorage>) -> Self {
+        if let Some(ref settings_service) = self.settings_service {
+            self.handlers.insert(
+                "export_series".to_string(),
+                Arc::new(ExportSeriesHandler::new(
+                    export_storage,
+                    settings_service.clone(),
+                )),
+            );
+        } else {
+            tracing::warn!(
+                "SettingsService not set - ExportSeriesHandler will not be registered. \
+                 Call with_settings_service before with_export_storage."
+            );
+        }
         self
     }
 

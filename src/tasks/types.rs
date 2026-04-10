@@ -174,6 +174,14 @@ pub enum TaskType {
         user_id: Uuid,
     },
 
+    /// Export series data to a JSON or CSV file
+    ExportSeries {
+        #[serde(rename = "exportId")]
+        export_id: Uuid,
+        #[serde(rename = "userId")]
+        user_id: Uuid,
+    },
+
     /// Notify a plugin that a recommendation was dismissed
     UserPluginRecommendationDismiss {
         #[serde(rename = "pluginId")]
@@ -223,6 +231,8 @@ impl TaskType {
             TaskType::FindDuplicates => 400,
             TaskType::RefreshMetadata { .. } => 390,
             TaskType::PluginAutoMatch { .. } => 380,
+            // Export
+            TaskType::ExportSeries { .. } => 450,
             // Plugins
             TaskType::UserPluginRecommendationDismiss { .. } => 200,
             TaskType::UserPluginSync { .. } => 190,
@@ -259,6 +269,7 @@ impl TaskType {
             TaskType::RenumberSeries { .. } => "renumber_series",
             TaskType::RenumberSeriesBatch { .. } => "renumber_series_batch",
             TaskType::CleanupPluginData => "cleanup_plugin_data",
+            TaskType::ExportSeries { .. } => "export_series",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
             TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",
             TaskType::UserPluginRecommendationDismiss { .. } => {
@@ -343,6 +354,9 @@ impl TaskType {
             }
             TaskType::UserPluginRecommendations { plugin_id, user_id } => {
                 serde_json::json!({ "plugin_id": plugin_id, "user_id": user_id })
+            }
+            TaskType::ExportSeries { export_id, user_id } => {
+                serde_json::json!({ "export_id": export_id, "user_id": user_id })
             }
             TaskType::UserPluginRecommendationDismiss {
                 plugin_id,
