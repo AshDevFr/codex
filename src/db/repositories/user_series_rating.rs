@@ -8,6 +8,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
     QueryOrder, Set,
 };
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::db::entities::{user_series_ratings, user_series_ratings::Entity as UserSeriesRatings};
@@ -182,6 +183,51 @@ impl UserSeriesRatingRepository {
             .count(db)
             .await?;
         Ok(count)
+    }
+
+    /// Get a user's ratings for multiple series at once.
+    /// Returns a HashMap keyed by series_id.
+    pub async fn get_for_user_and_series_ids(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        series_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, user_series_ratings::Model>> {
+        if series_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let results = UserSeriesRatings::find()
+            .filter(user_series_ratings::Column::UserId.eq(user_id))
+            .filter(user_series_ratings::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+        Ok(results.into_iter().map(|r| (r.series_id, r)).collect())
+    }
+
+    /// Calculate average ratings for multiple series at once.
+    /// Returns a HashMap keyed by series_id with the average rating (1-100 scale).
+    pub async fn calculate_averages_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, f64>> {
+        if series_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let all_ratings = UserSeriesRatings::find()
+            .filter(user_series_ratings::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+
+        let mut sums: HashMap<Uuid, (i64, u32)> = HashMap::new();
+        for r in all_ratings {
+            let entry = sums.entry(r.series_id).or_insert((0, 0));
+            entry.0 += r.rating as i64;
+            entry.1 += 1;
+        }
+
+        Ok(sums
+            .into_iter()
+            .map(|(id, (sum, count))| (id, sum as f64 / count as f64))
+            .collect())
     }
 
     /// Count ratings by a user
@@ -706,5 +752,123 @@ mod tests {
                 .unwrap(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_for_user_and_series_ids() {
+        let (db, _temp_dir) = create_test_db().await;
+        let user = create_test_user(db.sea_orm_connection(), "bulk@example.com").await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let s1 = SeriesRepository::create(db.sea_orm_connection(), library.id, "S1", None)
+            .await
+            .unwrap();
+        let s2 = SeriesRepository::create(db.sea_orm_connection(), library.id, "S2", None)
+            .await
+            .unwrap();
+        let s3 = SeriesRepository::create(db.sea_orm_connection(), library.id, "S3", None)
+            .await
+            .unwrap();
+
+        UserSeriesRatingRepository::create(db.sea_orm_connection(), user.id, s1.id, 80, None)
+            .await
+            .unwrap();
+        UserSeriesRatingRepository::create(
+            db.sea_orm_connection(),
+            user.id,
+            s2.id,
+            60,
+            Some("ok".to_string()),
+        )
+        .await
+        .unwrap();
+        // s3 has no rating
+
+        let map = UserSeriesRatingRepository::get_for_user_and_series_ids(
+            db.sea_orm_connection(),
+            user.id,
+            &[s1.id, s2.id, s3.id],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get(&s1.id).unwrap().rating, 80);
+        assert_eq!(map.get(&s2.id).unwrap().rating, 60);
+        assert!(map.get(&s3.id).is_none());
+
+        // Empty input
+        let empty = UserSeriesRatingRepository::get_for_user_and_series_ids(
+            db.sea_orm_connection(),
+            user.id,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(empty.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_calculate_averages_for_series_ids() {
+        let (db, _temp_dir) = create_test_db().await;
+        let user1 = create_test_user(db.sea_orm_connection(), "avg1@example.com").await;
+        let user2 = create_test_user(db.sea_orm_connection(), "avg2@example.com").await;
+
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let s1 = SeriesRepository::create(db.sea_orm_connection(), library.id, "S1", None)
+            .await
+            .unwrap();
+        let s2 = SeriesRepository::create(db.sea_orm_connection(), library.id, "S2", None)
+            .await
+            .unwrap();
+
+        // s1: user1=80, user2=60 → avg=70
+        UserSeriesRatingRepository::create(db.sea_orm_connection(), user1.id, s1.id, 80, None)
+            .await
+            .unwrap();
+        UserSeriesRatingRepository::create(db.sea_orm_connection(), user2.id, s1.id, 60, None)
+            .await
+            .unwrap();
+
+        // s2: user1=90 → avg=90
+        UserSeriesRatingRepository::create(db.sea_orm_connection(), user1.id, s2.id, 90, None)
+            .await
+            .unwrap();
+
+        let avgs = UserSeriesRatingRepository::calculate_averages_for_series_ids(
+            db.sea_orm_connection(),
+            &[s1.id, s2.id],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(avgs.len(), 2);
+        assert!((avgs[&s1.id] - 70.0).abs() < 0.001);
+        assert!((avgs[&s2.id] - 90.0).abs() < 0.001);
+
+        // Empty input
+        let empty = UserSeriesRatingRepository::calculate_averages_for_series_ids(
+            db.sea_orm_connection(),
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(empty.is_empty());
     }
 }
