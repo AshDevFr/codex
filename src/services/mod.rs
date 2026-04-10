@@ -1,6 +1,7 @@
 pub mod auth_tracking;
 pub mod cleanup_subscriber;
 pub mod email;
+pub mod export_storage;
 pub mod file_cleanup;
 pub mod filter;
 pub mod inflight_thumbnails;
@@ -20,6 +21,7 @@ pub mod user_plugin;
 
 pub use auth_tracking::AuthTrackingService;
 pub use cleanup_subscriber::CleanupEventSubscriber;
+pub use export_storage::ExportStorage;
 pub use file_cleanup::{CleanupStats, FileCleanupService, OrphanedFileType};
 pub use filter::FilterService;
 pub use inflight_thumbnails::InflightThumbnailTracker;
