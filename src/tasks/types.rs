@@ -158,6 +158,9 @@ pub enum TaskType {
     /// Clean up expired plugin storage data across all user plugins
     CleanupPluginData,
 
+    /// Clean up expired series exports (files + DB records)
+    CleanupSeriesExports,
+
     /// Sync user plugin data with external service
     UserPluginSync {
         #[serde(rename = "pluginId")]
@@ -242,7 +245,8 @@ impl TaskType {
             | TaskType::CleanupSeriesFiles { .. }
             | TaskType::CleanupOrphanedFiles
             | TaskType::CleanupPdfCache
-            | TaskType::CleanupPluginData => 100,
+            | TaskType::CleanupPluginData
+            | TaskType::CleanupSeriesExports => 100,
         }
     }
 
@@ -269,6 +273,7 @@ impl TaskType {
             TaskType::RenumberSeries { .. } => "renumber_series",
             TaskType::RenumberSeriesBatch { .. } => "renumber_series_batch",
             TaskType::CleanupPluginData => "cleanup_plugin_data",
+            TaskType::CleanupSeriesExports => "cleanup_series_exports",
             TaskType::ExportSeries { .. } => "export_series",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
             TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",

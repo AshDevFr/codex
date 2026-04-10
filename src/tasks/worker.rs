@@ -27,11 +27,12 @@ use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
-    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesFilesHandler,
-    ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
-    GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
-    PluginAutoMatchHandler, PurgeDeletedHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
-    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesExportsHandler,
+    CleanupSeriesFilesHandler, ExportSeriesHandler, FindDuplicatesHandler,
+    GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
+    GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler,
+    RenumberSeriesBatchHandler, RenumberSeriesHandler, ReprocessSeriesTitleHandler,
+    ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
 };
@@ -311,7 +312,7 @@ impl TaskWorker {
         self
     }
 
-    /// Set the export storage for the series export handler.
+    /// Set the export storage for the series export and cleanup handlers.
     ///
     /// Requires `with_settings_service` to be called first.
     pub fn with_export_storage(mut self, export_storage: Arc<ExportStorage>) -> Self {
@@ -319,6 +320,13 @@ impl TaskWorker {
             self.handlers.insert(
                 "export_series".to_string(),
                 Arc::new(ExportSeriesHandler::new(
+                    export_storage.clone(),
+                    settings_service.clone(),
+                )),
+            );
+            self.handlers.insert(
+                "cleanup_series_exports".to_string(),
+                Arc::new(CleanupSeriesExportsHandler::new(
                     export_storage,
                     settings_service.clone(),
                 )),

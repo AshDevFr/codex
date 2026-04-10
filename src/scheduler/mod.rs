@@ -66,6 +66,9 @@ impl Scheduler {
         // Load plugin data cleanup schedule (OAuth flows, expired storage)
         self.load_plugin_data_cleanup_schedule().await?;
 
+        // Load series exports cleanup schedule
+        self.load_series_exports_cleanup_schedule().await?;
+
         // Load thumbnail generation schedules
         self.load_book_thumbnail_schedule().await?;
         self.load_series_thumbnail_schedule().await?;
@@ -274,6 +277,55 @@ impl Scheduler {
             .context("Failed to add plugin data cleanup job to scheduler")?;
 
         info!("Added plugin data cleanup schedule: {}", cron);
+
+        Ok(())
+    }
+
+    /// Load series exports cleanup schedule from settings
+    ///
+    /// Periodically cleans up expired exports, stale tmp files, and enforces
+    /// the global storage cap. Cron is configurable via DB settings.
+    async fn load_series_exports_cleanup_schedule(&mut self) -> Result<()> {
+        let settings = SettingsService::new(self.db.clone()).await?;
+
+        // Default: every hour at minute 30
+        let cron = settings
+            .get_string("exports.cleanup_cron", "0 30 * * * *")
+            .await?;
+
+        if cron.is_empty() {
+            debug!("Series exports cleanup disabled (empty cron schedule)");
+            return Ok(());
+        }
+
+        let cron = normalize_cron_expression(&cron)
+            .context("Invalid cron expression for series exports cleanup schedule")?;
+
+        let db = self.db.clone();
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron.as_str(), tz, move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                debug!("Triggering scheduled series exports cleanup");
+
+                let task_type = TaskType::CleanupSeriesExports;
+                match TaskRepository::enqueue(&db, task_type, None).await {
+                    Ok(_) => debug!("Series exports cleanup task enqueued"),
+                    Err(e) => error!("Failed to enqueue series exports cleanup: {}", e),
+                }
+            })
+        })
+        .context("Failed to create series exports cleanup cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add series exports cleanup job to scheduler")?;
+
+        info!(
+            "Added series exports cleanup schedule: {} (timezone: {})",
+            cron, self.default_tz
+        );
 
         Ok(())
     }

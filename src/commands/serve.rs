@@ -319,6 +319,15 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             info!("Worker count from settings: {}", worker_count);
         }
 
+        // Reconcile orphaned series exports from prior crash/restart
+        if let Err(e) = crate::tasks::handlers::cleanup_series_exports::reconcile_on_startup(
+            db.sea_orm_connection(),
+        )
+        .await
+        {
+            tracing::warn!("Failed to reconcile orphaned exports on startup: {e}");
+        }
+
         info!("Starting {} task queue worker(s)...", worker_count);
 
         // Spawn multiple workers for parallel task processing
