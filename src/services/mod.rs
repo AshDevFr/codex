@@ -14,6 +14,7 @@ pub mod plugin_metrics;
 pub mod rate_limiter;
 pub mod read_progress;
 pub mod series_export_collector;
+pub mod series_export_writer;
 pub mod settings;
 pub mod task_listener;
 pub mod task_metrics;

@@ -267,6 +267,49 @@ impl SeriesExportRow {
             external_ratings: None,
         }
     }
+
+    /// Get the string value for a given export field.
+    /// Used by the CSV writer to emit columns in a consistent order.
+    pub fn get_field_value(&self, field: &ExportField) -> String {
+        match field {
+            ExportField::SeriesId => self.series_id.clone(),
+            ExportField::SeriesName => self.series_name.clone(),
+            ExportField::LibraryId => self.library_id.clone(),
+            ExportField::LibraryName => self.library_name.clone().unwrap_or_default(),
+            ExportField::Path => self.path.clone().unwrap_or_default(),
+            ExportField::CreatedAt => self.created_at.clone().unwrap_or_default(),
+            ExportField::UpdatedAt => self.updated_at.clone().unwrap_or_default(),
+            ExportField::Title => self.title.clone().unwrap_or_default(),
+            ExportField::Summary => self.summary.clone().unwrap_or_default(),
+            ExportField::Publisher => self.publisher.clone().unwrap_or_default(),
+            ExportField::Status => self.status.clone().unwrap_or_default(),
+            ExportField::Year => self.year.map(|y| y.to_string()).unwrap_or_default(),
+            ExportField::Language => self.language.clone().unwrap_or_default(),
+            ExportField::Authors => self.authors.clone().unwrap_or_default(),
+            ExportField::Genres => self.genres.clone().unwrap_or_default(),
+            ExportField::Tags => self.tags.clone().unwrap_or_default(),
+            ExportField::AlternateTitles => self.alternate_titles.clone().unwrap_or_default(),
+            ExportField::ExpectedBookCount => self
+                .expected_book_count
+                .map(|c| c.to_string())
+                .unwrap_or_default(),
+            ExportField::ActualBookCount => self
+                .actual_book_count
+                .map(|c| c.to_string())
+                .unwrap_or_default(),
+            ExportField::UnreadBookCount => self
+                .unread_book_count
+                .map(|c| c.to_string())
+                .unwrap_or_default(),
+            ExportField::UserRating => self.user_rating.map(|r| r.to_string()).unwrap_or_default(),
+            ExportField::UserNotes => self.user_notes.clone().unwrap_or_default(),
+            ExportField::CommunityAvgRating => self
+                .community_avg_rating
+                .map(|r| format!("{r:.2}"))
+                .unwrap_or_default(),
+            ExportField::ExternalRatings => self.external_ratings.clone().unwrap_or_default(),
+        }
+    }
 }
 
 // =============================================================================
