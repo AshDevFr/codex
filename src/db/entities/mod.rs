@@ -43,6 +43,7 @@ pub mod user_plugins;
 pub mod genres;
 pub mod series_alternate_titles;
 pub mod series_covers;
+pub mod series_exports;
 pub mod series_external_ids;
 pub mod series_external_links;
 pub mod series_external_ratings;

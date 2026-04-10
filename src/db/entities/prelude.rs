@@ -41,6 +41,10 @@ pub use super::user_plugin_data::Entity as UserPluginData;
 #[allow(unused_imports)]
 pub use super::user_plugins::Entity as UserPlugins;
 
+// Series exports
+#[allow(unused_imports)]
+pub use super::series_exports::Entity as SeriesExports;
+
 // Sharing tags for content access control (WIP feature)
 #[allow(unused_imports)]
 pub use super::series_sharing_tags::Entity as SeriesSharingTags;

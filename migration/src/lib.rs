@@ -130,6 +130,9 @@ mod m20260314_000061_add_r2_progression;
 mod m20260315_000062_add_epub_positions;
 mod m20260316_000063_add_epub_spine_items;
 
+// Series data export
+mod m20260408_000064_create_series_exports;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -232,6 +235,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260315_000062_add_epub_positions::Migration),
             // Add epub_spine_items for char/byte position normalization (cross-device sync)
             Box::new(m20260316_000063_add_epub_spine_items::Migration),
+            // Series data export
+            Box::new(m20260408_000064_create_series_exports::Migration),
         ]
     }
 }
