@@ -497,6 +497,72 @@ function ExportTypeBadge({ exportType }: { exportType: string }) {
 }
 
 // =============================================================================
+// Libraries cell with field tooltip
+// =============================================================================
+
+function LibrariesCell({
+  libraryNames,
+  totalCount,
+  seriesFields,
+  bookFields,
+  exportType,
+}: {
+  libraryNames: string[];
+  totalCount: number;
+  seriesFields: string[];
+  bookFields: string[];
+  exportType: string;
+}) {
+  const namesLabel =
+    libraryNames.length === 0
+      ? totalCount === 0
+        ? "-"
+        : `${totalCount} libraries`
+      : libraryNames.join(", ");
+
+  const showSeries = exportType !== "books" && seriesFields.length > 0;
+  const showBooks = exportType !== "series" && bookFields.length > 0;
+
+  return (
+    <Tooltip
+      multiline
+      w={320}
+      withArrow
+      label={
+        <Stack gap={4}>
+          <Text size="xs" fw={600}>
+            Libraries
+          </Text>
+          <Text size="xs">
+            {libraryNames.length > 0 ? libraryNames.join(", ") : "-"}
+          </Text>
+          {showSeries && (
+            <>
+              <Text size="xs" fw={600} mt={4}>
+                Series fields ({seriesFields.length})
+              </Text>
+              <Text size="xs">{seriesFields.join(", ")}</Text>
+            </>
+          )}
+          {showBooks && (
+            <>
+              <Text size="xs" fw={600} mt={4}>
+                Book fields ({bookFields.length})
+              </Text>
+              <Text size="xs">{bookFields.join(", ")}</Text>
+            </>
+          )}
+        </Stack>
+      }
+    >
+      <Text size="sm" lineClamp={1} style={{ maxWidth: 220, cursor: "help" }}>
+        {namesLabel}
+      </Text>
+    </Tooltip>
+  );
+}
+
+// =============================================================================
 // Main settings page
 // =============================================================================
 
@@ -506,15 +572,29 @@ export function SeriesExportsSettings() {
   const deleteMutation = useDeleteSeriesExport();
   const downloadMutation = useDownloadSeriesExport();
 
+  const { data: libraries } = useQuery({
+    queryKey: ["libraries"],
+    queryFn: librariesApi.getAll,
+  });
+
+  const libraryNameById = new Map(
+    (libraries || []).map((lib) => [lib.id, lib.name]),
+  );
+
+  const getLibraryNames = (ids: string[]): string[] =>
+    ids.map((id) => libraryNameById.get(id)).filter((n): n is string => !!n);
+
   const handleDownload = (exp: {
     id: string;
     format: string;
     createdAt: string;
+    libraryIds: string[];
   }) => {
     downloadMutation.mutate({
       id: exp.id,
       format: exp.format,
       createdAt: exp.createdAt,
+      libraryNames: getLibraryNames(exp.libraryIds),
     });
   };
 
@@ -562,6 +642,7 @@ export function SeriesExportsSettings() {
                 <Table.Th>Type</Table.Th>
                 <Table.Th>Format</Table.Th>
                 <Table.Th>Status</Table.Th>
+                <Table.Th>Libraries</Table.Th>
                 <Table.Th>Rows</Table.Th>
                 <Table.Th>Size</Table.Th>
                 <Table.Th>Expires</Table.Th>
@@ -593,6 +674,15 @@ export function SeriesExportsSettings() {
                         </Text>
                       </Tooltip>
                     )}
+                  </Table.Td>
+                  <Table.Td>
+                    <LibrariesCell
+                      libraryNames={getLibraryNames(exp.libraryIds)}
+                      totalCount={exp.libraryIds.length}
+                      seriesFields={exp.fields}
+                      bookFields={exp.bookFields}
+                      exportType={exp.exportType}
+                    />
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm">{exp.rowCount ?? "-"}</Text>

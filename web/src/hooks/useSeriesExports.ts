@@ -139,10 +139,12 @@ export function useDownloadSeriesExport() {
       id,
       format,
       createdAt,
+      libraryNames,
     }: {
       id: string;
       format: string;
       createdAt: string;
+      libraryNames?: string[];
     }) => {
       const blob = await seriesExportsApi.download(id);
       const ext = format === "csv" ? "csv" : format === "md" ? "md" : "json";
@@ -150,7 +152,19 @@ export function useDownloadSeriesExport() {
         .toISOString()
         .replace(/[:.]/g, "-")
         .slice(0, 19);
-      const filename = `codex-export-${timestamp}.${ext}`;
+      const slug = (libraryNames ?? [])
+        .map((n) =>
+          n
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, ""),
+        )
+        .filter(Boolean)
+        .join("-");
+      const filename = slug
+        ? `codex-${slug}-export-${timestamp}.${ext}`
+        : `codex-export-${timestamp}.${ext}`;
 
       // Trigger browser download
       const url = URL.createObjectURL(blob);
