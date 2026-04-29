@@ -5,16 +5,22 @@ import {
   Loader,
   Menu,
   Pagination,
+  SegmentedControl,
   Select,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
-import { IconSortAscending } from "@tabler/icons-react";
+import {
+  IconLayoutGrid,
+  IconLayoutList,
+  IconSortAscending,
+} from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { seriesApi } from "@/api/series";
 import { MediaCard } from "@/components/library/MediaCard";
+import { SeriesBookTable } from "@/components/series/SeriesBookTable";
 import {
   selectCanSelectType,
   selectIsSelectionMode,
@@ -22,6 +28,7 @@ import {
 } from "@/store/bulkSelectionStore";
 import {
   DEFAULT_PAGE_SIZE,
+  type SeriesBooksViewMode,
   useLibraryPreferencesStore,
 } from "@/store/libraryPreferencesStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
@@ -52,6 +59,7 @@ const SORT_OPTIONS: SortOption[] = [
 const PAGE_SIZES = [25, 50, 100, 200];
 const SERIES_BOOKS_TAB = "series-books";
 const DEFAULT_SORT = "number,asc";
+const DEFAULT_VIEW_MODE: SeriesBooksViewMode = "card";
 
 export function SeriesBookList({
   seriesId,
@@ -71,6 +79,7 @@ export function SeriesBookList({
 
   const pageSize = storedPrefs?.pageSize ?? DEFAULT_PAGE_SIZE;
   const sort = storedPrefs?.sort ?? DEFAULT_SORT;
+  const viewMode = storedPrefs?.viewMode ?? DEFAULT_VIEW_MODE;
 
   const setPageSize = useCallback(
     (newPageSize: number) => {
@@ -84,6 +93,13 @@ export function SeriesBookList({
     (newSort: string) => {
       setTabPreferences(libraryId, SERIES_BOOKS_TAB, { sort: newSort });
       setPage(1);
+    },
+    [libraryId, setTabPreferences],
+  );
+
+  const setViewMode = useCallback(
+    (newMode: SeriesBooksViewMode) => {
+      setTabPreferences(libraryId, SERIES_BOOKS_TAB, { viewMode: newMode });
     },
     [libraryId, setTabPreferences],
   );
@@ -277,6 +293,33 @@ export function SeriesBookList({
               label: size.toString(),
             }))}
           />
+
+          <SegmentedControl
+            size="xs"
+            value={viewMode}
+            onChange={(value) => setViewMode(value as SeriesBooksViewMode)}
+            aria-label="View mode"
+            data={[
+              {
+                value: "card",
+                label: (
+                  <Center style={{ gap: 4 }}>
+                    <IconLayoutGrid size={14} />
+                    <Box visibleFrom="sm">Cards</Box>
+                  </Center>
+                ),
+              },
+              {
+                value: "table",
+                label: (
+                  <Center style={{ gap: 4 }}>
+                    <IconLayoutList size={14} />
+                    <Box visibleFrom="sm">Table</Box>
+                  </Center>
+                ),
+              },
+            ]}
+          />
         </Group>
       </Group>
 
@@ -288,28 +331,38 @@ export function SeriesBookList({
         <Text c="dimmed">No books in this series</Text>
       ) : (
         <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-              gap: "var(--mantine-spacing-md)",
-              width: "100%",
-            }}
-          >
-            {data?.data.map((book, index) => (
-              <MediaCard
-                key={book.id}
-                type="book"
-                data={book}
-                hideSeriesName
-                index={index}
-                onSelect={handleSelect}
-                isSelected={selectedIds.has(book.id)}
-                isSelectionMode={isSelectionMode}
-                canBeSelected={canSelectBooks}
-              />
-            ))}
-          </div>
+          {viewMode === "table" ? (
+            <SeriesBookTable
+              books={data?.data ?? []}
+              onSelect={handleSelect}
+              selectedIds={selectedIds}
+              isSelectionMode={isSelectionMode}
+              canBeSelected={canSelectBooks}
+            />
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                gap: "var(--mantine-spacing-md)",
+                width: "100%",
+              }}
+            >
+              {data?.data.map((book, index) => (
+                <MediaCard
+                  key={book.id}
+                  type="book"
+                  data={book}
+                  hideSeriesName
+                  index={index}
+                  onSelect={handleSelect}
+                  isSelected={selectedIds.has(book.id)}
+                  isSelectionMode={isSelectionMode}
+                  canBeSelected={canSelectBooks}
+                />
+              ))}
+            </div>
+          )}
 
           {totalPages > 1 && (
             <Center mt="md">

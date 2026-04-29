@@ -9,10 +9,13 @@ export const DEFAULT_PAGE_SIZE = 50;
 /** Maximum number of items per page allowed by the API */
 export const MAX_PAGE_SIZE = 500;
 
+export type SeriesBooksViewMode = "card" | "table";
+
 export interface TabPreferences {
   pageSize?: number;
   sort?: string;
   filters?: Record<string, string>;
+  viewMode?: SeriesBooksViewMode;
 }
 
 export interface LibraryPreferences {

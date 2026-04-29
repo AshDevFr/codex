@@ -124,6 +124,36 @@ describe("libraryPreferencesStore", () => {
       const prefs = getTabPreferences("library-1", "books");
       expect(prefs?.filters).toEqual({ status: "reading", format: "cbz" });
     });
+
+    it("should store and merge viewMode without clobbering other fields", () => {
+      const { setTabPreferences, getTabPreferences } =
+        useLibraryPreferencesStore.getState();
+
+      setTabPreferences("library-1", "series-books", {
+        pageSize: 50,
+        sort: "number,asc",
+      });
+      setTabPreferences("library-1", "series-books", { viewMode: "table" });
+
+      const prefs = getTabPreferences("library-1", "series-books");
+      expect(prefs).toEqual({
+        pageSize: 50,
+        sort: "number,asc",
+        viewMode: "table",
+      });
+    });
+
+    it("should preserve viewMode when other preferences change", () => {
+      const { setTabPreferences, getTabPreferences } =
+        useLibraryPreferencesStore.getState();
+
+      setTabPreferences("library-1", "series-books", { viewMode: "table" });
+      setTabPreferences("library-1", "series-books", { pageSize: 100 });
+
+      expect(getTabPreferences("library-1", "series-books")?.viewMode).toBe(
+        "table",
+      );
+    });
   });
 
   describe("clearLibraryPreferences", () => {
