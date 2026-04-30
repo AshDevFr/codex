@@ -1,6 +1,6 @@
 # Development Dockerfile with hot reload support
 
-FROM rust:1.93-alpine
+FROM rust:1.95-alpine
 
 # Install development dependencies
 # Includes Node.js and npm for TypeScript/JavaScript plugin development

@@ -31,7 +31,7 @@ RUN npm run build
 # =============================================================================
 # Stage 2: Rust build with cross-compilation support (always x86_64)
 # =============================================================================
-FROM --platform=linux/amd64 rust:1.93-bookworm AS chef
+FROM --platform=linux/amd64 rust:1.95-bookworm AS chef
 
 # Install base build tools
 # clang is needed for proc-macro build scripts (proc-macro2, quote, etc.)
