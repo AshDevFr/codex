@@ -244,10 +244,8 @@ impl SettingsRepository {
                     .parse()
                     .map_err(|_| anyhow!("Invalid float value: {}", value))?;
             }
-            "Boolean" => {
-                if value != "true" && value != "false" {
-                    return Err(anyhow!("Invalid boolean value: {}", value));
-                }
+            "Boolean" if value != "true" && value != "false" => {
+                return Err(anyhow!("Invalid boolean value: {}", value));
             }
             "String" => {
                 // String values are always valid

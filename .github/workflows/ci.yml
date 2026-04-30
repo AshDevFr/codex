@@ -79,8 +79,9 @@ jobs:
       - name: Install mold linker
         run: sudo apt-get update && sudo apt-get install -y mold
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.95.0
           components: rustfmt, clippy
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
