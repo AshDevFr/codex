@@ -282,7 +282,9 @@ export function convertRecommendations(
     const score = Math.round((communityScore * 0.6 + avgScore * 0.4) * 100) / 100;
 
     const status = mapAniListStatus(media.status);
-    const totalBookCount = media.volumes ?? undefined;
+    const totalVolumeCount = media.volumes != null && media.volumes > 0 ? media.volumes : undefined;
+    const totalChapterCount =
+      media.chapters != null && media.chapters > 0 ? media.chapters : undefined;
 
     results.push({
       externalId,
@@ -300,7 +302,11 @@ export function convertRecommendations(
       format: media.format ?? undefined,
       countryOfOrigin: media.countryOfOrigin ?? undefined,
       startYear: media.startDate?.year ?? undefined,
-      totalBookCount,
+      // Legacy field mirrors the volume count so older Codex versions still
+      // see a value; new field is the authoritative one going forward.
+      totalBookCount: totalVolumeCount,
+      totalVolumeCount,
+      totalChapterCount,
       rating: media.averageScore ?? undefined,
       popularity: media.popularity ?? undefined,
     });

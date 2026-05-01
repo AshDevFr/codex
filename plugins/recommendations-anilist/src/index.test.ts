@@ -51,6 +51,7 @@ function makeNode(
     countryOfOrigin: string | null;
     startYear: number | null;
     volumes: number | null;
+    chapters: number | null;
     mediaRecommendation: AniListRecommendationNode["mediaRecommendation"];
   }>,
 ): AniListRecommendationNode {
@@ -80,6 +81,7 @@ function makeNode(
       countryOfOrigin: "countryOfOrigin" in overrides ? (overrides.countryOfOrigin ?? null) : null,
       startDate: "startYear" in overrides ? { year: overrides.startYear ?? null } : { year: null },
       volumes: "volumes" in overrides ? (overrides.volumes ?? null) : null,
+      chapters: "chapters" in overrides ? (overrides.chapters ?? null) : null,
     },
   };
 }
@@ -260,15 +262,46 @@ describe("convertRecommendations", () => {
     expect(results[0].status).toBeUndefined();
   });
 
-  it("includes totalBookCount from volumes", () => {
+  it("includes totalVolumeCount from volumes", () => {
     const nodes = [makeNode({ id: 1, rating: 50, volumes: 27 })];
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalVolumeCount).toBe(27);
+    // Legacy totalBookCount mirrors the volume value for backward-compat
     expect(results[0].totalBookCount).toBe(27);
   });
 
-  it("leaves totalBookCount undefined when volumes is null", () => {
+  it("leaves totalVolumeCount undefined when volumes is null", () => {
     const nodes = [makeNode({ id: 1, rating: 50, volumes: null })];
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalVolumeCount).toBeUndefined();
+    expect(results[0].totalBookCount).toBeUndefined();
+  });
+
+  it("includes totalChapterCount from chapters", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, chapters: 1086 })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalChapterCount).toBe(1086);
+  });
+
+  it("leaves totalChapterCount undefined when chapters is null", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, chapters: null })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalChapterCount).toBeUndefined();
+  });
+
+  it("populates both totalVolumeCount and totalChapterCount when both are known", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, volumes: 14, chapters: 109 })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalVolumeCount).toBe(14);
+    expect(results[0].totalChapterCount).toBe(109);
+    expect(results[0].totalBookCount).toBe(14);
+  });
+
+  it("treats zero or negative volumes/chapters as undefined", () => {
+    const nodes = [makeNode({ id: 1, rating: 50, volumes: 0, chapters: 0 })];
+    const results = convertRecommendations(nodes, "Test", new Set(), new Set());
+    expect(results[0].totalVolumeCount).toBeUndefined();
+    expect(results[0].totalChapterCount).toBeUndefined();
     expect(results[0].totalBookCount).toBeUndefined();
   });
 

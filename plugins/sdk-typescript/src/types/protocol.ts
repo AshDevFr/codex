@@ -105,8 +105,25 @@ export interface PluginSeriesMetadata {
   year?: number;
 
   // Extended metadata
-  /** Expected total number of books in the series */
+  /**
+   * Expected total number of books in the series.
+   *
+   * @deprecated Use `totalVolumeCount` and/or `totalChapterCount` instead.
+   * Kept for one phase of backward-compat with older plugins; will be removed
+   * in a future protocol version.
+   */
   totalBookCount?: number;
+  /**
+   * Expected total number of volumes in the series, when known.
+   * Use this for volume-organized libraries.
+   */
+  totalVolumeCount?: number;
+  /**
+   * Expected total number of chapters in the series, when known.
+   * May be fractional (e.g. 47.5).
+   * Use this for chapter-organized libraries.
+   */
+  totalChapterCount?: number;
   /** BCP47 language code (e.g., "en", "ja", "ko") */
   language?: string;
   /** Age rating (e.g., 0, 13, 16, 18) */

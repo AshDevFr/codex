@@ -122,7 +122,7 @@ export interface PluginManifest {
   icon?: string;
 
   /** Protocol version this plugin implements */
-  protocolVersion: "1.0";
+  protocolVersion: "1.0" | "1.1";
 
   /** What this plugin can do */
   capabilities: PluginCapabilities;
