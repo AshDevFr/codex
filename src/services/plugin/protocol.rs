@@ -14,8 +14,14 @@ use serde_json::Value;
 pub const JSONRPC_VERSION: &str = "2.0";
 
 /// Plugin protocol version
+///
+/// Bumped to 1.1 (additive minor) when `total_volume_count` + `total_chapter_count`
+/// were added to `PluginSeriesMetadata` / `UserLibraryEntry` and
+/// `MetadataWriteTotalVolumeCount` / `MetadataWriteTotalChapterCount` permissions were
+/// introduced. Plugins built against 1.0 still deserialize cleanly (legacy
+/// `total_book_count` remains in the schema).
 #[allow(dead_code)] // Protocol contract: sent to plugins during initialize
-pub const PROTOCOL_VERSION: &str = "1.0";
+pub const PROTOCOL_VERSION: &str = "1.1";
 
 // =============================================================================
 // JSON-RPC Base Types
@@ -764,9 +770,21 @@ pub struct PluginSeriesMetadata {
     pub year: Option<i32>,
 
     // Extended metadata
-    /// Expected total number of books in the series
+    /// Expected total number of books in the series.
+    ///
+    /// DEPRECATED: kept for one phase of backward-compat with older plugins. Plugins
+    /// should populate `total_volume_count` and/or `total_chapter_count` instead.
+    /// Removed in Phase 9 of the metadata-count-split plan.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_book_count: Option<i32>,
+    /// Expected total number of volumes in the series, when known.
+    /// Use this for volume-organized libraries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_volume_count: Option<i32>,
+    /// Expected total number of chapters in the series, when known. May be fractional.
+    /// Use this for chapter-organized libraries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_chapter_count: Option<f32>,
     /// BCP47 language code (e.g., "en", "ja", "ko")
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
@@ -1186,9 +1204,19 @@ pub struct UserLibraryEntry {
     /// Tags
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
-    /// Total book count in the series
+    /// Total book count in the series.
+    ///
+    /// DEPRECATED: kept for one phase of backward-compat with older plugins. Plugins
+    /// should consume `total_volume_count` and/or `total_chapter_count` instead.
+    /// Removed in Phase 9 of the metadata-count-split plan.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_book_count: Option<i32>,
+    /// Expected total number of volumes in the series, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_volume_count: Option<i32>,
+    /// Expected total number of chapters in the series, when known. May be fractional.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_chapter_count: Option<f32>,
 
     /// Known external IDs (source → external_id mapping)
     /// e.g., {"anilist": "12345", "myanimelist": "67890"}
@@ -1461,6 +1489,8 @@ mod tests {
             status: Some(SeriesStatus::Ongoing),
             year: Some(1997),
             total_book_count: Some(100),
+            total_volume_count: Some(100),
+            total_chapter_count: Some(1086.0),
             language: Some("ja".to_string()),
             age_rating: Some(13),
             reading_direction: Some("rtl".to_string()),
@@ -1538,6 +1568,8 @@ mod tests {
             status: None,
             year: None,
             total_book_count: None,
+            total_volume_count: None,
+            total_chapter_count: None,
             language: None,
             age_rating: None,
             reading_direction: None,
@@ -1556,6 +1588,108 @@ mod tests {
         let json = serde_json::to_value(&metadata).unwrap();
         // externalIds should be omitted when empty
         assert!(!json.as_object().unwrap().contains_key("externalIds"));
+    }
+
+    #[test]
+    fn test_plugin_series_metadata_split_counts_round_trip() {
+        // Both volume and chapter counts populate cleanly.
+        let json = json!({
+            "externalId": "abc",
+            "externalUrl": "https://example.com/series/abc",
+            "title": "One Piece",
+            "totalVolumeCount": 14,
+            "totalChapterCount": 109.5,
+        });
+        let parsed: PluginSeriesMetadata = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.total_volume_count, Some(14));
+        assert_eq!(parsed.total_chapter_count, Some(109.5));
+        // Legacy field is None when only the new fields are sent.
+        assert_eq!(parsed.total_book_count, None);
+
+        // Round-trip back to JSON preserves both fields.
+        let serialized = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(serialized["totalVolumeCount"], 14);
+        assert_eq!(serialized["totalChapterCount"], 109.5);
+    }
+
+    #[test]
+    fn test_plugin_series_metadata_legacy_total_book_count_still_deserializes() {
+        // An old plugin that only emits the legacy field must still parse cleanly,
+        // with the new fields absent (None). The Phase 4 fallback in MetadataApplier
+        // is what routes this to total_volume_count at write time.
+        let json = json!({
+            "externalId": "old-1",
+            "externalUrl": "https://example.com/old-1",
+            "totalBookCount": 14,
+        });
+        let parsed: PluginSeriesMetadata = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.total_book_count, Some(14));
+        assert_eq!(parsed.total_volume_count, None);
+        assert_eq!(parsed.total_chapter_count, None);
+    }
+
+    #[test]
+    fn test_plugin_series_metadata_skips_unset_count_fields() {
+        // When all three count fields are None, none should be present on the wire.
+        let metadata = PluginSeriesMetadata {
+            external_id: "1".to_string(),
+            external_url: "https://example.com/1".to_string(),
+            title: None,
+            alternate_titles: vec![],
+            summary: None,
+            status: None,
+            year: None,
+            total_book_count: None,
+            total_volume_count: None,
+            total_chapter_count: None,
+            language: None,
+            age_rating: None,
+            reading_direction: None,
+            genres: vec![],
+            tags: vec![],
+            authors: vec![],
+            artists: vec![],
+            publisher: None,
+            cover_url: None,
+            banner_url: None,
+            rating: None,
+            external_ratings: vec![],
+            external_links: vec![],
+            external_ids: vec![],
+        };
+        let json = serde_json::to_value(&metadata).unwrap();
+        let obj = json.as_object().unwrap();
+        assert!(!obj.contains_key("totalBookCount"));
+        assert!(!obj.contains_key("totalVolumeCount"));
+        assert!(!obj.contains_key("totalChapterCount"));
+    }
+
+    #[test]
+    fn test_user_library_entry_split_counts_round_trip() {
+        let json = json!({
+            "seriesId": "uuid-1",
+            "title": "One Piece",
+            "totalVolumeCount": 107,
+            "totalChapterCount": 1086.5,
+            "booksRead": 0,
+            "booksOwned": 0,
+        });
+        let parsed: UserLibraryEntry = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.total_volume_count, Some(107));
+        assert_eq!(parsed.total_chapter_count, Some(1086.5));
+        assert_eq!(parsed.total_book_count, None);
+
+        let serialized = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(serialized["totalVolumeCount"], 107);
+        assert_eq!(serialized["totalChapterCount"], 1086.5);
+    }
+
+    #[test]
+    fn test_protocol_version_is_minor_bumped() {
+        // Phase 2 of metadata-count-split bumps the protocol from 1.0 to 1.1
+        // (additive minor). Older 1.0 plugins continue to deserialize because
+        // total_book_count is still on the wire.
+        assert_eq!(PROTOCOL_VERSION, "1.1");
     }
 
     #[test]
@@ -2090,6 +2224,8 @@ mod tests {
             genres: vec!["Action".to_string(), "Adventure".to_string()],
             tags: vec!["pirates".to_string()],
             total_book_count: Some(107),
+            total_volume_count: Some(107),
+            total_chapter_count: Some(1086.5),
             external_ids: vec![UserLibraryExternalId {
                 source: "anilist".to_string(),
                 external_id: "21".to_string(),
@@ -2133,6 +2269,8 @@ mod tests {
             genres: vec![],
             tags: vec![],
             total_book_count: None,
+            total_volume_count: None,
+            total_chapter_count: None,
             external_ids: vec![],
             reading_status: None,
             books_read: 0,
@@ -2237,6 +2375,8 @@ mod tests {
             genres: vec![],
             tags: vec![],
             total_book_count: None,
+            total_volume_count: None,
+            total_chapter_count: None,
             external_ids: vec![
                 UserLibraryExternalId {
                     source: "anilist".to_string(),
