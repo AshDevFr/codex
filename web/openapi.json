@@ -31770,6 +31770,13 @@
             ],
             "description": "Short description"
           },
+          "format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Content format discriminator (e.g. `manga`, `novel`, `light_novel`,\n`manhwa`, `manhua`, `comic`, `webtoon`, `one_shot`).\n\nFree-form string at the protocol layer; the UI maps known values to\ncolored badges and falls back to a neutral badge for anything else."
+          },
           "genres": {
             "type": "array",
             "items": {

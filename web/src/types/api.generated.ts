@@ -14411,6 +14411,14 @@ export interface components {
             bookCount?: number | null;
             /** @description Short description */
             description?: string | null;
+            /**
+             * @description Content format discriminator (e.g. `manga`, `novel`, `light_novel`,
+             *     `manhwa`, `manhua`, `comic`, `webtoon`, `one_shot`).
+             *
+             *     Free-form string at the protocol layer; the UI maps known values to
+             *     colored badges and falls back to a neutral badge for anything else.
+             */
+            format?: string | null;
             /** @description Genres */
             genres?: string[];
             /**

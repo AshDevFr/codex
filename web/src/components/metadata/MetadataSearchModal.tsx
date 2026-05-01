@@ -27,6 +27,7 @@ import {
   type PluginSearchResultDto,
   pluginsApi,
 } from "@/api/plugins";
+import { resolveFormatBadge } from "./formatBadge";
 
 export interface MetadataSearchModalProps {
   /** Whether the modal is open */
@@ -477,6 +478,14 @@ function SearchResultCard({ result, onSelect }: SearchResultCardProps) {
 
           {result.preview && (
             <Group gap="xs" mt={4}>
+              {(() => {
+                const badge = resolveFormatBadge(result.preview.format);
+                return badge ? (
+                  <Badge size="xs" variant="filled" color={badge.color}>
+                    {badge.label}
+                  </Badge>
+                ) : null;
+              })()}
               {result.preview.status && (
                 <Badge size="xs" variant="outline">
                   {result.preview.status}

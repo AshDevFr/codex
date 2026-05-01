@@ -1150,6 +1150,14 @@ pub struct SearchResultPreviewDto {
     /// Author names (book search results)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub authors: Vec<String>,
+
+    /// Content format discriminator (e.g. `manga`, `novel`, `light_novel`,
+    /// `manhwa`, `manhua`, `comic`, `webtoon`, `one_shot`).
+    ///
+    /// Free-form string at the protocol layer; the UI maps known values to
+    /// colored badges and falls back to a neutral badge for anything else.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
 }
 
 /// Response containing search results from a plugin
@@ -1433,6 +1441,7 @@ impl From<crate::services::plugin::protocol::SearchResultPreview> for SearchResu
             description: p.description,
             book_count: p.book_count,
             authors: p.authors,
+            format: p.format,
         }
     }
 }

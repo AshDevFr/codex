@@ -69,6 +69,18 @@ export interface SearchResultPreview {
   bookCount?: number;
   /** Author names (for book search results) */
   authors?: string[];
+  /**
+   * Content format discriminator (e.g. `manga`, `novel`, `light_novel`,
+   * `manhwa`, `manhua`, `comic`, `webtoon`, `one_shot`, `doujin`,
+   * `artbook`).
+   *
+   * Free-form string so plugins are not locked into an enum that requires
+   * Codex core changes when new formats appear. Plugin authors are
+   * encouraged to emit lowercase snake_case values from the recommended
+   * vocabulary above so the UI can render consistent badges; unknown
+   * values still render as a neutral badge.
+   */
+  format?: string;
 }
 
 // =============================================================================
