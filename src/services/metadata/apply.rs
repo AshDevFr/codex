@@ -337,6 +337,11 @@ impl MetadataApplier {
         }
 
         // Total Book Count
+        //
+        // DEPRECATED: kept through Phase 3 of metadata-count-split for backward
+        // compatibility with plugins that still emit the legacy field. Phase 4
+        // stops the write here and adds a fallback that routes the legacy value
+        // to `totalVolumeCount`. Phase 9 removes this block entirely.
         if should_apply_field("totalBookCount")
             && let Some(total_book_count) = metadata.total_book_count
         {
@@ -357,6 +362,58 @@ impl MetadataApplier {
                     .await
                     .context("Failed to update total book count")?;
                     applied_fields.push("totalBookCount".to_string());
+                }
+                Err(skip) => skipped_fields.push(skip),
+            }
+        }
+
+        // Total Volume Count
+        if should_apply_field("totalVolumeCount")
+            && let Some(total_volume_count) = metadata.total_volume_count
+        {
+            let is_locked = current_metadata
+                .map(|m| m.total_volume_count_lock)
+                .unwrap_or(false);
+            match check_field(
+                "totalVolumeCount",
+                is_locked,
+                PluginPermission::MetadataWriteTotalVolumeCount,
+            ) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_total_volume_count(
+                        db,
+                        series_id,
+                        Some(total_volume_count),
+                    )
+                    .await
+                    .context("Failed to update total volume count")?;
+                    applied_fields.push("totalVolumeCount".to_string());
+                }
+                Err(skip) => skipped_fields.push(skip),
+            }
+        }
+
+        // Total Chapter Count
+        if should_apply_field("totalChapterCount")
+            && let Some(total_chapter_count) = metadata.total_chapter_count
+        {
+            let is_locked = current_metadata
+                .map(|m| m.total_chapter_count_lock)
+                .unwrap_or(false);
+            match check_field(
+                "totalChapterCount",
+                is_locked,
+                PluginPermission::MetadataWriteTotalChapterCount,
+            ) {
+                Ok(_) => {
+                    SeriesMetadataRepository::update_total_chapter_count(
+                        db,
+                        series_id,
+                        Some(total_chapter_count),
+                    )
+                    .await
+                    .context("Failed to update total chapter count")?;
+                    applied_fields.push("totalChapterCount".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
             }
