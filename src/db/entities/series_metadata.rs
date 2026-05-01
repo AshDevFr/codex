@@ -96,13 +96,19 @@ pub struct Model {
     pub language: Option<String>,          // BCP47: "en", "ja", "ko"
     pub reading_direction: Option<String>, // ltr, rtl, ttb
     pub year: Option<i32>,
-    pub total_book_count: Option<i32>, // Expected total (for ongoing series)
+    pub total_book_count: Option<i32>, // Expected total (for ongoing series). DEPRECATED: removed in Phase 9 of metadata-count-split; new code reads/writes total_volume_count and total_chapter_count instead.
+    /// Total volumes the series will/did have, when known. Use for volume-organized libraries.
+    pub total_volume_count: Option<i32>,
+    /// Total chapters the series will/did have, when known. May be fractional (e.g. 47.5).
+    pub total_chapter_count: Option<f32>,
     pub custom_metadata: Option<String>, // JSON escape hatch for user-defined fields
     /// Structured author information as JSON array
     /// Format: [{"name": "...", "role": "author|co-author|editor|...", "sort_name": "..."}]
     pub authors_json: Option<String>,
     // Lock fields
-    pub total_book_count_lock: bool,
+    pub total_book_count_lock: bool, // DEPRECATED: removed in Phase 9; replaced by total_volume_count_lock + total_chapter_count_lock.
+    pub total_volume_count_lock: bool,
+    pub total_chapter_count_lock: bool,
     pub title_lock: bool,
     pub title_sort_lock: bool,
     pub summary_lock: bool,

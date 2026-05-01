@@ -69,9 +69,13 @@ impl SeriesMetadataRepository {
             reading_direction: Set(None),
             year: Set(None),
             total_book_count: Set(None),
+            total_volume_count: Set(None),
+            total_chapter_count: Set(None),
             custom_metadata: Set(None),
             authors_json: Set(None),
             total_book_count_lock: Set(false),
+            total_volume_count_lock: Set(false),
+            total_chapter_count_lock: Set(false),
             title_lock: Set(false),
             title_sort_lock: Set(false),
             summary_lock: Set(false),
@@ -301,6 +305,10 @@ impl SeriesMetadataRepository {
     }
 
     /// Update total book count (expected number of books in the series)
+    ///
+    /// DEPRECATED: kept through Phase 4 of metadata-count-split for the legacy column;
+    /// new callers should use [`update_total_volume_count`] and/or
+    /// [`update_total_chapter_count`]. Removed entirely in Phase 9.
     pub async fn update_total_book_count(
         db: &DatabaseConnection,
         series_id: Uuid,
@@ -314,6 +322,52 @@ impl SeriesMetadataRepository {
 
         let mut active_model: series_metadata::ActiveModel = existing.into();
         active_model.total_book_count = Set(total_book_count);
+        active_model.updated_at = Set(Utc::now());
+
+        let model = active_model.update(db).await?;
+        Ok(model)
+    }
+
+    /// Update the expected total volume count for a series.
+    ///
+    /// Pass `None` to clear the value. The lock state is independent and unchanged.
+    pub async fn update_total_volume_count(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        total_volume_count: Option<i32>,
+    ) -> Result<series_metadata::Model> {
+        let existing = Self::get_by_series_id(db, series_id)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Series metadata not found for series: {}", series_id)
+            })?;
+
+        let mut active_model: series_metadata::ActiveModel = existing.into();
+        active_model.total_volume_count = Set(total_volume_count);
+        active_model.updated_at = Set(Utc::now());
+
+        let model = active_model.update(db).await?;
+        Ok(model)
+    }
+
+    /// Update the expected total chapter count for a series.
+    ///
+    /// Pass `None` to clear the value. Chapters are stored as `f32` to support
+    /// fractional chapter numbers like 47.5 that some providers expose. The lock
+    /// state is independent and unchanged.
+    pub async fn update_total_chapter_count(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        total_chapter_count: Option<f32>,
+    ) -> Result<series_metadata::Model> {
+        let existing = Self::get_by_series_id(db, series_id)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Series metadata not found for series: {}", series_id)
+            })?;
+
+        let mut active_model: series_metadata::ActiveModel = existing.into();
+        active_model.total_chapter_count = Set(total_chapter_count);
         active_model.updated_at = Set(Utc::now());
 
         let model = active_model.update(db).await?;
@@ -367,6 +421,8 @@ impl SeriesMetadataRepository {
             "reading_direction" => active_model.reading_direction_lock = Set(locked),
             "year" => active_model.year_lock = Set(locked),
             "total_book_count" => active_model.total_book_count_lock = Set(locked),
+            "total_volume_count" => active_model.total_volume_count_lock = Set(locked),
+            "total_chapter_count" => active_model.total_chapter_count_lock = Set(locked),
             "genres" => active_model.genres_lock = Set(locked),
             "tags" => active_model.tags_lock = Set(locked),
             "cover" => active_model.cover_lock = Set(locked),
@@ -393,6 +449,8 @@ impl SeriesMetadataRepository {
             "reading_direction" => metadata.reading_direction_lock,
             "year" => metadata.year_lock,
             "total_book_count" => metadata.total_book_count_lock,
+            "total_volume_count" => metadata.total_volume_count_lock,
+            "total_chapter_count" => metadata.total_chapter_count_lock,
             "genres" => metadata.genres_lock,
             "tags" => metadata.tags_lock,
             "cover" => metadata.cover_lock,
@@ -663,5 +721,139 @@ mod tests {
         assert!(reset.publisher.is_none());
         assert!(!reset.title_lock);
         assert!(!reset.summary_lock);
+    }
+
+    /// Helper that creates a library + series and returns the series UUID.
+    async fn make_series(db: &crate::db::Database, name: &str) -> Uuid {
+        let library = LibraryRepository::create(
+            db.sea_orm_connection(),
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+        SeriesRepository::create(db.sea_orm_connection(), library.id, name, None)
+            .await
+            .unwrap()
+            .id
+    }
+
+    #[tokio::test]
+    async fn test_update_total_volume_count_round_trip() {
+        let (db, _temp_dir) = create_test_db().await;
+        let series_id = make_series(&db, "Vol Series").await;
+
+        // Defaults: both new fields unset, both locks false.
+        let initial =
+            SeriesMetadataRepository::get_by_series_id(db.sea_orm_connection(), series_id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert!(initial.total_volume_count.is_none());
+        assert!(!initial.total_volume_count_lock);
+
+        // Set volume count.
+        let updated = SeriesMetadataRepository::update_total_volume_count(
+            db.sea_orm_connection(),
+            series_id,
+            Some(14),
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.total_volume_count, Some(14));
+        // Lock should not have been touched.
+        assert!(!updated.total_volume_count_lock);
+        // Chapter side untouched.
+        assert!(updated.total_chapter_count.is_none());
+
+        // Clear via None.
+        let cleared = SeriesMetadataRepository::update_total_volume_count(
+            db.sea_orm_connection(),
+            series_id,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(cleared.total_volume_count.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_total_chapter_count_round_trip_fractional() {
+        let (db, _temp_dir) = create_test_db().await;
+        let series_id = make_series(&db, "Chap Series").await;
+
+        // Set fractional chapter count to confirm float storage works.
+        let updated = SeriesMetadataRepository::update_total_chapter_count(
+            db.sea_orm_connection(),
+            series_id,
+            Some(109.5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.total_chapter_count, Some(109.5));
+        assert!(!updated.total_chapter_count_lock);
+        // Volume side untouched.
+        assert!(updated.total_volume_count.is_none());
+
+        // Clear via None.
+        let cleared = SeriesMetadataRepository::update_total_chapter_count(
+            db.sea_orm_connection(),
+            series_id,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(cleared.total_chapter_count.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_volume_and_chapter_locks_are_independent() {
+        let (db, _temp_dir) = create_test_db().await;
+        let series_id = make_series(&db, "Lock Series").await;
+
+        // Lock volume count, leave chapter count untouched.
+        let after_vol_lock = SeriesMetadataRepository::set_lock(
+            db.sea_orm_connection(),
+            series_id,
+            "total_volume_count",
+            true,
+        )
+        .await
+        .unwrap();
+        assert!(after_vol_lock.total_volume_count_lock);
+        assert!(!after_vol_lock.total_chapter_count_lock);
+        assert!(SeriesMetadataRepository::is_field_locked(
+            &after_vol_lock,
+            "total_volume_count"
+        ));
+        assert!(!SeriesMetadataRepository::is_field_locked(
+            &after_vol_lock,
+            "total_chapter_count"
+        ));
+
+        // Lock chapter count too; both locked now.
+        let after_chap_lock = SeriesMetadataRepository::set_lock(
+            db.sea_orm_connection(),
+            series_id,
+            "total_chapter_count",
+            true,
+        )
+        .await
+        .unwrap();
+        assert!(after_chap_lock.total_volume_count_lock);
+        assert!(after_chap_lock.total_chapter_count_lock);
+
+        // Unlock chapter count: volume lock stays.
+        let after_unlock = SeriesMetadataRepository::set_lock(
+            db.sea_orm_connection(),
+            series_id,
+            "total_chapter_count",
+            false,
+        )
+        .await
+        .unwrap();
+        assert!(after_unlock.total_volume_count_lock);
+        assert!(!after_unlock.total_chapter_count_lock);
     }
 }
