@@ -135,6 +135,9 @@ mod m20260408_000064_create_series_exports;
 mod m20260408_000065_seed_series_export_settings;
 mod m20260410_000066_add_export_type;
 
+// Split series_metadata.total_book_count into total_volume_count and total_chapter_count
+mod m20260502_000067_split_book_count;
+
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -241,6 +244,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260408_000064_create_series_exports::Migration),
             Box::new(m20260408_000065_seed_series_export_settings::Migration),
             Box::new(m20260410_000066_add_export_type::Migration),
+            // Split total_book_count into total_volume_count and total_chapter_count
+            Box::new(m20260502_000067_split_book_count::Migration),
         ]
     }
 }

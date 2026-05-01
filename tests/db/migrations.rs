@@ -365,3 +365,143 @@ async fn test_migration_056_fresh_run_postgres() {
 
     db.close().await;
 }
+
+// -- Migration 067 (split_book_count) tests --
+// These tests verify that the migration adds the new volume + chapter columns
+// and backfills total_volume_count from the legacy total_book_count, preserving
+// the lock state. Chapter columns must remain NULL/false.
+
+/// Helper: create a SQLite database and run all migrations EXCEPT the last one (067).
+/// Returns the Database and TempDir (must keep alive).
+async fn setup_db_before_migration_067() -> (Database, TempDir) {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+
+    let config = DatabaseConfig {
+        db_type: DatabaseType::SQLite,
+        postgres: None,
+        sqlite: Some(SQLiteConfig {
+            path: db_path.to_str().unwrap().to_string(),
+            pragmas: None,
+            ..SQLiteConfig::default()
+        }),
+    };
+
+    let db = Database::new(&config).await.unwrap();
+    let conn = db.sea_orm_connection();
+
+    // Run all migrations except the last one (067 = split_book_count).
+    // Total migrations after adding 067 is 64; running 63 leaves 067 pending.
+    Migrator::up(conn, Some(63)).await.unwrap();
+
+    (db, temp_dir)
+}
+
+#[tokio::test]
+async fn test_migration_067_backfill_sqlite() {
+    let (db, _temp_dir) = setup_db_before_migration_067().await;
+    let conn = db.sea_orm_connection();
+
+    // Pre-conditions: legacy column exists, new columns do not.
+    assert!(sqlite_has_column(conn, "series_metadata", "total_book_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_book_count_lock").await);
+    assert!(!sqlite_has_column(conn, "series_metadata", "total_volume_count").await);
+    assert!(!sqlite_has_column(conn, "series_metadata", "total_volume_count_lock").await);
+    assert!(!sqlite_has_column(conn, "series_metadata", "total_chapter_count").await);
+    assert!(!sqlite_has_column(conn, "series_metadata", "total_chapter_count_lock").await);
+
+    // Seed three series + metadata rows covering the lock/value matrix.
+    conn.execute_unprepared(
+        "INSERT INTO libraries (id, name, path, series_strategy, book_strategy, number_strategy, default_reading_direction, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000001', 'Lib', '/lib', 'series_volume', 'filename', 'file_order', 'LEFT_TO_RIGHT', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    // Three series IDs.
+    let s_value_and_lock = "X'00000000000000000000000000000010'";
+    let s_value_only = "X'00000000000000000000000000000011'";
+    let s_lock_only = "X'00000000000000000000000000000012'";
+
+    for (idx, sid) in [s_value_and_lock, s_value_only, s_lock_only]
+        .iter()
+        .enumerate()
+    {
+        let sql = format!(
+            "INSERT INTO series (id, library_id, path, name, normalized_name, created_at, updated_at)
+             VALUES ({sid}, X'00000000000000000000000000000001', '/path/{idx}', 'Series {idx}', 'series {idx}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+        );
+        conn.execute_unprepared(&sql).await.unwrap();
+    }
+
+    // Row 1: count=14, lock=true (volume-organized series with locked count).
+    conn.execute_unprepared(&format!(
+        "INSERT INTO series_metadata (series_id, title, total_book_count, total_book_count_lock, created_at, updated_at)
+         VALUES ({s_value_and_lock}, 'Locked', 14, 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )).await.unwrap();
+
+    // Row 2: count=42, lock=false (typical volume-organized series).
+    conn.execute_unprepared(&format!(
+        "INSERT INTO series_metadata (series_id, title, total_book_count, total_book_count_lock, created_at, updated_at)
+         VALUES ({s_value_only}, 'Open', 42, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )).await.unwrap();
+
+    // Row 3: count=NULL, lock=true (chapter-organized series, user emptied + locked).
+    conn.execute_unprepared(&format!(
+        "INSERT INTO series_metadata (series_id, title, total_book_count, total_book_count_lock, created_at, updated_at)
+         VALUES ({s_lock_only}, 'Empty Locked', NULL, 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )).await.unwrap();
+
+    // Run migration 067.
+    Migrator::up(conn, None).await.unwrap();
+
+    // Post-conditions: new columns present.
+    assert!(sqlite_has_column(conn, "series_metadata", "total_volume_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_volume_count_lock").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_chapter_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_chapter_count_lock").await);
+    // Legacy columns still present (kept until Phase 9).
+    assert!(sqlite_has_column(conn, "series_metadata", "total_book_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_book_count_lock").await);
+
+    // Helper closure to read a single row's split-count state.
+    let read_state = |sid: &'static str| {
+        let sql = format!(
+            "SELECT total_volume_count, total_volume_count_lock, total_chapter_count, total_chapter_count_lock FROM series_metadata WHERE series_id = {sid}"
+        );
+        async move {
+            let row = conn
+                .query_one(Statement::from_string(DatabaseBackend::Sqlite, sql))
+                .await
+                .unwrap()
+                .unwrap();
+            let vol: Option<i32> = row.try_get("", "total_volume_count").unwrap();
+            let vol_lock: bool = row.try_get("", "total_volume_count_lock").unwrap();
+            let chap: Option<f32> = row.try_get("", "total_chapter_count").unwrap();
+            let chap_lock: bool = row.try_get("", "total_chapter_count_lock").unwrap();
+            (vol, vol_lock, chap, chap_lock)
+        }
+    };
+
+    // Row 1: value + lock both copy across.
+    let (vol, vol_lock, chap, chap_lock) = read_state(s_value_and_lock).await;
+    assert_eq!(vol, Some(14));
+    assert!(vol_lock);
+    assert!(chap.is_none(), "chapter count must stay NULL on backfill");
+    assert!(!chap_lock, "chapter lock must stay false on backfill");
+
+    // Row 2: value copies, lock stays false.
+    let (vol, vol_lock, chap, chap_lock) = read_state(s_value_only).await;
+    assert_eq!(vol, Some(42));
+    assert!(!vol_lock);
+    assert!(chap.is_none());
+    assert!(!chap_lock);
+
+    // Row 3: NULL + locked → volume NULL + locked (the chapter-organized workaround state
+    // lands cleanly on the new schema).
+    let (vol, vol_lock, chap, chap_lock) = read_state(s_lock_only).await;
+    assert!(vol.is_none());
+    assert!(vol_lock);
+    assert!(chap.is_none());
+    assert!(!chap_lock);
+
+    db.close().await;
+}
