@@ -25440,11 +25440,11 @@
               "null"
             ],
             "format": "int32",
-            "description": "Total book count (expected)"
+            "description": "Total book count (expected). Komga's wire field is `totalBookCount`,\nwhich is volume-shaped semantically; we populate it from Codex's\n`series_metadata.total_volume_count`. Keep the serde rename so Komga\nclients (Komic, Mihon, etc.) see the field name they expect."
           },
           "totalBookCountLock": {
             "type": "boolean",
-            "description": "Whether total_book_count is locked"
+            "description": "Whether total_volume_count is locked. Wire name stays `totalBookCountLock`\nto match Komga's schema."
           }
         }
       },

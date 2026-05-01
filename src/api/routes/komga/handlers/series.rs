@@ -833,8 +833,8 @@ async fn build_series_dto(
             // map our `total_volume_count` (and its lock) to it. If/when
             // Komga adds a chapter-count field upstream, surface
             // `total_chapter_count` there too.
-            total_book_count: m.total_volume_count,
-            total_book_count_lock: m.total_volume_count_lock,
+            total_volume_count: m.total_volume_count,
+            total_volume_count_lock: m.total_volume_count_lock,
             sharing_labels: Vec::new(),
             sharing_labels_lock: false,
             links,
