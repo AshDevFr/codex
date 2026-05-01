@@ -66,6 +66,7 @@ import {
   SeriesMetadataEditModal,
   SeriesRating,
 } from "@/components/series";
+import { formatSeriesCounts } from "@/components/series/seriesCounts";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
@@ -764,10 +765,18 @@ export function SeriesDetail() {
               </Group>
 
               {/* Book count */}
-              <Text size="sm" c="dimmed">
-                {series.bookCount ?? 0} /{" "}
-                {series.metadata?.totalBookCount ?? series.bookCount ?? 0} books
-              </Text>
+              {(() => {
+                const counts = formatSeriesCounts({
+                  localCount: series.bookCount ?? null,
+                  totalVolumeCount: metadata?.totalVolumeCount ?? null,
+                  totalChapterCount: metadata?.totalChapterCount ?? null,
+                });
+                return counts ? (
+                  <Text size="sm" c="dimmed">
+                    {counts}
+                  </Text>
+                ) : null;
+              })()}
 
               {/* Alternate titles inline */}
               {series.alternateTitles && series.alternateTitles.length > 0 && (

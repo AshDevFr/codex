@@ -31,6 +31,8 @@ const mockMetadata = {
   imprint: null,
   year: 2024,
   ageRating: null,
+  totalVolumeCount: 14,
+  totalChapterCount: 109.5,
   genres: [{ id: "g1", name: "Action" }],
   tags: [{ id: "t1", name: "Superhero" }],
   alternateTitles: [],
@@ -47,6 +49,8 @@ const mockMetadata = {
     imprint: false,
     year: false,
     ageRating: false,
+    totalVolumeCount: false,
+    totalChapterCount: false,
     genres: false,
     tags: false,
   },
@@ -165,5 +169,42 @@ describe("SeriesMetadataEditModal", () => {
     );
 
     expect(seriesMetadataApi.getFullMetadata).not.toHaveBeenCalled();
+  });
+
+  it("hydrates and round-trips total volume + chapter counts (incl. fractional)", async () => {
+    renderWithProviders(
+      <SeriesMetadataEditModal
+        opened={true}
+        onClose={vi.fn()}
+        seriesId="test-series-id"
+      />,
+    );
+
+    // Open the Details tab where the volume/chapter inputs live
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /Details/i })).toBeInTheDocument();
+    });
+    screen.getByRole("tab", { name: /Details/i }).click();
+
+    // Both inputs should be hydrated with the mock values
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("14")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("109.5")).toBeInTheDocument();
+    });
+
+    // Save without further edits — both fields should make it into the
+    // PATCH payload, with the chapter count parsed as a float.
+    const saveButton = screen.getByRole("button", { name: /Save Changes/i });
+    saveButton.click();
+
+    await waitFor(() => {
+      expect(seriesMetadataApi.patchMetadata).toHaveBeenCalledWith(
+        "test-series-id",
+        expect.objectContaining({
+          totalVolumeCount: 14,
+          totalChapterCount: 109.5,
+        }),
+      );
+    });
   });
 });

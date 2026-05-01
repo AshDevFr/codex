@@ -287,6 +287,31 @@ describe("BulkMetadataEditModal", () => {
       // The editor should be visible with its help text
       expect(screen.getByText(/merge patch semantics/i)).toBeInTheDocument();
     });
+
+    it("submits totalVolumeCount and totalChapterCount on series patch", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<BulkMetadataEditModal {...defaultSeriesProps} />);
+
+      const volumeInput = screen.getByPlaceholderText("e.g., 14");
+      const chapterInput = screen.getByPlaceholderText("e.g., 109 or 109.5");
+      await user.type(volumeInput, "14");
+      await user.type(chapterInput, "109.5");
+
+      const applyButton = screen.getByRole("button", {
+        name: /apply to 3 series/i,
+      });
+      await user.click(applyButton);
+
+      await waitFor(() => {
+        expect(mockPatchSeriesMetadata).toHaveBeenCalledWith(
+          expect.objectContaining({
+            seriesIds: ["series-1", "series-2", "series-3"],
+            totalVolumeCount: 14,
+            totalChapterCount: 109.5,
+          }),
+        );
+      });
+    });
   });
 
   // ===========================================================================

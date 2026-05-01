@@ -80,7 +80,8 @@ export function SeriesMetadata({ metadata }: SeriesMetadataProps) {
     { label: "Language", value: languageDisplay },
     { label: "Age Rating", value: ageRatingDisplay },
     { label: "Reading Direction", value: readingDirDisplay },
-    { label: "Total Books", value: metadata.totalBookCount },
+    { label: "Total Volumes", value: metadata.totalVolumeCount },
+    { label: "Total Chapters", value: metadata.totalChapterCount },
   ].filter((item) => item.value !== null && item.value !== undefined);
 
   if (items.length === 0) {

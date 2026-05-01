@@ -76,7 +76,8 @@ interface FormState {
   ageRating: string;
   imprint: string;
   year: string;
-  totalBookCount: string;
+  totalVolumeCount: string;
+  totalChapterCount: string;
   genres: string[];
   tags: string[];
   sharingTags: string[];
@@ -97,7 +98,8 @@ interface LocksState {
   ageRating: boolean;
   imprint: boolean;
   year: boolean;
-  totalBookCount: boolean;
+  totalVolumeCount: boolean;
+  totalChapterCount: boolean;
   genres: boolean;
   tags: boolean;
   customMetadata: boolean;
@@ -146,7 +148,8 @@ function initializeFormState(
     ageRating: metadata?.ageRating?.toString() || "",
     imprint: metadata?.imprint || "",
     year: metadata?.year?.toString() || "",
-    totalBookCount: metadata?.totalBookCount?.toString() || "",
+    totalVolumeCount: metadata?.totalVolumeCount?.toString() || "",
+    totalChapterCount: metadata?.totalChapterCount?.toString() || "",
     genres: metadata?.genres.map((g) => g.name) || [],
     tags: metadata?.tags?.map((t) => t.name) || [],
     authors: (metadata?.authors as BookAuthor[] | undefined) ?? [],
@@ -180,7 +183,8 @@ function initializeLocksState(locks: MetadataLocks | undefined): LocksState {
     ageRating: locks?.ageRating || false,
     imprint: locks?.imprint || false,
     year: locks?.year || false,
-    totalBookCount: locks?.totalBookCount || false,
+    totalVolumeCount: locks?.totalVolumeCount || false,
+    totalChapterCount: locks?.totalChapterCount || false,
     genres: locks?.genres || false,
     tags: locks?.tags || false,
     customMetadata: locks?.customMetadata || false,
@@ -384,8 +388,11 @@ export function SeriesMetadataEditModal({
           ? Number.parseInt(formState.ageRating, 10)
           : null,
         year: formState.year ? Number.parseInt(formState.year, 10) : null,
-        totalBookCount: formState.totalBookCount
-          ? Number.parseInt(formState.totalBookCount, 10)
+        totalVolumeCount: formState.totalVolumeCount
+          ? Number.parseInt(formState.totalVolumeCount, 10)
+          : null,
+        totalChapterCount: formState.totalChapterCount
+          ? Number.parseFloat(formState.totalChapterCount)
           : null,
         authors:
           formState.authors.length > 0
@@ -655,7 +662,7 @@ export function SeriesMetadataEditModal({
         />
       </SimpleGrid>
 
-      <SimpleGrid cols={3}>
+      <SimpleGrid cols={2}>
         <LockableInput
           label="Year"
           value={formState.year}
@@ -668,17 +675,6 @@ export function SeriesMetadataEditModal({
         />
 
         <LockableInput
-          label="Total Books"
-          value={formState.totalBookCount}
-          onChange={(v) => updateField("totalBookCount", v)}
-          locked={locksState.totalBookCount}
-          onLockChange={(v) => updateLock("totalBookCount", v)}
-          originalValue={originalFormState?.totalBookCount}
-          placeholder="Count"
-          type="number"
-        />
-
-        <LockableInput
           label="Age Rating"
           value={formState.ageRating}
           onChange={(v) => updateField("ageRating", v)}
@@ -686,6 +682,32 @@ export function SeriesMetadataEditModal({
           onLockChange={(v) => updateLock("ageRating", v)}
           originalValue={originalFormState?.ageRating}
           placeholder="e.g., 13"
+          type="number"
+        />
+      </SimpleGrid>
+
+      <SimpleGrid cols={2}>
+        <LockableInput
+          label="Total Volumes"
+          value={formState.totalVolumeCount}
+          onChange={(v) => updateField("totalVolumeCount", v)}
+          locked={locksState.totalVolumeCount}
+          onLockChange={(v) => updateLock("totalVolumeCount", v)}
+          originalValue={originalFormState?.totalVolumeCount}
+          placeholder="e.g., 14"
+          description="Expected total volume count (whole numbers)"
+          type="number"
+        />
+
+        <LockableInput
+          label="Total Chapters"
+          value={formState.totalChapterCount}
+          onChange={(v) => updateField("totalChapterCount", v)}
+          locked={locksState.totalChapterCount}
+          onLockChange={(v) => updateLock("totalChapterCount", v)}
+          originalValue={originalFormState?.totalChapterCount}
+          placeholder="e.g., 109 or 109.5"
+          description="Expected total chapter count (may be fractional)"
           type="number"
         />
       </SimpleGrid>
