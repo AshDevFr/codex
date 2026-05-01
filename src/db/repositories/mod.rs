@@ -18,10 +18,12 @@ pub mod plugin_failures;
 pub mod plugins;
 pub mod read_progress;
 pub mod series;
+pub mod series_aliases;
 pub mod series_covers;
 pub mod series_export;
 pub mod series_external_id;
 pub mod series_metadata;
+pub mod series_tracking;
 pub mod settings;
 pub mod tag;
 pub mod task;
@@ -64,10 +66,14 @@ pub use plugin_failures::{FailureContext, PluginFailuresRepository};
 pub use plugins::PluginsRepository;
 pub use read_progress::ReadProgressRepository;
 pub use series::{SeriesQueryOptions, SeriesQuerySort, SeriesRepository, SeriesSortFieldRepo};
+#[allow(unused_imports)]
+pub use series_aliases::SeriesAliasRepository;
 pub use series_covers::SeriesCoversRepository;
 pub use series_export::SeriesExportRepository;
 pub use series_external_id::SeriesExternalIdRepository;
 pub use series_metadata::SeriesMetadataRepository;
+#[allow(unused_imports)]
+pub use series_tracking::{SeriesTrackingRepository, TrackingUpdate};
 pub use settings::SettingsRepository;
 pub use tag::TagRepository;
 pub use task::TaskRepository;
