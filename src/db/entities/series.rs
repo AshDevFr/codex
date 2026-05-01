@@ -60,6 +60,11 @@ pub enum Relation {
     UserSeriesRatings,
     #[sea_orm(has_many = "super::series_sharing_tags::Entity")]
     SeriesSharingTags,
+    // Release tracking sidecar (1:1) and matcher aliases.
+    #[sea_orm(has_one = "super::series_tracking::Entity")]
+    SeriesTracking,
+    #[sea_orm(has_many = "super::series_aliases::Entity")]
+    SeriesAliases,
 }
 
 impl Related<super::books::Entity> for Entity {
@@ -165,6 +170,18 @@ impl Related<super::sharing_tags::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::series_sharing_tags::Relation::Series.def().rev())
+    }
+}
+
+impl Related<super::series_tracking::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesTracking.def()
+    }
+}
+
+impl Related<super::series_aliases::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SeriesAliases.def()
     }
 }
 
