@@ -65,6 +65,7 @@ import {
   SeriesInfoModal,
   SeriesMetadataEditModal,
   SeriesRating,
+  TrackingPanel,
 } from "@/components/series";
 import { formatSeriesCounts } from "@/components/series/seriesCounts";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -947,6 +948,11 @@ export function SeriesDetail() {
                 onEdit={canEditSeries ? openExternalIdModal : undefined}
               />
             </Group>
+          )}
+
+          {/* Release tracking (admin/editor surface; query stays cheap when collapsed) */}
+          {canEditSeries && (
+            <TrackingPanel seriesId={series.id} canEdit={canEditSeries} />
           )}
 
           {/* External Links */}

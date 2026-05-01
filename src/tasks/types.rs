@@ -206,6 +206,21 @@ pub enum TaskType {
         #[serde(default)]
         reason: Option<String>,
     },
+
+    /// Backfill release-tracking aliases from existing series metadata.
+    ///
+    /// Walks series in scope, harvests the canonical title plus alternate titles
+    /// from `series_metadata` and `series_alternate_titles`, and seeds them as
+    /// `metadata`-source aliases in `series_aliases`. Idempotent — re-runs do
+    /// not create duplicates. Does NOT enable tracking; that stays explicit.
+    BackfillTrackingFromMetadata {
+        /// If set, scope to this library; otherwise all series.
+        #[serde(rename = "libraryId", default)]
+        library_id: Option<Uuid>,
+        /// If set, scope to these specific series (takes precedence over library_id).
+        #[serde(rename = "seriesIds", default)]
+        series_ids: Option<Vec<Uuid>>,
+    },
 }
 
 fn default_mode() -> String {
@@ -251,6 +266,8 @@ impl TaskType {
             TaskType::UserPluginRecommendationDismiss { .. } => 200,
             TaskType::UserPluginSync { .. } => 190,
             TaskType::UserPluginRecommendations { .. } => 180,
+            // Release tracking maintenance
+            TaskType::BackfillTrackingFromMetadata { .. } => 150,
             // Cleanup
             TaskType::CleanupBookFiles { .. }
             | TaskType::CleanupSeriesFiles { .. }
@@ -292,6 +309,7 @@ impl TaskType {
             TaskType::UserPluginRecommendationDismiss { .. } => {
                 "user_plugin_recommendation_dismiss"
             }
+            TaskType::BackfillTrackingFromMetadata { .. } => "backfill_tracking_from_metadata",
         }
     }
 
@@ -308,6 +326,7 @@ impl TaskType {
             TaskType::GenerateThumbnails { library_id, .. } => *library_id,
             TaskType::GenerateSeriesThumbnails { library_id, .. } => *library_id,
             TaskType::ReprocessSeriesTitles { library_id, .. } => *library_id,
+            TaskType::BackfillTrackingFromMetadata { library_id, .. } => *library_id,
             _ => None,
         }
     }
@@ -406,6 +425,9 @@ impl TaskType {
                     "external_id": external_id,
                     "reason": reason,
                 })
+            }
+            TaskType::BackfillTrackingFromMetadata { series_ids, .. } => {
+                serde_json::json!({ "series_ids": series_ids })
             }
             _ => serde_json::json!({}),
         }
