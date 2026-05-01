@@ -3333,6 +3333,55 @@ async fn test_komga_list_series_returns_metadata_fields() {
     assert_eq!(dto.metadata.tags[0], "shounen");
 }
 
+/// Komga's wire format for the volume count is `totalBookCount` (volume-shaped
+/// semantically). We populate it from Codex's `total_volume_count` so that
+/// Komga clients (Komic, Mihon, etc.) see the field they expect. Verifies the
+/// wire shape end-to-end against an actual handler response.
+#[tokio::test]
+async fn test_komga_series_total_book_count_maps_from_volume_count() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "One Piece", None)
+        .await
+        .unwrap();
+
+    SeriesMetadataRepository::update_total_volume_count(&db, series.id, Some(108))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::set_lock(&db, series.id, "total_volume_count", true)
+        .await
+        .unwrap();
+    // Chapter count must NOT leak into Komga's wire format (Komga's schema
+    // doesn't have a chapter-count field).
+    SeriesMetadataRepository::update_total_chapter_count(&db, series.id, Some(1100.5))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_komga(state);
+
+    let uri = format!("/komga/api/v1/series/{}", series.id);
+    let request = get_request_with_auth(&uri, &token);
+    let (status, body) = make_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let metadata = &json["metadata"];
+
+    assert_eq!(metadata["totalBookCount"], 108);
+    assert_eq!(metadata["totalBookCountLock"], true);
+    // Reverse direction: no Codex-internal field name should leak.
+    assert!(metadata.get("totalVolumeCount").is_none());
+    assert!(metadata.get("total_volume_count").is_none());
+    // No chapter-count field is invented for Komga clients.
+    assert!(metadata.get("totalChapterCount").is_none());
+    assert!(metadata.get("chaptersCount").is_none());
+}
+
 // ============================================================================
 // Book Metadata Fields Tests (authors, summary, release_date, tags)
 // ============================================================================

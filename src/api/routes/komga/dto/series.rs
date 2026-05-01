@@ -86,12 +86,16 @@ pub struct KomgaSeriesMetadataDto {
     /// Whether tags are locked
     #[serde(default)]
     pub tags_lock: bool,
-    /// Total book count (expected)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_book_count: Option<i32>,
-    /// Whether total_book_count is locked
-    #[serde(default)]
-    pub total_book_count_lock: bool,
+    /// Total book count (expected). Komga's wire field is `totalBookCount`,
+    /// which is volume-shaped semantically; we populate it from Codex's
+    /// `series_metadata.total_volume_count`. Keep the serde rename so Komga
+    /// clients (Komic, Mihon, etc.) see the field name they expect.
+    #[serde(rename = "totalBookCount", skip_serializing_if = "Option::is_none")]
+    pub total_volume_count: Option<i32>,
+    /// Whether total_volume_count is locked. Wire name stays `totalBookCountLock`
+    /// to match Komga's schema.
+    #[serde(rename = "totalBookCountLock", default)]
+    pub total_volume_count_lock: bool,
     /// Sharing labels
     #[serde(default)]
     pub sharing_labels: Vec<String>,
@@ -140,8 +144,8 @@ impl Default for KomgaSeriesMetadataDto {
             genres_lock: false,
             tags: Vec::new(),
             tags_lock: false,
-            total_book_count: None,
-            total_book_count_lock: false,
+            total_volume_count: None,
+            total_volume_count_lock: false,
             sharing_labels: Vec::new(),
             sharing_labels_lock: false,
             links: Vec::new(),
@@ -388,7 +392,11 @@ mod tests {
 
     #[test]
     fn test_series_metadata_camel_case() {
-        let metadata = KomgaSeriesMetadataDto::default();
+        let metadata = KomgaSeriesMetadataDto {
+            total_volume_count: Some(14),
+            total_volume_count_lock: true,
+            ..Default::default()
+        };
         let json = serde_json::to_string(&metadata).unwrap();
 
         // Verify camelCase field names
@@ -400,10 +408,55 @@ mod tests {
         assert!(json.contains("\"publisherLock\""));
         assert!(json.contains("\"ageRating\"") || !json.contains("\"age_rating\""));
         assert!(json.contains("\"genresLock\""));
-        assert!(json.contains("\"totalBookCount\"") || !json.contains("\"total_book_count\""));
+        // Komga's wire field name for the volume count must remain `totalBookCount`
+        // (and `totalBookCountLock`) regardless of the internal Rust field name.
+        assert!(json.contains("\"totalBookCount\":14"));
+        assert!(json.contains("\"totalBookCountLock\":true"));
+        assert!(!json.contains("\"totalVolumeCount\""));
+        assert!(!json.contains("\"total_volume_count\""));
         assert!(json.contains("\"sharingLabels\""));
         assert!(json.contains("\"alternateTitles\""));
         assert!(json.contains("\"lastModified\""));
+    }
+
+    #[test]
+    fn test_series_metadata_total_book_count_roundtrip() {
+        // Komic / Mihon send PUT requests with `totalBookCount` and
+        // `totalBookCountLock`; ensure we round-trip cleanly through the
+        // internally-renamed field.
+        let json = r#"{
+            "status": "ONGOING",
+            "title": "Test",
+            "titleSort": "Test",
+            "publisher": "",
+            "language": "",
+            "genres": [],
+            "tags": [],
+            "totalBookCount": 14,
+            "totalBookCountLock": true,
+            "sharingLabels": [],
+            "links": [],
+            "alternateTitles": [],
+            "created": "2026-01-01T00:00:00Z",
+            "lastModified": "2026-01-01T00:00:00Z"
+        }"#;
+        let parsed: KomgaSeriesMetadataDto = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.total_volume_count, Some(14));
+        assert!(parsed.total_volume_count_lock);
+
+        let reserialized = serde_json::to_string(&parsed).unwrap();
+        assert!(reserialized.contains("\"totalBookCount\":14"));
+        assert!(reserialized.contains("\"totalBookCountLock\":true"));
+    }
+
+    #[test]
+    fn test_series_metadata_omits_total_book_count_when_none() {
+        let metadata = KomgaSeriesMetadataDto::default();
+        let json = serde_json::to_string(&metadata).unwrap();
+        // None must skip serialization (Komga clients tolerate missing field).
+        assert!(!json.contains("\"totalBookCount\""));
+        // Lock field is a plain bool, so it always serializes.
+        assert!(json.contains("\"totalBookCountLock\":false"));
     }
 
     #[test]

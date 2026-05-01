@@ -10725,10 +10725,16 @@ export interface components {
             titleSortLock?: boolean;
             /**
              * Format: int32
-             * @description Total book count (expected)
+             * @description Total book count (expected). Komga's wire field is `totalBookCount`,
+             *     which is volume-shaped semantically; we populate it from Codex's
+             *     `series_metadata.total_volume_count`. Keep the serde rename so Komga
+             *     clients (Komic, Mihon, etc.) see the field name they expect.
              */
             totalBookCount?: number | null;
-            /** @description Whether total_book_count is locked */
+            /**
+             * @description Whether total_volume_count is locked. Wire name stays `totalBookCountLock`
+             *     to match Komga's schema.
+             */
             totalBookCountLock?: boolean;
         };
         /**
