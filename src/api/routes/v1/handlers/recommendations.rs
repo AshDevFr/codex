@@ -384,7 +384,12 @@ fn to_recommendation_dto(
         format: r.format,
         country_of_origin: r.country_of_origin,
         start_year: r.start_year,
-        total_book_count: r.total_book_count,
+        // Legacy `totalBookCount` mirrors whichever volume count the plugin
+        // sends; if the plugin populated only the new field, we still surface
+        // it under both keys for one phase. Removed in Phase 9.
+        total_book_count: r.total_volume_count.or(r.total_book_count),
+        total_volume_count: r.total_volume_count.or(r.total_book_count),
+        total_chapter_count: r.total_chapter_count,
         rating: r.rating,
         popularity: r.popularity,
     }
@@ -554,6 +559,8 @@ mod tests {
             country_of_origin: Some("JP".to_string()),
             start_year: Some(2005),
             total_book_count: Some(27),
+            total_volume_count: Some(27),
+            total_chapter_count: None,
             rating: Some(90),
             popularity: Some(50000),
         };
@@ -608,6 +615,8 @@ mod tests {
             country_of_origin: None,
             start_year: None,
             total_book_count: None,
+            total_volume_count: None,
+            total_chapter_count: None,
             rating: None,
             popularity: None,
         };
@@ -656,6 +665,8 @@ mod tests {
                 country_of_origin: Some("JP".to_string()),
                 start_year: Some(2005),
                 total_book_count: Some(30),
+                total_volume_count: Some(30),
+                total_chapter_count: None,
                 rating: Some(88),
                 popularity: Some(75000),
             }),
@@ -677,6 +688,8 @@ mod tests {
                 country_of_origin: None,
                 start_year: None,
                 total_book_count: None,
+                total_volume_count: None,
+                total_chapter_count: None,
                 rating: None,
                 popularity: None,
             }),
@@ -771,6 +784,8 @@ mod tests {
                 country_of_origin: None,
                 start_year: None,
                 total_book_count: None,
+                total_volume_count: None,
+                total_chapter_count: None,
                 rating: None,
                 popularity: None,
             }],

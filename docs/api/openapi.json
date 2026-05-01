@@ -20403,7 +20403,23 @@
               "null"
             ],
             "format": "int32",
-            "description": "Expected total book count (for ongoing series)"
+            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat with API clients\npinned to the legacy field. Sets `total_volume_count` under the hood.\nRemoved in Phase 9 of the metadata-count-split plan."
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Expected total chapter count (for chapter-organized series). May be fractional."
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total volume count (for volume-organized series)."
           },
           "year": {
             "type": [
@@ -23308,7 +23324,25 @@
               "null"
             ],
             "format": "int32",
-            "description": "Expected total book count (for ongoing series)",
+            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9.",
+            "example": 4
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Expected total chapter count (for chapter-organized series). May be fractional.",
+            "example": 109.5
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total volume count (for volume-organized series).",
             "example": 4
           },
           "updatedAt": {
@@ -26310,12 +26344,38 @@
               "null"
             ],
             "format": "int32",
-            "description": "Expected total book count",
+            "description": "Expected total book count.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.",
             "example": 110
           },
           "totalBookCountLock": {
             "type": "boolean",
-            "description": "Whether total_book_count is locked"
+            "description": "Whether total_book_count is locked.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCountLock`. Removed in Phase 9."
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Expected total chapter count (may be fractional)",
+            "example": 1100.5
+          },
+          "totalChapterCountLock": {
+            "type": "boolean",
+            "description": "Whether total_chapter_count is locked"
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total volume count",
+            "example": 110
+          },
+          "totalVolumeCountLock": {
+            "type": "boolean",
+            "description": "Whether total_volume_count is locked"
           },
           "year": {
             "type": [
@@ -26378,6 +26438,8 @@
           "readingDirection",
           "year",
           "totalBookCount",
+          "totalVolumeCount",
+          "totalChapterCount",
           "genres",
           "tags",
           "customMetadata",
@@ -26463,7 +26525,17 @@
           },
           "totalBookCount": {
             "type": "boolean",
-            "description": "Whether the total_book_count field is locked",
+            "description": "Whether the total_book_count field is locked.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCountLock`. Removed in Phase 9.",
+            "example": false
+          },
+          "totalChapterCount": {
+            "type": "boolean",
+            "description": "Whether the total_chapter_count field is locked",
+            "example": false
+          },
+          "totalVolumeCount": {
+            "type": "boolean",
+            "description": "Whether the total_volume_count field is locked",
             "example": false
           },
           "year": {
@@ -28716,7 +28788,25 @@
               "null"
             ],
             "format": "int32",
-            "description": "Expected total book count (for ongoing series)",
+            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Sets\n`totalVolumeCount` under the hood. Removed in Phase 9 of the\nmetadata-count-split plan.",
+            "example": 4
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Expected total chapter count (for chapter-organized series). May be fractional.",
+            "example": 109.5
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total volume count (for volume-organized series)",
             "example": 4
           },
           "year": {
@@ -30665,7 +30755,23 @@
               "null"
             ],
             "format": "int32",
-            "description": "Total expected number of books/volumes in the series"
+            "description": "Total expected number of books/volumes in the series.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9 of metadata-count-split."
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Total expected number of chapters in the series. May be fractional."
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total expected number of volumes in the series."
           }
         }
       },
@@ -31244,7 +31350,25 @@
               "null"
             ],
             "format": "int32",
-            "description": "Expected total book count (for ongoing series)",
+            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Use `totalVolumeCount` and/or `totalChapterCount`\ngoing forward; this field is removed in Phase 9 of the\nmetadata-count-split plan.",
+            "example": 4
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Expected total chapter count (for chapter-organized series). May be fractional.",
+            "example": 109.5
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total volume count (for volume-organized series).",
             "example": 4
           },
           "year": {
@@ -31913,7 +32037,7 @@
           },
           {
             "type": "object",
-            "description": "Filter by series completion status (complete/incomplete based on book_count vs total_book_count)",
+            "description": "Filter by series completion status (complete/incomplete based on book_count vs total_volume_count)",
             "required": [
               "completion"
             ],
@@ -32519,7 +32643,25 @@
               "null"
             ],
             "format": "int32",
-            "description": "Expected total book count (for ongoing series)",
+            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9.",
+            "example": 4
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Expected total chapter count (for chapter-organized series). May be fractional.",
+            "example": 109.5
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total volume count (for volume-organized series).",
             "example": 4
           },
           "updatedAt": {
@@ -32688,7 +32830,25 @@
               "null"
             ],
             "format": "int32",
-            "description": "Expected total book count (for ongoing series)",
+            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.",
+            "example": 4
+          },
+          "totalChapterCount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Expected total chapter count (for chapter-organized series). May be fractional.",
+            "example": 109.5
+          },
+          "totalVolumeCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expected total volume count (for volume-organized series).",
             "example": 4
           },
           "updatedAt": {
@@ -35498,7 +35658,23 @@
               "boolean",
               "null"
             ],
-            "description": "Whether to lock the total_book_count field",
+            "description": "Whether to lock the total_book_count field.\n\nDEPRECATED: kept for one phase of backward-compat. Sets\n`totalVolumeCountLock` under the hood. Removed in Phase 9.",
+            "example": false
+          },
+          "totalChapterCount": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the total_chapter_count field",
+            "example": false
+          },
+          "totalVolumeCount": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock the total_volume_count field",
             "example": false
           },
           "year": {

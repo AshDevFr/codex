@@ -50,6 +50,7 @@ pub enum ExportField {
     AlternateTitles,
     // Counts
     ExpectedBookCount,
+    ExpectedChapterCount,
     ActualBookCount,
     UnreadBookCount,
     // Progress
@@ -82,6 +83,7 @@ impl ExportField {
         ExportField::Tags,
         ExportField::AlternateTitles,
         ExportField::ExpectedBookCount,
+        ExportField::ExpectedChapterCount,
         ExportField::ActualBookCount,
         ExportField::UnreadBookCount,
         ExportField::Progress,
@@ -130,6 +132,7 @@ impl ExportField {
             ExportField::Tags => "tags",
             ExportField::AlternateTitles => "alternate_titles",
             ExportField::ExpectedBookCount => "expected_book_count",
+            ExportField::ExpectedChapterCount => "expected_chapter_count",
             ExportField::ActualBookCount => "actual_book_count",
             ExportField::UnreadBookCount => "unread_book_count",
             ExportField::Progress => "progress",
@@ -160,6 +163,7 @@ impl ExportField {
             "tags" => Some(ExportField::Tags),
             "alternate_titles" => Some(ExportField::AlternateTitles),
             "expected_book_count" => Some(ExportField::ExpectedBookCount),
+            "expected_chapter_count" => Some(ExportField::ExpectedChapterCount),
             "actual_book_count" => Some(ExportField::ActualBookCount),
             "unread_book_count" => Some(ExportField::UnreadBookCount),
             "progress" => Some(ExportField::Progress),
@@ -192,6 +196,7 @@ impl ExportField {
             ExportField::Tags => "Tags",
             ExportField::AlternateTitles => "Alternate Titles",
             ExportField::ExpectedBookCount => "Expected Book Count",
+            ExportField::ExpectedChapterCount => "Expected Chapter Count",
             ExportField::ActualBookCount => "Actual Book Count",
             ExportField::UnreadBookCount => "Unread Book Count",
             ExportField::Progress => "Progress",
@@ -283,6 +288,8 @@ pub struct SeriesExportRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_book_count: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_chapter_count: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub actual_book_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unread_book_count: Option<i64>,
@@ -319,6 +326,7 @@ impl SeriesExportRow {
             tags: None,
             alternate_titles: None,
             expected_book_count: None,
+            expected_chapter_count: None,
             actual_book_count: None,
             unread_book_count: None,
             progress: None,
@@ -351,6 +359,7 @@ impl SeriesExportRow {
             tags: None,
             alternate_titles: None,
             expected_book_count: None,
+            expected_chapter_count: None,
             actual_book_count: None,
             unread_book_count: None,
             progress: None,
@@ -386,6 +395,10 @@ impl SeriesExportRow {
                 .expected_book_count
                 .map(|c| c.to_string())
                 .unwrap_or_default(),
+            ExportField::ExpectedChapterCount => self
+                .expected_chapter_count
+                .map(format_chapter_count)
+                .unwrap_or_default(),
             ExportField::ActualBookCount => self
                 .actual_book_count
                 .map(|c| c.to_string())
@@ -409,6 +422,15 @@ impl SeriesExportRow {
 // =============================================================================
 // Helpers for formatting multi-value fields
 // =============================================================================
+
+/// Format a chapter count, dropping the trailing `.0` for whole-number values.
+fn format_chapter_count(c: f32) -> String {
+    if c.fract() == 0.0 {
+        format!("{}", c as i64)
+    } else {
+        format!("{c}")
+    }
+}
 
 /// Format authors_json string into "name (role); name (role); ..." format.
 fn format_authors(authors_json: &Option<String>) -> Option<String> {
@@ -503,7 +525,8 @@ pub async fn collect_batched(
             || has(ExportField::Year)
             || has(ExportField::Language)
             || has(ExportField::Authors)
-            || has(ExportField::ExpectedBookCount);
+            || has(ExportField::ExpectedBookCount)
+            || has(ExportField::ExpectedChapterCount);
 
         let metadata_map = if needs_metadata {
             SeriesMetadataRepository::get_by_series_ids(db, chunk).await?
@@ -617,7 +640,10 @@ pub async fn collect_batched(
                     row.authors = format_authors(&meta.authors_json);
                 }
                 if has(ExportField::ExpectedBookCount) {
-                    row.expected_book_count = meta.total_book_count;
+                    row.expected_book_count = meta.total_volume_count;
+                }
+                if has(ExportField::ExpectedChapterCount) {
+                    row.expected_chapter_count = meta.total_chapter_count;
                 }
             }
 

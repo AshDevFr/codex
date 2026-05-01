@@ -107,7 +107,13 @@ pub struct MetadataContext {
     pub language: Option<String>,
     pub reading_direction: Option<String>,
     pub year: Option<i32>,
+    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
+    /// `total_volume_count`. Removed in Phase 9 of the metadata-count-split
+    /// plan; preprocessing rules should reference `totalVolumeCount` or
+    /// `totalChapterCount` going forward.
     pub total_book_count: Option<i32>,
+    pub total_volume_count: Option<i32>,
+    pub total_chapter_count: Option<f32>,
 
     /// Genre names for this series
     #[serde(default)]
@@ -144,7 +150,11 @@ pub struct MetadataContext {
     pub language_lock: bool,
     pub reading_direction_lock: bool,
     pub year_lock: bool,
+    /// DEPRECATED: kept for one phase of backward-compat alongside
+    /// `total_book_count`. Removed in Phase 9.
     pub total_book_count_lock: bool,
+    pub total_volume_count_lock: bool,
+    pub total_chapter_count_lock: bool,
     pub genres_lock: bool,
     pub tags_lock: bool,
     pub custom_metadata_lock: bool,
@@ -352,6 +362,14 @@ impl SeriesContext {
                 .metadata
                 .total_book_count
                 .map(|v| FieldValue::Number(v as f64)),
+            "totalVolumeCount" | "total_volume_count" => self
+                .metadata
+                .total_volume_count
+                .map(|v| FieldValue::Number(v as f64)),
+            "totalChapterCount" | "total_chapter_count" => self
+                .metadata
+                .total_chapter_count
+                .map(|v| FieldValue::Number(v as f64)),
             // Array fields
             "genres" => {
                 let arr: Vec<Value> = self
@@ -428,6 +446,12 @@ impl SeriesContext {
             "yearLock" | "year_lock" => Some(FieldValue::Bool(self.metadata.year_lock)),
             "totalBookCountLock" | "total_book_count_lock" => {
                 Some(FieldValue::Bool(self.metadata.total_book_count_lock))
+            }
+            "totalVolumeCountLock" | "total_volume_count_lock" => {
+                Some(FieldValue::Bool(self.metadata.total_volume_count_lock))
+            }
+            "totalChapterCountLock" | "total_chapter_count_lock" => {
+                Some(FieldValue::Bool(self.metadata.total_chapter_count_lock))
             }
             "genresLock" | "genres_lock" => Some(FieldValue::Bool(self.metadata.genres_lock)),
             "tagsLock" | "tags_lock" => Some(FieldValue::Bool(self.metadata.tags_lock)),
@@ -603,7 +627,9 @@ impl SeriesContextBuilder {
                 language: m.language.clone(),
                 reading_direction: m.reading_direction.clone(),
                 year: m.year,
-                total_book_count: m.total_book_count,
+                total_book_count: m.total_volume_count,
+                total_volume_count: m.total_volume_count,
+                total_chapter_count: m.total_chapter_count,
                 genres: genres.iter().map(|g| g.name.clone()).collect(),
                 tags: tags.iter().map(|t| t.name.clone()).collect(),
                 alternate_titles: alternate_titles_ctx,
@@ -620,7 +646,9 @@ impl SeriesContextBuilder {
                 language_lock: m.language_lock,
                 reading_direction_lock: m.reading_direction_lock,
                 year_lock: m.year_lock,
-                total_book_count_lock: m.total_book_count_lock,
+                total_book_count_lock: m.total_volume_count_lock,
+                total_volume_count_lock: m.total_volume_count_lock,
+                total_chapter_count_lock: m.total_chapter_count_lock,
                 genres_lock: m.genres_lock,
                 tags_lock: m.tags_lock,
                 custom_metadata_lock: m.custom_metadata_lock,

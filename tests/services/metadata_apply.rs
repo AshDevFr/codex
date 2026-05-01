@@ -747,6 +747,174 @@ async fn test_apply_count_fields_filtered_out_by_allowlist() {
     assert!(after.total_chapter_count.is_none());
 }
 
+// =============================================================================
+// Legacy `total_book_count` Backward-Compat Fallback Tests (Phase 4)
+// =============================================================================
+
+fn metadata_with_legacy_book_count(total_book_count: Option<i32>) -> PluginSeriesMetadata {
+    PluginSeriesMetadata {
+        external_id: "legacy-1".to_string(),
+        external_url: "https://example.com/legacy-1".to_string(),
+        title: None,
+        alternate_titles: vec![],
+        summary: None,
+        status: None,
+        year: None,
+        total_book_count,
+        total_volume_count: None,
+        total_chapter_count: None,
+        language: None,
+        age_rating: None,
+        reading_direction: None,
+        genres: vec![],
+        tags: vec![],
+        authors: vec![],
+        artists: vec![],
+        publisher: None,
+        cover_url: None,
+        banner_url: None,
+        rating: None,
+        external_ratings: vec![],
+        external_links: vec![],
+        external_ids: vec![],
+    }
+}
+
+#[tokio::test]
+async fn test_apply_legacy_total_book_count_routes_to_total_volume_count() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+    let current = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Plugin only knows the `total_volume_count` permission (the new field) —
+    // the fallback should still apply because we re-route the legacy value.
+    let plugin = create_plugin_with_permissions(&["metadata:write:total_volume_count"]);
+    let result = MetadataApplier::apply(
+        &db,
+        series.id,
+        library.id,
+        &plugin,
+        &metadata_with_legacy_book_count(Some(14)),
+        Some(&current),
+        &ApplyOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        result
+            .applied_fields
+            .contains(&"totalVolumeCount".to_string()),
+        "totalVolumeCount should be applied via the legacy fallback"
+    );
+    let updated = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.total_volume_count, Some(14));
+    // Legacy column is no longer written by apply() — Phase 4 freezes it.
+    assert_eq!(
+        updated.total_book_count, None,
+        "legacy total_book_count column should not be written"
+    );
+}
+
+#[tokio::test]
+async fn test_apply_new_total_volume_count_takes_precedence_over_legacy() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+    let current = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Plugin sends both old and new shape; the new field must win.
+    let mut metadata = metadata_with_legacy_book_count(Some(99));
+    metadata.total_volume_count = Some(14);
+
+    let plugin = create_plugin_with_permissions(&["metadata:write:total_volume_count"]);
+    MetadataApplier::apply(
+        &db,
+        series.id,
+        library.id,
+        &plugin,
+        &metadata,
+        Some(&current),
+        &ApplyOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    let updated = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        updated.total_volume_count,
+        Some(14),
+        "new field must take precedence when both are sent"
+    );
+}
+
+#[tokio::test]
+async fn test_apply_does_not_write_legacy_total_book_count_column() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library =
+        LibraryRepository::create(&db, "Test Library", "/test/path", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+    let current = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Even with the deprecated permission granted, apply() must not write the
+    // legacy `total_book_count` column. Phase 4 stops the write entirely.
+    let plugin = create_plugin_with_permissions(&[
+        "metadata:write:total_book_count",
+        "metadata:write:total_volume_count",
+    ]);
+    MetadataApplier::apply(
+        &db,
+        series.id,
+        library.id,
+        &plugin,
+        &metadata_with_legacy_book_count(Some(14)),
+        Some(&current),
+        &ApplyOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    let updated = SeriesMetadataRepository::get_by_series_id(&db, series.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        updated.total_book_count, None,
+        "legacy total_book_count column must remain frozen after Phase 4"
+    );
+    assert_eq!(updated.total_volume_count, Some(14));
+}
+
 #[tokio::test]
 async fn test_apply_count_fields_skip_when_metadata_value_absent() {
     let (db, _temp_dir) = setup_test_db().await;

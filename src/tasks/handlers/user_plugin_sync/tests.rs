@@ -1632,10 +1632,14 @@ async fn test_build_push_entries_populates_total_volumes() {
         test_books.push(book);
     }
 
-    // Set total_book_count=3 in metadata (more than the 2 local books)
-    SeriesMetadataRepository::update_total_book_count(db.sea_orm_connection(), series.id, Some(3))
-        .await
-        .unwrap();
+    // Set total_volume_count=3 in metadata (more than the 2 local books)
+    SeriesMetadataRepository::update_total_volume_count(
+        db.sea_orm_connection(),
+        series.id,
+        Some(3),
+    )
+    .await
+    .unwrap();
 
     let user = create_test_user(db.sea_orm_connection()).await;
 
@@ -1668,7 +1672,7 @@ async fn test_build_push_entries_populates_total_volumes() {
     assert_eq!(
         entries[0].progress.as_ref().unwrap().total_volumes,
         Some(3),
-        "totalVolumes should come from series metadata total_book_count"
+        "totalVolumes should come from series metadata total_volume_count"
     );
 }
 

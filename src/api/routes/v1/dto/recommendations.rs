@@ -69,9 +69,18 @@ pub struct RecommendationDto {
     /// Year the series started
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start_year: Option<i32>,
-    /// Total expected number of books/volumes in the series
+    /// Total expected number of books/volumes in the series.
+    ///
+    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
+    /// `totalVolumeCount`. Removed in Phase 9 of metadata-count-split.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_book_count: Option<i32>,
+    /// Total expected number of volumes in the series.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_volume_count: Option<i32>,
+    /// Total expected number of chapters in the series. May be fractional.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_chapter_count: Option<f32>,
     /// Average user rating on the source service (0-100 scale)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rating: Option<i32>,
@@ -156,6 +165,8 @@ mod tests {
             country_of_origin: None,
             start_year: None,
             total_book_count: None,
+            total_volume_count: None,
+            total_chapter_count: None,
             rating: None,
             popularity: None,
         };
