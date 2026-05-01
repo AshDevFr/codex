@@ -193,7 +193,8 @@ async fn test_reset_series_metadata_success() {
     assert!(body.language.is_none());
     assert!(body.reading_direction.is_none());
     assert!(body.year.is_none());
-    assert!(body.total_book_count.is_none());
+    assert!(body.total_volume_count.is_none());
+    assert!(body.total_chapter_count.is_none());
     assert!(body.custom_metadata.is_none());
 
     // Verify all locks are false

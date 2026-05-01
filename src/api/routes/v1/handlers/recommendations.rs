@@ -384,10 +384,6 @@ fn to_recommendation_dto(
         format: r.format,
         country_of_origin: r.country_of_origin,
         start_year: r.start_year,
-        // Legacy `totalBookCount` mirrors whichever volume count the plugin
-        // sends; if the plugin populated only the new field, we still surface
-        // it under both keys for one phase. Removed in Phase 9.
-        total_book_count: r.total_volume_count.or(r.total_book_count),
         total_volume_count: r.total_volume_count.or(r.total_book_count),
         total_chapter_count: r.total_chapter_count,
         rating: r.rating,
@@ -589,7 +585,7 @@ mod tests {
         assert!(dto.in_library);
         assert!(!dto.in_codex); // in_codex defaults to false before enrichment
         assert_eq!(dto.status.as_deref(), Some("ongoing"));
-        assert_eq!(dto.total_book_count, Some(27));
+        assert_eq!(dto.total_volume_count, Some(27));
         assert_eq!(dto.rating, Some(90));
         assert_eq!(dto.popularity, Some(50000));
     }
@@ -636,7 +632,7 @@ mod tests {
         assert!(!dto.in_library);
         assert!(!dto.in_codex);
         assert!(dto.status.is_none());
-        assert!(dto.total_book_count.is_none());
+        assert!(dto.total_volume_count.is_none());
         assert!(dto.rating.is_none());
         assert!(dto.popularity.is_none());
     }
@@ -734,7 +730,7 @@ mod tests {
         // codexSeriesId should be absent (None)
         assert!(rec0.get("codexSeriesId").is_none());
         assert_eq!(rec0["status"], "ongoing");
-        assert_eq!(rec0["totalBookCount"], 30);
+        assert_eq!(rec0["totalVolumeCount"], 30);
         assert_eq!(rec0["rating"], 88);
         assert_eq!(rec0["popularity"], 75000);
 
@@ -753,7 +749,7 @@ mod tests {
         assert!(!rec1["inCodex"].as_bool().unwrap());
         // Optional fields should be absent (None)
         assert!(rec1.get("status").is_none());
-        assert!(rec1.get("totalBookCount").is_none());
+        assert!(rec1.get("totalVolumeCount").is_none());
         assert!(rec1.get("rating").is_none());
         assert!(rec1.get("popularity").is_none());
     }

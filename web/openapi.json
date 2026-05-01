@@ -20397,14 +20397,6 @@
             ],
             "description": "Series status (ongoing, ended, hiatus, abandoned, unknown)"
           },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat with API clients\npinned to the legacy field. Sets `total_volume_count` under the hood.\nRemoved in Phase 9 of the metadata-count-split plan."
-          },
           "totalChapterCount": {
             "type": [
               "number",
@@ -23317,15 +23309,6 @@
             ],
             "description": "Custom sort name for ordering",
             "example": "Batman Year One"
-          },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9.",
-            "example": 4
           },
           "totalChapterCount": {
             "type": [
@@ -26338,19 +26321,6 @@
             "type": "boolean",
             "description": "Whether title_sort is locked"
           },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected total book count.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.",
-            "example": 110
-          },
-          "totalBookCountLock": {
-            "type": "boolean",
-            "description": "Whether total_book_count is locked.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCountLock`. Removed in Phase 9."
-          },
           "totalChapterCount": {
             "type": [
               "number",
@@ -26437,7 +26407,6 @@
           "language",
           "readingDirection",
           "year",
-          "totalBookCount",
           "totalVolumeCount",
           "totalChapterCount",
           "genres",
@@ -26521,11 +26490,6 @@
           "titleSort": {
             "type": "boolean",
             "description": "Whether the title_sort field is locked",
-            "example": false
-          },
-          "totalBookCount": {
-            "type": "boolean",
-            "description": "Whether the total_book_count field is locked.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCountLock`. Removed in Phase 9.",
             "example": false
           },
           "totalChapterCount": {
@@ -28782,15 +28746,6 @@
             "description": "Custom sort name for ordering",
             "example": "Batman Year One"
           },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Sets\n`totalVolumeCount` under the hood. Removed in Phase 9 of the\nmetadata-count-split plan.",
-            "example": 4
-          },
           "totalChapterCount": {
             "type": [
               "number",
@@ -30749,14 +30704,6 @@
             "type": "string",
             "description": "Title of the recommended series/book"
           },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Total expected number of books/volumes in the series.\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9 of metadata-count-split."
-          },
           "totalChapterCount": {
             "type": [
               "number",
@@ -31343,15 +31290,6 @@
             ],
             "description": "Custom sort name for ordering (e.g., \"Batman Year One\" instead of \"The Batman Year One\")",
             "example": "Batman Year One"
-          },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Use `totalVolumeCount` and/or `totalChapterCount`\ngoing forward; this field is removed in Phase 9 of the\nmetadata-count-split plan.",
-            "example": 4
           },
           "totalChapterCount": {
             "type": [
@@ -32644,15 +32582,6 @@
             "description": "Custom sort name for ordering",
             "example": "Batman Year One"
           },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9.",
-            "example": 4
-          },
           "totalChapterCount": {
             "type": [
               "number",
@@ -32830,15 +32759,6 @@
             ],
             "description": "Custom sort name for ordering",
             "example": "Batman Year One"
-          },
-          "totalBookCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Expected total book count (for ongoing series).\n\nDEPRECATED: kept for one phase of backward-compat. Mirrors\n`totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.",
-            "example": 4
           },
           "totalChapterCount": {
             "type": [
@@ -35658,14 +35578,6 @@
               "null"
             ],
             "description": "Whether to lock the title_sort field",
-            "example": false
-          },
-          "totalBookCount": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Whether to lock the total_book_count field.\n\nDEPRECATED: kept for one phase of backward-compat. Sets\n`totalVolumeCountLock` under the hood. Removed in Phase 9.",
             "example": false
           },
           "totalChapterCount": {
