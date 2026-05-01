@@ -147,6 +147,8 @@ mod m20260503_000070_backfill_book_volume_chapter;
 // Filename retains the original Phase 1 name for git-history continuity; module
 // now creates the generic `library_jobs` table instead of adding a JSON column.
 mod m20260503_000071_add_metadata_refresh_config;
+// Release tracking (Phase 1): series_tracking sidecar + series_aliases
+mod m20260503_000072_create_release_tracking;
 
 pub struct Migrator;
 
@@ -264,6 +266,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260503_000070_backfill_book_volume_chapter::Migration),
             // Per-library scheduled metadata refresh config (Phase 1)
             Box::new(m20260503_000071_add_metadata_refresh_config::Migration),
+            // Release tracking (Phase 1)
+            Box::new(m20260503_000072_create_release_tracking::Migration),
         ]
     }
 }
