@@ -26,12 +26,13 @@ use crate::services::user_plugin::OAuthStateManager;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
-    AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
-    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesExportsHandler,
-    CleanupSeriesFilesHandler, ExportSeriesHandler, FindDuplicatesHandler,
-    GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
-    GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler,
-    RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
+    AnalyzeBookHandler, AnalyzeSeriesHandler, BackfillTrackingFromMetadataHandler,
+    CleanupBookFilesHandler, CleanupOrphanedFilesHandler, CleanupPdfCacheHandler,
+    CleanupPluginDataHandler, CleanupSeriesExportsHandler, CleanupSeriesFilesHandler,
+    ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
+    GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
+    PluginAutoMatchHandler, PurgeDeletedHandler, RefreshLibraryMetadataHandler,
+    RenumberSeriesBatchHandler, RenumberSeriesHandler,
     ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
@@ -100,6 +101,11 @@ impl TaskWorker {
         handlers.insert(
             "cleanup_plugin_data".to_string(),
             Arc::new(CleanupPluginDataHandler::new()),
+        );
+        // Release-tracking maintenance: backfill aliases from metadata.
+        handlers.insert(
+            "backfill_tracking_from_metadata".to_string(),
+            Arc::new(BackfillTrackingFromMetadataHandler::new()),
         );
 
         // Generate worker ID from hostname or random UUID

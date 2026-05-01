@@ -8,6 +8,7 @@ use crate::tasks::types::TaskResult;
 
 pub mod analyze_book;
 pub mod analyze_series;
+pub mod backfill_tracking;
 pub mod cleanup_book_files;
 pub mod cleanup_orphaned_files;
 pub mod cleanup_pdf_cache;
@@ -32,6 +33,7 @@ pub mod user_plugin_sync;
 
 pub use analyze_book::AnalyzeBookHandler;
 pub use analyze_series::AnalyzeSeriesHandler;
+pub use backfill_tracking::BackfillTrackingFromMetadataHandler;
 pub use cleanup_book_files::CleanupBookFilesHandler;
 pub use cleanup_orphaned_files::CleanupOrphanedFilesHandler;
 pub use cleanup_pdf_cache::CleanupPdfCacheHandler;

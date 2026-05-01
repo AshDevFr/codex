@@ -3064,6 +3064,45 @@ export interface paths {
         patch: operations["patch_series"];
         trace?: never;
     };
+    "/api/v1/series/{series_id}/aliases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List release-matching aliases for a series. */
+        get: operations["list_series_aliases"];
+        put?: never;
+        /**
+         * Create a release-matching alias for a series.
+         * @description Idempotent: if `(series_id, alias)` already exists, returns the existing
+         *     row with HTTP 200 instead of inserting a duplicate.
+         */
+        post: operations["create_series_alias"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/aliases/{alias_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a release-matching alias. */
+        delete: operations["delete_series_alias"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/alternate-titles": {
         parameters: {
             query?: never;
@@ -3770,6 +3809,33 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/tracking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get release-tracking config for a series.
+         * @description Returns a virtual untracked row when no `series_tracking` row exists, so the
+         *     frontend can render the panel uniformly without special-casing absent rows.
+         */
+        get: operations["get_series_tracking"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update release-tracking config for a series.
+         * @description Upserts: creates the row on first write, applies the patch otherwise.
+         *     All fields are optional — omit to leave alone, send `null` on a nullable
+         *     field to clear it.
+         */
+        patch: operations["update_series_tracking"];
         trace?: never;
     };
     "/api/v1/series/{series_id}/unread": {
@@ -8797,6 +8863,18 @@ export interface components {
             useExistingExternalId?: boolean;
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
+        };
+        CreateSeriesAliasRequest: {
+            /**
+             * @description Alias text. Will be trimmed; must normalize to non-empty.
+             * @example Boku no Hero Academia
+             */
+            alias: string;
+            /**
+             * @description Optional explicit source. Defaults to `manual` when called from the API.
+             *     Plugin-internal flows write `metadata`; we don't expose that to HTTP.
+             */
+            source?: string | null;
         };
         /** @description Request body for creating a new series export */
         CreateSeriesExportRequest: {
@@ -14700,6 +14778,43 @@ export interface components {
             /** @description Cover source: "default" (first book cover) or "custom" (uploaded cover) */
             source: string;
         };
+        /**
+         * @description Title alias used by release-source plugins to match incoming releases by
+         *     title (Nyaa, MangaUpdates without an external ID, etc.).
+         */
+        SeriesAliasDto: {
+            /**
+             * @description Alias as entered (preserves casing/punctuation).
+             * @example My Hero Academia
+             */
+            alias: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Alias row ID.
+             * @example 550e8400-e29b-41d4-a716-446655440100
+             */
+            id: string;
+            /**
+             * @description Lowercased + punctuation-stripped form used for matching.
+             * @example my hero academia
+             */
+            normalized: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description `metadata` (auto-derived) | `manual` (user-entered).
+             * @example manual
+             */
+            source: string;
+        };
+        SeriesAliasListResponse: {
+            aliases: components["schemas"]["SeriesAliasDto"][];
+        };
         /** @description Response containing the average community rating for a series */
         SeriesAverageRatingResponse: {
             /**
@@ -15301,6 +15416,64 @@ export interface components {
          * @enum {string}
          */
         SeriesStrategy: "series_volume" | "series_volume_chapter" | "flat" | "publisher_hierarchy" | "calibre" | "custom";
+        /**
+         * @description Per-series release-tracking configuration.
+         *
+         *     Returned even for untracked series — the row defaults to `tracked: false`
+         *     with conservative defaults so the frontend can render the panel without
+         *     special-casing missing rows.
+         */
+        SeriesTrackingDto: {
+            /**
+             * Format: double
+             * @description Per-series override of the server's confidence threshold (0.0 - 1.0).
+             */
+            confidenceThresholdOverride?: number | null;
+            /**
+             * Format: date-time
+             * @description When the row was created (epoch when virtual).
+             */
+            createdAt: string;
+            /**
+             * Format: double
+             * @description Latest known external chapter (supports decimals like 12.5).
+             */
+            latestKnownChapter?: number | null;
+            /**
+             * Format: int32
+             * @description Latest known external volume.
+             */
+            latestKnownVolume?: number | null;
+            /**
+             * Format: int32
+             * @description Per-series override of the source poll interval (seconds).
+             */
+            pollIntervalOverrideS?: number | null;
+            /**
+             * Format: uuid
+             * @description Series ID this config belongs to.
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /** @description Whether to announce new chapters. */
+            trackChapters: boolean;
+            /** @description Whether to announce new volumes. */
+            trackVolumes: boolean;
+            /** @description Whether release tracking is enabled. */
+            tracked: boolean;
+            /**
+             * @description Publication status: `ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`.
+             * @example ongoing
+             */
+            trackingStatus: string;
+            /**
+             * Format: date-time
+             * @description When the row was last updated (epoch when virtual).
+             */
+            updatedAt: string;
+            /** @description Sparse map of `{ "<volume>": { "first": ch, "last": ch } }`. */
+            volumeChapterMap?: unknown;
+        };
         /** @description Response for series update */
         SeriesUpdateResponse: {
             /**
@@ -16200,6 +16373,16 @@ export interface components {
             type: "user_plugin_recommendation_dismiss";
             /** Format: uuid */
             userId: string;
+        } | {
+            /**
+             * Format: uuid
+             * @description If set, scope to this library; otherwise all series.
+             */
+            libraryId?: string | null;
+            /** @description If set, scope to these specific series (takes precedence over library_id). */
+            seriesIds?: string[] | null;
+            /** @enum {string} */
+            type: "backfill_tracking_from_metadata";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -16763,6 +16946,30 @@ export interface components {
              * @example 0.45
              */
             progressPercentage?: number | null;
+        };
+        /**
+         * @description PATCH payload for tracking config. All fields are optional:
+         *     omit a field to leave it untouched. Use a JSON `null` on a nullable field
+         *     to clear it explicitly.
+         */
+        UpdateSeriesTrackingRequest: {
+            /** Format: double */
+            confidenceThresholdOverride?: number | null;
+            /**
+             * Format: double
+             * @description Use `Some(null)` to clear, `Some(<value>)` to set, omit to leave alone.
+             */
+            latestKnownChapter?: number | null;
+            /** Format: int32 */
+            latestKnownVolume?: number | null;
+            /** Format: int32 */
+            pollIntervalOverrideS?: number | null;
+            trackChapters?: boolean | null;
+            trackVolumes?: boolean | null;
+            tracked?: boolean | null;
+            /** @description `ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`. */
+            trackingStatus?: string | null;
+            volumeChapterMap?: unknown;
         };
         /** @description Update setting request */
         UpdateSettingRequest: {
@@ -23755,6 +23962,137 @@ export interface operations {
             };
         };
     };
+    list_series_aliases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of aliases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAliasListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_series_alias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSeriesAliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Alias already existed (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAliasDto"];
+                };
+            };
+            /** @description Alias created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAliasDto"];
+                };
+            };
+            /** @description Invalid alias (empty after normalization) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_series_alias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+                /** @description Alias ID */
+                alias_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alias deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or alias not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_series_alternate_titles: {
         parameters: {
             query?: never;
@@ -25770,6 +26108,91 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EnqueueReprocessTitleResponse"];
                 };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_tracking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tracking config */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesTrackingDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_series_tracking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSeriesTrackingRequest"];
+            };
+        };
+        responses: {
+            /** @description Tracking config updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesTrackingDto"];
+                };
+            };
+            /** @description Invalid tracking_status */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Forbidden */
             403: {

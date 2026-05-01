@@ -256,6 +256,13 @@ The following paths are exempt from rate limiting:
         v1::handlers::create_series_external_id,
         v1::handlers::delete_series_external_id,
 
+        // Release-tracking config + aliases
+        v1::handlers::tracking::get_series_tracking,
+        v1::handlers::tracking::update_series_tracking,
+        v1::handlers::tracking::list_series_aliases,
+        v1::handlers::tracking::create_series_alias,
+        v1::handlers::tracking::delete_series_alias,
+
         // Cover management endpoints
         v1::handlers::list_series_covers,
         v1::handlers::get_series_cover_image,
@@ -678,6 +685,13 @@ The following paths are exempt from rate limiting:
             v1::dto::CreateAlternateTitleRequest,
             v1::dto::UpdateAlternateTitleRequest,
 
+            // Release-tracking DTOs
+            v1::dto::tracking::SeriesTrackingDto,
+            v1::dto::tracking::UpdateSeriesTrackingRequest,
+            v1::dto::tracking::SeriesAliasDto,
+            v1::dto::tracking::SeriesAliasListResponse,
+            v1::dto::tracking::CreateSeriesAliasRequest,
+
             // External Rating DTOs
             v1::dto::ExternalRatingDto,
             v1::dto::ExternalRatingListResponse,
@@ -1002,6 +1016,7 @@ The following paths are exempt from rate limiting:
         // Library Content
         (name = "Libraries", description = "Library management endpoints"),
         (name = "Series", description = "Series browsing and search endpoints"),
+        (name = "Tracking", description = "Release-tracking config and matcher aliases"),
         (name = "Books", description = "Book details and metadata endpoints"),
         (name = "Pages", description = "Page image serving endpoints"),
 

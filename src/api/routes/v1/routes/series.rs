@@ -337,4 +337,26 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/{series_id}/title/reprocess",
             post(handlers::task_queue::reprocess_series_title),
         )
+        // Release-tracking config (per series)
+        .route(
+            "/series/{series_id}/tracking",
+            get(handlers::tracking::get_series_tracking),
+        )
+        .route(
+            "/series/{series_id}/tracking",
+            patch(handlers::tracking::update_series_tracking),
+        )
+        // Release-matching aliases (per series)
+        .route(
+            "/series/{series_id}/aliases",
+            get(handlers::tracking::list_series_aliases),
+        )
+        .route(
+            "/series/{series_id}/aliases",
+            post(handlers::tracking::create_series_alias),
+        )
+        .route(
+            "/series/{series_id}/aliases/{alias_id}",
+            delete(handlers::tracking::delete_series_alias),
+        )
 }
