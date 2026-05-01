@@ -340,6 +340,102 @@ describe("mappers", () => {
       expect(result.artists).toEqual([]);
     });
 
+    it("should populate totalVolumeCount from final_volume and totalChapterCount from total_chapters", () => {
+      const series: MbSeries = {
+        id: 4,
+        state: "active",
+        title: "One Piece",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "releasing",
+        final_volume: "108",
+        total_chapters: "1138",
+      };
+
+      const result = mapSeriesMetadata(series);
+
+      expect(result.totalVolumeCount).toBe(108);
+      expect(result.totalChapterCount).toBe(1138);
+      // Legacy totalBookCount kept populated mirroring the volume count for
+      // one phase of backward-compat.
+      expect(result.totalBookCount).toBe(108);
+    });
+
+    it("should populate fractional totalChapterCount", () => {
+      const series: MbSeries = {
+        id: 5,
+        state: "active",
+        title: "Series with half chapters",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "releasing",
+        final_volume: "10",
+        total_chapters: "47.5",
+      };
+
+      const result = mapSeriesMetadata(series);
+
+      expect(result.totalVolumeCount).toBe(10);
+      expect(result.totalChapterCount).toBe(47.5);
+    });
+
+    it("should leave count fields undefined when MangaBaka returns null/empty", () => {
+      const series: MbSeries = {
+        id: 6,
+        state: "active",
+        title: "No counts known",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "releasing",
+        final_volume: null,
+        total_chapters: null,
+      };
+
+      const result = mapSeriesMetadata(series);
+
+      expect(result.totalVolumeCount).toBeUndefined();
+      expect(result.totalChapterCount).toBeUndefined();
+      expect(result.totalBookCount).toBeUndefined();
+    });
+
+    it("should treat non-numeric or non-positive count strings as undefined", () => {
+      const series: MbSeries = {
+        id: 7,
+        state: "active",
+        title: "Garbage counts",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "releasing",
+        final_volume: "0",
+        total_chapters: "n/a",
+      };
+
+      const result = mapSeriesMetadata(series);
+
+      expect(result.totalVolumeCount).toBeUndefined();
+      expect(result.totalChapterCount).toBeUndefined();
+    });
+
     it("should detect language from country of origin", () => {
       const series: MbSeries = {
         id: 2,

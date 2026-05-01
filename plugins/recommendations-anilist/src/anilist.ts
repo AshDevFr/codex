@@ -63,6 +63,7 @@ const MEDIA_RECOMMENDATIONS_QUERY = `
               year
             }
             volumes
+            chapters
           }
         }
       }
@@ -137,6 +138,7 @@ export interface AniListRecommendationNode {
     countryOfOrigin: string | null;
     startDate: { year: number | null } | null;
     volumes: number | null;
+    chapters: number | null;
   } | null;
 }
 

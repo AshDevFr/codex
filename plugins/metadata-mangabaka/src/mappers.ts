@@ -16,6 +16,28 @@ import type {
 import type { MbContentRating, MbSeries, MbSeriesType, MbStatus } from "./types.js";
 
 /**
+ * Parse MangaBaka's volume count strings (e.g. "40") into a positive integer.
+ * Returns undefined for null/empty/non-numeric/non-positive inputs.
+ */
+function parseVolumeCount(value: string | null | undefined): number | undefined {
+  if (value == null) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
+
+/**
+ * Parse MangaBaka's chapter count strings (e.g. "109", "47.5") into a positive
+ * float. Returns undefined for null/empty/non-numeric/non-positive inputs.
+ */
+function parseChapterCount(value: string | null | undefined): number | undefined {
+  if (value == null) return undefined;
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
+
+/**
  * Strip HTML tags from text, converting <br> to newlines
  */
 function stripHtml(html: string | undefined | null): string | undefined {
@@ -172,7 +194,7 @@ export function mapSearchResult(series: MbSeries): SearchResult {
       genres: (series.genres ?? []).slice(0, 3).map(formatGenre),
       rating: extractRating(series.rating),
       description: stripHtml(series.description)?.slice(0, 200) ?? undefined,
-      bookCount: series.final_volume ? Number.parseInt(series.final_volume, 10) : undefined,
+      bookCount: parseVolumeCount(series.final_volume),
       authors: previewAuthors.length > 0 ? previewAuthors : undefined,
     },
   };
@@ -328,6 +350,9 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
   // Get publisher name (pick first one if available)
   const publisher = series.publishers?.[0]?.name ?? undefined;
 
+  const totalVolumeCount = parseVolumeCount(series.final_volume);
+  const totalChapterCount = parseChapterCount(series.total_chapters);
+
   return {
     externalId: String(series.id),
     externalUrl: `https://mangabaka.org/${series.id}`,
@@ -338,7 +363,12 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     year: series.year ?? undefined,
     // Extended metadata
     publisher,
-    totalBookCount: series.final_volume ? Number.parseInt(series.final_volume, 10) : undefined,
+    // Legacy field kept populated for backward-compat with older Codex versions
+    // that don't yet read totalVolumeCount; mirrors the volume value (most
+    // metadata in the wild is volume-shaped).
+    totalBookCount: totalVolumeCount,
+    totalVolumeCount,
+    totalChapterCount,
     ageRating: mapContentRating(series.content_rating),
     readingDirection: inferReadingDirection(series.type, series.country_of_origin),
     // Taxonomy

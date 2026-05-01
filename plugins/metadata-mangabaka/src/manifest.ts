@@ -8,7 +8,7 @@ export const manifest = {
   description: "Fetch manga metadata from MangaBaka - aggregated data from multiple sources",
   author: "Codex",
   homepage: "https://mangabaka.org",
-  protocolVersion: "1.0",
+  protocolVersion: "1.1",
   capabilities: {
     metadataProvider: ["series"] as MetadataContentType[],
   },

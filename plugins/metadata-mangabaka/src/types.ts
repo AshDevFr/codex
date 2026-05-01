@@ -180,6 +180,7 @@ export interface MbSeries {
   description?: string | null;
   year?: number | null;
   final_volume?: string | null;
+  total_chapters?: string | null;
   status: MbStatus;
   is_licensed?: boolean;
   has_anime?: boolean;

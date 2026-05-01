@@ -12,7 +12,7 @@ export const manifest = {
     "Personalized manga recommendations from AniList based on your reading history and ratings.",
   author: "Codex",
   homepage: "https://github.com/AshDevFr/codex",
-  protocolVersion: "1.0",
+  protocolVersion: "1.1",
   capabilities: {
     userRecommendationProvider: true,
     externalIdSource: EXTERNAL_ID_SOURCE_ANILIST,
