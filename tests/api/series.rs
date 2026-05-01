@@ -2001,7 +2001,6 @@ async fn test_replace_series_metadata_success() {
         language: None,
         year: Some(2020),
         reading_direction: Some("ltr".to_string()),
-        total_book_count: None,
         total_volume_count: None,
         total_chapter_count: None,
         custom_metadata: Some(serde_json::json!({"tag": "value"})),
@@ -2078,7 +2077,6 @@ async fn test_replace_series_metadata_clears_omitted_fields() {
         language: None,
         year: None, // Should clear year
         reading_direction: None,
-        total_book_count: None,
         total_volume_count: None,
         total_chapter_count: None,
         custom_metadata: None,
@@ -2121,7 +2119,6 @@ async fn test_replace_series_metadata_not_found() {
         language: None,
         year: None,
         reading_direction: None,
-        total_book_count: None,
         total_volume_count: None,
         total_chapter_count: None,
         custom_metadata: None,
@@ -2169,7 +2166,6 @@ async fn test_replace_series_metadata_without_auth() {
         language: None,
         year: None,
         reading_direction: None,
-        total_book_count: None,
         total_volume_count: None,
         total_chapter_count: None,
         custom_metadata: None,
@@ -4937,7 +4933,7 @@ async fn test_list_series_filtered_by_completion_complete() {
         BookRepository::create(&db, &book, None).await.unwrap();
     }
 
-    // Create a series without total_book_count (should be excluded from both filters)
+    // Create a series without a volume count (should be excluded from both filters)
     let no_count_series = SeriesRepository::create(&db, library.id, "No Count Series", None)
         .await
         .unwrap();
@@ -4988,14 +4984,14 @@ async fn test_list_series_filtered_by_completion_complete() {
 }
 
 #[tokio::test]
-async fn test_list_series_filtered_by_completion_with_no_total_book_count() {
+async fn test_list_series_filtered_by_completion_with_no_volume_count() {
     let (db, _temp_dir) = setup_test_db().await;
 
     let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
         .await
         .unwrap();
 
-    // Create series without total_book_count
+    // Create series without a volume count
     let series1 = SeriesRepository::create(&db, library.id, "Series Without Count", None)
         .await
         .unwrap();
@@ -5012,7 +5008,7 @@ async fn test_list_series_filtered_by_completion_with_no_total_book_count() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Filter by completion = true should return empty (no series have total_book_count)
+    // Filter by completion = true should return empty (no series have a volume count)
     let request_body = SeriesListRequest {
         condition: Some(SeriesCondition::Completion {
             completion: BoolOperator::IsTrue,
@@ -5028,7 +5024,7 @@ async fn test_list_series_filtered_by_completion_with_no_total_book_count() {
     assert_eq!(
         series_list.data.len(),
         0,
-        "Series without total_book_count should not appear in complete filter"
+        "Series without a volume count should not appear in complete filter"
     );
 
     // Filter by completion = false should also return empty
@@ -5047,7 +5043,7 @@ async fn test_list_series_filtered_by_completion_with_no_total_book_count() {
     assert_eq!(
         series_list.data.len(),
         0,
-        "Series without total_book_count should not appear in incomplete filter"
+        "Series without a volume count should not appear in incomplete filter"
     );
 }
 
@@ -6007,7 +6003,6 @@ async fn test_replace_series_metadata_with_authors() {
         language: None,
         year: None,
         reading_direction: None,
-        total_book_count: None,
         total_volume_count: None,
         total_chapter_count: None,
         custom_metadata: None,
@@ -6076,7 +6071,6 @@ async fn test_replace_series_metadata_clears_authors_when_omitted() {
         language: None,
         year: None,
         reading_direction: None,
-        total_book_count: None,
         total_volume_count: None,
         total_chapter_count: None,
         custom_metadata: None,
@@ -6110,7 +6104,6 @@ async fn test_replace_series_metadata_clears_authors_when_omitted() {
         language: None,
         year: None,
         reading_direction: None,
-        total_book_count: None,
         total_volume_count: None,
         total_chapter_count: None,
         custom_metadata: None,

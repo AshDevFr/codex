@@ -84,14 +84,7 @@ pub async fn bulk_patch_series_metadata(
     let language_opt = request.language.into_nested_option();
     let reading_direction_opt = request.reading_direction.into_nested_option();
     let year_opt = request.year.into_nested_option();
-    // Legacy `total_book_count` patches route to `total_volume_count` (the
-    // canonical field after metadata-count-split). If both are sent, the new
-    // field wins. Removed alongside the legacy field in Phase 9.
-    let legacy_total_book_count_opt = request.total_book_count.into_nested_option();
-    let total_volume_count_opt = request
-        .total_volume_count
-        .into_nested_option()
-        .or(legacy_total_book_count_opt);
+    let total_volume_count_opt = request.total_volume_count.into_nested_option();
     let total_chapter_count_opt = request.total_chapter_count.into_nested_option();
     let custom_metadata_opt = request.custom_metadata.into_nested_option();
     let authors_opt = request.authors.into_nested_option();
@@ -917,10 +910,7 @@ pub async fn bulk_update_series_locks(
             active.year_lock = Set(v);
             has_changes = true;
         }
-        // Legacy `total_book_count` lock routes to `total_volume_count_lock`.
-        // If both are sent, the new field wins. Removed in Phase 9.
-        let resolved_volume_lock = locks.total_volume_count.or(locks.total_book_count);
-        if let Some(v) = resolved_volume_lock {
+        if let Some(v) = locks.total_volume_count {
             active.total_volume_count_lock = Set(v);
             has_changes = true;
         }

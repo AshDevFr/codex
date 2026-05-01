@@ -314,15 +314,6 @@ pub struct ReplaceSeriesMetadataRequest {
     #[schema(example = 1987)]
     pub year: Option<i32>,
 
-    /// Expected total book count (for ongoing series).
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `totalVolumeCount`. Use `totalVolumeCount` and/or `totalChapterCount`
-    /// going forward; this field is removed in Phase 9 of the
-    /// metadata-count-split plan.
-    #[schema(example = 4)]
-    pub total_book_count: Option<i32>,
-
     /// Expected total volume count (for volume-organized series).
     #[schema(example = 4)]
     pub total_volume_count: Option<i32>,
@@ -396,15 +387,6 @@ pub struct PatchSeriesMetadataRequest {
     #[schema(value_type = Option<i32>, example = 1987, nullable = true)]
     pub year: super::patch::PatchValue<i32>,
 
-    /// Expected total book count (for ongoing series).
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Sets
-    /// `totalVolumeCount` under the hood. Removed in Phase 9 of the
-    /// metadata-count-split plan.
-    #[serde(default)]
-    #[schema(value_type = Option<i32>, example = 4, nullable = true)]
-    pub total_book_count: super::patch::PatchValue<i32>,
-
     /// Expected total volume count (for volume-organized series)
     #[serde(default)]
     #[schema(value_type = Option<i32>, example = 4, nullable = true)]
@@ -473,13 +455,6 @@ pub struct SeriesMetadataResponse {
     /// Release year
     #[schema(example = 1987)]
     pub year: Option<i32>,
-
-    /// Expected total book count (for ongoing series).
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.
-    #[schema(example = 4)]
-    pub total_book_count: Option<i32>,
 
     /// Expected total volume count (for volume-organized series).
     #[schema(example = 4)]
@@ -1012,13 +987,6 @@ pub struct MetadataLocks {
     #[schema(example = false)]
     pub year: bool,
 
-    /// Whether the total_book_count field is locked.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `totalVolumeCountLock`. Removed in Phase 9.
-    #[schema(example = false)]
-    pub total_book_count: bool,
-
     /// Whether the total_volume_count field is locked
     #[schema(example = false)]
     pub total_volume_count: bool,
@@ -1101,13 +1069,6 @@ pub struct FullSeriesMetadataResponse {
     /// Release year
     #[schema(example = 1987)]
     pub year: Option<i32>,
-
-    /// Expected total book count (for ongoing series).
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `totalVolumeCount`. Removed in Phase 9.
-    #[schema(example = 4)]
-    pub total_book_count: Option<i32>,
 
     /// Expected total volume count (for volume-organized series).
     #[schema(example = 4)]
@@ -1205,14 +1166,6 @@ pub struct SeriesFullMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 1987)]
     pub year: Option<i32>,
-
-    /// Expected total book count (for ongoing series).
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `totalVolumeCount`. Removed in Phase 9.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(example = 4)]
-    pub total_book_count: Option<i32>,
 
     /// Expected total volume count (for volume-organized series).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1368,14 +1321,6 @@ pub struct UpdateMetadataLocksRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = false)]
     pub year: Option<bool>,
-
-    /// Whether to lock the total_book_count field.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Sets
-    /// `totalVolumeCountLock` under the hood. Removed in Phase 9.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(example = false)]
-    pub total_book_count: Option<bool>,
 
     /// Whether to lock the total_volume_count field
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1759,14 +1704,6 @@ pub struct MetadataContextDto {
     #[schema(example = 1997)]
     pub year: Option<i32>,
 
-    /// Expected total book count.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(example = 110)]
-    pub total_book_count: Option<i32>,
-
     /// Expected total volume count
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 110)]
@@ -1843,13 +1780,6 @@ pub struct MetadataContextDto {
     /// Whether year is locked
     #[serde(default)]
     pub year_lock: bool,
-
-    /// Whether total_book_count is locked.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `totalVolumeCountLock`. Removed in Phase 9.
-    #[serde(default)]
-    pub total_book_count_lock: bool,
 
     /// Whether total_volume_count is locked
     #[serde(default)]
@@ -1971,7 +1901,6 @@ impl From<crate::services::metadata::preprocessing::context::SeriesContext> for 
                 language: ctx.metadata.language,
                 reading_direction: ctx.metadata.reading_direction,
                 year: ctx.metadata.year,
-                total_book_count: ctx.metadata.total_book_count,
                 total_volume_count: ctx.metadata.total_volume_count,
                 total_chapter_count: ctx.metadata.total_chapter_count,
                 genres: ctx.metadata.genres,
@@ -2025,7 +1954,6 @@ impl From<crate::services::metadata::preprocessing::context::SeriesContext> for 
                 language_lock: ctx.metadata.language_lock,
                 reading_direction_lock: ctx.metadata.reading_direction_lock,
                 year_lock: ctx.metadata.year_lock,
-                total_book_count_lock: ctx.metadata.total_book_count_lock,
                 total_volume_count_lock: ctx.metadata.total_volume_count_lock,
                 total_chapter_count_lock: ctx.metadata.total_chapter_count_lock,
                 genres_lock: ctx.metadata.genres_lock,
