@@ -652,6 +652,17 @@ pub struct SearchResultPreview {
     /// Author names (for book search results)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub authors: Vec<String>,
+    /// Content format discriminator (e.g. `manga`, `novel`, `light_novel`,
+    /// `manhwa`, `manhua`, `comic`, `webtoon`, `one_shot`, `doujin`,
+    /// `artbook`).
+    ///
+    /// Free-form at the protocol level so plugins are not locked into an
+    /// enum that requires Codex core changes when new formats appear.
+    /// Plugin authors are encouraged to emit lowercase snake_case values
+    /// from the recommended vocabulary above so the UI can render
+    /// consistent badges; unknown values still render as a neutral badge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
 }
 
 /// Parameters for metadata/get
@@ -1472,6 +1483,56 @@ mod tests {
         assert_eq!(result.year, Some(1997));
         assert_eq!(result.relevance_score, Some(0.98));
         assert!(result.preview.is_some());
+        assert_eq!(result.preview.as_ref().unwrap().format, None);
+    }
+
+    #[test]
+    fn test_search_result_preview_with_format_round_trip() {
+        let preview = SearchResultPreview {
+            status: Some("ongoing".to_string()),
+            genres: vec!["Action".to_string()],
+            rating: None,
+            description: None,
+            book_count: None,
+            authors: vec![],
+            format: Some("manga".to_string()),
+        };
+
+        let json = serde_json::to_value(&preview).unwrap();
+        assert_eq!(json["format"], "manga");
+
+        let parsed: SearchResultPreview = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed.format.as_deref(), Some("manga"));
+    }
+
+    #[test]
+    fn test_search_result_preview_format_optional_old_shape() {
+        // Old plugin output (no `format` field) must still deserialize.
+        let json = json!({
+            "status": "ongoing",
+            "genres": ["Action", "Adventure"],
+            "bookCount": 14,
+        });
+
+        let preview: SearchResultPreview = serde_json::from_value(json).unwrap();
+        assert_eq!(preview.format, None);
+        assert_eq!(preview.book_count, Some(14));
+    }
+
+    #[test]
+    fn test_search_result_preview_format_skipped_when_none() {
+        let preview = SearchResultPreview {
+            status: None,
+            genres: vec![],
+            rating: None,
+            description: None,
+            book_count: None,
+            authors: vec![],
+            format: None,
+        };
+
+        let json = serde_json::to_value(&preview).unwrap();
+        assert!(!json.as_object().unwrap().contains_key("format"));
     }
 
     #[test]

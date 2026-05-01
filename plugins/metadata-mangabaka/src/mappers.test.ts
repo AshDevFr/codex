@@ -110,6 +110,68 @@ describe("mappers", () => {
 
       expect(result.preview?.bookCount).toBe(13);
     });
+
+    it("should populate format from MangaBaka series type (manga)", () => {
+      const series: MbSeries = {
+        id: 12345,
+        state: "active",
+        title: "A Wild Last Boss Appeared!",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manga",
+        status: "releasing",
+        year: 2017,
+      };
+
+      const result = mapSearchResult(series);
+
+      expect(result.preview?.format).toBe("manga");
+    });
+
+    it("should populate format from MangaBaka series type (novel)", () => {
+      const series: MbSeries = {
+        id: 12346,
+        state: "active",
+        title: "A Wild Last Boss Appeared!",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "novel",
+        status: "releasing",
+        year: 2016,
+      };
+
+      const result = mapSearchResult(series);
+
+      expect(result.preview?.format).toBe("novel");
+    });
+
+    it("should pass through other format values verbatim", () => {
+      const series: MbSeries = {
+        id: 99999,
+        state: "active",
+        title: "Korean Series",
+        cover: {
+          raw: { url: null },
+          x150: { x1: null, x2: null, x3: null },
+          x250: { x1: null, x2: null, x3: null },
+          x350: { x1: null, x2: null, x3: null },
+        },
+        type: "manhwa",
+        status: "releasing",
+      };
+
+      const result = mapSearchResult(series);
+
+      expect(result.preview?.format).toBe("manhwa");
+    });
   });
 
   describe("mapSeriesMetadata", () => {

@@ -196,6 +196,7 @@ export function mapSearchResult(series: MbSeries): SearchResult {
       description: stripHtml(series.description)?.slice(0, 200) ?? undefined,
       bookCount: parseVolumeCount(series.final_volume),
       authors: previewAuthors.length > 0 ? previewAuthors : undefined,
+      format: series.type ?? undefined,
     },
   };
 }

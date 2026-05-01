@@ -335,6 +335,139 @@ describe("MetadataSearchModal", () => {
     expect(screen.getByText("1 book")).toBeInTheDocument();
   });
 
+  it("renders distinct format badges for manga vs novel results", async () => {
+    (pluginsApi.searchMetadata as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      result: {
+        results: [
+          {
+            externalId: "ext-manga",
+            title: "A Wild Last Boss Appeared!",
+            alternateTitles: [],
+            year: 2017,
+            coverUrl: null,
+            preview: {
+              status: "Releasing",
+              genres: [],
+              format: "manga",
+            },
+          },
+          {
+            externalId: "ext-novel",
+            title: "A Wild Last Boss Appeared!",
+            alternateTitles: [],
+            year: 2016,
+            coverUrl: null,
+            preview: {
+              status: "Releasing",
+              genres: [],
+              format: "novel",
+            },
+          },
+        ],
+      },
+      latencyMs: 100,
+    });
+
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={mockPlugin}
+        initialQuery="A Wild Last Boss"
+        onSelect={onSelect}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("Manga")).toBeInTheDocument();
+      },
+      { timeout: 1000 },
+    );
+
+    const mangaBadge = screen.getByText("Manga");
+    const novelBadge = screen.getByText("Novel");
+
+    expect(mangaBadge).toBeInTheDocument();
+    expect(novelBadge).toBeInTheDocument();
+
+    // Mantine Badge sets data-variant + the resolved color via CSS variables on
+    // the root element. The badge text node lives inside a label span; walk up
+    // to find the styled root.
+    const mangaRoot = mangaBadge.closest("[data-variant]");
+    const novelRoot = novelBadge.closest("[data-variant]");
+
+    expect(mangaRoot).not.toBeNull();
+    expect(novelRoot).not.toBeNull();
+    // Distinct colors → distinct inline style for the Mantine color variable.
+    expect(mangaRoot?.getAttribute("style")).not.toBe(
+      novelRoot?.getAttribute("style"),
+    );
+  });
+
+  it("renders a fallback gray badge for unknown format values", async () => {
+    (pluginsApi.searchMetadata as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      result: {
+        results: [
+          {
+            externalId: "ext-oel",
+            title: "Original English",
+            alternateTitles: [],
+            year: 2020,
+            coverUrl: null,
+            preview: {
+              genres: [],
+              format: "oel",
+            },
+          },
+        ],
+      },
+      latencyMs: 100,
+    });
+
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={mockPlugin}
+        initialQuery="Original"
+        onSelect={onSelect}
+      />,
+    );
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("Oel")).toBeInTheDocument();
+      },
+      { timeout: 1000 },
+    );
+  });
+
+  it("omits the format badge when format is missing", async () => {
+    renderWithProviders(
+      <MetadataSearchModal
+        opened={true}
+        onClose={onClose}
+        plugin={mockPlugin}
+        initialQuery="Test"
+        onSelect={onSelect}
+      />,
+    );
+
+    // Use the existing default mock (no `format` set on either preview).
+    await waitFor(
+      () => {
+        expect(screen.getByText("Test Series")).toBeInTheDocument();
+      },
+      { timeout: 1000 },
+    );
+
+    expect(screen.queryByText("Manga")).not.toBeInTheDocument();
+    expect(screen.queryByText("Novel")).not.toBeInTheDocument();
+  });
+
   it("displays description when provided in preview", async () => {
     (pluginsApi.searchMetadata as ReturnType<typeof vi.fn>).mockResolvedValue({
       success: true,

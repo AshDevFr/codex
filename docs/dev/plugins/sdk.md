@@ -383,6 +383,15 @@ interface SearchResultPreview {
   description?: string;
   bookCount?: number;
   authors?: string[];
+  /**
+   * Content format discriminator for visually disambiguating results.
+   * Free-form string. Recommended values (lowercase snake_case):
+   *   manga, manhwa, manhua, novel, light_novel, comic, webtoon,
+   *   one_shot, doujin, artbook.
+   * The UI maps known values to colored badges and falls back to a
+   * neutral badge for anything else.
+   */
+  format?: string;
 }
 ```
 
