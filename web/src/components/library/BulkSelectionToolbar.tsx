@@ -11,6 +11,8 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
   IconAnalyze,
+  IconBell,
+  IconBellOff,
   IconBook,
   IconBookOff,
   IconChevronDown,
@@ -27,6 +29,7 @@ import { useEffect, useMemo, useState } from "react";
 import { booksApi } from "@/api/books";
 import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
+import { trackingApi } from "@/api/tracking";
 import { BulkMetadataEditModal } from "@/components/library/BulkMetadataEditModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
@@ -386,6 +389,49 @@ export function BulkSelectionToolbar() {
     },
   });
 
+  // Bulk set release-tracking flag. No dedicated bulk endpoint exists yet —
+  // fan out per-series PATCH calls. Acceptable scale for a hand-managed library
+  // (hundreds of series, low-frequency action).
+  const bulkSetTrackedMutation = useMutation({
+    mutationFn: async ({
+      seriesIds,
+      tracked,
+    }: {
+      seriesIds: string[];
+      tracked: boolean;
+    }) => {
+      const results = await Promise.allSettled(
+        seriesIds.map((id) => trackingApi.updateTracking(id, { tracked })),
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      return { total: seriesIds.length, failed };
+    },
+    onSuccess: ({ total, failed }, { tracked }) => {
+      if (failed === 0) {
+        notifications.show({
+          title: tracked ? "Tracking enabled" : "Tracking disabled",
+          message: `Updated ${total} series.`,
+          color: tracked ? "green" : "blue",
+        });
+      } else {
+        notifications.show({
+          title: "Some updates failed",
+          message: `${total - failed} of ${total} series updated; ${failed} failed.`,
+          color: "yellow",
+        });
+      }
+      refetchAll();
+      clearSelection();
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Failed to update tracking",
+        message: error.message || "Bulk tracking update failed",
+        color: "red",
+      });
+    },
+  });
+
   // Bulk reset series metadata
   const bulkResetMetadataMutation = useMutation({
     mutationFn: (seriesIds: string[]) => seriesApi.bulkResetMetadata(seriesIds),
@@ -452,7 +498,8 @@ export function BulkSelectionToolbar() {
     bulkGenerateSeriesBookThumbnailsMutation.isPending ||
     bulkReprocessTitlesMutation.isPending ||
     bulkRenumberSeriesMutation.isPending ||
-    bulkResetMetadataMutation.isPending;
+    bulkResetMetadataMutation.isPending ||
+    bulkSetTrackedMutation.isPending;
 
   // Determine if the "More" menu should be shown based on permissions
   const showBooksMoreMenu = isBooks && (canWriteBooks || canWriteTasks);
@@ -797,6 +844,33 @@ export function BulkSelectionToolbar() {
                     disabled={isAnyPending}
                   >
                     Reprocess Titles
+                  </Menu.Item>
+
+                  <Menu.Divider />
+                  <Menu.Label>Release Tracking</Menu.Label>
+                  <Menu.Item
+                    leftSection={<IconBell size={16} />}
+                    onClick={() =>
+                      bulkSetTrackedMutation.mutate({
+                        seriesIds: selectedIds,
+                        tracked: true,
+                      })
+                    }
+                    disabled={isAnyPending}
+                  >
+                    Mark as Tracked
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconBellOff size={16} />}
+                    onClick={() =>
+                      bulkSetTrackedMutation.mutate({
+                        seriesIds: selectedIds,
+                        tracked: false,
+                      })
+                    }
+                    disabled={isAnyPending}
+                  >
+                    Mark as Untracked
                   </Menu.Item>
 
                   <Menu.Divider />

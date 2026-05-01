@@ -29,6 +29,7 @@ pub mod settings;
 pub mod setup;
 pub mod sharing_tag;
 pub mod task_metrics;
+pub mod tracking;
 pub mod user;
 pub mod user_plugins;
 pub mod user_preferences;
@@ -62,6 +63,8 @@ pub use settings::*;
 pub use setup::*;
 pub use sharing_tag::*;
 pub use task_metrics::*;
+#[allow(unused_imports)]
+pub use tracking::*;
 pub use user::*;
 #[allow(unused_imports)]
 pub use user_plugins::*;

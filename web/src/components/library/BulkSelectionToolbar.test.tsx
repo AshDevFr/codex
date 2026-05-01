@@ -38,6 +38,20 @@ vi.mock("@/api/series", () => ({
   },
 }));
 
+vi.mock("@/api/tracking", () => ({
+  trackingApi: {
+    updateTracking: vi.fn().mockResolvedValue({
+      seriesId: "series-1",
+      tracked: true,
+      trackingStatus: "unknown",
+      trackChapters: true,
+      trackVolumes: true,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    }),
+  },
+}));
+
 // Mock the usePermissions hook - default to admin (all permissions)
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: vi.fn(),
@@ -349,6 +363,52 @@ describe("BulkSelectionToolbar", () => {
 
       await waitFor(() => {
         expect(seriesApi.bulkAnalyze).toHaveBeenCalledWith(["series-1"]);
+      });
+    });
+
+    it("should call updateTracking for each series when Mark as Tracked clicked", async () => {
+      const { trackingApi } = await import("@/api/tracking");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+      useBulkSelectionStore.getState().toggleSelection("series-2", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Mark as Tracked")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Mark as Tracked"));
+
+      await waitFor(() => {
+        expect(trackingApi.updateTracking).toHaveBeenCalledWith("series-1", {
+          tracked: true,
+        });
+        expect(trackingApi.updateTracking).toHaveBeenCalledWith("series-2", {
+          tracked: true,
+        });
+      });
+    });
+
+    it("should call updateTracking with tracked=false when Mark as Untracked clicked", async () => {
+      const { trackingApi } = await import("@/api/tracking");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Mark as Untracked")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Mark as Untracked"));
+
+      await waitFor(() => {
+        expect(trackingApi.updateTracking).toHaveBeenCalledWith("series-1", {
+          tracked: false,
+        });
       });
     });
   });

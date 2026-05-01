@@ -47,6 +47,7 @@ mod api {
     mod tags;
     mod task_metrics;
     mod thumbnails;
+    mod tracking;
     mod user_plugins;
     mod user_preferences;
     mod user_ratings;
