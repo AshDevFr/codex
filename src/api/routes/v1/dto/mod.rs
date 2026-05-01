@@ -22,6 +22,7 @@ pub mod plugin_storage;
 pub mod plugins;
 pub mod read_progress;
 pub mod recommendations;
+pub mod release;
 pub mod scan;
 pub mod series;
 pub mod series_export;
@@ -55,6 +56,8 @@ pub use plugins::*;
 pub use read_progress::*;
 #[allow(unused_imports)]
 pub use recommendations::*;
+#[allow(unused_imports)]
+pub use release::*;
 pub use scan::*;
 pub use series::*;
 #[allow(unused_imports)]

@@ -61,6 +61,7 @@ pub mod plugin_storage;
 pub mod plugins;
 pub mod read_progress;
 pub mod recommendations;
+pub mod releases;
 pub mod scan;
 pub mod series;
 pub mod series_exports;

@@ -359,4 +359,9 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/{series_id}/aliases/{alias_id}",
             delete(handlers::tracking::delete_series_alias),
         )
+        // Per-series release ledger (Phase 2)
+        .route(
+            "/series/{series_id}/releases",
+            get(handlers::releases::list_series_releases),
+        )
 }

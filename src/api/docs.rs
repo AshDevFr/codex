@@ -263,6 +263,16 @@ The following paths are exempt from rate limiting:
         v1::handlers::tracking::create_series_alias,
         v1::handlers::tracking::delete_series_alias,
 
+        // Release ledger + sources (Phase 2)
+        v1::handlers::releases::list_series_releases,
+        v1::handlers::releases::list_release_inbox,
+        v1::handlers::releases::update_release_entry,
+        v1::handlers::releases::dismiss_release,
+        v1::handlers::releases::mark_release_acquired,
+        v1::handlers::releases::list_release_sources,
+        v1::handlers::releases::update_release_source,
+        v1::handlers::releases::poll_release_source_now,
+
         // Cover management endpoints
         v1::handlers::list_series_covers,
         v1::handlers::get_series_cover_image,
@@ -692,6 +702,16 @@ The following paths are exempt from rate limiting:
             v1::dto::tracking::SeriesAliasListResponse,
             v1::dto::tracking::CreateSeriesAliasRequest,
 
+            // Release-ledger + source DTOs (Phase 2)
+            v1::dto::release::ReleaseLedgerEntryDto,
+            v1::dto::release::ReleaseLedgerListResponse,
+            v1::dto::release::UpdateReleaseLedgerEntryRequest,
+            v1::dto::release::ReleaseSourceDto,
+            v1::dto::release::ReleaseSourceListResponse,
+            v1::dto::release::UpdateReleaseSourceRequest,
+            v1::dto::release::PollNowResponse,
+            v1::dto::PaginatedResponse<v1::dto::release::ReleaseLedgerEntryDto>,
+
             // External Rating DTOs
             v1::dto::ExternalRatingDto,
             v1::dto::ExternalRatingListResponse,
@@ -1017,6 +1037,7 @@ The following paths are exempt from rate limiting:
         (name = "Libraries", description = "Library management endpoints"),
         (name = "Series", description = "Series browsing and search endpoints"),
         (name = "Tracking", description = "Release-tracking config and matcher aliases"),
+        (name = "Releases", description = "Release ledger (announcements) and source admin"),
         (name = "Books", description = "Book details and metadata endpoints"),
         (name = "Pages", description = "Page image serving endpoints"),
 
@@ -1159,7 +1180,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "Library Content",
-                "tags": ["Libraries", "Series", "Books", "Pages"]
+                "tags": ["Libraries", "Series", "Tracking", "Releases", "Books", "Pages"]
             },
             {
                 "name": "Metadata & Taxonomy",

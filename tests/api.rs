@@ -36,6 +36,7 @@ mod api {
     mod rate_limit;
     mod read_progress;
     mod recommendations;
+    mod releases;
     mod renumber;
     mod scan;
     mod series;
