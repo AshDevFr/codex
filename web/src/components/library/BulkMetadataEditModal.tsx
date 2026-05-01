@@ -94,7 +94,8 @@ const SERIES_LOCK_FIELDS: Array<{ key: string; label: string }> = [
   { key: "ageRating", label: "Age Rating" },
   { key: "imprint", label: "Imprint" },
   { key: "year", label: "Year" },
-  { key: "totalBookCount", label: "Total Book Count" },
+  { key: "totalVolumeCount", label: "Total Volume Count" },
+  { key: "totalChapterCount", label: "Total Chapter Count" },
   { key: "genres", label: "Genres" },
   { key: "tags", label: "Tags" },
   { key: "customMetadata", label: "Custom Metadata" },
@@ -156,7 +157,8 @@ interface SeriesFormState {
   readingDirection: string | null;
   ageRating: string;
   year: string;
-  totalBookCount: string;
+  totalVolumeCount: string;
+  totalChapterCount: string;
   authors: BookAuthor[];
 }
 
@@ -206,7 +208,8 @@ export function BulkMetadataEditModal({
     readingDirection: null,
     ageRating: "",
     year: "",
-    totalBookCount: "",
+    totalVolumeCount: "",
+    totalChapterCount: "",
     authors: [],
   });
 
@@ -276,7 +279,8 @@ export function BulkMetadataEditModal({
         readingDirection: null,
         ageRating: "",
         year: "",
-        totalBookCount: "",
+        totalVolumeCount: "",
+        totalChapterCount: "",
         authors: [],
       });
       setBookForm({
@@ -333,9 +337,13 @@ export function BulkMetadataEditModal({
             : null;
         if (touchedFields.year)
           data.year = seriesForm.year ? parseInt(seriesForm.year, 10) : null;
-        if (touchedFields.totalBookCount)
-          data.totalBookCount = seriesForm.totalBookCount
-            ? parseInt(seriesForm.totalBookCount, 10)
+        if (touchedFields.totalVolumeCount)
+          data.totalVolumeCount = seriesForm.totalVolumeCount
+            ? parseInt(seriesForm.totalVolumeCount, 10)
+            : null;
+        if (touchedFields.totalChapterCount)
+          data.totalChapterCount = seriesForm.totalChapterCount
+            ? parseFloat(seriesForm.totalChapterCount)
             : null;
         if (touchedFields.authors) {
           const filtered = seriesForm.authors.filter((a) => a.name.trim());
@@ -915,13 +923,24 @@ function SeriesMetadataFields({
         </BulkField>
 
         <BulkField
-          label="Total Book Count"
-          touched={touchedFields.totalBookCount}
+          label="Total Volume Count"
+          touched={touchedFields.totalVolumeCount}
         >
           <TextInput
-            placeholder="Expected total"
-            value={form.totalBookCount}
-            onChange={(e) => update("totalBookCount", e.target.value)}
+            placeholder="e.g., 14"
+            value={form.totalVolumeCount}
+            onChange={(e) => update("totalVolumeCount", e.target.value)}
+          />
+        </BulkField>
+
+        <BulkField
+          label="Total Chapter Count"
+          touched={touchedFields.totalChapterCount}
+        >
+          <TextInput
+            placeholder="e.g., 109 or 109.5"
+            value={form.totalChapterCount}
+            onChange={(e) => update("totalChapterCount", e.target.value)}
           />
         </BulkField>
       </SimpleGrid>

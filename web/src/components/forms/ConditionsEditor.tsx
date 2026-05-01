@@ -224,8 +224,13 @@ const DEFAULT_FIELDS: { value: string; label: string; group: string }[] = [
   },
   { value: "metadata.year", label: "Year", group: "Metadata" },
   {
-    value: "metadata.totalBookCount",
-    label: "Total Book Count",
+    value: "metadata.totalVolumeCount",
+    label: "Total Volume Count",
+    group: "Metadata",
+  },
+  {
+    value: "metadata.totalChapterCount",
+    label: "Total Chapter Count",
     group: "Metadata",
   },
   // Array fields
@@ -256,8 +261,13 @@ const DEFAULT_FIELDS: { value: string; label: string; group: string }[] = [
   },
   { value: "metadata.yearLock", label: "Year Lock", group: "Locks" },
   {
-    value: "metadata.totalBookCountLock",
-    label: "Total Book Count Lock",
+    value: "metadata.totalVolumeCountLock",
+    label: "Total Volume Count Lock",
+    group: "Locks",
+  },
+  {
+    value: "metadata.totalChapterCountLock",
+    label: "Total Chapter Count Lock",
     group: "Locks",
   },
   { value: "metadata.genresLock", label: "Genres Lock", group: "Locks" },
