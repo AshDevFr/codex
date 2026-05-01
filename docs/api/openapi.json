@@ -7107,6 +7107,402 @@
         ]
       }
     },
+    "/api/v1/release-sources": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "List all configured release sources (admin-only).",
+        "operationId": "list_release_sources",
+        "responses": {
+          "200": {
+            "description": "Source list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSourceListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/release-sources/{source_id}": {
+      "patch": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "PATCH a release source (admin-only).",
+        "description": "Toggle `enabled`, override `pollIntervalS`, or rename `displayName`.",
+        "operationId": "update_release_source",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Source ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReleaseSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Source updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSourceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid update payload"
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          },
+          "404": {
+            "description": "Source not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/release-sources/{source_id}/poll-now": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Trigger a manual poll for a source.",
+        "description": "**Phase 2 stub**: returns `501 Not Implemented`. Phase 4 wires this into\nthe task queue (`PollReleaseSource` task type).",
+        "operationId": "poll_release_source_now",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Source ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "PluginsManage permission required"
+          },
+          "404": {
+            "description": "Source not found"
+          },
+          "501": {
+            "description": "Not implemented yet (Phase 4)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollNowResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Cross-series inbox: announced (or filtered) ledger entries, paginated.",
+        "operationId": "list_release_inbox",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Filter by state. Defaults to `announced`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sourceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated inbox entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}": {
+      "patch": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "PATCH a ledger entry's state (general-purpose state transition).",
+        "operationId": "update_release_entry",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReleaseLedgerEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated ledger entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}/dismiss": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Convenience POST: dismiss a release.",
+        "operationId": "dismiss_release",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}/mark-acquired": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Convenience POST: mark a release acquired.",
+        "operationId": "mark_release_acquired",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release marked acquired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/scans/active": {
       "get": {
         "tags": [
@@ -10987,6 +11383,87 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MarkReadResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/releases": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "List release-ledger entries for a series.",
+        "operationId": "list_series_releases",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Filter by state. Defaults to all states (no filter) so the per-series\nview shows the full history.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-indexed page number.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (max 500, default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated ledger entries for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_ReleaseLedgerEntryDto"
                 }
               }
             }
@@ -28625,6 +29102,154 @@
           }
         }
       },
+      "PaginatedResponse_ReleaseLedgerEntryDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "A single release announcement. Sources write these; the inbox reads them.",
+              "required": [
+                "id",
+                "seriesId",
+                "sourceId",
+                "externalReleaseId",
+                "payloadUrl",
+                "confidence",
+                "state",
+                "observedAt",
+                "createdAt"
+              ],
+              "properties": {
+                "chapter": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Decimal supports `12.5` etc."
+                },
+                "confidence": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "externalReleaseId": {
+                  "type": "string",
+                  "description": "Plugin-stable identity for the release (used for dedup).",
+                  "example": "nyaa:1234567"
+                },
+                "formatHints": {
+                  "description": "Sparse `{ \"jxl\": true, \"container\": \"cbz\", ... }`."
+                },
+                "groupOrUploader": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Group/scanlator/uploader attribution."
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "550e8400-e29b-41d4-a716-446655440a00"
+                },
+                "infoHash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Torrent info_hash, if applicable."
+                },
+                "language": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "metadata": {
+                  "description": "Source-specific extras (free-form)."
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "payloadUrl": {
+                  "type": "string",
+                  "description": "Where to acquire the release."
+                },
+                "seriesId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "550e8400-e29b-41d4-a716-446655440002"
+                },
+                "sourceId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "550e8400-e29b-41d4-a716-446655440b00"
+                },
+                "state": {
+                  "type": "string",
+                  "description": "`announced` | `dismissed` | `marked_acquired` | `hidden`."
+                },
+                "volume": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32"
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
       "PaginatedResponse_SeriesDto": {
         "type": "object",
         "description": "Generic paginated response wrapper with HATEOAS links",
@@ -30998,6 +31623,24 @@
           }
         }
       },
+      "PollNowResponse": {
+        "type": "object",
+        "description": "Response shape from the `poll-now` endpoint. Phase 4 wires this to the task\nqueue; Phase 2 returns a stub indicating the operation isn't implemented.",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable message."
+          },
+          "status": {
+            "type": "string",
+            "description": "`enqueued` once Phase 4 lands; `not_implemented` until then."
+          }
+        }
+      },
       "PreviewScanRequest": {
         "type": "object",
         "description": "Preview scan request",
@@ -31791,6 +32434,216 @@
           "user": {
             "$ref": "#/components/schemas/UserInfo",
             "description": "User information"
+          }
+        }
+      },
+      "ReleaseLedgerEntryDto": {
+        "type": "object",
+        "description": "A single release announcement. Sources write these; the inbox reads them.",
+        "required": [
+          "id",
+          "seriesId",
+          "sourceId",
+          "externalReleaseId",
+          "payloadUrl",
+          "confidence",
+          "state",
+          "observedAt",
+          "createdAt"
+        ],
+        "properties": {
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Decimal supports `12.5` etc."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "externalReleaseId": {
+            "type": "string",
+            "description": "Plugin-stable identity for the release (used for dedup).",
+            "example": "nyaa:1234567"
+          },
+          "formatHints": {
+            "description": "Sparse `{ \"jxl\": true, \"container\": \"cbz\", ... }`."
+          },
+          "groupOrUploader": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Group/scanlator/uploader attribution."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440a00"
+          },
+          "infoHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Torrent info_hash, if applicable."
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "description": "Source-specific extras (free-form)."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payloadUrl": {
+            "type": "string",
+            "description": "Where to acquire the release."
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "sourceId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440b00"
+          },
+          "state": {
+            "type": "string",
+            "description": "`announced` | `dismissed` | `marked_acquired` | `hidden`."
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReleaseLedgerListResponse": {
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+            }
+          }
+        }
+      },
+      "ReleaseSourceDto": {
+        "type": "object",
+        "description": "A configured release source (one row per logical feed).",
+        "required": [
+          "id",
+          "pluginId",
+          "sourceKey",
+          "displayName",
+          "kind",
+          "enabled",
+          "pollIntervalS",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "config": {
+            "description": "Source-specific configuration (free-form)."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque etag/cursor used for conditional fetches."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440b00"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`rss-uploader` | `rss-series` | `api-feed` | `metadata-feed` | `metadata-piggyback`."
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastErrorAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastPolledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "pluginId": {
+            "type": "string",
+            "description": "Owning plugin id, or `core` for in-core synthetic sources.",
+            "example": "release-nyaa"
+          },
+          "pollIntervalS": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sourceKey": {
+            "type": "string",
+            "description": "Plugin-defined unique key.",
+            "example": "nyaa:user:tsuna69"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReleaseSourceListResponse": {
+        "type": "object",
+        "required": [
+          "sources"
+        ],
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseSourceDto"
+            }
           }
         }
       },
@@ -36922,6 +37775,45 @@
           }
         }
       },
+      "UpdateReleaseLedgerEntryRequest": {
+        "type": "object",
+        "description": "PATCH payload for ledger row state transitions.\n\nOnly `state` is patchable from the API today; the rest of the row is\nsource-controlled. `state` is validated against the canonical set:\n`announced` | `dismissed` | `marked_acquired` | `hidden`.",
+        "properties": {
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New state. See [`ReleaseLedgerEntryDto::state`] for allowed values."
+          }
+        }
+      },
+      "UpdateReleaseSourceRequest": {
+        "type": "object",
+        "description": "PATCH payload for a release source. All fields optional; omit to leave alone.",
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "pollIntervalS": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Polling interval override (seconds). Must be > 0."
+          }
+        }
+      },
       "UpdateSeriesTrackingRequest": {
         "type": "object",
         "description": "PATCH payload for tracking config. All fields are optional:\nomit a field to leave it untouched. Use a JSON `null` on a nullable field\nto clear it explicitly.",
@@ -37872,6 +38764,10 @@
       "description": "Release-tracking config and matcher aliases"
     },
     {
+      "name": "Releases",
+      "description": "Release ledger (announcements) and source admin"
+    },
+    {
       "name": "Books",
       "description": "Book details and metadata endpoints"
     },
@@ -37996,6 +38892,8 @@
       "tags": [
         "Libraries",
         "Series",
+        "Tracking",
+        "Releases",
         "Books",
         "Pages"
       ]

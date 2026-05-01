@@ -11,6 +11,7 @@ mod misc;
 mod oidc;
 mod plugins;
 mod recommendations;
+mod releases;
 mod series;
 mod setup;
 mod tasks;
@@ -41,6 +42,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(plugins::routes(state.clone()))
         .merge(user_plugins::routes(state.clone()))
         .merge(recommendations::routes(state.clone()))
+        .merge(releases::routes(state.clone()))
         // Apply state to all routes
         .with_state(state)
 }

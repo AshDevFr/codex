@@ -149,6 +149,8 @@ mod m20260503_000070_backfill_book_volume_chapter;
 mod m20260503_000071_add_metadata_refresh_config;
 // Release tracking (Phase 1): series_tracking sidecar + series_aliases
 mod m20260503_000072_create_release_tracking;
+// Release tracking (Phase 2): release_sources + release_ledger
+mod m20260503_000073_create_release_ledger;
 
 pub struct Migrator;
 
@@ -268,6 +270,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260503_000071_add_metadata_refresh_config::Migration),
             // Release tracking (Phase 1)
             Box::new(m20260503_000072_create_release_tracking::Migration),
+            // Release tracking (Phase 2)
+            Box::new(m20260503_000073_create_release_ledger::Migration),
         ]
     }
 }

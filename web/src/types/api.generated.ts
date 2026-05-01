@@ -2424,6 +2424,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/release-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all configured release sources (admin-only). */
+        get: operations["list_release_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/release-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * PATCH a release source (admin-only).
+         * @description Toggle `enabled`, override `pollIntervalS`, or rename `displayName`.
+         */
+        patch: operations["update_release_source"];
+        trace?: never;
+    };
+    "/api/v1/release-sources/{source_id}/poll-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a manual poll for a source.
+         * @description **Phase 2 stub**: returns `501 Not Implemented`. Phase 4 wires this into
+         *     the task queue (`PollReleaseSource` task type).
+         */
+        post: operations["poll_release_source_now"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cross-series inbox: announced (or filtered) ledger entries, paginated. */
+        get: operations["list_release_inbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** PATCH a ledger entry's state (general-purpose state transition). */
+        patch: operations["update_release_entry"];
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Convenience POST: dismiss a release. */
+        post: operations["dismiss_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/mark-acquired": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Convenience POST: mark a release acquired. */
+        post: operations["mark_release_acquired"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scans/active": {
         parameters: {
             query?: never;
@@ -3631,6 +3757,23 @@ export interface paths {
         put?: never;
         /** Mark all books in a series as read */
         post: operations["mark_series_as_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List release-ledger entries for a series. */
+        get: operations["list_series_releases"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12440,6 +12583,84 @@ export interface components {
             totalPages: number;
         };
         /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_ReleaseLedgerEntryDto: {
+            /** @description The data items for this page */
+            data: {
+                /**
+                 * Format: double
+                 * @description Decimal supports `12.5` etc.
+                 */
+                chapter?: number | null;
+                /** Format: double */
+                confidence: number;
+                /** Format: date-time */
+                createdAt: string;
+                /**
+                 * @description Plugin-stable identity for the release (used for dedup).
+                 * @example nyaa:1234567
+                 */
+                externalReleaseId: string;
+                /** @description Sparse `{ "jxl": true, "container": "cbz", ... }`. */
+                formatHints?: unknown;
+                /** @description Group/scanlator/uploader attribution. */
+                groupOrUploader?: string | null;
+                /**
+                 * Format: uuid
+                 * @example 550e8400-e29b-41d4-a716-446655440a00
+                 */
+                id: string;
+                /** @description Torrent info_hash, if applicable. */
+                infoHash?: string | null;
+                language?: string | null;
+                /** @description Source-specific extras (free-form). */
+                metadata?: unknown;
+                /** Format: date-time */
+                observedAt: string;
+                /** @description Where to acquire the release. */
+                payloadUrl: string;
+                /**
+                 * Format: uuid
+                 * @example 550e8400-e29b-41d4-a716-446655440002
+                 */
+                seriesId: string;
+                /**
+                 * Format: uuid
+                 * @example 550e8400-e29b-41d4-a716-446655440b00
+                 */
+                sourceId: string;
+                /** @description `announced` | `dismissed` | `marked_acquired` | `hidden`. */
+                state: string;
+                /** Format: int32 */
+                volume?: number | null;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_SeriesDto: {
             /** @description The data items for this page */
             data: {
@@ -13802,6 +14023,16 @@ export interface components {
             /** @description Total count */
             total: number;
         };
+        /**
+         * @description Response shape from the `poll-now` endpoint. Phase 4 wires this to the task
+         *     queue; Phase 2 returns a stub indicating the operation isn't implemented.
+         */
+        PollNowResponse: {
+            /** @description Human-readable message. */
+            message: string;
+            /** @description `enqueued` once Phase 4 lands; `not_implemented` until then. */
+            status: string;
+        };
         /** @description Preview scan request */
         PreviewScanRequest: {
             /**
@@ -14209,6 +14440,98 @@ export interface components {
             tokenType?: string | null;
             /** @description User information */
             user: components["schemas"]["UserInfo"];
+        };
+        /** @description A single release announcement. Sources write these; the inbox reads them. */
+        ReleaseLedgerEntryDto: {
+            /**
+             * Format: double
+             * @description Decimal supports `12.5` etc.
+             */
+            chapter?: number | null;
+            /** Format: double */
+            confidence: number;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description Plugin-stable identity for the release (used for dedup).
+             * @example nyaa:1234567
+             */
+            externalReleaseId: string;
+            /** @description Sparse `{ "jxl": true, "container": "cbz", ... }`. */
+            formatHints?: unknown;
+            /** @description Group/scanlator/uploader attribution. */
+            groupOrUploader?: string | null;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440a00
+             */
+            id: string;
+            /** @description Torrent info_hash, if applicable. */
+            infoHash?: string | null;
+            language?: string | null;
+            /** @description Source-specific extras (free-form). */
+            metadata?: unknown;
+            /** Format: date-time */
+            observedAt: string;
+            /** @description Where to acquire the release. */
+            payloadUrl: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440b00
+             */
+            sourceId: string;
+            /** @description `announced` | `dismissed` | `marked_acquired` | `hidden`. */
+            state: string;
+            /** Format: int32 */
+            volume?: number | null;
+        };
+        ReleaseLedgerListResponse: {
+            entries: components["schemas"]["ReleaseLedgerEntryDto"][];
+        };
+        /** @description A configured release source (one row per logical feed). */
+        ReleaseSourceDto: {
+            /** @description Source-specific configuration (free-form). */
+            config?: unknown;
+            /** Format: date-time */
+            createdAt: string;
+            displayName: string;
+            enabled: boolean;
+            /** @description Opaque etag/cursor used for conditional fetches. */
+            etag?: string | null;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440b00
+             */
+            id: string;
+            /** @description `rss-uploader` | `rss-series` | `api-feed` | `metadata-feed` | `metadata-piggyback`. */
+            kind: string;
+            lastError?: string | null;
+            /** Format: date-time */
+            lastErrorAt?: string | null;
+            /** Format: date-time */
+            lastPolledAt?: string | null;
+            /**
+             * @description Owning plugin id, or `core` for in-core synthetic sources.
+             * @example release-nyaa
+             */
+            pluginId: string;
+            /** Format: int32 */
+            pollIntervalS: number;
+            /**
+             * @description Plugin-defined unique key.
+             * @example nyaa:user:tsuna69
+             */
+            sourceKey: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ReleaseSourceListResponse: {
+            sources: components["schemas"]["ReleaseSourceDto"][];
         };
         /**
          * @description PUT request for full replacement of book metadata
@@ -16946,6 +17269,27 @@ export interface components {
              * @example 0.45
              */
             progressPercentage?: number | null;
+        };
+        /**
+         * @description PATCH payload for ledger row state transitions.
+         *
+         *     Only `state` is patchable from the API today; the rest of the row is
+         *     source-controlled. `state` is validated against the canonical set:
+         *     `announced` | `dismissed` | `marked_acquired` | `hidden`.
+         */
+        UpdateReleaseLedgerEntryRequest: {
+            /** @description New state. See [`ReleaseLedgerEntryDto::state`] for allowed values. */
+            state?: string | null;
+        };
+        /** @description PATCH payload for a release source. All fields optional; omit to leave alone. */
+        UpdateReleaseSourceRequest: {
+            displayName?: string | null;
+            enabled?: boolean | null;
+            /**
+             * Format: int32
+             * @description Polling interval override (seconds). Must be > 0.
+             */
+            pollIntervalS?: number | null;
         };
         /**
          * @description PATCH payload for tracking config. All fields are optional:
@@ -22721,6 +23065,275 @@ export interface operations {
             };
         };
     };
+    list_release_sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseSourceListResponse"];
+                };
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_release_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source ID */
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReleaseSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Source updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseSourceDto"];
+                };
+            };
+            /** @description Invalid update payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    poll_release_source_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source ID */
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not implemented yet (Phase 4) */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollNowResponse"];
+                };
+            };
+        };
+    };
+    list_release_inbox: {
+        parameters: {
+            query?: {
+                /** @description Filter by state. Defaults to `announced`. */
+                state?: string | null;
+                seriesId?: string | null;
+                sourceId?: string | null;
+                language?: string | null;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated inbox entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_release_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReleaseLedgerEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated ledger entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Invalid state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mark_release_acquired: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release marked acquired */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_active_scans: {
         parameters: {
             query?: never;
@@ -25648,6 +26261,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_series_releases: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Filter by state. Defaults to all states (no filter) so the per-series
+                 *     view shows the full history.
+                 */
+                state?: string | null;
+                /** @description 1-indexed page number. */
+                page?: number;
+                /** @description Items per page (max 500, default 50). */
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated ledger entries for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_ReleaseLedgerEntryDto"];
                 };
             };
             /** @description Forbidden */

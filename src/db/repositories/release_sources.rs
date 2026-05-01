@@ -1,0 +1,437 @@
+//! Repository for the `release_sources` table.
+//!
+//! One row per logical source a plugin (or core) exposes. The plugin → source
+//! relationship is many-to-one: e.g., a single Nyaa plugin instance exposes
+//! one source per uploader subscription. CRUD here, plus state-tracking
+//! helpers (`record_poll_success`, `record_poll_error`) used by the polling
+//! task in Phase 4.
+
+#![allow(dead_code)]
+
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, Set,
+};
+use uuid::Uuid;
+
+use crate::db::entities::release_sources::{
+    self, Entity as ReleaseSources, Model as ReleaseSource, kind,
+};
+
+/// Parameters for creating a new release source. Only the fields a caller is
+/// expected to choose live here; `created_at` / `updated_at` / `id` are
+/// generated.
+#[derive(Debug, Clone)]
+pub struct NewReleaseSource {
+    pub plugin_id: String,
+    pub source_key: String,
+    pub display_name: String,
+    pub kind: String,
+    pub poll_interval_s: i32,
+    pub enabled: Option<bool>,
+    pub config: Option<serde_json::Value>,
+}
+
+/// PATCH-style update payload. Each `Option<T>` distinguishes "leave alone"
+/// (`None`) from "set". For nullable columns a simple `Option<Option<T>>` is
+/// not needed at this stage because the existing fields are status fields
+/// that the caller can read-modify-write through dedicated helpers.
+#[derive(Debug, Default, Clone)]
+pub struct ReleaseSourceUpdate {
+    pub display_name: Option<String>,
+    pub enabled: Option<bool>,
+    pub poll_interval_s: Option<i32>,
+    pub config: Option<Option<serde_json::Value>>,
+}
+
+pub struct ReleaseSourceRepository;
+
+impl ReleaseSourceRepository {
+    pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<ReleaseSource>> {
+        Ok(ReleaseSources::find_by_id(id).one(db).await?)
+    }
+
+    /// Lookup by the natural composite key `(plugin_id, source_key)`.
+    pub async fn find_by_key(
+        db: &DatabaseConnection,
+        plugin_id: &str,
+        source_key: &str,
+    ) -> Result<Option<ReleaseSource>> {
+        Ok(ReleaseSources::find()
+            .filter(release_sources::Column::PluginId.eq(plugin_id))
+            .filter(release_sources::Column::SourceKey.eq(source_key))
+            .one(db)
+            .await?)
+    }
+
+    /// List all sources, ordered by `(plugin_id, source_key)` for stable display.
+    pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<ReleaseSource>> {
+        Ok(ReleaseSources::find()
+            .order_by_asc(release_sources::Column::PluginId)
+            .order_by_asc(release_sources::Column::SourceKey)
+            .all(db)
+            .await?)
+    }
+
+    /// List enabled sources only. Hot path for the scheduler.
+    pub async fn list_enabled(db: &DatabaseConnection) -> Result<Vec<ReleaseSource>> {
+        Ok(ReleaseSources::find()
+            .filter(release_sources::Column::Enabled.eq(true))
+            .order_by_asc(release_sources::Column::PluginId)
+            .order_by_asc(release_sources::Column::SourceKey)
+            .all(db)
+            .await?)
+    }
+
+    /// Count all sources (used for inventory metrics).
+    pub async fn count(db: &DatabaseConnection) -> Result<u64> {
+        Ok(ReleaseSources::find().count(db).await?)
+    }
+
+    /// Create a new source. Validates `kind` against the canonical set.
+    pub async fn create(
+        db: &DatabaseConnection,
+        params: NewReleaseSource,
+    ) -> Result<ReleaseSource> {
+        if !kind::is_valid(&params.kind) {
+            anyhow::bail!("invalid kind: {}", params.kind);
+        }
+        if params.poll_interval_s <= 0 {
+            anyhow::bail!("poll_interval_s must be positive");
+        }
+        if params.plugin_id.trim().is_empty() {
+            anyhow::bail!("plugin_id cannot be empty");
+        }
+        if params.source_key.trim().is_empty() {
+            anyhow::bail!("source_key cannot be empty");
+        }
+
+        let now = Utc::now();
+        let active = release_sources::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            plugin_id: Set(params.plugin_id),
+            source_key: Set(params.source_key),
+            display_name: Set(params.display_name),
+            kind: Set(params.kind),
+            enabled: Set(params.enabled.unwrap_or(true)),
+            poll_interval_s: Set(params.poll_interval_s),
+            last_polled_at: Set(None),
+            last_error: Set(None),
+            last_error_at: Set(None),
+            etag: Set(None),
+            config: Set(params.config),
+            created_at: Set(now),
+            updated_at: Set(now),
+        };
+        Ok(active.insert(db).await?)
+    }
+
+    /// Get-or-create a synthetic in-core source (used by the metadata-piggyback
+    /// path in Phase 5). Distinct from `create` so callers don't accidentally
+    /// create duplicate synthetic rows.
+    pub async fn get_or_create(
+        db: &DatabaseConnection,
+        params: NewReleaseSource,
+    ) -> Result<ReleaseSource> {
+        if let Some(existing) = Self::find_by_key(db, &params.plugin_id, &params.source_key).await?
+        {
+            return Ok(existing);
+        }
+        Self::create(db, params).await
+    }
+
+    /// Apply a PATCH-style update.
+    pub async fn update(
+        db: &DatabaseConnection,
+        id: Uuid,
+        update: ReleaseSourceUpdate,
+    ) -> Result<ReleaseSource> {
+        let existing = ReleaseSources::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("release source {} not found", id))?;
+
+        if let Some(interval) = update.poll_interval_s
+            && interval <= 0
+        {
+            anyhow::bail!("poll_interval_s must be positive");
+        }
+
+        let mut active: release_sources::ActiveModel = existing.into();
+        if let Some(name) = update.display_name {
+            active.display_name = Set(name);
+        }
+        if let Some(enabled) = update.enabled {
+            active.enabled = Set(enabled);
+        }
+        if let Some(interval) = update.poll_interval_s {
+            active.poll_interval_s = Set(interval);
+        }
+        if let Some(cfg) = update.config {
+            active.config = Set(cfg);
+        }
+        active.updated_at = Set(Utc::now());
+        Ok(active.update(db).await?)
+    }
+
+    /// Record a successful poll. Clears any prior error and bumps `last_polled_at`.
+    /// Optionally sets a new etag/cursor.
+    pub async fn record_poll_success(
+        db: &DatabaseConnection,
+        id: Uuid,
+        polled_at: DateTime<Utc>,
+        etag: Option<String>,
+    ) -> Result<()> {
+        let existing = ReleaseSources::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("release source {} not found", id))?;
+        let mut active: release_sources::ActiveModel = existing.into();
+        active.last_polled_at = Set(Some(polled_at));
+        active.last_error = Set(None);
+        active.last_error_at = Set(None);
+        if let Some(e) = etag {
+            active.etag = Set(Some(e));
+        }
+        active.updated_at = Set(Utc::now());
+        active.update(db).await?;
+        Ok(())
+    }
+
+    /// Record a poll error. Does NOT touch `last_polled_at` (we still consider
+    /// the poll attempt observed, but `last_error` lets the UI surface failures).
+    pub async fn record_poll_error(
+        db: &DatabaseConnection,
+        id: Uuid,
+        error: &str,
+        errored_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let existing = ReleaseSources::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("release source {} not found", id))?;
+        let mut active: release_sources::ActiveModel = existing.into();
+        active.last_error = Set(Some(error.to_string()));
+        active.last_error_at = Set(Some(errored_at));
+        active.updated_at = Set(Utc::now());
+        active.update(db).await?;
+        Ok(())
+    }
+
+    /// Delete a source. Cascades to `release_ledger` rows.
+    pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
+        let result = ReleaseSources::delete_by_id(id).exec(db).await?;
+        Ok(result.rows_affected > 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::test_helpers::create_test_db;
+
+    fn nyaa_source() -> NewReleaseSource {
+        NewReleaseSource {
+            plugin_id: "release-nyaa".to_string(),
+            source_key: "nyaa:user:tsuna69".to_string(),
+            display_name: "Nyaa - tsuna69".to_string(),
+            kind: kind::RSS_UPLOADER.to_string(),
+            poll_interval_s: 3600,
+            enabled: None,
+            config: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn create_and_lookup_roundtrip() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let created = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        assert_eq!(created.plugin_id, "release-nyaa");
+        assert!(created.enabled, "default to enabled");
+
+        let by_id = ReleaseSourceRepository::get_by_id(conn, created.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(by_id.id, created.id);
+
+        let by_key =
+            ReleaseSourceRepository::find_by_key(conn, "release-nyaa", "nyaa:user:tsuna69")
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!(by_key.id, created.id);
+    }
+
+    #[tokio::test]
+    async fn create_rejects_invalid_kind() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let mut params = nyaa_source();
+        params.kind = "frobnicate".to_string();
+        let err = ReleaseSourceRepository::create(conn, params)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("invalid kind"));
+    }
+
+    #[tokio::test]
+    async fn create_rejects_non_positive_interval() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let mut params = nyaa_source();
+        params.poll_interval_s = 0;
+        let err = ReleaseSourceRepository::create(conn, params)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("positive"));
+    }
+
+    #[tokio::test]
+    async fn get_or_create_is_idempotent_per_key() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let a = ReleaseSourceRepository::get_or_create(conn, nyaa_source())
+            .await
+            .unwrap();
+        let b = ReleaseSourceRepository::get_or_create(conn, nyaa_source())
+            .await
+            .unwrap();
+        assert_eq!(a.id, b.id, "same key returns same row");
+    }
+
+    #[tokio::test]
+    async fn list_enabled_filters_disabled_rows() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let a = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        let mut p2 = nyaa_source();
+        p2.source_key = "nyaa:user:other".to_string();
+        let b = ReleaseSourceRepository::create(conn, p2).await.unwrap();
+
+        ReleaseSourceRepository::update(
+            conn,
+            b.id,
+            ReleaseSourceUpdate {
+                enabled: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let enabled = ReleaseSourceRepository::list_enabled(conn).await.unwrap();
+        assert_eq!(enabled.len(), 1);
+        assert_eq!(enabled[0].id, a.id);
+    }
+
+    #[tokio::test]
+    async fn record_poll_success_clears_error_and_sets_etag() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let s = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+
+        // Seed an error first.
+        ReleaseSourceRepository::record_poll_error(conn, s.id, "503 upstream", Utc::now())
+            .await
+            .unwrap();
+        let after_err = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after_err.last_error.as_deref(), Some("503 upstream"));
+
+        // Successful poll clears the error and sets etag.
+        let polled_at = Utc::now();
+        ReleaseSourceRepository::record_poll_success(
+            conn,
+            s.id,
+            polled_at,
+            Some("\"etag-1\"".to_string()),
+        )
+        .await
+        .unwrap();
+        let after_ok = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after_ok.last_error, None);
+        assert_eq!(after_ok.last_error_at, None);
+        assert_eq!(after_ok.last_polled_at, Some(polled_at));
+        assert_eq!(after_ok.etag.as_deref(), Some("\"etag-1\""));
+    }
+
+    #[tokio::test]
+    async fn record_poll_error_does_not_touch_last_polled_at() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let s = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+
+        // First a success.
+        let success_at = Utc::now();
+        ReleaseSourceRepository::record_poll_success(conn, s.id, success_at, None)
+            .await
+            .unwrap();
+
+        // Then an error.
+        ReleaseSourceRepository::record_poll_error(conn, s.id, "boom", Utc::now())
+            .await
+            .unwrap();
+
+        let after = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            after.last_polled_at,
+            Some(success_at),
+            "last_polled_at preserved on error so users can see when we last got data"
+        );
+        assert_eq!(after.last_error.as_deref(), Some("boom"));
+    }
+
+    #[tokio::test]
+    async fn unique_constraint_on_plugin_id_source_key() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+
+        // Same (plugin_id, source_key) - should fail at the unique index.
+        let result = ReleaseSourceRepository::create(conn, nyaa_source()).await;
+        assert!(result.is_err(), "duplicate key must fail");
+    }
+
+    #[tokio::test]
+    async fn delete_removes_row() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let s = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+
+        let removed = ReleaseSourceRepository::delete(conn, s.id).await.unwrap();
+        assert!(removed);
+        let gone = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap();
+        assert!(gone.is_none());
+    }
+}
