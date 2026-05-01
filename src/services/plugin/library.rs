@@ -170,6 +170,8 @@ pub async fn build_user_library(
             genres,
             tags,
             total_book_count: meta.and_then(|m| m.total_book_count),
+            total_volume_count: meta.and_then(|m| m.total_volume_count),
+            total_chapter_count: meta.and_then(|m| m.total_chapter_count),
             external_ids,
             reading_status,
             books_read,

@@ -68,6 +68,8 @@ fn create_test_metadata(title: &str) -> PluginSeriesMetadata {
         status: None,
         year: None,
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         language: None,
         age_rating: None,
         reading_direction: None,
