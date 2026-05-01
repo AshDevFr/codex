@@ -65,6 +65,9 @@ pub enum Relation {
     SeriesTracking,
     #[sea_orm(has_many = "super::series_aliases::Entity")]
     SeriesAliases,
+    // Release ledger entries for this series (Phase 2).
+    #[sea_orm(has_many = "super::release_ledger::Entity")]
+    ReleaseLedger,
 }
 
 impl Related<super::books::Entity> for Entity {
@@ -182,6 +185,12 @@ impl Related<super::series_tracking::Entity> for Entity {
 impl Related<super::series_aliases::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::SeriesAliases.def()
+    }
+}
+
+impl Related<super::release_ledger::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ReleaseLedger.def()
     }
 }
 

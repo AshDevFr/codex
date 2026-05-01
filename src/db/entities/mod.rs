@@ -42,6 +42,8 @@ pub mod user_plugins;
 
 // Series metadata enhancement entities
 pub mod genres;
+pub mod release_ledger;
+pub mod release_sources;
 pub mod series_aliases;
 pub mod series_alternate_titles;
 pub mod series_covers;

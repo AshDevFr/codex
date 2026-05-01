@@ -17,6 +17,8 @@ pub mod page;
 pub mod plugin_failures;
 pub mod plugins;
 pub mod read_progress;
+pub mod release_ledger;
+pub mod release_sources;
 pub mod series;
 pub mod series_aliases;
 pub mod series_covers;
@@ -65,6 +67,12 @@ pub use page::PageRepository;
 pub use plugin_failures::{FailureContext, PluginFailuresRepository};
 pub use plugins::PluginsRepository;
 pub use read_progress::ReadProgressRepository;
+#[allow(unused_imports)]
+pub use release_ledger::{
+    LedgerInboxFilter, NewReleaseEntry, RecordOutcome, ReleaseLedgerRepository,
+};
+#[allow(unused_imports)]
+pub use release_sources::{NewReleaseSource, ReleaseSourceRepository, ReleaseSourceUpdate};
 pub use series::{SeriesQueryOptions, SeriesQuerySort, SeriesRepository, SeriesSortFieldRepo};
 #[allow(unused_imports)]
 pub use series_aliases::SeriesAliasRepository;
