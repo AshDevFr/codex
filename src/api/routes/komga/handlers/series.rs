@@ -829,8 +829,12 @@ async fn build_series_dto(
             genres_lock: m.genres_lock,
             tags: tag_names,
             tags_lock: m.tags_lock,
-            total_book_count: m.total_book_count,
-            total_book_count_lock: m.total_book_count_lock,
+            // Komga's `totalBookCount` is volume-shaped semantically, so we
+            // map our `total_volume_count` (and its lock) to it. If/when
+            // Komga adds a chapter-count field upstream, surface
+            // `total_chapter_count` there too.
+            total_book_count: m.total_volume_count,
+            total_book_count_lock: m.total_volume_count_lock,
             sharing_labels: Vec::new(),
             sharing_labels_lock: false,
             links,
@@ -886,7 +890,7 @@ async fn build_series_dto(
         deleted: false,
         oneshot: metadata
             .as_ref()
-            .and_then(|m| m.total_book_count)
+            .and_then(|m| m.total_volume_count)
             .map(|count| count == 1)
             .unwrap_or(book_count == 1),
     })

@@ -2002,6 +2002,8 @@ async fn test_replace_series_metadata_success() {
         year: Some(2020),
         reading_direction: Some("ltr".to_string()),
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         custom_metadata: Some(serde_json::json!({"tag": "value"})),
         authors: None,
     };
@@ -2077,6 +2079,8 @@ async fn test_replace_series_metadata_clears_omitted_fields() {
         year: None, // Should clear year
         reading_direction: None,
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         custom_metadata: None,
         authors: None,
     };
@@ -2118,6 +2122,8 @@ async fn test_replace_series_metadata_not_found() {
         year: None,
         reading_direction: None,
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         custom_metadata: None,
         authors: None,
     };
@@ -2164,6 +2170,8 @@ async fn test_replace_series_metadata_without_auth() {
         year: None,
         reading_direction: None,
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         custom_metadata: None,
         authors: None,
     };
@@ -4897,7 +4905,7 @@ async fn test_list_series_filtered_by_completion_complete() {
     let complete_series = SeriesRepository::create(&db, library.id, "Complete Series", None)
         .await
         .unwrap();
-    SeriesMetadataRepository::update_total_book_count(&db, complete_series.id, Some(3))
+    SeriesMetadataRepository::update_total_volume_count(&db, complete_series.id, Some(3))
         .await
         .unwrap();
     for i in 1..=3 {
@@ -4915,7 +4923,7 @@ async fn test_list_series_filtered_by_completion_complete() {
     let incomplete_series = SeriesRepository::create(&db, library.id, "Incomplete Series", None)
         .await
         .unwrap();
-    SeriesMetadataRepository::update_total_book_count(&db, incomplete_series.id, Some(5))
+    SeriesMetadataRepository::update_total_volume_count(&db, incomplete_series.id, Some(5))
         .await
         .unwrap();
     for i in 1..=2 {
@@ -6000,6 +6008,8 @@ async fn test_replace_series_metadata_with_authors() {
         year: None,
         reading_direction: None,
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         custom_metadata: None,
         authors: Some(vec![
             serde_json::from_value(serde_json::json!({
@@ -6067,6 +6077,8 @@ async fn test_replace_series_metadata_clears_authors_when_omitted() {
         year: None,
         reading_direction: None,
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         custom_metadata: None,
         authors: Some(vec![
             serde_json::from_value(serde_json::json!({
@@ -6099,6 +6111,8 @@ async fn test_replace_series_metadata_clears_authors_when_omitted() {
         year: None,
         reading_direction: None,
         total_book_count: None,
+        total_volume_count: None,
+        total_chapter_count: None,
         custom_metadata: None,
         authors: None,
     };

@@ -1079,20 +1079,46 @@ pub async fn preview_series_metadata(
         &mut not_provided,
     ));
 
-    // Total Book Count
+    // Total Volume Count.
+    //
+    // Backward-compat: a plugin that still sends only the legacy
+    // `total_book_count` is treated as if it sent `total_volume_count`. The
+    // legacy compatibility shim is removed in Phase 9.
+    let proposed_volume_count = plugin_metadata
+        .total_volume_count
+        .or(plugin_metadata.total_book_count);
     fields.push(build_field_preview(
-        "totalBookCount",
+        "totalVolumeCount",
         current_metadata
             .as_ref()
-            .and_then(|m| m.total_book_count.map(|v| serde_json::json!(v))),
+            .and_then(|m| m.total_volume_count.map(|v| serde_json::json!(v))),
+        proposed_volume_count.map(|v| serde_json::json!(v)),
+        current_metadata
+            .as_ref()
+            .map(|m| m.total_volume_count_lock)
+            .unwrap_or(false),
+        has_permission(PluginPermission::MetadataWriteTotalVolumeCount),
+        &mut will_apply,
+        &mut locked,
+        &mut no_permission,
+        &mut unchanged,
+        &mut not_provided,
+    ));
+
+    // Total Chapter Count.
+    fields.push(build_field_preview(
+        "totalChapterCount",
+        current_metadata
+            .as_ref()
+            .and_then(|m| m.total_chapter_count.map(|v| serde_json::json!(v))),
         plugin_metadata
-            .total_book_count
+            .total_chapter_count
             .map(|v| serde_json::json!(v)),
         current_metadata
             .as_ref()
-            .map(|m| m.total_book_count_lock)
+            .map(|m| m.total_chapter_count_lock)
             .unwrap_or(false),
-        has_permission(PluginPermission::MetadataWriteTotalBookCount),
+        has_permission(PluginPermission::MetadataWriteTotalChapterCount),
         &mut will_apply,
         &mut locked,
         &mut no_permission,

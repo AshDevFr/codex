@@ -8263,9 +8263,23 @@ export interface components {
             status?: string | null;
             /**
              * Format: int32
-             * @description Expected total book count (for ongoing series)
+             * @description Expected total book count (for ongoing series).
+             *
+             *     DEPRECATED: kept for one phase of backward-compat with API clients
+             *     pinned to the legacy field. Sets `total_volume_count` under the hood.
+             *     Removed in Phase 9 of the metadata-count-split plan.
              */
             totalBookCount?: number | null;
+            /**
+             * Format: float
+             * @description Expected total chapter count (for chapter-organized series). May be fractional.
+             */
+            totalChapterCount?: number | null;
+            /**
+             * Format: int32
+             * @description Expected total volume count (for volume-organized series).
+             */
+            totalVolumeCount?: number | null;
             /**
              * Format: int32
              * @description Release year
@@ -9664,10 +9678,25 @@ export interface components {
             titleSort?: string | null;
             /**
              * Format: int32
-             * @description Expected total book count (for ongoing series)
+             * @description Expected total book count (for ongoing series).
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCount`. Removed in Phase 9.
              * @example 4
              */
             totalBookCount?: number | null;
+            /**
+             * Format: float
+             * @description Expected total chapter count (for chapter-organized series). May be fractional.
+             * @example 109.5
+             */
+            totalChapterCount?: number | null;
+            /**
+             * Format: int32
+             * @description Expected total volume count (for volume-organized series).
+             * @example 4
+             */
+            totalVolumeCount?: number | null;
             /**
              * Format: date-time
              * @example 2024-01-15T10:30:00Z
@@ -11176,12 +11205,36 @@ export interface components {
             titleSortLock?: boolean;
             /**
              * Format: int32
-             * @description Expected total book count
+             * @description Expected total book count.
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.
              * @example 110
              */
             totalBookCount?: number | null;
-            /** @description Whether total_book_count is locked */
+            /**
+             * @description Whether total_book_count is locked.
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCountLock`. Removed in Phase 9.
+             */
             totalBookCountLock?: boolean;
+            /**
+             * Format: float
+             * @description Expected total chapter count (may be fractional)
+             * @example 1100.5
+             */
+            totalChapterCount?: number | null;
+            /** @description Whether total_chapter_count is locked */
+            totalChapterCountLock?: boolean;
+            /**
+             * Format: int32
+             * @description Expected total volume count
+             * @example 110
+             */
+            totalVolumeCount?: number | null;
+            /** @description Whether total_volume_count is locked */
+            totalVolumeCountLock?: boolean;
             /**
              * Format: int32
              * @description Publication year
@@ -11283,10 +11336,23 @@ export interface components {
              */
             titleSort: boolean;
             /**
-             * @description Whether the total_book_count field is locked
+             * @description Whether the total_book_count field is locked.
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCountLock`. Removed in Phase 9.
              * @example false
              */
             totalBookCount: boolean;
+            /**
+             * @description Whether the total_chapter_count field is locked
+             * @example false
+             */
+            totalChapterCount: boolean;
+            /**
+             * @description Whether the total_volume_count field is locked
+             * @example false
+             */
+            totalVolumeCount: boolean;
             /**
              * @description Whether the year field is locked
              * @example false
@@ -12669,10 +12735,26 @@ export interface components {
             titleSort?: string | null;
             /**
              * Format: int32
-             * @description Expected total book count (for ongoing series)
+             * @description Expected total book count (for ongoing series).
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Sets
+             *     `totalVolumeCount` under the hood. Removed in Phase 9 of the
+             *     metadata-count-split plan.
              * @example 4
              */
             totalBookCount?: number | null;
+            /**
+             * Format: float
+             * @description Expected total chapter count (for chapter-organized series). May be fractional.
+             * @example 109.5
+             */
+            totalChapterCount?: number | null;
+            /**
+             * Format: int32
+             * @description Expected total volume count (for volume-organized series)
+             * @example 4
+             */
+            totalVolumeCount?: number | null;
             /**
              * Format: int32
              * @description Release year
@@ -13703,9 +13785,22 @@ export interface components {
             title: string;
             /**
              * Format: int32
-             * @description Total expected number of books/volumes in the series
+             * @description Total expected number of books/volumes in the series.
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCount`. Removed in Phase 9 of metadata-count-split.
              */
             totalBookCount?: number | null;
+            /**
+             * Format: float
+             * @description Total expected number of chapters in the series. May be fractional.
+             */
+            totalChapterCount?: number | null;
+            /**
+             * Format: int32
+             * @description Total expected number of volumes in the series.
+             */
+            totalVolumeCount?: number | null;
         };
         /** @description A tag with relevance rank from the source service */
         RecommendationTagDto: {
@@ -14046,10 +14141,27 @@ export interface components {
             titleSort?: string | null;
             /**
              * Format: int32
-             * @description Expected total book count (for ongoing series)
+             * @description Expected total book count (for ongoing series).
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCount`. Use `totalVolumeCount` and/or `totalChapterCount`
+             *     going forward; this field is removed in Phase 9 of the
+             *     metadata-count-split plan.
              * @example 4
              */
             totalBookCount?: number | null;
+            /**
+             * Format: float
+             * @description Expected total chapter count (for chapter-organized series). May be fractional.
+             * @example 109.5
+             */
+            totalChapterCount?: number | null;
+            /**
+             * Format: int32
+             * @description Expected total volume count (for volume-organized series).
+             * @example 4
+             */
+            totalVolumeCount?: number | null;
             /**
              * Format: int32
              * @description Release year
@@ -14751,10 +14863,25 @@ export interface components {
             titleSort?: string | null;
             /**
              * Format: int32
-             * @description Expected total book count (for ongoing series)
+             * @description Expected total book count (for ongoing series).
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCount`. Removed in Phase 9.
              * @example 4
              */
             totalBookCount?: number | null;
+            /**
+             * Format: float
+             * @description Expected total chapter count (for chapter-organized series). May be fractional.
+             * @example 109.5
+             */
+            totalChapterCount?: number | null;
+            /**
+             * Format: int32
+             * @description Expected total volume count (for volume-organized series).
+             * @example 4
+             */
+            totalVolumeCount?: number | null;
             /**
              * Format: date-time
              * @description When the metadata was last updated
@@ -14850,10 +14977,25 @@ export interface components {
             titleSort?: string | null;
             /**
              * Format: int32
-             * @description Expected total book count (for ongoing series)
+             * @description Expected total book count (for ongoing series).
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Mirrors
+             *     `totalVolumeCount`. Removed in Phase 9 of the metadata-count-split plan.
              * @example 4
              */
             totalBookCount?: number | null;
+            /**
+             * Format: float
+             * @description Expected total chapter count (for chapter-organized series). May be fractional.
+             * @example 109.5
+             */
+            totalChapterCount?: number | null;
+            /**
+             * Format: int32
+             * @description Expected total volume count (for volume-organized series).
+             * @example 4
+             */
+            totalVolumeCount?: number | null;
             /**
              * Format: date-time
              * @description Last update timestamp
@@ -16263,10 +16405,23 @@ export interface components {
              */
             titleSort?: boolean | null;
             /**
-             * @description Whether to lock the total_book_count field
+             * @description Whether to lock the total_book_count field.
+             *
+             *     DEPRECATED: kept for one phase of backward-compat. Sets
+             *     `totalVolumeCountLock` under the hood. Removed in Phase 9.
              * @example false
              */
             totalBookCount?: boolean | null;
+            /**
+             * @description Whether to lock the total_chapter_count field
+             * @example false
+             */
+            totalChapterCount?: boolean | null;
+            /**
+             * @description Whether to lock the total_volume_count field
+             * @example false
+             */
+            totalVolumeCount?: boolean | null;
             /**
              * @description Whether to lock the year field
              * @example false

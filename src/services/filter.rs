@@ -668,14 +668,18 @@ impl FilterService {
     /// Filter series by completion status
     ///
     /// A series is considered "complete" when:
-    /// - It has a total_book_count set in metadata AND
-    /// - The actual book_count equals total_book_count
+    /// - It has a total_volume_count set in metadata AND
+    /// - The actual book_count equals total_volume_count
     ///
     /// A series is considered "incomplete" (missing books) when:
-    /// - It has a total_book_count set in metadata AND
-    /// - The actual book_count is less than total_book_count
+    /// - It has a total_volume_count set in metadata AND
+    /// - The actual book_count is less than total_volume_count
     ///
-    /// Series without total_book_count are excluded from both filters.
+    /// Series without total_volume_count are excluded from both filters.
+    /// Note: chapter-organized series (where total_chapter_count is the
+    /// meaningful axis) are deliberately not handled here; this filter targets
+    /// volume-organized libraries. A separate chapter-completion filter can be
+    /// added if/when needed.
     async fn filter_by_completion(
         db: &DatabaseConnection,
         operator: &BoolOperator,
@@ -684,12 +688,12 @@ impl FilterService {
         use crate::db::entities::{books, series_metadata};
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        // Get all series with total_book_count set
+        // Get all series with total_volume_count set
         let series_with_total: Vec<(Uuid, i32)> = series_metadata::Entity::find()
-            .filter(series_metadata::Column::TotalBookCount.is_not_null())
+            .filter(series_metadata::Column::TotalVolumeCount.is_not_null())
             .select_only()
             .column(series_metadata::Column::SeriesId)
-            .column(series_metadata::Column::TotalBookCount)
+            .column(series_metadata::Column::TotalVolumeCount)
             .into_tuple()
             .all(db)
             .await?;
@@ -733,9 +737,9 @@ impl FilterService {
         // Determine which series match the completion filter
         let mut result = HashSet::new();
 
-        for (series_id, total_book_count) in series_with_total {
+        for (series_id, total_volume_count) in series_with_total {
             let actual_count = book_count_map.get(&series_id).copied().unwrap_or(0);
-            let is_complete = actual_count >= total_book_count as i64;
+            let is_complete = actual_count >= total_volume_count as i64;
 
             let matches = match operator {
                 BoolOperator::IsTrue => is_complete,

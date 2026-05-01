@@ -207,19 +207,23 @@ pub(crate) async fn build_push_entries(
             progress_count,
         );
 
-        // Use pre-fetched series metadata (for total_book_count)
-        let total_book_count = metadata_map
-            .get(&ext_id.series_id)
-            .and_then(|m| m.total_book_count)
+        // Use pre-fetched series metadata for completion / progress totals.
+        let series_meta = metadata_map.get(&ext_id.series_id);
+        let total_volume_count = series_meta
+            .and_then(|m| m.total_volume_count)
             .filter(|&total| total > 0);
+        let total_chapter_count = series_meta
+            .and_then(|m| m.total_chapter_count)
+            .filter(|c| c.is_finite() && *c > 0.0);
 
         // Mark as Completed only when:
         // 1. All local books are read, AND
-        // 2. The series has a known total_book_count in metadata, AND
-        // 3. completed_count >= total_book_count
+        // 2. The series has a known total_volume_count in metadata, AND
+        // 3. completed_count >= total_volume_count
         // Otherwise default to Reading — we can't be sure the library is complete.
         let status = if all_completed {
-            let is_truly_complete = total_book_count.is_some_and(|total| completed_count >= total);
+            let is_truly_complete =
+                total_volume_count.is_some_and(|total| completed_count >= total);
             if is_truly_complete {
                 SyncReadingStatus::Completed
             } else {
@@ -238,8 +242,8 @@ pub(crate) async fn build_push_entries(
             chapters: None,
             volumes: Some(progress_count),
             pages: None,
-            total_chapters: None,
-            total_volumes: total_book_count,
+            total_chapters: total_chapter_count.map(|c| c as i32),
+            total_volumes: total_volume_count,
         };
 
         // Look up rating/notes if sync_ratings is enabled
@@ -474,13 +478,17 @@ async fn build_unmatched_entries(
             completed_count
         };
 
-        let total_book_count = metadata_map
-            .get(&series_id)
-            .and_then(|m| m.total_book_count)
+        let series_meta = metadata_map.get(&series_id);
+        let total_volume_count = series_meta
+            .and_then(|m| m.total_volume_count)
             .filter(|&total| total > 0);
+        let total_chapter_count = series_meta
+            .and_then(|m| m.total_chapter_count)
+            .filter(|c| c.is_finite() && *c > 0.0);
 
         let status = if all_completed {
-            let is_truly_complete = total_book_count.is_some_and(|total| completed_count >= total);
+            let is_truly_complete =
+                total_volume_count.is_some_and(|total| completed_count >= total);
             if is_truly_complete {
                 SyncReadingStatus::Completed
             } else {
@@ -494,8 +502,8 @@ async fn build_unmatched_entries(
             chapters: None,
             volumes: Some(progress_count),
             pages: None,
-            total_chapters: None,
-            total_volumes: total_book_count,
+            total_chapters: total_chapter_count.map(|c| c as i32),
+            total_volumes: total_volume_count,
         };
 
         let (score, notes) = if settings.sync_ratings {

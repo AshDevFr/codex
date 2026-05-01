@@ -410,7 +410,9 @@ async fn series_to_full_dtos_batched(
                 language: metadata.language.clone(),
                 reading_direction: metadata.reading_direction.clone(),
                 year: metadata.year,
-                total_book_count: metadata.total_book_count,
+                total_book_count: metadata.total_volume_count,
+                total_volume_count: metadata.total_volume_count,
+                total_chapter_count: metadata.total_chapter_count,
                 custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
                 authors: metadata
                     .authors_json
@@ -427,7 +429,9 @@ async fn series_to_full_dtos_batched(
                     language: metadata.language_lock,
                     reading_direction: metadata.reading_direction_lock,
                     year: metadata.year_lock,
-                    total_book_count: metadata.total_book_count_lock,
+                    total_book_count: metadata.total_volume_count_lock,
+                    total_volume_count: metadata.total_volume_count_lock,
+                    total_chapter_count: metadata.total_chapter_count_lock,
                     genres: metadata.genres_lock,
                     tags: metadata.tags_lock,
                     custom_metadata: metadata.custom_metadata_lock,
@@ -2501,7 +2505,11 @@ pub async fn replace_series_metadata(
     active.language = Set(request.language.clone());
     active.reading_direction = Set(request.reading_direction.clone());
     active.year = Set(request.year);
-    active.total_book_count = Set(request.total_book_count);
+    // Legacy `total_book_count` requests route to `total_volume_count`; if both
+    // are present, the new field wins. Removed in Phase 9 of metadata-count-split.
+    let resolved_volume_count = request.total_volume_count.or(request.total_book_count);
+    active.total_volume_count = Set(resolved_volume_count);
+    active.total_chapter_count = Set(request.total_chapter_count);
 
     // Validate and convert custom_metadata from JSON Value to String
     if let Some(ref cm) = request.custom_metadata {
@@ -2556,7 +2564,9 @@ pub async fn replace_series_metadata(
         language: updated_metadata.language,
         reading_direction: updated_metadata.reading_direction,
         year: updated_metadata.year,
-        total_book_count: updated_metadata.total_book_count,
+        total_book_count: updated_metadata.total_volume_count,
+        total_volume_count: updated_metadata.total_volume_count,
+        total_chapter_count: updated_metadata.total_chapter_count,
         custom_metadata: parse_custom_metadata(updated_metadata.custom_metadata.as_deref()),
         authors: updated_metadata
             .authors_json
@@ -2700,7 +2710,9 @@ pub async fn reset_series_metadata(
         language: metadata.language,
         reading_direction: metadata.reading_direction,
         year: metadata.year,
-        total_book_count: metadata.total_book_count,
+        total_book_count: metadata.total_volume_count,
+        total_volume_count: metadata.total_volume_count,
+        total_chapter_count: metadata.total_chapter_count,
         custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
         authors: metadata
             .authors_json
@@ -2717,7 +2729,9 @@ pub async fn reset_series_metadata(
             language: metadata.language_lock,
             reading_direction: metadata.reading_direction_lock,
             year: metadata.year_lock,
-            total_book_count: metadata.total_book_count_lock,
+            total_book_count: metadata.total_volume_count_lock,
+            total_volume_count: metadata.total_volume_count_lock,
+            total_chapter_count: metadata.total_chapter_count_lock,
             genres: metadata.genres_lock,
             tags: metadata.tags_lock,
             custom_metadata: metadata.custom_metadata_lock,
@@ -2825,8 +2839,19 @@ pub async fn patch_series_metadata(
         metadata_active.year = Set(opt);
         has_changes = true;
     }
-    if let Some(opt) = request.total_book_count.into_nested_option() {
-        metadata_active.total_book_count = Set(opt);
+    // Legacy `total_book_count` patches route to `total_volume_count`; if both
+    // are sent, the new field wins. Removed in Phase 9 of metadata-count-split.
+    let legacy_volume_count_patch = request.total_book_count.into_nested_option();
+    let volume_count_patch = request
+        .total_volume_count
+        .into_nested_option()
+        .or(legacy_volume_count_patch);
+    if let Some(opt) = volume_count_patch {
+        metadata_active.total_volume_count = Set(opt);
+        has_changes = true;
+    }
+    if let Some(opt) = request.total_chapter_count.into_nested_option() {
+        metadata_active.total_chapter_count = Set(opt);
         has_changes = true;
     }
     if let Some(opt) = request.custom_metadata.into_nested_option() {
@@ -2887,7 +2912,9 @@ pub async fn patch_series_metadata(
         language: updated_metadata.language,
         reading_direction: updated_metadata.reading_direction,
         year: updated_metadata.year,
-        total_book_count: updated_metadata.total_book_count,
+        total_book_count: updated_metadata.total_volume_count,
+        total_volume_count: updated_metadata.total_volume_count,
+        total_chapter_count: updated_metadata.total_chapter_count,
         custom_metadata: parse_custom_metadata(updated_metadata.custom_metadata.as_deref()),
         authors: updated_metadata
             .authors_json
@@ -3032,7 +3059,9 @@ pub async fn get_series_metadata(
         language: metadata.language,
         reading_direction: metadata.reading_direction,
         year: metadata.year,
-        total_book_count: metadata.total_book_count,
+        total_book_count: metadata.total_volume_count,
+        total_volume_count: metadata.total_volume_count,
+        total_chapter_count: metadata.total_chapter_count,
         custom_metadata: parse_custom_metadata(metadata.custom_metadata.as_deref()),
         authors: metadata
             .authors_json
@@ -3049,7 +3078,9 @@ pub async fn get_series_metadata(
             language: metadata.language_lock,
             reading_direction: metadata.reading_direction_lock,
             year: metadata.year_lock,
-            total_book_count: metadata.total_book_count_lock,
+            total_book_count: metadata.total_volume_count_lock,
+            total_volume_count: metadata.total_volume_count_lock,
+            total_chapter_count: metadata.total_chapter_count_lock,
             genres: metadata.genres_lock,
             tags: metadata.tags_lock,
             custom_metadata: metadata.custom_metadata_lock,
@@ -3154,8 +3185,15 @@ pub async fn update_metadata_locks(
         active.year_lock = Set(v);
         has_changes = true;
     }
-    if let Some(v) = request.total_book_count {
-        active.total_book_count_lock = Set(v);
+    // Legacy `total_book_count` lock route to `total_volume_count_lock`. If
+    // both are sent, the new field wins. Removed in Phase 9.
+    let resolved_volume_lock = request.total_volume_count.or(request.total_book_count);
+    if let Some(v) = resolved_volume_lock {
+        active.total_volume_count_lock = Set(v);
+        has_changes = true;
+    }
+    if let Some(v) = request.total_chapter_count {
+        active.total_chapter_count_lock = Set(v);
         has_changes = true;
     }
     if let Some(v) = request.genres {
@@ -3208,7 +3246,9 @@ pub async fn update_metadata_locks(
         language: updated.language_lock,
         reading_direction: updated.reading_direction_lock,
         year: updated.year_lock,
-        total_book_count: updated.total_book_count_lock,
+        total_book_count: updated.total_volume_count_lock,
+        total_volume_count: updated.total_volume_count_lock,
+        total_chapter_count: updated.total_chapter_count_lock,
         genres: updated.genres_lock,
         tags: updated.tags_lock,
         custom_metadata: updated.custom_metadata_lock,
@@ -3266,7 +3306,9 @@ pub async fn get_metadata_locks(
         language: metadata.language_lock,
         reading_direction: metadata.reading_direction_lock,
         year: metadata.year_lock,
-        total_book_count: metadata.total_book_count_lock,
+        total_book_count: metadata.total_volume_count_lock,
+        total_volume_count: metadata.total_volume_count_lock,
+        total_chapter_count: metadata.total_chapter_count_lock,
         genres: metadata.genres_lock,
         tags: metadata.tags_lock,
         custom_metadata: metadata.custom_metadata_lock,

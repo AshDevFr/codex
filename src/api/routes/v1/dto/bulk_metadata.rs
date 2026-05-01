@@ -81,10 +81,24 @@ pub struct BulkPatchSeriesMetadataRequest {
     #[schema(value_type = Option<i32>, nullable = true)]
     pub year: super::patch::PatchValue<i32>,
 
-    /// Expected total book count (for ongoing series)
+    /// Expected total book count (for ongoing series).
+    ///
+    /// DEPRECATED: kept for one phase of backward-compat with API clients
+    /// pinned to the legacy field. Sets `total_volume_count` under the hood.
+    /// Removed in Phase 9 of the metadata-count-split plan.
     #[serde(default)]
     #[schema(value_type = Option<i32>, nullable = true)]
     pub total_book_count: super::patch::PatchValue<i32>,
+
+    /// Expected total volume count (for volume-organized series).
+    #[serde(default)]
+    #[schema(value_type = Option<i32>, nullable = true)]
+    pub total_volume_count: super::patch::PatchValue<i32>,
+
+    /// Expected total chapter count (for chapter-organized series). May be fractional.
+    #[serde(default)]
+    #[schema(value_type = Option<f32>, nullable = true)]
+    pub total_chapter_count: super::patch::PatchValue<f32>,
 
     /// Custom JSON metadata (uses RFC 7386 JSON Merge Patch semantics)
     #[serde(default)]

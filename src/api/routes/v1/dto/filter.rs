@@ -95,7 +95,7 @@ pub enum SeriesCondition {
         #[serde(rename = "sharingTag")]
         sharing_tag: FieldOperator,
     },
-    /// Filter by series completion status (complete/incomplete based on book_count vs total_book_count)
+    /// Filter by series completion status (complete/incomplete based on book_count vs total_volume_count)
     Completion { completion: BoolOperator },
     /// Filter by whether the series has an external source ID linked
     HasExternalSourceId {

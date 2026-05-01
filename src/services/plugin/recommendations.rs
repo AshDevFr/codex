@@ -126,9 +126,20 @@ pub struct Recommendation {
     /// Year the series started
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_year: Option<i32>,
-    /// Total expected number of books/volumes in the series
+    /// Total expected number of books/volumes in the series.
+    ///
+    /// DEPRECATED: kept for one phase of backward-compat with older
+    /// recommendation plugins. Plugins should populate `total_volume_count`
+    /// and/or `total_chapter_count` instead. Removed in Phase 9 of the
+    /// metadata-count-split plan.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_book_count: Option<i32>,
+    /// Total expected number of volumes in the series, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_volume_count: Option<i32>,
+    /// Total expected number of chapters in the series, when known. May be fractional.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_chapter_count: Option<f32>,
     /// Average user rating on the source service (0-100 scale)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rating: Option<i32>,
@@ -328,6 +339,8 @@ mod tests {
                 country_of_origin: None,
                 start_year: None,
                 total_book_count: Some(27),
+                total_volume_count: Some(27),
+                total_chapter_count: None,
                 rating: Some(85),
                 popularity: Some(120000),
             }],
@@ -397,6 +410,8 @@ mod tests {
             country_of_origin: Some("JP".to_string()),
             start_year: Some(1994),
             total_book_count: Some(18),
+            total_volume_count: Some(18),
+            total_chapter_count: Some(162.0),
             rating: Some(92),
             popularity: Some(85000),
         };
@@ -417,6 +432,8 @@ mod tests {
         assert!(json["inLibrary"].as_bool().unwrap());
         assert_eq!(json["status"], "ended");
         assert_eq!(json["totalBookCount"], 18);
+        assert_eq!(json["totalVolumeCount"], 18);
+        assert_eq!(json["totalChapterCount"], 162.0);
         assert_eq!(json["rating"], 92);
         assert_eq!(json["popularity"], 85000);
     }
@@ -447,6 +464,8 @@ mod tests {
         assert!(rec.country_of_origin.is_none());
         assert!(rec.start_year.is_none());
         assert!(rec.total_book_count.is_none());
+        assert!(rec.total_volume_count.is_none());
+        assert!(rec.total_chapter_count.is_none());
         assert!(rec.rating.is_none());
         assert!(rec.popularity.is_none());
     }
@@ -471,6 +490,8 @@ mod tests {
             country_of_origin: None,
             start_year: None,
             total_book_count: None,
+            total_volume_count: None,
+            total_chapter_count: None,
             rating: None,
             popularity: None,
         };
@@ -488,6 +509,8 @@ mod tests {
         assert!(!obj.contains_key("countryOfOrigin"));
         assert!(!obj.contains_key("startYear"));
         assert!(!obj.contains_key("totalBookCount"));
+        assert!(!obj.contains_key("totalVolumeCount"));
+        assert!(!obj.contains_key("totalChapterCount"));
         assert!(!obj.contains_key("rating"));
         assert!(!obj.contains_key("popularity"));
     }

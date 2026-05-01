@@ -413,6 +413,7 @@ mod tests {
             tags: Some("tag1; tag2".to_string()),
             alternate_titles: None,
             expected_book_count: Some(20),
+            expected_chapter_count: None,
             actual_book_count: Some(15),
             unread_book_count: Some(5),
             progress: Some(66.7),
