@@ -282,9 +282,12 @@ async fn analyze_single_book(
     // Resolve book number using the library's number strategy
     let resolved_number = resolve_book_number(db, &book, &metadata, metadata_number).await;
 
-    // Resolve book title using the library's book naming strategy
-    // Note: title and number are now stored in book_metadata, not books table
+    // Resolve book title using the library's book metadata strategy.
+    // Note: title and number are now stored in book_metadata, not books table.
     let resolved_title = resolve_book_title(db, &book, &metadata, resolved_number).await;
+    // Phase 11: resolve structured volume/chapter via the same strategy.
+    let resolved_classification =
+        resolve_book_classification(db, &book, &metadata, resolved_number).await;
     let resolved_number_decimal =
         resolved_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
 
@@ -506,7 +509,16 @@ async fn analyze_single_book(
                 volume: if existing.volume_lock {
                     existing.volume
                 } else {
-                    comic_info.volume
+                    // Strategy-resolved volume (filename / metadata / etc.)
+                    // takes precedence over raw ComicInfo because the strategy
+                    // is what the library was configured with. Falls through
+                    // to ComicInfo for strategies that don't extract volume.
+                    resolved_classification.volume.or(comic_info.volume)
+                },
+                chapter: if existing.chapter_lock {
+                    existing.chapter
+                } else {
+                    resolved_classification.chapter.or(existing.chapter)
                 },
                 count: if existing.count_lock {
                     existing.count
@@ -546,6 +558,7 @@ async fn analyze_single_book(
                 month_lock: existing.month_lock,
                 day_lock: existing.day_lock,
                 volume_lock: existing.volume_lock,
+                chapter_lock: existing.chapter_lock,
                 count_lock: existing.count_lock,
                 isbns_lock: existing.isbns_lock,
                 // New Phase 1 lock fields - preserve existing
@@ -586,7 +599,10 @@ async fn analyze_single_book(
                 year: comic_info.year,
                 month: comic_info.month,
                 day: comic_info.day,
-                volume: comic_info.volume,
+                // Strategy-resolved volume takes precedence; ComicInfo is the
+                // fallback for strategies that don't parse a volume.
+                volume: resolved_classification.volume.or(comic_info.volume),
+                chapter: resolved_classification.chapter,
                 count: comic_info.count,
                 isbns: isbns_json,
                 // New Phase 1 fields
@@ -618,6 +634,7 @@ async fn analyze_single_book(
                 month_lock: false,
                 day_lock: false,
                 volume_lock: false,
+                chapter_lock: false,
                 count_lock: false,
                 isbns_lock: false,
                 // New Phase 1 lock fields
@@ -749,7 +766,16 @@ async fn analyze_single_book(
                 year: existing.year,
                 month: existing.month,
                 day: existing.day,
-                volume: existing.volume,
+                volume: if existing.volume_lock {
+                    existing.volume
+                } else {
+                    resolved_classification.volume.or(existing.volume)
+                },
+                chapter: if existing.chapter_lock {
+                    existing.chapter
+                } else {
+                    resolved_classification.chapter.or(existing.chapter)
+                },
                 count: existing.count,
                 isbns: existing.isbns.clone(),
                 // New Phase 1 fields - preserve existing values
@@ -781,6 +807,7 @@ async fn analyze_single_book(
                 month_lock: existing.month_lock,
                 day_lock: existing.day_lock,
                 volume_lock: existing.volume_lock,
+                chapter_lock: existing.chapter_lock,
                 count_lock: existing.count_lock,
                 isbns_lock: existing.isbns_lock,
                 // New Phase 1 lock fields - preserve existing
@@ -820,7 +847,8 @@ async fn analyze_single_book(
                 year: None,
                 month: None,
                 day: None,
-                volume: None,
+                volume: resolved_classification.volume,
+                chapter: resolved_classification.chapter,
                 count: None,
                 isbns: None,
                 // New Phase 1 fields
@@ -851,6 +879,7 @@ async fn analyze_single_book(
                 month_lock: false,
                 day_lock: false,
                 volume_lock: false,
+                chapter_lock: false,
                 count_lock: false,
                 isbns_lock: false,
                 // New Phase 1 lock fields
@@ -1051,6 +1080,69 @@ async fn analyze_single_book(
     Ok(())
 }
 
+/// Per-book classification output from the active book metadata strategy.
+/// Phase 11: lets scanner write `book_metadata.volume` and `book_metadata.chapter`
+/// alongside the title.
+#[derive(Debug, Default, Clone, Copy)]
+struct BookClassification {
+    volume: Option<i32>,
+    chapter: Option<f32>,
+}
+
+/// Resolve volume + chapter using the library's book metadata strategy.
+///
+/// Mirrors `resolve_book_title`: same strategy, same context, same metadata
+/// inputs. Returns `BookClassification::default()` if the library or series
+/// can't be located (the title fallback would do the same).
+async fn resolve_book_classification(
+    db: &DatabaseConnection,
+    book: &books::Model,
+    file_metadata: &crate::parsers::BookMetadata,
+    book_number: Option<f32>,
+) -> BookClassification {
+    let Ok(Some(library)) = LibraryRepository::get_by_id(db, book.library_id).await else {
+        return BookClassification::default();
+    };
+
+    let book_strategy = library
+        .book_strategy
+        .parse::<BookStrategy>()
+        .unwrap_or(BookStrategy::Filename);
+    let book_config_str = library.book_config.as_ref().map(|v| v.to_string());
+    let strategy = create_book_strategy(book_strategy, book_config_str.as_deref());
+
+    let series_name = match SeriesMetadataRepository::get_by_series_id(db, book.series_id).await {
+        Ok(Some(m)) => m.title,
+        _ => String::new(),
+    };
+
+    let total_books = BookRepository::count_by_series(db, book.series_id)
+        .await
+        .map(|c| c as usize)
+        .unwrap_or(1);
+
+    let metadata = file_metadata.comic_info.as_ref().map(|ci| BookMetadata {
+        title: ci.title.clone().filter(|t| !t.is_empty()),
+        number: book_number,
+        volume: ci.volume,
+        // ComicInfo has no Chapter field today; Phase 12 wires one through.
+        chapter: None,
+    });
+
+    let context = BookNamingContext {
+        series_name,
+        book_number,
+        volume: None,
+        chapter_number: None,
+        total_books,
+    };
+
+    BookClassification {
+        volume: strategy.resolve_volume(&book.file_name, metadata.as_ref(), &context),
+        chapter: strategy.resolve_chapter(&book.file_name, metadata.as_ref(), &context),
+    }
+}
+
 /// Resolve book title using the library's book naming strategy
 async fn resolve_book_title(
     db: &DatabaseConnection,
@@ -1101,6 +1193,8 @@ async fn resolve_book_title(
     let metadata = file_metadata.comic_info.as_ref().map(|ci| BookMetadata {
         title: ci.title.clone().filter(|t| !t.is_empty()),
         number: book_number,
+        volume: ci.volume,
+        chapter: None,
     });
 
     // Build naming context
@@ -1514,6 +1608,7 @@ mod tests {
             month: None,
             day: None,
             volume: None,
+            chapter: None,
             count: None,
             isbns: None,
             // New Phase 1 fields
@@ -1545,6 +1640,7 @@ mod tests {
             month_lock: false,
             day_lock: false,
             volume_lock: false,
+            chapter_lock: false,
             count_lock: false,
             isbns_lock: false,
             // New Phase 1 lock fields

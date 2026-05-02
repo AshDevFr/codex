@@ -71,6 +71,39 @@ impl BookNamingStrategy for SeriesNameStrategy {
         BookStrategy::SeriesName
     }
 
+    /// SeriesName operates on the upstream series-detection output via
+    /// `BookNamingContext`. For the per-book classification axis it just
+    /// passes through whatever the series detection populated. When the
+    /// detection isn't `series_volume_chapter`, both context fields are `None`
+    /// and so are the answers (correct — SeriesName isn't a parser).
+    fn resolve_volume(
+        &self,
+        _file_name: &str,
+        _metadata: Option<&BookMetadata>,
+        context: &BookNamingContext,
+    ) -> Option<i32> {
+        context
+            .volume
+            .as_deref()
+            .and_then(extract_number_from_string)
+            .and_then(|n| {
+                if n.fract() == 0.0 && n >= 0.0 {
+                    Some(n as i32)
+                } else {
+                    None
+                }
+            })
+    }
+
+    fn resolve_chapter(
+        &self,
+        _file_name: &str,
+        _metadata: Option<&BookMetadata>,
+        context: &BookNamingContext,
+    ) -> Option<f32> {
+        context.chapter_number
+    }
+
     fn resolve_title(
         &self,
         file_name: &str,

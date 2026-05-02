@@ -45,6 +45,7 @@ impl BookMetadataRepository {
             month: Set(metadata_model.month),
             day: Set(metadata_model.day),
             volume: Set(metadata_model.volume),
+            chapter: Set(metadata_model.chapter),
             count: Set(metadata_model.count),
             isbns: Set(metadata_model.isbns.clone()),
             // New Phase 1 fields
@@ -77,6 +78,7 @@ impl BookMetadataRepository {
             month_lock: Set(metadata_model.month_lock),
             day_lock: Set(metadata_model.day_lock),
             volume_lock: Set(metadata_model.volume_lock),
+            chapter_lock: Set(metadata_model.chapter_lock),
             count_lock: Set(metadata_model.count_lock),
             isbns_lock: Set(metadata_model.isbns_lock),
             // New Phase 1 lock fields
@@ -186,6 +188,7 @@ impl BookMetadataRepository {
             month: Set(metadata_model.month),
             day: Set(metadata_model.day),
             volume: Set(metadata_model.volume),
+            chapter: Set(metadata_model.chapter),
             count: Set(metadata_model.count),
             isbns: Set(metadata_model.isbns.clone()),
             // New Phase 1 fields
@@ -218,6 +221,7 @@ impl BookMetadataRepository {
             month_lock: Set(metadata_model.month_lock),
             day_lock: Set(metadata_model.day_lock),
             volume_lock: Set(metadata_model.volume_lock),
+            chapter_lock: Set(metadata_model.chapter_lock),
             count_lock: Set(metadata_model.count_lock),
             isbns_lock: Set(metadata_model.isbns_lock),
             // New Phase 1 lock fields
@@ -245,6 +249,69 @@ impl BookMetadataRepository {
             .context("Failed to update book metadata")?;
 
         Ok(())
+    }
+
+    /// Update only the `chapter` field on an existing metadata row.
+    /// Mirrors the per-field update pattern used on series_metadata.
+    pub async fn update_chapter(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        chapter: Option<f32>,
+    ) -> Result<book_metadata::Model> {
+        let existing = Self::get_by_book_id(db, book_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Book metadata not found for book: {book_id}"))?;
+
+        let mut active: book_metadata::ActiveModel = existing.into();
+        active.chapter = Set(chapter);
+        active.updated_at = Set(Utc::now());
+        active
+            .update(db)
+            .await
+            .context("Failed to update book chapter")
+    }
+
+    /// Update only the `volume` field on an existing metadata row.
+    pub async fn update_volume(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        volume: Option<i32>,
+    ) -> Result<book_metadata::Model> {
+        let existing = Self::get_by_book_id(db, book_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Book metadata not found for book: {book_id}"))?;
+
+        let mut active: book_metadata::ActiveModel = existing.into();
+        active.volume = Set(volume);
+        active.updated_at = Set(Utc::now());
+        active
+            .update(db)
+            .await
+            .context("Failed to update book volume")
+    }
+
+    /// Lock or unlock a specific metadata field on a book.
+    ///
+    /// Currently supports the per-book classification locks (`volume`, `chapter`).
+    /// Extend with additional cases as new lock-aware fields are added.
+    pub async fn set_lock(
+        db: &DatabaseConnection,
+        book_id: Uuid,
+        field: &str,
+        locked: bool,
+    ) -> Result<book_metadata::Model> {
+        let existing = Self::get_by_book_id(db, book_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Book metadata not found for book: {book_id}"))?;
+
+        let mut active: book_metadata::ActiveModel = existing.into();
+        match field {
+            "volume" => active.volume_lock = Set(locked),
+            "chapter" => active.chapter_lock = Set(locked),
+            _ => return Err(anyhow::anyhow!("Unknown book metadata lock field: {field}")),
+        }
+        active.updated_at = Set(Utc::now());
+        active.update(db).await.context("Failed to set book lock")
     }
 
     /// Delete metadata by book ID
@@ -285,6 +352,7 @@ impl BookMetadataRepository {
             month: Set(None),
             day: Set(None),
             volume: Set(None),
+            chapter: Set(None),
             count: Set(None),
             isbns: Set(None),
             // New Phase 1 fields
@@ -316,6 +384,7 @@ impl BookMetadataRepository {
             month_lock: Set(false),
             day_lock: Set(false),
             volume_lock: Set(false),
+            chapter_lock: Set(false),
             count_lock: Set(false),
             isbns_lock: Set(false),
             // New Phase 1 lock fields
@@ -421,6 +490,7 @@ mod tests {
             month: None,
             day: None,
             volume: None,
+            chapter: None,
             count: None,
             isbns: None,
             // New Phase 1 fields
@@ -452,6 +522,7 @@ mod tests {
             month_lock: false,
             day_lock: false,
             volume_lock: false,
+            chapter_lock: false,
             count_lock: false,
             isbns_lock: false,
             // New Phase 1 lock fields
@@ -649,5 +720,111 @@ mod tests {
         assert!(retrieved.year_lock);
         // Others should still be false
         assert!(!retrieved.publisher_lock);
+    }
+
+    // -- Per-book volume/chapter classification (Phase 11) --
+
+    #[tokio::test]
+    async fn test_chapter_round_trip_fractional() {
+        let (db, _temp_dir) = create_test_db().await;
+        let book = create_test_book(&db).await;
+
+        let mut metadata = create_metadata_model(book.id);
+        metadata.volume = Some(15);
+        metadata.chapter = Some(126.5);
+        BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
+            .await
+            .unwrap();
+
+        let retrieved = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.volume, Some(15));
+        assert_eq!(retrieved.chapter, Some(126.5));
+        assert!(!retrieved.chapter_lock);
+        assert!(!retrieved.volume_lock);
+    }
+
+    #[tokio::test]
+    async fn test_update_chapter_clears_to_null() {
+        let (db, _temp_dir) = create_test_db().await;
+        let book = create_test_book(&db).await;
+
+        let mut metadata = create_metadata_model(book.id);
+        metadata.chapter = Some(42.0);
+        BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
+            .await
+            .unwrap();
+
+        let updated =
+            BookMetadataRepository::update_chapter(db.sea_orm_connection(), book.id, None)
+                .await
+                .unwrap();
+        assert!(updated.chapter.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_volume_writes_value() {
+        let (db, _temp_dir) = create_test_db().await;
+        let book = create_test_book(&db).await;
+
+        let metadata = create_metadata_model(book.id);
+        BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
+            .await
+            .unwrap();
+
+        let updated =
+            BookMetadataRepository::update_volume(db.sea_orm_connection(), book.id, Some(7))
+                .await
+                .unwrap();
+        assert_eq!(updated.volume, Some(7));
+    }
+
+    #[tokio::test]
+    async fn test_set_lock_volume_and_chapter_independent() {
+        let (db, _temp_dir) = create_test_db().await;
+        let book = create_test_book(&db).await;
+
+        let metadata = create_metadata_model(book.id);
+        BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
+            .await
+            .unwrap();
+
+        let after_chapter_lock =
+            BookMetadataRepository::set_lock(db.sea_orm_connection(), book.id, "chapter", true)
+                .await
+                .unwrap();
+        assert!(after_chapter_lock.chapter_lock);
+        assert!(!after_chapter_lock.volume_lock);
+
+        let after_volume_lock =
+            BookMetadataRepository::set_lock(db.sea_orm_connection(), book.id, "volume", true)
+                .await
+                .unwrap();
+        assert!(after_volume_lock.chapter_lock);
+        assert!(after_volume_lock.volume_lock);
+
+        let after_unlock_chapter =
+            BookMetadataRepository::set_lock(db.sea_orm_connection(), book.id, "chapter", false)
+                .await
+                .unwrap();
+        assert!(!after_unlock_chapter.chapter_lock);
+        assert!(after_unlock_chapter.volume_lock);
+    }
+
+    #[tokio::test]
+    async fn test_set_lock_unknown_field_errors() {
+        let (db, _temp_dir) = create_test_db().await;
+        let book = create_test_book(&db).await;
+
+        let metadata = create_metadata_model(book.id);
+        BookMetadataRepository::upsert(db.sea_orm_connection(), &metadata)
+            .await
+            .unwrap();
+
+        let result =
+            BookMetadataRepository::set_lock(db.sea_orm_connection(), book.id, "bogus", true).await;
+        assert!(result.is_err());
     }
 }

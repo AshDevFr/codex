@@ -28,6 +28,8 @@ fn test_filename_strategy_ignores_metadata() {
     let metadata = BookMetadata {
         title: Some("The Dark Knight Returns".to_string()),
         number: Some(1.0),
+        volume: None,
+        chapter: None,
     };
 
     let title = strategy.resolve_title("Batman Issue 001.cbz", Some(&metadata), &context);
@@ -50,6 +52,8 @@ fn test_metadata_first_strategy_uses_metadata() {
     let metadata = BookMetadata {
         title: Some("The Dark Knight Returns".to_string()),
         number: Some(1.0),
+        volume: None,
+        chapter: None,
     };
 
     let title = strategy.resolve_title("batman_001.cbz", Some(&metadata), &context);
@@ -101,6 +105,8 @@ fn test_smart_strategy_rejects_generic_titles() {
         let metadata = BookMetadata {
             title: Some(generic_title.to_string()),
             number: Some(3.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title(filename, Some(&metadata), &context);
@@ -129,6 +135,8 @@ fn test_smart_strategy_accepts_meaningful_titles() {
     let metadata = BookMetadata {
         title: Some("The Killing Joke".to_string()),
         number: Some(1.0),
+        volume: None,
+        chapter: None,
     };
 
     let title = strategy.resolve_title("batman_special_001.cbz", Some(&metadata), &context);
@@ -151,6 +159,8 @@ fn test_smart_strategy_custom_patterns() {
     let metadata = BookMetadata {
         title: Some("Book 1".to_string()),
         number: Some(1.0),
+        volume: None,
+        chapter: None,
     };
 
     let title = strategy.resolve_title("novel_001.epub", Some(&metadata), &context);
@@ -432,6 +442,8 @@ fn test_custom_strategy_metadata_first_fallback() {
     let metadata = BookMetadata {
         title: Some("The Dark Knight".to_string()),
         number: Some(1.0),
+        volume: None,
+        chapter: None,
     };
 
     // Filename doesn't match pattern, should use metadata

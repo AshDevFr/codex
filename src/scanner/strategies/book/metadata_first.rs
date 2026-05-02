@@ -38,6 +38,27 @@ impl BookNamingStrategy for MetadataFirstStrategy {
             .cloned()
             .unwrap_or_else(|| filename_without_extension(file_name))
     }
+
+    /// Volume from metadata only. Honors the user's "I picked Metadata, don't
+    /// touch the filename" choice; returns `None` if metadata has no volume.
+    fn resolve_volume(
+        &self,
+        _file_name: &str,
+        metadata: Option<&BookMetadata>,
+        _context: &BookNamingContext,
+    ) -> Option<i32> {
+        metadata.and_then(|m| m.volume)
+    }
+
+    /// Chapter from metadata only.
+    fn resolve_chapter(
+        &self,
+        _file_name: &str,
+        metadata: Option<&BookMetadata>,
+        _context: &BookNamingContext,
+    ) -> Option<f32> {
+        metadata.and_then(|m| m.chapter)
+    }
 }
 
 #[cfg(test)]
@@ -61,6 +82,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("The Dark Knight Returns".to_string()),
             number: Some(1.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("batman-001.cbz", Some(&metadata), &ctx);
@@ -83,6 +106,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("".to_string()),
             number: None,
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("batman-001.cbz", Some(&metadata), &ctx);
@@ -96,6 +121,8 @@ mod tests {
         let metadata = BookMetadata {
             title: None,
             number: Some(1.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("batman-001.cbz", Some(&metadata), &ctx);

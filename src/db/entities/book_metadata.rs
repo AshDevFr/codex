@@ -129,6 +129,12 @@ pub struct Model {
     pub month: Option<i32>,
     pub day: Option<i32>,
     pub volume: Option<i32>,
+    /// Chapter number for this book (sibling of `volume`).
+    /// `f32` because chapters can be fractional (e.g. 47.5 for side chapters).
+    /// The pair `(volume, chapter)` derives the kind of book:
+    /// `(Some, None)` = volume, `(None, Some)` = chapter,
+    /// `(Some, Some)` = chapter belonging to a volume, `(None, None)` = unknown.
+    pub chapter: Option<f32>,
     pub count: Option<i32>,
     pub isbns: Option<String>,
     // New book metadata fields (Phase 1)
@@ -174,6 +180,7 @@ pub struct Model {
     pub month_lock: bool,
     pub day_lock: bool,
     pub volume_lock: bool,
+    pub chapter_lock: bool,
     pub count_lock: bool,
     pub isbns_lock: bool,
     // New lock fields for Phase 1 fields
