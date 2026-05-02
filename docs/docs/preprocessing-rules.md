@@ -373,7 +373,8 @@ External ID sources use the format `plugin:<name>` (e.g., `plugin:mangabaka`).
 | `metadata.imprint`          | string | Publisher imprint           |
 | `metadata.ageRating`        | number | Age rating                  |
 | `metadata.readingDirection` | string | Reading direction (ltr/rtl) |
-| `metadata.totalBookCount`   | number | Expected total book count   |
+| `metadata.totalVolumeCount`  | number | Expected total volume count (integer) |
+| `metadata.totalChapterCount` | number | Expected total chapter count (decimal) |
 | `metadata.genres`           | array  | Genre names                 |
 | `metadata.tags`             | array  | Tag names                   |
 

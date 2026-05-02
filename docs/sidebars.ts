@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
         "formats",
         "filtering",
         "book-metadata",
+        "series-metadata",
         "custom-metadata",
         {
           type: "category",

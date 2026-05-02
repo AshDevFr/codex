@@ -242,7 +242,8 @@ When `type` is `"series"`, the `metadata` object contains:
 | `metadata.imprint` | string | Publisher imprint |
 | `metadata.year` | number | Publication year |
 | `metadata.status` | string | Series status (e.g., "ongoing", "completed") |
-| `metadata.totalBookCount` | number | Total number of books in the series |
+| `metadata.totalVolumeCount` | number | Expected total volume count (integer) |
+| `metadata.totalChapterCount` | number | Expected total chapter count (decimal; supports fractional chapters like `47.5`) |
 | `metadata.ageRating` | number | Age rating (e.g., 13, 18) |
 | `metadata.language` | string | Primary language |
 | `metadata.readingDirection` | string | Reading direction (ltr, rtl, ttb) |
@@ -319,7 +320,7 @@ Use the `type` discriminator to create templates that work for both series and b
 
 {{#ifEquals type "series"}}
 ## {{metadata.title}}
-**Books:** {{bookCount}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+**Books:** {{bookCount}}{{#if metadata.totalVolumeCount}} of {{metadata.totalVolumeCount}} vol{{/if}}{{#if metadata.totalChapterCount}} ({{metadata.totalChapterCount}} ch){{/if}}
 {{#if metadata.status}}
 **Status:** {{capitalize metadata.status}}
 {{/if}}
@@ -392,7 +393,7 @@ Use the `type` discriminator to create templates that work for both series and b
 
 **Status:** {{default customMetadata.status "Not started"}}
 {{#if customMetadata.currentVolume}}
-**Currently on:** Volume {{customMetadata.currentVolume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+**Currently on:** Volume {{customMetadata.currentVolume}}{{#if metadata.totalVolumeCount}} of {{metadata.totalVolumeCount}}{{/if}}
 {{/if}}
 {{/if}}
 ```
@@ -705,7 +706,7 @@ Combine custom tracking data with built-in series metadata:
 {{/if}}
 
 {{#if customMetadata.currentVolume}}
-**Currently on:** Volume {{customMetadata.currentVolume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+**Currently on:** Volume {{customMetadata.currentVolume}}{{#if metadata.totalVolumeCount}} of {{metadata.totalVolumeCount}}{{/if}}
 {{/if}}
 
 {{#if customMetadata.notes}}

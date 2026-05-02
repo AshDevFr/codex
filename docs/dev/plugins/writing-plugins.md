@@ -229,6 +229,10 @@ const provider: MetadataProvider = {
       summary: item.description,
       status: item.status,
       year: item.year,
+      // Populate volume and chapter totals separately (see "Volume and
+      // Chapter Counts" below for guidance).
+      totalVolumeCount: item.volumeCount,
+      totalChapterCount: item.chapterCount,
       genres: item.genres,
       tags: item.tags,
       authors: item.authors,
@@ -305,6 +309,46 @@ throw new NotFoundError("Series not found");
 throw new RateLimitError(60, "Rate limited by external API");
 throw new AuthError("Invalid API key");
 ```
+
+#### Volume and Chapter Counts
+
+`PluginSeriesMetadata` carries two independent count fields. Populate whichever ones your upstream API exposes; leave the other(s) undefined.
+
+| Field | Type | When to populate |
+|-------|------|------------------|
+| `totalVolumeCount` | integer | Upstream knows the expected number of bound volumes. |
+| `totalChapterCount` | number (decimal) | Upstream knows the expected number of chapters. Decimals are allowed (e.g. `47.5` for an omake chapter). |
+
+These map directly onto Codex's per-axis lock model: a user can lock the volume count while letting the chapter count refresh, or vice versa. Codex's apply pipeline checks the corresponding lock and the corresponding write permission (`metadata:write:total_volume_count`, `metadata:write:total_chapter_count`) before writing each field.
+
+Mapping common upstream shapes:
+
+```typescript
+// MangaBaka-style: distinct fields on the response.
+return {
+  // ...
+  totalVolumeCount: upstream.totalVolumes ?? undefined,
+  totalChapterCount: upstream.totalChapters ?? undefined,
+};
+
+// AniList GraphQL: `volumes` and `chapters` on the Media node.
+return {
+  // ...
+  totalVolumeCount: media.volumes ?? undefined,
+  totalChapterCount: media.chapters ?? undefined,
+};
+
+// Volume-only provider (e.g. Open Library): leave chapters undefined.
+return {
+  // ...
+  totalVolumeCount: edition.volumeCount ?? undefined,
+  // totalChapterCount intentionally omitted
+};
+```
+
+If the upstream returns a single ambiguous "book count" without telling you whether it means volumes or chapters, prefer mapping it to `totalVolumeCount` (matches today's convention for most metadata providers). Do not populate both fields with the same number; Codex treats them as independent values, and seeding both will produce nonsense like "14 vol · 14 ch" in the UI.
+
+The legacy `totalBookCount` field on `PluginSeriesMetadata` was removed in protocol version 1.2. Plugins emitting it on the wire will not error (the value is silently dropped), but neither count field is populated as a result. Update your mapper to emit `totalVolumeCount` and/or `totalChapterCount` instead.
 
 ### 5. Build and Test Locally
 
