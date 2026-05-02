@@ -406,7 +406,17 @@ interface PluginSeriesMetadata {
   summary?: string;
   status?: SeriesStatus;
   year?: number;
-  totalBookCount?: number;
+  /**
+   * Expected total number of volumes in the series (integer).
+   * Populate from upstream when available; leave undefined otherwise.
+   */
+  totalVolumeCount?: number;
+  /**
+   * Expected total number of chapters in the series (decimal).
+   * Supports fractional chapters (e.g. `47.5`, `100.5`).
+   * Populate from upstream when available; leave undefined otherwise.
+   */
+  totalChapterCount?: number;
   language?: string;
   ageRating?: number;
   readingDirection?: ReadingDirection;

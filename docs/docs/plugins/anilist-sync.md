@@ -102,7 +102,7 @@ If you want to manually manage your AniList list without Codex overwriting it, u
 
 The plugin is conservative about marking series as "Completed" on AniList:
 
-- A series is pushed as **Completed** only when **all** local books are read **and** the series metadata includes a `total_book_count` that matches.
+- A series is pushed as **Completed** only when **all** local books are read **and** the series metadata includes a `total_volume_count` (or `total_chapter_count`, depending on the configured Progress Unit) that matches the local count.
 - Otherwise, the series is always pushed as **Reading** — even if all local books are read — because Codex can't be certain the library contains the full series.
 
 This prevents incorrectly marking a series as finished when you may simply not have all volumes in your library yet.
