@@ -2,6 +2,34 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.16.1] - 2026-05-02
+
+### 🚀 Features
+
+- *(export)* Add series_exports data model, migration, and repository
+- *(export)* Add ExportStorage service for atomic file writes
+- *(export)* Add series export data collector and bulk rating helpers
+- *(export)* Add JSON and CSV series export writers
+- *(export)* Add ExportSeries task type and background handler
+- *(export)* Add REST API endpoints for series export CRUD
+- *(export)* Add cleanup task, scheduler cron, and startup reconciliation
+- *(export)* Seed DB settings for export retention, caps, and scheduling
+- *(export)* Add frontend UI for series data exports
+- *(export)* Add book exports, markdown format, progress field, and LLM preset
+- *(export)* Show libraries column with field tooltip and include library names in download filename
+- *(series)* Add card/table view toggle to series books list
+
+### 🐛 Bug Fixes
+
+- *(series)* Make list sort deterministic and correct under ties
+- *(export)* Wire production plumbing, add OpenAPI docs, mocks, and integration tests
+
+### 💼 Other
+
+- Pin Rust toolchain to 1.95.0 and fix collapsible_match lint
+- *(docker)* Bump Rust base images to 1.95 to match toolchain pin
+- *(docker)* Source musl cross-compilers from muslcc images instead of musl.cc
+
 ## [1.16.0] - 2026-03-31
 
 ### 🚀 Features
