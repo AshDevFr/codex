@@ -543,7 +543,7 @@ async fn test_migration_068_drop_legacy_sqlite() {
 // Phase 11 of metadata-count-split: adds `chapter` and `chapter_lock` to
 // book_metadata. Verifies up/down behavior and default values for existing rows.
 
-/// Helper: run all migrations except the very last (069) so tests can apply 069 in isolation.
+/// Helper: run all migrations through 068 so tests can apply 069 in isolation.
 async fn setup_db_before_migration_069() -> (Database, TempDir) {
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test.db");
@@ -561,8 +561,9 @@ async fn setup_db_before_migration_069() -> (Database, TempDir) {
     let db = Database::new(&config).await.unwrap();
     let conn = db.sea_orm_connection();
 
-    // Run all 66 migrations except the last one (069). Total = 66; running 65 leaves
-    // 069 pending so the test below can apply it via `Some(1)` and assert before/after.
+    // Run all migrations through 068 (= 65 entries in the migration list, since
+    // sequence numbers skip a few). Leaves 069 + 070 pending; the per-migration
+    // tests apply them with `Some(1)` to step through assertions.
     Migrator::up(conn, Some(65)).await.unwrap();
 
     (db, temp_dir)
@@ -648,6 +649,172 @@ async fn test_migration_069_down_drops_chapter_columns_sqlite() {
     assert!(!sqlite_has_column(conn, "book_metadata", "chapter_lock").await);
     assert!(sqlite_has_column(conn, "book_metadata", "volume").await);
     assert!(sqlite_has_column(conn, "book_metadata", "volume_lock").await);
+
+    db.close().await;
+}
+
+// -- Migration 070 (backfill_book_volume_chapter) tests --
+// Phase 12 of metadata-count-split: re-parse each book's filename and populate
+// `book_metadata.volume` / `chapter` where currently NULL. Idempotent and
+// strictly additive — never overwrites a populated value.
+
+#[tokio::test]
+async fn test_migration_070_backfills_from_filename_sqlite() {
+    let (db, _temp_dir) = setup_db_before_migration_069().await;
+    let conn = db.sea_orm_connection();
+
+    // Apply 069 first (adds the columns) so we can populate test rows pre-070.
+    Migrator::up(conn, Some(1)).await.unwrap();
+    assert!(sqlite_has_column(conn, "book_metadata", "chapter").await);
+
+    // Seed library + series + a handful of books covering each parse case.
+    conn.execute_unprepared(
+        "INSERT INTO libraries (id, name, path, series_strategy, book_strategy, number_strategy, default_reading_direction, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000001', 'Lib', '/lib', 'series_volume', 'filename', 'file_order', 'LEFT_TO_RIGHT', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    conn.execute_unprepared(
+        "INSERT INTO series (id, library_id, path, name, normalized_name, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000010', X'00000000000000000000000000000001', '/path', 'S', 's', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    let cases: &[(&str, &str, &str)] = &[
+        // (book_id_hex, file_name, comment)
+        // Volume only.
+        (
+            "11111111111111111111111111111111",
+            "Series v01.cbz",
+            "vol-only",
+        ),
+        // Chapter only.
+        (
+            "22222222222222222222222222222222",
+            "Series c042.cbz",
+            "chap-only",
+        ),
+        // Both.
+        (
+            "33333333333333333333333333333333",
+            "Series v15 - c126 (2023).cbz",
+            "both",
+        ),
+        // Bare number — neither populated.
+        ("44444444444444444444444444444444", "Naruto 042.cbz", "bare"),
+    ];
+
+    for (id, file_name, _comment) in cases {
+        conn.execute_unprepared(&format!(
+            "INSERT INTO books (id, series_id, library_id, file_path, file_name, file_size, file_hash, partial_hash, format, page_count, deleted, analyzed, modified_at, created_at, updated_at)
+             VALUES (X'{id}', X'00000000000000000000000000000010', X'00000000000000000000000000000001', '/path/{file_name}', '{file_name}', 1024, 'h', '', 'cbz', 10, 0, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+        )).await.unwrap();
+
+        let metadata_id = format!("aa{}", &id[2..]);
+        conn.execute_unprepared(&format!(
+            "INSERT INTO book_metadata (id, book_id, search_title, created_at, updated_at)
+             VALUES (X'{metadata_id}', X'{id}', '{file_name}', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+        )).await.unwrap();
+    }
+
+    // Pre-set volume = 99 for one book — the migration must NOT overwrite this.
+    let preset_book_id = "55555555555555555555555555555555";
+    let preset_meta_id = "bb555555555555555555555555555555";
+    conn.execute_unprepared(&format!(
+        "INSERT INTO books (id, series_id, library_id, file_path, file_name, file_size, file_hash, partial_hash, format, page_count, deleted, analyzed, modified_at, created_at, updated_at)
+         VALUES (X'{preset_book_id}', X'00000000000000000000000000000010', X'00000000000000000000000000000001', '/path/Series v07.cbz', 'Series v07.cbz', 1024, 'h', '', 'cbz', 10, 0, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )).await.unwrap();
+    conn.execute_unprepared(&format!(
+        "INSERT INTO book_metadata (id, book_id, search_title, volume, volume_lock, created_at, updated_at)
+         VALUES (X'{preset_meta_id}', X'{preset_book_id}', 'Series v07', 99, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )).await.unwrap();
+
+    // Apply migration 070.
+    Migrator::up(conn, Some(1)).await.unwrap();
+
+    // Verify each parse case landed correctly.
+    let expected: &[(&str, Option<i32>, Option<f32>)] = &[
+        ("11111111111111111111111111111111", Some(1), None),
+        ("22222222222222222222222222222222", None, Some(42.0)),
+        ("33333333333333333333333333333333", Some(15), Some(126.0)),
+        ("44444444444444444444444444444444", None, None),
+    ];
+
+    for (id, want_vol, want_chap) in expected {
+        let row = conn
+            .query_one(Statement::from_string(
+                DatabaseBackend::Sqlite,
+                format!("SELECT volume, chapter FROM book_metadata WHERE book_id = X'{id}'"),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        let vol: Option<i32> = row.try_get("", "volume").unwrap();
+        let chap: Option<f32> = row.try_get("", "chapter").unwrap();
+        assert_eq!(vol, *want_vol, "volume mismatch for {id}");
+        assert_eq!(chap, *want_chap, "chapter mismatch for {id}");
+    }
+
+    // Pre-set volume must be preserved (additive only — never overwrites).
+    let row = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            format!("SELECT volume FROM book_metadata WHERE book_id = X'{preset_book_id}'"),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    let vol: Option<i32> = row.try_get("", "volume").unwrap();
+    assert_eq!(
+        vol,
+        Some(99),
+        "backfill must not overwrite a manually-set volume"
+    );
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_migration_070_is_idempotent_sqlite() {
+    let (db, _temp_dir) = setup_db_before_migration_069().await;
+    let conn = db.sea_orm_connection();
+
+    // Apply 069.
+    Migrator::up(conn, Some(1)).await.unwrap();
+
+    conn.execute_unprepared(
+        "INSERT INTO libraries (id, name, path, series_strategy, book_strategy, number_strategy, default_reading_direction, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000001', 'Lib', '/lib', 'series_volume', 'filename', 'file_order', 'LEFT_TO_RIGHT', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO series (id, library_id, path, name, normalized_name, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000010', X'00000000000000000000000000000001', '/path', 'S', 's', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO books (id, series_id, library_id, file_path, file_name, file_size, file_hash, partial_hash, format, page_count, deleted, analyzed, modified_at, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000020', X'00000000000000000000000000000010', X'00000000000000000000000000000001', '/path/Series v05 - c100.cbz', 'Series v05 - c100.cbz', 1024, 'h', '', 'cbz', 10, 0, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+    conn.execute_unprepared(
+        "INSERT INTO book_metadata (id, book_id, search_title, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000030', X'00000000000000000000000000000020', 'sv05c100', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    // First pass.
+    Migrator::up(conn, Some(1)).await.unwrap();
+    // Second pass (down + up) — re-running must produce the same result.
+    Migrator::down(conn, Some(1)).await.unwrap();
+    Migrator::up(conn, Some(1)).await.unwrap();
+
+    let row = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT volume, chapter FROM book_metadata WHERE book_id = X'00000000000000000000000000000020'".to_string(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    let vol: Option<i32> = row.try_get("", "volume").unwrap();
+    let chap: Option<f32> = row.try_get("", "chapter").unwrap();
+    assert_eq!(vol, Some(5));
+    assert_eq!(chap, Some(100.0));
 
     db.close().await;
 }

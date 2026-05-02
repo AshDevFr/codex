@@ -424,6 +424,12 @@ pub enum PluginPermission {
     /// Update ISBN identifiers
     #[serde(rename = "metadata:write:isbn")]
     MetadataWriteIsbn,
+    /// Update per-book volume number (Phase 12 of metadata-count-split)
+    #[serde(rename = "metadata:write:volume")]
+    MetadataWriteVolume,
+    /// Update per-book chapter number (Phase 12 of metadata-count-split)
+    #[serde(rename = "metadata:write:chapter")]
+    MetadataWriteChapter,
 
     // =========================================================================
     // Wildcard Permissions
@@ -477,6 +483,8 @@ impl PluginPermission {
             PluginPermission::MetadataWriteAwards => "metadata:write:awards",
             PluginPermission::MetadataWriteCustomMetadata => "metadata:write:custom_metadata",
             PluginPermission::MetadataWriteIsbn => "metadata:write:isbn",
+            PluginPermission::MetadataWriteVolume => "metadata:write:volume",
+            PluginPermission::MetadataWriteChapter => "metadata:write:chapter",
             // Wildcard
             PluginPermission::MetadataWriteAll => "metadata:write:*",
             // Library
@@ -519,6 +527,8 @@ impl PluginPermission {
             PluginPermission::MetadataWriteAwards,
             PluginPermission::MetadataWriteCustomMetadata,
             PluginPermission::MetadataWriteIsbn,
+            PluginPermission::MetadataWriteVolume,
+            PluginPermission::MetadataWriteChapter,
         ]
     }
 
@@ -559,6 +569,8 @@ impl PluginPermission {
             PluginPermission::MetadataWriteAwards,
             PluginPermission::MetadataWriteCustomMetadata,
             PluginPermission::MetadataWriteIsbn,
+            PluginPermission::MetadataWriteVolume,
+            PluginPermission::MetadataWriteChapter,
         ]
     }
 }
@@ -606,6 +618,8 @@ impl FromStr for PluginPermission {
             "metadata:write:awards" => Ok(PluginPermission::MetadataWriteAwards),
             "metadata:write:custom_metadata" => Ok(PluginPermission::MetadataWriteCustomMetadata),
             "metadata:write:isbn" => Ok(PluginPermission::MetadataWriteIsbn),
+            "metadata:write:volume" => Ok(PluginPermission::MetadataWriteVolume),
+            "metadata:write:chapter" => Ok(PluginPermission::MetadataWriteChapter),
             // Wildcard
             "metadata:write:*" => Ok(PluginPermission::MetadataWriteAll),
             // Library
@@ -720,6 +734,8 @@ impl Model {
                     | PluginPermission::MetadataWriteAwards
                     | PluginPermission::MetadataWriteCustomMetadata
                     | PluginPermission::MetadataWriteIsbn
+                    | PluginPermission::MetadataWriteVolume
+                    | PluginPermission::MetadataWriteChapter
             ) {
                 return true;
             }
@@ -1029,8 +1045,10 @@ mod tests {
         assert!(perms.contains(&PluginPermission::MetadataWriteExternalIds));
         assert!(perms.contains(&PluginPermission::MetadataWriteTotalVolumeCount));
         assert!(perms.contains(&PluginPermission::MetadataWriteTotalChapterCount));
-        // Should have 28 write permissions (16 common + 12 book-specific)
-        assert_eq!(perms.len(), 28);
+        assert!(perms.contains(&PluginPermission::MetadataWriteVolume));
+        assert!(perms.contains(&PluginPermission::MetadataWriteChapter));
+        // Should have 30 write permissions (16 common + 14 book-specific)
+        assert_eq!(perms.len(), 30);
     }
 
     #[test]
@@ -1064,10 +1082,12 @@ mod tests {
         assert!(perms.contains(&PluginPermission::MetadataWriteAwards));
         assert!(perms.contains(&PluginPermission::MetadataWriteCustomMetadata));
         assert!(perms.contains(&PluginPermission::MetadataWriteIsbn));
+        assert!(perms.contains(&PluginPermission::MetadataWriteVolume));
+        assert!(perms.contains(&PluginPermission::MetadataWriteChapter));
         // Common permissions should NOT be in book-specific
         assert!(!perms.contains(&PluginPermission::MetadataWriteTitle));
-        // Should have 12 book-specific permissions
-        assert_eq!(perms.len(), 12);
+        // Should have 14 book-specific permissions
+        assert_eq!(perms.len(), 14);
     }
 
     #[test]
