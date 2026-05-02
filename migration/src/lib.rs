@@ -141,6 +141,8 @@ mod m20260502_000067_split_book_count;
 mod m20260502_000068_drop_book_count;
 // Add chapter + chapter_lock columns to book_metadata (Phase 11 per-book classification)
 mod m20260503_000069_add_book_chapter;
+// Backfill volume/chapter from filename for already-scanned books (Phase 12)
+mod m20260503_000070_backfill_book_volume_chapter;
 
 pub struct Migrator;
 
@@ -254,6 +256,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260502_000068_drop_book_count::Migration),
             // Add chapter + chapter_lock columns to book_metadata (Phase 11)
             Box::new(m20260503_000069_add_book_chapter::Migration),
+            // Backfill book_metadata.volume / .chapter from filename (Phase 12)
+            Box::new(m20260503_000070_backfill_book_volume_chapter::Migration),
         ]
     }
 }

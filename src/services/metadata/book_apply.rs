@@ -391,6 +391,52 @@ impl BookMetadataApplier {
             }
         }
 
+        // Volume (Phase 12 of metadata-count-split): per-book volume number.
+        // Plugin protocol carries `volume: Option<f64>`; book_metadata stores it
+        // as `i32` (no fractional volumes today — matches the structured
+        // filename parser's strictness). Reject fractional with a skip rather
+        // than truncating: silent truncation would lose information.
+        if should_apply_field("volume")
+            && let Some(volume) = metadata.volume
+        {
+            let is_locked = current_metadata.map(|m| m.volume_lock).unwrap_or(false);
+            match check_field("volume", is_locked, PluginPermission::MetadataWriteVolume) {
+                Ok(_) => {
+                    if volume.fract() == 0.0
+                        && (i32::MIN as f64..=i32::MAX as f64).contains(&volume)
+                    {
+                        updated.volume = Some(volume as i32);
+                        applied_fields.push("volume".to_string());
+                        changed = true;
+                    } else {
+                        skipped_fields.push(SkippedField {
+                            field: "volume".to_string(),
+                            reason: format!("Fractional or out-of-range volume rejected: {volume}"),
+                        });
+                    }
+                }
+                Err(skip) => skipped_fields.push(skip),
+            }
+        }
+
+        // Chapter (Phase 12 of metadata-count-split): per-book chapter number.
+        // Stored as `f32` to preserve fractional chapters (e.g. side stories at
+        // 47.5). Plugin protocol uses `f64`; we narrow with a debug-asserted
+        // cast since chapter numbers in practice never exceed `f32` precision.
+        if should_apply_field("chapter")
+            && let Some(chapter) = metadata.chapter
+        {
+            let is_locked = current_metadata.map(|m| m.chapter_lock).unwrap_or(false);
+            match check_field("chapter", is_locked, PluginPermission::MetadataWriteChapter) {
+                Ok(_) => {
+                    updated.chapter = Some(chapter as f32);
+                    applied_fields.push("chapter".to_string());
+                    changed = true;
+                }
+                Err(skip) => skipped_fields.push(skip),
+            }
+        }
+
         // Subjects
         if should_apply_field("subjects") && !metadata.subjects.is_empty() {
             let is_locked = current_metadata.map(|m| m.subjects_lock).unwrap_or(false);

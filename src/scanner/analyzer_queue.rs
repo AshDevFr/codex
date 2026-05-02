@@ -518,7 +518,9 @@ async fn analyze_single_book(
                 chapter: if existing.chapter_lock {
                     existing.chapter
                 } else {
-                    resolved_classification.chapter.or(existing.chapter)
+                    // Mirrors the volume rule: strategy first, raw ComicInfo
+                    // fallback for strategies that don't extract a chapter.
+                    resolved_classification.chapter.or(comic_info.chapter)
                 },
                 count: if existing.count_lock {
                     existing.count
@@ -602,7 +604,7 @@ async fn analyze_single_book(
                 // Strategy-resolved volume takes precedence; ComicInfo is the
                 // fallback for strategies that don't parse a volume.
                 volume: resolved_classification.volume.or(comic_info.volume),
-                chapter: resolved_classification.chapter,
+                chapter: resolved_classification.chapter.or(comic_info.chapter),
                 count: comic_info.count,
                 isbns: isbns_json,
                 // New Phase 1 fields
@@ -1125,8 +1127,7 @@ async fn resolve_book_classification(
         title: ci.title.clone().filter(|t| !t.is_empty()),
         number: book_number,
         volume: ci.volume,
-        // ComicInfo has no Chapter field today; Phase 12 wires one through.
-        chapter: None,
+        chapter: ci.chapter,
     });
 
     let context = BookNamingContext {
@@ -1194,7 +1195,7 @@ async fn resolve_book_title(
         title: ci.title.clone().filter(|t| !t.is_empty()),
         number: book_number,
         volume: ci.volume,
-        chapter: None,
+        chapter: ci.chapter,
     });
 
     // Build naming context

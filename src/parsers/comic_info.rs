@@ -127,12 +127,22 @@ pub fn parse_comic_info(xml_content: &str) -> Result<ComicInfo, quick_xml::DeErr
         &xml_info.editor,
     );
 
+    // Phase 12 of metadata-count-split: derive a structured `chapter` from
+    // `<Number>`. ComicInfo's `<Number>` field is overloaded — issue, chapter,
+    // or part depending on the producer. v1: read it as a chapter; users whose
+    // files use it for issues can lock `chapter` after manual fix.
+    let chapter = xml_info
+        .number
+        .as_deref()
+        .and_then(|n| n.trim().parse::<f32>().ok());
+
     Ok(ComicInfo {
         title: xml_info.title,
         series: xml_info.series,
         number: xml_info.number,
         count: xml_info.count,
         volume: xml_info.volume,
+        chapter,
         summary: xml_info.summary,
         year: xml_info.year,
         month: xml_info.month,
@@ -346,6 +356,44 @@ mod tests {
         if let Ok(info) = result {
             assert_eq!(info.title, Some("Test".to_string()));
         }
+    }
+
+    #[test]
+    fn test_parse_comic_info_derives_chapter_from_number() {
+        // Phase 12 of metadata-count-split: ComicInfo `<Number>` is the chapter
+        // axis on the parsed struct. Integer parses cleanly; fractional preserved.
+        let xml = r#"<?xml version="1.0"?>
+<ComicInfo>
+    <Number>42</Number>
+</ComicInfo>"#;
+        let result = parse_comic_info(xml).unwrap();
+        assert_eq!(result.number.as_deref(), Some("42"));
+        assert_eq!(result.chapter, Some(42.0));
+
+        // Fractional chapter (e.g. side stories at 47.5).
+        let xml_frac = r#"<?xml version="1.0"?>
+<ComicInfo>
+    <Number>47.5</Number>
+</ComicInfo>"#;
+        let result_frac = parse_comic_info(xml_frac).unwrap();
+        assert_eq!(result_frac.chapter, Some(47.5));
+
+        // No `<Number>` at all -> chapter stays None.
+        let xml_none = r#"<?xml version="1.0"?>
+<ComicInfo>
+    <Title>X</Title>
+</ComicInfo>"#;
+        let result_none = parse_comic_info(xml_none).unwrap();
+        assert_eq!(result_none.chapter, None);
+
+        // Non-numeric `<Number>` (rare but possible) -> chapter None, raw stays.
+        let xml_bad = r#"<?xml version="1.0"?>
+<ComicInfo>
+    <Number>part-1</Number>
+</ComicInfo>"#;
+        let result_bad = parse_comic_info(xml_bad).unwrap();
+        assert_eq!(result_bad.number.as_deref(), Some("part-1"));
+        assert_eq!(result_bad.chapter, None);
     }
 
     #[test]

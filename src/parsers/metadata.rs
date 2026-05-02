@@ -213,6 +213,11 @@ pub struct ComicInfo {
     pub number: Option<String>,
     pub count: Option<i32>,
     pub volume: Option<i32>,
+    /// Chapter number derived from ComicInfo `<Number>`. ComicInfo overloads
+    /// `<Number>` (issue / chapter / part) — Phase 12 of metadata-count-split
+    /// reads it as a chapter unconditionally and lets users lock the field if
+    /// their files use `<Number>` for issues instead.
+    pub chapter: Option<f32>,
     pub summary: Option<String>,
     pub year: Option<i32>,
     pub month: Option<i32>,

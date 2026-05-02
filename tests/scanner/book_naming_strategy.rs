@@ -544,3 +544,184 @@ async fn test_custom_book_strategy_persistence() {
     let title = strategy.resolve_title("One_Piece_v012_c145.cbz", None, &context);
     assert_eq!(title, "One_Piece v.012 c.145");
 }
+
+// ============================================================================
+// Per-book volume/chapter classification (Phase 12 of metadata-count-split)
+// ============================================================================
+//
+// These tests cover the strategy x parse-case matrix the scanner now relies on
+// to populate `book_metadata.volume` / `book_metadata.chapter`. They verify the
+// strategy contract directly (the scanner glue is a thin call into
+// `resolve_volume` / `resolve_chapter`); a full end-to-end scan test would only
+// re-cover library wiring already tested elsewhere.
+
+fn classification_context() -> BookNamingContext {
+    BookNamingContext {
+        series_name: "Test Series".to_string(),
+        book_number: None,
+        volume: None,
+        chapter_number: None,
+        total_books: 50,
+    }
+}
+
+/// Filename strategy: structured parse from filename, ComicInfo ignored.
+#[test]
+fn test_filename_strategy_resolves_volume_chapter() {
+    let strategy = create_book_strategy(BookStrategy::Filename, None);
+    let ctx = classification_context();
+    // ComicInfo says volume=99 chapter=999, but Filename strategy ignores it.
+    let metadata = BookMetadata {
+        title: None,
+        number: None,
+        volume: Some(99),
+        chapter: Some(999.0),
+    };
+
+    assert_eq!(
+        strategy.resolve_volume("Series v15 - c126.cbz", Some(&metadata), &ctx),
+        Some(15)
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v15 - c126.cbz", Some(&metadata), &ctx),
+        Some(126.0)
+    );
+}
+
+/// MetadataFirst strategy: ComicInfo only, filename never parsed.
+#[test]
+fn test_metadata_first_strategy_uses_only_comic_info() {
+    let strategy = create_book_strategy(BookStrategy::MetadataFirst, None);
+    let ctx = classification_context();
+    // Filename has v15 - c126, but MetadataFirst defers to ComicInfo.
+    let metadata = BookMetadata {
+        title: None,
+        number: None,
+        volume: Some(7),
+        chapter: Some(42.0),
+    };
+
+    assert_eq!(
+        strategy.resolve_volume("Series v15 - c126.cbz", Some(&metadata), &ctx),
+        Some(7)
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v15 - c126.cbz", Some(&metadata), &ctx),
+        Some(42.0)
+    );
+
+    // No ComicInfo: returns None for both.
+    assert_eq!(
+        strategy.resolve_volume("Series v15 - c126.cbz", None, &ctx),
+        None
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v15 - c126.cbz", None, &ctx),
+        None
+    );
+}
+
+/// Smart strategy: ComicInfo first, filename fallback when ComicInfo silent.
+#[test]
+fn test_smart_strategy_falls_back_to_filename() {
+    let strategy = create_book_strategy(BookStrategy::Smart, None);
+    let ctx = classification_context();
+
+    // ComicInfo populated -> takes precedence.
+    let with_meta = BookMetadata {
+        title: None,
+        number: None,
+        volume: Some(7),
+        chapter: Some(42.0),
+    };
+    assert_eq!(
+        strategy.resolve_volume("Series v15 - c126.cbz", Some(&with_meta), &ctx),
+        Some(7)
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v15 - c126.cbz", Some(&with_meta), &ctx),
+        Some(42.0)
+    );
+
+    // ComicInfo silent on volume -> filename fallback fills in.
+    let chapter_only = BookMetadata {
+        title: None,
+        number: None,
+        volume: None,
+        chapter: Some(42.0),
+    };
+    assert_eq!(
+        strategy.resolve_volume("Series v15 - c126.cbz", Some(&chapter_only), &ctx),
+        Some(15)
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v15 - c126.cbz", Some(&chapter_only), &ctx),
+        Some(42.0)
+    );
+
+    // No ComicInfo at all -> filename is the only source.
+    assert_eq!(
+        strategy.resolve_volume("Series v15 - c126.cbz", None, &ctx),
+        Some(15)
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v15 - c126.cbz", None, &ctx),
+        Some(126.0)
+    );
+}
+
+/// SeriesName strategy: passes through whatever series detection populated on
+/// the context. No detection -> None.
+#[test]
+fn test_series_name_strategy_passes_through_context() {
+    let strategy = create_book_strategy(BookStrategy::SeriesName, None);
+
+    // Detection wrote volume + chapter into the context.
+    let with_detection = BookNamingContext {
+        series_name: "Series".to_string(),
+        book_number: None,
+        volume: Some("Volume 12".to_string()),
+        chapter_number: Some(126.0),
+        total_books: 200,
+    };
+    assert_eq!(
+        strategy.resolve_volume("Series v99 - c999.cbz", None, &with_detection),
+        Some(12)
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v99 - c999.cbz", None, &with_detection),
+        Some(126.0)
+    );
+
+    // No detection on context -> None on both axes (filename ignored).
+    let without = classification_context();
+    assert_eq!(
+        strategy.resolve_volume("Series v15 - c126.cbz", None, &without),
+        None
+    );
+    assert_eq!(
+        strategy.resolve_chapter("Series v15 - c126.cbz", None, &without),
+        None
+    );
+}
+
+/// Custom strategy: extracts named groups from the user's regex.
+#[test]
+fn test_custom_strategy_resolves_volume_chapter_from_named_groups() {
+    let config = r#"{"pattern":"(?P<series>.+?)_v(?P<volume>\\d+)_c(?P<chapter>\\d+)","fallback":"filename"}"#;
+    let strategy = create_book_strategy(BookStrategy::Custom, Some(config));
+    let ctx = classification_context();
+
+    assert_eq!(
+        strategy.resolve_volume("One_Piece_v012_c145.cbz", None, &ctx),
+        Some(12)
+    );
+    assert_eq!(
+        strategy.resolve_chapter("One_Piece_v012_c145.cbz", None, &ctx),
+        Some(145.0)
+    );
+
+    // Pattern doesn't match -> None on both.
+    assert_eq!(strategy.resolve_volume("random.cbz", None, &ctx), None);
+    assert_eq!(strategy.resolve_chapter("random.cbz", None, &ctx), None);
+}

@@ -118,6 +118,7 @@ pub fn merge_comic_info(base: &ComicInfo, overlay: &ComicInfo) -> ComicInfo {
         number: overlay.number.clone().or_else(|| base.number.clone()),
         count: overlay.count.or(base.count),
         volume: overlay.volume.or(base.volume),
+        chapter: overlay.chapter.or(base.chapter),
         summary: overlay.summary.clone().or_else(|| base.summary.clone()),
         year: overlay.year.or(base.year),
         month: overlay.month.or(base.month),

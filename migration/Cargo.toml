@@ -12,6 +12,8 @@ path = "src/lib.rs"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 uuid = { version = "1.11.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+lazy_static = "1"
 
 [dependencies.sea-orm-migration]
 version = "1.1.0"
