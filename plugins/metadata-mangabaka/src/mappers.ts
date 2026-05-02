@@ -364,10 +364,6 @@ export function mapSeriesMetadata(series: MbSeries): PluginSeriesMetadata {
     year: series.year ?? undefined,
     // Extended metadata
     publisher,
-    // Legacy field kept populated for backward-compat with older Codex versions
-    // that don't yet read totalVolumeCount; mirrors the volume value (most
-    // metadata in the wild is volume-shaped).
-    totalBookCount: totalVolumeCount,
     totalVolumeCount,
     totalChapterCount,
     ageRating: mapContentRating(series.content_rating),

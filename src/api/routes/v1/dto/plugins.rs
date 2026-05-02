@@ -940,7 +940,6 @@ pub fn available_permissions() -> Vec<&'static str> {
         "metadata:write:age_rating",
         "metadata:write:language",
         "metadata:write:reading_direction",
-        "metadata:write:total_book_count",
         "metadata:write:total_volume_count",
         "metadata:write:total_chapter_count",
         // Book-specific write permissions

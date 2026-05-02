@@ -1080,19 +1080,14 @@ pub async fn preview_series_metadata(
     ));
 
     // Total Volume Count.
-    //
-    // Backward-compat: a plugin that still sends only the legacy
-    // `total_book_count` is treated as if it sent `total_volume_count`. The
-    // legacy compatibility shim is removed in Phase 9.
-    let proposed_volume_count = plugin_metadata
-        .total_volume_count
-        .or(plugin_metadata.total_book_count);
     fields.push(build_field_preview(
         "totalVolumeCount",
         current_metadata
             .as_ref()
             .and_then(|m| m.total_volume_count.map(|v| serde_json::json!(v))),
-        proposed_volume_count.map(|v| serde_json::json!(v)),
+        plugin_metadata
+            .total_volume_count
+            .map(|v| serde_json::json!(v)),
         current_metadata
             .as_ref()
             .map(|m| m.total_volume_count_lock)

@@ -84,7 +84,7 @@ const provider: MetadataProvider = {
       year: 2024,
 
       // Extended metadata fields
-      totalBookCount: 10,
+      totalVolumeCount: 10,
       language: "en",
       ageRating: 13,
       readingDirection: "ltr",

@@ -152,7 +152,7 @@ export function MetadataSearchModal({
               : [],
             bookCount:
               contentType === "series"
-                ? (metadata.totalBookCount as number | undefined)
+                ? (metadata.totalVolumeCount as number | undefined)
                 : undefined,
             authors: Array.isArray(metadata.authors)
               ? (metadata.authors as unknown[]).map((a: unknown) =>

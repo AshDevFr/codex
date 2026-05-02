@@ -378,13 +378,6 @@ pub enum PluginPermission {
     /// Update reading direction
     #[serde(rename = "metadata:write:reading_direction")]
     MetadataWriteReadingDirection,
-    /// Update total book count.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat. Removed in Phase 9 of the
-    /// metadata-count-split plan. New plugins should request
-    /// `metadata:write:total_volume_count` and/or `metadata:write:total_chapter_count`.
-    #[serde(rename = "metadata:write:total_book_count")]
-    MetadataWriteTotalBookCount,
     /// Update total volume count
     #[serde(rename = "metadata:write:total_volume_count")]
     MetadataWriteTotalVolumeCount,
@@ -467,7 +460,6 @@ impl PluginPermission {
             PluginPermission::MetadataWriteAgeRating => "metadata:write:age_rating",
             PluginPermission::MetadataWriteLanguage => "metadata:write:language",
             PluginPermission::MetadataWriteReadingDirection => "metadata:write:reading_direction",
-            PluginPermission::MetadataWriteTotalBookCount => "metadata:write:total_book_count",
             PluginPermission::MetadataWriteTotalVolumeCount => "metadata:write:total_volume_count",
             PluginPermission::MetadataWriteTotalChapterCount => {
                 "metadata:write:total_chapter_count"
@@ -512,7 +504,6 @@ impl PluginPermission {
             PluginPermission::MetadataWriteAgeRating,
             PluginPermission::MetadataWriteLanguage,
             PluginPermission::MetadataWriteReadingDirection,
-            PluginPermission::MetadataWriteTotalBookCount,
             PluginPermission::MetadataWriteTotalVolumeCount,
             PluginPermission::MetadataWriteTotalChapterCount,
             // Book-specific write permissions
@@ -548,7 +539,6 @@ impl PluginPermission {
             PluginPermission::MetadataWriteAgeRating,
             PluginPermission::MetadataWriteLanguage,
             PluginPermission::MetadataWriteReadingDirection,
-            PluginPermission::MetadataWriteTotalBookCount,
             PluginPermission::MetadataWriteTotalVolumeCount,
             PluginPermission::MetadataWriteTotalChapterCount,
         ]
@@ -597,7 +587,6 @@ impl FromStr for PluginPermission {
             "metadata:write:reading_direction" => {
                 Ok(PluginPermission::MetadataWriteReadingDirection)
             }
-            "metadata:write:total_book_count" => Ok(PluginPermission::MetadataWriteTotalBookCount),
             "metadata:write:total_volume_count" => {
                 Ok(PluginPermission::MetadataWriteTotalVolumeCount)
             }
@@ -716,7 +705,6 @@ impl Model {
                     | PluginPermission::MetadataWriteAgeRating
                     | PluginPermission::MetadataWriteLanguage
                     | PluginPermission::MetadataWriteReadingDirection
-                    | PluginPermission::MetadataWriteTotalBookCount
                     | PluginPermission::MetadataWriteTotalVolumeCount
                     | PluginPermission::MetadataWriteTotalChapterCount
                     // Book-specific write permissions
@@ -1022,8 +1010,6 @@ mod tests {
 
         assert!(model.has_permission(&PluginPermission::MetadataWriteTotalVolumeCount));
         assert!(model.has_permission(&PluginPermission::MetadataWriteTotalChapterCount));
-        // Sanity: still grants the legacy permission (kept until Phase 9).
-        assert!(model.has_permission(&PluginPermission::MetadataWriteTotalBookCount));
     }
 
     #[test]
@@ -1043,8 +1029,8 @@ mod tests {
         assert!(perms.contains(&PluginPermission::MetadataWriteExternalIds));
         assert!(perms.contains(&PluginPermission::MetadataWriteTotalVolumeCount));
         assert!(perms.contains(&PluginPermission::MetadataWriteTotalChapterCount));
-        // Should have 29 write permissions (17 common + 12 book-specific)
-        assert_eq!(perms.len(), 29);
+        // Should have 28 write permissions (16 common + 12 book-specific)
+        assert_eq!(perms.len(), 28);
     }
 
     #[test]
@@ -1052,15 +1038,14 @@ mod tests {
         let perms = PluginPermission::common_write_permissions();
         assert!(perms.contains(&PluginPermission::MetadataWriteTitle));
         assert!(perms.contains(&PluginPermission::MetadataWriteSummary));
-        assert!(perms.contains(&PluginPermission::MetadataWriteTotalBookCount));
         assert!(perms.contains(&PluginPermission::MetadataWriteTotalVolumeCount));
         assert!(perms.contains(&PluginPermission::MetadataWriteTotalChapterCount));
         // Book-specific should NOT be in common
         assert!(!perms.contains(&PluginPermission::MetadataWriteBookType));
         assert!(!perms.contains(&PluginPermission::MetadataWriteIsbn));
         assert!(perms.contains(&PluginPermission::MetadataWriteExternalIds));
-        // Should have 17 common permissions
-        assert_eq!(perms.len(), 17);
+        // Should have 16 common permissions
+        assert_eq!(perms.len(), 16);
     }
 
     #[test]

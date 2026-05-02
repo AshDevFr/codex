@@ -81,7 +81,8 @@ export const SAMPLE_SERIES_CONTEXT: SeriesContextWithCustomMetadata = {
     language: "ja",
     readingDirection: "rtl",
     year: 1997,
-    totalBookCount: 110,
+    totalVolumeCount: 110,
+    totalChapterCount: 1086.5,
     genres: ["Action", "Adventure", "Comedy", "Fantasy"],
     tags: ["pirates", "treasure", "friendship", "manga"],
     alternateTitles: [
@@ -116,7 +117,8 @@ export const SAMPLE_SERIES_CONTEXT: SeriesContextWithCustomMetadata = {
     languageLock: false,
     readingDirectionLock: false,
     yearLock: false,
-    totalBookCountLock: false,
+    totalVolumeCountLock: false,
+    totalChapterCountLock: false,
     genresLock: false,
     tagsLock: false,
     customMetadataLock: false,
@@ -189,7 +191,8 @@ export function transformFullSeriesToSeriesContext(
       language: metadata.language ?? null,
       readingDirection: metadata.readingDirection ?? null,
       year: metadata.year ?? null,
-      totalBookCount: metadata.totalBookCount ?? null,
+      totalVolumeCount: metadata.totalVolumeCount ?? null,
+      totalChapterCount: metadata.totalChapterCount ?? null,
       genres: series.genres.map((g) => g.name),
       tags: series.tags.map((t) => t.name),
       alternateTitles: series.alternateTitles.map((at) => ({
@@ -221,7 +224,8 @@ export function transformFullSeriesToSeriesContext(
       languageLock: metadata.locks.language ?? false,
       readingDirectionLock: metadata.locks.readingDirection ?? false,
       yearLock: metadata.locks.year ?? false,
-      totalBookCountLock: metadata.locks.totalBookCount ?? false,
+      totalVolumeCountLock: metadata.locks.totalVolumeCount ?? false,
+      totalChapterCountLock: metadata.locks.totalChapterCount ?? false,
       genresLock: metadata.locks.genres ?? false,
       tagsLock: metadata.locks.tags ?? false,
       customMetadataLock: metadata.locks.customMetadata ?? false,
@@ -513,8 +517,10 @@ export interface MetadataForTemplate {
   status: string | null;
   /** Reading direction (ltr, rtl, ttb, webtoon) */
   readingDirection: string | null;
-  /** Expected total book count */
-  totalBookCount: number | null;
+  /** Expected total volume count, when known */
+  totalVolumeCount: number | null;
+  /** Expected total chapter count, when known. May be fractional. */
+  totalChapterCount: number | null;
   /** Custom sort name */
   titleSort: string | null;
   /** Genre names as a simple array of strings */
@@ -544,7 +550,8 @@ export const SAMPLE_METADATA_FOR_TEMPLATE: MetadataForTemplate = {
   language: "ja",
   status: "ended",
   readingDirection: "rtl",
-  totalBookCount: 34,
+  totalVolumeCount: 34,
+  totalChapterCount: 139,
   titleSort: "Attack on Titan",
   genres: ["Action", "Dark Fantasy", "Post-Apocalyptic"],
   tags: ["manga", "titans", "survival", "military"],
@@ -593,7 +600,8 @@ export function transformToMetadataForTemplate(
     language: metadata.language ?? null,
     status: metadata.status ?? null,
     readingDirection: metadata.readingDirection ?? null,
-    totalBookCount: metadata.totalBookCount ?? null,
+    totalVolumeCount: metadata.totalVolumeCount ?? null,
+    totalChapterCount: metadata.totalChapterCount ?? null,
     titleSort: metadata.titleSort ?? null,
 
     // Simplify genres to just names
@@ -652,7 +660,8 @@ export function transformFullSeriesToMetadataForTemplate(
     language: metadata.language ?? null,
     status: metadata.status ?? null,
     readingDirection: metadata.readingDirection ?? null,
-    totalBookCount: metadata.totalBookCount ?? null,
+    totalVolumeCount: metadata.totalVolumeCount ?? null,
+    totalChapterCount: metadata.totalChapterCount ?? null,
     titleSort: metadata.titleSort ?? null,
 
     // Arrays from top-level of FullSeriesResponse

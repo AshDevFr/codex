@@ -118,14 +118,6 @@ export interface PluginSeriesMetadata {
 
   // Extended metadata
   /**
-   * Expected total number of books in the series.
-   *
-   * @deprecated Use `totalVolumeCount` and/or `totalChapterCount` instead.
-   * Kept for one phase of backward-compat with older plugins; will be removed
-   * in a future protocol version.
-   */
-  totalBookCount?: number;
-  /**
    * Expected total number of volumes in the series, when known.
    * Use this for volume-organized libraries.
    */

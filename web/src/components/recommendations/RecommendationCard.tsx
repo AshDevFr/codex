@@ -80,7 +80,8 @@ export function RecommendationCard({
     status,
     format,
     countryOfOrigin,
-    totalBookCount,
+    totalVolumeCount,
+    totalChapterCount,
     rating,
     popularity,
   } = recommendation;
@@ -183,14 +184,24 @@ export function RecommendationCard({
                   : format}
             </Badge>
           )}
-          {totalBookCount != null && (
+          {totalVolumeCount != null && (
             <Badge
               size="xs"
               variant="light"
               color="gray"
               leftSection={<IconBook size={10} />}
             >
-              {totalBookCount} vol
+              {totalVolumeCount} vol
+            </Badge>
+          )}
+          {totalChapterCount != null && (
+            <Badge
+              size="xs"
+              variant="light"
+              color="gray"
+              leftSection={<IconBook size={10} />}
+            >
+              {totalChapterCount} ch
             </Badge>
           )}
           {rating != null && (

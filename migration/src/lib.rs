@@ -137,6 +137,8 @@ mod m20260410_000066_add_export_type;
 
 // Split series_metadata.total_book_count into total_volume_count and total_chapter_count
 mod m20260502_000067_split_book_count;
+// Drop legacy series_metadata.total_book_count and lock columns (Phase 9 hard removal)
+mod m20260502_000068_drop_book_count;
 
 pub struct Migrator;
 
@@ -246,6 +248,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260410_000066_add_export_type::Migration),
             // Split total_book_count into total_volume_count and total_chapter_count
             Box::new(m20260502_000067_split_book_count::Migration),
+            // Drop legacy total_book_count column and lock (Phase 9 hard removal)
+            Box::new(m20260502_000068_drop_book_count::Migration),
         ]
     }
 }

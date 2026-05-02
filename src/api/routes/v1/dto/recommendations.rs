@@ -172,7 +172,8 @@ mod tests {
         assert!(!obj.contains_key("basedOn"));
         assert!(!obj.contains_key("codexSeriesId"));
         assert!(!obj.contains_key("status"));
-        assert!(!obj.contains_key("totalBookCount"));
+        assert!(!obj.contains_key("totalVolumeCount"));
+        assert!(!obj.contains_key("totalChapterCount"));
         assert!(!obj.contains_key("rating"));
         assert!(!obj.contains_key("popularity"));
     }

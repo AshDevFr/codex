@@ -3,9 +3,7 @@
  *
  * Inputs come from `series.bookCount` (local count) and `series.metadata`
  * (`totalVolumeCount`, `totalChapterCount`). Either total may be null/undefined
- * when the metadata provider didn't expose it. The legacy `totalBookCount` on
- * the wire still mirrors `totalVolumeCount` until Phase 9; we read the new
- * field exclusively here so call sites stop fanning out the fallback.
+ * when the metadata provider didn't expose it.
  */
 
 export interface SeriesCountInputs {

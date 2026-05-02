@@ -1630,7 +1630,7 @@ async fn test_series_context_field_access_dual_path_support() {
         title_sort: Some("Test Series".to_string()),
         age_rating: Some(13),
         reading_direction: Some("rtl".to_string()),
-        total_book_count: Some(50),
+        total_volume_count: Some(50),
         genres: vec!["Action".to_string(), "Drama".to_string()],
         tags: vec!["fantasy".to_string()],
         title_lock: true,
@@ -1660,7 +1660,7 @@ async fn test_series_context_field_access_dual_path_support() {
         Some(FieldValue::String("rtl".to_string()))
     );
     assert_eq!(
-        context.get_field("metadata.totalBookCount"),
+        context.get_field("metadata.totalVolumeCount"),
         Some(FieldValue::Number(50.0))
     );
     assert_eq!(

@@ -302,9 +302,6 @@ export function convertRecommendations(
       format: media.format ?? undefined,
       countryOfOrigin: media.countryOfOrigin ?? undefined,
       startYear: media.startDate?.year ?? undefined,
-      // Legacy field mirrors the volume count so older Codex versions still
-      // see a value; new field is the authoritative one going forward.
-      totalBookCount: totalVolumeCount,
       totalVolumeCount,
       totalChapterCount,
       rating: media.averageScore ?? undefined,

@@ -103,7 +103,8 @@ export type PluginPermission =
   | "metadata:write:age_rating"
   | "metadata:write:language"
   | "metadata:write:reading_direction"
-  | "metadata:write:total_book_count"
+  | "metadata:write:total_volume_count"
+  | "metadata:write:total_chapter_count"
   | "metadata:write:*"
   | "library:read";
 
@@ -140,8 +141,12 @@ export const AVAILABLE_PERMISSIONS: {
     label: "Write Reading Direction",
   },
   {
-    value: "metadata:write:total_book_count",
-    label: "Write Total Book Count",
+    value: "metadata:write:total_volume_count",
+    label: "Write Total Volume Count",
+  },
+  {
+    value: "metadata:write:total_chapter_count",
+    label: "Write Total Chapter Count",
   },
   { value: "library:read", label: "Read Library" },
 ];

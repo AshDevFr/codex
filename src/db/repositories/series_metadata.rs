@@ -68,12 +68,10 @@ impl SeriesMetadataRepository {
             language: Set(None),
             reading_direction: Set(None),
             year: Set(None),
-            total_book_count: Set(None),
             total_volume_count: Set(None),
             total_chapter_count: Set(None),
             custom_metadata: Set(None),
             authors_json: Set(None),
-            total_book_count_lock: Set(false),
             total_volume_count_lock: Set(false),
             total_chapter_count_lock: Set(false),
             title_lock: Set(false),
@@ -304,30 +302,6 @@ impl SeriesMetadataRepository {
         Ok(model)
     }
 
-    /// Update total book count (expected number of books in the series)
-    ///
-    /// DEPRECATED: kept through Phase 4 of metadata-count-split for the legacy column;
-    /// new callers should use [`update_total_volume_count`] and/or
-    /// [`update_total_chapter_count`]. Removed entirely in Phase 9.
-    pub async fn update_total_book_count(
-        db: &DatabaseConnection,
-        series_id: Uuid,
-        total_book_count: Option<i32>,
-    ) -> Result<series_metadata::Model> {
-        let existing = Self::get_by_series_id(db, series_id)
-            .await?
-            .ok_or_else(|| {
-                anyhow::anyhow!("Series metadata not found for series: {}", series_id)
-            })?;
-
-        let mut active_model: series_metadata::ActiveModel = existing.into();
-        active_model.total_book_count = Set(total_book_count);
-        active_model.updated_at = Set(Utc::now());
-
-        let model = active_model.update(db).await?;
-        Ok(model)
-    }
-
     /// Update the expected total volume count for a series.
     ///
     /// Pass `None` to clear the value. The lock state is independent and unchanged.
@@ -420,7 +394,6 @@ impl SeriesMetadataRepository {
             "language" => active_model.language_lock = Set(locked),
             "reading_direction" => active_model.reading_direction_lock = Set(locked),
             "year" => active_model.year_lock = Set(locked),
-            "total_book_count" => active_model.total_book_count_lock = Set(locked),
             "total_volume_count" => active_model.total_volume_count_lock = Set(locked),
             "total_chapter_count" => active_model.total_chapter_count_lock = Set(locked),
             "genres" => active_model.genres_lock = Set(locked),
@@ -448,7 +421,6 @@ impl SeriesMetadataRepository {
             "language" => metadata.language_lock,
             "reading_direction" => metadata.reading_direction_lock,
             "year" => metadata.year_lock,
-            "total_book_count" => metadata.total_book_count_lock,
             "total_volume_count" => metadata.total_volume_count_lock,
             "total_chapter_count" => metadata.total_chapter_count_lock,
             "genres" => metadata.genres_lock,

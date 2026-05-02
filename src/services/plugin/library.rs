@@ -169,10 +169,6 @@ pub async fn build_user_library(
             }),
             genres,
             tags,
-            // Legacy `total_book_count` mirrors `total_volume_count` for one phase
-            // to keep older plugins compatible. Removed in Phase 9 of the
-            // metadata-count-split plan.
-            total_book_count: meta.and_then(|m| m.total_volume_count),
             total_volume_count: meta.and_then(|m| m.total_volume_count),
             total_chapter_count: meta.and_then(|m| m.total_chapter_count),
             external_ids,

@@ -15,13 +15,14 @@ pub const JSONRPC_VERSION: &str = "2.0";
 
 /// Plugin protocol version
 ///
-/// Bumped to 1.1 (additive minor) when `total_volume_count` + `total_chapter_count`
-/// were added to `PluginSeriesMetadata` / `UserLibraryEntry` and
-/// `MetadataWriteTotalVolumeCount` / `MetadataWriteTotalChapterCount` permissions were
-/// introduced. Plugins built against 1.0 still deserialize cleanly (legacy
-/// `total_book_count` remains in the schema).
+/// - 1.1 (additive minor): added `total_volume_count` + `total_chapter_count` and the
+///   matching `MetadataWriteTotalVolumeCount` / `MetadataWriteTotalChapterCount`
+///   permissions; legacy `total_book_count` still accepted on the wire.
+/// - 1.2 (breaking minor): legacy `total_book_count` field and
+///   `MetadataWriteTotalBookCount` permission removed; plugins must populate the split
+///   counts directly.
 #[allow(dead_code)] // Protocol contract: sent to plugins during initialize
-pub const PROTOCOL_VERSION: &str = "1.1";
+pub const PROTOCOL_VERSION: &str = "1.2";
 
 // =============================================================================
 // JSON-RPC Base Types
@@ -781,13 +782,6 @@ pub struct PluginSeriesMetadata {
     pub year: Option<i32>,
 
     // Extended metadata
-    /// Expected total number of books in the series.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat with older plugins. Plugins
-    /// should populate `total_volume_count` and/or `total_chapter_count` instead.
-    /// Removed in Phase 9 of the metadata-count-split plan.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub total_book_count: Option<i32>,
     /// Expected total number of volumes in the series, when known.
     /// Use this for volume-organized libraries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1215,13 +1209,6 @@ pub struct UserLibraryEntry {
     /// Tags
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
-    /// Total book count in the series.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat with older plugins. Plugins
-    /// should consume `total_volume_count` and/or `total_chapter_count` instead.
-    /// Removed in Phase 9 of the metadata-count-split plan.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub total_book_count: Option<i32>,
     /// Expected total number of volumes in the series, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_volume_count: Option<i32>,
@@ -1549,7 +1536,6 @@ mod tests {
             summary: Some("A pirate adventure".to_string()),
             status: Some(SeriesStatus::Ongoing),
             year: Some(1997),
-            total_book_count: Some(100),
             total_volume_count: Some(100),
             total_chapter_count: Some(1086.0),
             language: Some("ja".to_string()),
@@ -1628,7 +1614,6 @@ mod tests {
             summary: None,
             status: None,
             year: None,
-            total_book_count: None,
             total_volume_count: None,
             total_chapter_count: None,
             language: None,
@@ -1664,8 +1649,6 @@ mod tests {
         let parsed: PluginSeriesMetadata = serde_json::from_value(json).unwrap();
         assert_eq!(parsed.total_volume_count, Some(14));
         assert_eq!(parsed.total_chapter_count, Some(109.5));
-        // Legacy field is None when only the new fields are sent.
-        assert_eq!(parsed.total_book_count, None);
 
         // Round-trip back to JSON preserves both fields.
         let serialized = serde_json::to_value(&parsed).unwrap();
@@ -1674,17 +1657,16 @@ mod tests {
     }
 
     #[test]
-    fn test_plugin_series_metadata_legacy_total_book_count_still_deserializes() {
-        // An old plugin that only emits the legacy field must still parse cleanly,
-        // with the new fields absent (None). The Phase 4 fallback in MetadataApplier
-        // is what routes this to total_volume_count at write time.
+    fn test_plugin_series_metadata_legacy_total_book_count_is_ignored() {
+        // Protocol 1.2 dropped the legacy field. Older plugins that still emit it
+        // must still parse (serde ignores unknown fields by default), but the
+        // value is silently discarded - there is no longer a routing path for it.
         let json = json!({
             "externalId": "old-1",
             "externalUrl": "https://example.com/old-1",
             "totalBookCount": 14,
         });
         let parsed: PluginSeriesMetadata = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.total_book_count, Some(14));
         assert_eq!(parsed.total_volume_count, None);
         assert_eq!(parsed.total_chapter_count, None);
     }
@@ -1700,7 +1682,6 @@ mod tests {
             summary: None,
             status: None,
             year: None,
-            total_book_count: None,
             total_volume_count: None,
             total_chapter_count: None,
             language: None,
@@ -1738,7 +1719,6 @@ mod tests {
         let parsed: UserLibraryEntry = serde_json::from_value(json).unwrap();
         assert_eq!(parsed.total_volume_count, Some(107));
         assert_eq!(parsed.total_chapter_count, Some(1086.5));
-        assert_eq!(parsed.total_book_count, None);
 
         let serialized = serde_json::to_value(&parsed).unwrap();
         assert_eq!(serialized["totalVolumeCount"], 107);
@@ -1747,10 +1727,11 @@ mod tests {
 
     #[test]
     fn test_protocol_version_is_minor_bumped() {
-        // Phase 2 of metadata-count-split bumps the protocol from 1.0 to 1.1
-        // (additive minor). Older 1.0 plugins continue to deserialize because
-        // total_book_count is still on the wire.
-        assert_eq!(PROTOCOL_VERSION, "1.1");
+        // Phase 9 of metadata-count-split bumps the protocol from 1.1 to 1.2:
+        // legacy `totalBookCount` field and `metadata:write:total_book_count`
+        // permission are removed. Plugins that still emit the legacy field
+        // round-trip through serde silently (the field is dropped on decode).
+        assert_eq!(PROTOCOL_VERSION, "1.2");
     }
 
     #[test]
@@ -2284,7 +2265,6 @@ mod tests {
             status: Some(SeriesStatus::Ongoing),
             genres: vec!["Action".to_string(), "Adventure".to_string()],
             tags: vec!["pirates".to_string()],
-            total_book_count: Some(107),
             total_volume_count: Some(107),
             total_chapter_count: Some(1086.5),
             external_ids: vec![UserLibraryExternalId {
@@ -2308,7 +2288,8 @@ mod tests {
         assert_eq!(json["year"], 1997);
         assert_eq!(json["status"], "ongoing");
         assert_eq!(json["genres"].as_array().unwrap().len(), 2);
-        assert_eq!(json["totalBookCount"], 107);
+        assert_eq!(json["totalVolumeCount"], 107);
+        assert_eq!(json["totalChapterCount"], 1086.5);
         assert_eq!(json["externalIds"][0]["source"], "anilist");
         assert_eq!(json["externalIds"][0]["externalId"], "21");
         assert_eq!(json["readingStatus"], "reading");
@@ -2329,7 +2310,6 @@ mod tests {
             status: None,
             genres: vec![],
             tags: vec![],
-            total_book_count: None,
             total_volume_count: None,
             total_chapter_count: None,
             external_ids: vec![],
@@ -2435,7 +2415,6 @@ mod tests {
             status: None,
             genres: vec![],
             tags: vec![],
-            total_book_count: None,
             total_volume_count: None,
             total_chapter_count: None,
             external_ids: vec![

@@ -126,14 +126,6 @@ pub struct Recommendation {
     /// Year the series started
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_year: Option<i32>,
-    /// Total expected number of books/volumes in the series.
-    ///
-    /// DEPRECATED: kept for one phase of backward-compat with older
-    /// recommendation plugins. Plugins should populate `total_volume_count`
-    /// and/or `total_chapter_count` instead. Removed in Phase 9 of the
-    /// metadata-count-split plan.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub total_book_count: Option<i32>,
     /// Total expected number of volumes in the series, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_volume_count: Option<i32>,
@@ -268,7 +260,6 @@ mod tests {
                 status: None,
                 genres: vec!["Action".to_string(), "Dark Fantasy".to_string()],
                 tags: vec![],
-                total_book_count: Some(41),
                 total_volume_count: Some(41),
                 total_chapter_count: None,
                 external_ids: vec![],
@@ -338,7 +329,6 @@ mod tests {
                 format: None,
                 country_of_origin: None,
                 start_year: None,
-                total_book_count: Some(27),
                 total_volume_count: Some(27),
                 total_chapter_count: None,
                 rating: Some(85),
@@ -352,7 +342,7 @@ mod tests {
         assert_eq!(json["recommendations"][0]["title"], "Vinland Saga");
         assert_eq!(json["recommendations"][0]["score"], 0.95);
         assert_eq!(json["recommendations"][0]["status"], "ongoing");
-        assert_eq!(json["recommendations"][0]["totalBookCount"], 27);
+        assert_eq!(json["recommendations"][0]["totalVolumeCount"], 27);
         assert_eq!(json["recommendations"][0]["rating"], 85);
         assert_eq!(json["recommendations"][0]["popularity"], 120000);
         assert_eq!(json["generatedAt"], "2026-02-06T12:00:00Z");
@@ -409,7 +399,6 @@ mod tests {
             format: Some("MANGA".to_string()),
             country_of_origin: Some("JP".to_string()),
             start_year: Some(1994),
-            total_book_count: Some(18),
             total_volume_count: Some(18),
             total_chapter_count: Some(162.0),
             rating: Some(92),
@@ -431,7 +420,6 @@ mod tests {
         assert_eq!(json["codexSeriesId"], "codex-uuid-123");
         assert!(json["inLibrary"].as_bool().unwrap());
         assert_eq!(json["status"], "ended");
-        assert_eq!(json["totalBookCount"], 18);
         assert_eq!(json["totalVolumeCount"], 18);
         assert_eq!(json["totalChapterCount"], 162.0);
         assert_eq!(json["rating"], 92);
@@ -463,7 +451,6 @@ mod tests {
         assert!(rec.format.is_none());
         assert!(rec.country_of_origin.is_none());
         assert!(rec.start_year.is_none());
-        assert!(rec.total_book_count.is_none());
         assert!(rec.total_volume_count.is_none());
         assert!(rec.total_chapter_count.is_none());
         assert!(rec.rating.is_none());
@@ -489,7 +476,6 @@ mod tests {
             format: None,
             country_of_origin: None,
             start_year: None,
-            total_book_count: None,
             total_volume_count: None,
             total_chapter_count: None,
             rating: None,
@@ -530,7 +516,6 @@ mod tests {
                 status: None,
                 genres: vec!["Adventure".to_string()],
                 tags: vec![],
-                total_book_count: None,
                 total_volume_count: None,
                 total_chapter_count: None,
                 external_ids: vec![],
