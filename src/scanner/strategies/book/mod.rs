@@ -1,7 +1,10 @@
-//! Book naming strategy implementations
+//! Book metadata strategy implementations
 //!
-//! Book naming strategies determine how individual book titles are resolved
-//! from filesystem paths and metadata.
+//! Book metadata strategies determine how per-book facts (title, volume,
+//! chapter) are resolved from filesystem paths and embedded metadata. The
+//! framing is "which sources do we trust for facts about this book"; title is
+//! just the first fact we extract. Volume and chapter classification (Phase 11
+//! of metadata-count-split) live on the same trait, mirroring the title flow.
 //!
 //! TODO: Remove allow(dead_code) once all book strategy features are fully integrated
 
@@ -21,7 +24,7 @@ pub use smart::SmartStrategy;
 
 use crate::models::{BookStrategy, CustomBookConfig, SmartBookConfig};
 
-/// Context for resolving book titles
+/// Context for resolving book metadata
 #[derive(Debug, Clone)]
 pub struct BookNamingContext {
     /// Series name (for SeriesName strategy)
@@ -36,17 +39,30 @@ pub struct BookNamingContext {
     pub total_books: usize,
 }
 
-/// Metadata that may contain a title
+/// Metadata that may contribute facts about a book (title, volume, chapter).
+///
+/// Mirrors the fields on `book_metadata` that the per-book classification cares
+/// about. Strategies use this as their "ComicInfo says X" input shape.
 #[derive(Debug, Clone, Default)]
 pub struct BookMetadata {
     /// Title from ComicInfo.xml or embedded metadata
     pub title: Option<String>,
-    /// Number from metadata
+    /// Number from metadata (legacy single-axis identifier)
     pub number: Option<f32>,
+    /// Volume number from metadata (e.g. ComicInfo `<Volume>`)
+    pub volume: Option<i32>,
+    /// Chapter number from metadata (fractional, e.g. side chapters at 47.5)
+    pub chapter: Option<f32>,
 }
 
-/// Trait for book naming strategy implementations
-pub trait BookNamingStrategy: Send + Sync {
+/// Trait for per-book metadata strategy implementations.
+///
+/// Renamed from `BookNamingStrategy` (Phase 11 of metadata-count-split): the
+/// trait is no longer purely about titles. It now resolves three independent
+/// facts about a book — title, volume, chapter — from the same trio of inputs
+/// (filename, metadata, context). Strategies remain free to implement only the
+/// methods they have meaningful answers for; the rest return `None` defaults.
+pub trait BookMetadataStrategy: Send + Sync {
     /// Get the strategy type
     fn strategy_type(&self) -> BookStrategy;
 
@@ -57,7 +73,39 @@ pub trait BookNamingStrategy: Send + Sync {
         metadata: Option<&BookMetadata>,
         context: &BookNamingContext,
     ) -> String;
+
+    /// Resolve the volume number for this book, if known.
+    ///
+    /// Default: `None`. Strategies that have a meaningful answer (filename
+    /// regex, ComicInfo `<Volume>`, etc.) override this.
+    fn resolve_volume(
+        &self,
+        _file_name: &str,
+        _metadata: Option<&BookMetadata>,
+        _context: &BookNamingContext,
+    ) -> Option<i32> {
+        None
+    }
+
+    /// Resolve the chapter number for this book, if known.
+    ///
+    /// Default: `None`. Fractional chapters (e.g. 47.5 side chapters) are
+    /// preserved via `f32`; integer chapters parse cleanly into the same type.
+    fn resolve_chapter(
+        &self,
+        _file_name: &str,
+        _metadata: Option<&BookMetadata>,
+        _context: &BookNamingContext,
+    ) -> Option<f32> {
+        None
+    }
 }
+
+/// Backwards-compat alias. Prefer `BookMetadataStrategy` in new code; the
+/// `BookNamingStrategy` name is kept as a re-export for now to keep the
+/// downstream cascade narrow during Phase 11. Remove in a follow-up once all
+/// call sites are updated.
+pub use self::BookMetadataStrategy as BookNamingStrategy;
 
 /// Remove file extension from filename
 pub fn filename_without_extension(file_name: &str) -> String {
@@ -68,11 +116,11 @@ pub fn filename_without_extension(file_name: &str) -> String {
     }
 }
 
-/// Create a book naming strategy from configuration
+/// Create a book metadata strategy from configuration
 pub fn create_book_strategy(
     strategy: BookStrategy,
     config: Option<&str>,
-) -> Box<dyn BookNamingStrategy> {
+) -> Box<dyn BookMetadataStrategy> {
     match strategy {
         BookStrategy::Filename => Box::new(FilenameStrategy::new()),
         BookStrategy::MetadataFirst => Box::new(MetadataFirstStrategy::new()),

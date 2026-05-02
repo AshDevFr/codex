@@ -1213,6 +1213,7 @@ pub async fn patch_book(
             month: Set(None),
             day: Set(None),
             volume: Set(None),
+            chapter: Set(None),
             count: Set(None),
             isbns: Set(None),
             // New Phase 1 fields
@@ -1244,6 +1245,7 @@ pub async fn patch_book(
             month_lock: Set(false),
             day_lock: Set(false),
             volume_lock: Set(false),
+            chapter_lock: Set(false),
             count_lock: Set(false),
             isbns_lock: Set(false),
             // New Phase 1 lock fields
@@ -2176,6 +2178,7 @@ pub async fn replace_book_metadata(
             month: Set(request.month),
             day: Set(request.day),
             volume: Set(request.volume),
+            chapter: Set(None),
             count: Set(request.count),
             isbns: Set(request.isbns.clone()),
             // New Phase 1 fields
@@ -2207,6 +2210,7 @@ pub async fn replace_book_metadata(
             month_lock: Set(request.month.is_some()),
             day_lock: Set(request.day.is_some()),
             volume_lock: Set(request.volume.is_some()),
+            chapter_lock: Set(false),
             count_lock: Set(request.count.is_some()),
             isbns_lock: Set(request.isbns.is_some()),
             // New Phase 1 lock fields
@@ -2763,6 +2767,7 @@ pub async fn patch_book_metadata(
             month: Set(month_opt),
             day: Set(day_opt),
             volume: Set(volume_opt),
+            chapter: Set(None),
             count: Set(count_opt),
             isbns: Set(isbns_opt.clone()),
             // New Phase 6 fields
@@ -2796,6 +2801,7 @@ pub async fn patch_book_metadata(
             month_lock: Set(month_opt.is_some()),
             day_lock: Set(day_opt.is_some()),
             volume_lock: Set(volume_opt.is_some()),
+            chapter_lock: Set(false),
             count_lock: Set(count_opt.is_some()),
             isbns_lock: Set(isbns_opt.is_some()),
             // New Phase 6 lock fields

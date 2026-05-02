@@ -8,7 +8,10 @@ use regex::Regex;
 
 use crate::models::{BookStrategy, SmartBookConfig};
 
-use super::{BookMetadata, BookNamingContext, BookNamingStrategy, filename_without_extension};
+use super::{
+    BookMetadata, BookNamingContext, BookNamingStrategy, FilenameStrategy,
+    filename_without_extension,
+};
 
 lazy_static! {
     /// Default patterns for generic titles that should be skipped
@@ -87,6 +90,32 @@ impl BookNamingStrategy for SmartStrategy {
             .cloned()
             .unwrap_or_else(|| filename_without_extension(file_name))
     }
+
+    /// Volume: ComicInfo first (more authoritative), filename fallback. Mirrors
+    /// the Smart "metadata-when-meaningful, filename otherwise" idiom on the
+    /// title axis.
+    fn resolve_volume(
+        &self,
+        file_name: &str,
+        metadata: Option<&BookMetadata>,
+        context: &BookNamingContext,
+    ) -> Option<i32> {
+        metadata
+            .and_then(|m| m.volume)
+            .or_else(|| FilenameStrategy::new().resolve_volume(file_name, metadata, context))
+    }
+
+    /// Chapter: ComicInfo first, filename fallback.
+    fn resolve_chapter(
+        &self,
+        file_name: &str,
+        metadata: Option<&BookMetadata>,
+        context: &BookNamingContext,
+    ) -> Option<f32> {
+        metadata
+            .and_then(|m| m.chapter)
+            .or_else(|| FilenameStrategy::new().resolve_chapter(file_name, metadata, context))
+    }
 }
 
 #[cfg(test)]
@@ -110,6 +139,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("The Dark Knight Returns".to_string()),
             number: Some(1.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("batman-001.cbz", Some(&metadata), &ctx);
@@ -123,6 +154,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("Vol. 3".to_string()),
             number: Some(3.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("batman-003.cbz", Some(&metadata), &ctx);
@@ -136,6 +169,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("Volume 1".to_string()),
             number: Some(1.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("series-vol01.cbz", Some(&metadata), &ctx);
@@ -149,6 +184,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("Chapter 5".to_string()),
             number: Some(5.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("manga-ch005.cbz", Some(&metadata), &ctx);
@@ -162,6 +199,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("Issue #42".to_string()),
             number: Some(42.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("comic-042.cbz", Some(&metadata), &ctx);
@@ -175,6 +214,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("42".to_string()),
             number: Some(42.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("comic-042.cbz", Some(&metadata), &ctx);
@@ -188,6 +229,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("#1".to_string()),
             number: Some(1.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("comic-001.cbz", Some(&metadata), &ctx);
@@ -204,6 +247,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("Book 1".to_string()),
             number: Some(1.0),
+            volume: None,
+            chapter: None,
         };
 
         let title = strategy.resolve_title("novel-001.epub", Some(&metadata), &ctx);

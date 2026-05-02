@@ -538,3 +538,116 @@ async fn test_migration_068_drop_legacy_sqlite() {
 
     db.close().await;
 }
+
+// -- Migration 069 (add_book_chapter) tests --
+// Phase 11 of metadata-count-split: adds `chapter` and `chapter_lock` to
+// book_metadata. Verifies up/down behavior and default values for existing rows.
+
+/// Helper: run all migrations except the very last (069) so tests can apply 069 in isolation.
+async fn setup_db_before_migration_069() -> (Database, TempDir) {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+
+    let config = DatabaseConfig {
+        db_type: DatabaseType::SQLite,
+        postgres: None,
+        sqlite: Some(SQLiteConfig {
+            path: db_path.to_str().unwrap().to_string(),
+            pragmas: None,
+            ..SQLiteConfig::default()
+        }),
+    };
+
+    let db = Database::new(&config).await.unwrap();
+    let conn = db.sea_orm_connection();
+
+    // Run all 66 migrations except the last one (069). Total = 66; running 65 leaves
+    // 069 pending so the test below can apply it via `Some(1)` and assert before/after.
+    Migrator::up(conn, Some(65)).await.unwrap();
+
+    (db, temp_dir)
+}
+
+#[tokio::test]
+async fn test_migration_069_adds_chapter_columns_sqlite() {
+    let (db, _temp_dir) = setup_db_before_migration_069().await;
+    let conn = db.sea_orm_connection();
+
+    // Pre-conditions: chapter columns do not yet exist; volume + volume_lock do.
+    assert!(sqlite_has_column(conn, "book_metadata", "volume").await);
+    assert!(sqlite_has_column(conn, "book_metadata", "volume_lock").await);
+    assert!(!sqlite_has_column(conn, "book_metadata", "chapter").await);
+    assert!(!sqlite_has_column(conn, "book_metadata", "chapter_lock").await);
+
+    // Seed a library, series, book, and book_metadata row using the pre-069 schema
+    // so we can verify the new columns get default values applied to existing rows.
+    conn.execute_unprepared(
+        "INSERT INTO libraries (id, name, path, series_strategy, book_strategy, number_strategy, default_reading_direction, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000001', 'Lib', '/lib', 'series_volume', 'filename', 'file_order', 'LEFT_TO_RIGHT', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    conn.execute_unprepared(
+        "INSERT INTO series (id, library_id, path, name, normalized_name, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000010', X'00000000000000000000000000000001', '/path', 'S', 's', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    conn.execute_unprepared(
+        "INSERT INTO books (id, series_id, library_id, file_path, file_name, file_size, file_hash, partial_hash, format, page_count, deleted, analyzed, modified_at, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000020', X'00000000000000000000000000000010', X'00000000000000000000000000000001', '/path/v01.cbz', 'v01.cbz', 1024, 'h', '', 'cbz', 10, 0, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    conn.execute_unprepared(
+        "INSERT INTO book_metadata (id, book_id, search_title, volume, volume_lock, created_at, updated_at)
+         VALUES (X'00000000000000000000000000000030', X'00000000000000000000000000000020', 'v01', 1, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    ).await.unwrap();
+
+    // Apply migration 069.
+    Migrator::up(conn, Some(1)).await.unwrap();
+
+    // Post-conditions: new columns exist.
+    assert!(sqlite_has_column(conn, "book_metadata", "chapter").await);
+    assert!(sqlite_has_column(conn, "book_metadata", "chapter_lock").await);
+
+    // Existing row gains NULL chapter and chapter_lock = false (the default).
+    let row = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT volume, chapter, chapter_lock FROM book_metadata WHERE id = X'00000000000000000000000000000030'"
+                .to_string(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    let volume: Option<i32> = row.try_get("", "volume").unwrap();
+    let chapter: Option<f32> = row.try_get("", "chapter").unwrap();
+    let chapter_lock: bool = row.try_get("", "chapter_lock").unwrap();
+    assert_eq!(volume, Some(1));
+    assert!(
+        chapter.is_none(),
+        "chapter must be NULL for pre-existing rows"
+    );
+    assert!(!chapter_lock, "chapter_lock must default to false");
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_migration_069_down_drops_chapter_columns_sqlite() {
+    let (db, _temp_dir) = setup_db_before_migration_069().await;
+    let conn = db.sea_orm_connection();
+
+    // Apply 069 then immediately roll it back.
+    Migrator::up(conn, Some(1)).await.unwrap();
+    assert!(sqlite_has_column(conn, "book_metadata", "chapter").await);
+    assert!(sqlite_has_column(conn, "book_metadata", "chapter_lock").await);
+
+    Migrator::down(conn, Some(1)).await.unwrap();
+
+    // Down drops the two new columns; volume + volume_lock still around.
+    assert!(!sqlite_has_column(conn, "book_metadata", "chapter").await);
+    assert!(!sqlite_has_column(conn, "book_metadata", "chapter_lock").await);
+    assert!(sqlite_has_column(conn, "book_metadata", "volume").await);
+    assert!(sqlite_has_column(conn, "book_metadata", "volume_lock").await);
+
+    db.close().await;
+}

@@ -128,6 +128,37 @@ impl BookNamingStrategy for CustomStrategy {
         let fallback_strategy = create_book_strategy(self.fallback, None);
         fallback_strategy.resolve_title(file_name, metadata, context)
     }
+
+    /// Volume from the user's `(?P<volume>\d+)` named group. `extract_volume`
+    /// returns `f32` (Custom predates Phase 11); the trait narrows to `i32` for
+    /// schema compat. Fractional values are rejected rather than truncated —
+    /// silent truncation would discard user-meaningful information. If a user
+    /// hits this we widen the column.
+    fn resolve_volume(
+        &self,
+        file_name: &str,
+        _metadata: Option<&BookMetadata>,
+        _context: &BookNamingContext,
+    ) -> Option<i32> {
+        let name = filename_without_extension(file_name);
+        self.extract_volume(&name).and_then(|v| {
+            if v.fract() == 0.0 && v >= 0.0 {
+                Some(v as i32)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn resolve_chapter(
+        &self,
+        file_name: &str,
+        _metadata: Option<&BookMetadata>,
+        _context: &BookNamingContext,
+    ) -> Option<f32> {
+        let name = filename_without_extension(file_name);
+        self.extract_chapter(&name)
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +262,8 @@ mod tests {
         let metadata = BookMetadata {
             title: Some("The Dark Knight".to_string()),
             number: Some(1.0),
+            volume: None,
+            chapter: None,
         };
 
         // This doesn't match the pattern, so fallback to metadata_first
