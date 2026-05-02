@@ -107,11 +107,6 @@ pub struct MetadataContext {
     pub language: Option<String>,
     pub reading_direction: Option<String>,
     pub year: Option<i32>,
-    /// DEPRECATED: kept for one phase of backward-compat. Mirrors
-    /// `total_volume_count`. Removed in Phase 9 of the metadata-count-split
-    /// plan; preprocessing rules should reference `totalVolumeCount` or
-    /// `totalChapterCount` going forward.
-    pub total_book_count: Option<i32>,
     pub total_volume_count: Option<i32>,
     pub total_chapter_count: Option<f32>,
 
@@ -150,9 +145,6 @@ pub struct MetadataContext {
     pub language_lock: bool,
     pub reading_direction_lock: bool,
     pub year_lock: bool,
-    /// DEPRECATED: kept for one phase of backward-compat alongside
-    /// `total_book_count`. Removed in Phase 9.
-    pub total_book_count_lock: bool,
     pub total_volume_count_lock: bool,
     pub total_chapter_count_lock: bool,
     pub genres_lock: bool,
@@ -358,10 +350,6 @@ impl SeriesContext {
                 .clone()
                 .map(FieldValue::String),
             "year" => self.metadata.year.map(|v| FieldValue::Number(v as f64)),
-            "totalBookCount" | "total_book_count" => self
-                .metadata
-                .total_book_count
-                .map(|v| FieldValue::Number(v as f64)),
             "totalVolumeCount" | "total_volume_count" => self
                 .metadata
                 .total_volume_count
@@ -444,9 +432,6 @@ impl SeriesContext {
                 Some(FieldValue::Bool(self.metadata.reading_direction_lock))
             }
             "yearLock" | "year_lock" => Some(FieldValue::Bool(self.metadata.year_lock)),
-            "totalBookCountLock" | "total_book_count_lock" => {
-                Some(FieldValue::Bool(self.metadata.total_book_count_lock))
-            }
             "totalVolumeCountLock" | "total_volume_count_lock" => {
                 Some(FieldValue::Bool(self.metadata.total_volume_count_lock))
             }
@@ -627,7 +612,6 @@ impl SeriesContextBuilder {
                 language: m.language.clone(),
                 reading_direction: m.reading_direction.clone(),
                 year: m.year,
-                total_book_count: m.total_volume_count,
                 total_volume_count: m.total_volume_count,
                 total_chapter_count: m.total_chapter_count,
                 genres: genres.iter().map(|g| g.name.clone()).collect(),
@@ -646,7 +630,6 @@ impl SeriesContextBuilder {
                 language_lock: m.language_lock,
                 reading_direction_lock: m.reading_direction_lock,
                 year_lock: m.year_lock,
-                total_book_count_lock: m.total_volume_count_lock,
                 total_volume_count_lock: m.total_volume_count_lock,
                 total_chapter_count_lock: m.total_chapter_count_lock,
                 genres_lock: m.genres_lock,
@@ -1547,7 +1530,7 @@ mod tests {
             title_sort: Some("One Piece".to_string()),
             age_rating: Some(13),
             reading_direction: Some("rtl".to_string()),
-            total_book_count: Some(100),
+            total_volume_count: Some(100),
             genres: vec!["Action".to_string(), "Adventure".to_string()],
             tags: vec!["pirates".to_string(), "treasure".to_string()],
             title_lock: true,
@@ -1566,8 +1549,8 @@ mod tests {
             "readingDirection should exist"
         );
         assert!(
-            json.get("totalBookCount").is_some(),
-            "totalBookCount should exist"
+            json.get("totalVolumeCount").is_some(),
+            "totalVolumeCount should exist"
         );
         assert!(json.get("titleLock").is_some(), "titleLock should exist");
         assert!(json.get("genresLock").is_some(), "genresLock should exist");
@@ -1590,8 +1573,8 @@ mod tests {
             "reading_direction should not exist"
         );
         assert!(
-            json.get("total_book_count").is_none(),
-            "total_book_count should not exist"
+            json.get("total_volume_count").is_none(),
+            "total_volume_count should not exist"
         );
         assert!(
             json.get("title_lock").is_none(),
@@ -1603,7 +1586,7 @@ mod tests {
         assert_eq!(json["titleSort"], "One Piece");
         assert_eq!(json["ageRating"], 13);
         assert_eq!(json["readingDirection"], "rtl");
-        assert_eq!(json["totalBookCount"], 100);
+        assert_eq!(json["totalVolumeCount"], 100);
         assert_eq!(json["titleLock"], true);
         assert_eq!(json["genres"], serde_json::json!(["Action", "Adventure"]));
         assert_eq!(json["tags"], serde_json::json!(["pirates", "treasure"]));
@@ -1669,7 +1652,7 @@ mod tests {
             title_sort: Some("One Piece".to_string()),
             age_rating: Some(13),
             reading_direction: Some("rtl".to_string()),
-            total_book_count: Some(100),
+            total_volume_count: Some(100),
             title_sort_lock: true,
             ..Default::default()
         };
@@ -1693,7 +1676,7 @@ mod tests {
             Some(FieldValue::String("rtl".to_string()))
         );
         assert_eq!(
-            context.get_field("metadata.totalBookCount"),
+            context.get_field("metadata.totalVolumeCount"),
             Some(FieldValue::Number(100.0))
         );
         assert_eq!(

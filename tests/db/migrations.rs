@@ -390,8 +390,9 @@ async fn setup_db_before_migration_067() -> (Database, TempDir) {
     let db = Database::new(&config).await.unwrap();
     let conn = db.sea_orm_connection();
 
-    // Run all migrations except the last one (067 = split_book_count).
-    // Total migrations after adding 067 is 64; running 63 leaves 067 pending.
+    // Run all migrations except 067 + 068 (the count-split + drop pair).
+    // Total migrations after adding 068 is 65; running 63 leaves 067 and 068
+    // both pending so each test below can apply them step-by-step via Some(1).
     Migrator::up(conn, Some(63)).await.unwrap();
 
     (db, temp_dir)
@@ -450,15 +451,17 @@ async fn test_migration_067_backfill_sqlite() {
          VALUES ({s_lock_only}, 'Empty Locked', NULL, 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
     )).await.unwrap();
 
-    // Run migration 067.
-    Migrator::up(conn, None).await.unwrap();
+    // Run migration 067 only (one step), so the legacy column is still present
+    // and we can verify backfill semantics in isolation. Migration 068 (drop)
+    // is exercised by `test_migration_068_drop_legacy_sqlite` below.
+    Migrator::up(conn, Some(1)).await.unwrap();
 
     // Post-conditions: new columns present.
     assert!(sqlite_has_column(conn, "series_metadata", "total_volume_count").await);
     assert!(sqlite_has_column(conn, "series_metadata", "total_volume_count_lock").await);
     assert!(sqlite_has_column(conn, "series_metadata", "total_chapter_count").await);
     assert!(sqlite_has_column(conn, "series_metadata", "total_chapter_count_lock").await);
-    // Legacy columns still present (kept until Phase 9).
+    // Legacy columns still present after 067 (dropped by 068).
     assert!(sqlite_has_column(conn, "series_metadata", "total_book_count").await);
     assert!(sqlite_has_column(conn, "series_metadata", "total_book_count_lock").await);
 
@@ -502,6 +505,36 @@ async fn test_migration_067_backfill_sqlite() {
     assert!(vol_lock);
     assert!(chap.is_none());
     assert!(!chap_lock);
+
+    db.close().await;
+}
+
+// -- Migration 068 (drop_book_count) tests --
+// Verifies the Phase 9 hard-removal migration drops the legacy total_book_count
+// + total_book_count_lock columns while leaving the split-count columns intact.
+
+#[tokio::test]
+async fn test_migration_068_drop_legacy_sqlite() {
+    let (db, _temp_dir) = setup_db_before_migration_067().await;
+    let conn = db.sea_orm_connection();
+
+    // Apply 067 first so the new columns exist alongside the legacy pair.
+    Migrator::up(conn, Some(1)).await.unwrap();
+    assert!(sqlite_has_column(conn, "series_metadata", "total_book_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_book_count_lock").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_volume_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_chapter_count").await);
+
+    // Apply 068 (drop the legacy columns).
+    Migrator::up(conn, None).await.unwrap();
+
+    // Legacy columns are gone; split-count columns survive.
+    assert!(!sqlite_has_column(conn, "series_metadata", "total_book_count").await);
+    assert!(!sqlite_has_column(conn, "series_metadata", "total_book_count_lock").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_volume_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_volume_count_lock").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_chapter_count").await);
+    assert!(sqlite_has_column(conn, "series_metadata", "total_chapter_count_lock").await);
 
     db.close().await;
 }

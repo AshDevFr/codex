@@ -266,15 +266,12 @@ describe("convertRecommendations", () => {
     const nodes = [makeNode({ id: 1, rating: 50, volumes: 27 })];
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
     expect(results[0].totalVolumeCount).toBe(27);
-    // Legacy totalBookCount mirrors the volume value for backward-compat
-    expect(results[0].totalBookCount).toBe(27);
   });
 
   it("leaves totalVolumeCount undefined when volumes is null", () => {
     const nodes = [makeNode({ id: 1, rating: 50, volumes: null })];
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
     expect(results[0].totalVolumeCount).toBeUndefined();
-    expect(results[0].totalBookCount).toBeUndefined();
   });
 
   it("includes totalChapterCount from chapters", () => {
@@ -294,7 +291,6 @@ describe("convertRecommendations", () => {
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
     expect(results[0].totalVolumeCount).toBe(14);
     expect(results[0].totalChapterCount).toBe(109);
-    expect(results[0].totalBookCount).toBe(14);
   });
 
   it("treats zero or negative volumes/chapters as undefined", () => {
@@ -302,7 +298,6 @@ describe("convertRecommendations", () => {
     const results = convertRecommendations(nodes, "Test", new Set(), new Set());
     expect(results[0].totalVolumeCount).toBeUndefined();
     expect(results[0].totalChapterCount).toBeUndefined();
-    expect(results[0].totalBookCount).toBeUndefined();
   });
 
   it("includes rating from AniList averageScore", () => {

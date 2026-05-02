@@ -329,8 +329,12 @@ const seriesInfoTemplate: ExampleTemplate = {
 **Status:** {{capitalize metadata.status}}
 {{/if}}
 
-{{#if metadata.totalBookCount}}
-**Volumes:** {{metadata.totalBookCount}}
+{{#if metadata.totalVolumeCount}}
+**Volumes:** {{metadata.totalVolumeCount}}
+{{/if}}
+
+{{#if metadata.totalChapterCount}}
+**Chapters:** {{metadata.totalChapterCount}}
 {{/if}}
 
 {{#if metadata.ageRating}}
@@ -406,7 +410,7 @@ const completeOverviewTemplate: ExampleTemplate = {
 {{/if}}
 
 {{#if custom_metadata.current_volume}}
-**Currently on:** Volume {{custom_metadata.current_volume}}{{#if metadata.totalBookCount}} of {{metadata.totalBookCount}}{{/if}}
+**Currently on:** Volume {{custom_metadata.current_volume}}{{#if metadata.totalVolumeCount}} of {{metadata.totalVolumeCount}}{{/if}}
 {{/if}}
 
 {{#if custom_metadata.notes}}
@@ -487,7 +491,8 @@ const kitchenSinkTemplate: ExampleTemplate = {
 {{#if metadata.publisher}}| Publisher | {{metadata.publisher}}{{#if metadata.imprint}} ({{metadata.imprint}}){{/if}} |{{/if}}
 {{#if metadata.year}}| Year | {{metadata.year}} |{{/if}}
 {{#if metadata.status}}| Status | {{capitalize metadata.status}} |{{/if}}
-{{#if metadata.totalBookCount}}| Volumes | {{metadata.totalBookCount}} |{{/if}}
+{{#if metadata.totalVolumeCount}}| Volumes | {{metadata.totalVolumeCount}} |{{/if}}
+{{#if metadata.totalChapterCount}}| Chapters | {{metadata.totalChapterCount}} |{{/if}}
 {{#if metadata.ageRating}}| Age Rating | {{metadata.ageRating}}+ |{{/if}}
 {{#if metadata.language}}| Language | {{metadata.language}} |{{/if}}
 

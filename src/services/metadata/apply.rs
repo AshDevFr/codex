@@ -8,7 +8,7 @@ use sea_orm::DatabaseConnection;
 use sea_orm::prelude::Decimal;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
@@ -337,25 +337,8 @@ impl MetadataApplier {
         }
 
         // Total Volume Count
-        //
-        // Backward-compat fallback (Phase 4 of metadata-count-split): if the
-        // plugin only sent the legacy `total_book_count` field, route its value
-        // into `total_volume_count` and emit a one-time deprecation warning per
-        // plugin. The fallback is removed in Phase 9 along with the legacy
-        // field on the protocol.
-        let effective_total_volume_count = match metadata.total_volume_count {
-            Some(v) => Some(v),
-            None => {
-                if let Some(legacy) = metadata.total_book_count {
-                    warn_legacy_total_book_count(&plugin.name);
-                    Some(legacy)
-                } else {
-                    None
-                }
-            }
-        };
         if should_apply_field("totalVolumeCount")
-            && let Some(total_volume_count) = effective_total_volume_count
+            && let Some(total_volume_count) = metadata.total_volume_count
         {
             let is_locked = current_metadata
                 .map(|m| m.total_volume_count_lock)
@@ -610,24 +593,5 @@ impl MetadataApplier {
             applied_fields,
             skipped_fields,
         })
-    }
-}
-
-/// Emit a one-time-per-plugin deprecation warning when a plugin sends the
-/// legacy `total_book_count` field instead of `total_volume_count`. Removed
-/// in Phase 9 of the metadata-count-split plan.
-fn warn_legacy_total_book_count(plugin_name: &str) {
-    static WARNED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-    let warned = WARNED.get_or_init(|| Mutex::new(HashSet::new()));
-    let mut guard = match warned.lock() {
-        Ok(g) => g,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    if guard.insert(plugin_name.to_string()) {
-        warn!(
-            plugin = plugin_name,
-            "Plugin sent deprecated `total_book_count` field; routing to `total_volume_count`. \
-             Update the plugin to emit `total_volume_count` and/or `total_chapter_count` directly."
-        );
     }
 }

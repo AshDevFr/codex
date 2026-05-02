@@ -753,13 +753,11 @@ impl SeriesRepository {
             language: Set(None),
             reading_direction: Set(None),
             year: Set(None),
-            total_book_count: Set(None),
             total_volume_count: Set(None),
             total_chapter_count: Set(None),
             custom_metadata: Set(None),
             authors_json: Set(None),
             // Lock fields default to false
-            total_book_count_lock: Set(false),
             total_volume_count_lock: Set(false),
             total_chapter_count_lock: Set(false),
             title_lock: Set(false),

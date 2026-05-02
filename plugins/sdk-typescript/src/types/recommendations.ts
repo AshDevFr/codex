@@ -39,13 +39,6 @@ export interface UserLibraryEntry {
   genres: string[];
   /** Tags */
   tags: string[];
-  /**
-   * Total number of books in the series.
-   *
-   * @deprecated Use `totalVolumeCount` and/or `totalChapterCount` instead.
-   * Kept for one phase of backward-compat with older plugins.
-   */
-  totalBookCount?: number;
   /** Expected total number of volumes in the series, when known */
   totalVolumeCount?: number;
   /** Expected total number of chapters in the series, when known. May be fractional. */
@@ -118,13 +111,6 @@ export interface Recommendation {
   countryOfOrigin?: string;
   /** Year the series started */
   startYear?: number;
-  /**
-   * Total expected number of books/volumes in the series.
-   *
-   * @deprecated Use `totalVolumeCount` and/or `totalChapterCount` instead.
-   * Kept for one phase of backward-compat with older plugins.
-   */
-  totalBookCount?: number;
   /** Total expected number of volumes in the series, when known */
   totalVolumeCount?: number;
   /** Total expected number of chapters in the series, when known. May be fractional. */

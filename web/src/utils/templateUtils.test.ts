@@ -28,7 +28,8 @@ function createMockMetadata(
     language: null,
     status: null,
     readingDirection: null,
-    totalBookCount: null,
+    totalVolumeCount: null,
+    totalChapterCount: null,
     titleSort: null,
     genres: [],
     tags: [],
@@ -46,7 +47,8 @@ function createMockMetadata(
       ageRating: false,
       year: false,
       status: false,
-      totalBookCount: false,
+      totalVolumeCount: false,
+      totalChapterCount: false,
       readingDirection: false,
       customMetadata: false,
       genres: false,
@@ -74,7 +76,7 @@ describe("templateUtils", () => {
         language: "ja",
         status: "ended",
         readingDirection: "rtl",
-        totalBookCount: 34,
+        totalVolumeCount: 34,
         titleSort: "Attack on Titan",
       });
 
@@ -89,7 +91,7 @@ describe("templateUtils", () => {
       expect(result.language).toBe("ja");
       expect(result.status).toBe("ended");
       expect(result.readingDirection).toBe("rtl");
-      expect(result.totalBookCount).toBe(34);
+      expect(result.totalVolumeCount).toBe(34);
       expect(result.titleSort).toBe("Attack on Titan");
     });
 
@@ -111,7 +113,8 @@ describe("templateUtils", () => {
       expect(result.language).toBeNull();
       expect(result.status).toBeNull();
       expect(result.readingDirection).toBeNull();
-      expect(result.totalBookCount).toBeNull();
+      expect(result.totalVolumeCount).toBeNull();
+      expect(result.totalChapterCount).toBeNull();
       expect(result.titleSort).toBeNull();
     });
 
@@ -431,7 +434,8 @@ describe("templateUtils", () => {
           language: null,
           status: null,
           readingDirection: null,
-          totalBookCount: null,
+          totalVolumeCount: null,
+          totalChapterCount: null,
           titleSort: null,
           customMetadata: null,
           locks: {
@@ -444,7 +448,8 @@ describe("templateUtils", () => {
             ageRating: false,
             year: false,
             status: false,
-            totalBookCount: false,
+            totalVolumeCount: false,
+            totalChapterCount: false,
             readingDirection: false,
             customMetadata: false,
             genres: false,
@@ -476,7 +481,7 @@ describe("templateUtils", () => {
           language: "ja",
           status: "ended",
           readingDirection: "rtl",
-          totalBookCount: 34,
+          totalVolumeCount: 34,
           titleSort: "Attack on Titan",
         },
       );
@@ -492,7 +497,7 @@ describe("templateUtils", () => {
       expect(result.language).toBe("ja");
       expect(result.status).toBe("ended");
       expect(result.readingDirection).toBe("rtl");
-      expect(result.totalBookCount).toBe(34);
+      expect(result.totalVolumeCount).toBe(34);
       expect(result.titleSort).toBe("Attack on Titan");
     });
 
@@ -723,13 +728,15 @@ describe("templateUtils", () => {
       expect("titleSort" in metadata).toBe(true);
       expect("ageRating" in metadata).toBe(true);
       expect("readingDirection" in metadata).toBe(true);
-      expect("totalBookCount" in metadata).toBe(true);
+      expect("totalVolumeCount" in metadata).toBe(true);
+      expect("totalChapterCount" in metadata).toBe(true);
 
       // Should NOT have snake_case versions
       expect("title_sort" in metadata).toBe(false);
       expect("age_rating" in metadata).toBe(false);
       expect("reading_direction" in metadata).toBe(false);
-      expect("total_book_count" in metadata).toBe(false);
+      expect("total_volume_count" in metadata).toBe(false);
+      expect("total_chapter_count" in metadata).toBe(false);
     });
 
     it("should have metadata lock fields with camelCase names", () => {
@@ -743,7 +750,8 @@ describe("templateUtils", () => {
       expect("summaryLock" in metadata).toBe(true);
       expect("ageRatingLock" in metadata).toBe(true);
       expect("readingDirectionLock" in metadata).toBe(true);
-      expect("totalBookCountLock" in metadata).toBe(true);
+      expect("totalVolumeCountLock" in metadata).toBe(true);
+      expect("totalChapterCountLock" in metadata).toBe(true);
       expect("genresLock" in metadata).toBe(true);
       expect("tagsLock" in metadata).toBe(true);
       expect("customMetadataLock" in metadata).toBe(true);
@@ -834,7 +842,8 @@ describe("templateUtils", () => {
       expect(metadata.languageLock).toBe(false);
       expect(metadata.readingDirectionLock).toBe(false);
       expect(metadata.yearLock).toBe(false);
-      expect(metadata.totalBookCountLock).toBe(false);
+      expect(metadata.totalVolumeCountLock).toBe(false);
+      expect(metadata.totalChapterCountLock).toBe(false);
       expect(metadata.genresLock).toBe(false);
       expect(metadata.tagsLock).toBe(false);
       expect(metadata.customMetadataLock).toBe(false);
@@ -1179,7 +1188,8 @@ describe("templateUtils", () => {
           ageRating: null,
           year: null,
           status: null,
-          totalBookCount: null,
+          totalVolumeCount: null,
+          totalChapterCount: null,
           readingDirection: null,
           customMetadata: null,
           authors: null,
@@ -1193,7 +1203,8 @@ describe("templateUtils", () => {
             ageRating: false,
             year: false,
             status: false,
-            totalBookCount: false,
+            totalVolumeCount: false,
+            totalChapterCount: false,
             readingDirection: false,
             customMetadata: false,
             genres: false,

@@ -423,9 +423,6 @@ describe("mappers", () => {
 
       expect(result.totalVolumeCount).toBe(108);
       expect(result.totalChapterCount).toBe(1138);
-      // Legacy totalBookCount kept populated mirroring the volume count for
-      // one phase of backward-compat.
-      expect(result.totalBookCount).toBe(108);
     });
 
     it("should populate fractional totalChapterCount", () => {
@@ -472,7 +469,6 @@ describe("mappers", () => {
 
       expect(result.totalVolumeCount).toBeUndefined();
       expect(result.totalChapterCount).toBeUndefined();
-      expect(result.totalBookCount).toBeUndefined();
     });
 
     it("should treat non-numeric or non-positive count strings as undefined", () => {

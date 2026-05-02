@@ -240,10 +240,10 @@ describe("RecommendationCard", () => {
     expect(screen.queryByText("Ended")).not.toBeInTheDocument();
   });
 
-  it("renders total book count when provided", () => {
+  it("renders total volume count when provided", () => {
     renderWithProviders(
       <RecommendationCard
-        recommendation={{ ...fullRecommendation, totalBookCount: 27 }}
+        recommendation={{ ...fullRecommendation, totalVolumeCount: 27 }}
         onDismiss={vi.fn()}
       />,
     );
