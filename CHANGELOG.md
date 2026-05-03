@@ -2,6 +2,42 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.17.0] - 2026-05-03
+
+### 🚀 Features
+
+- *(metadata)* Split total_book_count into separate volume and chapter counts
+- *(plugins)* Add total_volume_count and total_chapter_count to plugin protocol
+- *(metadata)* Apply total_volume_count and total_chapter_count via MetadataApplier
+- *(plugins)* Populate total_volume_count and total_chapter_count from MangaBaka and AniList
+- *(plugins)* Surface search-result format discriminator on previews
+- *(web)* Split series total book count into volume and chapter counts
+- *(metadata)* Add per-book volume and chapter classification
+- *(scanner)* Populate book volume and chapter from filename and ComicInfo
+- *(series)* Expose local volume/chapter aggregates and switch count display to <max>/<total>
+- *(books)* Expose per-book chapter on the API and surface vol/chap classification in the UI
+- *(books)* Expose volume/chapter on BookDto and add Kind column to series table
+
+### 🐛 Bug Fixes
+
+- *(migration)* Use sea-query to build backfill UPDATE so it runs on Postgres
+
+### 🚜 Refactor
+
+- *(metadata)* Switch read sites to total_volume_count and stop writing total_book_count
+- *(api)* Drop legacy total_book_count from v1 DTOs and handlers
+- *(komga)* Rename DTO count field to total_volume_count, preserve totalBookCount wire format
+- *(metadata)* Drop legacy total_book_count from schema, protocol, and DTOs
+
+### 📚 Documentation
+
+- Document split volume and chapter counts for series metadata
+- *(books)* Document filename-based volume/chapter classification
+
+### ⚙️ Miscellaneous Tasks
+
+- *(mocks)* Populate volume/chapter and series local aggregates
+
 ## [1.16.1] - 2026-05-02
 
 ### 🚀 Features
