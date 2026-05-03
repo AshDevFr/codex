@@ -21707,6 +21707,131 @@
           }
         }
       },
+      "DryRunRequest": {
+        "type": "object",
+        "description": "Body for `POST /libraries/{id}/metadata-refresh/dry-run`.\n\n`configOverride` lets the UI preview a config that hasn't been saved yet —\n\"what would happen if I clicked Save right now?\". When absent, the saved\nconfig is used.",
+        "properties": {
+          "configOverride": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetadataRefreshConfigDto",
+                "description": "Optional unsaved config to preview. When absent, the library's saved\nconfig is used."
+              }
+            ],
+            "default": null
+          },
+          "sampleSize": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Number of series to preview. Defaults to 5, capped at 20.",
+            "default": null,
+            "minimum": 0
+          }
+        }
+      },
+      "DryRunResponse": {
+        "type": "object",
+        "description": "Full dry-run response.",
+        "required": [
+          "sample",
+          "totalEligible",
+          "estSkippedNoId",
+          "estSkippedRecentlySynced"
+        ],
+        "properties": {
+          "estSkippedNoId": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Estimated `(series, provider)` pairs the planner skipped because the\nseries has no stored external ID for the provider (strict mode only).",
+            "minimum": 0
+          },
+          "estSkippedRecentlySynced": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Estimated pairs skipped because their `last_synced_at` is younger than\nthe recency cutoff.",
+            "minimum": 0
+          },
+          "sample": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DryRunSeriesDelta"
+            },
+            "description": "Per-series deltas, capped at the requested sample size."
+          },
+          "totalEligible": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of `(series, provider)` pairs the planner produced before\nthe sample cap.",
+            "minimum": 0
+          },
+          "unresolvedProviders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Provider strings from the config that don't resolve to an enabled\nplugin. Surfaced verbatim so the UI can highlight typos or disabled\nplugins."
+          }
+        }
+      },
+      "DryRunSeriesDelta": {
+        "type": "object",
+        "description": "One series' would-be deltas in a dry-run preview.",
+        "required": [
+          "seriesId",
+          "seriesTitle",
+          "provider",
+          "changes"
+        ],
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldChangeDto"
+            },
+            "description": "Fields that would be written."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Plugin id (`\"plugin:<name>\"`) that produced this delta."
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seriesTitle": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DryRunSkippedFieldDto"
+            },
+            "description": "Fields that would be skipped (locked, no permission, etc.)."
+          }
+        }
+      },
+      "DryRunSkippedFieldDto": {
+        "type": "object",
+        "description": "A field skipped during a dry-run apply, with the reason.",
+        "required": [
+          "field",
+          "reason"
+        ],
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
       "DuplicateGroup": {
         "type": "object",
         "description": "A group of duplicate books",
@@ -22863,6 +22988,32 @@
           },
           "field": {
             "type": "string"
+          }
+        }
+      },
+      "FieldGroupDto": {
+        "type": "object",
+        "description": "One entry from `GET /api/v1/metadata-refresh/field-groups`.",
+        "required": [
+          "id",
+          "label",
+          "fields"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "camelCase field names this group expands into. Match the\n`should_apply_field` call sites in `MetadataApplier`."
+          },
+          "id": {
+            "type": "string",
+            "description": "Snake_case identifier stored in [`MetadataRefreshConfig::field_groups`]."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for UI display."
           }
         }
       },
@@ -26710,6 +26861,165 @@
           }
         }
       },
+      "MetadataRefreshConfigDto": {
+        "type": "object",
+        "description": "Full read response for a library's scheduled metadata-refresh config.\n\nWhen the library has no stored config, the server returns\n[`MetadataRefreshConfig::default`] so clients always render something.",
+        "required": [
+          "enabled",
+          "cronSchedule",
+          "fieldGroups",
+          "extraFields",
+          "providers",
+          "existingSourceIdsOnly",
+          "skipRecentlySyncedWithinS",
+          "maxConcurrency"
+        ],
+        "properties": {
+          "cronSchedule": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "existingSourceIdsOnly": {
+            "type": "boolean"
+          },
+          "extraFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fieldGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxConcurrency": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "perProviderOverrides": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProviderOverrideDto"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skipRecentlySyncedWithinS": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MetadataRefreshConfigPatchDto": {
+        "type": "object",
+        "description": "Partial PATCH body. Uses [`PatchValue`] for nullable fields so clients can\ndistinguish \"leave alone\" from \"explicit clear\".\n\nAll other fields use plain `Option<T>` because clearing a non-nullable\nfield doesn't make sense (e.g. you can't \"unset\" `enabled` — you can only\nflip it).",
+        "properties": {
+          "cronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": null
+          },
+          "existingSourceIdsOnly": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": null
+          },
+          "extraFields": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": null
+          },
+          "fieldGroups": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": null
+          },
+          "maxConcurrency": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "default": null,
+            "minimum": 0
+          },
+          "perProviderOverrides": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "providers": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": null
+          },
+          "skipRecentlySyncedWithinS": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "default": null,
+            "minimum": 0
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        }
+      },
       "MetricsCleanupResponse": {
         "type": "object",
         "description": "Response for cleanup operation",
@@ -30384,6 +30694,24 @@
           }
         }
       },
+      "ProviderOverrideDto": {
+        "type": "object",
+        "description": "Per-provider override placeholder (Phase 8). Mirrors\n[`crate::services::metadata::ProviderOverride`] for the wire format.",
+        "properties": {
+          "extraFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fieldGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "PublicSettingDto": {
         "type": "object",
         "description": "Public setting DTO (for non-admin users)\n\nA simplified setting DTO that only includes the key and value,\nused for public display settings accessible to all authenticated users.",
@@ -31761,6 +32089,20 @@
             "description": "Number of tasks enqueued",
             "example": 5,
             "minimum": 0
+          }
+        }
+      },
+      "RunNowResponse": {
+        "type": "object",
+        "description": "Response for `POST /libraries/{id}/metadata-refresh/run-now`.",
+        "required": [
+          "taskId"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Background task ID. Subscribe to events on `/api/v1/events/stream` to\nfollow progress."
           }
         }
       },
@@ -36966,6 +37308,10 @@
     {
       "name": "Plugin Actions",
       "description": "Plugin action discovery and execution for metadata fetching"
+    },
+    {
+      "name": "Metadata Refresh",
+      "description": "Per-library scheduled metadata refresh configuration, dry-run preview, and run-now"
     },
     {
       "name": "User Plugins",

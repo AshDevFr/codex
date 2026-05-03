@@ -8959,6 +8959,69 @@ export interface components {
         DryRunReportDto: {
             changes: components["schemas"]["FieldChangeDto"][];
         };
+        /**
+         * @description Body for `POST /libraries/{id}/metadata-refresh/dry-run`.
+         *
+         *     `configOverride` lets the UI preview a config that hasn't been saved yet —
+         *     "what would happen if I clicked Save right now?". When absent, the saved
+         *     config is used.
+         */
+        DryRunRequest: {
+            /** @default null */
+            configOverride: null | components["schemas"]["MetadataRefreshConfigDto"];
+            /**
+             * Format: int32
+             * @description Number of series to preview. Defaults to 5, capped at 20.
+             * @default null
+             */
+            sampleSize: number | null;
+        };
+        /** @description Full dry-run response. */
+        DryRunResponse: {
+            /**
+             * Format: int32
+             * @description Estimated `(series, provider)` pairs the planner skipped because the
+             *     series has no stored external ID for the provider (strict mode only).
+             */
+            estSkippedNoId: number;
+            /**
+             * Format: int32
+             * @description Estimated pairs skipped because their `last_synced_at` is younger than
+             *     the recency cutoff.
+             */
+            estSkippedRecentlySynced: number;
+            /** @description Per-series deltas, capped at the requested sample size. */
+            sample: components["schemas"]["DryRunSeriesDelta"][];
+            /**
+             * Format: int32
+             * @description Total number of `(series, provider)` pairs the planner produced before
+             *     the sample cap.
+             */
+            totalEligible: number;
+            /**
+             * @description Provider strings from the config that don't resolve to an enabled
+             *     plugin. Surfaced verbatim so the UI can highlight typos or disabled
+             *     plugins.
+             */
+            unresolvedProviders?: string[];
+        };
+        /** @description One series' would-be deltas in a dry-run preview. */
+        DryRunSeriesDelta: {
+            /** @description Fields that would be written. */
+            changes: components["schemas"]["FieldChangeDto"][];
+            /** @description Plugin id (`"plugin:<name>"`) that produced this delta. */
+            provider: string;
+            /** Format: uuid */
+            seriesId: string;
+            seriesTitle: string;
+            /** @description Fields that would be skipped (locked, no permission, etc.). */
+            skipped?: components["schemas"]["DryRunSkippedFieldDto"][];
+        };
+        /** @description A field skipped during a dry-run apply, with the reason. */
+        DryRunSkippedFieldDto: {
+            field: string;
+            reason: string;
+        };
         /** @description A group of duplicate books */
         DuplicateGroup: {
             /** @description List of book IDs that share this hash */
@@ -9473,6 +9536,18 @@ export interface components {
              */
             before?: unknown;
             field: string;
+        };
+        /** @description One entry from `GET /api/v1/metadata-refresh/field-groups`. */
+        FieldGroupDto: {
+            /**
+             * @description camelCase field names this group expands into. Match the
+             *     `should_apply_field` call sites in `MetadataApplier`.
+             */
+            fields: string[];
+            /** @description Snake_case identifier stored in [`MetadataRefreshConfig::field_groups`]. */
+            id: string;
+            /** @description Human-readable label for UI display. */
+            label: string;
         };
         /** @description Operators for string and equality comparisons */
         FieldOperator: {
@@ -11443,6 +11518,63 @@ export interface components {
             pluginName: string;
             /** @description Summary counts */
             summary: components["schemas"]["PreviewSummary"];
+        };
+        /**
+         * @description Full read response for a library's scheduled metadata-refresh config.
+         *
+         *     When the library has no stored config, the server returns
+         *     [`MetadataRefreshConfig::default`] so clients always render something.
+         */
+        MetadataRefreshConfigDto: {
+            cronSchedule: string;
+            enabled: boolean;
+            existingSourceIdsOnly: boolean;
+            extraFields: string[];
+            fieldGroups: string[];
+            /** Format: int32 */
+            maxConcurrency: number;
+            perProviderOverrides?: {
+                [key: string]: components["schemas"]["ProviderOverrideDto"];
+            } | null;
+            providers: string[];
+            /** Format: int32 */
+            skipRecentlySyncedWithinS: number;
+            timezone?: string | null;
+        };
+        /**
+         * @description Partial PATCH body. Uses [`PatchValue`] for nullable fields so clients can
+         *     distinguish "leave alone" from "explicit clear".
+         *
+         *     All other fields use plain `Option<T>` because clearing a non-nullable
+         *     field doesn't make sense (e.g. you can't "unset" `enabled` — you can only
+         *     flip it).
+         */
+        MetadataRefreshConfigPatchDto: {
+            /** @default null */
+            cronSchedule: string | null;
+            /** @default null */
+            enabled: boolean | null;
+            /** @default null */
+            existingSourceIdsOnly: boolean | null;
+            /** @default null */
+            extraFields: string[] | null;
+            /** @default null */
+            fieldGroups: string[] | null;
+            /**
+             * Format: int32
+             * @default null
+             */
+            maxConcurrency: number | null;
+            perProviderOverrides?: Record<string, never> | null;
+            /** @default null */
+            providers: string[] | null;
+            /**
+             * Format: int32
+             * @default null
+             */
+            skipRecentlySyncedWithinS: number | null;
+            /** @default null */
+            timezone: string | null;
         };
         /** @description Response for cleanup operation */
         MetricsCleanupResponse: {
@@ -13612,6 +13744,14 @@ export interface components {
             willApply: number;
         };
         /**
+         * @description Per-provider override placeholder (Phase 8). Mirrors
+         *     [`crate::services::metadata::ProviderOverride`] for the wire format.
+         */
+        ProviderOverrideDto: {
+            extraFields?: string[];
+            fieldGroups?: string[];
+        };
+        /**
          * @description Public setting DTO (for non-admin users)
          *
          *     A simplified setting DTO that only includes the key and value,
@@ -14398,6 +14538,15 @@ export interface components {
              * @example 5
              */
             tasksEnqueued: number;
+        };
+        /** @description Response for `POST /libraries/{id}/metadata-refresh/run-now`. */
+        RunNowResponse: {
+            /**
+             * Format: uuid
+             * @description Background task ID. Subscribe to events on `/api/v1/events/stream` to
+             *     follow progress.
+             */
+            taskId: string;
         };
         /** @description Scan status response */
         ScanStatusDto: {
