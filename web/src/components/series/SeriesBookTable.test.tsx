@@ -75,7 +75,8 @@ describe("SeriesBookTable", () => {
       />,
     );
 
-    expect(screen.getByText("—")).toBeInTheDocument();
+    // One en-dash for the missing number, one for the missing Kind.
+    expect(screen.getAllByText("—")).toHaveLength(2);
   });
 
   it("renders the selection checkbox column even when not in selection mode", async () => {
