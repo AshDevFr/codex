@@ -101,4 +101,62 @@ describe("formatSeriesCounts", () => {
       }),
     ).toBe("0/0 vol");
   });
+
+  // Phase 13: localMax* fields override the file-count numerator when the
+  // scanner has populated structured book_metadata.volume / chapter values.
+  it("uses localMaxVolume as the volume numerator when present", () => {
+    expect(
+      formatSeriesCounts({
+        localCount: 17, // 17 files on disk (v01..v15 plus chapter files)
+        totalVolumeCount: 17,
+        totalChapterCount: null,
+        localMaxVolume: 14, // last *complete* volume seen
+      }),
+    ).toBe("14/17 vol");
+  });
+
+  it("uses localMaxChapter as the chapter numerator when present", () => {
+    expect(
+      formatSeriesCounts({
+        localCount: 60,
+        totalVolumeCount: null,
+        totalChapterCount: 158,
+        localMaxChapter: 137,
+      }),
+    ).toBe("137/158 ch");
+  });
+
+  it("uses both localMax fields together for a mixed series", () => {
+    expect(
+      formatSeriesCounts({
+        localCount: 20,
+        totalVolumeCount: 17,
+        totalChapterCount: 158,
+        localMaxVolume: 14,
+        localMaxChapter: 137,
+      }),
+    ).toBe("14/17 vol · 137/158 ch");
+  });
+
+  it("falls back to file-count numerator when localMax fields are absent", () => {
+    expect(
+      formatSeriesCounts({
+        localCount: 5,
+        totalVolumeCount: 14,
+        totalChapterCount: null,
+        localMaxVolume: null,
+      }),
+    ).toBe("5/14 vol");
+  });
+
+  it("preserves fractional localMaxChapter values", () => {
+    expect(
+      formatSeriesCounts({
+        localCount: 1,
+        totalVolumeCount: null,
+        totalChapterCount: 158,
+        localMaxChapter: 137.5,
+      }),
+    ).toBe("137.5/158 ch");
+  });
 });

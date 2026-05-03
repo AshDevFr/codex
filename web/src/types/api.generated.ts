@@ -9737,6 +9737,20 @@ export interface components {
              * @example Comics
              */
             libraryName: string;
+            /**
+             * Format: float
+             * @description Highest `book_metadata.chapter` across the books in this series.
+             *     See `SeriesDto::local_max_chapter` for semantics.
+             * @example 137.5
+             */
+            localMaxChapter?: number | null;
+            /**
+             * Format: int32
+             * @description Highest `book_metadata.volume` across the books in this series.
+             *     See `SeriesDto::local_max_volume` for semantics.
+             * @example 14
+             */
+            localMaxVolume?: number | null;
             /** @description Complete series metadata */
             metadata: components["schemas"]["SeriesFullMetadata"];
             /**
@@ -9763,6 +9777,13 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+            /**
+             * Format: int64
+             * @description Number of books classified as a complete volume (volume set, chapter null).
+             *     See `SeriesDto::volumes_owned` for semantics.
+             * @example 14
+             */
+            volumesOwned?: number | null;
         };
         /** @description Request body for batch book thumbnail generation */
         GenerateBookThumbnailsRequest: {
@@ -12166,6 +12187,27 @@ export interface components {
                  */
                 libraryName: string;
                 /**
+                 * Format: float
+                 * @description Highest `book_metadata.chapter` across the books in this series.
+                 *
+                 *     `None` when no book in the series has `chapter` populated. When
+                 *     non-null and `metadata.totalChapterCount` is also known, the UI renders
+                 *     `<localMaxChapter>/<totalChapterCount> ch`.
+                 * @example 137.5
+                 */
+                localMaxChapter?: number | null;
+                /**
+                 * Format: int32
+                 * @description Highest `book_metadata.volume` across the books in this series.
+                 *
+                 *     `None` when no book in the series has `volume` populated. When
+                 *     non-null and `metadata.totalVolumeCount` is also known, the UI renders
+                 *     `<localMaxVolume>/<totalVolumeCount> vol` instead of the legacy
+                 *     `<bookCount>/<totalVolumeCount> vol`.
+                 * @example 14
+                 */
+                localMaxVolume?: number | null;
+                /**
                  * @description Filesystem path to the series directory
                  * @example /media/comics/Batman - Year One
                  */
@@ -12207,6 +12249,17 @@ export interface components {
                  * @example 2024-01-15T10:30:00Z
                  */
                 updatedAt: string;
+                /**
+                 * Format: int64
+                 * @description Number of books in this series classified as a complete volume
+                 *     (`volume IS NOT NULL AND chapter IS NULL`).
+                 *
+                 *     Distinct from `bookCount`: a chapter inside a volume (`v15 c126`)
+                 *     counts as a chapter, not a volume. `None` when no books exist;
+                 *     `Some(0)` when books exist but none are complete volumes.
+                 * @example 14
+                 */
+                volumesOwned?: number | null;
                 /**
                  * Format: int32
                  * @description Release year
@@ -14617,6 +14670,27 @@ export interface components {
              */
             libraryName: string;
             /**
+             * Format: float
+             * @description Highest `book_metadata.chapter` across the books in this series.
+             *
+             *     `None` when no book in the series has `chapter` populated. When
+             *     non-null and `metadata.totalChapterCount` is also known, the UI renders
+             *     `<localMaxChapter>/<totalChapterCount> ch`.
+             * @example 137.5
+             */
+            localMaxChapter?: number | null;
+            /**
+             * Format: int32
+             * @description Highest `book_metadata.volume` across the books in this series.
+             *
+             *     `None` when no book in the series has `volume` populated. When
+             *     non-null and `metadata.totalVolumeCount` is also known, the UI renders
+             *     `<localMaxVolume>/<totalVolumeCount> vol` instead of the legacy
+             *     `<bookCount>/<totalVolumeCount> vol`.
+             * @example 14
+             */
+            localMaxVolume?: number | null;
+            /**
              * @description Filesystem path to the series directory
              * @example /media/comics/Batman - Year One
              */
@@ -14658,6 +14732,17 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+            /**
+             * Format: int64
+             * @description Number of books in this series classified as a complete volume
+             *     (`volume IS NOT NULL AND chapter IS NULL`).
+             *
+             *     Distinct from `bookCount`: a chapter inside a volume (`v15 c126`)
+             *     counts as a chapter, not a volume. `None` when no books exist;
+             *     `Some(0)` when books exist but none are complete volumes.
+             * @example 14
+             */
+            volumesOwned?: number | null;
             /**
              * Format: int32
              * @description Release year

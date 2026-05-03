@@ -200,6 +200,35 @@ pub struct SeriesDto {
     #[schema(example = 4)]
     pub book_count: i64,
 
+    /// Highest `book_metadata.volume` across the books in this series.
+    ///
+    /// `None` when no book in the series has `volume` populated. When
+    /// non-null and `metadata.totalVolumeCount` is also known, the UI renders
+    /// `<localMaxVolume>/<totalVolumeCount> vol` instead of the legacy
+    /// `<bookCount>/<totalVolumeCount> vol`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 14)]
+    pub local_max_volume: Option<i32>,
+
+    /// Highest `book_metadata.chapter` across the books in this series.
+    ///
+    /// `None` when no book in the series has `chapter` populated. When
+    /// non-null and `metadata.totalChapterCount` is also known, the UI renders
+    /// `<localMaxChapter>/<totalChapterCount> ch`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 137.5)]
+    pub local_max_chapter: Option<f32>,
+
+    /// Number of books in this series classified as a complete volume
+    /// (`volume IS NOT NULL AND chapter IS NULL`).
+    ///
+    /// Distinct from `bookCount`: a chapter inside a volume (`v15 c126`)
+    /// counts as a chapter, not a volume. `None` when no books exist;
+    /// `Some(0)` when books exist but none are complete volumes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 14)]
+    pub volumes_owned: Option<i64>,
+
     /// Filesystem path to the series directory
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "/media/comics/Batman - Year One")]
@@ -1217,6 +1246,24 @@ pub struct FullSeriesResponse {
     /// Total number of books in this series
     #[schema(example = 4)]
     pub book_count: i64,
+
+    /// Highest `book_metadata.volume` across the books in this series.
+    /// See `SeriesDto::local_max_volume` for semantics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 14)]
+    pub local_max_volume: Option<i32>,
+
+    /// Highest `book_metadata.chapter` across the books in this series.
+    /// See `SeriesDto::local_max_chapter` for semantics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 137.5)]
+    pub local_max_chapter: Option<f32>,
+
+    /// Number of books classified as a complete volume (volume set, chapter null).
+    /// See `SeriesDto::volumes_owned` for semantics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 14)]
+    pub volumes_owned: Option<i64>,
 
     /// Number of unread books in this series (user-specific)
     #[serde(skip_serializing_if = "Option::is_none")]
