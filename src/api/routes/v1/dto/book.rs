@@ -598,6 +598,16 @@ pub struct BookDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "ltr")]
     pub reading_direction: Option<String>,
+
+    /// Volume number from book metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1)]
+    pub volume: Option<i32>,
+
+    /// Chapter number from book metadata (may be fractional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 42.5)]
+    pub chapter: Option<f32>,
 }
 
 /// Book list response

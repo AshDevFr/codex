@@ -17492,6 +17492,15 @@
             "description": "Whether the book has been analyzed (page dimensions available)",
             "example": true
           },
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Chapter number from book metadata (may be fractional)",
+            "example": 42.5
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -17611,6 +17620,15 @@
             "format": "date-time",
             "description": "When the book was last updated",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Volume number from book metadata",
+            "example": 1
           }
         }
       },
@@ -27444,6 +27462,15 @@
                   "description": "Whether the book has been analyzed (page dimensions available)",
                   "example": true
                 },
+                "chapter": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float",
+                  "description": "Chapter number from book metadata (may be fractional)",
+                  "example": 42.5
+                },
                 "createdAt": {
                   "type": "string",
                   "format": "date-time",
@@ -27563,6 +27590,15 @@
                   "format": "date-time",
                   "description": "When the book was last updated",
                   "example": "2024-01-15T10:30:00Z"
+                },
+                "volume": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "Volume number from book metadata",
+                  "example": 1
                 }
               }
             },

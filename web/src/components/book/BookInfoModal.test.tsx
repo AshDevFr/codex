@@ -83,6 +83,52 @@ describe("BookInfoModal", () => {
     expect(screen.getByText("Comics")).toBeInTheDocument();
   });
 
+  it("should display volume and chapter with classification badge when both set", () => {
+    renderWithProviders(
+      <BookInfoModal
+        opened={true}
+        onClose={vi.fn()}
+        book={createMockBook({
+          title: "7th Prince v15 c126",
+          volume: 15,
+          chapter: 126,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Volume")).toBeInTheDocument();
+    expect(screen.getByText("15")).toBeInTheDocument();
+    expect(screen.getByText("Chapter")).toBeInTheDocument();
+    expect(screen.getByText("126")).toBeInTheDocument();
+    expect(screen.getByText("Classification")).toBeInTheDocument();
+    expect(screen.getByText("Vol 15 · Ch 126")).toBeInTheDocument();
+  });
+
+  it("should show chapter-only classification when only chapter is set", () => {
+    renderWithProviders(
+      <BookInfoModal
+        opened={true}
+        onClose={vi.fn()}
+        book={createMockBook({ chapter: 42 })}
+      />,
+    );
+
+    expect(screen.getByText("Chapter")).toBeInTheDocument();
+    expect(screen.getByText("Classification")).toBeInTheDocument();
+    expect(screen.getByText("Ch 42")).toBeInTheDocument();
+    expect(screen.queryByText("Volume")).not.toBeInTheDocument();
+  });
+
+  it("should not display Volume/Chapter rows when neither is set", () => {
+    renderWithProviders(
+      <BookInfoModal opened={true} onClose={vi.fn()} book={createMockBook()} />,
+    );
+
+    expect(screen.queryByText("Volume")).not.toBeInTheDocument();
+    expect(screen.queryByText("Chapter")).not.toBeInTheDocument();
+    expect(screen.queryByText("Classification")).not.toBeInTheDocument();
+  });
+
   it("should display file information", () => {
     renderWithProviders(
       <BookInfoModal

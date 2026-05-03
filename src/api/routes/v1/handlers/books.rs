@@ -275,6 +275,10 @@ pub async fn books_to_dtos(
                 .and_then(|m| m.number)
                 .map(|d| d.to_string().parse::<i32>().unwrap_or(0));
 
+            // Volume / chapter classification from book_metadata
+            let volume = book_meta.and_then(|m| m.volume);
+            let chapter = book_meta.and_then(|m| m.chapter);
+
             let read_progress = progress_map.get(&book.id).cloned();
 
             // Determine effective reading direction: series metadata > library default
@@ -305,6 +309,8 @@ pub async fn books_to_dtos(
                 deleted: book.deleted,
                 analyzed: book.analyzed,
                 reading_direction,
+                volume,
+                chapter,
             }
         })
         .collect();

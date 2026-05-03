@@ -6514,6 +6514,12 @@ export interface components {
              */
             analyzed: boolean;
             /**
+             * Format: float
+             * @description Chapter number from book metadata (may be fractional)
+             * @example 42.5
+             */
+            chapter?: number | null;
+            /**
              * Format: date-time
              * @description When the book was added to the library
              * @example 2024-01-01T00:00:00Z
@@ -6610,6 +6616,12 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+            /**
+             * Format: int32
+             * @description Volume number from book metadata
+             * @example 1
+             */
+            volume?: number | null;
         };
         /** @description A single error for a book */
         BookErrorDto: {
@@ -11869,6 +11881,12 @@ export interface components {
                  */
                 analyzed: boolean;
                 /**
+                 * Format: float
+                 * @description Chapter number from book metadata (may be fractional)
+                 * @example 42.5
+                 */
+                chapter?: number | null;
+                /**
                  * Format: date-time
                  * @description When the book was added to the library
                  * @example 2024-01-01T00:00:00Z
@@ -11965,6 +11983,12 @@ export interface components {
                  * @example 2024-01-15T10:30:00Z
                  */
                 updatedAt: string;
+                /**
+                 * Format: int32
+                 * @description Volume number from book metadata
+                 * @example 1
+                 */
+                volume?: number | null;
             }[];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
