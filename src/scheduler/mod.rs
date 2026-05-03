@@ -1,12 +1,14 @@
 use anyhow::{Context, Result};
 use chrono_tz::Tz;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+use crate::db::entities::{prelude::Tasks, tasks};
 use crate::db::repositories::{LibraryRepository, TaskRepository};
 use crate::scanner::{ScanMode, ScanningConfig};
+use crate::services::metadata::parse_metadata_refresh_config;
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
 use crate::utils::cron::{normalize_cron_expression, parse_timezone};
@@ -56,6 +58,9 @@ impl Scheduler {
 
         // Load library scan schedules
         self.load_library_schedules().await?;
+
+        // Load per-library scheduled metadata-refresh entries
+        self.load_library_metadata_refresh_schedules().await?;
 
         // Load deduplication schedule
         self.load_deduplication_schedule().await?;
@@ -536,6 +541,145 @@ impl Scheduler {
         Ok(())
     }
 
+    /// Load per-library scheduled metadata-refresh entries.
+    ///
+    /// Mirrors [`Self::load_library_schedules`] but reads `metadata_refresh_config`
+    /// instead of `scanning_config` and enqueues `RefreshLibraryMetadata` tasks.
+    /// Libraries with the schedule disabled (or missing config) get no entry.
+    async fn load_library_metadata_refresh_schedules(&mut self) -> Result<()> {
+        let libraries = LibraryRepository::list_all(&self.db).await?;
+
+        for library in libraries {
+            if let Err(e) = self.add_library_metadata_refresh_schedule(library.id).await {
+                warn!(
+                    "Failed to add metadata refresh schedule for library {}: {}",
+                    library.name, e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Resolve the timezone for a library metadata-refresh job.
+    ///
+    /// Priority: refresh-config `timezone` > server default timezone.
+    fn resolve_metadata_refresh_timezone(&self, tz_str: Option<&str>) -> Tz {
+        if let Some(tz_str) = tz_str {
+            match parse_timezone(tz_str) {
+                Ok(tz) => return tz,
+                Err(e) => {
+                    warn!(
+                        "Invalid metadata refresh timezone '{}': {}. Using server default ({})",
+                        tz_str, e, self.default_tz
+                    );
+                }
+            }
+        }
+        self.default_tz
+    }
+
+    /// Add or update a library's scheduled metadata-refresh cron entry.
+    ///
+    /// Reads `libraries.metadata_refresh_config`. When `enabled = true`, registers
+    /// a cron job that enqueues [`TaskType::RefreshLibraryMetadata`] with a
+    /// skip-if-already-running guard so a long previous run cannot pile up
+    /// duplicates if the next tick fires before it finishes.
+    pub async fn add_library_metadata_refresh_schedule(&mut self, library_id: Uuid) -> Result<()> {
+        let library = LibraryRepository::get_by_id(&self.db, library_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Library not found: {}", library_id))?;
+
+        let config = match parse_metadata_refresh_config(library.metadata_refresh_config.as_deref())
+        {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(
+                    "Library {} has invalid metadata_refresh_config ({}); skipping schedule",
+                    library.name, e
+                );
+                return Ok(());
+            }
+        };
+
+        if !config.enabled {
+            debug!(
+                "Skipping library {} - scheduled metadata refresh disabled",
+                library.name
+            );
+            return Ok(());
+        }
+
+        let cron_schedule = normalize_cron_expression(&config.cron_schedule)
+            .context("Invalid cron expression for library metadata refresh schedule")?;
+
+        let tz = self.resolve_metadata_refresh_timezone(config.timezone.as_deref());
+
+        let db = self.db.clone();
+        let library_name = library.name.clone();
+
+        let job = Job::new_async_tz(cron_schedule.as_str(), tz, move |_uuid, _lock| {
+            let db = db.clone();
+            let library_name = library_name.clone();
+
+            Box::pin(async move {
+                // Skip-if-already-running guard: if a refresh task for this
+                // library is still pending or processing, drop this firing
+                // rather than letting cron ticks pile up duplicate work.
+                match has_active_refresh_for_library(&db, library_id).await {
+                    Ok(true) => {
+                        warn!(
+                            "Skipping scheduled metadata refresh for library {}: previous task still running",
+                            library_name
+                        );
+                        return;
+                    }
+                    Ok(false) => {}
+                    Err(e) => {
+                        warn!(
+                            "Failed to check for in-flight refresh task for library {}: {}; proceeding",
+                            library_name, e
+                        );
+                    }
+                }
+
+                info!(
+                    "Triggering scheduled metadata refresh for library {}",
+                    library_name
+                );
+
+                let task_type = TaskType::RefreshLibraryMetadata { library_id };
+                match TaskRepository::enqueue(&db, task_type, None).await {
+                    Ok(_) => {
+                        debug!(
+                            "Successfully enqueued scheduled metadata refresh for library {}",
+                            library_name
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to enqueue scheduled metadata refresh for library {}: {}",
+                            library_name, e
+                        );
+                    }
+                }
+            })
+        })
+        .context("Failed to create metadata refresh cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add metadata refresh job to scheduler")?;
+
+        info!(
+            "Added metadata refresh schedule for library {} with cron '{}' (timezone: {})",
+            library.name, cron_schedule, tz
+        );
+
+        Ok(())
+    }
+
     /// Reload all schedules (useful when libraries or settings are updated)
     pub async fn reload_schedules(&mut self) -> Result<()> {
         info!("Reloading all schedules");
@@ -558,12 +702,101 @@ impl Scheduler {
     }
 }
 
+/// Whether an active (`pending` or `processing`) `refresh_library_metadata`
+/// task already exists for the given library.
+///
+/// Used by the per-library refresh cron job to avoid stacking duplicate work
+/// when a previous run hasn't drained yet.
+async fn has_active_refresh_for_library(db: &DatabaseConnection, library_id: Uuid) -> Result<bool> {
+    let count = Tasks::find()
+        .filter(tasks::Column::TaskType.eq("refresh_library_metadata"))
+        .filter(tasks::Column::LibraryId.eq(library_id))
+        .filter(tasks::Column::Status.is_in(["pending", "processing"]))
+        .count(db)
+        .await
+        .context("Failed to count active refresh tasks")?;
+    Ok(count > 0)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::db::repositories::LibraryRepository;
+    use crate::db::test_helpers::setup_test_db;
+    use crate::models::ScanningStrategy;
+    use crate::tasks::types::TaskType;
 
     #[test]
     fn test_scheduler_can_be_created() {
         // This test is a placeholder - proper tests require a database connection
         // See tests/scheduler/mod.rs for integration tests
+    }
+
+    #[tokio::test]
+    async fn has_active_refresh_for_library_returns_false_when_no_tasks() {
+        let db = setup_test_db().await;
+        let library = LibraryRepository::create(&db, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+        let active = has_active_refresh_for_library(&db, library.id)
+            .await
+            .unwrap();
+        assert!(
+            !active,
+            "Fresh DB has no refresh tasks for the library, helper must report false"
+        );
+    }
+
+    #[tokio::test]
+    async fn has_active_refresh_for_library_detects_pending_task() {
+        let db = setup_test_db().await;
+        let library = LibraryRepository::create(&db, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+        TaskRepository::enqueue(
+            &db,
+            TaskType::RefreshLibraryMetadata {
+                library_id: library.id,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+        let active = has_active_refresh_for_library(&db, library.id)
+            .await
+            .unwrap();
+        assert!(
+            active,
+            "A pending refresh task for the same library must be detected"
+        );
+    }
+
+    #[tokio::test]
+    async fn has_active_refresh_for_library_is_scoped_per_library() {
+        let db = setup_test_db().await;
+        let lib_a = LibraryRepository::create(&db, "A", "/tmp/a", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let lib_b = LibraryRepository::create(&db, "B", "/tmp/b", ScanningStrategy::Default)
+            .await
+            .unwrap();
+
+        TaskRepository::enqueue(
+            &db,
+            TaskType::RefreshLibraryMetadata {
+                library_id: lib_a.id,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+        let active_a = has_active_refresh_for_library(&db, lib_a.id).await.unwrap();
+        let active_b = has_active_refresh_for_library(&db, lib_b.id).await.unwrap();
+        assert!(active_a, "library A has the in-flight task");
+        assert!(!active_b, "library B has no in-flight task");
     }
 }
