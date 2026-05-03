@@ -101,4 +101,21 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/libraries/{library_id}/series/titles/reprocess",
             post(handlers::task_queue::reprocess_library_series_titles),
         )
+        // Scheduled metadata refresh (Phase 6)
+        .route(
+            "/libraries/{library_id}/metadata-refresh",
+            get(handlers::metadata_refresh::get_refresh_config),
+        )
+        .route(
+            "/libraries/{library_id}/metadata-refresh",
+            patch(handlers::metadata_refresh::patch_refresh_config),
+        )
+        .route(
+            "/libraries/{library_id}/metadata-refresh/run-now",
+            post(handlers::metadata_refresh::run_refresh_now),
+        )
+        .route(
+            "/libraries/{library_id}/metadata-refresh/dry-run",
+            post(handlers::metadata_refresh::dry_run_refresh),
+        )
 }

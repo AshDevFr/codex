@@ -51,6 +51,7 @@ pub mod filesystem;
 pub mod health;
 pub mod info;
 pub mod libraries;
+pub mod metadata_refresh;
 pub mod metrics;
 pub mod oidc;
 pub mod pages;

@@ -23,6 +23,7 @@ mod api {
     mod koreader;
     mod libraries;
     mod metadata_locks;
+    mod metadata_refresh;
     mod metadata_reset;
     mod metrics;
     mod oidc;

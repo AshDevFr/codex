@@ -889,6 +889,17 @@ The following paths are exempt from rate limiting:
             v1::dto::EnqueueBulkAutoMatchRequest,
             v1::dto::EnqueueLibraryAutoMatchRequest,
 
+            // Scheduled metadata refresh DTOs (Phase 6)
+            v1::dto::MetadataRefreshConfigDto,
+            v1::dto::MetadataRefreshConfigPatchDto,
+            v1::dto::ProviderOverrideDto,
+            v1::dto::RunNowResponse,
+            v1::dto::DryRunRequest,
+            v1::dto::DryRunResponse,
+            v1::dto::DryRunSeriesDelta,
+            v1::dto::DryRunSkippedFieldDto,
+            v1::dto::FieldGroupDto,
+
             // Task Queue DTOs
             v1::handlers::task_queue::CreateTaskRequest,
             v1::handlers::task_queue::CreateTaskResponse,
@@ -1010,6 +1021,7 @@ The following paths are exempt from rate limiting:
         (name = "Settings", description = "Runtime configuration settings (admin only)"),
         (name = "Plugins", description = "Admin-managed external plugin processes"),
         (name = "Plugin Actions", description = "Plugin action discovery and execution for metadata fetching"),
+        (name = "Metadata Refresh", description = "Per-library scheduled metadata refresh configuration, dry-run preview, and run-now"),
         (name = "User Plugins", description = "User-facing plugin management, OAuth, and configuration"),
         (name = "Recommendations", description = "Personalized recommendation endpoints"),
         (name = "Metrics", description = "Application metrics and statistics"),
