@@ -378,6 +378,140 @@ async fn test_patch_refresh_config_requires_write_permission() {
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
+#[tokio::test]
+async fn test_patch_refresh_config_round_trips_per_provider_overrides() {
+    let (db, _tmp) = setup_test_db().await;
+    let library_id = create_library(&db).await;
+    let _plugin_id = create_test_plugin(&db, "anilist", true).await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{library_id}/metadata-refresh");
+    let body = r#"{
+        "perProviderOverrides": {
+            "plugin:anilist": {
+                "fieldGroups": ["ratings"],
+                "extraFields": ["coverUrl"]
+            }
+        }
+    }"#;
+    let req = patch_request_with_auth_json(&uri, &token, body);
+    let (status, response): (StatusCode, Option<MetadataRefreshConfigDto>) =
+        make_json_request(app, req).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    let overrides = dto
+        .per_provider_overrides
+        .expect("override map should round-trip");
+    let anilist = overrides
+        .get("plugin:anilist")
+        .expect("anilist override should be present");
+    assert_eq!(anilist.field_groups, vec!["ratings"]);
+    assert_eq!(anilist.extra_fields, vec!["coverUrl"]);
+
+    // Stored config should also have the override.
+    let stored = LibraryRepository::get_metadata_refresh_config(&db, library_id)
+        .await
+        .unwrap();
+    let stored_overrides = stored.per_provider_overrides.unwrap();
+    assert!(stored_overrides.contains_key("plugin:anilist"));
+}
+
+#[tokio::test]
+async fn test_patch_refresh_config_clears_per_provider_overrides_on_null() {
+    let (db, _tmp) = setup_test_db().await;
+    let library_id = create_library(&db).await;
+    let _plugin_id = create_test_plugin(&db, "anilist", true).await;
+
+    // Seed an override.
+    let mut overrides = std::collections::BTreeMap::new();
+    overrides.insert(
+        "plugin:anilist".to_string(),
+        codex::services::metadata::ProviderOverride {
+            field_groups: vec!["ratings".to_string()],
+            extra_fields: vec![],
+        },
+    );
+    let cfg = codex::services::metadata::MetadataRefreshConfig {
+        per_provider_overrides: Some(overrides),
+        ..Default::default()
+    };
+    LibraryRepository::set_metadata_refresh_config(&db, library_id, &cfg)
+        .await
+        .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{library_id}/metadata-refresh");
+    let body = r#"{"perProviderOverrides": null}"#;
+    let req = patch_request_with_auth_json(&uri, &token, body);
+    let (status, response): (StatusCode, Option<MetadataRefreshConfigDto>) =
+        make_json_request(app, req).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(response.unwrap().per_provider_overrides.is_none());
+}
+
+#[tokio::test]
+async fn test_patch_refresh_config_rejects_per_provider_unknown_field_group() {
+    let (db, _tmp) = setup_test_db().await;
+    let library_id = create_library(&db).await;
+    let _plugin_id = create_test_plugin(&db, "anilist", true).await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{library_id}/metadata-refresh");
+    let body = r#"{
+        "perProviderOverrides": {
+            "plugin:anilist": {
+                "fieldGroups": ["made_up_group"]
+            }
+        }
+    }"#;
+    let req = patch_request_with_auth_json(&uri, &token, body);
+    let (status, err): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let msg = err.unwrap().message;
+    assert!(
+        msg.contains("plugin:anilist"),
+        "error should mention provider, got: {msg}"
+    );
+    assert!(
+        msg.contains("made_up_group"),
+        "error should mention bad group, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn test_patch_refresh_config_rejects_per_provider_unknown_plugin() {
+    let (db, _tmp) = setup_test_db().await;
+    let library_id = create_library(&db).await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/libraries/{library_id}/metadata-refresh");
+    let body = r#"{
+        "perProviderOverrides": {
+            "plugin:nonexistent": {
+                "fieldGroups": ["ratings"]
+            }
+        }
+    }"#;
+    let req = patch_request_with_auth_json(&uri, &token, body);
+    let (status, err): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(err.unwrap().message.contains("nonexistent"));
+}
+
 // ============================================================================
 // run-now
 // ============================================================================

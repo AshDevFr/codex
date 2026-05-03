@@ -182,6 +182,7 @@ pub fn fields_for_groups<S: AsRef<str>>(groups: &[S], extras: &[S]) -> Option<Ha
 /// dry-run preview. Returns `None` for fields that aren't part of any
 /// group (e.g. `customMetadata`, which the scheduled refresh doesn't
 /// touch).
+#[allow(dead_code)]
 pub fn group_for_field(field: &str) -> Option<FieldGroup> {
     for group in FieldGroup::all() {
         if fields_for_group(*group).contains(&field) {
