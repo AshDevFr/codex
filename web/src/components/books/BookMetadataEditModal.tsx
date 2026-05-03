@@ -85,6 +85,7 @@ interface FormState {
   releaseDay: string;
   isbn: string;
   volume: string;
+  chapter: string;
   count: string;
   // Publication
   edition: string;
@@ -132,6 +133,7 @@ interface LocksState {
   month: boolean;
   day: boolean;
   volume: boolean;
+  chapter: boolean;
   count: boolean;
   isbns: boolean;
   edition: boolean;
@@ -182,6 +184,7 @@ function initializeFormState(
     releaseDay: metadata?.day?.toString() || "",
     isbn: metadata?.isbns || "",
     volume: metadata?.volume?.toString() || "",
+    chapter: metadata?.chapter?.toString() || "",
     count: metadata?.count?.toString() || "",
     edition: metadata?.edition || "",
     originalTitle: metadata?.originalTitle || "",
@@ -227,6 +230,7 @@ function initializeLocksState(
     month: locks?.monthLock || false,
     day: locks?.dayLock || false,
     volume: locks?.volumeLock || false,
+    chapter: locks?.chapterLock || false,
     count: locks?.countLock || false,
     isbns: locks?.isbnsLock || false,
     edition: locks?.editionLock || false,
@@ -491,6 +495,9 @@ export function BookMetadataEditModal({
           ? Number.parseInt(formState.releaseDay, 10)
           : null,
         volume: formState.volume ? Number.parseInt(formState.volume, 10) : null,
+        chapter: formState.chapter
+          ? Number.parseFloat(formState.chapter)
+          : null,
         count: formState.count ? Number.parseInt(formState.count, 10) : null,
         isbns: formState.isbn || null,
         edition: formState.edition || null,
@@ -577,6 +584,7 @@ export function BookMetadataEditModal({
         monthLock: locksState.month,
         dayLock: locksState.day,
         volumeLock: locksState.volume,
+        chapterLock: locksState.chapter,
         countLock: locksState.count,
         isbnsLock: locksState.isbns,
         editionLock: locksState.edition,
@@ -796,6 +804,17 @@ export function BookMetadataEditModal({
           originalValue={originalFormState?.volume}
           placeholder="Volume number"
           type="number"
+        />
+        <LockableInput
+          label="Chapter"
+          value={formState.chapter}
+          onChange={(v) => updateField("chapter", v)}
+          locked={locksState.chapter}
+          onLockChange={(v) => updateLock("chapter", v)}
+          originalValue={originalFormState?.chapter}
+          placeholder="Chapter (e.g. 42 or 42.5)"
+          type="number"
+          step="any"
         />
         <LockableInput
           label="Count"

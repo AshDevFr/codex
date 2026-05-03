@@ -3,6 +3,7 @@ export { AwardsCount, AwardsList } from "./AwardsList";
 export { BookExternalIds } from "./BookExternalIds";
 export { BookFileInfo } from "./BookFileInfo";
 export { BookInfoModal } from "./BookInfoModal";
+export { BookKindBadge } from "./BookKindBadge";
 export { BookMetadataDisplay } from "./BookMetadataDisplay";
 export { BookProgress } from "./BookProgress";
 export { BookTypeBadge } from "./BookTypeBadge";

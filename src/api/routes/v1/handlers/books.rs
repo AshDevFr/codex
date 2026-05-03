@@ -476,6 +476,7 @@ pub async fn books_to_full_dtos_batched(
                 month: meta.month,
                 day: meta.day,
                 volume: meta.volume,
+                chapter: meta.chapter,
                 count: meta.count,
                 isbns: meta.isbns.clone(),
                 // Phase 6 fields
@@ -528,6 +529,7 @@ pub async fn books_to_full_dtos_batched(
                     month_lock: meta.month_lock,
                     day_lock: meta.day_lock,
                     volume_lock: meta.volume_lock,
+                    chapter_lock: meta.chapter_lock,
                     count_lock: meta.count_lock,
                     isbns_lock: meta.isbns_lock,
                     book_type_lock: meta.book_type_lock,
@@ -572,6 +574,7 @@ pub async fn books_to_full_dtos_batched(
                 month: None,
                 day: None,
                 volume: None,
+                chapter: None,
                 count: None,
                 isbns: None,
                 book_type: None,
@@ -617,6 +620,7 @@ pub async fn books_to_full_dtos_batched(
                     month_lock: false,
                     day_lock: false,
                     volume_lock: false,
+                    chapter_lock: false,
                     count_lock: false,
                     isbns_lock: false,
                     book_type_lock: false,
@@ -1091,6 +1095,7 @@ pub async fn get_book(
                     month: meta.month,
                     day: meta.day,
                     volume: meta.volume,
+                    chapter: meta.chapter,
                     count: meta.count,
                     isbns: meta.isbns,
                 }
@@ -2083,6 +2088,7 @@ pub async fn replace_book_metadata(
         active.month = Set(request.month);
         active.day = Set(request.day);
         active.volume = Set(request.volume);
+        active.chapter = Set(request.chapter);
         active.count = Set(request.count);
         active.isbns = Set(request.isbns.clone());
 
@@ -2133,6 +2139,9 @@ pub async fn replace_book_metadata(
         if request.volume.is_some() {
             active.volume_lock = Set(true);
         }
+        if request.chapter.is_some() {
+            active.chapter_lock = Set(true);
+        }
         if request.count.is_some() {
             active.count_lock = Set(true);
         }
@@ -2178,7 +2187,7 @@ pub async fn replace_book_metadata(
             month: Set(request.month),
             day: Set(request.day),
             volume: Set(request.volume),
-            chapter: Set(None),
+            chapter: Set(request.chapter),
             count: Set(request.count),
             isbns: Set(request.isbns.clone()),
             // New Phase 1 fields
@@ -2210,7 +2219,7 @@ pub async fn replace_book_metadata(
             month_lock: Set(request.month.is_some()),
             day_lock: Set(request.day.is_some()),
             volume_lock: Set(request.volume.is_some()),
-            chapter_lock: Set(false),
+            chapter_lock: Set(request.chapter.is_some()),
             count_lock: Set(request.count.is_some()),
             isbns_lock: Set(request.isbns.is_some()),
             // New Phase 1 lock fields
@@ -2295,6 +2304,7 @@ pub async fn replace_book_metadata(
         month: updated.month,
         day: updated.day,
         volume: updated.volume,
+        chapter: updated.chapter,
         count: updated.count,
         isbns: updated.isbns,
         // New Phase 6 fields
@@ -2339,6 +2349,7 @@ pub async fn replace_book_metadata(
             month_lock: updated.month_lock,
             day_lock: updated.day_lock,
             volume_lock: updated.volume_lock,
+            chapter_lock: updated.chapter_lock,
             count_lock: updated.count_lock,
             isbns_lock: updated.isbns_lock,
             book_type_lock: updated.book_type_lock,
@@ -2549,6 +2560,13 @@ pub async fn patch_book_metadata(
             }
             has_changes = true;
         }
+        if let Some(opt) = request.chapter.into_nested_option() {
+            active.chapter = Set(opt);
+            if opt.is_some() {
+                active.chapter_lock = Set(true);
+            }
+            has_changes = true;
+        }
         if let Some(opt) = request.count.into_nested_option() {
             active.count = Set(opt);
             if opt.is_some() {
@@ -2702,6 +2720,7 @@ pub async fn patch_book_metadata(
         let month_opt = request.month.into_option();
         let day_opt = request.day.into_option();
         let volume_opt = request.volume.into_option();
+        let chapter_opt = request.chapter.into_option();
         let count_opt = request.count.into_option();
         let isbns_opt = request.isbns.into_option();
         // New Phase 6 fields
@@ -2767,7 +2786,7 @@ pub async fn patch_book_metadata(
             month: Set(month_opt),
             day: Set(day_opt),
             volume: Set(volume_opt),
-            chapter: Set(None),
+            chapter: Set(chapter_opt),
             count: Set(count_opt),
             isbns: Set(isbns_opt.clone()),
             // New Phase 6 fields
@@ -2801,7 +2820,7 @@ pub async fn patch_book_metadata(
             month_lock: Set(month_opt.is_some()),
             day_lock: Set(day_opt.is_some()),
             volume_lock: Set(volume_opt.is_some()),
-            chapter_lock: Set(false),
+            chapter_lock: Set(chapter_opt.is_some()),
             count_lock: Set(count_opt.is_some()),
             isbns_lock: Set(isbns_opt.is_some()),
             // New Phase 6 lock fields
@@ -2888,6 +2907,7 @@ pub async fn patch_book_metadata(
         month: updated.month,
         day: updated.day,
         volume: updated.volume,
+        chapter: updated.chapter,
         count: updated.count,
         isbns: updated.isbns,
         // New Phase 6 fields
@@ -2932,6 +2952,7 @@ pub async fn patch_book_metadata(
             month_lock: updated.month_lock,
             day_lock: updated.day_lock,
             volume_lock: updated.volume_lock,
+            chapter_lock: updated.chapter_lock,
             count_lock: updated.count_lock,
             isbns_lock: updated.isbns_lock,
             book_type_lock: updated.book_type_lock,
@@ -3022,6 +3043,7 @@ pub async fn get_book_metadata_locks(
         month_lock: metadata.month_lock,
         day_lock: metadata.day_lock,
         volume_lock: metadata.volume_lock,
+        chapter_lock: metadata.chapter_lock,
         count_lock: metadata.count_lock,
         isbns_lock: metadata.isbns_lock,
         // New Phase 6 lock fields
@@ -3144,6 +3166,9 @@ pub async fn update_book_metadata_locks(
     if let Some(v) = request.volume_lock {
         active.volume_lock = Set(v);
     }
+    if let Some(v) = request.chapter_lock {
+        active.chapter_lock = Set(v);
+    }
     if let Some(v) = request.count_lock {
         active.count_lock = Set(v);
     }
@@ -3234,6 +3259,7 @@ pub async fn update_book_metadata_locks(
         month_lock: updated.month_lock,
         day_lock: updated.day_lock,
         volume_lock: updated.volume_lock,
+        chapter_lock: updated.chapter_lock,
         count_lock: updated.count_lock,
         isbns_lock: updated.isbns_lock,
         // New Phase 6 lock fields

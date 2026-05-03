@@ -236,11 +236,28 @@ describe("BookStrategySelector", () => {
       <BookStrategySelector value="filename" onChange={onChange} />,
     );
 
-    expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
+    expect(screen.getByText("Book Metadata Strategy")).toBeInTheDocument();
     // Mantine Select displays the label in the textbox, not the value
     expect(screen.getByRole("textbox", { hidden: true })).toHaveValue(
       "Filename (Recommended)",
     );
+  });
+
+  it("uses the post-rename label and description (volume/chapter aware copy)", () => {
+    const onChange = vi.fn();
+
+    renderWithProviders(
+      <BookStrategySelector value="filename" onChange={onChange} />,
+    );
+
+    // Renamed label
+    expect(screen.getByText("Book Metadata Strategy")).toBeInTheDocument();
+    // Updated description mentions volume/chapter
+    expect(
+      screen.getByText(
+        "How book metadata (title, volume, chapter) is extracted from files",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("displays description for selected strategy", () => {
@@ -384,7 +401,7 @@ describe("BookStrategySelector", () => {
 
     // Open the select dropdown - target the strategy select by its label
     const select = screen.getByRole("textbox", {
-      name: /book naming strategy/i,
+      name: /book metadata strategy/i,
     });
     await user.click(select.parentElement!);
 

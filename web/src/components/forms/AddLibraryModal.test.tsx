@@ -960,7 +960,7 @@ describe("LibraryModal (Add Mode)", () => {
         expect(
           screen.getByText("Series Detection Strategy"),
         ).toBeInTheDocument();
-        expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
+        expect(screen.getByText("Book Metadata Strategy")).toBeInTheDocument();
       });
     });
 
@@ -1137,7 +1137,7 @@ describe("LibraryModal (Add Mode)", () => {
 
         // Change book strategy to smart
         const bookStrategySelect = screen
-          .getByText("Book Naming Strategy")
+          .getByText("Book Metadata Strategy")
           .closest("div")
           ?.parentElement?.querySelector('input[type="text"]');
         if (bookStrategySelect) {
@@ -1218,7 +1218,7 @@ describe("LibraryModal (Add Mode)", () => {
         expect(
           screen.getByText("Series Detection Strategy"),
         ).toBeInTheDocument();
-        expect(screen.getByText("Book Naming Strategy")).toBeInTheDocument();
+        expect(screen.getByText("Book Metadata Strategy")).toBeInTheDocument();
         expect(screen.getByText("Book Number Strategy")).toBeInTheDocument();
       });
     });

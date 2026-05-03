@@ -65,6 +65,8 @@ const mockBookDetail = {
     imprint: null,
     genre: "Action",
     languageIso: "en",
+    volume: 5,
+    chapter: 42.5,
   },
 };
 
@@ -88,6 +90,7 @@ const mockLocks = {
   monthLock: false,
   dayLock: false,
   volumeLock: false,
+  chapterLock: false,
   countLock: false,
   isbnsLock: false,
 };
@@ -212,5 +215,52 @@ describe("BookMetadataEditModal", () => {
 
     expect(booksApi.getDetail).not.toHaveBeenCalled();
     expect(booksApi.getMetadataLocks).not.toHaveBeenCalled();
+  });
+
+  it("hydrates and round-trips fractional chapter through PATCH", async () => {
+    renderWithProviders(
+      <BookMetadataEditModal
+        opened={true}
+        onClose={vi.fn()}
+        bookId="test-book-id"
+      />,
+    );
+
+    // Switch to the publication tab where Volume + Chapter live
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /Publication/i }),
+      ).toBeInTheDocument();
+    });
+    screen.getByRole("tab", { name: /Publication/i }).click();
+
+    // Volume hydrates from mock (5), Chapter hydrates from mock (42.5)
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("5")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("42.5")).toBeInTheDocument();
+    });
+
+    // Save without further edits; patchMetadata should still receive both values
+    const saveButton = screen.getByRole("button", { name: /Save Changes/i });
+    saveButton.click();
+
+    await waitFor(() => {
+      expect(booksApi.patchMetadata).toHaveBeenCalled();
+    });
+
+    const patchCall = (booksApi.patchMetadata as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(patchCall[0]).toBe("test-book-id");
+    expect(patchCall[1].volume).toBe(5);
+    expect(patchCall[1].chapter).toBe(42.5);
+
+    // Locks payload should propagate the chapterLock field independently
+    await waitFor(() => {
+      expect(booksApi.updateMetadataLocks).toHaveBeenCalled();
+    });
+    const locksCall = (booksApi.updateMetadataLocks as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
+    expect(locksCall[1]).toHaveProperty("chapterLock");
+    expect(locksCall[1]).toHaveProperty("volumeLock");
   });
 });
