@@ -422,7 +422,6 @@ async fn process_pair(
         thumbnail_service: thumbnail_service.cloned(),
         event_broadcaster: event_broadcaster.cloned(),
         dry_run: false,
-        matching_strategy,
     };
 
     let apply_result = MetadataApplier::apply(

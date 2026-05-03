@@ -926,15 +926,11 @@ impl TaskHandler for PluginAutoMatchHandler {
             let current_metadata =
                 SeriesMetadataRepository::get_by_series_id(db, series_id).await?;
 
-            // Build apply options. Auto-match preserves the historical
-            // `AllowReMatch` default — the matching decision was made just
-            // above, so the field is informational here.
             let options = ApplyOptions {
                 fields_filter: None,
                 thumbnail_service: self.thumbnail_service.clone(),
                 event_broadcaster: event_broadcaster.cloned(),
                 dry_run: false,
-                ..Default::default()
             };
 
             // Apply metadata

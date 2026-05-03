@@ -33,9 +33,7 @@ use crate::db::repositories::{PluginsRepository, SeriesExternalIdRepository, Ser
 
 use super::refresh_config::MetadataRefreshConfig;
 
-/// Reason a series was skipped during planning. Mirrors the future
-/// `RefreshSkipReason` taxonomy from Phase 4 closely enough that they can
-/// be unified later without breaking external callers.
+/// Reason a series was skipped during planning.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SkipReason {
     /// Provider config references a plugin that isn't installed/enabled.

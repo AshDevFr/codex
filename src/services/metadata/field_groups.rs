@@ -22,7 +22,6 @@
 //! - [`fields_for_group`] — single group → its field set.
 //! - [`fields_for_groups`] — slice of groups → deduplicated field set
 //!   (returns an `Option<HashSet<String>>` mirroring `ApplyOptions`).
-//! - [`group_for_field`] — reverse lookup, used by the UI for display.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -176,22 +175,6 @@ pub fn fields_for_groups<S: AsRef<str>>(groups: &[S], extras: &[S]) -> Option<Ha
     Some(out)
 }
 
-/// Reverse lookup: given a field name, return the group it belongs to.
-///
-/// Used by the UI to render "this field belongs to group X" in the
-/// dry-run preview. Returns `None` for fields that aren't part of any
-/// group (e.g. `customMetadata`, which the scheduled refresh doesn't
-/// touch).
-#[allow(dead_code)]
-pub fn group_for_field(field: &str) -> Option<FieldGroup> {
-    for group in FieldGroup::all() {
-        if fields_for_group(*group).contains(&field) {
-            return Some(*group);
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,28 +302,6 @@ mod tests {
         assert_eq!(out.len(), 2);
         assert!(out.contains("language"));
         assert!(out.contains("publisher"));
-    }
-
-    #[test]
-    fn group_for_field_finds_group() {
-        assert_eq!(group_for_field("rating"), Some(FieldGroup::Ratings));
-        assert_eq!(
-            group_for_field("externalRatings"),
-            Some(FieldGroup::Ratings)
-        );
-        assert_eq!(
-            group_for_field("totalVolumeCount"),
-            Some(FieldGroup::Counts)
-        );
-        assert_eq!(group_for_field("status"), Some(FieldGroup::Status));
-        assert_eq!(group_for_field("year"), Some(FieldGroup::Status));
-        assert_eq!(group_for_field("coverUrl"), Some(FieldGroup::Cover));
-    }
-
-    #[test]
-    fn group_for_field_returns_none_for_unknown_field() {
-        assert_eq!(group_for_field("notARealField"), None);
-        assert_eq!(group_for_field(""), None);
     }
 
     #[test]
