@@ -122,6 +122,12 @@ for (let seriesIndex = 0; seriesIndex < mockSeries.length; seriesIndex++) {
   }
 }
 
+// Recompute per-series volume/chapter aggregates from the books we actually
+// created so the SeriesDto values stay consistent with what the books mock
+// returns. createSeries seeds these from a random bookCount, but the store
+// pins each series to a fixed number of books, so we need to recalculate.
+recomputeSeriesAggregates();
+
 // Update library counts
 mockLibraries = mockLibraries.map((library) => {
   const librarySeries = mockSeries.filter((s) => s.libraryId === library.id);
@@ -134,6 +140,32 @@ mockLibraries = mockLibraries.map((library) => {
     bookCount: libraryBooks.length,
   };
 });
+
+function recomputeSeriesAggregates() {
+  for (let i = 0; i < mockSeries.length; i++) {
+    const s = mockSeries[i];
+    const books = mockBooks.filter((b) => b.seriesId === s.id);
+    let maxVol: number | null = null;
+    let maxCh: number | null = null;
+    let volsOwned = 0;
+    for (const b of books) {
+      if (b.volume != null && (maxVol == null || b.volume > maxVol)) {
+        maxVol = b.volume;
+      }
+      if (b.chapter != null && (maxCh == null || b.chapter > maxCh)) {
+        maxCh = b.chapter;
+      }
+      if (b.volume != null && b.chapter == null) volsOwned += 1;
+    }
+    mockSeries[i] = {
+      ...s,
+      bookCount: books.length,
+      localMaxVolume: maxVol,
+      localMaxChapter: maxCh,
+      volumesOwned: maxVol != null ? volsOwned : null,
+    };
+  }
+}
 
 // Helper functions
 export const getSeriesByLibrary = (libraryId: string): SeriesDto[] =>
@@ -194,6 +226,8 @@ export const resetMockData = () => {
       mockBooks.push(book);
     }
   }
+
+  recomputeSeriesAggregates();
 
   mockLibraries = mockLibraries.map((library) => {
     const librarySeries = mockSeries.filter((s) => s.libraryId === library.id);

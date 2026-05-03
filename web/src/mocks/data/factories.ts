@@ -221,6 +221,25 @@ export const createSeries = (overrides: Partial<SeriesDto> = {}): SeriesDto => {
   const publisher =
     publishers[title] || faker.helpers.arrayElement(defaultPublishers);
 
+  const bookCount = faker.number.int({ min: 1, max: 100 });
+  // Local aggregates derived from the same classification rules used by
+  // createBook above so dev/mock UI shows realistic <max>/<total> values.
+  const isManga = MOCK_MANGA_SERIES.has(title);
+  const isBook = MOCK_BOOK_SERIES.has(title);
+  let localMaxVolume: number | null = null;
+  let localMaxChapter: number | null = null;
+  let volumesOwned: number | null = null;
+  if (isBook) {
+    localMaxVolume = bookCount;
+    volumesOwned = bookCount;
+  } else if (isManga) {
+    // Manga mock alternates: even numbers are complete volumes, odd numbers
+    // are loose chapters with volume = ⌈number/10⌉.
+    localMaxVolume = Math.max(1, Math.ceil(bookCount / 10));
+    localMaxChapter = bookCount % 2 === 1 ? bookCount : bookCount - 1;
+    volumesOwned = Math.floor(bookCount / 2);
+  }
+
   return {
     id: faker.string.uuid(),
     libraryId: overrides.libraryId || faker.string.uuid(),
@@ -230,11 +249,14 @@ export const createSeries = (overrides: Partial<SeriesDto> = {}): SeriesDto => {
     summary,
     publisher,
     year: faker.number.int({ min: 1980, max: 2024 }),
-    bookCount: faker.number.int({ min: 1, max: 100 }),
+    bookCount,
     path: `/media/comics/${title.replace(/[:\s]+/g, "-")}`,
     selectedCoverSource: "first_book",
     hasCustomCover: false,
     unreadCount: faker.number.int({ min: 0, max: 10 }),
+    localMaxVolume,
+    localMaxChapter,
+    volumesOwned,
     createdAt: faker.date.past().toISOString(),
     updatedAt: faker.date.recent().toISOString(),
     ...overrides,
@@ -619,6 +641,14 @@ export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
       ? faker.number.int({ min: 200, max: 600 })
       : faker.number.int({ min: 20, max: 50 }));
 
+  // Volume / chapter classification.
+  //   - Books (epub/pdf novels): volume = number, chapter null.
+  //   - Manga: alternate so each series shows a mix — even numbers are
+  //     complete volumes (volume = number, chapter null), odd numbers
+  //     are loose chapters (volume = ⌈number/10⌉, chapter = number).
+  //   - Comics (everything else): both null (issue-organized).
+  const { volume, chapter } = classifyMockBook(seriesName, number);
+
   return {
     id: faker.string.uuid(),
     libraryId: overrides.libraryId || faker.string.uuid(),
@@ -633,6 +663,8 @@ export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
     fileHash: faker.string.alphanumeric(40),
     pageCount,
     number,
+    volume,
+    chapter,
     createdAt: faker.date.past().toISOString(),
     updatedAt: faker.date.recent().toISOString(),
     readProgress: null,
@@ -643,6 +675,55 @@ export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
     ...overrides,
   };
 };
+
+const MOCK_BOOK_SERIES = new Set([
+  "Dune",
+  "The Expanse",
+  "Foundation",
+  "Neuromancer",
+  "Snow Crash",
+  "The Diamond Age",
+  "Hyperion",
+  "Ender's Game",
+]);
+
+const MOCK_MANGA_SERIES = new Set([
+  "One Piece",
+  "Naruto",
+  "Attack on Titan",
+  "Bleach",
+  "Dragon Ball",
+  "My Hero Academia",
+  "Demon Slayer",
+  "Jujutsu Kaisen",
+  "Chainsaw Man",
+  "Death Note",
+  "Fullmetal Alchemist",
+  "Hunter x Hunter",
+]);
+
+/**
+ * Derive (volume, chapter) for a mock book — visible on BookDto.volume /
+ * BookDto.chapter, plus on BookFullMetadata in the books mock handler.
+ *
+ * The mix is intentional so the series detail "Kind" column shows
+ * different-colored badges within a single mock series.
+ */
+export function classifyMockBook(
+  seriesName: string,
+  number: number,
+): { volume: number | null; chapter: number | null } {
+  if (MOCK_BOOK_SERIES.has(seriesName)) {
+    return { volume: number, chapter: null };
+  }
+  if (MOCK_MANGA_SERIES.has(seriesName)) {
+    if (number % 2 === 0) {
+      return { volume: number, chapter: null };
+    }
+    return { volume: Math.ceil(number / 10), chapter: number };
+  }
+  return { volume: null, chapter: null };
+}
 
 /**
  * Read progress factory - matches ReadProgressResponse schema
