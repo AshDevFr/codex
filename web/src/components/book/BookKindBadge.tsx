@@ -15,10 +15,14 @@ function formatChapter(chapter: number): string {
 /**
  * Badge component classifying a book by its (volume, chapter) populated fields.
  *
- * Four cases:
- * - volume set, chapter null  → "Vol N"
- * - chapter set, volume null  → "Ch N"
- * - both set                  → "Vol V · Ch C"
+ * Two semantic colors:
+ * - blue  = volume (a complete volume — chapter null)
+ * - grape = chapter (a chapter, with or without a parent volume)
+ *
+ * Cases:
+ * - volume set, chapter null  → blue  "Vol N"
+ * - chapter set, volume null  → grape "Ch N"
+ * - both set                  → grape "Vol V · Ch C" (still a chapter)
  * - neither set               → muted "Vol" with hover tooltip explaining the gap
  */
 export function BookKindBadge({
@@ -30,29 +34,22 @@ export function BookKindBadge({
   const hasVolume = volume !== null && volume !== undefined;
   const hasChapter = chapter !== null && chapter !== undefined;
 
-  // Both set: combined badge
-  if (hasVolume && hasChapter) {
+  // Chapter (with or without parent volume) — grape
+  if (hasChapter) {
     return (
-      <Badge variant={variant} color={"blue" as MantineColor} size={size}>
-        Vol {volume} · Ch {formatChapter(chapter)}
+      <Badge variant={variant} color={"grape" as MantineColor} size={size}>
+        {hasVolume
+          ? `Vol ${volume} · Ch ${formatChapter(chapter)}`
+          : `Ch ${formatChapter(chapter)}`}
       </Badge>
     );
   }
 
-  // Volume only
+  // Volume only — blue
   if (hasVolume) {
     return (
       <Badge variant={variant} color={"blue" as MantineColor} size={size}>
         Vol {volume}
-      </Badge>
-    );
-  }
-
-  // Chapter only
-  if (hasChapter) {
-    return (
-      <Badge variant={variant} color={"grape" as MantineColor} size={size}>
-        Ch {formatChapter(chapter)}
       </Badge>
     );
   }

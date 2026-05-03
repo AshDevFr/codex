@@ -23,6 +23,27 @@ describe("BookKindBadge", () => {
     expect(screen.getByText("Vol 15 · Ch 126")).toBeInTheDocument();
   });
 
+  it("uses the chapter color (grape) when both volume and chapter are set", () => {
+    renderWithProviders(<BookKindBadge volume={15} chapter={126} />);
+    const badge = screen
+      .getByText("Vol 15 · Ch 126")
+      .closest(".mantine-Badge-root") as HTMLElement | null;
+    expect(badge).not.toBeNull();
+    // Mantine renders the badge color into a CSS custom property on the root
+    const styleColor = badge?.getAttribute("style") ?? "";
+    expect(styleColor).toMatch(/grape/);
+  });
+
+  it("uses the volume color (blue) when only volume is set", () => {
+    renderWithProviders(<BookKindBadge volume={7} chapter={null} />);
+    const badge = screen
+      .getByText("Vol 7")
+      .closest(".mantine-Badge-root") as HTMLElement | null;
+    expect(badge).not.toBeNull();
+    const styleColor = badge?.getAttribute("style") ?? "";
+    expect(styleColor).toMatch(/blue/);
+  });
+
   it("renders muted Vol fallback when neither is set", () => {
     renderWithProviders(<BookKindBadge volume={null} chapter={null} />);
     // The badge text is just "Vol" (no number)

@@ -12,6 +12,7 @@ import {
 import { IconBook, IconTrash } from "@tabler/icons-react";
 import { memo } from "react";
 import { useNavigate } from "react-router-dom";
+import { BookKindBadge } from "@/components/book/BookKindBadge";
 import type { Book } from "@/types";
 
 interface SeriesBookTableProps {
@@ -109,6 +110,7 @@ export const SeriesBookTable = memo(function SeriesBookTable({
           <Table.Tr>
             <Table.Th style={{ width: 40 }} aria-label="Select" />
             <Table.Th style={{ width: 64 }}>#</Table.Th>
+            <Table.Th style={{ width: 130 }}>Kind</Table.Th>
             <Table.Th>Title</Table.Th>
             <Table.Th style={{ width: 120 }}>Status</Table.Th>
             <Table.Th style={{ width: 80 }}>Pages</Table.Th>
@@ -153,27 +155,51 @@ export const SeriesBookTable = memo(function SeriesBookTable({
                   </Text>
                 </Table.Td>
                 <Table.Td>
-                  <Group gap="xs" wrap="nowrap">
+                  {book.volume != null || book.chapter != null ? (
+                    <BookKindBadge
+                      volume={book.volume}
+                      chapter={book.chapter}
+                      size="xs"
+                      variant="light"
+                    />
+                  ) : (
+                    <Text size="sm" c="dimmed">
+                      —
+                    </Text>
+                  )}
+                </Table.Td>
+                <Table.Td style={{ minWidth: 0 }}>
+                  <Group
+                    gap="xs"
+                    wrap="nowrap"
+                    style={{ minWidth: 0, maxWidth: "100%" }}
+                  >
                     {book.deleted && (
                       <Badge
                         size="xs"
                         color="red"
                         variant="light"
                         leftSection={<IconTrash size={10} />}
+                        style={{ flexShrink: 0 }}
                       >
                         Deleted
                       </Badge>
                     )}
-                    <Text
-                      size="sm"
-                      fw={500}
-                      style={{
-                        whiteSpace: "normal",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {book.title}
-                    </Text>
+                    <Tooltip label={book.title} openDelay={500} withArrow>
+                      <Text
+                        size="sm"
+                        fw={500}
+                        style={{
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          minWidth: 0,
+                          flex: 1,
+                        }}
+                      >
+                        {book.title}
+                      </Text>
+                    </Tooltip>
                   </Group>
                 </Table.Td>
                 <Table.Td>

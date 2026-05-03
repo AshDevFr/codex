@@ -12,6 +12,7 @@ import {
 } from "@mantine/core";
 import { IconCheck, IconCopy, IconInfoCircle } from "@tabler/icons-react";
 import type { Book } from "@/types";
+import { BookKindBadge } from "./BookKindBadge";
 
 export interface BookInfoModalProps {
   opened: boolean;
@@ -103,6 +104,12 @@ function InfoRow({ label, value, copyable, monospace }: InfoRowProps) {
 }
 
 export function BookInfoModal({ opened, onClose, book }: BookInfoModalProps) {
+  const volume = book.volume;
+  const chapter = book.chapter;
+  const hasVolumeOrChapter =
+    (volume !== null && volume !== undefined) ||
+    (chapter !== null && chapter !== undefined);
+
   return (
     <Modal
       opened={opened}
@@ -132,6 +139,16 @@ export function BookInfoModal({ opened, onClose, book }: BookInfoModalProps) {
             <InfoRow label="Number" value={book.number} />
             <InfoRow label="Series" value={book.seriesName} />
             <InfoRow label="Library" value={book.libraryName} />
+            <InfoRow label="Volume" value={volume} />
+            <InfoRow label="Chapter" value={chapter} />
+            {hasVolumeOrChapter && (
+              <Group justify="space-between" wrap="nowrap" gap="md">
+                <Text size="sm" c="dimmed">
+                  Classification
+                </Text>
+                <BookKindBadge volume={volume} chapter={chapter} size="sm" />
+              </Group>
+            )}
             {book.titleSort && (
               <InfoRow label="Sort Title" value={book.titleSort} />
             )}
