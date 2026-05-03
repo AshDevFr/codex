@@ -143,6 +143,8 @@ mod m20260502_000068_drop_book_count;
 mod m20260503_000069_add_book_chapter;
 // Backfill volume/chapter from filename for already-scanned books (Phase 12)
 mod m20260503_000070_backfill_book_volume_chapter;
+// Per-library scheduled metadata refresh config (Phase 1 of scheduled-metadata-refresh)
+mod m20260503_000071_add_metadata_refresh_config;
 
 pub struct Migrator;
 
@@ -258,6 +260,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260503_000069_add_book_chapter::Migration),
             // Backfill book_metadata.volume / .chapter from filename (Phase 12)
             Box::new(m20260503_000070_backfill_book_volume_chapter::Migration),
+            // Per-library scheduled metadata refresh config (Phase 1)
+            Box::new(m20260503_000071_add_metadata_refresh_config::Migration),
         ]
     }
 }

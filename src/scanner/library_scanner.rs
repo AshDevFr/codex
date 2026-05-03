@@ -1655,6 +1655,7 @@ mod tests {
             excluded_patterns,
             title_preprocessing_rules: None,
             auto_match_conditions: None,
+            metadata_refresh_config: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_scanned_at: None,
