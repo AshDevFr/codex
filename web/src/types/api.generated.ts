@@ -8952,6 +8952,13 @@ export interface components {
             /** @description Whether the dismissal was recorded */
             dismissed: boolean;
         };
+        /**
+         * @description Dry-run preview attached to [`MetadataApplyResponse`] when the request
+         *     set `dryRun = true`. Absent on real applies.
+         */
+        DryRunReportDto: {
+            changes: components["schemas"]["FieldChangeDto"][];
+        };
         /** @description A group of duplicate books */
         DuplicateGroup: {
             /** @description List of book IDs that share this hash */
@@ -9452,6 +9459,21 @@ export interface components {
          * @enum {string}
          */
         FieldApplyStatus: "will_apply" | "locked" | "no_permission" | "unchanged" | "not_provided";
+        /**
+         * @description One would-be field change recorded during a dry-run apply.
+         *
+         *     Mirrors `services::metadata::apply::FieldChange`, kept as a distinct DTO
+         *     to keep the wire-format frozen even if internal types evolve.
+         */
+        FieldChangeDto: {
+            after: unknown;
+            /**
+             * @description Current value, where cheaply available. `null` for fields backed by
+             *     joined tables (genres, tags, alternate titles, ratings, etc.).
+             */
+            before?: unknown;
+            field: string;
+        };
         /** @description Operators for string and equality comparisons */
         FieldOperator: {
             /** @enum {string} */
@@ -11098,6 +11120,12 @@ export interface components {
         MetadataAction: "search" | "get" | "match";
         /** @description Request to apply metadata from a plugin */
         MetadataApplyRequest: {
+            /**
+             * @description When `true`, the call simulates the apply without writing to the
+             *     database. Returns the same `appliedFields`/`skippedFields` plus an
+             *     extra `dryRunReport` showing every would-be change. Default `false`.
+             */
+            dryRun?: boolean;
             /** @description External ID from the plugin's search results */
             externalId: string;
             /** @description Optional list of fields to apply (default: all applicable fields) */
@@ -11112,6 +11140,7 @@ export interface components {
         MetadataApplyResponse: {
             /** @description Fields that were applied */
             appliedFields: string[];
+            dryRunReport?: null | components["schemas"]["DryRunReportDto"];
             /** @description Message */
             message: string;
             /** @description Fields that were skipped (with reasons) */
@@ -15889,6 +15918,11 @@ export interface components {
             source: string;
             /** @enum {string} */
             type: "refresh_metadata";
+        } | {
+            /** Format: uuid */
+            libraryId: string;
+            /** @enum {string} */
+            type: "refresh_library_metadata";
         } | {
             bookIds?: string[] | null;
             force?: boolean;

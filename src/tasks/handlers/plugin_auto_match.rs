@@ -931,6 +931,7 @@ impl TaskHandler for PluginAutoMatchHandler {
                 fields_filter: None,
                 thumbnail_service: self.thumbnail_service.clone(),
                 event_broadcaster: event_broadcaster.cloned(),
+                dry_run: false,
             };
 
             // Apply metadata

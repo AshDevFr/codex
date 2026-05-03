@@ -237,22 +237,16 @@ async fn resolve_provider(db: &DatabaseConnection, provider: &str) -> Result<Opt
 /// Convenience: dedup + flatten the field allowlist that the task handler
 /// will pass to `MetadataApplier::apply` via `ApplyOptions::fields_filter`.
 ///
-/// Phase 3 will add a real `field_groups::fields_for_groups()` resolver. For
-/// Phase 2 we only need the union of `extra_fields` plus a (currently
-/// stubbed) per-group expansion that returns each group name as-is — this
-/// preserves the full set of fields the user picked so the handler doesn't
-/// over-write fields outside the allowlist.
+/// Group names in `config.field_groups` are expanded via
+/// [`crate::services::metadata::field_groups::fields_for_groups`] into the
+/// concrete camelCase field names the applier checks. `config.extra_fields`
+/// is unioned in verbatim (power-user hatch).
 ///
 /// Returns `None` when both lists are empty (apply everything; existing
-/// `MetadataApplier` semantics).
+/// `MetadataApplier` semantics). Unknown group names are silently skipped —
+/// the API layer is responsible for validating user input up front.
 pub fn fields_filter_from_config(config: &MetadataRefreshConfig) -> Option<HashSet<String>> {
-    if config.field_groups.is_empty() && config.extra_fields.is_empty() {
-        return None;
-    }
-    let mut out: HashSet<String> = HashSet::new();
-    out.extend(config.field_groups.iter().cloned());
-    out.extend(config.extra_fields.iter().cloned());
-    Some(out)
+    super::field_groups::fields_for_groups(&config.field_groups, &config.extra_fields)
 }
 
 #[cfg(test)]
@@ -580,16 +574,47 @@ mod tests {
     }
 
     #[test]
-    fn fields_filter_combines_groups_and_extras() {
+    fn fields_filter_expands_groups_to_concrete_fields() {
+        // "ratings" → ["rating", "externalRatings"]
+        // "status"  → ["status", "year"]
+        // extras    → ["language"]
         let cfg = MetadataRefreshConfig {
             field_groups: vec!["ratings".to_string(), "status".to_string()],
             extra_fields: vec!["language".to_string()],
             ..Default::default()
         };
         let filter = fields_filter_from_config(&cfg).unwrap();
-        assert!(filter.contains("ratings"));
+        assert!(filter.contains("rating"));
+        assert!(filter.contains("externalRatings"));
         assert!(filter.contains("status"));
+        assert!(filter.contains("year"));
         assert!(filter.contains("language"));
-        assert_eq!(filter.len(), 3);
+        assert_eq!(filter.len(), 5);
+    }
+
+    #[test]
+    fn fields_filter_extras_only_passes_through() {
+        let cfg = MetadataRefreshConfig {
+            field_groups: vec![],
+            extra_fields: vec!["title".to_string(), "summary".to_string()],
+            ..Default::default()
+        };
+        let filter = fields_filter_from_config(&cfg).unwrap();
+        assert!(filter.contains("title"));
+        assert!(filter.contains("summary"));
+        assert_eq!(filter.len(), 2);
+    }
+
+    #[test]
+    fn fields_filter_silently_drops_unknown_groups() {
+        let cfg = MetadataRefreshConfig {
+            field_groups: vec!["ratings".to_string(), "made_up_group".to_string()],
+            extra_fields: vec![],
+            ..Default::default()
+        };
+        let filter = fields_filter_from_config(&cfg).unwrap();
+        assert!(filter.contains("rating"));
+        assert!(filter.contains("externalRatings"));
+        assert_eq!(filter.len(), 2);
     }
 }

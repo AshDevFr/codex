@@ -10,6 +10,7 @@
 mod apply;
 mod book_apply;
 mod cover;
+pub mod field_groups;
 pub mod preprocessing;
 pub mod refresh_config;
 pub mod refresh_planner;
@@ -17,6 +18,8 @@ pub mod refresh_planner;
 pub use apply::{ApplyOptions, MetadataApplier, SkippedField};
 pub use book_apply::{BookApplyOptions, BookMetadataApplier};
 pub use cover::CoverService;
+#[allow(unused_imports)]
+pub use field_groups::{FieldGroup, fields_for_group, fields_for_groups, group_for_field};
 pub use refresh_config::{MetadataRefreshConfig, parse_metadata_refresh_config};
 // Re-exported for downstream phases (HTTP PATCH endpoint, per-provider
 // overrides). Allowed to be unused until those phases land.

@@ -21692,6 +21692,21 @@
           }
         }
       },
+      "DryRunReportDto": {
+        "type": "object",
+        "description": "Dry-run preview attached to [`MetadataApplyResponse`] when the request\nset `dryRun = true`. Absent on real applies.",
+        "required": [
+          "changes"
+        ],
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldChangeDto"
+            }
+          }
+        }
+      },
       "DuplicateGroup": {
         "type": "object",
         "description": "A group of duplicate books",
@@ -22833,6 +22848,23 @@
           "unchanged",
           "not_provided"
         ]
+      },
+      "FieldChangeDto": {
+        "type": "object",
+        "description": "One would-be field change recorded during a dry-run apply.\n\nMirrors `services::metadata::apply::FieldChange`, kept as a distinct DTO\nto keep the wire-format frozen even if internal types evolve.",
+        "required": [
+          "field",
+          "after"
+        ],
+        "properties": {
+          "after": {},
+          "before": {
+            "description": "Current value, where cheaply available. `null` for fields backed by\njoined tables (genres, tags, alternate titles, ratings, etc.)."
+          },
+          "field": {
+            "type": "string"
+          }
+        }
       },
       "FieldOperator": {
         "oneOf": [
@@ -26091,6 +26123,10 @@
           "externalId"
         ],
         "properties": {
+          "dryRun": {
+            "type": "boolean",
+            "description": "When `true`, the call simulates the apply without writing to the\ndatabase. Returns the same `appliedFields`/`skippedFields` plus an\nextra `dryRunReport` showing every would-be change. Default `false`."
+          },
           "externalId": {
             "type": "string",
             "description": "External ID from the plugin's search results"
@@ -26128,6 +26164,17 @@
               "type": "string"
             },
             "description": "Fields that were applied"
+          },
+          "dryRunReport": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DryRunReportDto",
+                "description": "Populated only when the request set `dryRun = true`. Each entry is a\nfield that *would* have been written."
+              }
+            ]
           },
           "message": {
             "type": "string",
@@ -34359,6 +34406,26 @@
                 "type": "string",
                 "enum": [
                   "refresh_metadata"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Scheduled per-library metadata refresh.\n\nWalks the library's series, applies the per-library\n`metadata_refresh_config` (field groups, providers, matching strategy),\nand refreshes metadata via the existing `MetadataApplier`.",
+            "required": [
+              "libraryId",
+              "type"
+            ],
+            "properties": {
+              "libraryId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "refresh_library_metadata"
                 ]
               }
             }

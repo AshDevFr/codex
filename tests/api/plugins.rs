@@ -1779,6 +1779,37 @@ async fn test_preview_book_metadata_requires_auth() {
 }
 
 #[tokio::test]
+async fn test_apply_book_metadata_rejects_dry_run() {
+    // Book apply does not (yet) support dry-run. The handler must reject
+    // the request with 400 rather than silently performing a real apply.
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let fake_book_id = uuid::Uuid::new_v4();
+    let fake_plugin_id = uuid::Uuid::new_v4();
+    let body = json!({
+        "pluginId": fake_plugin_id.to_string(),
+        "externalId": "12345",
+        "dryRun": true,
+    });
+    let request = post_json_request_with_auth(
+        &format!("/api/v1/books/{}/metadata/apply", fake_book_id),
+        &body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "book apply must reject dryRun=true"
+    );
+}
+
+#[tokio::test]
 async fn test_apply_book_metadata_requires_auth() {
     let (db, _temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db).await;
