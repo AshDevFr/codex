@@ -14,8 +14,9 @@ pub mod field_groups;
 pub mod preprocessing;
 pub mod refresh_config;
 pub mod refresh_planner;
+pub mod refresh_skip_reason;
 
-pub use apply::{ApplyOptions, MetadataApplier, SkippedField};
+pub use apply::{ApplyOptions, MatchingStrategy, MetadataApplier, SkippedField};
 pub use book_apply::{BookApplyOptions, BookMetadataApplier};
 pub use cover::CoverService;
 #[allow(unused_imports)]
@@ -27,6 +28,8 @@ pub use refresh_config::{MetadataRefreshConfig, parse_metadata_refresh_config};
 pub use refresh_config::{MetadataRefreshConfigPatch, ProviderOverride};
 #[allow(unused_imports)]
 pub use refresh_planner::{
-    PlannedRefresh, RefreshPlan, RefreshPlanner, SkipReason as RefreshSkipReason, SkippedRefresh,
+    PlannedRefresh, RefreshPlan, RefreshPlanner, SkipReason as PlannerSkipReason, SkippedRefresh,
     fields_filter_from_config,
 };
+#[allow(unused_imports)]
+pub use refresh_skip_reason::RefreshSkipReason;
