@@ -29,7 +29,7 @@ pub use refresh_config::{MetadataRefreshConfigPatch, ProviderOverride};
 #[allow(unused_imports)]
 pub use refresh_planner::{
     PlannedRefresh, RefreshPlan, RefreshPlanner, SkipReason as PlannerSkipReason, SkippedRefresh,
-    fields_filter_from_config,
+    fields_filter_for_provider, fields_filter_from_config,
 };
 #[allow(unused_imports)]
 pub use refresh_skip_reason::RefreshSkipReason;

@@ -17,7 +17,7 @@ use crate::db::repositories::{
 };
 use crate::services::metadata::{
     ApplyOptions, FieldGroup, MatchingStrategy, MetadataApplier, MetadataRefreshConfig,
-    PlannedRefresh, ProviderOverride, RefreshPlan, RefreshPlanner, fields_filter_from_config,
+    PlannedRefresh, ProviderOverride, RefreshPlan, RefreshPlanner, fields_filter_for_provider,
     fields_for_group,
 };
 use crate::services::plugin::protocol::{MetadataGetParams, MetadataMatchParams};
@@ -253,7 +253,6 @@ pub async fn dry_run_refresh(
         .map_err(|e| ApiError::Internal(format!("Failed to plan refresh: {e}")))?;
 
     let totals = plan_totals(&plan);
-    let fields_filter = fields_filter_from_config(&config);
 
     let matching_strategy = if config.existing_source_ids_only {
         MatchingStrategy::ExistingExternalIdOnly
@@ -266,11 +265,14 @@ pub async fn dry_run_refresh(
 
     let mut sample = Vec::with_capacity(sample_pairs.len());
     for planned in sample_pairs {
+        let provider_key = format!("plugin:{}", planned.plugin.name);
+        let pair_fields_filter = fields_filter_for_provider(&config, &provider_key);
+
         match dry_run_one_pair(
             &state.db,
             library_id,
             planned,
-            fields_filter.as_ref(),
+            pair_fields_filter.as_ref(),
             matching_strategy,
             &state,
         )
@@ -440,6 +442,8 @@ async fn apply_patch_with_validation(
         match maybe_overrides {
             None => cfg.per_provider_overrides = None,
             Some(map) => {
+                let provider_keys: Vec<String> = map.keys().cloned().collect();
+                validate_providers(db, &provider_keys).await?;
                 for (provider, ovr) in &map {
                     validate_field_groups(&ovr.field_groups).map_err(|e| match e {
                         ApiError::BadRequest(msg) => ApiError::BadRequest(format!(
@@ -491,6 +495,8 @@ async fn apply_override_dto(
     cfg.max_concurrency = dto.max_concurrency;
 
     if let Some(map) = dto.per_provider_overrides {
+        let provider_keys: Vec<String> = map.keys().cloned().collect();
+        validate_providers(db, &provider_keys).await?;
         for (provider, ovr) in &map {
             validate_field_groups(&ovr.field_groups).map_err(|e| match e {
                 ApiError::BadRequest(msg) => ApiError::BadRequest(format!(

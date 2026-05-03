@@ -114,6 +114,7 @@ pub struct ApplyOptions {
     /// the applier; the applier itself doesn't branch on it. Defaults to
     /// [`MatchingStrategy::AllowReMatch`] so existing manual-apply call
     /// sites preserve their previous behavior.
+    #[allow(dead_code)]
     pub matching_strategy: MatchingStrategy,
 }
 

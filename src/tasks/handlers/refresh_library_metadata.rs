@@ -39,7 +39,7 @@ use crate::db::repositories::{
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::services::metadata::refresh_planner::{
-    PlannedRefresh, RefreshPlan, RefreshPlanner, fields_filter_from_config,
+    PlannedRefresh, RefreshPlan, RefreshPlanner, fields_filter_for_provider,
 };
 use crate::services::metadata::{ApplyOptions, MatchingStrategy, MetadataApplier};
 use crate::services::plugin::PluginManager;
@@ -230,7 +230,6 @@ impl TaskHandler for RefreshLibraryMetadataHandler {
             let _max_concurrency =
                 (config.max_concurrency as usize).clamp(1, MAX_CONCURRENCY_HARD_CAP);
 
-            let fields_filter = fields_filter_from_config(&config);
             let library_name = library.name.clone();
             // Mirror the config toggle into the strategy enum so future
             // call sites that key off `MatchingStrategy` (e.g. dry-run
@@ -242,11 +241,18 @@ impl TaskHandler for RefreshLibraryMetadataHandler {
             };
 
             for (idx, planned) in plan.planned.iter().enumerate() {
+                // Resolve the field filter for this specific provider — the
+                // planner doesn't know about the per-provider override, so the
+                // handler computes it here. Without an override, this returns
+                // the same set as the library-wide filter.
+                let provider_key = format!("plugin:{}", planned.plugin.name);
+                let pair_fields_filter = fields_filter_for_provider(&config, &provider_key);
+
                 let pair_outcome = process_pair(
                     db,
                     library_id,
                     planned,
-                    fields_filter.as_ref(),
+                    pair_fields_filter.as_ref(),
                     self.thumbnail_service.as_ref(),
                     event_broadcaster,
                     self.plugin_manager.as_ref(),

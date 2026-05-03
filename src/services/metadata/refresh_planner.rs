@@ -249,6 +249,28 @@ pub fn fields_filter_from_config(config: &MetadataRefreshConfig) -> Option<HashS
     super::field_groups::fields_for_groups(&config.field_groups, &config.extra_fields)
 }
 
+/// Per-provider variant of [`fields_filter_from_config`].
+///
+/// When `config.per_provider_overrides` contains an entry for `provider`, that
+/// override's `field_groups` + `extra_fields` are used in place of the
+/// library-wide selection. Without an override, the result is identical to
+/// [`fields_filter_from_config`].
+///
+/// `provider` is the wire-format string (e.g. `"plugin:mangabaka"`), matching
+/// the keys used in the per-library config and the planner's
+/// `unresolved_providers` list.
+pub fn fields_filter_for_provider(
+    config: &MetadataRefreshConfig,
+    provider: &str,
+) -> Option<HashSet<String>> {
+    if let Some(overrides) = config.per_provider_overrides.as_ref()
+        && let Some(ovr) = overrides.get(provider)
+    {
+        return super::field_groups::fields_for_groups(&ovr.field_groups, &ovr.extra_fields);
+    }
+    fields_filter_from_config(config)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -616,5 +638,106 @@ mod tests {
         assert!(filter.contains("rating"));
         assert!(filter.contains("externalRatings"));
         assert_eq!(filter.len(), 2);
+    }
+
+    #[test]
+    fn fields_filter_for_provider_uses_library_default_when_no_override() {
+        let cfg = MetadataRefreshConfig {
+            field_groups: vec!["ratings".to_string()],
+            extra_fields: vec![],
+            ..Default::default()
+        };
+        let filter = fields_filter_for_provider(&cfg, "plugin:mangabaka").unwrap();
+        assert!(filter.contains("rating"));
+        assert!(filter.contains("externalRatings"));
+        assert_eq!(filter.len(), 2);
+    }
+
+    #[test]
+    fn fields_filter_for_provider_uses_override_when_set() {
+        use crate::services::metadata::ProviderOverride;
+        use std::collections::BTreeMap;
+
+        let mut overrides = BTreeMap::new();
+        overrides.insert(
+            "plugin:anilist".to_string(),
+            ProviderOverride {
+                field_groups: vec!["ratings".to_string()],
+                extra_fields: vec![],
+            },
+        );
+        let cfg = MetadataRefreshConfig {
+            // Library default is "status" (so default ⇒ status, year)
+            field_groups: vec!["status".to_string()],
+            extra_fields: vec![],
+            per_provider_overrides: Some(overrides),
+            ..Default::default()
+        };
+
+        // anilist override → ratings only
+        let anilist = fields_filter_for_provider(&cfg, "plugin:anilist").unwrap();
+        assert!(anilist.contains("rating"));
+        assert!(anilist.contains("externalRatings"));
+        assert!(!anilist.contains("status"));
+        assert_eq!(anilist.len(), 2);
+
+        // mangabaka has no override → falls back to library default (status)
+        let mangabaka = fields_filter_for_provider(&cfg, "plugin:mangabaka").unwrap();
+        assert!(mangabaka.contains("status"));
+        assert!(mangabaka.contains("year"));
+        assert!(!mangabaka.contains("rating"));
+        assert_eq!(mangabaka.len(), 2);
+    }
+
+    #[test]
+    fn fields_filter_for_provider_override_with_only_extras() {
+        use crate::services::metadata::ProviderOverride;
+        use std::collections::BTreeMap;
+
+        let mut overrides = BTreeMap::new();
+        overrides.insert(
+            "plugin:custom".to_string(),
+            ProviderOverride {
+                field_groups: vec![],
+                extra_fields: vec!["coverUrl".to_string()],
+            },
+        );
+        let cfg = MetadataRefreshConfig {
+            field_groups: vec!["ratings".to_string()],
+            extra_fields: vec![],
+            per_provider_overrides: Some(overrides),
+            ..Default::default()
+        };
+
+        let filter = fields_filter_for_provider(&cfg, "plugin:custom").unwrap();
+        assert!(filter.contains("coverUrl"));
+        assert!(!filter.contains("rating"));
+        assert_eq!(filter.len(), 1);
+    }
+
+    #[test]
+    fn fields_filter_for_provider_empty_override_returns_none() {
+        use crate::services::metadata::ProviderOverride;
+        use std::collections::BTreeMap;
+
+        let mut overrides = BTreeMap::new();
+        overrides.insert(
+            "plugin:custom".to_string(),
+            ProviderOverride {
+                field_groups: vec![],
+                extra_fields: vec![],
+            },
+        );
+        let cfg = MetadataRefreshConfig {
+            field_groups: vec!["ratings".to_string()],
+            extra_fields: vec![],
+            per_provider_overrides: Some(overrides),
+            ..Default::default()
+        };
+
+        // An empty override is interpreted as "apply everything" — explicit
+        // user intent to bypass the library's restriction for this provider.
+        let filter = fields_filter_for_provider(&cfg, "plugin:custom");
+        assert!(filter.is_none());
     }
 }

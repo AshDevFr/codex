@@ -24,6 +24,7 @@ use super::refresh_planner::SkipReason as PlannerSkipReason;
 /// Variants are flat and self-describing so the JSON form is friendly to
 /// consume from the frontend. The discriminant strings (also returned by
 /// [`Self::as_str`]) are stable.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RefreshSkipReason {
@@ -57,6 +58,7 @@ pub enum RefreshSkipReason {
 impl RefreshSkipReason {
     /// Stable string identifier. Used as the JSON key in task-summary
     /// `skipped` maps and as the value of the `kind` discriminant.
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::NoExternalId => "no_external_id",

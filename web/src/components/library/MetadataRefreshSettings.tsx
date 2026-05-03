@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  Collapse,
   Group,
   MultiSelect,
   NumberInput,
@@ -13,14 +14,18 @@ import {
   Text,
   TextInput,
   Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
 import {
+  IconChevronDown,
+  IconChevronRight,
   IconInfoCircle,
   IconPlayerPlay,
   IconRefresh,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import type { ProviderOverride } from "@/api/metadataRefresh";
 import { type PluginActionsResponse, pluginsApi } from "@/api/plugins";
 import {
   useDryRunMetadataRefresh,
@@ -84,6 +89,12 @@ export function MetadataRefreshSettings({
   const [skipRecentlySyncedHours, setSkipRecentlySyncedHours] =
     useState<number>(1);
   const [maxConcurrency, setMaxConcurrency] = useState<number>(4);
+  const [perProviderOverrides, setPerProviderOverrides] = useState<
+    Record<string, ProviderOverride>
+  >({});
+  const [expandedProviders, setExpandedProviders] = useState<
+    Record<string, boolean>
+  >({});
 
   const [dryRunOpen, setDryRunOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -103,6 +114,7 @@ export function MetadataRefreshSettings({
       Math.max(0, Math.round((cfg.skipRecentlySyncedWithinS ?? 3600) / 3600)),
     );
     setMaxConcurrency(cfg.maxConcurrency || 4);
+    setPerProviderOverrides(cfg.perProviderOverrides ?? {});
   }, [configQuery.data]);
 
   // Provider options: each entry's value is the wire format `"plugin:<name>"`.
@@ -136,6 +148,20 @@ export function MetadataRefreshSettings({
     return map;
   }, [fieldGroupsQuery.data]);
 
+  // Drop overrides for providers that are no longer selected. Persisting
+  // overrides for providers the user just unselected would silently
+  // resurface them on a future re-add — surprising behavior. Filter at
+  // serialize time so the UI state stays editable while the user is still
+  // making changes.
+  const activeOverrides = useMemo(() => {
+    const out: Record<string, ProviderOverride> = {};
+    for (const provider of providers) {
+      const ovr = perProviderOverrides[provider];
+      if (ovr) out[provider] = ovr;
+    }
+    return out;
+  }, [providers, perProviderOverrides]);
+
   const buildPatch = () => ({
     enabled,
     cronSchedule,
@@ -145,7 +171,33 @@ export function MetadataRefreshSettings({
     existingSourceIdsOnly,
     skipRecentlySyncedWithinS: Math.max(0, skipRecentlySyncedHours) * 3600,
     maxConcurrency,
+    perProviderOverrides:
+      Object.keys(activeOverrides).length > 0 ? activeOverrides : null,
   });
+
+  const isOverridden = (provider: string): boolean =>
+    perProviderOverrides[provider] !== undefined;
+
+  const setOverride = (provider: string, override: ProviderOverride) => {
+    setPerProviderOverrides((prev) => ({ ...prev, [provider]: override }));
+  };
+
+  const resetOverride = (provider: string) => {
+    setPerProviderOverrides((prev) => {
+      const next = { ...prev };
+      delete next[provider];
+      return next;
+    });
+  };
+
+  const toggleExpanded = (provider: string) => {
+    setExpandedProviders((prev) => ({ ...prev, [provider]: !prev[provider] }));
+  };
+
+  const providerLabel = (provider: string): string => {
+    const opt = providerOptions.find((o) => o.value === provider);
+    return opt?.label ?? provider.replace(/^plugin:/, "");
+  };
 
   const handleSave = () => {
     updateMutation.mutate(buildPatch());
@@ -294,6 +346,92 @@ export function MetadataRefreshSettings({
             comboboxProps={{ zIndex: 1001 }}
             disabled={providerOptions.length === 0}
           />
+
+          {providers.length > 0 && (
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>
+                Per-provider field customization
+              </Text>
+              <Text size="xs" c="dimmed">
+                Each provider inherits the library-wide field group selection
+                above. Expand a provider below to override its allowlist (for
+                example: AniList for ratings only, MangaBaka for status and
+                counts).
+              </Text>
+              <Stack gap={4} pl="md">
+                {providers.map((provider) => {
+                  const expanded = expandedProviders[provider] ?? false;
+                  const overridden = isOverridden(provider);
+                  const override = perProviderOverrides[provider];
+                  return (
+                    <Paper
+                      key={provider}
+                      p="xs"
+                      withBorder
+                      data-testid={`override-card-${provider}`}
+                    >
+                      <Stack gap="xs">
+                        <Group justify="space-between" wrap="nowrap">
+                          <UnstyledButton
+                            onClick={() => toggleExpanded(provider)}
+                            aria-label={`Customize fields for ${providerLabel(provider)}`}
+                            aria-expanded={expanded}
+                          >
+                            <Group gap="xs">
+                              {expanded ? (
+                                <IconChevronDown size={14} />
+                              ) : (
+                                <IconChevronRight size={14} />
+                              )}
+                              <Text size="sm">{providerLabel(provider)}</Text>
+                              {overridden ? (
+                                <Badge size="xs" color="blue" variant="light">
+                                  Custom
+                                </Badge>
+                              ) : (
+                                <Badge size="xs" color="gray" variant="light">
+                                  Inherits library
+                                </Badge>
+                              )}
+                            </Group>
+                          </UnstyledButton>
+                          {overridden && (
+                            <Button
+                              variant="subtle"
+                              size="xs"
+                              color="gray"
+                              onClick={() => resetOverride(provider)}
+                            >
+                              Reset to inherit
+                            </Button>
+                          )}
+                        </Group>
+                        <Collapse in={expanded}>
+                          <Stack gap="xs" pt="xs">
+                            <MultiSelect
+                              label="Field groups"
+                              description="Override the library-wide selection for this provider only."
+                              placeholder="Select groups"
+                              data={fieldGroupOptions}
+                              value={override?.fieldGroups ?? []}
+                              onChange={(value) =>
+                                setOverride(provider, {
+                                  fieldGroups: value,
+                                  extraFields: override?.extraFields ?? [],
+                                })
+                              }
+                              comboboxProps={{ zIndex: 1001 }}
+                              data-testid={`override-groups-${provider}`}
+                            />
+                          </Stack>
+                        </Collapse>
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            </Stack>
+          )}
         </Stack>
       </Paper>
 

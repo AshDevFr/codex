@@ -182,4 +182,92 @@ describe("MetadataRefreshSettings", () => {
     );
     await waitFor(() => expect(screen.getByText("7")).toBeInTheDocument());
   });
+
+  it("renders selected providers as inheriting the library by default", async () => {
+    renderWithProviders(<MetadataRefreshSettings libraryId={LIBRARY_ID} />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("override-card-plugin:mangabaka"),
+      ).toBeInTheDocument(),
+    );
+
+    const card = screen.getByTestId("override-card-plugin:mangabaka");
+    // Default state: no override saved → "Inherits library" badge.
+    expect(card).toHaveTextContent(/Inherits library/i);
+    expect(card).not.toHaveTextContent(/^Custom$/i);
+  });
+
+  it("hydrates an existing per-provider override and surfaces the Custom badge", async () => {
+    server.use(
+      http.get(`/api/v1/libraries/${LIBRARY_ID}/metadata-refresh`, () =>
+        HttpResponse.json({
+          ...baseConfig,
+          perProviderOverrides: {
+            "plugin:mangabaka": {
+              fieldGroups: ["ratings"],
+              extraFields: [],
+            },
+          },
+        }),
+      ),
+    );
+
+    renderWithProviders(<MetadataRefreshSettings libraryId={LIBRARY_ID} />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("override-card-plugin:mangabaka"),
+      ).toBeInTheDocument(),
+    );
+
+    const card = screen.getByTestId("override-card-plugin:mangabaka");
+    expect(card).toHaveTextContent(/Custom/i);
+    expect(card).toHaveTextContent(/Reset to inherit/i);
+  });
+
+  it("PATCHes the override map when the user resets a provider", async () => {
+    server.use(
+      http.get(`/api/v1/libraries/${LIBRARY_ID}/metadata-refresh`, () =>
+        HttpResponse.json({
+          ...baseConfig,
+          perProviderOverrides: {
+            "plugin:mangabaka": {
+              fieldGroups: ["ratings"],
+              extraFields: [],
+            },
+          },
+        }),
+      ),
+    );
+
+    let captured: { perProviderOverrides?: unknown } | null = null;
+    server.use(
+      http.patch(
+        `/api/v1/libraries/${LIBRARY_ID}/metadata-refresh`,
+        async ({ request }) => {
+          captured = (await request.json()) as {
+            perProviderOverrides?: unknown;
+          };
+          return HttpResponse.json(baseConfig);
+        },
+      ),
+    );
+
+    renderWithProviders(<MetadataRefreshSettings libraryId={LIBRARY_ID} />);
+
+    const resetButton = await screen.findByRole("button", {
+      name: /Reset to inherit/i,
+    });
+    const user = userEvent.setup();
+    await user.click(resetButton);
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await user.click(saveButton);
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    // Reset wipes the only override, so the patch should explicitly null
+    // out perProviderOverrides (clears it on the server).
+    expect(captured!.perProviderOverrides).toBeNull();
+  });
 });
