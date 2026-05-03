@@ -47,6 +47,16 @@ pub enum TaskType {
         source: String, // "comicvine", "openlibrary", etc.
     },
 
+    /// Scheduled per-library metadata refresh.
+    ///
+    /// Walks the library's series, applies the per-library
+    /// `metadata_refresh_config` (field groups, providers, matching strategy),
+    /// and refreshes metadata via the existing `MetadataApplier`.
+    RefreshLibraryMetadata {
+        #[serde(rename = "libraryId")]
+        library_id: Uuid,
+    },
+
     /// Generate thumbnails for books in a scope (library, series, specific books, or all)
     /// This is a fan-out task that enqueues individual GenerateThumbnail tasks
     GenerateThumbnails {
@@ -233,6 +243,7 @@ impl TaskType {
             // Metadata
             TaskType::FindDuplicates => 400,
             TaskType::RefreshMetadata { .. } => 390,
+            TaskType::RefreshLibraryMetadata { .. } => 385,
             TaskType::PluginAutoMatch { .. } => 380,
             // Export
             TaskType::ExportSeries { .. } => 450,
@@ -258,6 +269,7 @@ impl TaskType {
             TaskType::AnalyzeSeries { .. } => "analyze_series",
             TaskType::PurgeDeleted { .. } => "purge_deleted",
             TaskType::RefreshMetadata { .. } => "refresh_metadata",
+            TaskType::RefreshLibraryMetadata { .. } => "refresh_library_metadata",
             TaskType::GenerateThumbnails { .. } => "generate_thumbnails",
             TaskType::GenerateThumbnail { .. } => "generate_thumbnail",
             TaskType::GenerateSeriesThumbnail { .. } => "generate_series_thumbnail",
@@ -288,6 +300,7 @@ impl TaskType {
         match self {
             TaskType::ScanLibrary { library_id, .. } => Some(*library_id),
             TaskType::PurgeDeleted { library_id } => Some(*library_id),
+            TaskType::RefreshLibraryMetadata { library_id } => Some(*library_id),
             TaskType::GenerateThumbnails { library_id, .. } => *library_id,
             TaskType::GenerateSeriesThumbnails { library_id, .. } => *library_id,
             TaskType::ReprocessSeriesTitles { library_id, .. } => *library_id,
@@ -1004,6 +1017,42 @@ mod tests {
         assert_eq!(task.type_string(), "renumber_series_batch");
         let params = task.params();
         assert!(params["series_ids"].is_null());
+    }
+
+    #[test]
+    fn test_refresh_library_metadata_extraction() {
+        let library_id = Uuid::new_v4();
+        let task = TaskType::RefreshLibraryMetadata { library_id };
+
+        assert_eq!(task.type_string(), "refresh_library_metadata");
+        assert_eq!(task.library_id(), Some(library_id));
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+        assert_eq!(task.default_priority(), 385);
+
+        let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "refresh_library_metadata");
+        assert_eq!(lib_id, Some(library_id));
+        assert!(series_id.is_none());
+        assert!(book_id.is_none());
+        // No extra params beyond library_id (carried via the FK column)
+        assert!(params.is_none());
+    }
+
+    #[test]
+    fn test_refresh_library_metadata_serialization() {
+        let library_id = Uuid::new_v4();
+        let task = TaskType::RefreshLibraryMetadata { library_id };
+
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("refresh_library_metadata"));
+        assert!(json.contains(&library_id.to_string()));
+        // libraryId is the camelCase rename used by the rest of the enum
+        assert!(json.contains("libraryId"));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.type_string(), "refresh_library_metadata");
+        assert_eq!(deserialized.library_id(), Some(library_id));
     }
 
     #[test]
