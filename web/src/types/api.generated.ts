@@ -6768,6 +6768,12 @@ export interface components {
             blackAndWhite?: boolean | null;
             bookType?: null | components["schemas"]["BookTypeDto"];
             /**
+             * Format: float
+             * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
+             * @example 42
+             */
+            chapter?: number | null;
+            /**
              * @description Colorist(s)
              * @example Richmond Lewis
              */
@@ -7015,6 +7021,14 @@ export interface components {
             /** @description Whether book_type is locked */
             bookTypeLock?: boolean;
             /**
+             * Format: float
+             * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
+             * @example 42
+             */
+            chapter?: number | null;
+            /** @description Whether chapter is locked */
+            chapterLock?: boolean;
+            /**
              * Format: int32
              * @description Total count in series
              * @example 4
@@ -7256,6 +7270,12 @@ export interface components {
             bookId: string;
             bookType?: null | components["schemas"]["BookTypeDto"];
             /**
+             * Format: float
+             * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
+             * @example 42
+             */
+            chapter?: number | null;
+            /**
              * @description Colorists
              * @example [
              *       "Richmond Lewis"
@@ -7485,6 +7505,11 @@ export interface components {
              */
             bookTypeLock: boolean;
             /**
+             * @description Whether chapter is locked
+             * @example false
+             */
+            chapterLock: boolean;
+            /**
              * @description Whether colorist is locked
              * @example false
              */
@@ -7668,6 +7693,12 @@ export interface components {
              */
             bookId: string;
             bookType?: null | components["schemas"]["BookTypeDto"];
+            /**
+             * Format: float
+             * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
+             * @example 42
+             */
+            chapter?: number | null;
             /**
              * @description Colorist(s)
              * @example Richmond Lewis
@@ -12527,6 +12558,12 @@ export interface components {
             blackAndWhite?: boolean | null;
             bookType?: null | components["schemas"]["BookTypeDto"];
             /**
+             * Format: float
+             * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
+             * @example 42
+             */
+            chapter?: number | null;
+            /**
              * @description Colorist(s) - comma-separated if multiple
              * @example Richmond Lewis
              */
@@ -13926,6 +13963,12 @@ export interface components {
              */
             blackAndWhite?: boolean | null;
             bookType?: null | components["schemas"]["BookTypeDto"];
+            /**
+             * Format: float
+             * @description Chapter number (may be fractional, e.g. 42.5 for side chapters)
+             * @example 42
+             */
+            chapter?: number | null;
             /**
              * @description Colorist(s) - comma-separated if multiple
              * @example Richmond Lewis
@@ -16197,6 +16240,8 @@ export interface components {
             blackAndWhiteLock?: boolean | null;
             /** @description Whether to lock book_type */
             bookTypeLock?: boolean | null;
+            /** @description Whether to lock chapter */
+            chapterLock?: boolean | null;
             /** @description Whether to lock colorist */
             coloristLock?: boolean | null;
             /** @description Whether to lock count */

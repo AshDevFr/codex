@@ -17887,6 +17887,15 @@
               }
             ]
           },
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Chapter number (may be fractional, e.g. 42.5 for side chapters)",
+            "example": 42.0
+          },
           "colorist": {
             "type": [
               "string",
@@ -18307,6 +18316,19 @@
             "type": "boolean",
             "description": "Whether book_type is locked"
           },
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Chapter number (may be fractional, e.g. 42.5 for side chapters)",
+            "example": 42.0
+          },
+          "chapterLock": {
+            "type": "boolean",
+            "description": "Whether chapter is locked"
+          },
           "count": {
             "type": [
               "integer",
@@ -18722,6 +18744,15 @@
               }
             ]
           },
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Chapter number (may be fractional, e.g. 42.5 for side chapters)",
+            "example": 42.0
+          },
           "colorists": {
             "type": "array",
             "items": {
@@ -19058,6 +19089,7 @@
           "monthLock",
           "dayLock",
           "volumeLock",
+          "chapterLock",
           "countLock",
           "isbnsLock",
           "bookTypeLock",
@@ -19093,6 +19125,11 @@
           "bookTypeLock": {
             "type": "boolean",
             "description": "Whether book_type is locked",
+            "example": false
+          },
+          "chapterLock": {
+            "type": "boolean",
+            "description": "Whether chapter is locked",
             "example": false
           },
           "coloristLock": {
@@ -19315,6 +19352,15 @@
                 "description": "Book type classification (comic, manga, novel, etc.)"
               }
             ]
+          },
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Chapter number (may be fractional, e.g. 42.5 for side chapters)",
+            "example": 42.0
           },
           "colorist": {
             "type": [
@@ -28440,6 +28486,15 @@
               }
             ]
           },
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Chapter number (may be fractional, e.g. 42.5 for side chapters)",
+            "example": 42.0
+          },
           "colorist": {
             "type": [
               "string",
@@ -31002,6 +31057,15 @@
                 "description": "Book type classification (comic, manga, novel, etc.)"
               }
             ]
+          },
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Chapter number (may be fractional, e.g. 42.5 for side chapters)",
+            "example": 42.0
           },
           "colorist": {
             "type": [
@@ -35181,6 +35245,13 @@
               "null"
             ],
             "description": "Whether to lock book_type"
+          },
+          "chapterLock": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether to lock chapter"
           },
           "coloristLock": {
             "type": [

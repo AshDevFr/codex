@@ -93,31 +93,31 @@ export const BOOK_STRATEGIES: BookStrategyData[] = [
     value: "filename",
     label: "Filename (Recommended)",
     description:
-      "Use filename without extension. Predictable and Komga-compatible.",
+      "Parses title, volume, and chapter from the filename. Volume and chapter are detected via `v\\d+` and `c\\d+` patterns. Predictable and Komga-compatible.",
   },
   {
     value: "metadata_first",
     label: "Metadata First",
     description:
-      "Use ComicInfo/EPUB metadata title if present, fallback to filename.",
+      "Uses ComicInfo.xml for title, volume, and chapter. Falls back to the filename only for the title when ComicInfo is missing; volume and chapter stay empty.",
   },
   {
     value: "smart",
     label: "Smart Detection",
     description:
-      "Use metadata only if meaningful (not generic like 'Vol. 3'), otherwise use filename.",
+      "Reads ComicInfo.xml first, then falls back to filename patterns for any field ComicInfo did not supply (title, volume, chapter).",
   },
   {
     value: "series_name",
     label: "Generated Name",
     description:
-      "Generate title from series name + position (e.g., 'One Piece v.01').",
+      "Builds the title from series + volume + chapter context. Volume and chapter come from series detection (e.g., the series-volume-chapter folder strategy).",
   },
   {
     value: "custom",
     label: "Custom (Regex)",
     description:
-      "User-defined regex pattern to extract title from filename. For unique naming conventions.",
+      "User-defined regex with named groups `series`, `volume`, `chapter`, `title` to extract metadata from filenames. For unique naming conventions.",
     hasConfig: true,
   },
 ];
@@ -597,8 +597,8 @@ export function BookStrategySelector({
   return (
     <Stack gap="md">
       <Select
-        label="Book Naming Strategy"
-        description="How individual book titles are determined"
+        label="Book Metadata Strategy"
+        description="How book metadata (title, volume, chapter) is extracted from files"
         data={BOOK_STRATEGIES.map((s) => ({
           value: s.value,
           label: s.label,

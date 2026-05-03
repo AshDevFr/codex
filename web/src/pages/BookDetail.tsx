@@ -54,6 +54,7 @@ import {
   AuthorsList,
   BookExternalIds,
   BookInfoModal,
+  BookKindBadge,
   BookTypeBadge,
 } from "@/components/book";
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
@@ -504,6 +505,12 @@ export function BookDetail() {
                     </Badge>
                     <BookTypeBadge
                       bookType={metadata?.bookType}
+                      size="sm"
+                      variant="light"
+                    />
+                    <BookKindBadge
+                      volume={metadata?.volume}
+                      chapter={metadata?.chapter}
                       size="sm"
                       variant="light"
                     />

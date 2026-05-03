@@ -797,6 +797,11 @@ pub struct BookMetadataDto {
     #[schema(example = 1)]
     pub volume: Option<i32>,
 
+    /// Chapter number (may be fractional, e.g. 42.5 for side chapters)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 42.0)]
+    pub chapter: Option<f32>,
+
     /// Total count in series
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 4)]
@@ -890,6 +895,10 @@ pub struct ReplaceBookMetadataRequest {
     /// Volume number
     #[schema(example = 1)]
     pub volume: Option<i32>,
+
+    /// Chapter number (may be fractional, e.g. 42.5 for side chapters)
+    #[schema(example = 42.0)]
+    pub chapter: Option<f32>,
 
     /// Total count in series
     #[schema(example = 4)]
@@ -1053,6 +1062,11 @@ pub struct PatchBookMetadataRequest {
     #[schema(value_type = Option<i32>, example = 1, nullable = true)]
     pub volume: super::patch::PatchValue<i32>,
 
+    /// Chapter number (may be fractional, e.g. 42.5 for side chapters)
+    #[serde(default)]
+    #[schema(value_type = Option<f32>, example = 42.0, nullable = true)]
+    pub chapter: super::patch::PatchValue<f32>,
+
     /// Total count in series
     #[serde(default)]
     #[schema(value_type = Option<i32>, example = 4, nullable = true)]
@@ -1210,6 +1224,10 @@ pub struct BookMetadataResponse {
     /// Volume number
     #[schema(example = 1)]
     pub volume: Option<i32>,
+
+    /// Chapter number (may be fractional, e.g. 42.5 for side chapters)
+    #[schema(example = 42.0)]
+    pub chapter: Option<f32>,
 
     /// Total count in series
     #[schema(example = 4)]
@@ -1382,6 +1400,10 @@ pub struct BookMetadataLocks {
     #[schema(example = false)]
     pub volume_lock: bool,
 
+    /// Whether chapter is locked
+    #[schema(example = false)]
+    pub chapter_lock: bool,
+
     /// Whether count is locked
     #[schema(example = false)]
     pub count_lock: bool,
@@ -1518,6 +1540,9 @@ pub struct UpdateBookMetadataLocksRequest {
 
     /// Whether to lock volume
     pub volume_lock: Option<bool>,
+
+    /// Whether to lock chapter
+    pub chapter_lock: Option<bool>,
 
     /// Whether to lock count
     pub count_lock: Option<bool>,
@@ -1960,6 +1985,11 @@ pub struct BookFullMetadata {
     #[schema(example = 1)]
     pub volume: Option<i32>,
 
+    /// Chapter number (may be fractional, e.g. 42.5 for side chapters)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 42.0)]
+    pub chapter: Option<f32>,
+
     /// Total count in series
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 4)]
@@ -2290,6 +2320,11 @@ pub struct BookMetadataContextDto {
     #[schema(example = 1)]
     pub volume: Option<i32>,
 
+    /// Chapter number (may be fractional, e.g. 42.5 for side chapters)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 42.0)]
+    pub chapter: Option<f32>,
+
     /// Total count in series
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 4)]
@@ -2409,6 +2444,9 @@ pub struct BookMetadataContextDto {
     /// Whether volume is locked
     #[serde(default)]
     pub volume_lock: bool,
+    /// Whether chapter is locked
+    #[serde(default)]
+    pub chapter_lock: bool,
     /// Whether count is locked
     #[serde(default)]
     pub count_lock: bool,
@@ -2556,6 +2594,7 @@ impl From<crate::services::metadata::preprocessing::context::BookContext> for Bo
                 month: ctx.metadata.month,
                 day: ctx.metadata.day,
                 volume: ctx.metadata.volume,
+                chapter: ctx.metadata.chapter,
                 count: ctx.metadata.count,
                 isbns: ctx.metadata.isbns,
                 book_type: ctx.metadata.book_type,
@@ -2614,6 +2653,7 @@ impl From<crate::services::metadata::preprocessing::context::BookContext> for Bo
                 month_lock: ctx.metadata.month_lock,
                 day_lock: ctx.metadata.day_lock,
                 volume_lock: ctx.metadata.volume_lock,
+                chapter_lock: ctx.metadata.chapter_lock,
                 count_lock: ctx.metadata.count_lock,
                 isbns_lock: ctx.metadata.isbns_lock,
                 book_type_lock: ctx.metadata.book_type_lock,
