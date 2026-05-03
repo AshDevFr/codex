@@ -31,8 +31,8 @@ use crate::tasks::handlers::{
     CleanupSeriesFilesHandler, ExportSeriesHandler, FindDuplicatesHandler,
     GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
     GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler,
-    RenumberSeriesBatchHandler, RenumberSeriesHandler, ReprocessSeriesTitleHandler,
-    ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
+    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
 };
@@ -232,6 +232,18 @@ impl TaskWorker {
         }
         self.handlers
             .insert("plugin_auto_match".to_string(), Arc::new(handler));
+        // Register the scheduled per-library metadata refresh handler.
+        // It depends on PluginManager (to call get_series_metadata) and
+        // optionally ThumbnailService (for cover-field updates via the
+        // shared MetadataApplier).
+        let mut refresh_handler = RefreshLibraryMetadataHandler::new(plugin_manager.clone());
+        if let Some(ref thumbnail_service) = self.thumbnail_service {
+            refresh_handler = refresh_handler.with_thumbnail_service(thumbnail_service.clone());
+        }
+        self.handlers.insert(
+            "refresh_library_metadata".to_string(),
+            Arc::new(refresh_handler),
+        );
         // Register user plugin sync handler (with settings service for configurable timeout)
         let mut sync_handler = UserPluginSyncHandler::new(plugin_manager.clone());
         if let Some(ref settings_service) = self.settings_service {
