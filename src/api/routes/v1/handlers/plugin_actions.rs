@@ -1431,13 +1431,17 @@ pub async fn apply_series_metadata(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
 
-    // Build apply options
+    // Build apply options. Manual API endpoints keep the historical
+    // `AllowReMatch` default to preserve existing behavior — the new
+    // `ExistingExternalIdOnly` strategy is opt-in via the scheduled
+    // refresh task.
     let dry_run = request.dry_run;
     let options = ApplyOptions {
         fields_filter: request.fields.map(|f| f.into_iter().collect()),
         thumbnail_service: Some(state.thumbnail_service.clone()),
         event_broadcaster: Some(state.event_broadcaster.clone()),
         dry_run,
+        ..Default::default()
     };
 
     // Apply metadata using the shared service
@@ -1654,12 +1658,14 @@ pub async fn auto_match_series_metadata(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
 
-    // Build apply options (no field filtering for auto-match)
+    // Build apply options (no field filtering for auto-match).
+    // Manual auto-match preserves the historical `AllowReMatch` default.
     let options = ApplyOptions {
         fields_filter: None, // Apply all fields
         thumbnail_service: Some(state.thumbnail_service.clone()),
         event_broadcaster: Some(state.event_broadcaster.clone()),
         dry_run: false,
+        ..Default::default()
     };
 
     // Apply metadata using the shared service

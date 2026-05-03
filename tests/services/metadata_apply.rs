@@ -705,6 +705,7 @@ async fn test_apply_count_fields_filtered_out_by_allowlist() {
         thumbnail_service: None,
         event_broadcaster: None,
         dry_run: false,
+        ..Default::default()
     };
 
     let result = MetadataApplier::apply(

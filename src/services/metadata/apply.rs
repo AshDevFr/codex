@@ -72,6 +72,31 @@ pub struct MetadataApplyResult {
     pub dry_run_report: Option<DryRunReport>,
 }
 
+/// How a caller decides whether the applier should accept metadata for a
+/// series with no stored external ID.
+///
+/// The applier itself never re-matches; it just applies the metadata it's
+/// handed. This enum is passed through as configuration for the *caller*
+/// (typically a task handler) so it can decide whether to call
+/// `metadata/series/match` or skip the series entirely. Carrying it in
+/// [`ApplyOptions`] keeps the contract visible at every apply site without
+/// putting matching logic inside the applier.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MatchingStrategy {
+    /// Refresh only series that already have a stored external ID for the
+    /// chosen provider. Series without one are skipped (not re-matched).
+    ///
+    /// This is the safe default for scheduled refreshes against a curated
+    /// library: the user picked the match once, the scheduler honors it.
+    ExistingExternalIdOnly,
+    /// Allow re-matching when no external ID is stored. The handler is
+    /// expected to call `metadata/series/match` and proceed with the best
+    /// result. This preserves the manual-apply contract that existed before
+    /// the scheduled-refresh feature.
+    #[default]
+    AllowReMatch,
+}
+
 /// Options for controlling metadata application behavior.
 #[derive(Clone, Default)]
 pub struct ApplyOptions {
@@ -85,6 +110,11 @@ pub struct ApplyOptions {
     /// returned instead. Locks and permission checks still run — same code
     /// path, just gated writes.
     pub dry_run: bool,
+    /// Caller-provided matching strategy. Read by the handlers that drive
+    /// the applier; the applier itself doesn't branch on it. Defaults to
+    /// [`MatchingStrategy::AllowReMatch`] so existing manual-apply call
+    /// sites preserve their previous behavior.
+    pub matching_strategy: MatchingStrategy,
 }
 
 /// Service for applying plugin metadata to series.
@@ -831,5 +861,29 @@ impl MetadataApplier {
             skipped_fields,
             dry_run_report: dry_run_changes.map(|changes| DryRunReport { changes }),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn matching_strategy_default_is_allow_rematch() {
+        // Manual-apply call sites use `..Default::default()`; flipping the
+        // default would silently switch them to `ExistingExternalIdOnly`,
+        // which would skip series that don't have a stored external ID.
+        // Pin the default explicitly so future refactors are caught here.
+        assert_eq!(MatchingStrategy::default(), MatchingStrategy::AllowReMatch);
+    }
+
+    #[test]
+    fn apply_options_default_uses_allow_rematch() {
+        // Same guard one level up: ApplyOptions::default carries the
+        // historical "search if no ID" behavior.
+        let opts = ApplyOptions::default();
+        assert_eq!(opts.matching_strategy, MatchingStrategy::AllowReMatch);
+        assert!(!opts.dry_run);
+        assert!(opts.fields_filter.is_none());
     }
 }
