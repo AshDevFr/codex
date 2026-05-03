@@ -11,13 +11,13 @@
 //! - POST /api/v1/books/{id}/metadata/apply - Apply metadata for a book
 
 use super::super::dto::{
-    EnqueueAutoMatchRequest, EnqueueAutoMatchResponse, EnqueueBulkAutoMatchRequest,
-    EnqueueLibraryAutoMatchRequest, ExecutePluginRequest, ExecutePluginResponse, FieldApplyStatus,
-    MetadataAction, MetadataApplyRequest, MetadataApplyResponse, MetadataAutoMatchRequest,
-    MetadataAutoMatchResponse, MetadataFieldPreview, MetadataPreviewRequest,
-    MetadataPreviewResponse, PluginActionDto, PluginActionRequest, PluginActionsResponse,
-    PluginSearchResponse, PluginSearchResultDto, PreviewSummary, SearchTitleResponse, SkippedField,
-    parse_scope,
+    DryRunReportDto, EnqueueAutoMatchRequest, EnqueueAutoMatchResponse,
+    EnqueueBulkAutoMatchRequest, EnqueueLibraryAutoMatchRequest, ExecutePluginRequest,
+    ExecutePluginResponse, FieldApplyStatus, FieldChangeDto, MetadataAction, MetadataApplyRequest,
+    MetadataApplyResponse, MetadataAutoMatchRequest, MetadataAutoMatchResponse,
+    MetadataFieldPreview, MetadataPreviewRequest, MetadataPreviewResponse, PluginActionDto,
+    PluginActionRequest, PluginActionsResponse, PluginSearchResponse, PluginSearchResultDto,
+    PreviewSummary, SearchTitleResponse, SkippedField, parse_scope,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::entities::plugins::PluginPermission;
@@ -1432,10 +1432,12 @@ pub async fn apply_series_metadata(
         .map_err(|e| ApiError::Internal(format!("Failed to get current metadata: {}", e)))?;
 
     // Build apply options
+    let dry_run = request.dry_run;
     let options = ApplyOptions {
         fields_filter: request.fields.map(|f| f.into_iter().collect()),
         thumbnail_service: Some(state.thumbnail_service.clone()),
         event_broadcaster: Some(state.event_broadcaster.clone()),
+        dry_run,
     };
 
     // Apply metadata using the shared service
@@ -1451,16 +1453,18 @@ pub async fn apply_series_metadata(
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to apply metadata: {}", e)))?;
 
-    // Store/update external ID for future lookups (matches auto-match behavior)
-    if let Err(e) = SeriesExternalIdRepository::upsert_for_plugin(
-        &state.db,
-        series_id,
-        &plugin.name,
-        &plugin_metadata.external_id,
-        Some(&plugin_metadata.external_url),
-        None, // metadata_hash - could be computed if needed
-    )
-    .await
+    // Store/update external ID for future lookups (matches auto-match
+    // behavior). Skipped on dry-run so a preview never mutates DB state.
+    if !dry_run
+        && let Err(e) = SeriesExternalIdRepository::upsert_for_plugin(
+            &state.db,
+            series_id,
+            &plugin.name,
+            &plugin_metadata.external_id,
+            Some(&plugin_metadata.external_url),
+            None, // metadata_hash - could be computed if needed
+        )
+        .await
     {
         tracing::warn!(
             "Failed to store external ID for series {}: {}",
@@ -1480,8 +1484,25 @@ pub async fn apply_series_metadata(
         })
         .collect();
 
+    let dry_run_report = result.dry_run_report.map(|r| DryRunReportDto {
+        changes: r
+            .changes
+            .into_iter()
+            .map(|c| FieldChangeDto {
+                field: c.field,
+                before: c.before,
+                after: c.after,
+            })
+            .collect(),
+    });
+
     let message = if result.applied_fields.is_empty() {
         "No fields were applied".to_string()
+    } else if dry_run {
+        format!(
+            "Dry run: {} field(s) would be applied",
+            result.applied_fields.len()
+        )
     } else {
         format!("Applied {} field(s)", result.applied_fields.len())
     };
@@ -1491,6 +1512,7 @@ pub async fn apply_series_metadata(
         applied_fields: result.applied_fields,
         skipped_fields,
         message,
+        dry_run_report,
     }))
 }
 
@@ -1637,6 +1659,7 @@ pub async fn auto_match_series_metadata(
         fields_filter: None, // Apply all fields
         thumbnail_service: Some(state.thumbnail_service.clone()),
         event_broadcaster: Some(state.event_broadcaster.clone()),
+        dry_run: false,
     };
 
     // Apply metadata using the shared service
@@ -2279,6 +2302,14 @@ pub async fn apply_book_metadata(
     // Check permission to edit book metadata
     auth.require_permission(&Permission::BooksWrite)?;
 
+    // Dry-run is currently only supported on the series apply path. Reject
+    // it explicitly here so the user doesn't get a silent real-apply.
+    if request.dry_run {
+        return Err(ApiError::BadRequest(
+            "dryRun is not supported on book metadata apply".to_string(),
+        ));
+    }
+
     // Get the book (verify it exists)
     let book = BookRepository::get_by_id(&state.db, book_id)
         .await
@@ -2374,6 +2405,8 @@ pub async fn apply_book_metadata(
         applied_fields: result.applied_fields,
         skipped_fields,
         message,
+        // Book apply doesn't support dry-run yet; series-only for now.
+        dry_run_report: None,
     }))
 }
 

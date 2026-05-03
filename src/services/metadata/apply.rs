@@ -33,13 +33,43 @@ pub struct SkippedField {
     pub reason: String,
 }
 
+/// One field's would-be change as recorded by a dry-run apply.
+///
+/// `before` is the in-memory current value pulled from `series_metadata`
+/// (or `None` when the source-of-truth lives in a joined table — e.g.
+/// genres, tags, alternate titles, ratings, external links/ids, cover).
+/// `after` is the value the applier would have written. Both are JSON
+/// for uniform transport over the wire.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldChange {
+    pub field: String,
+    pub before: Option<serde_json::Value>,
+    pub after: serde_json::Value,
+}
+
+/// Per-series report of what a dry-run apply would have done. Returned
+/// alongside [`MetadataApplyResult`] when `ApplyOptions::dry_run = true`.
+///
+/// Skip reasons (locked field, missing permission, etc.) are surfaced via
+/// [`MetadataApplyResult::skipped_fields`] — same code path as a real
+/// apply, so the report stays focused on prospective writes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DryRunReport {
+    pub changes: Vec<FieldChange>,
+}
+
 /// Result of applying metadata to a series.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MetadataApplyResult {
     /// Fields that were successfully applied.
     pub applied_fields: Vec<String>,
     /// Fields that were skipped (with reasons).
     pub skipped_fields: Vec<SkippedField>,
+    /// Populated only when `ApplyOptions::dry_run = true`. `None` for real
+    /// applies. Each entry is a field that *would* have been written.
+    pub dry_run_report: Option<DryRunReport>,
 }
 
 /// Options for controlling metadata application behavior.
@@ -51,6 +81,10 @@ pub struct ApplyOptions {
     pub thumbnail_service: Option<Arc<ThumbnailService>>,
     /// Event broadcaster for emitting real-time events. If None, events won't be emitted.
     pub event_broadcaster: Option<Arc<EventBroadcaster>>,
+    /// When true, all DB writes are skipped and a [`DryRunReport`] is
+    /// returned instead. Locks and permission checks still run — same code
+    /// path, just gated writes.
+    pub dry_run: bool,
 }
 
 /// Service for applying plugin metadata to series.
@@ -74,6 +108,13 @@ impl MetadataApplier {
     ) -> Result<MetadataApplyResult> {
         let mut applied_fields = Vec::new();
         let mut skipped_fields = Vec::new();
+        // Collected when `options.dry_run = true`, kept `None` otherwise so a
+        // real apply still returns `dry_run_report = None`.
+        let mut dry_run_changes: Option<Vec<FieldChange>> = if options.dry_run {
+            Some(Vec::new())
+        } else {
+            None
+        };
 
         // Helper to check if a field should be applied based on the filter
         let should_apply_field = |field: &str| -> bool {
@@ -118,14 +159,33 @@ impl MetadataApplier {
                     } else {
                         Some(title.clone())
                     };
-                    SeriesMetadataRepository::update_title(
-                        db,
-                        series_id,
-                        title.clone(),
-                        title_sort,
-                    )
-                    .await
-                    .context("Failed to update title")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "title".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.map(|m| m.title.clone())
+                            )),
+                            after: serde_json::json!(title),
+                        });
+                        if !title_sort_locked && should_apply_field("titleSort") {
+                            changes.push(FieldChange {
+                                field: "titleSort".to_string(),
+                                before: Some(serde_json::json!(
+                                    current_metadata.and_then(|m| m.title_sort.clone())
+                                )),
+                                after: serde_json::json!(title_sort),
+                            });
+                        }
+                    } else {
+                        SeriesMetadataRepository::update_title(
+                            db,
+                            series_id,
+                            title.clone(),
+                            title_sort,
+                        )
+                        .await
+                        .context("Failed to update title")?;
+                    }
                     applied_fields.push("title".to_string());
                     if !title_sort_locked && should_apply_field("titleSort") {
                         applied_fields.push("titleSort".to_string());
@@ -146,35 +206,50 @@ impl MetadataApplier {
                 PluginPermission::MetadataWriteTitle,
             ) {
                 Ok(_) => {
-                    // Delete existing alternate titles
-                    AlternateTitleRepository::delete_all_for_series(db, series_id)
-                        .await
-                        .context("Failed to delete old alternate titles")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        // Joined-table data: `before` not cheaply available
+                        // here. Surface the new payload as `after` only.
+                        changes.push(FieldChange {
+                            field: "alternateTitles".to_string(),
+                            before: None,
+                            after: serde_json::json!(metadata.alternate_titles),
+                        });
+                    } else {
+                        // Delete existing alternate titles
+                        AlternateTitleRepository::delete_all_for_series(db, series_id)
+                            .await
+                            .context("Failed to delete old alternate titles")?;
 
-                    // Add new alternate titles with unique labels
-                    // Track label counts to make duplicates unique (e.g., "en", "en-2", "en-3")
-                    let mut label_counts: HashMap<String, u32> = HashMap::new();
+                        // Add new alternate titles with unique labels
+                        // Track label counts to make duplicates unique (e.g., "en", "en-2", "en-3")
+                        let mut label_counts: HashMap<String, u32> = HashMap::new();
 
-                    for alt_title in &metadata.alternate_titles {
-                        // Use language or title_type as base label, defaulting to "alternate"
-                        let base_label = alt_title
-                            .language
-                            .clone()
-                            .or_else(|| alt_title.title_type.clone())
-                            .unwrap_or_else(|| "alternate".to_string());
+                        for alt_title in &metadata.alternate_titles {
+                            // Use language or title_type as base label, defaulting to "alternate"
+                            let base_label = alt_title
+                                .language
+                                .clone()
+                                .or_else(|| alt_title.title_type.clone())
+                                .unwrap_or_else(|| "alternate".to_string());
 
-                        // Make label unique by appending count suffix for duplicates
-                        let count = label_counts.entry(base_label.clone()).or_insert(0);
-                        *count += 1;
-                        let label = if *count == 1 {
-                            base_label
-                        } else {
-                            format!("{}-{}", base_label, count)
-                        };
+                            // Make label unique by appending count suffix for duplicates
+                            let count = label_counts.entry(base_label.clone()).or_insert(0);
+                            *count += 1;
+                            let label = if *count == 1 {
+                                base_label
+                            } else {
+                                format!("{}-{}", base_label, count)
+                            };
 
-                        AlternateTitleRepository::create(db, series_id, &label, &alt_title.title)
+                            AlternateTitleRepository::create(
+                                db,
+                                series_id,
+                                &label,
+                                &alt_title.title,
+                            )
                             .await
                             .context("Failed to create alternate title")?;
+                        }
                     }
                     applied_fields.push("alternateTitles".to_string());
                 }
@@ -189,9 +264,23 @@ impl MetadataApplier {
             let is_locked = current_metadata.map(|m| m.summary_lock).unwrap_or(false);
             match check_field("summary", is_locked, PluginPermission::MetadataWriteSummary) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_summary(db, series_id, Some(summary.clone()))
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "summary".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.summary.clone())
+                            )),
+                            after: serde_json::json!(summary),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_summary(
+                            db,
+                            series_id,
+                            Some(summary.clone()),
+                        )
                         .await
                         .context("Failed to update summary")?;
+                    }
                     applied_fields.push("summary".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -205,9 +294,17 @@ impl MetadataApplier {
             let is_locked = current_metadata.map(|m| m.year_lock).unwrap_or(false);
             match check_field("year", is_locked, PluginPermission::MetadataWriteYear) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_year(db, series_id, Some(year))
-                        .await
-                        .context("Failed to update year")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "year".to_string(),
+                            before: Some(serde_json::json!(current_metadata.and_then(|m| m.year))),
+                            after: serde_json::json!(year),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_year(db, series_id, Some(year))
+                            .await
+                            .context("Failed to update year")?;
+                    }
                     applied_fields.push("year".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -228,13 +325,23 @@ impl MetadataApplier {
                         SeriesStatus::Abandoned => "abandoned",
                         SeriesStatus::Unknown => "unknown",
                     };
-                    SeriesMetadataRepository::update_status(
-                        db,
-                        series_id,
-                        Some(status_str.to_string()),
-                    )
-                    .await
-                    .context("Failed to update status")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "status".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.status.clone())
+                            )),
+                            after: serde_json::json!(status_str),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_status(
+                            db,
+                            series_id,
+                            Some(status_str.to_string()),
+                        )
+                        .await
+                        .context("Failed to update status")?;
+                    }
                     applied_fields.push("status".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -252,14 +359,24 @@ impl MetadataApplier {
                 PluginPermission::MetadataWritePublisher,
             ) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_publisher(
-                        db,
-                        series_id,
-                        Some(publisher.clone()),
-                        None,
-                    )
-                    .await
-                    .context("Failed to update publisher")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "publisher".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.publisher.clone())
+                            )),
+                            after: serde_json::json!(publisher),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_publisher(
+                            db,
+                            series_id,
+                            Some(publisher.clone()),
+                            None,
+                        )
+                        .await
+                        .context("Failed to update publisher")?;
+                    }
                     applied_fields.push("publisher".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -277,9 +394,23 @@ impl MetadataApplier {
                 PluginPermission::MetadataWriteAgeRating,
             ) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_age_rating(db, series_id, Some(age_rating))
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "ageRating".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.age_rating)
+                            )),
+                            after: serde_json::json!(age_rating),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_age_rating(
+                            db,
+                            series_id,
+                            Some(age_rating),
+                        )
                         .await
                         .context("Failed to update age rating")?;
+                    }
                     applied_fields.push("ageRating".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -297,13 +428,23 @@ impl MetadataApplier {
                 PluginPermission::MetadataWriteLanguage,
             ) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_language(
-                        db,
-                        series_id,
-                        Some(language.clone()),
-                    )
-                    .await
-                    .context("Failed to update language")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "language".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.language.clone())
+                            )),
+                            after: serde_json::json!(language),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_language(
+                            db,
+                            series_id,
+                            Some(language.clone()),
+                        )
+                        .await
+                        .context("Failed to update language")?;
+                    }
                     applied_fields.push("language".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -323,13 +464,23 @@ impl MetadataApplier {
                 PluginPermission::MetadataWriteReadingDirection,
             ) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_reading_direction(
-                        db,
-                        series_id,
-                        Some(reading_direction.clone()),
-                    )
-                    .await
-                    .context("Failed to update reading direction")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "readingDirection".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.reading_direction.clone())
+                            )),
+                            after: serde_json::json!(reading_direction),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_reading_direction(
+                            db,
+                            series_id,
+                            Some(reading_direction.clone()),
+                        )
+                        .await
+                        .context("Failed to update reading direction")?;
+                    }
                     applied_fields.push("readingDirection".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -349,13 +500,23 @@ impl MetadataApplier {
                 PluginPermission::MetadataWriteTotalVolumeCount,
             ) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_total_volume_count(
-                        db,
-                        series_id,
-                        Some(total_volume_count),
-                    )
-                    .await
-                    .context("Failed to update total volume count")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "totalVolumeCount".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.total_volume_count)
+                            )),
+                            after: serde_json::json!(total_volume_count),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_total_volume_count(
+                            db,
+                            series_id,
+                            Some(total_volume_count),
+                        )
+                        .await
+                        .context("Failed to update total volume count")?;
+                    }
                     applied_fields.push("totalVolumeCount".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -375,13 +536,23 @@ impl MetadataApplier {
                 PluginPermission::MetadataWriteTotalChapterCount,
             ) {
                 Ok(_) => {
-                    SeriesMetadataRepository::update_total_chapter_count(
-                        db,
-                        series_id,
-                        Some(total_chapter_count),
-                    )
-                    .await
-                    .context("Failed to update total chapter count")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "totalChapterCount".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.total_chapter_count)
+                            )),
+                            after: serde_json::json!(total_chapter_count),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_total_chapter_count(
+                            db,
+                            series_id,
+                            Some(total_chapter_count),
+                        )
+                        .await
+                        .context("Failed to update total chapter count")?;
+                    }
                     applied_fields.push("totalChapterCount".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -402,9 +573,17 @@ impl MetadataApplier {
                     reason: "Plugin does not have permission".to_string(),
                 });
             } else {
-                GenreRepository::set_genres_for_series(db, series_id, metadata.genres.clone())
-                    .await
-                    .context("Failed to set genres")?;
+                if let Some(changes) = dry_run_changes.as_mut() {
+                    changes.push(FieldChange {
+                        field: "genres".to_string(),
+                        before: None,
+                        after: serde_json::json!(metadata.genres),
+                    });
+                } else {
+                    GenreRepository::set_genres_for_series(db, series_id, metadata.genres.clone())
+                        .await
+                        .context("Failed to set genres")?;
+                }
                 applied_fields.push("genres".to_string());
             }
         }
@@ -423,9 +602,17 @@ impl MetadataApplier {
                     reason: "Plugin does not have permission".to_string(),
                 });
             } else {
-                TagRepository::set_tags_for_series(db, series_id, metadata.tags.clone())
-                    .await
-                    .context("Failed to set tags")?;
+                if let Some(changes) = dry_run_changes.as_mut() {
+                    changes.push(FieldChange {
+                        field: "tags".to_string(),
+                        before: None,
+                        after: serde_json::json!(metadata.tags),
+                    });
+                } else {
+                    TagRepository::set_tags_for_series(db, series_id, metadata.tags.clone())
+                        .await
+                        .context("Failed to set tags")?;
+                }
                 applied_fields.push("tags".to_string());
             }
         }
@@ -439,13 +626,23 @@ impl MetadataApplier {
                 Ok(_) => {
                     let authors_json = serde_json::to_string(&metadata.authors)
                         .unwrap_or_else(|_| "[]".to_string());
-                    SeriesMetadataRepository::update_authors_json(
-                        db,
-                        series_id,
-                        Some(authors_json),
-                    )
-                    .await
-                    .context("Failed to update authors")?;
+                    if let Some(changes) = dry_run_changes.as_mut() {
+                        changes.push(FieldChange {
+                            field: "authors".to_string(),
+                            before: Some(serde_json::json!(
+                                current_metadata.and_then(|m| m.authors_json.clone())
+                            )),
+                            after: serde_json::json!(metadata.authors),
+                        });
+                    } else {
+                        SeriesMetadataRepository::update_authors_json(
+                            db,
+                            series_id,
+                            Some(authors_json),
+                        )
+                        .await
+                        .context("Failed to update authors")?;
+                    }
                     applied_fields.push("authors".to_string());
                 }
                 Err(skip) => skipped_fields.push(skip),
@@ -460,10 +657,18 @@ impl MetadataApplier {
                     reason: "Plugin does not have permission".to_string(),
                 });
             } else {
-                for link in &metadata.external_links {
-                    ExternalLinkRepository::upsert(db, series_id, &link.label, &link.url, None)
-                        .await
-                        .context("Failed to upsert external link")?;
+                if let Some(changes) = dry_run_changes.as_mut() {
+                    changes.push(FieldChange {
+                        field: "externalLinks".to_string(),
+                        before: None,
+                        after: serde_json::json!(metadata.external_links),
+                    });
+                } else {
+                    for link in &metadata.external_links {
+                        ExternalLinkRepository::upsert(db, series_id, &link.label, &link.url, None)
+                            .await
+                            .context("Failed to upsert external link")?;
+                    }
                 }
                 applied_fields.push("externalLinks".to_string());
             }
@@ -477,17 +682,25 @@ impl MetadataApplier {
                     reason: "Plugin does not have permission".to_string(),
                 });
             } else {
-                for ext_id in &metadata.external_ids {
-                    SeriesExternalIdRepository::upsert(
-                        db,
-                        series_id,
-                        &ext_id.source,
-                        &ext_id.external_id,
-                        None, // external_url - not provided in cross-references
-                        None, // metadata_hash - not applicable for cross-references
-                    )
-                    .await
-                    .context("Failed to upsert external ID")?;
+                if let Some(changes) = dry_run_changes.as_mut() {
+                    changes.push(FieldChange {
+                        field: "externalIds".to_string(),
+                        before: None,
+                        after: serde_json::json!(metadata.external_ids),
+                    });
+                } else {
+                    for ext_id in &metadata.external_ids {
+                        SeriesExternalIdRepository::upsert(
+                            db,
+                            series_id,
+                            &ext_id.source,
+                            &ext_id.external_id,
+                            None, // external_url - not provided in cross-references
+                            None, // metadata_hash - not applicable for cross-references
+                        )
+                        .await
+                        .context("Failed to upsert external ID")?;
+                    }
                 }
                 applied_fields.push("externalIds".to_string());
             }
@@ -503,17 +716,25 @@ impl MetadataApplier {
                     reason: "Plugin does not have permission".to_string(),
                 });
             } else {
-                let score =
-                    Decimal::from_f64_retain(rating.score).unwrap_or_else(|| Decimal::new(0, 0));
-                ExternalRatingRepository::upsert(
-                    db,
-                    series_id,
-                    &rating.source,
-                    score,
-                    rating.vote_count,
-                )
-                .await
-                .context("Failed to upsert external rating")?;
+                if let Some(changes) = dry_run_changes.as_mut() {
+                    changes.push(FieldChange {
+                        field: "rating".to_string(),
+                        before: None,
+                        after: serde_json::json!(rating),
+                    });
+                } else {
+                    let score = Decimal::from_f64_retain(rating.score)
+                        .unwrap_or_else(|| Decimal::new(0, 0));
+                    ExternalRatingRepository::upsert(
+                        db,
+                        series_id,
+                        &rating.source,
+                        score,
+                        rating.vote_count,
+                    )
+                    .await
+                    .context("Failed to upsert external rating")?;
+                }
                 applied_fields.push("rating".to_string());
             }
         }
@@ -528,18 +749,26 @@ impl MetadataApplier {
                     });
                 }
             } else {
-                for rating in &metadata.external_ratings {
-                    let score = Decimal::from_f64_retain(rating.score)
-                        .unwrap_or_else(|| Decimal::new(0, 0));
-                    ExternalRatingRepository::upsert(
-                        db,
-                        series_id,
-                        &rating.source,
-                        score,
-                        rating.vote_count,
-                    )
-                    .await
-                    .context("Failed to upsert external rating")?;
+                if let Some(changes) = dry_run_changes.as_mut() {
+                    changes.push(FieldChange {
+                        field: "externalRatings".to_string(),
+                        before: None,
+                        after: serde_json::json!(metadata.external_ratings),
+                    });
+                } else {
+                    for rating in &metadata.external_ratings {
+                        let score = Decimal::from_f64_retain(rating.score)
+                            .unwrap_or_else(|| Decimal::new(0, 0));
+                        ExternalRatingRepository::upsert(
+                            db,
+                            series_id,
+                            &rating.source,
+                            score,
+                            rating.vote_count,
+                        )
+                        .await
+                        .context("Failed to upsert external rating")?;
+                    }
                 }
                 if !applied_fields.contains(&"rating".to_string()) {
                     applied_fields.push("externalRatings".to_string());
@@ -557,6 +786,14 @@ impl MetadataApplier {
                     field: "coverUrl".to_string(),
                     reason: "Plugin does not have permission".to_string(),
                 });
+            } else if let Some(changes) = dry_run_changes.as_mut() {
+                // Dry run: don't download, just record the new URL.
+                changes.push(FieldChange {
+                    field: "coverUrl".to_string(),
+                    before: None,
+                    after: serde_json::json!(cover_url),
+                });
+                applied_fields.push("coverUrl".to_string());
             } else if let Some(thumbnail_service) = &options.thumbnail_service {
                 match CoverService::download_and_apply(
                     db,
@@ -592,6 +829,7 @@ impl MetadataApplier {
         Ok(MetadataApplyResult {
             applied_fields,
             skipped_fields,
+            dry_run_report: dry_run_changes.map(|changes| DryRunReport { changes }),
         })
     }
 }

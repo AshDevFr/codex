@@ -878,6 +878,8 @@ The following paths are exempt from rate limiting:
             v1::dto::PreviewSummary,
             v1::dto::MetadataApplyRequest,
             v1::dto::MetadataApplyResponse,
+            v1::dto::FieldChangeDto,
+            v1::dto::DryRunReportDto,
             v1::dto::SkippedField,
             v1::dto::MetadataAutoMatchRequest,
             v1::dto::MetadataAutoMatchResponse,

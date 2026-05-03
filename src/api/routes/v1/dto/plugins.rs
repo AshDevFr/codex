@@ -1290,6 +1290,39 @@ pub struct MetadataApplyRequest {
     /// Optional list of fields to apply (default: all applicable fields)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fields: Option<Vec<String>>,
+
+    /// When `true`, the call simulates the apply without writing to the
+    /// database. Returns the same `appliedFields`/`skippedFields` plus an
+    /// extra `dryRunReport` showing every would-be change. Default `false`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub dry_run: bool,
+}
+
+/// One would-be field change recorded during a dry-run apply.
+///
+/// Mirrors `services::metadata::apply::FieldChange`, kept as a distinct DTO
+/// to keep the wire-format frozen even if internal types evolve.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldChangeDto {
+    pub field: String,
+    /// Current value, where cheaply available. `null` for fields backed by
+    /// joined tables (genres, tags, alternate titles, ratings, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<serde_json::Value>,
+    pub after: serde_json::Value,
+}
+
+/// Dry-run preview attached to [`MetadataApplyResponse`] when the request
+/// set `dryRun = true`. Absent on real applies.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DryRunReportDto {
+    pub changes: Vec<FieldChangeDto>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Response after applying metadata
@@ -1307,6 +1340,11 @@ pub struct MetadataApplyResponse {
 
     /// Message
     pub message: String,
+
+    /// Populated only when the request set `dryRun = true`. Each entry is a
+    /// field that *would* have been written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dry_run_report: Option<DryRunReportDto>,
 }
 
 /// A field that was skipped during apply
