@@ -15,8 +15,8 @@ use uuid::Uuid;
 
 use crate::api::routes::v1::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
 use crate::db::entities::{
-    books, prelude::*, read_progress, series, series_external_ratings, series_metadata,
-    user_series_ratings,
+    book_metadata, books, prelude::*, read_progress, series, series_external_ratings,
+    series_metadata, user_series_ratings,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use crate::utils::normalize_for_search;
@@ -191,6 +191,25 @@ impl From<SeriesWithRating> for series::Model {
             updated_at: s.updated_at,
         }
     }
+}
+
+/// Per-series aggregates derived from `book_metadata.volume` and
+/// `book_metadata.chapter`.
+///
+/// Used by series DTOs to render `<max>/<total>` counts when structured
+/// data has been populated by the scanner (Phase 12). All fields are
+/// `None` when no books in the series have the underlying value set,
+/// keeping the legacy `<bookCount>/<total>` display intact for
+/// unclassified libraries.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BookClassificationAggregates {
+    /// Highest `book_metadata.volume` across non-deleted books in the series.
+    pub local_max_volume: Option<i32>,
+    /// Highest `book_metadata.chapter` across non-deleted books in the series.
+    pub local_max_chapter: Option<f32>,
+    /// Number of books in the series with `volume IS NOT NULL AND chapter IS NULL`
+    /// (strict-volume count: a "complete" volume rather than a chapter inside one).
+    pub volumes_owned: Option<i64>,
 }
 
 /// Repository for Series operations
@@ -1958,6 +1977,96 @@ impl SeriesRepository {
         Ok(map)
     }
 
+    /// Get classification aggregates for a single series.
+    ///
+    /// Wrapper around `get_book_classification_aggregates_for_series_ids` for
+    /// the single-series detail endpoint.
+    pub async fn get_book_classification_aggregates(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+    ) -> Result<BookClassificationAggregates> {
+        let map = Self::get_book_classification_aggregates_for_series_ids(db, &[series_id]).await?;
+        Ok(map.get(&series_id).copied().unwrap_or_default())
+    }
+
+    /// Compute `local_max_volume`, `local_max_chapter`, and `volumes_owned`
+    /// for multiple series in one round-trip.
+    ///
+    /// All series IDs in `series_ids` are present in the returned map; series
+    /// with no classified books map to a default (all-`None`) aggregate so
+    /// callers don't need to handle missing keys.
+    pub async fn get_book_classification_aggregates_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, BookClassificationAggregates>> {
+        use sea_orm::{FromQueryResult, QuerySelect, sea_query::Expr};
+
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        #[derive(Debug, FromQueryResult)]
+        struct AggRow {
+            series_id: Uuid,
+            local_max_volume: Option<i32>,
+            local_max_chapter: Option<f32>,
+            volumes_owned: Option<i64>,
+        }
+
+        // SUM(CASE WHEN volume IS NOT NULL AND chapter IS NULL THEN 1 ELSE 0 END)
+        // counts books that are "complete" volumes (no chapter pinned). Works
+        // identically on SQLite and PostgreSQL.
+        let volumes_owned_expr = Expr::case(
+            Expr::col((book_metadata::Entity, book_metadata::Column::Volume))
+                .is_not_null()
+                .and(Expr::col((book_metadata::Entity, book_metadata::Column::Chapter)).is_null()),
+            1,
+        )
+        .finally(0);
+
+        let results: Vec<AggRow> = books::Entity::find()
+            .select_only()
+            .column(books::Column::SeriesId)
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .column_as(
+                Expr::col((book_metadata::Entity, book_metadata::Column::Volume)).max(),
+                "local_max_volume",
+            )
+            .column_as(
+                Expr::col((book_metadata::Entity, book_metadata::Column::Chapter)).max(),
+                "local_max_chapter",
+            )
+            .column_as(Expr::expr(volumes_owned_expr).sum(), "volumes_owned")
+            .filter(books::Column::SeriesId.is_in(series_ids.to_vec()))
+            .filter(books::Column::Deleted.eq(false))
+            .group_by(books::Column::SeriesId)
+            .into_model::<AggRow>()
+            .all(db)
+            .await
+            .context("Failed to aggregate book classification fields")?;
+
+        let mut map: std::collections::HashMap<Uuid, BookClassificationAggregates> = results
+            .into_iter()
+            .map(|r| {
+                (
+                    r.series_id,
+                    BookClassificationAggregates {
+                        local_max_volume: r.local_max_volume,
+                        local_max_chapter: r.local_max_chapter,
+                        volumes_owned: r.volumes_owned,
+                    },
+                )
+            })
+            .collect();
+
+        // Fill in defaults for series with no books
+        for id in series_ids {
+            map.entry(*id).or_default();
+        }
+
+        Ok(map)
+    }
+
     /// Delete a series
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         Series::delete_by_id(id)
@@ -3279,5 +3388,219 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(metadata.title, "One Piece");
+    }
+
+    /// Helper to create a book + book_metadata row with a configured
+    /// `(volume, chapter)` pair for aggregation tests.
+    async fn insert_book_with_classification(
+        db: &sea_orm::DatabaseConnection,
+        series_id: Uuid,
+        library_id: Uuid,
+        path: &str,
+        volume: Option<i32>,
+        chapter: Option<f32>,
+    ) -> Uuid {
+        use crate::db::repositories::BookMetadataRepository;
+        use sea_orm::{ActiveModelTrait, Set};
+
+        let book = books::Model {
+            id: Uuid::new_v4(),
+            series_id,
+            library_id,
+            file_path: path.to_string(),
+            file_name: path.rsplit('/').next().unwrap_or(path).to_string(),
+            file_size: 1024,
+            file_hash: format!("hash_{}", Uuid::new_v4()),
+            partial_hash: String::new(),
+            format: "cbz".to_string(),
+            page_count: 10,
+            deleted: false,
+            analyzed: false,
+            analysis_error: None,
+            analysis_errors: None,
+            modified_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            thumbnail_path: None,
+            thumbnail_generated_at: None,
+            koreader_hash: None,
+            epub_positions: None,
+            epub_spine_items: None,
+        };
+        let created = BookRepository::create(db, &book, None).await.unwrap();
+        let meta = BookMetadataRepository::create_with_title_and_number(db, created.id, None, None)
+            .await
+            .unwrap();
+        // Patch volume / chapter directly.
+        let mut active: book_metadata::ActiveModel = meta.into();
+        active.volume = Set(volume);
+        active.chapter = Set(chapter);
+        active.update(db).await.unwrap();
+        created.id
+    }
+
+    #[tokio::test]
+    async fn test_classification_aggregates_mixed_books() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(
+            conn,
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(conn, library.id, "Vinland Saga", None)
+            .await
+            .unwrap();
+
+        // Volumes 1, 2, 14 (no chapter pinned -> count toward volumes_owned).
+        insert_book_with_classification(conn, series.id, library.id, "/v1.cbz", Some(1), None)
+            .await;
+        insert_book_with_classification(conn, series.id, library.id, "/v2.cbz", Some(2), None)
+            .await;
+        insert_book_with_classification(conn, series.id, library.id, "/v14.cbz", Some(14), None)
+            .await;
+        // Chapter inside a volume (v15 c126) — does NOT count toward volumes_owned
+        // but contributes to local_max_volume and local_max_chapter.
+        insert_book_with_classification(
+            conn,
+            series.id,
+            library.id,
+            "/v15-c126.cbz",
+            Some(15),
+            Some(126.0),
+        )
+        .await;
+        // Pure chapter (c137) — only contributes to local_max_chapter.
+        insert_book_with_classification(
+            conn,
+            series.id,
+            library.id,
+            "/c137.cbz",
+            None,
+            Some(137.5),
+        )
+        .await;
+
+        let agg = SeriesRepository::get_book_classification_aggregates(conn, series.id)
+            .await
+            .unwrap();
+
+        assert_eq!(agg.local_max_volume, Some(15));
+        assert_eq!(agg.local_max_chapter, Some(137.5));
+        assert_eq!(agg.volumes_owned, Some(3));
+    }
+
+    #[tokio::test]
+    async fn test_classification_aggregates_empty_series() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(
+            conn,
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let empty = SeriesRepository::create(conn, library.id, "Empty", None)
+            .await
+            .unwrap();
+
+        let agg = SeriesRepository::get_book_classification_aggregates(conn, empty.id)
+            .await
+            .unwrap();
+
+        assert_eq!(agg.local_max_volume, None);
+        assert_eq!(agg.local_max_chapter, None);
+        assert_eq!(agg.volumes_owned, None);
+    }
+
+    #[tokio::test]
+    async fn test_classification_aggregates_unclassified_books_yield_none() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(
+            conn,
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(conn, library.id, "Unclassified", None)
+            .await
+            .unwrap();
+
+        // Books exist but have no volume/chapter populated — DTO should fall
+        // back to legacy `<bookCount>/<total>` formatting.
+        for i in 1..=3 {
+            insert_book_with_classification(
+                conn,
+                series.id,
+                library.id,
+                &format!("/u{}.cbz", i),
+                None,
+                None,
+            )
+            .await;
+        }
+
+        let agg = SeriesRepository::get_book_classification_aggregates(conn, series.id)
+            .await
+            .unwrap();
+
+        assert_eq!(agg.local_max_volume, None);
+        assert_eq!(agg.local_max_chapter, None);
+        // SUM over 3 rows of CASE...ELSE 0 = 0, not NULL, so we expect Some(0).
+        assert_eq!(agg.volumes_owned, Some(0));
+    }
+
+    #[tokio::test]
+    async fn test_classification_aggregates_batch_query_all_series_present() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(
+            conn,
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let with_books = SeriesRepository::create(conn, library.id, "Has Books", None)
+            .await
+            .unwrap();
+        insert_book_with_classification(conn, with_books.id, library.id, "/v1.cbz", Some(1), None)
+            .await;
+
+        let empty = SeriesRepository::create(conn, library.id, "Empty", None)
+            .await
+            .unwrap();
+
+        let map = SeriesRepository::get_book_classification_aggregates_for_series_ids(
+            conn,
+            &[with_books.id, empty.id],
+        )
+        .await
+        .unwrap();
+
+        // Both series IDs should be present in the map; missing rows get defaults.
+        assert_eq!(map.len(), 2);
+        let with = map.get(&with_books.id).copied().unwrap();
+        assert_eq!(with.local_max_volume, Some(1));
+        let none = map.get(&empty.id).copied().unwrap();
+        assert_eq!(none.local_max_volume, None);
+        assert_eq!(none.volumes_owned, None);
     }
 }

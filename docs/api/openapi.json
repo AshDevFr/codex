@@ -23435,6 +23435,24 @@
             "description": "Name of the library this series belongs to",
             "example": "Comics"
           },
+          "localMaxChapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Highest `book_metadata.chapter` across the books in this series.\nSee `SeriesDto::local_max_chapter` for semantics.",
+            "example": 137.5
+          },
+          "localMaxVolume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Highest `book_metadata.volume` across the books in this series.\nSee `SeriesDto::local_max_volume` for semantics.",
+            "example": 14
+          },
           "metadata": {
             "$ref": "#/components/schemas/SeriesFullMetadata",
             "description": "Complete series metadata"
@@ -23476,6 +23494,15 @@
             "format": "date-time",
             "description": "When the series was last updated",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "volumesOwned": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Number of books classified as a complete volume (volume set, chapter null).\nSee `SeriesDto::volumes_owned` for semantics.",
+            "example": 14
           }
         }
       },
@@ -27883,6 +27910,24 @@
                   "description": "Name of the library this series belongs to",
                   "example": "Comics"
                 },
+                "localMaxChapter": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float",
+                  "description": "Highest `book_metadata.chapter` across the books in this series.\n\n`None` when no book in the series has `chapter` populated. When\nnon-null and `metadata.totalChapterCount` is also known, the UI renders\n`<localMaxChapter>/<totalChapterCount> ch`.",
+                  "example": 137.5
+                },
+                "localMaxVolume": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "Highest `book_metadata.volume` across the books in this series.\n\n`None` when no book in the series has `volume` populated. When\nnon-null and `metadata.totalVolumeCount` is also known, the UI renders\n`<localMaxVolume>/<totalVolumeCount> vol` instead of the legacy\n`<bookCount>/<totalVolumeCount> vol`.",
+                  "example": 14
+                },
                 "path": {
                   "type": [
                     "string",
@@ -27942,6 +27987,15 @@
                   "format": "date-time",
                   "description": "When the series was last updated",
                   "example": "2024-01-15T10:30:00Z"
+                },
+                "volumesOwned": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Number of books in this series classified as a complete volume\n(`volume IS NOT NULL AND chapter IS NULL`).\n\nDistinct from `bookCount`: a chapter inside a volume (`v15 c126`)\ncounts as a chapter, not a volume. `None` when no books exist;\n`Some(0)` when books exist but none are complete volumes.",
+                  "example": 14
                 },
                 "year": {
                   "type": [
@@ -32214,6 +32268,24 @@
             "description": "Name of the library this series belongs to",
             "example": "Comics"
           },
+          "localMaxChapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Highest `book_metadata.chapter` across the books in this series.\n\n`None` when no book in the series has `chapter` populated. When\nnon-null and `metadata.totalChapterCount` is also known, the UI renders\n`<localMaxChapter>/<totalChapterCount> ch`.",
+            "example": 137.5
+          },
+          "localMaxVolume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Highest `book_metadata.volume` across the books in this series.\n\n`None` when no book in the series has `volume` populated. When\nnon-null and `metadata.totalVolumeCount` is also known, the UI renders\n`<localMaxVolume>/<totalVolumeCount> vol` instead of the legacy\n`<bookCount>/<totalVolumeCount> vol`.",
+            "example": 14
+          },
           "path": {
             "type": [
               "string",
@@ -32273,6 +32345,15 @@
             "format": "date-time",
             "description": "When the series was last updated",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "volumesOwned": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Number of books in this series classified as a complete volume\n(`volume IS NOT NULL AND chapter IS NULL`).\n\nDistinct from `bookCount`: a chapter inside a volume (`v15 c126`)\ncounts as a chapter, not a volume. `None` when no books exist;\n`Some(0)` when books exist but none are complete volumes.",
+            "example": 14
           },
           "year": {
             "type": [

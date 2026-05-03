@@ -147,6 +147,16 @@ async fn series_to_dto(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to get book count: {:?}", e)))?;
 
+    // Per-book classification aggregates derived from book_metadata.volume / chapter
+    let aggregates = SeriesRepository::get_book_classification_aggregates(db, series.id)
+        .await
+        .map_err(|e| {
+            ApiError::Internal(format!(
+                "Failed to compute book classification aggregates: {:?}",
+                e
+            ))
+        })?;
+
     // Fetch cover info from series_covers table
     let selected_cover = SeriesCoversRepository::get_selected(db, series.id)
         .await
@@ -180,6 +190,9 @@ async fn series_to_dto(
         publisher: metadata.as_ref().and_then(|m| m.publisher.clone()),
         year: metadata.as_ref().and_then(|m| m.year),
         book_count,
+        local_max_volume: aggregates.local_max_volume,
+        local_max_chapter: aggregates.local_max_chapter,
+        volumes_owned: aggregates.volumes_owned,
         path: Some(series.path),
         selected_cover_source: selected_cover.map(|c| c.source),
         has_custom_cover: Some(has_custom_cover),
@@ -217,6 +230,7 @@ async fn series_to_full_dtos_batched(
     let (
         metadata_map,
         book_counts_map,
+        classification_map,
         unread_counts_map,
         selected_covers_map,
         custom_covers_map,
@@ -230,6 +244,7 @@ async fn series_to_full_dtos_batched(
     ) = tokio::join!(
         SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
         SeriesRepository::get_book_counts_for_series_ids(db, &series_ids),
+        SeriesRepository::get_book_classification_aggregates_for_series_ids(db, &series_ids),
         async {
             if let Some(uid) = user_id {
                 BookRepository::count_unread_in_series_ids(db, &series_ids, uid).await
@@ -253,6 +268,12 @@ async fn series_to_full_dtos_batched(
         metadata_map.map_err(|e| ApiError::Internal(format!("Failed to fetch metadata: {}", e)))?;
     let book_counts_map = book_counts_map
         .map_err(|e| ApiError::Internal(format!("Failed to get book counts: {}", e)))?;
+    let classification_map = classification_map.map_err(|e| {
+        ApiError::Internal(format!(
+            "Failed to compute book classification aggregates: {}",
+            e
+        ))
+    })?;
     let unread_counts_map = unread_counts_map
         .map_err(|e| ApiError::Internal(format!("Failed to count unread: {}", e)))?;
     let selected_covers_map = selected_covers_map
@@ -287,6 +308,10 @@ async fn series_to_full_dtos_batched(
 
         // Get other data (with defaults)
         let book_count = book_counts_map.get(&series_id).copied().unwrap_or(0);
+        let aggregates = classification_map
+            .get(&series_id)
+            .copied()
+            .unwrap_or_default();
         let unread_count = unread_counts_map.get(&series_id).copied();
         let selected_cover = selected_covers_map.get(&series_id);
         let has_custom_cover = custom_covers_map.get(&series_id).copied().unwrap_or(false);
@@ -395,6 +420,9 @@ async fn series_to_full_dtos_batched(
             library_id: series.library_id,
             library_name,
             book_count,
+            local_max_volume: aggregates.local_max_volume,
+            local_max_chapter: aggregates.local_max_chapter,
+            volumes_owned: aggregates.volumes_owned,
             unread_count,
             path: Some(series.path),
             selected_cover_source: selected_cover.map(|c| c.source.clone()),

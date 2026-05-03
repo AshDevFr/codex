@@ -770,6 +770,8 @@ export function SeriesDetail() {
                   localCount: series.bookCount ?? null,
                   totalVolumeCount: metadata?.totalVolumeCount ?? null,
                   totalChapterCount: metadata?.totalChapterCount ?? null,
+                  localMaxVolume: series.localMaxVolume ?? null,
+                  localMaxChapter: series.localMaxChapter ?? null,
                 });
                 return counts ? (
                   <Text size="sm" c="dimmed">

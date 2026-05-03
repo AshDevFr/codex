@@ -6,7 +6,8 @@ use codex::api::routes::v1::dto::book::BookDto;
 use codex::api::routes::v1::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, SeriesMetadataRepository, SeriesRepository, UserRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, SeriesMetadataRepository,
+    SeriesRepository, UserRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -591,6 +592,107 @@ async fn test_get_series_by_id() {
     let retrieved = response.unwrap();
     assert_eq!(retrieved.id, series.id);
     assert_eq!(retrieved.title, "Test Series");
+}
+
+#[tokio::test]
+async fn test_get_series_exposes_classification_aggregates() {
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Vinland Saga", None)
+        .await
+        .unwrap();
+
+    // Helper: create a book + classified metadata.
+    async fn add_classified_book(
+        db: &sea_orm::DatabaseConnection,
+        series_id: uuid::Uuid,
+        library_id: uuid::Uuid,
+        path: &str,
+        volume: Option<i32>,
+        chapter: Option<f32>,
+    ) {
+        let mut book = create_test_book(
+            series_id,
+            library_id,
+            path,
+            path.rsplit('/').next().unwrap_or(path),
+            None,
+        );
+        book.file_hash = format!("hash_{}", uuid::Uuid::new_v4());
+        let created = BookRepository::create(db, &book, None).await.unwrap();
+        let meta = BookMetadataRepository::create_with_title_and_number(db, created.id, None, None)
+            .await
+            .unwrap();
+        let mut active: codex::db::entities::book_metadata::ActiveModel = meta.into();
+        active.volume = Set(volume);
+        active.chapter = Set(chapter);
+        active.update(db).await.unwrap();
+    }
+
+    add_classified_book(&db, series.id, library.id, "/v1.cbz", Some(1), None).await;
+    add_classified_book(&db, series.id, library.id, "/v14.cbz", Some(14), None).await;
+    add_classified_book(
+        &db,
+        series.id,
+        library.id,
+        "/v15-c126.cbz",
+        Some(15),
+        Some(126.0),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series.id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert_eq!(dto.book_count, 3);
+    assert_eq!(dto.local_max_volume, Some(15));
+    assert_eq!(dto.local_max_chapter, Some(126.0));
+    // Two books have volume set with no chapter; the v15+c126 row counts as a chapter.
+    assert_eq!(dto.volumes_owned, Some(2));
+}
+
+#[tokio::test]
+async fn test_get_series_classification_aggregates_absent_when_unclassified() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Unclassified", None)
+        .await
+        .unwrap();
+    // Add a book with no classification.
+    let mut book = create_test_book(series.id, library.id, "/u1.cbz", "u1.cbz", None);
+    book.file_hash = "hash_unclassified_1".to_string();
+    BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series.id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert_eq!(dto.book_count, 1);
+    // Book has no metadata row at all -> MAX(volume) and MAX(chapter) are NULL.
+    assert_eq!(dto.local_max_volume, None);
+    assert_eq!(dto.local_max_chapter, None);
+    // SUM(CASE ... ELSE 0) over a single LEFT-JOINed-with-NULL row evaluates
+    // to 0 (the CASE branch is the constant 0), so volumes_owned is Some(0).
+    assert_eq!(dto.volumes_owned, Some(0));
 }
 
 #[tokio::test]
