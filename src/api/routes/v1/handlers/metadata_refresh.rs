@@ -625,7 +625,6 @@ async fn dry_run_one_pair(
         thumbnail_service: Some(state.thumbnail_service.clone()),
         event_broadcaster: None, // Don't emit events for previews.
         dry_run: true,
-        matching_strategy,
     };
 
     let result = MetadataApplier::apply(

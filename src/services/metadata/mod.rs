@@ -14,22 +14,12 @@ pub mod field_groups;
 pub mod preprocessing;
 pub mod refresh_config;
 pub mod refresh_planner;
-pub mod refresh_skip_reason;
 
 pub use apply::{ApplyOptions, MatchingStrategy, MetadataApplier, SkippedField};
 pub use book_apply::{BookApplyOptions, BookMetadataApplier};
 pub use cover::CoverService;
-#[allow(unused_imports)]
-pub use field_groups::{FieldGroup, fields_for_group, fields_for_groups, group_for_field};
-pub use refresh_config::{MetadataRefreshConfig, parse_metadata_refresh_config};
-// Re-exported for downstream phases (HTTP PATCH endpoint, per-provider
-// overrides). Allowed to be unused until those phases land.
-#[allow(unused_imports)]
-pub use refresh_config::{MetadataRefreshConfigPatch, ProviderOverride};
-#[allow(unused_imports)]
+pub use field_groups::{FieldGroup, fields_for_group};
+pub use refresh_config::{MetadataRefreshConfig, ProviderOverride, parse_metadata_refresh_config};
 pub use refresh_planner::{
-    PlannedRefresh, RefreshPlan, RefreshPlanner, SkipReason as PlannerSkipReason, SkippedRefresh,
-    fields_filter_for_provider, fields_filter_from_config,
+    PlannedRefresh, RefreshPlan, RefreshPlanner, fields_filter_for_provider,
 };
-#[allow(unused_imports)]
-pub use refresh_skip_reason::RefreshSkipReason;

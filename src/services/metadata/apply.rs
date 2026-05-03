@@ -110,12 +110,6 @@ pub struct ApplyOptions {
     /// returned instead. Locks and permission checks still run — same code
     /// path, just gated writes.
     pub dry_run: bool,
-    /// Caller-provided matching strategy. Read by the handlers that drive
-    /// the applier; the applier itself doesn't branch on it. Defaults to
-    /// [`MatchingStrategy::AllowReMatch`] so existing manual-apply call
-    /// sites preserve their previous behavior.
-    #[allow(dead_code)]
-    pub matching_strategy: MatchingStrategy,
 }
 
 /// Service for applying plugin metadata to series.
@@ -870,20 +864,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn matching_strategy_default_is_allow_rematch() {
-        // Manual-apply call sites use `..Default::default()`; flipping the
-        // default would silently switch them to `ExistingExternalIdOnly`,
-        // which would skip series that don't have a stored external ID.
-        // Pin the default explicitly so future refactors are caught here.
-        assert_eq!(MatchingStrategy::default(), MatchingStrategy::AllowReMatch);
-    }
-
-    #[test]
-    fn apply_options_default_uses_allow_rematch() {
-        // Same guard one level up: ApplyOptions::default carries the
-        // historical "search if no ID" behavior.
+    fn apply_options_default_is_safe() {
         let opts = ApplyOptions::default();
-        assert_eq!(opts.matching_strategy, MatchingStrategy::AllowReMatch);
         assert!(!opts.dry_run);
         assert!(opts.fields_filter.is_none());
     }
