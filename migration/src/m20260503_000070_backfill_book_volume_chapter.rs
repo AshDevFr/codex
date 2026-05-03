@@ -18,9 +18,9 @@
 
 use regex::Regex;
 use sea_orm_migration::prelude::*;
-use sea_orm_migration::sea_orm::{
-    ConnectionTrait, FromQueryResult, Statement, TransactionTrait, Value,
-};
+use sea_orm_migration::sea_orm::{ConnectionTrait, FromQueryResult, Statement, TransactionTrait};
+
+use crate::m20260103_000014_create_book_metadata::BookMetadata;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -85,29 +85,19 @@ impl MigrationTrait for Migration {
                     continue;
                 }
 
-                // Build the UPDATE dynamically: only set the columns that need a
-                // new value. We always set updated_at to reflect the touch.
-                let mut sets: Vec<&str> = Vec::with_capacity(3);
-                let mut values: Vec<Value> = Vec::with_capacity(3);
+                // Build the UPDATE via sea-query so placeholders render correctly
+                // for the active backend (`?` for SQLite, `$1..$N` for Postgres).
+                let mut update = Query::update();
+                update.table(BookMetadata::Table);
                 if let Some(v) = new_volume {
-                    sets.push("volume = ?");
-                    values.push(v.into());
+                    update.value(BookMetadata::Volume, v);
                 }
                 if let Some(c) = new_chapter {
-                    sets.push("chapter = ?");
-                    values.push(c.into());
+                    update.value(Alias::new("chapter"), c);
                 }
-                if sets.is_empty() {
-                    continue;
-                }
-                let sql = format!(
-                    "UPDATE book_metadata SET {} WHERE book_id = ?",
-                    sets.join(", ")
-                );
-                values.push(row.book_id.into());
+                update.and_where(Expr::col(BookMetadata::BookId).eq(row.book_id));
 
-                txn.execute(Statement::from_sql_and_values(backend, &sql, values))
-                    .await?;
+                txn.execute(backend.build(&update)).await?;
             }
 
             // If we fetched fewer than the batch size, there's no next page.
