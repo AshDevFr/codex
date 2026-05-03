@@ -34,6 +34,60 @@ Book type can be set in several ways:
 
 Like other metadata fields, book type supports locking. When locked, metadata plugins cannot overwrite the value during automatic metadata fetching. Lock a field by toggling the lock icon next to it in the edit modal.
 
+## Volume and Chapter Numbers
+
+Each book carries an optional **volume** (integer) and **chapter** (decimal) number. Codex uses these to classify each book and to compute per-series aggregates (`local_max_volume`, `local_max_chapter`, `volumes_owned`) that drive the series count display and "behind by N" indicators.
+
+How a book is classified depends on which fields are populated:
+
+| `volume` | `chapter` | Book detail badge | Meaning |
+|----------|-----------|-------------------|---------|
+| set | unset | `Vol N` (blue) | A bound volume. |
+| unset | set | `Ch N` (grape) | A loose chapter. |
+| set | set | `Vol V · Ch C` (blue) | A specific chapter inside a known volume. |
+| unset | unset | `Vol` (gray, muted) | Unclassified; defaults to volume. Click to edit. |
+
+### Filename Convention
+
+When the library uses the **Filename** or **Smart** [book strategy](./scanning-strategies/book-strategies), Codex extracts `volume` and `chapter` from the filename using these canonical patterns:
+
+| Pattern | Example | Result |
+|---------|---------|--------|
+| `vN`, `vol.N`, `volume N` | `One Piece v01.cbz` | `volume = 1` |
+| `cN`, `ch.N`, `chapter N` | `One Piece c042.cbz` | `chapter = 42` |
+| Both, separated by anything non-alphanumeric | `One Piece v15 - c126 (2023).cbz` | `volume = 15`, `chapter = 126` |
+| Fractional chapters | `One Piece c042.5.cbz` | `chapter = 42.5` |
+
+Rules and edge cases:
+
+- The prefix (`v` / `vol` / `volume`, `c` / `ch` / `chapter`) is required and **case-insensitive**. Bare numbers without a prefix are not parsed into the volume or chapter axis. They may still be parsed as the **book number** for sort order; see [book strategies](./scanning-strategies/book-strategies).
+- The prefix must sit on a **non-alphanumeric left boundary** (start of name, space, underscore, dash, `[`, or `(`). This prevents uploader tags like `[GroupName]` and words containing `c` mid-string from triggering false matches.
+- **Fractional volumes are rejected.** `Series v01.5.cbz` produces `volume = NULL` because the volume column is an integer. Use the chapter axis for fractional values.
+- **First match wins per axis.** If a filename contains multiple volume markers (e.g. accidental duplication), the first one is used.
+- A bare year in parentheses or after a dash (e.g. `v01 - 2024 (Digital).cbz`) is **not** mistaken for a chapter number. Only `c`-prefixed numbers are read as chapters.
+
+:::tip Recommended naming
+For volume-organized libraries, name files `Series Name v01.cbz`, `Series Name v02.cbz`, etc. For chapter-organized libraries, name files `Series Name c001.cbz`. For mixed libraries with bound volumes plus loose chapters, mix both forms or use `v15 - c126.cbz` for chapters known to belong to a specific volume.
+:::
+
+### ComicInfo.xml Override
+
+When a CBZ contains a `ComicInfo.xml`, the embedded `<Volume>` and `<Number>` tags take precedence over filename parsing if the [book strategy](./scanning-strategies/book-strategies) is **Smart** or **Metadata First**. Specifically:
+
+- **Filename strategy**: ComicInfo is ignored. Filename is the only source.
+- **Metadata First strategy**: ComicInfo is the only source. Filename is ignored.
+- **Smart strategy**: ComicInfo first, filename fallback if ComicInfo doesn't carry the field.
+
+This means a series that drops to using filename naming after dropping ComicInfo (or vice versa) keeps the same volume/chapter values across rescans on the **Smart** strategy.
+
+### Custom Regex (Non-Canonical Filenames)
+
+If your filenames don't match the canonical patterns above, configure a [custom book strategy](./scanning-strategies/book-strategies#custom) with a regex that names `volume` and `chapter` capture groups. See [Configuration Examples](./scanning-strategies/examples) for worked examples covering scanlation-bracketed releases, `SxxExx`-style episode numbering, and other non-canonical layouts.
+
+### Locking Volume and Chapter
+
+Like every other metadata field, volume and chapter have **independent lock toggles**. Setting a value through the manual edit modal locks that field automatically, so a future rescan won't clobber it. You can lock or unlock either field independently in the edit modal's Publication tab.
+
 ## Extended Metadata Fields
 
 Books support additional metadata fields beyond the basic title, summary, and publisher:
@@ -56,6 +110,8 @@ Books support additional metadata fields beyond the basic title, summary, and pu
 |-------|-------------|
 | **Subjects** | Subject categories (e.g., "Science Fiction", "Space Exploration") |
 | **Book Type** | Publication type classification (see above) |
+| **Volume** | The volume this book belongs to (integer). Optional. |
+| **Chapter** | The chapter this book contains (decimal, e.g. `42.5`). Optional. |
 
 ### Credits Fields
 
