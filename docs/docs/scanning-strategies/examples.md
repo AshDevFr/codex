@@ -216,7 +216,7 @@ Group all books by the same author into a series.
 
 ## Custom: Scanlation Group Format
 
-Files with scanlation group tags.
+Files with scanlation group tags. The `(?P<volume>\d+)` and `(?P<chapter>\d+)` named groups populate the per-book volume/chapter fields, which feed the series count display and "behind by N" indicators.
 
 ```
 /library/
@@ -233,18 +233,20 @@ Files with scanlation group tags.
   },
   "book_strategy": "custom",
   "book_config": {
-    "pattern": "\\] (?P<series>.+?) v(?P<volume>\\d+) c(?P<chapter>\\d+)",
+    "pattern": "\\] (?P<series>.+?) v(?P<volume>\\d+) c(?P<chapter>\\d+(?:\\.\\d+)?)",
     "title_template": "{series} v.{volume} c.{chapter}",
     "fallback": "filename"
   }
 }
 ```
 
+The `(?:\.\d+)?` inside the chapter group makes fractional chapter numbers (`c042.5`) work for special chapters and side stories. Drop it if your library never uses fractional chapters.
+
 ---
 
 ## Custom: TV-style Episode Numbering
 
-Files with SxxExx or seasonXepisode format.
+Files with SxxExx or seasonXepisode format. Each season maps to a volume; each episode maps to a chapter.
 
 ```
 /library/
@@ -267,6 +269,61 @@ Files with SxxExx or seasonXepisode format.
   }
 }
 ```
+
+---
+
+## Custom: Chapter-Only Library With Range Filenames
+
+Some scanlation packs distribute chapter ranges as a single file (`c001-005.cbz`). Capture the **first** chapter of the range so the series's `local_max_chapter` aggregate stays correct.
+
+```
+/library/
+  └── Series Name/
+      ├── Series Name - c001-005.cbz
+      ├── Series Name - c006-010.cbz
+      └── Series Name - c011.cbz
+```
+
+```json
+{
+  "series_strategy": "series_volume",
+  "book_strategy": "custom",
+  "book_config": {
+    "pattern": "^(?P<series>.+?) - c(?P<chapter>\\d+(?:\\.\\d+)?)(?:-\\d+)?$",
+    "title_template": "{series} c.{chapter}",
+    "fallback": "filename"
+  }
+}
+```
+
+The `(?:-\d+)?` in the pattern matches and discards the optional `-005` end-of-range portion so each book is classified by its starting chapter. No `volume` group means books are classified as chapter-only.
+
+---
+
+## Custom: Volume-Of-Series + Issue Number
+
+Western-comic-style filenames where each issue is also a volume's worth of standalone content (`Series Vol.1 #5`).
+
+```
+/library/
+  ├── Saga Vol.1 #001.cbz
+  ├── Saga Vol.1 #002.cbz
+  └── Saga Vol.2 #001.cbz
+```
+
+```json
+{
+  "series_strategy": "series_volume",
+  "book_strategy": "custom",
+  "book_config": {
+    "pattern": "^(?P<series>.+?) Vol\\.(?P<volume>\\d+) #(?P<chapter>\\d+(?:\\.\\d+)?)",
+    "title_template": "{series} v.{volume} #{chapter}",
+    "fallback": "filename"
+  }
+}
+```
+
+This populates **both** `volume` and `chapter` per book, so the book detail page renders the combined `Vol V · Ch C` badge and the series detail header shows both totals when known.
 
 ---
 

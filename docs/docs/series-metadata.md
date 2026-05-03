@@ -65,7 +65,7 @@ Codex's first-party plugins populate both counts where the upstream API exposes 
 - **AniList**: populates both Total Volumes and Total Chapters from AniList GraphQL.
 - **Open Library**: populates Total Volumes only (Open Library does not expose chapter counts).
 
-Other metadata-source plugins follow the same shape; see the [Plugin Author Guide](dev/plugins/writing-plugins.md) for what to populate.
+Other metadata-source plugins follow the same shape; see the [Plugin Author Guide](/dev/plugins/writing-plugins) for what to populate.
 
 ## Migration from `totalBookCount`
 

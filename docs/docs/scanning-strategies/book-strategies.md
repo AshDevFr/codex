@@ -8,7 +8,7 @@ Book strategies determine how Codex names individual books and extracts volume/c
 
 ## Filename (Default)
 
-**Rule:** Book title = filename without extension
+**Rule:** Book title = filename without extension. **Volume** and **chapter** are extracted from canonical filename markers (`v01`, `c042`, etc.); ComicInfo is ignored.
 
 This is the Komga-compatible default behavior.
 
@@ -17,8 +17,16 @@ File: Batman #003.cbz
 Title: "Batman #003"
 
 File: One Piece v01.cbz
-Title: "One Piece v01"
+Title: "One Piece v01"   →   volume: 1
+
+File: One Piece c042.cbz
+Title: "One Piece c042"  →   chapter: 42
+
+File: One Piece v15 - c126 (2023).cbz
+Title: "One Piece v15 - c126 (2023)"  →  volume: 15, chapter: 126
 ```
+
+See [Volume and Chapter Numbers](../book-metadata#volume-and-chapter-numbers) for the full filename-pattern reference.
 
 **Pros:**
 - Predictable: what you see on disk = what you see in UI
@@ -40,7 +48,7 @@ Title: "One Piece v01"
 
 ## Metadata First
 
-**Rule:** Use ComicInfo `<Title>` if present, fallback to filename
+**Rule:** Use ComicInfo `<Title>` if present, fallback to filename. For **volume** and **chapter**, ComicInfo is the only source; the filename is never parsed for these fields.
 
 ```
 File: +Anima #03.cbz
@@ -71,7 +79,7 @@ Title: "Batman #001"
 
 ## Smart
 
-**Rule:** Use metadata only if it's meaningful, otherwise use filename
+**Rule:** Use metadata only if it's meaningful, otherwise use filename. For **volume** and **chapter**, ComicInfo is consulted first; if it doesn't carry the field, the canonical filename markers are used as fallback.
 
 ```
 File: +Anima #03.cbz
@@ -190,10 +198,12 @@ Series [V01] [C003].cbz  → volume: 1, chapter: 3, title: "Series v.01 c.003"
 
 | Group | Purpose | Example |
 |-------|---------|---------|
-| `(?P<volume>...)` | Extract volume number | `v(?P<volume>\d+)` matches "v12" → 12 |
-| `(?P<chapter>...)` | Extract chapter number | `c(?P<chapter>\d+)` matches "c145" → 145 |
+| `(?P<volume>...)` | Extract volume number (integer; persisted as the book's `volume` field) | `v(?P<volume>\d+)` matches "v12" → 12 |
+| `(?P<chapter>...)` | Extract chapter number (decimal; persisted as the book's `chapter` field) | `c(?P<chapter>\d+(?:\.\d+)?)` matches "c145.5" → 145.5 |
 | `(?P<title>...)` | Extract title portion | `- (?P<title>.+)$` matches "- Romance Dawn" |
 | `(?P<series>...)` | Extract series (for template) | `^(?P<series>.+?)_` |
+
+The captured `volume` and `chapter` values populate the per-book metadata fields and feed the series-level `local_max_volume` / `local_max_chapter` aggregates and "behind by N" comparisons. See [Volume and Chapter Numbers](../book-metadata#volume-and-chapter-numbers) for the canonical patterns the default `Filename` and `Smart` strategies recognize without custom regex.
 
 **Common patterns:**
 
