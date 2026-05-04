@@ -31,9 +31,9 @@ use crate::tasks::handlers::{
     CleanupPluginDataHandler, CleanupSeriesExportsHandler, CleanupSeriesFilesHandler,
     ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
     GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
-    PluginAutoMatchHandler, PurgeDeletedHandler, RefreshLibraryMetadataHandler,
-    RenumberSeriesBatchHandler, RenumberSeriesHandler, ReprocessSeriesTitleHandler,
-    ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    PluginAutoMatchHandler, PollReleaseSourceHandler, PurgeDeletedHandler,
+    RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
+    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
 };
@@ -49,6 +49,10 @@ pub struct TaskWorker {
     thumbnail_service: Option<Arc<ThumbnailService>>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     plugin_manager: Option<Arc<PluginManager>>,
+    /// Shared per-host backoff state used by the `PollReleaseSourceHandler`.
+    /// Exposed via [`Self::release_backoff`] so the scheduler can read the
+    /// same multipliers when picking next-poll intervals.
+    release_backoff: crate::services::release::backoff::HostBackoff,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -123,8 +127,16 @@ impl TaskWorker {
             thumbnail_service: None,
             task_metrics_service: None,
             plugin_manager: None,
+            release_backoff: crate::services::release::backoff::HostBackoff::new(),
             shutdown_tx: None,
         }
+    }
+
+    /// Shared per-host backoff used by `PollReleaseSourceHandler`. The
+    /// scheduler reads this when computing the effective interval for the
+    /// next poll.
+    pub fn release_backoff(&self) -> crate::services::release::backoff::HostBackoff {
+        self.release_backoff.clone()
     }
 
     /// Set the poll interval
@@ -276,6 +288,15 @@ impl TaskWorker {
             "user_plugin_recommendation_dismiss".to_string(),
             Arc::new(dismiss_handler),
         );
+        // Register release-polling handler. Shares the worker's HostBackoff
+        // so the scheduler can also consult the same multipliers.
+        let mut poll_handler = PollReleaseSourceHandler::new(plugin_manager.clone())
+            .with_backoff(self.release_backoff.clone());
+        if let Some(ref settings_service) = self.settings_service {
+            poll_handler = poll_handler.with_settings_service(settings_service.clone());
+        }
+        self.handlers
+            .insert("poll_release_source".to_string(), Arc::new(poll_handler));
         self.plugin_manager = Some(plugin_manager);
         self
     }
