@@ -245,6 +245,21 @@ pub mod methods {
     pub const RECOMMENDATIONS_CLEAR: &str = "recommendations/clear";
     /// Dismiss a recommendation (user not interested)
     pub const RECOMMENDATIONS_DISMISS: &str = "recommendations/dismiss";
+
+    // Release-source methods (host -> plugin)
+    /// Ask the plugin to poll its source for new releases.
+    #[allow(dead_code)] // Host -> plugin call wired in Phase 4 (PollReleaseSource task).
+    pub const RELEASES_POLL: &str = "releases/poll";
+
+    // Release-source reverse-RPC methods (plugin -> host)
+    /// List tracked series scoped to what the source needs.
+    pub const RELEASES_LIST_TRACKED: &str = "releases/list_tracked";
+    /// Record a release candidate in the ledger.
+    pub const RELEASES_RECORD: &str = "releases/record";
+    /// Get the persisted state for a release source (etag, cursor, etc.).
+    pub const RELEASES_SOURCE_STATE_GET: &str = "releases/source_state/get";
+    /// Set persisted state for a release source.
+    pub const RELEASES_SOURCE_STATE_SET: &str = "releases/source_state/set";
 }
 
 // =============================================================================
@@ -351,6 +366,76 @@ pub struct PluginCapabilities {
     /// Can provide personalized recommendations (v2)
     #[serde(default)]
     pub user_recommendation_provider: bool,
+    /// Can announce new releases (chapters/volumes) for tracked series.
+    /// When present, the plugin may invoke the `releases/*` reverse-RPC
+    /// methods. The capability struct declares the data the plugin needs
+    /// (aliases, external IDs) so the host can scope its responses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_source: Option<ReleaseSourceCapability>,
+}
+
+/// Release-source capability declaration.
+///
+/// Plugins that want to announce releases declare this capability in their
+/// manifest. The struct describes both *what* the plugin can announce and
+/// *what* it needs from the host. The host uses these fields when filling
+/// `releases/list_tracked` responses so plugins only see data they asked for.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseSourceCapability {
+    /// Source kinds this plugin exposes (e.g. `["rss-uploader"]`).
+    #[serde(default)]
+    pub kinds: Vec<ReleaseSourceKind>,
+    /// Whether the plugin needs title aliases (set when the plugin matches
+    /// by title rather than by external ID, e.g. Nyaa).
+    #[serde(default)]
+    pub requires_aliases: bool,
+    /// External-ID sources the plugin needs, e.g. `["mangaupdates"]` or
+    /// `["mangadex"]`. The host filters `series_external_ids` to these
+    /// sources when responding to `releases/list_tracked`.
+    #[serde(default)]
+    pub requires_external_ids: Vec<String>,
+    /// Whether the plugin announces chapter-level releases.
+    #[serde(default)]
+    pub can_announce_chapters: bool,
+    /// Whether the plugin announces volume-level releases.
+    #[serde(default)]
+    pub can_announce_volumes: bool,
+    /// Default poll interval in seconds. Used when a `release_sources` row
+    /// for this plugin doesn't override it. Server settings can also set a
+    /// global default that takes precedence at schedule resolution time.
+    #[serde(default)]
+    pub default_poll_interval_s: u32,
+}
+
+impl Default for ReleaseSourceCapability {
+    fn default() -> Self {
+        Self {
+            kinds: Vec::new(),
+            requires_aliases: false,
+            requires_external_ids: Vec::new(),
+            can_announce_chapters: true,
+            can_announce_volumes: true,
+            default_poll_interval_s: 86_400,
+        }
+    }
+}
+
+/// Kind of release source. Mirrors the `release_sources.kind` column on the
+/// host side, but lives here so plugins can declare it without depending on
+/// the database schema.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReleaseSourceKind {
+    /// Per-uploader feed (e.g., a Nyaa user RSS feed).
+    RssUploader,
+    /// Per-series feed (e.g., MangaUpdates RSS for a single series).
+    RssSeries,
+    /// Generic API-driven feed.
+    ApiFeed,
+    /// Metadata-derived signal (informational; usually doesn't write the
+    /// ledger - see Phase 5).
+    MetadataFeed,
 }
 
 impl PluginCapabilities {
@@ -365,15 +450,21 @@ impl PluginCapabilities {
         self.metadata_provider.contains(&MetadataContentType::Book)
     }
 
+    /// Whether this plugin declares the `release_source` capability.
+    pub fn is_release_source(&self) -> bool {
+        self.release_source.is_some()
+    }
+
     /// Infer the plugin type from capabilities.
     ///
     /// User-facing capabilities (`user_read_sync`, `user_recommendation_provider`)
-    /// indicate a "user" plugin. Metadata provider capabilities indicate a
-    /// "system" plugin. Returns `None` when capabilities are empty.
+    /// indicate a "user" plugin. Metadata-provider and release-source
+    /// capabilities indicate a "system" plugin. Returns `None` when
+    /// capabilities are empty.
     pub fn inferred_plugin_type(&self) -> Option<PluginManifestType> {
         if self.user_read_sync || self.user_recommendation_provider {
             Some(PluginManifestType::User)
-        } else if !self.metadata_provider.is_empty() {
+        } else if !self.metadata_provider.is_empty() || self.release_source.is_some() {
             Some(PluginManifestType::System)
         } else {
             None
@@ -2051,6 +2142,78 @@ mod tests {
     fn test_inferred_plugin_type_empty_capabilities() {
         let caps = PluginCapabilities::default();
         assert_eq!(caps.inferred_plugin_type(), None);
+    }
+
+    #[test]
+    fn test_release_source_capability_serializes_camel_case() {
+        let cap = ReleaseSourceCapability {
+            kinds: vec![ReleaseSourceKind::RssUploader],
+            requires_aliases: true,
+            requires_external_ids: vec!["mangaupdates".to_string()],
+            can_announce_chapters: true,
+            can_announce_volumes: false,
+            default_poll_interval_s: 3600,
+        };
+        let json = serde_json::to_value(&cap).unwrap();
+        assert_eq!(json["kinds"], json!(["rss-uploader"]));
+        assert!(json["requiresAliases"].as_bool().unwrap());
+        assert_eq!(json["requiresExternalIds"], json!(["mangaupdates"]));
+        assert!(json["canAnnounceChapters"].as_bool().unwrap());
+        assert!(!json["canAnnounceVolumes"].as_bool().unwrap());
+        assert_eq!(json["defaultPollIntervalS"], 3600);
+    }
+
+    #[test]
+    fn test_release_source_capability_kind_round_trip() {
+        for kind in [
+            ReleaseSourceKind::RssUploader,
+            ReleaseSourceKind::RssSeries,
+            ReleaseSourceKind::ApiFeed,
+            ReleaseSourceKind::MetadataFeed,
+        ] {
+            let json = serde_json::to_value(kind).unwrap();
+            let back: ReleaseSourceKind = serde_json::from_value(json).unwrap();
+            assert_eq!(kind, back);
+        }
+    }
+
+    #[test]
+    fn test_plugin_capabilities_release_source_inferred_type() {
+        let caps = PluginCapabilities {
+            release_source: Some(ReleaseSourceCapability::default()),
+            ..Default::default()
+        };
+        assert!(caps.is_release_source());
+        assert_eq!(
+            caps.inferred_plugin_type(),
+            Some(PluginManifestType::System)
+        );
+    }
+
+    #[test]
+    fn test_plugin_capabilities_manifest_parses_release_source() {
+        let manifest_json = json!({
+            "name": "release-nyaa",
+            "displayName": "Nyaa Releases",
+            "version": "0.1.0",
+            "protocolVersion": "1.2",
+            "capabilities": {
+                "releaseSource": {
+                    "kinds": ["rss-uploader"],
+                    "requiresAliases": true,
+                    "requiresExternalIds": [],
+                    "canAnnounceChapters": true,
+                    "canAnnounceVolumes": true,
+                    "defaultPollIntervalS": 3600
+                }
+            }
+        });
+        let manifest: PluginManifest = serde_json::from_value(manifest_json).unwrap();
+        assert!(manifest.capabilities.is_release_source());
+        let cap = manifest.capabilities.release_source.unwrap();
+        assert_eq!(cap.kinds, vec![ReleaseSourceKind::RssUploader]);
+        assert!(cap.requires_aliases);
+        assert_eq!(cap.default_poll_interval_s, 3600);
     }
 
     #[test]

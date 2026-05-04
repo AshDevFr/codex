@@ -32,8 +32,8 @@ use crate::tasks::handlers::{
     ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
     GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
     PluginAutoMatchHandler, PurgeDeletedHandler, RefreshLibraryMetadataHandler,
-    RenumberSeriesBatchHandler, RenumberSeriesHandler,
-    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    RenumberSeriesBatchHandler, RenumberSeriesHandler, ReprocessSeriesTitleHandler,
+    ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
 };
