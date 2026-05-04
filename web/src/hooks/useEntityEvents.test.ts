@@ -7,7 +7,7 @@ import * as eventsApi from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { EntityChangeEvent } from "@/types";
-import { useEntityEvents } from "./useEntityEvents";
+import { shouldNotifyRelease, useEntityEvents } from "./useEntityEvents";
 
 // Mock the events API
 vi.mock("@/api/events");
@@ -507,5 +507,76 @@ describe("useEntityEvents", () => {
     });
 
     consoleError.mockRestore();
+  });
+});
+
+// =============================================================================
+// shouldNotifyRelease — pure filter predicate
+// =============================================================================
+
+describe("shouldNotifyRelease", () => {
+  const baseParams = {
+    seriesId: "s1",
+    pluginId: "release-nyaa",
+    language: "en",
+    notifyLanguagesValue: undefined,
+    notifyPluginsValue: undefined,
+    mutedSeriesIds: [] as readonly string[],
+  };
+
+  it("lets everything through when filters are empty", () => {
+    expect(shouldNotifyRelease(baseParams)).toBe(true);
+  });
+
+  it("blocks events for muted series", () => {
+    expect(shouldNotifyRelease({ ...baseParams, mutedSeriesIds: ["s1"] })).toBe(
+      false,
+    );
+  });
+
+  it("enforces the language allowlist (case-insensitive)", () => {
+    // Allowlist is `["EN"]` (uppercase) and event language is `"en"` —
+    // the predicate normalizes both sides.
+    expect(
+      shouldNotifyRelease({
+        ...baseParams,
+        notifyLanguagesValue: '["EN"]',
+        language: "en",
+      }),
+    ).toBe(true);
+    expect(
+      shouldNotifyRelease({
+        ...baseParams,
+        notifyLanguagesValue: '["en"]',
+        language: "es",
+      }),
+    ).toBe(false);
+  });
+
+  it("enforces the plugin allowlist", () => {
+    expect(
+      shouldNotifyRelease({
+        ...baseParams,
+        notifyPluginsValue: '["release-mangaupdates"]',
+        pluginId: "release-mangaupdates",
+      }),
+    ).toBe(true);
+    expect(
+      shouldNotifyRelease({
+        ...baseParams,
+        notifyPluginsValue: '["release-mangaupdates"]',
+        pluginId: "release-nyaa",
+      }),
+    ).toBe(false);
+  });
+
+  it("treats invalid JSON in setting values as 'no filter'", () => {
+    expect(
+      shouldNotifyRelease({
+        ...baseParams,
+        notifyLanguagesValue: "{not valid json}",
+        notifyPluginsValue: "also broken",
+      }),
+    ).toBe(true);
   });
 });
