@@ -16,6 +16,7 @@ import { useEntityEvents } from "@/hooks/useEntityEvents";
 import { BookDetail } from "@/pages/BookDetail";
 import { Home } from "@/pages/Home";
 import { LibraryPage } from "@/pages/Library";
+import { LibraryJobsPage } from "@/pages/LibraryJobs";
 import { Login } from "@/pages/Login";
 import { OidcComplete } from "@/pages/OidcComplete";
 import { Reader } from "@/pages/Reader";
@@ -191,6 +192,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <Home />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/libraries/:libraryId/jobs"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <LibraryJobsPage />
               </AppLayout>
             </ProtectedRoute>
           }

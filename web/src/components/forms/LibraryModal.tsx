@@ -50,7 +50,6 @@ import type {
   ScanningConfig,
   SeriesStrategy,
 } from "@/types";
-import { MetadataRefreshSettings } from "../library/MetadataRefreshSettings";
 import { type AutoMatchConditions, ConditionsEditor } from "./ConditionsEditor";
 import { CronInput } from "./CronInput";
 import {
@@ -883,7 +882,7 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
       opened={opened}
       onClose={handleClose}
       title={modalTitle}
-      size="lg"
+      size="xl"
       centered
       zIndex={1000}
       overlayProps={{
@@ -931,14 +930,6 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
                 >
                   Conditions
                 </Tabs.Tab>
-                {isEditMode && (
-                  <Tabs.Tab
-                    value="metadataRefresh"
-                    leftSection={<IconRefresh size={16} />}
-                  >
-                    Metadata Refresh
-                  </Tabs.Tab>
-                )}
               </Tabs.List>
 
               <Tabs.Panel value="general" pt="md">
@@ -964,12 +955,6 @@ export function LibraryModal({ opened, onClose, library }: LibraryModalProps) {
               <Tabs.Panel value="conditions" pt="md">
                 {renderConditionsTab()}
               </Tabs.Panel>
-
-              {isEditMode && library && (
-                <Tabs.Panel value="metadataRefresh" pt="md">
-                  <MetadataRefreshSettings libraryId={library.id} />
-                </Tabs.Panel>
-              )}
             </Tabs>
 
             <Group justify="flex-end" mt="md">

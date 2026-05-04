@@ -47,14 +47,14 @@ pub enum TaskType {
         source: String, // "comicvine", "openlibrary", etc.
     },
 
-    /// Scheduled per-library metadata refresh.
+    /// Scheduled per-job metadata refresh.
     ///
-    /// Walks the library's series, applies the per-library
-    /// `metadata_refresh_config` (field groups, providers, matching strategy),
+    /// Loads the [`library_jobs`] row by `job_id`, decodes its config (single
+    /// provider + field groups + safety options), walks the library's series,
     /// and refreshes metadata via the existing `MetadataApplier`.
     RefreshLibraryMetadata {
-        #[serde(rename = "libraryId")]
-        library_id: Uuid,
+        #[serde(rename = "jobId")]
+        job_id: Uuid,
     },
 
     /// Generate thumbnails for books in a scope (library, series, specific books, or all)
@@ -295,15 +295,28 @@ impl TaskType {
         }
     }
 
-    /// Extract library_id if present
+    /// Extract library_id if present.
+    ///
+    /// `RefreshLibraryMetadata` carries `job_id` rather than `library_id`; the
+    /// library is resolved at run time from the job row. The library scope is
+    /// reflected by `enqueue_filter_library_id` on enqueue; this helper
+    /// returns `None` for that variant.
     pub fn library_id(&self) -> Option<Uuid> {
         match self {
             TaskType::ScanLibrary { library_id, .. } => Some(*library_id),
             TaskType::PurgeDeleted { library_id } => Some(*library_id),
-            TaskType::RefreshLibraryMetadata { library_id } => Some(*library_id),
             TaskType::GenerateThumbnails { library_id, .. } => *library_id,
             TaskType::GenerateSeriesThumbnails { library_id, .. } => *library_id,
             TaskType::ReprocessSeriesTitles { library_id, .. } => *library_id,
+            _ => None,
+        }
+    }
+
+    /// Extract the library job ID for tasks scoped to a single
+    /// [`library_jobs`] row, if any.
+    pub fn job_id(&self) -> Option<Uuid> {
+        match self {
+            TaskType::RefreshLibraryMetadata { job_id } => Some(*job_id),
             _ => None,
         }
     }
@@ -322,6 +335,11 @@ impl TaskType {
             }
             TaskType::RefreshMetadata { source, .. } => {
                 serde_json::json!({ "source": source })
+            }
+            TaskType::RefreshLibraryMetadata { job_id } => {
+                // job_id is stored in params (no FK column on tasks).
+                // The handler resolves the library from the job row at run time.
+                serde_json::json!({ "job_id": job_id })
             }
             TaskType::GenerateThumbnails {
                 force,
@@ -1021,38 +1039,41 @@ mod tests {
 
     #[test]
     fn test_refresh_library_metadata_extraction() {
-        let library_id = Uuid::new_v4();
-        let task = TaskType::RefreshLibraryMetadata { library_id };
+        let job_id = Uuid::new_v4();
+        let task = TaskType::RefreshLibraryMetadata { job_id };
 
         assert_eq!(task.type_string(), "refresh_library_metadata");
-        assert_eq!(task.library_id(), Some(library_id));
+        // RefreshLibraryMetadata is scoped by job_id; library is resolved at runtime.
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.job_id(), Some(job_id));
         assert_eq!(task.series_id(), None);
         assert_eq!(task.book_id(), None);
         assert_eq!(task.default_priority(), 385);
 
         let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
         assert_eq!(type_str, "refresh_library_metadata");
-        assert_eq!(lib_id, Some(library_id));
+        assert!(lib_id.is_none());
         assert!(series_id.is_none());
         assert!(book_id.is_none());
-        // No extra params beyond library_id (carried via the FK column)
-        assert!(params.is_none());
+        // job_id is part of the params payload (no dedicated FK column on tasks)
+        let params = params.expect("expected job_id params");
+        assert_eq!(params["job_id"], serde_json::json!(job_id));
     }
 
     #[test]
     fn test_refresh_library_metadata_serialization() {
-        let library_id = Uuid::new_v4();
-        let task = TaskType::RefreshLibraryMetadata { library_id };
+        let job_id = Uuid::new_v4();
+        let task = TaskType::RefreshLibraryMetadata { job_id };
 
         let json = serde_json::to_string(&task).unwrap();
         assert!(json.contains("refresh_library_metadata"));
-        assert!(json.contains(&library_id.to_string()));
-        // libraryId is the camelCase rename used by the rest of the enum
-        assert!(json.contains("libraryId"));
+        assert!(json.contains(&job_id.to_string()));
+        // jobId is the camelCase rename for the new variant.
+        assert!(json.contains("jobId"));
 
         let deserialized: TaskType = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.type_string(), "refresh_library_metadata");
-        assert_eq!(deserialized.library_id(), Some(library_id));
+        assert_eq!(deserialized.job_id(), Some(job_id));
     }
 
     #[test]

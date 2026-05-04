@@ -101,21 +101,23 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/libraries/{library_id}/series/titles/reprocess",
             post(handlers::task_queue::reprocess_library_series_titles),
         )
-        // Scheduled metadata refresh (Phase 6)
+        // Library jobs (Phase 9): generic CRUD for per-library scheduled work.
         .route(
-            "/libraries/{library_id}/metadata-refresh",
-            get(handlers::metadata_refresh::get_refresh_config),
+            "/libraries/{library_id}/jobs",
+            get(handlers::library_jobs::list_jobs).post(handlers::library_jobs::create_job),
         )
         .route(
-            "/libraries/{library_id}/metadata-refresh",
-            patch(handlers::metadata_refresh::patch_refresh_config),
+            "/libraries/{library_id}/jobs/{job_id}",
+            get(handlers::library_jobs::get_job)
+                .patch(handlers::library_jobs::patch_job)
+                .delete(handlers::library_jobs::delete_job),
         )
         .route(
-            "/libraries/{library_id}/metadata-refresh/run-now",
-            post(handlers::metadata_refresh::run_refresh_now),
+            "/libraries/{library_id}/jobs/{job_id}/run-now",
+            post(handlers::library_jobs::run_job_now),
         )
         .route(
-            "/libraries/{library_id}/metadata-refresh/dry-run",
-            post(handlers::metadata_refresh::dry_run_refresh),
+            "/libraries/{library_id}/jobs/{job_id}/dry-run",
+            post(handlers::library_jobs::dry_run_job),
         )
 }

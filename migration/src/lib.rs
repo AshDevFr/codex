@@ -143,7 +143,9 @@ mod m20260502_000068_drop_book_count;
 mod m20260503_000069_add_book_chapter;
 // Backfill volume/chapter from filename for already-scanned books (Phase 12)
 mod m20260503_000070_backfill_book_volume_chapter;
-// Per-library scheduled metadata refresh config (Phase 1 of scheduled-metadata-refresh)
+// Library jobs table for scheduled work (Phase 9 of scheduled-metadata-refresh).
+// Filename retains the original Phase 1 name for git-history continuity; module
+// now creates the generic `library_jobs` table instead of adding a JSON column.
 mod m20260503_000071_add_metadata_refresh_config;
 
 pub struct Migrator;

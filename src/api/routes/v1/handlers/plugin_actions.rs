@@ -224,6 +224,9 @@ pub async fn get_plugin_actions(
                 icon: Some("search".to_string()),
                 library_ids: plugin.library_ids_vec(),
                 search_uri_template: manifest.search_uri_template.clone(),
+                capabilities: Some(super::super::dto::PluginCapabilitiesDto::from(
+                    manifest.capabilities.clone(),
+                )),
             });
         }
     }

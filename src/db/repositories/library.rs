@@ -31,7 +31,6 @@ pub struct CreateLibraryParams {
     pub excluded_patterns: Option<String>,
     pub title_preprocessing_rules: Option<String>,
     pub auto_match_conditions: Option<String>,
-    pub metadata_refresh_config: Option<String>,
 }
 
 impl CreateLibraryParams {
@@ -52,7 +51,6 @@ impl CreateLibraryParams {
             excluded_patterns: None,
             title_preprocessing_rules: None,
             auto_match_conditions: None,
-            metadata_refresh_config: None,
         }
     }
 
@@ -100,11 +98,6 @@ impl CreateLibraryParams {
         self.auto_match_conditions = conditions;
         self
     }
-
-    pub fn with_metadata_refresh_config(mut self, config: Option<String>) -> Self {
-        self.metadata_refresh_config = config;
-        self
-    }
 }
 
 /// Repository for Library operations
@@ -136,7 +129,6 @@ impl LibraryRepository {
             excluded_patterns: Set(params.excluded_patterns),
             title_preprocessing_rules: Set(params.title_preprocessing_rules),
             auto_match_conditions: Set(params.auto_match_conditions),
-            metadata_refresh_config: Set(params.metadata_refresh_config),
             created_at: Set(now),
             updated_at: Set(now),
             last_scanned_at: Set(None),
@@ -225,7 +217,6 @@ impl LibraryRepository {
             excluded_patterns: Set(library.excluded_patterns.clone()),
             title_preprocessing_rules: Set(library.title_preprocessing_rules.clone()),
             auto_match_conditions: Set(library.auto_match_conditions.clone()),
-            metadata_refresh_config: Set(library.metadata_refresh_config.clone()),
             created_at: Set(library.created_at),
             updated_at: Set(Utc::now()),
             last_scanned_at: Set(library.last_scanned_at),
@@ -334,66 +325,6 @@ impl LibraryRepository {
                 None
             }
         }
-    }
-
-    /// Get the scheduled metadata-refresh config for a library by ID.
-    ///
-    /// Loads the row, parses `metadata_refresh_config`, and returns the
-    /// strongly-typed config. NULL or invalid JSON falls back to
-    /// [`crate::services::metadata::MetadataRefreshConfig::default`] (with a
-    /// warning logged for invalid JSON), so callers can rely on always
-    /// receiving a usable config rather than handling None or parse errors.
-    pub async fn get_metadata_refresh_config(
-        db: &DatabaseConnection,
-        library_id: Uuid,
-    ) -> Result<crate::services::metadata::MetadataRefreshConfig> {
-        use crate::services::metadata::{MetadataRefreshConfig, parse_metadata_refresh_config};
-
-        let library = Self::get_by_id(db, library_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Library not found: {}", library_id))?;
-
-        match parse_metadata_refresh_config(library.metadata_refresh_config.as_deref()) {
-            Ok(cfg) => Ok(cfg),
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to parse metadata refresh config for library {}: {} — using defaults",
-                    library_id,
-                    e
-                );
-                Ok(MetadataRefreshConfig::default())
-            }
-        }
-    }
-
-    /// Persist the scheduled metadata-refresh config for a library.
-    ///
-    /// Serializes to JSON and writes the `metadata_refresh_config` column
-    /// without touching the rest of the row. Bumps `updated_at`.
-    pub async fn set_metadata_refresh_config(
-        db: &DatabaseConnection,
-        library_id: Uuid,
-        config: &crate::services::metadata::MetadataRefreshConfig,
-    ) -> Result<()> {
-        let library = Libraries::find_by_id(library_id)
-            .one(db)
-            .await
-            .context("Failed to load library for metadata-refresh config update")?
-            .ok_or_else(|| anyhow::anyhow!("Library not found: {}", library_id))?;
-
-        let json =
-            serde_json::to_string(config).context("Failed to serialize metadata refresh config")?;
-
-        let mut active: libraries::ActiveModel = library.into();
-        active.metadata_refresh_config = Set(Some(json));
-        active.updated_at = Set(Utc::now());
-
-        active
-            .update(db)
-            .await
-            .context("Failed to update metadata refresh config")?;
-
-        Ok(())
     }
 }
 
@@ -1026,164 +957,5 @@ mod tests {
 
         let conditions = LibraryRepository::get_auto_match_conditions(&library);
         assert!(conditions.is_none());
-    }
-
-    // =========================================================================
-    // metadata_refresh_config accessors
-    // =========================================================================
-
-    #[tokio::test]
-    async fn test_get_metadata_refresh_config_returns_default_when_null() {
-        use crate::services::metadata::MetadataRefreshConfig;
-
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Refresh Default Library",
-            "/refresh/default",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let cfg =
-            LibraryRepository::get_metadata_refresh_config(db.sea_orm_connection(), library.id)
-                .await
-                .unwrap();
-
-        assert_eq!(cfg, MetadataRefreshConfig::default());
-        assert!(!cfg.enabled);
-        assert!(cfg.existing_source_ids_only);
-    }
-
-    #[tokio::test]
-    async fn test_set_and_get_metadata_refresh_config_round_trip() {
-        use crate::services::metadata::MetadataRefreshConfig;
-
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Refresh Configured Library",
-            "/refresh/configured",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let cfg = MetadataRefreshConfig {
-            enabled: true,
-            cron_schedule: "0 0 6 * * *".to_string(),
-            timezone: Some("UTC".to_string()),
-            field_groups: vec!["ratings".to_string(), "status".to_string()],
-            extra_fields: vec!["language".to_string()],
-            providers: vec!["plugin:mangabaka".to_string()],
-            existing_source_ids_only: false,
-            skip_recently_synced_within_s: 1800,
-            max_concurrency: 8,
-            per_provider_overrides: None,
-        };
-
-        LibraryRepository::set_metadata_refresh_config(db.sea_orm_connection(), library.id, &cfg)
-            .await
-            .unwrap();
-
-        let loaded =
-            LibraryRepository::get_metadata_refresh_config(db.sea_orm_connection(), library.id)
-                .await
-                .unwrap();
-
-        assert_eq!(loaded, cfg);
-    }
-
-    #[tokio::test]
-    async fn test_set_metadata_refresh_config_overwrites_previous_value() {
-        use crate::services::metadata::MetadataRefreshConfig;
-
-        let (db, _temp_dir) = create_test_db().await;
-
-        let library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Overwrite Library",
-            "/refresh/overwrite",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        let initial = MetadataRefreshConfig {
-            enabled: true,
-            ..Default::default()
-        };
-        LibraryRepository::set_metadata_refresh_config(
-            db.sea_orm_connection(),
-            library.id,
-            &initial,
-        )
-        .await
-        .unwrap();
-
-        let updated = MetadataRefreshConfig {
-            enabled: false,
-            cron_schedule: "0 0 8 * * *".to_string(),
-            ..Default::default()
-        };
-        LibraryRepository::set_metadata_refresh_config(
-            db.sea_orm_connection(),
-            library.id,
-            &updated,
-        )
-        .await
-        .unwrap();
-
-        let loaded =
-            LibraryRepository::get_metadata_refresh_config(db.sea_orm_connection(), library.id)
-                .await
-                .unwrap();
-
-        assert!(!loaded.enabled);
-        assert_eq!(loaded.cron_schedule, "0 0 8 * * *");
-    }
-
-    #[tokio::test]
-    async fn test_get_metadata_refresh_config_invalid_json_falls_back_to_default() {
-        use crate::services::metadata::MetadataRefreshConfig;
-
-        let (db, _temp_dir) = create_test_db().await;
-
-        let mut library = LibraryRepository::create(
-            db.sea_orm_connection(),
-            "Bad JSON Library",
-            "/refresh/bad-json",
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-
-        // Stuff invalid JSON directly into the column to simulate corruption
-        library.metadata_refresh_config = Some("{not json".to_string());
-        LibraryRepository::update(db.sea_orm_connection(), &library)
-            .await
-            .unwrap();
-
-        let cfg =
-            LibraryRepository::get_metadata_refresh_config(db.sea_orm_connection(), library.id)
-                .await
-                .unwrap();
-
-        // Falls back to defaults rather than failing the request
-        assert_eq!(cfg, MetadataRefreshConfig::default());
-    }
-
-    #[tokio::test]
-    async fn test_get_metadata_refresh_config_unknown_library_errors() {
-        let (db, _temp_dir) = create_test_db().await;
-
-        let result =
-            LibraryRepository::get_metadata_refresh_config(db.sea_orm_connection(), Uuid::new_v4())
-                .await;
-
-        assert!(result.is_err());
     }
 }

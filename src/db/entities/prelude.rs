@@ -14,6 +14,7 @@ pub use super::book_metadata::Entity as BookMetadata;
 pub use super::book_tags::Entity as BookTags;
 pub use super::books::Entity as Books;
 pub use super::libraries::Entity as Libraries;
+pub use super::library_jobs::Entity as LibraryJobs;
 pub use super::pages::Entity as Pages;
 pub use super::series::Entity as Series;
 pub use super::task_metrics::Entity as TaskMetrics;

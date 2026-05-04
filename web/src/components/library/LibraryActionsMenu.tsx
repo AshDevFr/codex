@@ -1,6 +1,7 @@
 import { Menu } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
+  IconCalendarTime,
   IconEdit,
   IconPhoto,
   IconRadar,
@@ -11,6 +12,7 @@ import {
   IconWand,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import {
   type PluginActionDto,
@@ -50,6 +52,7 @@ export function LibraryActionsMenu({
       action(...args);
     };
   };
+  const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canEditLibrary = hasPermission(PERMISSIONS.LIBRARIES_WRITE);
   const canDeleteLibrary = hasPermission(PERMISSIONS.LIBRARIES_DELETE);
@@ -244,6 +247,14 @@ export function LibraryActionsMenu({
             onClick={handleMenuAction(() => onEdit?.())}
           >
             Edit Library
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconCalendarTime size={16} />}
+            onClick={handleMenuAction(() =>
+              navigate(`/libraries/${library.id}/jobs`),
+            )}
+          >
+            Scheduled Jobs
           </Menu.Item>
           {canWriteTasks && (
             <>

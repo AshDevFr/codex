@@ -12,14 +12,14 @@ mod book_apply;
 mod cover;
 pub mod field_groups;
 pub mod preprocessing;
-pub mod refresh_config;
 pub mod refresh_planner;
 
 pub use apply::{ApplyOptions, MatchingStrategy, MetadataApplier, SkippedField};
 pub use book_apply::{BookApplyOptions, BookMetadataApplier};
 pub use cover::CoverService;
 pub use field_groups::{FieldGroup, fields_for_group};
-pub use refresh_config::{MetadataRefreshConfig, ProviderOverride, parse_metadata_refresh_config};
+#[allow(unused_imports)]
 pub use refresh_planner::{
-    PlannedRefresh, RefreshPlan, RefreshPlanner, fields_filter_for_provider,
+    PlanFailure, PlannedRefresh, RefreshPlan, RefreshPlanner, SkipReason, SkippedRefresh,
+    fields_filter_from_job_config,
 };

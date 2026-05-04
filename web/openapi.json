@@ -21078,6 +21078,38 @@
           }
         }
       },
+      "CreateLibraryJobRequest": {
+        "type": "object",
+        "description": "Request body for `POST /api/v1/libraries/{id}/jobs`.",
+        "required": [
+          "cronSchedule",
+          "config"
+        ],
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/LibraryJobConfigDto"
+          },
+          "cronSchedule": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional user-facing name. Auto-generated when missing or empty."
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "CreateLibraryRequest": {
         "type": "object",
         "description": "Create library request",
@@ -21692,6 +21724,17 @@
           }
         }
       },
+      "DryRunFieldChange": {
+        "type": "object",
+        "required": [
+          "before",
+          "after"
+        ],
+        "properties": {
+          "after": {},
+          "before": {}
+        }
+      },
       "DryRunReportDto": {
         "type": "object",
         "description": "Dry-run preview attached to [`MetadataApplyResponse`] when the request\nset `dryRun = true`. Absent on real applies.",
@@ -21709,7 +21752,7 @@
       },
       "DryRunRequest": {
         "type": "object",
-        "description": "Body for `POST /libraries/{id}/metadata-refresh/dry-run`.\n\n`configOverride` lets the UI preview a config that hasn't been saved yet —\n\"what would happen if I clicked Save right now?\". When absent, the saved\nconfig is used.",
+        "description": "Request body for `POST .../dry-run`.",
         "properties": {
           "configOverride": {
             "oneOf": [
@@ -21717,11 +21760,10 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/MetadataRefreshConfigDto",
-                "description": "Optional unsaved config to preview. When absent, the library's saved\nconfig is used."
+                "$ref": "#/components/schemas/LibraryJobConfigDto",
+                "description": "Override the saved config for this preview only. Must match the\nrow's `type`."
               }
-            ],
-            "default": null
+            ]
           },
           "sampleSize": {
             "type": [
@@ -21729,18 +21771,16 @@
               "null"
             ],
             "format": "int32",
-            "description": "Number of series to preview. Defaults to 5, capped at 20.",
-            "default": null,
+            "description": "Sample size, capped at 20 server-side.",
             "minimum": 0
           }
         }
       },
       "DryRunResponse": {
         "type": "object",
-        "description": "Full dry-run response.",
         "required": [
-          "sample",
           "totalEligible",
+          "sample",
           "estSkippedNoId",
           "estSkippedRecentlySynced"
         ],
@@ -21748,63 +21788,62 @@
           "estSkippedNoId": {
             "type": "integer",
             "format": "int32",
-            "description": "Estimated `(series, provider)` pairs the planner skipped because the\nseries has no stored external ID for the provider (strict mode only).",
+            "description": "Estimated count of series that would be skipped because they have no\nexternal ID for the chosen provider.",
             "minimum": 0
           },
           "estSkippedRecentlySynced": {
             "type": "integer",
             "format": "int32",
-            "description": "Estimated pairs skipped because their `last_synced_at` is younger than\nthe recency cutoff.",
+            "description": "Estimated count of series that would be skipped because they were\nrecently synced.",
             "minimum": 0
+          },
+          "planFailure": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider resolution failure reason, if any."
           },
           "sample": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DryRunSeriesDelta"
             },
-            "description": "Per-series deltas, capped at the requested sample size."
+            "description": "Per-series deltas for the first N eligible series."
           },
           "totalEligible": {
             "type": "integer",
             "format": "int32",
-            "description": "Total number of `(series, provider)` pairs the planner produced before\nthe sample cap.",
+            "description": "Total number of series eligible to be refreshed (all of them, not\njust the sample).",
             "minimum": 0
-          },
-          "unresolvedProviders": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Provider strings from the config that don't resolve to an enabled\nplugin. Surfaced verbatim so the UI can highlight typos or disabled\nplugins."
           }
         }
       },
       "DryRunSeriesDelta": {
         "type": "object",
-        "description": "One series' would-be deltas in a dry-run preview.",
+        "description": "One series's preview of would-be field changes.",
         "required": [
           "seriesId",
-          "seriesTitle",
-          "provider",
-          "changes"
+          "seriesName",
+          "changes",
+          "skipped"
         ],
         "properties": {
           "changes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FieldChangeDto"
+            "type": "object",
+            "description": "Field name → `(before, after)` JSON values.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DryRunFieldChange"
             },
-            "description": "Fields that would be written."
-          },
-          "provider": {
-            "type": "string",
-            "description": "Plugin id (`\"plugin:<name>\"`) that produced this delta."
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "seriesId": {
             "type": "string",
             "format": "uuid"
           },
-          "seriesTitle": {
+          "seriesName": {
             "type": "string"
           },
           "skipped": {
@@ -21812,13 +21851,12 @@
             "items": {
               "$ref": "#/components/schemas/DryRunSkippedFieldDto"
             },
-            "description": "Fields that would be skipped (locked, no permission, etc.)."
+            "description": "Fields that would have been written but were skipped (locks, all-locked, etc.)"
           }
         }
       },
       "DryRunSkippedFieldDto": {
         "type": "object",
-        "description": "A field skipped during a dry-run apply, with the reason.",
         "required": [
           "field",
           "reason"
@@ -22993,7 +23031,7 @@
       },
       "FieldGroupDto": {
         "type": "object",
-        "description": "One entry from `GET /api/v1/metadata-refresh/field-groups`.",
+        "description": "Static field-group catalog row exposed for the editor UI.",
         "required": [
           "id",
           "label",
@@ -23004,16 +23042,13 @@
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "camelCase field names this group expands into. Match the\n`should_apply_field` call sites in `MetadataApplier`."
+            }
           },
           "id": {
-            "type": "string",
-            "description": "Snake_case identifier stored in [`MetadataRefreshConfig::field_groups`]."
+            "type": "string"
           },
           "label": {
-            "type": "string",
-            "description": "Human-readable label for UI display."
+            "type": "string"
           }
         }
       },
@@ -26070,6 +26105,101 @@
           }
         }
       },
+      "LibraryJobConfigDto": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MetadataRefreshJobConfigDto"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "metadata_refresh"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "description": "Type-discriminated job config exposed over the wire.\n\nPhase 9 only ships the `metadata_refresh` variant; future job types\nextend the enum."
+      },
+      "LibraryJobDto": {
+        "type": "object",
+        "description": "Library job row exposed via GET / list / response.",
+        "required": [
+          "id",
+          "libraryId",
+          "name",
+          "enabled",
+          "cronSchedule",
+          "config",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/LibraryJobConfigDto"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cronSchedule": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lastRunAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastRunMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastRunStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "LibraryMetricsDto": {
         "type": "object",
         "description": "Metrics for a single library",
@@ -26153,6 +26283,21 @@
             "description": "Total number of duplicate groups",
             "example": 5,
             "minimum": 0
+          }
+        }
+      },
+      "ListLibraryJobsResponse": {
+        "type": "object",
+        "description": "Response for `GET /libraries/{id}/jobs`.",
+        "required": [
+          "jobs"
+        ],
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LibraryJobDto"
+            }
           }
         }
       },
@@ -26861,162 +27006,64 @@
           }
         }
       },
-      "MetadataRefreshConfigDto": {
+      "MetadataRefreshJobConfigDto": {
         "type": "object",
-        "description": "Full read response for a library's scheduled metadata-refresh config.\n\nWhen the library has no stored config, the server returns\n[`MetadataRefreshConfig::default`] so clients always render something.",
+        "description": "Wire shape for the metadata-refresh job config.",
         "required": [
-          "enabled",
-          "cronSchedule",
-          "fieldGroups",
-          "extraFields",
-          "providers",
-          "existingSourceIdsOnly",
-          "skipRecentlySyncedWithinS",
-          "maxConcurrency"
+          "provider"
         ],
         "properties": {
-          "cronSchedule": {
-            "type": "string"
+          "bookExtraFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reserved for the book-scope future work."
           },
-          "enabled": {
-            "type": "boolean"
+          "bookFieldGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Reserved for the book-scope future work."
           },
           "existingSourceIdsOnly": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "When true, the planner skips series with no stored external ID."
           },
           "extraFields": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Series-side individual field overrides (camelCase)."
           },
           "fieldGroups": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Series-side field groups (snake_case identifiers)."
           },
           "maxConcurrency": {
             "type": "integer",
             "format": "int32",
+            "description": "Per-task fan-out; clamped at run time.",
             "minimum": 0
           },
-          "perProviderOverrides": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ProviderOverrideDto"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
+          "provider": {
+            "type": "string",
+            "description": "Plugin reference, e.g. `\"plugin:mangabaka\"`."
           },
-          "providers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "scope": {
+            "$ref": "#/components/schemas/RefreshScope",
+            "description": "Refresh scope. Phase 9 only honours `series_only` at runtime."
           },
           "skipRecentlySyncedWithinS": {
             "type": "integer",
             "format": "int32",
+            "description": "Skip series whose `last_synced_at` is younger than this many seconds.",
             "minimum": 0
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "MetadataRefreshConfigPatchDto": {
-        "type": "object",
-        "description": "Partial PATCH body. Uses [`PatchValue`] for nullable fields so clients can\ndistinguish \"leave alone\" from \"explicit clear\".\n\nAll other fields use plain `Option<T>` because clearing a non-nullable\nfield doesn't make sense (e.g. you can't \"unset\" `enabled` — you can only\nflip it).",
-        "properties": {
-          "cronSchedule": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "default": null
-          },
-          "enabled": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "default": null
-          },
-          "existingSourceIdsOnly": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "default": null
-          },
-          "extraFields": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "default": null
-          },
-          "fieldGroups": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "default": null
-          },
-          "maxConcurrency": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "default": null,
-            "minimum": 0
-          },
-          "perProviderOverrides": {
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "providers": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "default": null
-          },
-          "skipRecentlySyncedWithinS": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "default": null,
-            "minimum": 0
-          },
-          "timezone": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "default": null
           }
         }
       },
@@ -29154,6 +29201,47 @@
           }
         }
       },
+      "PatchLibraryJobRequest": {
+        "type": "object",
+        "description": "Request body for `PATCH /api/v1/libraries/{id}/jobs/{job_id}`.\n\nAll fields are optional. Top-level fields use [`PatchValue`] when their\nunderlying type is `Option<...>` so an explicit `null` clears the value\ndistinct from \"not present\".",
+        "properties": {
+          "config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LibraryJobConfigDto",
+                "description": "Replaces the type-specific config wholesale; the type discriminator\nmust match the existing row's type."
+              }
+            ]
+          },
+          "cronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "PatchSeriesMetadataRequest": {
         "type": "object",
         "description": "PATCH request for partial update of series metadata\n\nOnly provided fields will be updated. Absent fields are unchanged.\nExplicitly null fields will be cleared.",
@@ -29395,6 +29483,17 @@
           "actionType": {
             "type": "string",
             "description": "Action type (e.g., \"metadata_search\", \"metadata_get\")"
+          },
+          "capabilities": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PluginCapabilitiesDto",
+                "description": "Capabilities the plugin advertises in its manifest. The library-jobs\neditor uses this to decide which scope options are available for the\nchosen provider. The `metadata_provider` array contains `\"series\"`\nand/or `\"book\"` entries."
+              }
+            ]
           },
           "description": {
             "type": [
@@ -30694,24 +30793,6 @@
           }
         }
       },
-      "ProviderOverrideDto": {
-        "type": "object",
-        "description": "Per-provider override placeholder (Phase 8). Mirrors\n[`crate::services::metadata::ProviderOverride`] for the wire format.",
-        "properties": {
-          "extraFields": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "fieldGroups": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "PublicSettingDto": {
         "type": "object",
         "description": "Public setting DTO (for non-admin users)\n\nA simplified setting DTO that only includes the key and value,\nused for public display settings accessible to all authenticated users.",
@@ -31337,6 +31418,15 @@
             "description": "Status of a running/pending background task (\"pending\" or \"running\"), if any"
           }
         }
+      },
+      "RefreshScope": {
+        "type": "string",
+        "description": "Scope of a metadata refresh job.\n\nPhase 9 only honours [`RefreshScope::SeriesOnly`] at runtime. The\nother variants are schema-accepted but rejected by the validator.",
+        "enum": [
+          "series_only",
+          "books_only",
+          "series_and_books"
+        ]
       },
       "RegisterRequest": {
         "type": "object",
@@ -32094,15 +32184,14 @@
       },
       "RunNowResponse": {
         "type": "object",
-        "description": "Response for `POST /libraries/{id}/metadata-refresh/run-now`.",
+        "description": "Response for `POST .../run-now`.",
         "required": [
           "taskId"
         ],
         "properties": {
           "taskId": {
             "type": "string",
-            "format": "uuid",
-            "description": "Background task ID. Subscribe to events on `/api/v1/events/stream` to\nfollow progress."
+            "format": "uuid"
           }
         }
       },
@@ -34754,13 +34843,13 @@
           },
           {
             "type": "object",
-            "description": "Scheduled per-library metadata refresh.\n\nWalks the library's series, applies the per-library\n`metadata_refresh_config` (field groups, providers, matching strategy),\nand refreshes metadata via the existing `MetadataApplier`.",
+            "description": "Scheduled per-job metadata refresh.\n\nLoads the [`library_jobs`] row by `job_id`, decodes its config (single\nprovider + field groups + safety options), walks the library's series,\nand refreshes metadata via the existing `MetadataApplier`.",
             "required": [
-              "libraryId",
+              "jobId",
               "type"
             ],
             "properties": {
-              "libraryId": {
+              "jobId": {
                 "type": "string",
                 "format": "uuid"
               },
@@ -37310,8 +37399,8 @@
       "description": "Plugin action discovery and execution for metadata fetching"
     },
     {
-      "name": "Metadata Refresh",
-      "description": "Per-library scheduled metadata refresh configuration, dry-run preview, and run-now"
+      "name": "Library Jobs",
+      "description": "Per-library scheduled jobs (metadata refresh today; future: scan, cleanup). Supports CRUD, run-now, and dry-run preview."
     },
     {
       "name": "User Plugins",
