@@ -175,6 +175,7 @@ mod tests {
             volume_chapter_map: None,
             poll_interval_override_s: None,
             confidence_threshold_override: None,
+            languages: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

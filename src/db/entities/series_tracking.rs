@@ -31,6 +31,11 @@ pub struct Model {
     pub poll_interval_override_s: Option<i32>,
     /// Per-series override of the server's confidence threshold. Null = use server default.
     pub confidence_threshold_override: Option<f64>,
+    /// Per-series language preference (ISO 639-1 codes, e.g. `["en", "es"]`).
+    /// `None` = fall back to the server-wide default (`release_tracking.default_languages`).
+    /// Used by aggregation feeds like MangaUpdates that emit candidates in many
+    /// languages; the plugin filters client-side before recording.
+    pub languages: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

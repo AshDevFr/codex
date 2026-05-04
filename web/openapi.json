@@ -34815,6 +34815,16 @@
             "format": "date-time",
             "description": "When the row was created (epoch when virtual)."
           },
+          "languages": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Per-series language preference (ISO 639-1 codes, e.g. `[\"en\", \"es\"]`).\n`null` means \"fall back to the server-wide default (`release_tracking.default_languages`).\"\nUsed by aggregation feeds (e.g. MangaUpdates) that emit candidates in many languages."
+          },
           "latestKnownChapter": {
             "type": [
               "number",
@@ -37925,6 +37935,16 @@
               "null"
             ],
             "format": "double"
+          },
+          "languages": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "ISO 639-1 codes; `null` clears (falls back to server-wide default)."
           },
           "latestKnownChapter": {
             "type": [

@@ -10,6 +10,7 @@ export type {
   PartialBookMetadataProvider,
   PartialMetadataProvider,
   RecommendationProvider,
+  ReleaseSourceProvider,
   SyncProvider,
 } from "./capabilities.js";
 
@@ -21,9 +22,12 @@ export type {
   OAuthConfig,
   PluginCapabilities,
   PluginManifest,
+  ReleaseSourceCapability,
+  ReleaseSourceKind,
 } from "./manifest.js";
 export {
   hasBookMetadataProvider,
+  hasReleaseSource,
   hasSeriesMetadataProvider,
 } from "./manifest.js";
 
@@ -66,6 +70,22 @@ export type {
   RecommendationResponse,
   UserLibraryEntry,
 } from "./recommendations.js";
+// From releases - release-source protocol types (these match Rust exactly)
+export type {
+  ListTrackedRequest,
+  ListTrackedResponse,
+  RecordRequest,
+  RecordResponse,
+  ReleaseCandidate,
+  ReleasePollRequest,
+  ReleasePollResponse,
+  SeriesMatch,
+  SourceStateGetRequest,
+  SourceStateSetRequest,
+  SourceStateView,
+  TrackedSeriesEntry,
+} from "./releases.js";
+export { RELEASES_METHODS } from "./releases.js";
 // From rpc - JSON-RPC primitives
 export * from "./rpc.js";
 // From sync - sync protocol types (these match Rust exactly)

@@ -15844,6 +15844,12 @@ export interface components {
              */
             createdAt: string;
             /**
+             * @description Per-series language preference (ISO 639-1 codes, e.g. `["en", "es"]`).
+             *     `null` means "fall back to the server-wide default (`release_tracking.default_languages`)."
+             *     Used by aggregation feeds (e.g. MangaUpdates) that emit candidates in many languages.
+             */
+            languages?: string[] | null;
+            /**
              * Format: double
              * @description Latest known external chapter (supports decimals like 12.5).
              */
@@ -17390,6 +17396,8 @@ export interface components {
         UpdateSeriesTrackingRequest: {
             /** Format: double */
             confidenceThresholdOverride?: number | null;
+            /** @description ISO 639-1 codes; `null` clears (falls back to server-wide default). */
+            languages?: string[] | null;
             /**
              * Format: double
              * @description Use `Some(null)` to clear, `Some(<value>)` to set, omit to leave alone.

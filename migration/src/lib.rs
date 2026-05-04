@@ -151,6 +151,10 @@ mod m20260503_000071_add_metadata_refresh_config;
 mod m20260503_000072_create_release_tracking;
 // Release tracking (Phase 2): release_sources + release_ledger
 mod m20260503_000073_create_release_ledger;
+// Release tracking (Phase 6): per-series language preference for scanlation feeds
+mod m20260504_000074_add_tracking_languages;
+// Release tracking (Phase 6): server-wide default language list
+mod m20260504_000075_seed_release_tracking_languages;
 
 pub struct Migrator;
 
@@ -272,6 +276,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260503_000072_create_release_tracking::Migration),
             // Release tracking (Phase 2)
             Box::new(m20260503_000073_create_release_ledger::Migration),
+            // Release tracking (Phase 6): per-series language preference
+            Box::new(m20260504_000074_add_tracking_languages::Migration),
+            // Release tracking (Phase 6): server-wide default language list
+            Box::new(m20260504_000075_seed_release_tracking_languages::Migration),
         ]
     }
 }

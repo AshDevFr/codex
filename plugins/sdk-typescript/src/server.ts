@@ -12,6 +12,7 @@
 
 import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
+import { HostRpcClient } from "./host-rpc.js";
 import { createLogger, type Logger } from "./logger.js";
 import { PluginStorage } from "./storage.js";
 import type {
@@ -19,9 +20,10 @@ import type {
   MetadataContentType,
   MetadataProvider,
   RecommendationProvider,
+  ReleaseSourceProvider,
   SyncProvider,
 } from "./types/capabilities.js";
-import type { PluginManifest } from "./types/manifest.js";
+import type { PluginManifest, ReleaseSourceCapability } from "./types/manifest.js";
 import type {
   BookMatchParams,
   BookSearchParams,
@@ -34,6 +36,7 @@ import type {
   RecommendationDismissRequest,
   RecommendationRequest,
 } from "./types/recommendations.js";
+import type { ReleasePollRequest } from "./types/releases.js";
 import { JSON_RPC_ERROR_CODES, type JsonRpcRequest, type JsonRpcResponse } from "./types/rpc.js";
 import type { SyncPullRequest, SyncPushRequest } from "./types/sync.js";
 
@@ -161,6 +164,15 @@ export interface InitializeParams {
    * instance — the host resolves the user context automatically.
    */
   storage: PluginStorage;
+  /**
+   * Generic host reverse-RPC client.
+   *
+   * Use this to call host methods outside the storage namespace, notably
+   * the `releases/*` methods (`releases/list_tracked`, `releases/record`,
+   * `releases/source_state/get`, `releases/source_state/set`) for plugins
+   * declaring the `releaseSource` capability.
+   */
+  hostRpc: HostRpcClient;
 }
 
 /**
@@ -196,6 +208,7 @@ function createPluginServer(options: PluginServerOptions): void {
   const logger = createLogger({ name: manifest.name, level: logLevel });
   const prefix = label ? `${label} plugin` : "plugin";
   const storage = new PluginStorage();
+  const hostRpc = new HostRpcClient();
 
   logger.info(`Starting ${prefix}: ${manifest.displayName} v${manifest.version}`);
 
@@ -205,12 +218,13 @@ function createPluginServer(options: PluginServerOptions): void {
   });
 
   rl.on("line", (line) => {
-    void handleLine(line, manifest, onInitialize, router, logger, storage);
+    void handleLine(line, manifest, onInitialize, router, logger, storage, hostRpc);
   });
 
   rl.on("close", () => {
     logger.info("stdin closed, shutting down");
     storage.cancelAll();
+    hostRpc.cancelAll();
     process.exit(0);
   });
 
@@ -243,13 +257,15 @@ async function handleLine(
   router: MethodRouter,
   logger: Logger,
   storage: PluginStorage,
+  hostRpc: HostRpcClient,
 ): Promise<void> {
   const trimmed = line.trim();
   if (!trimmed) return;
 
-  // Try to detect storage responses before full request handling.
-  // Storage responses come from the host on stdin — they have id + (result|error)
-  // but no method field.
+  // Try to detect responses (storage or host-rpc) before full request handling.
+  // Both come from the host on stdin — they have id + (result|error) but no
+  // method field. The two clients use disjoint id ranges so each can claim
+  // ownership without coordination; whichever owns the id resolves it.
   let parsed: Record<string, unknown> | undefined;
   try {
     parsed = JSON.parse(trimmed) as Record<string, unknown>;
@@ -258,8 +274,10 @@ async function handleLine(
   }
 
   if (parsed && isJsonRpcResponse(parsed)) {
-    logger.debug("Routing storage response", { id: parsed.id });
-    storage.handleResponse(trimmed);
+    logger.debug("Routing reverse-RPC response", { id: parsed.id });
+    if (!hostRpc.handleResponse(trimmed)) {
+      storage.handleResponse(trimmed);
+    }
     return;
   }
 
@@ -271,7 +289,15 @@ async function handleLine(
 
     logger.debug(`Received request: ${request.method}`, { id: request.id });
 
-    const response = await handleRequest(request, manifest, onInitialize, router, logger, storage);
+    const response = await handleRequest(
+      request,
+      manifest,
+      onInitialize,
+      router,
+      logger,
+      storage,
+      hostRpc,
+    );
     if (response !== null) {
       writeResponse(response);
     }
@@ -313,6 +339,7 @@ async function handleRequest(
   router: MethodRouter,
   logger: Logger,
   storage: PluginStorage,
+  hostRpc: HostRpcClient,
 ): Promise<JsonRpcResponse | null> {
   const { method, params, id } = request;
 
@@ -320,8 +347,10 @@ async function handleRequest(
   switch (method) {
     case "initialize": {
       const initParams = (params ?? {}) as InitializeParams;
-      // Inject the storage client so plugins can persist data
+      // Inject the reverse-RPC clients so plugins can persist data and
+      // call host-side methods (e.g. releases/list_tracked).
       initParams.storage = storage;
+      initParams.hostRpc = hostRpc;
       if (onInitialize) {
         await onInitialize(initParams);
       }
@@ -334,6 +363,7 @@ async function handleRequest(
     case "shutdown": {
       logger.info("Shutdown requested");
       storage.cancelAll();
+      hostRpc.cancelAll();
       const response: JsonRpcResponse = { jsonrpc: "2.0", id, result: null };
       process.stdout.write(`${JSON.stringify(response)}\n`, () => {
         process.exit(0);
@@ -658,4 +688,88 @@ export function createRecommendationPlugin(options: RecommendationPluginOptions)
   };
 
   createPluginServer({ manifest, onInitialize, logLevel, label: "recommendation", router });
+}
+
+// =============================================================================
+// Release Source Plugin
+// =============================================================================
+
+/**
+ * Validate `releases/poll` parameters. Requires a non-empty `sourceId` string;
+ * `etag` is optional.
+ */
+function validateReleasePollParams(params: unknown): ValidationError | null {
+  return validateStringFields(params, ["sourceId"]);
+}
+
+/**
+ * Options for creating a release-source plugin.
+ */
+export interface ReleaseSourcePluginOptions {
+  /** Plugin manifest. Must declare `capabilities.releaseSource`. */
+  manifest: PluginManifest & {
+    capabilities: { releaseSource: ReleaseSourceCapability };
+  };
+  /** ReleaseSourceProvider implementation. */
+  provider: ReleaseSourceProvider;
+  /** Called when plugin receives initialize with credentials/config. */
+  onInitialize?: (params: InitializeParams) => void | Promise<void>;
+  /** Log level (default: "info"). */
+  logLevel?: "debug" | "info" | "warn" | "error";
+}
+
+/**
+ * Create and run a release-source plugin.
+ *
+ * The host calls `releases/poll` on a schedule (per `release_sources` row).
+ * The plugin returns candidates either inline (in the poll response) or by
+ * streaming `releases/record` reverse-RPC calls during the poll. Both styles
+ * are supported by the host.
+ *
+ * Plugins typically:
+ *   1. Fetch tracked series via `releases/list_tracked`.
+ *   2. For each series, GET the upstream feed (with `If-None-Match` from the
+ *      previous ETag).
+ *   3. Parse + filter (language, group blocklist, etc.).
+ *   4. Either return all candidates in the poll response or call
+ *      `releases/record` for each.
+ *   5. Persist the new ETag via `releases/source_state/set` (or include it on
+ *      the poll response).
+ *
+ * @example
+ * ```typescript
+ * import { createReleaseSourcePlugin, type ReleaseSourceProvider } from "@ashdev/codex-plugin-sdk";
+ *
+ * const provider: ReleaseSourceProvider = {
+ *   async poll({ sourceId, etag }) {
+ *     // ...fetch + parse...
+ *     return { candidates: [...], etag: "new-etag" };
+ *   },
+ * };
+ *
+ * createReleaseSourcePlugin({ manifest, provider });
+ * ```
+ */
+export function createReleaseSourcePlugin(options: ReleaseSourcePluginOptions): void {
+  const { manifest, provider, onInitialize, logLevel } = options;
+
+  if (!manifest.capabilities.releaseSource) {
+    throw new Error(
+      "manifest.capabilities.releaseSource is required for createReleaseSourcePlugin",
+    );
+  }
+
+  const router: MethodRouter = async (method, params, id) => {
+    switch (method) {
+      case "releases/poll": {
+        const err = validateReleasePollParams(params);
+        if (err) return invalidParamsError(id, err);
+        return success(id, await provider.poll(params as ReleasePollRequest));
+      }
+      default:
+        return null;
+    }
+  };
+
+  createPluginServer({ manifest, onInitialize, logLevel, label: "release-source", router });
 }
