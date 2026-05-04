@@ -584,7 +584,7 @@ impl PluginManager {
 
         // Need to spawn/initialize the plugin
         let handle_config = self.create_plugin_config(&entry.db_config).await?;
-        let handle = PluginHandle::new(handle_config);
+        let handle = PluginHandle::new(handle_config).with_release_db(self.db.as_ref().clone());
 
         // Start the plugin
         match handle.start().await {
@@ -720,7 +720,8 @@ impl PluginManager {
 
         // Create handle with storage support for user plugins
         let storage_handler = StorageRequestHandler::new(self.db.as_ref().clone(), user_plugin.id);
-        let handle = PluginHandle::new_with_storage(handle_config, storage_handler);
+        let handle = PluginHandle::new_with_storage(handle_config, storage_handler)
+            .with_release_db(self.db.as_ref().clone());
 
         // Start the plugin
         match handle.start().await {
