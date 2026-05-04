@@ -233,6 +233,12 @@ export function isPluginEvent(event: EntityEvent): event is EntityEvent & {
   );
 }
 
+export function isReleaseAnnouncedEvent(
+  event: EntityEvent,
+): event is EntityEvent & { type: "release_announced" } {
+  return event.type === "release_announced";
+}
+
 // =============================================================================
 // Re-export the raw generated types for advanced use cases
 // =============================================================================

@@ -39,7 +39,7 @@ use crate::db::repositories::{
     NewReleaseEntry, PluginsRepository, ReleaseLedgerRepository, ReleaseSourceRepository,
     SeriesTrackingRepository,
 };
-use crate::events::EventBroadcaster;
+use crate::events::{EntityChangeEvent, EventBroadcaster};
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::handle::PluginError;
@@ -131,7 +131,7 @@ impl TaskHandler for PollReleaseSourceHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             // Extract task params.
@@ -345,6 +345,13 @@ impl TaskHandler for PollReleaseSourceHandler {
                                     result.candidates_deduped += 1;
                                 } else {
                                     result.candidates_recorded += 1;
+                                    if let Some(broadcaster) = event_broadcaster {
+                                        emit_release_announced(
+                                            broadcaster,
+                                            &outcome.row,
+                                            &source.plugin_id,
+                                        );
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -413,6 +420,18 @@ impl TaskHandler for PollReleaseSourceHandler {
     }
 }
 
+/// Emit a `ReleaseAnnounced` event for a freshly-inserted ledger row.
+///
+/// Failure to broadcast (no subscribers, channel closed) is a benign noop —
+/// the ledger row is the source of truth, the SSE event is a UX nicety.
+pub(crate) fn emit_release_announced(
+    broadcaster: &EventBroadcaster,
+    row: &crate::db::entities::release_ledger::Model,
+    plugin_id: &str,
+) {
+    let _ = broadcaster.emit(EntityChangeEvent::release_announced(row, plugin_id));
+}
+
 /// Best-effort URL hint extraction used for backoff keying.
 ///
 /// Looks in `config.url`, `config.feed_url`, and `config.base_url` in that
@@ -452,6 +471,85 @@ mod tests {
         SeriesTrackingRepository, TrackingUpdate,
     };
     use crate::db::test_helpers::create_test_db;
+
+    use crate::events::EntityEvent;
+
+    /// `emit_release_announced` produces a `ReleaseAnnounced` event whose
+    /// fields mirror the ledger row and the source's plugin id.
+    #[test]
+    fn emit_release_announced_emits_matching_event() {
+        let broadcaster = EventBroadcaster::new(8);
+        let mut rx = broadcaster.subscribe();
+
+        let row = crate::db::entities::release_ledger::Model {
+            id: Uuid::new_v4(),
+            series_id: Uuid::new_v4(),
+            source_id: Uuid::new_v4(),
+            external_release_id: "ext-1".to_string(),
+            info_hash: None,
+            chapter: Some(143.0),
+            volume: Some(15),
+            language: Some("en".to_string()),
+            format_hints: None,
+            group_or_uploader: None,
+            payload_url: "https://example.com/r/1".to_string(),
+            confidence: 0.95,
+            state: "announced".to_string(),
+            metadata: None,
+            observed_at: Utc::now(),
+            created_at: Utc::now(),
+        };
+
+        emit_release_announced(&broadcaster, &row, "release-mangaupdates");
+
+        let event = rx.try_recv().expect("expected one event");
+        match event.event {
+            EntityEvent::ReleaseAnnounced {
+                ledger_id,
+                series_id,
+                source_id,
+                plugin_id,
+                chapter,
+                volume,
+                language,
+            } => {
+                assert_eq!(ledger_id, row.id);
+                assert_eq!(series_id, row.series_id);
+                assert_eq!(source_id, row.source_id);
+                assert_eq!(plugin_id, "release-mangaupdates");
+                assert_eq!(chapter, Some(143.0));
+                assert_eq!(volume, Some(15));
+                assert_eq!(language, "en");
+            }
+            other => panic!("unexpected event: {:?}", other),
+        }
+    }
+
+    /// Emitting with no subscribers must not panic — the broadcast send error
+    /// is intentionally swallowed.
+    #[test]
+    fn emit_release_announced_tolerates_no_subscribers() {
+        let broadcaster = EventBroadcaster::new(8);
+        let row = crate::db::entities::release_ledger::Model {
+            id: Uuid::new_v4(),
+            series_id: Uuid::new_v4(),
+            source_id: Uuid::new_v4(),
+            external_release_id: "ext-2".to_string(),
+            info_hash: None,
+            chapter: None,
+            volume: None,
+            language: None,
+            format_hints: None,
+            group_or_uploader: None,
+            payload_url: "https://example.com/r/2".to_string(),
+            confidence: 0.8,
+            state: "announced".to_string(),
+            metadata: None,
+            observed_at: Utc::now(),
+            created_at: Utc::now(),
+        };
+        emit_release_announced(&broadcaster, &row, "release-nyaa");
+    }
 
     #[test]
     fn derive_url_hint_uses_config_url_when_present() {

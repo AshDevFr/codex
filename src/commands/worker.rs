@@ -121,7 +121,8 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         crate::services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
         ))
-        .with_metrics_service(plugin_metrics_service),
+        .with_metrics_service(plugin_metrics_service)
+        .with_event_broadcaster(event_broadcaster.clone()),
     );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {

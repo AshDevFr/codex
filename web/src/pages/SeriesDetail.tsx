@@ -55,6 +55,7 @@ import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar"
 import { MetadataApplyFlow } from "@/components/metadata";
 import {
   AlternateTitles,
+  BehindByBadge,
   CommunityRating,
   CustomMetadataDisplay,
   ExternalIds,
@@ -65,11 +66,13 @@ import {
   SeriesInfoModal,
   SeriesMetadataEditModal,
   SeriesRating,
+  SeriesReleasesPanel,
   TrackingPanel,
 } from "@/components/series";
 import { formatSeriesCounts } from "@/components/series/seriesCounts";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useSeriesTracking } from "@/hooks/useSeriesTracking";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
 import { transformFullSeriesToSeriesContext } from "@/utils/templateUtils";
@@ -150,6 +153,12 @@ export function SeriesDetail() {
     queryFn: () => sharingTagsApi.getForSeries(seriesId!),
     enabled: !!seriesId && isAdmin,
   });
+
+  // Fetch tracking config so we can render Behind-by-N badges next to the
+  // header counts (translation: latestKnownChapter > localMaxChapter,
+  // upstream: upstreamChapterGap > 0). The query is cheap and shared with
+  // the TrackingPanel below.
+  const { data: tracking } = useSeriesTracking(seriesId ?? "", !!seriesId);
 
   // Fetch available plugin actions for series:detail scope, filtered by library
   const { data: pluginActions } = useQuery({
@@ -781,6 +790,66 @@ export function SeriesDetail() {
                 ) : null;
               })()}
 
+              {/* Behind-by-N badges: translation gap (Phase 6 release sources)
+                  and upstream gap (Phase 5 metadata signal). Each badge is a
+                  no-op when the gap is zero/missing, the series isn't tracked,
+                  or the corresponding axis is disabled. */}
+              {tracking?.tracked && (
+                <Group gap={6} wrap="wrap">
+                  {tracking.trackChapters &&
+                    tracking.latestKnownChapter != null &&
+                    series.localMaxChapter != null &&
+                    tracking.latestKnownChapter > series.localMaxChapter && (
+                      <BehindByBadge
+                        variant="translation"
+                        axis="chapter"
+                        delta={
+                          Math.round(
+                            (tracking.latestKnownChapter -
+                              series.localMaxChapter) *
+                              10,
+                          ) / 10
+                        }
+                        seriesId={series.id}
+                        language={tracking.languages?.[0] ?? undefined}
+                      />
+                    )}
+                  {tracking.trackVolumes &&
+                    tracking.latestKnownVolume != null &&
+                    series.localMaxVolume != null &&
+                    tracking.latestKnownVolume > series.localMaxVolume && (
+                      <BehindByBadge
+                        variant="translation"
+                        axis="volume"
+                        delta={
+                          tracking.latestKnownVolume - series.localMaxVolume
+                        }
+                        seriesId={series.id}
+                      />
+                    )}
+                  {series.upstreamChapterGap != null &&
+                    series.upstreamChapterGap > 0 && (
+                      <BehindByBadge
+                        variant="upstream"
+                        axis="chapter"
+                        delta={Math.round(series.upstreamChapterGap * 10) / 10}
+                        seriesId={series.id}
+                        provider={series.upstreamGapProvider ?? undefined}
+                      />
+                    )}
+                  {series.upstreamVolumeGap != null &&
+                    series.upstreamVolumeGap > 0 && (
+                      <BehindByBadge
+                        variant="upstream"
+                        axis="volume"
+                        delta={series.upstreamVolumeGap}
+                        seriesId={series.id}
+                        provider={series.upstreamGapProvider ?? undefined}
+                      />
+                    )}
+                </Group>
+              )}
+
               {/* Alternate titles inline */}
               {series.alternateTitles && series.alternateTitles.length > 0 && (
                 <AlternateTitles titles={series.alternateTitles} compact />
@@ -954,6 +1023,11 @@ export function SeriesDetail() {
           {canEditSeries && (
             <TrackingPanel seriesId={series.id} canEdit={canEditSeries} />
           )}
+
+          {/* Releases panel: ledger entries grouped by chapter/volume.
+              Shows whenever the series has tracking enabled — the panel
+              renders an empty-state message if no entries exist yet. */}
+          {tracking?.tracked && <SeriesReleasesPanel seriesId={series.id} />}
 
           {/* External Links */}
           {series.externalLinks && series.externalLinks.length > 0 && (

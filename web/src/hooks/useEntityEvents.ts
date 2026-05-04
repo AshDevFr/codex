@@ -1,8 +1,10 @@
+import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { eventsApi } from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
+import { useReleaseAnnouncementsStore } from "@/store/releaseAnnouncementsStore";
 import type { EntityChangeEvent } from "@/types";
 import { createDevLog } from "@/utils/devLog";
 
@@ -224,6 +226,53 @@ function handleEntityEvent(
       queryClient.refetchQueries({
         queryKey: ["plugin-actions"],
         type: "active",
+      });
+      break;
+    }
+
+    case "release_announced": {
+      const store = useReleaseAnnouncementsStore.getState();
+      if (
+        !store.shouldNotify({
+          seriesId: event.seriesId,
+          pluginId: event.pluginId,
+          language: event.language ?? "",
+        })
+      ) {
+        break;
+      }
+      store.bump();
+
+      // Refresh inbox + per-series ledger views in case the user is
+      // watching them.
+      queryClient.invalidateQueries({ queryKey: ["releases"] });
+      queryClient.invalidateQueries({
+        queryKey: ["series", event.seriesId, "releases"],
+      });
+      // Refresh the series tracking row so the Behind-by-N badge can
+      // pick up the latest_known_* high-water mark advance.
+      queryClient.invalidateQueries({
+        queryKey: ["series", event.seriesId, "tracking"],
+      });
+      // Refresh the full series so localMaxChapter / upstream gap props
+      // recompute against the latest state.
+      queryClient.invalidateQueries({
+        queryKey: ["series", event.seriesId, "full"],
+      });
+
+      // Surface a low-priority toast. Toast text uses chapter or volume
+      // when the source provided one; falls back to a neutral message.
+      const label =
+        event.chapter !== null && event.chapter !== undefined
+          ? `Ch ${event.chapter}`
+          : event.volume !== null && event.volume !== undefined
+            ? `Vol ${event.volume}`
+            : "New release";
+      notifications.show({
+        id: `release-${event.ledgerId}`,
+        title: "New release",
+        message: `${label} from ${event.pluginId}`,
+        color: "orange",
       });
       break;
     }

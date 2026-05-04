@@ -332,6 +332,9 @@ pub struct PluginManager {
     metrics_service: Option<Arc<PluginMetricsService>>,
     /// Optional plugin file storage for resolving plugin data directories
     plugin_file_storage: Option<Arc<crate::services::PluginFileStorage>>,
+    /// Optional event broadcaster handed to per-plugin handles so reverse-RPC
+    /// handlers (releases/record) can emit cross-process notifications.
+    event_broadcaster: Option<Arc<crate::events::EventBroadcaster>>,
 }
 
 impl PluginManager {
@@ -346,6 +349,7 @@ impl PluginManager {
             health_check_handle: RwLock::new(None),
             metrics_service: None,
             plugin_file_storage: None,
+            event_broadcaster: None,
         }
     }
 
@@ -366,6 +370,17 @@ impl PluginManager {
         storage: Arc<crate::services::PluginFileStorage>,
     ) -> Self {
         self.plugin_file_storage = Some(storage);
+        self
+    }
+
+    /// Set the event broadcaster so per-plugin handles can emit
+    /// `ReleaseAnnounced` events from the reverse-RPC `releases/record`
+    /// path. Builder-style.
+    pub fn with_event_broadcaster(
+        mut self,
+        broadcaster: Arc<crate::events::EventBroadcaster>,
+    ) -> Self {
+        self.event_broadcaster = Some(broadcaster);
         self
     }
 
@@ -584,7 +599,10 @@ impl PluginManager {
 
         // Need to spawn/initialize the plugin
         let handle_config = self.create_plugin_config(&entry.db_config).await?;
-        let handle = PluginHandle::new(handle_config).with_release_db(self.db.as_ref().clone());
+        let mut handle = PluginHandle::new(handle_config).with_release_db(self.db.as_ref().clone());
+        if let Some(ref b) = self.event_broadcaster {
+            handle = handle.with_event_broadcaster(b.clone());
+        }
 
         // Start the plugin
         match handle.start().await {
@@ -720,8 +738,11 @@ impl PluginManager {
 
         // Create handle with storage support for user plugins
         let storage_handler = StorageRequestHandler::new(self.db.as_ref().clone(), user_plugin.id);
-        let handle = PluginHandle::new_with_storage(handle_config, storage_handler)
+        let mut handle = PluginHandle::new_with_storage(handle_config, storage_handler)
             .with_release_db(self.db.as_ref().clone());
+        if let Some(ref b) = self.event_broadcaster {
+            handle = handle.with_event_broadcaster(b.clone());
+        }
 
         // Start the plugin
         match handle.start().await {

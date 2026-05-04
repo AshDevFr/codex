@@ -22,6 +22,7 @@ import { OidcComplete } from "@/pages/OidcComplete";
 import { Reader } from "@/pages/Reader";
 import { Recommendations } from "@/pages/Recommendations";
 import { Register } from "@/pages/Register";
+import { ReleasesInbox } from "@/pages/ReleasesInbox";
 import { SearchResults } from "@/pages/SearchResults";
 import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
@@ -35,6 +36,7 @@ import {
   PluginStorageSettings,
   PluginsSettings,
   ProfileSettings,
+  ReleaseTrackingSettings,
   SeriesExportsSettings,
   ServerSettings,
   SharingTagsSettings,
@@ -181,6 +183,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <Recommendations />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/releases"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ReleasesInbox />
               </AppLayout>
             </ProtectedRoute>
           }
@@ -415,6 +428,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <BooksInErrorSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/release-tracking"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ReleaseTrackingSettings />
               </AppLayout>
             </ProtectedRoute>
           }

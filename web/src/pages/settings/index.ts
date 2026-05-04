@@ -7,6 +7,7 @@ export { PdfCacheSettings } from "./PdfCacheSettings";
 export { PluginStorageSettings } from "./PluginStorageSettings";
 export { PluginsSettings } from "./PluginsSettings";
 export { ProfileSettings } from "./ProfileSettings";
+export { ReleaseTrackingSettings } from "./ReleaseTrackingSettings";
 export { SeriesExportsSettings } from "./SeriesExportsSettings";
 export { ServerSettings } from "./ServerSettings";
 export { SharingTagsSettings } from "./SharingTagsSettings";
