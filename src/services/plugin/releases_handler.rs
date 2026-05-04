@@ -25,9 +25,10 @@ use super::protocol::{
 };
 use crate::db::repositories::{
     ReleaseLedgerRepository, ReleaseSourceRepository, SeriesAliasRepository,
-    SeriesExternalIdRepository, SeriesTrackingRepository,
+    SeriesExternalIdRepository, SeriesTrackingRepository, TrackingUpdate,
 };
 use crate::services::release::candidate::ReleaseCandidate;
+use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
 
 /// Default page size for `releases/list_tracked` when the caller doesn't
@@ -222,15 +223,11 @@ impl ReleasesRequestHandler {
             return resp;
         }
 
-        // 2. Resolve threshold (per-series override falls back to default).
-        let threshold = match SeriesTrackingRepository::get(
-            &self.db,
-            params.candidate.series_match.codex_series_id,
-        )
-        .await
-        {
-            Ok(Some(row)) => resolve_threshold(row.confidence_threshold_override),
-            Ok(None) => resolve_threshold(None),
+        // 2. Look up the tracking row up front. We need it both for the
+        //    threshold and (post-insert) for the latest_known_* gate.
+        let series_id = params.candidate.series_match.codex_series_id;
+        let tracking_row = match SeriesTrackingRepository::get(&self.db, series_id).await {
+            Ok(row) => row,
             Err(e) => {
                 error!(error = %e, "tracking lookup failed during record");
                 return JsonRpcResponse::error(
@@ -239,6 +236,11 @@ impl ReleasesRequestHandler {
                 );
             }
         };
+        let threshold = resolve_threshold(
+            tracking_row
+                .as_ref()
+                .and_then(|r| r.confidence_threshold_override),
+        );
 
         // 3. Validate + threshold-gate the candidate.
         let accepted = match evaluate(params.candidate, threshold) {
@@ -256,24 +258,118 @@ impl ReleasesRequestHandler {
             }
         };
 
+        // Snapshot the candidate fields needed for the latest_known_* gate
+        // before the move into the ledger entry.
+        let candidate_chapter = accepted.candidate.chapter;
+        let candidate_volume = accepted.candidate.volume;
+        let candidate_language = accepted.candidate.language.clone();
+
         // 4. Hand off to the ledger (which is itself idempotent).
         let entry = accepted.into_ledger_entry(params.source_id);
-        match ReleaseLedgerRepository::record(&self.db, entry).await {
-            Ok(outcome) => {
-                let resp = RecordResponse {
-                    ledger_id: outcome.row.id,
-                    deduped: outcome.deduped,
-                };
-                JsonRpcResponse::success(id, serde_json::to_value(resp).unwrap())
-            }
+        let outcome = match ReleaseLedgerRepository::record(&self.db, entry).await {
+            Ok(o) => o,
             Err(e) => {
                 error!(error = %e, "ledger record failed");
-                JsonRpcResponse::error(
+                return JsonRpcResponse::error(
                     Some(id),
                     JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                );
+            }
+        };
+
+        // 5. Advance series_tracking.latest_known_* to the high-water mark.
+        //
+        //    Skipped on dedup (the ledger already saw this release; we don't
+        //    re-tick the high-water mark). Gated on the per-axis track_*
+        //    flag — a series tracked only for volumes shouldn't have its
+        //    chapter mark moved by chapter announcements. Also gated on the
+        //    candidate's language being in the effective list, so that a
+        //    plugin which forgets to filter by language can't pollute
+        //    `latest_known_*` with out-of-language releases.
+        if !outcome.deduped
+            && let Err(e) = self
+                .advance_latest_known(
+                    series_id,
+                    tracking_row.as_ref(),
+                    candidate_chapter,
+                    candidate_volume,
+                    &candidate_language,
                 )
+                .await
+        {
+            // The ledger row is already persisted; a follow-up tracking
+            // failure is logged but does not fail the call. The next
+            // successful record will catch up.
+            warn!(error = %e, %series_id, "latest_known advance failed; ledger insert preserved");
+        }
+
+        let resp = RecordResponse {
+            ledger_id: outcome.row.id,
+            deduped: outcome.deduped,
+        };
+        JsonRpcResponse::success(id, serde_json::to_value(resp).unwrap())
+    }
+
+    /// Move `series_tracking.latest_known_chapter` and `latest_known_volume`
+    /// forward to the candidate's values, gated on the per-axis `track_*` flag
+    /// and the per-series effective language list. Stale candidates (smaller
+    /// than current) and out-of-language candidates are silently no-ops on
+    /// their respective axes. Out-of-language candidates skip *both* axes
+    /// because the language gate sits above per-axis tracking.
+    async fn advance_latest_known(
+        &self,
+        series_id: Uuid,
+        tracking_row: Option<&crate::db::entities::series_tracking::Model>,
+        candidate_chapter: Option<f64>,
+        candidate_volume: Option<i32>,
+        candidate_language: &str,
+    ) -> Result<(), anyhow::Error> {
+        // No tracking row → series isn't being tracked. Don't auto-create one
+        // just because a stray candidate came in; the user explicitly opts in
+        // via the tracking panel.
+        let Some(row) = tracking_row else {
+            return Ok(());
+        };
+        if !row.tracked {
+            return Ok(());
+        }
+
+        // Language gate: out-of-language candidates do not advance the
+        // high-water mark even if a buggy plugin records them.
+        let effective = resolve_for_series(&self.db, row.languages.as_ref()).await?;
+        if !includes(&effective, candidate_language) {
+            return Ok(());
+        }
+
+        let mut update = TrackingUpdate::default();
+        let mut dirty = false;
+
+        if let Some(ch) = candidate_chapter
+            && row.track_chapters
+            && ch.is_finite()
+        {
+            let current = row.latest_known_chapter.unwrap_or(f64::NEG_INFINITY);
+            if ch > current {
+                update.latest_known_chapter = Some(Some(ch));
+                dirty = true;
             }
         }
+
+        if let Some(vol) = candidate_volume
+            && row.track_volumes
+        {
+            let current = row.latest_known_volume.unwrap_or(i32::MIN);
+            if vol > current {
+                update.latest_known_volume = Some(Some(vol));
+                dirty = true;
+            }
+        }
+
+        if !dirty {
+            return Ok(());
+        }
+        SeriesTrackingRepository::upsert(&self.db, series_id, update).await?;
+        Ok(())
     }
 
     async fn handle_state_get(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
@@ -941,5 +1037,355 @@ mod tests {
         assert!(is_releases_method(methods::RELEASES_SOURCE_STATE_SET));
         assert!(!is_releases_method("releases/poll"));
         assert!(!is_releases_method("storage/get"));
+    }
+
+    // -------------------------------------------------------------------------
+    // latest_known_* advancement tests (Phase 6)
+    // -------------------------------------------------------------------------
+
+    async fn record_candidate(
+        handler: &ReleasesRequestHandler,
+        source_id: Uuid,
+        cand: ReleaseCandidate,
+    ) -> RecordResponse {
+        let req = make_request(
+            methods::RELEASES_RECORD,
+            json!({"sourceId": source_id, "candidate": cand}),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error(), "unexpected error: {:?}", resp.error);
+        serde_json::from_value(resp.result.unwrap()).unwrap()
+    }
+
+    fn candidate_with(
+        series_id: Uuid,
+        external_release_id: &str,
+        chapter: Option<f64>,
+        volume: Option<i32>,
+        language: &str,
+    ) -> ReleaseCandidate {
+        ReleaseCandidate {
+            series_match: SeriesMatch {
+                codex_series_id: series_id,
+                confidence: 0.95,
+                reason: "test".to_string(),
+            },
+            external_release_id: external_release_id.to_string(),
+            chapter,
+            volume,
+            language: language.to_string(),
+            format_hints: None,
+            group_or_uploader: Some("group-x".to_string()),
+            payload_url: format!("https://example.com/{}", external_release_id),
+            info_hash: None,
+            metadata: None,
+            observed_at: Utc::now(),
+        }
+    }
+
+    #[tokio::test]
+    async fn record_advances_latest_known_chapter() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        // Seed tracking with chapter=142.
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                latest_known_chapter: Some(Some(142.0)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-143", Some(143.0), None, "en"),
+        )
+        .await;
+
+        let row = SeriesTrackingRepository::get(conn, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.latest_known_chapter, Some(143.0));
+    }
+
+    #[tokio::test]
+    async fn record_does_not_advance_for_stale_chapter() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                latest_known_chapter: Some(Some(143.0)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-140", Some(140.0), None, "en"),
+        )
+        .await;
+
+        let row = SeriesTrackingRepository::get(conn, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.latest_known_chapter,
+            Some(143.0),
+            "stale candidate must not move the high-water mark backwards"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_skips_chapter_advance_when_track_chapters_false() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                track_chapters: Some(false),
+                track_volumes: Some(true),
+                latest_known_chapter: Some(Some(140.0)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-143", Some(143.0), None, "en"),
+        )
+        .await;
+
+        let row = SeriesTrackingRepository::get(conn, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.latest_known_chapter,
+            Some(140.0),
+            "track_chapters=false must suppress chapter advance"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_advances_volume_independently_of_chapter() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                latest_known_volume: Some(Some(14)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-vol-15", None, Some(15), "en"),
+        )
+        .await;
+
+        let row = SeriesTrackingRepository::get(conn, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.latest_known_volume, Some(15));
+    }
+
+    #[tokio::test]
+    async fn record_skips_advance_when_language_outside_effective_list() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        // Per-series languages = ["en"]; candidate is "id" (Indonesian).
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                languages: Some(Some(serde_json::json!(["en"]))),
+                latest_known_chapter: Some(Some(142.0)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let resp = record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-id-145", Some(145.0), None, "id"),
+        )
+        .await;
+        // Ledger row is still created — language filtering is the plugin's
+        // job. The handler only enforces that out-of-language records don't
+        // move the high-water mark.
+        assert!(!resp.deduped);
+
+        let row = SeriesTrackingRepository::get(conn, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.latest_known_chapter,
+            Some(142.0),
+            "out-of-language candidate must not move latest_known_chapter"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_dedup_does_not_re_advance_latest_known() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let cand = candidate_with(series_id, "rel-143", Some(143.0), None, "en");
+        let first = record_candidate(&handler, source_id, cand.clone()).await;
+        assert!(!first.deduped);
+
+        // Manually wind back latest_known_chapter to detect a spurious advance
+        // on the dedup path.
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                latest_known_chapter: Some(Some(100.0)),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let second = record_candidate(&handler, source_id, cand).await;
+        assert!(second.deduped);
+
+        let row = SeriesTrackingRepository::get(conn, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.latest_known_chapter,
+            Some(100.0),
+            "dedup path must not re-tick latest_known_chapter"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_does_not_create_tracking_row_for_untracked_series() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        // Flip the tracking row off so the series is not being tracked.
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-143", Some(143.0), None, "en"),
+        )
+        .await;
+
+        let row = SeriesTrackingRepository::get(conn, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            row.latest_known_chapter, None,
+            "untracked series must not have its high-water mark moved"
+        );
     }
 }

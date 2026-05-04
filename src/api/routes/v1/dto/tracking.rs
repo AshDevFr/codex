@@ -50,6 +50,11 @@ pub struct SeriesTrackingDto {
     /// Per-series override of the server's confidence threshold (0.0 - 1.0).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confidence_threshold_override: Option<f64>,
+    /// Per-series language preference (ISO 639-1 codes, e.g. `["en", "es"]`).
+    /// `null` means "fall back to the server-wide default (`release_tracking.default_languages`)."
+    /// Used by aggregation feeds (e.g. MangaUpdates) that emit candidates in many languages.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub languages: Option<Vec<String>>,
     /// When the row was created (epoch when virtual).
     pub created_at: DateTime<Utc>,
     /// When the row was last updated (epoch when virtual).
@@ -69,6 +74,7 @@ impl From<series_tracking::Model> for SeriesTrackingDto {
             volume_chapter_map: m.volume_chapter_map,
             poll_interval_override_s: m.poll_interval_override_s,
             confidence_threshold_override: m.confidence_threshold_override,
+            languages: m.languages.and_then(|v| serde_json::from_value(v).ok()),
             created_at: m.created_at,
             updated_at: m.updated_at,
         }
@@ -117,6 +123,13 @@ pub struct UpdateSeriesTrackingRequest {
         with = "double_option"
     )]
     pub confidence_threshold_override: Option<Option<f64>>,
+    /// ISO 639-1 codes; `null` clears (falls back to server-wide default).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "double_option"
+    )]
+    pub languages: Option<Option<Vec<String>>>,
 }
 
 /// `Option<Option<T>>` SerDe helper: distinguishes "field omitted" from "field

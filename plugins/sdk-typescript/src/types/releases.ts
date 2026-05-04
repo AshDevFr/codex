@@ -1,0 +1,185 @@
+/**
+ * Release-source protocol types - MUST match the Rust protocol exactly.
+ *
+ * Plugins implementing the `release_source` capability poll external sources
+ * for new chapter/volume releases and emit `ReleaseCandidate` rows. The host
+ * threshold-gates and dedups them through the `release_ledger` table.
+ *
+ * @see src/services/plugin/protocol.rs (`ReleasePollRequest`, `ReleasePollResponse`)
+ * @see src/services/release/candidate.rs (`ReleaseCandidate`, `SeriesMatch`)
+ * @see src/services/plugin/releases_handler.rs (reverse-RPC handlers)
+ */
+
+// =============================================================================
+// Reverse-RPC method names (plugin -> host)
+// =============================================================================
+
+/**
+ * Method names for the `releases/*` reverse-RPC namespace. Plugins call these
+ * over the open RPC channel during `releases/poll` (or any other time).
+ */
+export const RELEASES_METHODS = {
+  /** List tracked series, scoped to what the plugin's manifest declared. */
+  LIST_TRACKED: "releases/list_tracked",
+  /** Submit a candidate to the host's release ledger. */
+  RECORD: "releases/record",
+  /** Get persisted per-source state (etag, last_polled_at, last_error). */
+  SOURCE_STATE_GET: "releases/source_state/get",
+  /** Set persisted per-source state (etag only — other fields are host-owned). */
+  SOURCE_STATE_SET: "releases/source_state/set",
+} as const;
+
+// =============================================================================
+// ReleaseCandidate (the wire shape plugins emit)
+// =============================================================================
+
+/**
+ * Per-series match metadata attached to every candidate.
+ *
+ * - `codexSeriesId` is the host's UUID for the series. Plugins resolve this
+ *   from `releases/list_tracked` (don't invent series IDs).
+ * - `confidence` (0.0..=1.0) tells the host how sure the plugin is about the
+ *   match. The host drops below-threshold candidates (default 0.7).
+ * - `reason` is a short opaque string used for debugging/UI, e.g.
+ *   `"mangaupdates_id"`, `"alias-exact"`, `"alias-fuzzy"`.
+ */
+export interface SeriesMatch {
+  codexSeriesId: string;
+  confidence: number;
+  reason: string;
+}
+
+/**
+ * Release candidate emitted by a plugin.
+ *
+ * **Field semantics:**
+ * - `externalReleaseId`: Stable per-source ID. The first dedup key.
+ *   `(sourceId, externalReleaseId)` is `UNIQUE` in `release_ledger`.
+ * - `chapter` / `volume`: At least one should be set; both is fine for a
+ *   "vol 15 covers ch 126-142" case (the volume axis advances; the chapter
+ *   axis advances to the volume's last chapter only if the candidate
+ *   carries it). Decimals supported on `chapter` (e.g. 47.5).
+ * - `language`: ISO 639-1 code, lowercase. Must be non-empty. The host's
+ *   `latest_known_*` advance gate uses this against the per-series
+ *   effective language list.
+ * - `groupOrUploader`: Scanlation group (MangaUpdates) or torrent uploader
+ *   handle (Nyaa). Optional but strongly recommended.
+ * - `payloadUrl`: The link the user follows to actually consume / acquire
+ *   the release. Must be non-empty.
+ * - `infoHash`: Torrent info_hash if applicable. Cross-source dedup key.
+ * - `metadata` / `formatHints`: Free-form JSON for plugin-specific data
+ *   (Nyaa size in bytes, MangaUpdates "is volume bundle" flag, etc.).
+ * - `observedAt`: When the plugin saw this entry. Used for ordering;
+ *   bounded by `MAX_FUTURE_SKEW_S` (1h) on the host side.
+ */
+export interface ReleaseCandidate {
+  seriesMatch: SeriesMatch;
+  externalReleaseId: string;
+  chapter?: number | null;
+  volume?: number | null;
+  language: string;
+  formatHints?: Record<string, unknown> | null;
+  groupOrUploader?: string | null;
+  payloadUrl: string;
+  infoHash?: string | null;
+  metadata?: Record<string, unknown> | null;
+  /** ISO-8601 timestamp. */
+  observedAt: string;
+}
+
+// =============================================================================
+// releases/list_tracked
+// =============================================================================
+
+export interface ListTrackedRequest {
+  sourceId: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One tracked-series row scoped to what the plugin's manifest asked for.
+ * Aliases are present only when `requiresAliases: true`; external IDs are
+ * present only for sources the plugin listed in `requiresExternalIds`.
+ */
+export interface TrackedSeriesEntry {
+  seriesId: string;
+  aliases?: string[];
+  /** Map keyed by external-ID source name (e.g. `{ mangaupdates: "12345" }`). */
+  externalIds?: Record<string, string>;
+  latestKnownChapter?: number | null;
+  latestKnownVolume?: number | null;
+}
+
+export interface ListTrackedResponse {
+  tracked: TrackedSeriesEntry[];
+  nextOffset?: number;
+}
+
+// =============================================================================
+// releases/record
+// =============================================================================
+
+export interface RecordRequest {
+  sourceId: string;
+  candidate: ReleaseCandidate;
+}
+
+export interface RecordResponse {
+  ledgerId: string;
+  /** True if the row deduped onto an existing ledger entry. */
+  deduped: boolean;
+}
+
+// =============================================================================
+// releases/source_state
+// =============================================================================
+
+export interface SourceStateGetRequest {
+  sourceId: string;
+}
+
+export interface SourceStateView {
+  etag?: string;
+  lastPolledAt?: string;
+  lastError?: string;
+  lastErrorAt?: string;
+}
+
+export interface SourceStateSetRequest {
+  sourceId: string;
+  /** Only `etag` is plugin-writable; other fields are host-owned. */
+  etag?: string;
+}
+
+// =============================================================================
+// releases/poll (host -> plugin)
+// =============================================================================
+
+/**
+ * Parameters for the host's call into a release-source plugin's
+ * `releases/poll` handler. Carries the source row to poll plus any ETag the
+ * plugin recorded on its previous poll.
+ */
+export interface ReleasePollRequest {
+  sourceId: string;
+  etag?: string;
+}
+
+/**
+ * Response from a `releases/poll` call.
+ *
+ * Plugins may also stream candidates over `releases/record` mid-poll; the
+ * host treats both styles identically. Use `candidates` for plugins that
+ * prefer to return everything at once.
+ */
+export interface ReleasePollResponse {
+  /** Optional batch of candidates the host should evaluate and ledger. */
+  candidates?: ReleaseCandidate[];
+  /** New ETag observed (e.g., from the upstream feed's `ETag` header). */
+  etag?: string;
+  /** Whether the upstream returned `304 Not Modified` (or equivalent). */
+  notModified?: boolean;
+  /** HTTP status code observed (used by host's per-host backoff). */
+  upstreamStatus?: number;
+}

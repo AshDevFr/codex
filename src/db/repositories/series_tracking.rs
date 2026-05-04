@@ -31,6 +31,9 @@ pub struct TrackingUpdate {
     pub volume_chapter_map: Option<Option<serde_json::Value>>,
     pub poll_interval_override_s: Option<Option<i32>>,
     pub confidence_threshold_override: Option<Option<f64>>,
+    /// Per-series language preference. Outer `None` = leave alone; inner `None` =
+    /// clear (revert to server-wide default).
+    pub languages: Option<Option<serde_json::Value>>,
 }
 
 pub struct SeriesTrackingRepository;
@@ -66,6 +69,7 @@ impl SeriesTrackingRepository {
             volume_chapter_map: None,
             poll_interval_override_s: None,
             confidence_threshold_override: None,
+            languages: None,
             created_at: now,
             updated_at: now,
         })
@@ -118,6 +122,9 @@ impl SeriesTrackingRepository {
                 if let Some(v) = update.confidence_threshold_override {
                     active.confidence_threshold_override = Set(v);
                 }
+                if let Some(v) = update.languages {
+                    active.languages = Set(v);
+                }
                 active.updated_at = Set(now);
                 let model = active.update(db).await?;
                 Ok(model)
@@ -138,6 +145,7 @@ impl SeriesTrackingRepository {
                     confidence_threshold_override: Set(update
                         .confidence_threshold_override
                         .unwrap_or(None)),
+                    languages: Set(update.languages.unwrap_or(None)),
                     created_at: Set(now),
                     updated_at: Set(now),
                 };
@@ -443,6 +451,82 @@ mod tests {
             .await
             .unwrap();
         assert!(empty.is_empty());
+    }
+
+    #[tokio::test]
+    async fn upsert_round_trips_languages_field() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let series_id = make_series(conn).await;
+
+        // Insert with languages set.
+        let row = SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                languages: Some(Some(serde_json::json!(["en", "es"]))),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(row.languages, Some(serde_json::json!(["en", "es"])));
+
+        // Update to a different language list; other fields preserved.
+        let row = SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                languages: Some(Some(serde_json::json!(["en"]))),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(row.tracked, "tracked preserved");
+        assert_eq!(row.languages, Some(serde_json::json!(["en"])));
+
+        // Clear: Some(None) drops back to server-wide default.
+        let cleared = SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                languages: Some(None),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(cleared.languages, None);
+
+        // Outer None leaves languages untouched.
+        let again = SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                languages: Some(Some(serde_json::json!(["en", "fr"]))),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(again.languages, Some(serde_json::json!(["en", "fr"])));
+        let untouched = SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracking_status: Some("ongoing".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            untouched.languages,
+            Some(serde_json::json!(["en", "fr"])),
+            "languages preserved when not in update"
+        );
     }
 
     #[tokio::test]
