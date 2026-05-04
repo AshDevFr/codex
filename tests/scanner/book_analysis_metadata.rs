@@ -125,8 +125,15 @@ async fn test_analyze_book_saves_metadata() -> Result<()> {
     // Create a test CBZ file with metadata
     let cbz_path = create_test_cbz_with_metadata(&temp_dir, "test_comic.cbz");
 
-    // Create book record in database
-    let (book, _series) = create_test_book(&db, cbz_path.to_str().unwrap()).await?;
+    // Create book record in database. Use MetadataFirst so the strategy pulls
+    // volume/chapter from ComicInfo — Filename (the default) intentionally
+    // ignores ComicInfo on those axes.
+    let (book, _series) = create_test_book_with_strategy(
+        &db,
+        cbz_path.to_str().unwrap(),
+        BookStrategy::MetadataFirst,
+    )
+    .await?;
 
     // Verify book is not analyzed yet
     assert!(!book.analyzed);
