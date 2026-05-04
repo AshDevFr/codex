@@ -71,7 +71,7 @@ async fn test_scan_respects_allowed_formats_cbr_only() {
         .unwrap();
 
     // Run scan - should find 0 files (no CBR files exist)
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -102,7 +102,7 @@ async fn test_scan_respects_allowed_formats_cbz_only() {
         .unwrap();
 
     // Run scan - should only find CBZ files (2 files)
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -139,7 +139,7 @@ async fn test_scan_respects_allowed_formats_multiple_formats() {
         .unwrap();
 
     // Run scan - should find CBZ and EPUB files (4 files total)
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -174,7 +174,7 @@ async fn test_scan_respects_allowed_formats_none_restriction() {
 
     // Don't set allowed_formats (None) - should allow all formats
     // Run scan - should find all files (6 files: 2 CBZ, 2 EPUB, 2 PDF)
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -214,7 +214,7 @@ async fn test_scan_respects_allowed_formats_deep_scan() {
         .unwrap();
 
     // Run deep scan - should only find EPUB files (2 files)
-    let result = scan_library(db, library.id, ScanMode::Deep, None, None)
+    let result = scan_library(db, library.id, ScanMode::Deep, None, None, None)
         .await
         .unwrap();
 

@@ -6,7 +6,7 @@ use tracing::{error, info};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, TaskRepository};
-use crate::events::EventBroadcaster;
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
 
@@ -29,7 +29,7 @@ impl TaskHandler for AnalyzeSeriesHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             let series_id = task
@@ -53,11 +53,24 @@ impl TaskHandler for AnalyzeSeriesHandler {
                 ));
             }
 
+            if let Some(broadcaster) = event_broadcaster {
+                let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                    task.id,
+                    "analyze_series",
+                    0,
+                    total_books,
+                    Some(format!("Enqueueing analysis for {} book(s)", total_books)),
+                    task.library_id,
+                    Some(series_id),
+                    None,
+                ));
+            }
+
             // Enqueue individual AnalyzeBook tasks with force=true
             let mut enqueued = 0;
             let mut errors = Vec::new();
 
-            for book in books {
+            for (idx, book) in books.iter().enumerate() {
                 match TaskRepository::enqueue(
                     db,
                     TaskType::AnalyzeBook {
@@ -74,6 +87,25 @@ impl TaskHandler for AnalyzeSeriesHandler {
                         error!("{}", err_msg);
                         errors.push(err_msg);
                     }
+                }
+
+                if let Some(broadcaster) = event_broadcaster {
+                    let current = idx + 1;
+                    let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                        task.id,
+                        "analyze_series",
+                        current,
+                        total_books,
+                        Some(format!(
+                            "Enqueueing analysis ({}/{}, {} failed)",
+                            current,
+                            total_books,
+                            errors.len()
+                        )),
+                        task.library_id,
+                        Some(series_id),
+                        Some(book.id),
+                    ));
                 }
             }
 

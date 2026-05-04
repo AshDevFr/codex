@@ -11,7 +11,7 @@ use tracing::{debug, info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{SeriesRepository, TaskRepository};
-use crate::events::EventBroadcaster;
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
@@ -31,7 +31,7 @@ impl TaskHandler for GenerateSeriesThumbnailsHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             info!(
@@ -114,11 +114,27 @@ impl TaskHandler for GenerateSeriesThumbnailsHandler {
                 ));
             }
 
+            if let Some(broadcaster) = event_broadcaster {
+                let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                    task.id,
+                    "generate_series_thumbnails",
+                    0,
+                    to_process,
+                    Some(format!(
+                        "Enqueueing series thumbnail tasks for {} series ({} skipped)",
+                        to_process, skipped
+                    )),
+                    library_id,
+                    None,
+                    None,
+                ));
+            }
+
             // Enqueue individual GenerateSeriesThumbnail tasks for each series
             let mut enqueued = 0;
             let mut errors = Vec::new();
 
-            for series in series_to_process {
+            for (idx, series) in series_to_process.iter().enumerate() {
                 let task_type = TaskType::GenerateSeriesThumbnail {
                     series_id: series.id,
                     force,
@@ -140,6 +156,25 @@ impl TaskHandler for GenerateSeriesThumbnailsHandler {
                         warn!("{}", error_msg);
                         errors.push(error_msg);
                     }
+                }
+
+                if let Some(broadcaster) = event_broadcaster {
+                    let current = idx + 1;
+                    let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                        task.id,
+                        "generate_series_thumbnails",
+                        current,
+                        to_process,
+                        Some(format!(
+                            "Enqueueing series thumbnail tasks ({}/{}, {} failed)",
+                            current,
+                            to_process,
+                            errors.len()
+                        )),
+                        library_id,
+                        Some(series.id),
+                        None,
+                    ));
                 }
             }
 

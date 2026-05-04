@@ -14,7 +14,7 @@ use crate::db::entities::{series_metadata, tasks};
 use crate::db::repositories::{
     LibraryRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 use crate::services::metadata::preprocessing::apply_rules;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
@@ -127,7 +127,7 @@ impl TaskHandler for ReprocessSeriesTitlesHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             info!(
@@ -172,12 +172,30 @@ impl TaskHandler for ReprocessSeriesTitlesHandler {
                 ));
             }
 
+            if let Some(broadcaster) = event_broadcaster {
+                let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                    task.id,
+                    "reprocess_series_titles",
+                    0,
+                    total,
+                    Some(format!(
+                        "Enqueueing reprocess title tasks for {} series",
+                        total
+                    )),
+                    library_id,
+                    None,
+                    None,
+                ));
+            }
+
             // Enqueue individual ReprocessSeriesTitle tasks for each series
             let mut enqueued = 0;
             let mut errors = Vec::new();
 
-            for series_id in series_to_process {
-                let task_type = TaskType::ReprocessSeriesTitle { series_id };
+            for (idx, series_id) in series_to_process.iter().enumerate() {
+                let task_type = TaskType::ReprocessSeriesTitle {
+                    series_id: *series_id,
+                };
 
                 match TaskRepository::enqueue(db, task_type, None).await {
                     Ok(task_id) => {
@@ -195,6 +213,25 @@ impl TaskHandler for ReprocessSeriesTitlesHandler {
                         warn!("{}", error_msg);
                         errors.push(error_msg);
                     }
+                }
+
+                if let Some(broadcaster) = event_broadcaster {
+                    let current = idx + 1;
+                    let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                        task.id,
+                        "reprocess_series_titles",
+                        current,
+                        total,
+                        Some(format!(
+                            "Enqueueing reprocess title tasks ({}/{}, {} failed)",
+                            current,
+                            total,
+                            errors.len()
+                        )),
+                        library_id,
+                        Some(*series_id),
+                        None,
+                    ));
                 }
             }
 

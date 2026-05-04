@@ -214,7 +214,16 @@ impl TaskHandler for ScanLibraryHandler {
             // Execute scan (without progress channel for now, pass event_broadcaster)
             // Note: Analysis tasks are now queued during the scan itself (streaming),
             // so workers can start processing immediately rather than waiting for scan to complete.
-            match scan_library(db, library_id, scan_mode, None, event_broadcaster).await {
+            match scan_library(
+                db,
+                library_id,
+                scan_mode,
+                None,
+                event_broadcaster,
+                Some(task.id),
+            )
+            .await
+            {
                 Ok(result) => {
                     info!(
                         "Task {}: Library scan completed - {} files processed, {} series, {} books, {} analysis tasks queued",

@@ -27,7 +27,7 @@ use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{UserPluginDataRepository, UserPluginsRepository};
-use crate::events::EventBroadcaster;
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::protocol::methods;
@@ -124,7 +124,7 @@ impl TaskHandler for UserPluginSyncHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             // Extract task parameters
@@ -149,6 +149,25 @@ impl TaskHandler for UserPluginSyncHandler {
                 "Task {}: Starting sync for plugin {} / user {}",
                 task.id, plugin_id, user_id
             );
+
+            // Four high-level phases: connect → pull → push → finalize.
+            const SYNC_PHASES: usize = 4;
+            let emit_phase = |current: usize, message: String| {
+                if let Some(broadcaster) = event_broadcaster {
+                    let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                        task.id,
+                        "user_plugin_sync",
+                        current,
+                        SYNC_PHASES,
+                        Some(message),
+                        None,
+                        None,
+                        None,
+                    ));
+                }
+            };
+
+            emit_phase(0, "Connecting to plugin…".to_string());
 
             // Read user plugin config
             let user_config =
@@ -248,6 +267,15 @@ impl TaskHandler for UserPluginSyncHandler {
                 );
             }
 
+            emit_phase(
+                1,
+                if do_pull {
+                    "Pulling progress from external service…".to_string()
+                } else {
+                    "Skipping pull (push-only)…".to_string()
+                },
+            );
+
             // Step 2: Pull progress from external service
             let (pulled_count, pull_incomplete, matched_count, applied_count, pull_error) =
                 if do_pull {
@@ -303,6 +331,15 @@ impl TaskHandler for UserPluginSyncHandler {
                     (0, false, 0, 0, None)
                 };
 
+            emit_phase(
+                2,
+                if do_push {
+                    format!("Pushing progress (pulled {pulled_count}, applied {applied_count})…")
+                } else {
+                    format!("Skipping push (pull-only, pulled {pulled_count})…")
+                },
+            );
+
             // Step 3: Push progress to external service
             let (pushed_count, push_failures, push_error) = if do_push {
                 let entries = if let Some(ref source) = external_id_source {
@@ -353,6 +390,13 @@ impl TaskHandler for UserPluginSyncHandler {
                 info!("Task {}: Skipping push (syncMode={})", task.id, sync_mode);
                 (0, 0, None)
             };
+
+            emit_phase(
+                3,
+                format!(
+                    "Finalizing (pulled {pulled_count}, pushed {pushed_count}, applied {applied_count})"
+                ),
+            );
 
             // Stop the user plugin handle to clean up the spawned process
             if let Err(e) = handle.stop().await {

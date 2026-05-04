@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::SeriesExportRepository;
-use crate::events::EventBroadcaster;
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::SettingsService;
 use crate::services::export_storage::ExportStorage;
 use crate::tasks::handlers::TaskHandler;
@@ -41,11 +41,31 @@ impl TaskHandler for CleanupSeriesExportsHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             let task_id = task.id;
             info!("Task {task_id}: Starting series exports cleanup");
+
+            // Three sequential phases: expired → stale tmp → cap evict.
+            // We expose them as 3 high-level steps so the user always sees progress
+            // even when individual phases are short.
+            const PHASE_TOTAL: usize = 3;
+
+            let emit = |current: usize, message: String| {
+                if let Some(broadcaster) = event_broadcaster {
+                    let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                        task.id,
+                        "cleanup_series_exports",
+                        current,
+                        PHASE_TOTAL,
+                        Some(message),
+                        None,
+                        None,
+                        None,
+                    ));
+                }
+            };
 
             let now = Utc::now();
             let mut expired_count = 0u64;
@@ -54,6 +74,7 @@ impl TaskHandler for CleanupSeriesExportsHandler {
 
             // 1. Delete expired exports (completed + expires_at < now)
             let expired = SeriesExportRepository::list_expired(db, now).await?;
+            emit(0, format!("Deleting {} expired export(s)", expired.len()));
             for export in &expired {
                 // Delete file
                 let _ = self
@@ -74,6 +95,10 @@ impl TaskHandler for CleanupSeriesExportsHandler {
             if expired_count > 0 {
                 info!("Task {task_id}: Deleted {expired_count} expired exports");
             }
+            emit(
+                1,
+                format!("Sweeping stale .tmp files (deleted {expired_count} expired)"),
+            );
 
             // 2. Sweep stale .tmp files (older than 1 hour)
             let stale_duration = std::time::Duration::from_secs(3600);
@@ -101,6 +126,13 @@ impl TaskHandler for CleanupSeriesExportsHandler {
                     warn!("Task {task_id}: Failed to list stale tmp files: {e}");
                 }
             }
+
+            emit(
+                2,
+                format!(
+                    "Enforcing storage cap ({expired_count} expired, {stale_tmp_count} stale removed)"
+                ),
+            );
 
             // 3. Enforce global storage cap
             let cap_bytes = self
@@ -156,6 +188,13 @@ impl TaskHandler for CleanupSeriesExportsHandler {
                     );
                 }
             }
+
+            emit(
+                PHASE_TOTAL,
+                format!(
+                    "Cleanup complete ({expired_count} expired, {stale_tmp_count} stale, {cap_evicted_count} evicted)"
+                ),
+            );
 
             let total_cleaned = expired_count + stale_tmp_count + cap_evicted_count;
             let message = if total_cleaned == 0 {
