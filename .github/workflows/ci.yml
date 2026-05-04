@@ -134,6 +134,8 @@ jobs:
           - metadata-openlibrary
           - recommendations-anilist
           - sync-anilist
+          - release-mangaupdates
+          - release-nyaa
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
