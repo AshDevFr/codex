@@ -9470,6 +9470,35 @@ export interface components {
             pluginId: string;
             /** @enum {string} */
             type: "plugin_deleted";
+        } | {
+            /**
+             * Format: double
+             * @description Chapter announced (if the source emits chapters).
+             */
+            chapter?: number | null;
+            /**
+             * @description Language code (e.g. `"en"`); used by client-side notification
+             *     preference filters.
+             */
+            language: string;
+            /** Format: uuid */
+            ledgerId: string;
+            /**
+             * @description Plugin name that owns the source (`release_sources.plugin_id`).
+             *     Helps the frontend filter without an extra lookup.
+             */
+            pluginId: string;
+            /** Format: uuid */
+            seriesId: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @enum {string} */
+            type: "release_announced";
+            /**
+             * Format: int32
+             * @description Volume announced (if the source emits volumes).
+             */
+            volume?: number | null;
         };
         /**
          * @description Type of entity that was changed

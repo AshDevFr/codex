@@ -23278,6 +23278,62 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A new release was recorded in the ledger.\n\nEmitted once per accepted, non-deduped ledger insert by the polling\ntask and the `releases/record` reverse-RPC handler. The frontend uses\nthis to bump the Releases nav badge, surface a toast on the inbox\npage, and refresh the per-series Releases tab.",
+            "required": [
+              "ledgerId",
+              "seriesId",
+              "sourceId",
+              "pluginId",
+              "language",
+              "type"
+            ],
+            "properties": {
+              "chapter": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double",
+                "description": "Chapter announced (if the source emits chapters)."
+              },
+              "language": {
+                "type": "string",
+                "description": "Language code (e.g. `\"en\"`); used by client-side notification\npreference filters."
+              },
+              "ledgerId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "pluginId": {
+                "type": "string",
+                "description": "Plugin name that owns the source (`release_sources.plugin_id`).\nHelps the frontend filter without an extra lookup."
+              },
+              "seriesId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "sourceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "release_announced"
+                ]
+              },
+              "volume": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "description": "Volume announced (if the source emits volumes)."
+              }
+            }
           }
         ],
         "description": "Specific event types for entity changes"

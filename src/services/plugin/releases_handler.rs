@@ -52,6 +52,9 @@ pub struct ReleasesRequestHandler {
     /// to scope `releases/list_tracked` responses to what the plugin asked
     /// for.
     capability: ReleaseSourceCapability,
+    /// Optional event broadcaster used to emit `ReleaseAnnounced` events on
+    /// successful (non-deduped) `releases/record` inserts.
+    event_broadcaster: Option<std::sync::Arc<crate::events::EventBroadcaster>>,
 }
 
 impl ReleasesRequestHandler {
@@ -64,7 +67,18 @@ impl ReleasesRequestHandler {
             db,
             plugin_name,
             capability,
+            event_broadcaster: None,
         }
+    }
+
+    /// Attach an event broadcaster so the handler emits `ReleaseAnnounced`
+    /// events on inserts. Builder-style.
+    pub fn with_event_broadcaster(
+        mut self,
+        broadcaster: std::sync::Arc<crate::events::EventBroadcaster>,
+    ) -> Self {
+        self.event_broadcaster = Some(broadcaster);
+        self
     }
 
     /// Handle a `releases/*` JSON-RPC request and return a response.
@@ -286,8 +300,8 @@ impl ReleasesRequestHandler {
         //    candidate's language being in the effective list, so that a
         //    plugin which forgets to filter by language can't pollute
         //    `latest_known_*` with out-of-language releases.
-        if !outcome.deduped
-            && let Err(e) = self
+        if !outcome.deduped {
+            if let Err(e) = self
                 .advance_latest_known(
                     series_id,
                     tracking_row.as_ref(),
@@ -296,11 +310,19 @@ impl ReleasesRequestHandler {
                     &candidate_language,
                 )
                 .await
-        {
-            // The ledger row is already persisted; a follow-up tracking
-            // failure is logged but does not fail the call. The next
-            // successful record will catch up.
-            warn!(error = %e, %series_id, "latest_known advance failed; ledger insert preserved");
+            {
+                // The ledger row is already persisted; a follow-up tracking
+                // failure is logged but does not fail the call. The next
+                // successful record will catch up.
+                warn!(error = %e, %series_id, "latest_known advance failed; ledger insert preserved");
+            }
+
+            if let Some(ref broadcaster) = self.event_broadcaster {
+                let _ = broadcaster.emit(crate::events::EntityChangeEvent::release_announced(
+                    &outcome.row,
+                    &self.plugin_name,
+                ));
+            }
         }
 
         let resp = RecordResponse {
@@ -832,6 +854,66 @@ mod tests {
         let resp = handler.handle_request(&req).await;
         assert!(resp.is_error());
         assert_eq!(resp.error.unwrap().code, error_codes::AUTH_FAILED);
+    }
+
+    /// `releases/record` emits a `ReleaseAnnounced` event on insert and
+    /// suppresses it on dedup.
+    #[tokio::test]
+    async fn record_emits_release_announced_on_insert_only() {
+        use crate::events::{EntityEvent, EventBroadcaster};
+
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-nyaa").await;
+
+        let broadcaster = std::sync::Arc::new(EventBroadcaster::new(8));
+        let mut rx = broadcaster.subscribe();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        )
+        .with_event_broadcaster(broadcaster.clone());
+
+        let cand = good_candidate(series_id);
+        let req = make_request(
+            methods::RELEASES_RECORD,
+            json!({"sourceId": source_id, "candidate": cand}),
+        );
+
+        let first = handler.handle_request(&req).await;
+        assert!(!first.is_error(), "unexpected error: {:?}", first.error);
+        let body: RecordResponse = serde_json::from_value(first.result.unwrap()).unwrap();
+        assert!(!body.deduped);
+
+        let event = rx.try_recv().expect("expected ReleaseAnnounced");
+        match event.event {
+            EntityEvent::ReleaseAnnounced {
+                series_id: ev_series,
+                source_id: ev_source,
+                plugin_id,
+                chapter,
+                language,
+                ..
+            } => {
+                assert_eq!(ev_series, series_id);
+                assert_eq!(ev_source, source_id);
+                assert_eq!(plugin_id, "release-nyaa");
+                assert_eq!(chapter, Some(143.0));
+                assert_eq!(language, "en");
+            }
+            other => panic!("unexpected event: {:?}", other),
+        }
+
+        // Re-recording the same release dedups; no new event should fire.
+        let second = handler.handle_request(&req).await;
+        let body: RecordResponse = serde_json::from_value(second.result.unwrap()).unwrap();
+        assert!(body.deduped);
+        assert!(
+            rx.try_recv().is_err(),
+            "dedup must not emit a new ReleaseAnnounced event"
+        );
     }
 
     #[tokio::test]

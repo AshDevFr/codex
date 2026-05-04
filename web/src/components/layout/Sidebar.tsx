@@ -29,6 +29,7 @@ import {
   IconPlugConnected,
   IconPlus,
   IconRadar,
+  IconRss,
   IconScan,
   IconServer,
   IconSettings,
@@ -44,6 +45,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { userPluginsApi } from "@/api/userPlugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
+import { ReleasesNavBadge } from "@/components/layout/ReleasesNavBadge";
 import { LibraryActionsMenu } from "@/components/library/LibraryActionsMenu";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAppInfo } from "@/hooks/useAppInfo";
@@ -342,6 +344,14 @@ export function Sidebar() {
             )}
             <NavLink
               component={Link}
+              to="/releases"
+              label="Releases"
+              leftSection={<IconRss size={20} />}
+              active={currentPath.startsWith("/releases")}
+              rightSection={<ReleasesNavBadge />}
+            />
+            <NavLink
+              component={Link}
               to={`/libraries/all/${getLastTab("all") || "series"}`}
               label="Libraries"
               leftSection={<IconBooks size={20} />}
@@ -566,6 +576,15 @@ export function Sidebar() {
                     label="Plugins"
                     leftSection={<IconPlugConnected size={16} />}
                     active={currentPath.startsWith("/settings/plugins")}
+                  />
+                  <NavLink
+                    component={Link}
+                    to="/settings/release-tracking"
+                    label="Release Tracking"
+                    leftSection={<IconRss size={16} />}
+                    active={currentPath.startsWith(
+                      "/settings/release-tracking",
+                    )}
                   />
 
                   {/* Access Section */}

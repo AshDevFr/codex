@@ -168,6 +168,33 @@ pub enum EntityEvent {
         #[serde(rename = "pluginId")]
         plugin_id: Uuid,
     },
+    /// A new release was recorded in the ledger.
+    ///
+    /// Emitted once per accepted, non-deduped ledger insert by the polling
+    /// task and the `releases/record` reverse-RPC handler. The frontend uses
+    /// this to bump the Releases nav badge, surface a toast on the inbox
+    /// page, and refresh the per-series Releases tab.
+    ReleaseAnnounced {
+        #[serde(rename = "ledgerId")]
+        ledger_id: Uuid,
+        #[serde(rename = "seriesId")]
+        series_id: Uuid,
+        #[serde(rename = "sourceId")]
+        source_id: Uuid,
+        /// Plugin name that owns the source (`release_sources.plugin_id`).
+        /// Helps the frontend filter without an extra lookup.
+        #[serde(rename = "pluginId")]
+        plugin_id: String,
+        /// Chapter announced (if the source emits chapters).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        chapter: Option<f64>,
+        /// Volume announced (if the source emits volumes).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        volume: Option<i32>,
+        /// Language code (e.g. `"en"`); used by client-side notification
+        /// preference filters.
+        language: String,
+    },
     /// Internal signal to indicate shutdown (not sent to clients)
     #[serde(skip)]
     Shutdown,
@@ -216,6 +243,7 @@ impl EntityChangeEvent {
             | EntityEvent::PluginEnabled { .. }
             | EntityEvent::PluginDisabled { .. }
             | EntityEvent::PluginDeleted { .. }
+            | EntityEvent::ReleaseAnnounced { .. }
             | EntityEvent::Shutdown => None,
         }
     }
@@ -232,6 +260,28 @@ impl EntityChangeEvent {
     /// Check if this is a shutdown signal
     pub fn is_shutdown(&self) -> bool {
         matches!(self.event, EntityEvent::Shutdown)
+    }
+
+    /// Build a `ReleaseAnnounced` event from a freshly-inserted ledger row.
+    ///
+    /// Wraps the variant construction so callers in the polling task and the
+    /// reverse-RPC handler share one source of truth for the event shape.
+    pub fn release_announced(
+        row: &crate::db::entities::release_ledger::Model,
+        plugin_id: &str,
+    ) -> Self {
+        Self::new(
+            EntityEvent::ReleaseAnnounced {
+                ledger_id: row.id,
+                series_id: row.series_id,
+                source_id: row.source_id,
+                plugin_id: plugin_id.to_string(),
+                chapter: row.chapter,
+                volume: row.volume,
+                language: row.language.clone().unwrap_or_default(),
+            },
+            None,
+        )
     }
 }
 
