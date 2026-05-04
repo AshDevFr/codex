@@ -63,6 +63,9 @@ export {
   RateLimitError,
 } from "./errors.js";
 
+// Host RPC (generic reverse-RPC client for non-storage host methods)
+export { HostRpcClient, HostRpcError } from "./host-rpc.js";
+
 // Logger
 export { createLogger, Logger, type LoggerOptions, type LogLevel } from "./logger.js";
 
@@ -70,10 +73,12 @@ export { createLogger, Logger, type LoggerOptions, type LogLevel } from "./logge
 export {
   createMetadataPlugin,
   createRecommendationPlugin,
+  createReleaseSourcePlugin,
   createSyncPlugin,
   type InitializeParams,
   type MetadataPluginOptions,
   type RecommendationPluginOptions,
+  type ReleaseSourcePluginOptions,
   type SyncPluginOptions,
 } from "./server.js";
 

@@ -122,6 +122,9 @@ pub async fn update_series_tracking(
         volume_chapter_map: request.volume_chapter_map,
         poll_interval_override_s: request.poll_interval_override_s,
         confidence_threshold_override: request.confidence_threshold_override,
+        languages: request
+            .languages
+            .map(|opt| opt.map(|langs| serde_json::json!(langs))),
     };
 
     let row = SeriesTrackingRepository::upsert(&state.db, series_id, update)
