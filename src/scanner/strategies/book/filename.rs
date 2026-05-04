@@ -279,4 +279,28 @@ mod tests {
             None
         );
     }
+
+    #[test]
+    fn test_hellsing_the_dawn_returns_none() {
+        // Regression: `Hellsing - The Dawn.cbz` has no v/c markers. Filename
+        // strategy must return None for both, even when ComicInfo metadata
+        // carries values — the user picked "Filename only," so ComicInfo is
+        // ignored on the volume/chapter axes.
+        let strategy = FilenameStrategy::new();
+        let ctx = default_context();
+        let metadata = BookMetadata {
+            title: Some("Hellsing - The Dawn".to_string()),
+            number: None,
+            volume: Some(2001),
+            chapter: Some(1.0),
+        };
+        assert_eq!(
+            strategy.resolve_volume("Hellsing - The Dawn.cbz", Some(&metadata), &ctx),
+            None
+        );
+        assert_eq!(
+            strategy.resolve_chapter("Hellsing - The Dawn.cbz", Some(&metadata), &ctx),
+            None
+        );
+    }
 }

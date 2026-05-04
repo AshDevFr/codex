@@ -509,18 +509,17 @@ async fn analyze_single_book(
                 volume: if existing.volume_lock {
                     existing.volume
                 } else {
-                    // Strategy-resolved volume (filename / metadata / etc.)
-                    // takes precedence over raw ComicInfo because the strategy
-                    // is what the library was configured with. Falls through
-                    // to ComicInfo for strategies that don't extract volume.
-                    resolved_classification.volume.or(comic_info.volume)
+                    // The strategy is the single source of truth: it already
+                    // sees ComicInfo as input and decides whether to use it
+                    // (Smart/MetadataFirst do, Filename/SeriesName don't).
+                    // No external fallback — that would override the user's
+                    // strategy choice.
+                    resolved_classification.volume
                 },
                 chapter: if existing.chapter_lock {
                     existing.chapter
                 } else {
-                    // Mirrors the volume rule: strategy first, raw ComicInfo
-                    // fallback for strategies that don't extract a chapter.
-                    resolved_classification.chapter.or(comic_info.chapter)
+                    resolved_classification.chapter
                 },
                 count: if existing.count_lock {
                     existing.count
@@ -601,10 +600,11 @@ async fn analyze_single_book(
                 year: comic_info.year,
                 month: comic_info.month,
                 day: comic_info.day,
-                // Strategy-resolved volume takes precedence; ComicInfo is the
-                // fallback for strategies that don't parse a volume.
-                volume: resolved_classification.volume.or(comic_info.volume),
-                chapter: resolved_classification.chapter.or(comic_info.chapter),
+                // The strategy owns volume/chapter resolution — Smart and
+                // MetadataFirst already pull from ComicInfo when configured.
+                // No external fallback or it would override Filename/SeriesName.
+                volume: resolved_classification.volume,
+                chapter: resolved_classification.chapter,
                 count: comic_info.count,
                 isbns: isbns_json,
                 // New Phase 1 fields
