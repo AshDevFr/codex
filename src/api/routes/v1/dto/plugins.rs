@@ -403,10 +403,15 @@ pub struct PluginCapabilitiesDto {
     /// Can provide personalized recommendations
     #[serde(default)]
     pub user_recommendation_provider: bool,
+    /// Whether the plugin declares the `release_source` capability (announces
+    /// new chapter / volume releases for tracked series).
+    #[serde(default)]
+    pub release_source: bool,
 }
 
 impl From<PluginCapabilities> for PluginCapabilitiesDto {
     fn from(c: PluginCapabilities) -> Self {
+        let release_source = c.is_release_source();
         Self {
             metadata_provider: c
                 .metadata_provider
@@ -416,6 +421,7 @@ impl From<PluginCapabilities> for PluginCapabilitiesDto {
             user_read_sync: c.user_read_sync,
             external_id_source: c.external_id_source,
             user_recommendation_provider: c.user_recommendation_provider,
+            release_source,
         }
     }
 }

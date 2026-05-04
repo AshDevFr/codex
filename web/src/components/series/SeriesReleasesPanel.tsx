@@ -11,6 +11,8 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
+  IconBellOff,
+  IconBellRinging,
   IconCheck,
   IconExternalLink,
   IconRss,
@@ -24,6 +26,7 @@ import {
   useMarkReleaseAcquired,
   useSeriesReleases,
 } from "@/hooks/useReleases";
+import { useUserPreference } from "@/hooks/useUserPreference";
 
 interface SeriesReleasesPanelProps {
   seriesId: string;
@@ -48,6 +51,20 @@ function groupKey(entry: ReleaseLedgerEntry): string {
 export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
   const [showDismissed, setShowDismissed] = useState(false);
   const stateFilter = showDismissed ? undefined : "announced";
+
+  // Per-user mute. Persisted via the user_preferences store with localStorage
+  // caching + debounced server sync.
+  const [mutedSeriesIds, setMutedSeriesIds] = useUserPreference(
+    "release_tracking.muted_series_ids",
+  );
+  const isMuted = mutedSeriesIds.includes(seriesId);
+  const toggleMute = () => {
+    if (isMuted) {
+      setMutedSeriesIds(mutedSeriesIds.filter((id) => id !== seriesId));
+    } else {
+      setMutedSeriesIds([...mutedSeriesIds, seriesId]);
+    }
+  };
 
   const { data, isLoading } = useSeriesReleases(seriesId, {
     state: stateFilter,
@@ -98,15 +115,42 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
             <Badge color="gray" variant="light" size="sm">
               {data?.pagination.total ?? 0}
             </Badge>
+            {isMuted && (
+              <Badge color="orange" variant="light" size="sm">
+                Muted
+              </Badge>
+            )}
           </Group>
-          <Anchor
-            component="button"
-            type="button"
-            size="sm"
-            onClick={() => setShowDismissed((prev) => !prev)}
-          >
-            {showDismissed ? "Hide dismissed" : "Show all states"}
-          </Anchor>
+          <Group gap="xs">
+            <Tooltip
+              label={
+                isMuted
+                  ? "Re-enable announcement toasts and badge for this series"
+                  : "Stop announcement toasts and badge for this series (your account only)"
+              }
+            >
+              <ActionIcon
+                variant="subtle"
+                color={isMuted ? "orange" : "gray"}
+                onClick={toggleMute}
+                aria-label={isMuted ? "Unmute releases" : "Mute releases"}
+              >
+                {isMuted ? (
+                  <IconBellOff size={16} />
+                ) : (
+                  <IconBellRinging size={16} />
+                )}
+              </ActionIcon>
+            </Tooltip>
+            <Anchor
+              component="button"
+              type="button"
+              size="sm"
+              onClick={() => setShowDismissed((prev) => !prev)}
+            >
+              {showDismissed ? "Hide dismissed" : "Show all states"}
+            </Anchor>
+          </Group>
         </Group>
 
         {groups.length === 0 ? (

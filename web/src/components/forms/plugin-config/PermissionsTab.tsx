@@ -11,6 +11,10 @@ import type { PluginDto } from "@/api/plugins";
 import {
   getPermissionData,
   getScopeData,
+  hasPermissionableSurface,
+  isRecommendationProvider,
+  isReleaseSource,
+  isSyncProvider,
   type PluginConfigForm,
 } from "./types";
 
@@ -25,6 +29,36 @@ export function PermissionsTab({
   form,
   libraries,
 }: PermissionsTabProps) {
+  // Plugins whose only capabilities are `releaseSource`,
+  // `userRecommendationProvider`, or `userReadSync` don't go through the RBAC
+  // permission gate, don't expose scoped UI actions, and aren't
+  // library-filtered. Render an explanatory note instead of empty selectors.
+  if (!hasPermissionableSurface(plugin)) {
+    const capabilityLabel = isReleaseSource(plugin)
+      ? "Release-source"
+      : isRecommendationProvider(plugin)
+        ? "Recommendation"
+        : isSyncProvider(plugin)
+          ? "Sync"
+          : null;
+    return (
+      <Stack gap="md">
+        <Alert
+          icon={<IconInfoCircle size={16} />}
+          color="blue"
+          variant="light"
+          title="No permission settings for this plugin"
+        >
+          <Text size="sm">
+            {capabilityLabel
+              ? `${capabilityLabel} plugins are gated by their manifest capability — they don't write metadata, don't expose scoped UI actions, and aren't library-filtered. There is nothing to configure on this tab.`
+              : "This plugin doesn't expose any capability that uses permissions, scopes, or the library filter."}
+          </Text>
+        </Alert>
+      </Stack>
+    );
+  }
+
   const permissionInfo = getPermissionData(plugin);
   const scopeData = getScopeData(plugin);
 

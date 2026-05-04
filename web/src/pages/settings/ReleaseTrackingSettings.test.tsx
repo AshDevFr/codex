@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { pluginsApi } from "@/api/plugins";
 import {
   type ReleaseSource,
   releaseSourcesApi,
@@ -22,9 +23,21 @@ vi.mock("@/api/releases", () => ({
   },
 }));
 
+vi.mock("@/api/plugins", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/api/plugins")>();
+  return {
+    ...actual,
+    pluginsApi: {
+      ...actual.pluginsApi,
+      getAll: vi.fn(),
+    },
+  };
+});
+
 const list = vi.mocked(releaseSourcesApi.list);
 const update = vi.mocked(releaseSourcesApi.update);
 const pollNow = vi.mocked(releaseSourcesApi.pollNow);
+const getAllPlugins = vi.mocked(pluginsApi.getAll);
 
 function source(over: Partial<ReleaseSource> = {}): ReleaseSource {
   return {
@@ -50,6 +63,8 @@ describe("ReleaseTrackingSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     void releasesApi;
+    // Default: no plugins installed. Individual tests override as needed.
+    getAllPlugins.mockResolvedValue({ plugins: [], total: 0 });
   });
 
   it("renders sources and the OK status when last poll is fresh", async () => {
@@ -114,5 +129,53 @@ describe("ReleaseTrackingSettings", () => {
         "11111111-1111-1111-1111-111111111111",
       );
     });
+  });
+
+  it("plugin-sources dropdown lists release-source plugins by display name", async () => {
+    list.mockResolvedValue([]);
+    // One release-source plugin + one metadata plugin to confirm filtering.
+    getAllPlugins.mockResolvedValue({
+      plugins: [
+        {
+          id: "p1",
+          name: "release-mangaupdates",
+          displayName: "MangaUpdates Releases",
+          manifest: {
+            name: "release-mangaupdates",
+            displayName: "MangaUpdates Releases",
+            capabilities: { releaseSource: true },
+          },
+          // The remaining PluginDto fields don't matter for this test.
+        } as never,
+        {
+          id: "p2",
+          name: "metadata-mangabaka",
+          displayName: "MangaBaka",
+          manifest: {
+            name: "metadata-mangabaka",
+            displayName: "MangaBaka",
+            capabilities: { metadataProvider: ["series"] },
+          },
+        } as never,
+      ],
+      total: 2,
+    });
+
+    const user = userEvent.setup();
+    renderWithProviders(<ReleaseTrackingSettings />);
+    // Wait for the plugins query to settle (the dropdown only renders the
+    // release-source options once `pluginsApi.getAll` resolves).
+    await waitFor(() => {
+      expect(getAllPlugins).toHaveBeenCalled();
+    });
+    // Mantine MultiSelect renders an input with role=textbox associated with
+    // the label; clicking it opens the dropdown and shows the options.
+    const select = screen.getByRole("textbox", { name: "Plugin sources" });
+    await user.click(select);
+    await waitFor(() => {
+      expect(screen.getByText("MangaUpdates Releases")).toBeInTheDocument();
+    });
+    // Metadata-only plugin is filtered out — should not appear as an option.
+    expect(screen.queryByText("MangaBaka")).not.toBeInTheDocument();
   });
 });

@@ -155,6 +155,8 @@ mod m20260503_000073_create_release_ledger;
 mod m20260504_000074_add_tracking_languages;
 // Release tracking (Phase 6): server-wide default language list
 mod m20260504_000075_seed_release_tracking_languages;
+// Release tracking (Phase 8 follow-up): server-wide notification filter settings
+mod m20260504_000076_seed_release_tracking_notify_filters;
 
 pub struct Migrator;
 
@@ -280,6 +282,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260504_000074_add_tracking_languages::Migration),
             // Release tracking (Phase 6): server-wide default language list
             Box::new(m20260504_000075_seed_release_tracking_languages::Migration),
+            // Release tracking (Phase 8 follow-up): notification filter settings
+            Box::new(m20260504_000076_seed_release_tracking_notify_filters::Migration),
         ]
     }
 }

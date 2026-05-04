@@ -38,7 +38,7 @@ export interface OfficialPlugin {
   /** Short description of what the plugin does */
   description: string;
   /** Plugin type badge */
-  type: "Metadata" | "Sync" | "Recommendations";
+  type: "Metadata" | "Sync" | "Recommendations" | "Releases";
   /** npm package name */
   packageName: string;
   /** Short auth requirement description shown on the back face */
@@ -137,6 +137,38 @@ export const OFFICIAL_PLUGINS: OfficialPlugin[] = [
       credentialDelivery: "env",
     },
   },
+  {
+    name: "release-mangaupdates",
+    displayName: "MangaUpdates Releases",
+    description:
+      "Announces new chapter and volume releases for tracked series via MangaUpdates per-series RSS feeds. Multi-language support filtered by per-series language preferences. Notify-only — Codex does not download anything.",
+    type: "Releases",
+    packageName: "@ashdev/codex-plugin-release-mangaupdates",
+    authInfo: "No authentication required",
+    author: "Codex Team",
+    scope: "system",
+    formDefaults: {
+      command: "npx",
+      args: "-y\n@ashdev/codex-plugin-release-mangaupdates",
+      credentialDelivery: "env",
+    },
+  },
+  {
+    name: "release-nyaa",
+    displayName: "Nyaa Releases",
+    description:
+      "Announces new chapter and volume torrents for tracked series via Nyaa.si uploader RSS feeds. Limited to an admin-configured uploader allowlist; matches via title aliases. Notify-only — Codex does not download anything.",
+    type: "Releases",
+    packageName: "@ashdev/codex-plugin-release-nyaa",
+    authInfo: "No authentication required",
+    author: "Codex Team",
+    scope: "system",
+    formDefaults: {
+      command: "npx",
+      args: "-y\n@ashdev/codex-plugin-release-nyaa",
+      credentialDelivery: "env",
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -147,6 +179,7 @@ const pluginTypeBadgeColors: Record<OfficialPlugin["type"], string> = {
   Metadata: "blue",
   Sync: "teal",
   Recommendations: "grape",
+  Releases: "orange",
 };
 
 const credentialLabels: Record<string, string> = {

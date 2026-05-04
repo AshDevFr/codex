@@ -2,9 +2,11 @@ import {
   ActionIcon,
   Badge,
   Box,
+  Button,
   Card,
   Group,
   Loader,
+  MultiSelect,
   NumberInput,
   Stack,
   Switch,
@@ -14,21 +16,43 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import {
   IconAlertCircle,
   IconBellRinging,
   IconClockHour4,
   IconRefresh,
+  IconTrash,
 } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { pluginsApi } from "@/api/plugins";
 import type { ReleaseSource } from "@/api/releases";
+import { settingsApi } from "@/api/settings";
 import {
   usePollReleaseSourceNow,
   useReleaseSources,
   useUpdateReleaseSource,
 } from "@/hooks/useReleases";
-import { useReleaseAnnouncementsStore } from "@/store/releaseAnnouncementsStore";
+import { useUserPreference } from "@/hooks/useUserPreference";
+
+const SETTING_NOTIFY_LANGUAGES = "release_tracking.notify_languages";
+const SETTING_NOTIFY_PLUGINS = "release_tracking.notify_plugins";
+const PREF_MUTED_SERIES = "release_tracking.muted_series_ids";
+
+/** Parse a settings-table JSON-array value back to a string list. */
+function parseArraySetting(value: string | undefined | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((v): v is string => typeof v === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 const PRESETS = [
   { value: 3600, label: "1h" },
@@ -133,16 +157,102 @@ export function ReleaseTrackingSettings() {
 }
 
 function NotificationPreferencesCard() {
-  const allowedLanguages = useReleaseAnnouncementsStore(
-    (s) => s.allowedLanguages,
+  const queryClient = useQueryClient();
+
+  // Server-wide notify allowlists (admin-managed, persisted in `settings`).
+  const notifyLanguagesQuery = useQuery({
+    queryKey: ["admin-setting", SETTING_NOTIFY_LANGUAGES],
+    queryFn: () => settingsApi.get(SETTING_NOTIFY_LANGUAGES),
+  });
+  const notifyPluginsQuery = useQuery({
+    queryKey: ["admin-setting", SETTING_NOTIFY_PLUGINS],
+    queryFn: () => settingsApi.get(SETTING_NOTIFY_PLUGINS),
+  });
+
+  // Per-user mute list (persisted in user_preferences via the user-prefs
+  // store, with localStorage caching + debounced server sync). Used here
+  // only for the count display + "Clear all mutes" action; per-series
+  // toggle lives on each series detail page.
+  const [mutedSeriesIds, setMutedSeriesIds] =
+    useUserPreference(PREF_MUTED_SERIES);
+
+  // Pull every registered plugin so we can show release-source ones in the
+  // dropdown. Stale entries (in the allowlist but no longer installed) keep
+  // their slot in the option list so admins can see + remove them.
+  const pluginsQuery = useQuery({
+    queryKey: ["plugins"],
+    queryFn: pluginsApi.getAll,
+  });
+
+  const allowedLanguages = useMemo(
+    () => parseArraySetting(notifyLanguagesQuery.data?.value),
+    [notifyLanguagesQuery.data],
   );
-  const allowedPlugins = useReleaseAnnouncementsStore((s) => s.allowedPlugins);
-  const setAllowedLanguages = useReleaseAnnouncementsStore(
-    (s) => s.setAllowedLanguages,
+  const allowedPlugins = useMemo(
+    () => parseArraySetting(notifyPluginsQuery.data?.value),
+    [notifyPluginsQuery.data],
   );
-  const setAllowedPlugins = useReleaseAnnouncementsStore(
-    (s) => s.setAllowedPlugins,
-  );
+
+  const pluginOptions = useMemo(() => {
+    const registered = (pluginsQuery.data?.plugins ?? []).filter(
+      (p) => p.manifest?.capabilities?.releaseSource === true,
+    );
+    const seen = new Set<string>();
+    const opts: { value: string; label: string }[] = [];
+    for (const p of registered) {
+      seen.add(p.name);
+      opts.push({
+        value: p.name,
+        label: p.manifest?.displayName ?? p.name,
+      });
+    }
+    for (const id of allowedPlugins) {
+      if (!seen.has(id)) {
+        opts.push({ value: id, label: `${id} (not installed)` });
+      }
+    }
+    return opts;
+  }, [pluginsQuery.data, allowedPlugins]);
+
+  // Persist a setting back to the server. Lower-cases language codes so the
+  // backend filter (`shouldNotify`) doesn't need to re-normalize.
+  const updateSettingMutation = useMutation({
+    mutationFn: ({ key, values }: { key: string; values: string[] }) =>
+      settingsApi.update(key, { value: JSON.stringify(values) }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["admin-setting", vars.key],
+      });
+    },
+    onError: (err: Error) =>
+      notifications.show({
+        title: "Failed to save",
+        message: err.message ?? "Could not update notification preferences.",
+        color: "red",
+      }),
+  });
+
+  const clearMutes = () => {
+    setMutedSeriesIds([]);
+    notifications.show({
+      title: "Mutes cleared",
+      message: "All per-series mutes have been removed.",
+      color: "green",
+    });
+  };
+
+  const setAllowedLanguages = (values: string[]) =>
+    updateSettingMutation.mutate({
+      key: SETTING_NOTIFY_LANGUAGES,
+      values: values
+        .map((v) => v.trim().toLowerCase())
+        .filter((v) => v.length > 0),
+    });
+  const setAllowedPlugins = (values: string[]) =>
+    updateSettingMutation.mutate({
+      key: SETTING_NOTIFY_PLUGINS,
+      values,
+    });
 
   return (
     <Card withBorder padding="md" radius="md">
@@ -153,23 +263,60 @@ function NotificationPreferencesCard() {
         </Group>
         <Text size="xs" c="dimmed">
           Filter announcement toasts and the Releases nav badge. Empty means "no
-          filter — let everything through." Per-series mute lives on each series
-          detail page.
+          filter — let everything through." Server-wide for languages and plugin
+          sources; per-series mute is per-user (toggle on each series detail
+          page).
         </Text>
         <TagsInput
           label="Languages"
-          description="ISO 639-1 codes (e.g. en, es). Lower-cased automatically."
+          description="ISO 639-1 codes (e.g. en, es). Lower-cased automatically. Server-wide."
           placeholder="Add language code…"
-          value={Array.from(allowedLanguages)}
-          onChange={(values) => setAllowedLanguages(values)}
+          value={allowedLanguages}
+          onChange={setAllowedLanguages}
+          disabled={notifyLanguagesQuery.isLoading}
         />
-        <TagsInput
+        <MultiSelect
           label="Plugin sources"
-          description="Plugin IDs (e.g. release-mangaupdates, release-nyaa)."
-          placeholder="Add plugin id…"
-          value={Array.from(allowedPlugins)}
-          onChange={(values) => setAllowedPlugins(values)}
+          description="Pick the release-source plugins to receive notifications from. Empty = all installed sources are allowed. Server-wide."
+          placeholder={
+            allowedPlugins.length === 0
+              ? "All release-source plugins"
+              : undefined
+          }
+          data={pluginOptions}
+          value={allowedPlugins}
+          onChange={setAllowedPlugins}
+          searchable
+          clearable
+          nothingFoundMessage={
+            pluginsQuery.isLoading
+              ? "Loading plugins…"
+              : "No release-source plugins installed"
+          }
+          disabled={notifyPluginsQuery.isLoading}
         />
+        <Group justify="space-between" mt="xs" wrap="nowrap">
+          <Box>
+            <Text size="sm" fw={500}>
+              Muted series
+            </Text>
+            <Text size="xs" c="dimmed">
+              {mutedSeriesIds.length === 0
+                ? "No series muted for your account."
+                : `${mutedSeriesIds.length} series muted for your account.`}
+            </Text>
+          </Box>
+          <Button
+            size="xs"
+            variant="light"
+            color="red"
+            leftSection={<IconTrash size={14} />}
+            onClick={clearMutes}
+            disabled={mutedSeriesIds.length === 0}
+          >
+            Clear all mutes
+          </Button>
+        </Group>
       </Stack>
     </Card>
   );
