@@ -6,8 +6,9 @@ use codex::api::routes::v1::dto::book::BookDto;
 use codex::api::routes::v1::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
-    BookMetadataRepository, BookRepository, LibraryRepository, SeriesMetadataRepository,
-    SeriesRepository, UserRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, SeriesExternalIdRepository,
+    SeriesMetadataRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
+    UserRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -693,6 +694,260 @@ async fn test_get_series_classification_aggregates_absent_when_unclassified() {
     // SUM(CASE ... ELSE 0) over a single LEFT-JOINed-with-NULL row evaluates
     // to 0 (the CASE branch is the constant 0), so volumes_owned is Some(0).
     assert_eq!(dto.volumes_owned, Some(0));
+}
+
+// ============================================================================
+// Phase 5: Upstream-publication gap signal
+// ============================================================================
+
+/// Inputs for [`setup_tracked_series_with_gap`].
+struct TrackedSeriesGapSetup<'a> {
+    track_chapters: bool,
+    track_volumes: bool,
+    total_chapter_count: Option<f32>,
+    total_volume_count: Option<i32>,
+    local_max_chapter: Option<f32>,
+    local_max_volume: Option<i32>,
+    external_id_source: Option<&'a str>,
+}
+
+/// Helper: seed a tracked series with locally-classified books and a metadata
+/// provider's `total_*_count` so the upstream gap signal has something to
+/// compute against.
+async fn setup_tracked_series_with_gap(
+    db: &sea_orm::DatabaseConnection,
+    setup: TrackedSeriesGapSetup<'_>,
+) -> uuid::Uuid {
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let library = LibraryRepository::create(db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(db, library.id, "Tracked Series", None)
+        .await
+        .unwrap();
+
+    // Local classification: a single book carrying the desired aggregates.
+    let mut book = create_test_book(series.id, library.id, "/v1.cbz", "v1.cbz", None);
+    book.file_hash = format!("hash_{}", uuid::Uuid::new_v4());
+    let created = BookRepository::create(db, &book, None).await.unwrap();
+    let meta = BookMetadataRepository::create_with_title_and_number(db, created.id, None, None)
+        .await
+        .unwrap();
+    let mut active: codex::db::entities::book_metadata::ActiveModel = meta.into();
+    active.volume = Set(setup.local_max_volume);
+    active.chapter = Set(setup.local_max_chapter);
+    active.update(db).await.unwrap();
+
+    // Provider counts on series_metadata.
+    if let Some(c) = setup.total_chapter_count {
+        SeriesMetadataRepository::update_total_chapter_count(db, series.id, Some(c))
+            .await
+            .unwrap();
+    }
+    if let Some(v) = setup.total_volume_count {
+        SeriesMetadataRepository::update_total_volume_count(db, series.id, Some(v))
+            .await
+            .unwrap();
+    }
+
+    // Tracking row.
+    SeriesTrackingRepository::upsert(
+        db,
+        series.id,
+        TrackingUpdate {
+            tracked: Some(true),
+            track_chapters: Some(setup.track_chapters),
+            track_volumes: Some(setup.track_volumes),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    if let Some(source) = setup.external_id_source {
+        SeriesExternalIdRepository::create(db, series.id, source, "1234", None, None)
+            .await
+            .unwrap();
+    }
+
+    series.id
+}
+
+#[tokio::test]
+async fn test_get_series_upstream_gap_tracked_series_with_provider_ahead() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let series_id = setup_tracked_series_with_gap(
+        &db,
+        TrackedSeriesGapSetup {
+            track_chapters: true,
+            track_volumes: true,
+            total_chapter_count: Some(145.0),
+            total_volume_count: Some(15),
+            local_max_chapter: Some(142.0),
+            local_max_volume: Some(14),
+            external_id_source: Some("plugin:mangabaka"),
+        },
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series_id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert_eq!(dto.upstream_chapter_gap, Some(3.0));
+    assert_eq!(dto.upstream_volume_gap, Some(1));
+    assert_eq!(dto.upstream_gap_provider.as_deref(), Some("MangaBaka"));
+}
+
+#[tokio::test]
+async fn test_get_series_upstream_gap_omitted_when_not_tracked() {
+    use sea_orm::{ActiveModelTrait, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Untracked", None)
+        .await
+        .unwrap();
+    // Local book.
+    let mut book = create_test_book(series.id, library.id, "/v1.cbz", "v1.cbz", None);
+    book.file_hash = "hash_untracked_1".to_string();
+    let created = BookRepository::create(&db, &book, None).await.unwrap();
+    let meta = BookMetadataRepository::create_with_title_and_number(&db, created.id, None, None)
+        .await
+        .unwrap();
+    let mut active: codex::db::entities::book_metadata::ActiveModel = meta.into();
+    active.volume = Set(Some(14));
+    active.chapter = Set(Some(142.0));
+    active.update(&db).await.unwrap();
+    // Provider counts populated, but series is not tracked.
+    SeriesMetadataRepository::update_total_chapter_count(&db, series.id, Some(145.0))
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_total_volume_count(&db, series.id, Some(15))
+        .await
+        .unwrap();
+    // Note: no tracking row set up; series defaults to untracked.
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series.id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert_eq!(dto.upstream_chapter_gap, None);
+    assert_eq!(dto.upstream_volume_gap, None);
+    assert_eq!(dto.upstream_gap_provider, None);
+}
+
+#[tokio::test]
+async fn test_get_series_upstream_gap_track_chapters_false_suppresses_chapter_gap() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let series_id = setup_tracked_series_with_gap(
+        &db,
+        TrackedSeriesGapSetup {
+            track_chapters: false,
+            track_volumes: true,
+            total_chapter_count: Some(145.0),
+            total_volume_count: Some(15),
+            local_max_chapter: Some(142.0),
+            local_max_volume: Some(14),
+            external_id_source: Some("plugin:mangabaka"),
+        },
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series_id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert_eq!(dto.upstream_chapter_gap, None);
+    assert_eq!(dto.upstream_volume_gap, Some(1));
+    // Provider is still attributed because at least one axis is populated.
+    assert_eq!(dto.upstream_gap_provider.as_deref(), Some("MangaBaka"));
+}
+
+#[tokio::test]
+async fn test_get_series_upstream_gap_provider_count_missing_suppresses_axis() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // total_chapter_count is None — chapter axis must be omitted.
+    let series_id = setup_tracked_series_with_gap(
+        &db,
+        TrackedSeriesGapSetup {
+            track_chapters: true,
+            track_volumes: true,
+            total_chapter_count: None,
+            total_volume_count: Some(15),
+            local_max_chapter: Some(142.0),
+            local_max_volume: Some(14),
+            external_id_source: Some("plugin:mangabaka"),
+        },
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series_id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert_eq!(dto.upstream_chapter_gap, None);
+    assert_eq!(dto.upstream_volume_gap, Some(1));
+}
+
+#[tokio::test]
+async fn test_get_series_upstream_gap_axes_independent() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Volume gap exists, chapter gap is zero (provider matches local).
+    let series_id = setup_tracked_series_with_gap(
+        &db,
+        TrackedSeriesGapSetup {
+            track_chapters: true,
+            track_volumes: true,
+            total_chapter_count: Some(142.0),
+            total_volume_count: Some(15),
+            local_max_chapter: Some(142.0),
+            local_max_volume: Some(14),
+            external_id_source: Some("plugin:anilist"),
+        },
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series_id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert_eq!(dto.upstream_chapter_gap, None);
+    assert_eq!(dto.upstream_volume_gap, Some(1));
+    assert_eq!(dto.upstream_gap_provider.as_deref(), Some("AniList"));
 }
 
 #[tokio::test]
