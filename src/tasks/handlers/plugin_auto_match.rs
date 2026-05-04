@@ -24,7 +24,7 @@ use crate::db::repositories::{
     BookExternalIdRepository, BookMetadataRepository, BookRepository, LibraryRepository,
     PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::services::metadata::preprocessing::{
     AutoMatchConditions, PreprocessingRule, SeriesContext, SeriesContextBuilder, apply_rules,
@@ -163,6 +163,23 @@ impl PluginAutoMatchHandler {
             series_id
         );
 
+        let total_books = books.len();
+        if let Some(broadcaster) = event_broadcaster {
+            let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                task.id,
+                "plugin_auto_match",
+                0,
+                total_books,
+                Some(format!(
+                    "Matching {} book(s) via plugin '{}'",
+                    total_books, plugin.name
+                )),
+                Some(library_id),
+                Some(series_id),
+                None,
+            ));
+        }
+
         let min_confidence = self.get_confidence_threshold().await;
         let use_existing = PluginsRepository::use_existing_external_id(plugin);
 
@@ -176,7 +193,24 @@ impl PluginAutoMatchHandler {
         let mut last_matched_title: Option<String> = None;
         let mut any_used_existing = false;
 
-        for book in &books {
+        for (idx, book) in books.iter().enumerate() {
+            if let Some(broadcaster) = event_broadcaster {
+                let current = idx + 1;
+                let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                    task.id,
+                    "plugin_auto_match",
+                    current,
+                    total_books,
+                    Some(format!(
+                        "Matching books ({}/{}, {} matched, {} skipped)",
+                        current, total_books, books_matched, _books_skipped
+                    )),
+                    Some(library_id),
+                    Some(series_id),
+                    Some(book.id),
+                ));
+            }
+
             // Check for existing external ID for this book/plugin
             let existing_ext_id = if use_existing {
                 BookExternalIdRepository::get_for_plugin(db, book.id, &plugin.name).await?

@@ -65,7 +65,7 @@ async fn test_series_rename_preserves_identity() {
     .await;
 
     // Run initial scan
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_created, 2);
@@ -88,7 +88,7 @@ async fn test_series_rename_preserves_identity() {
     assert!(new_series_path.exists());
 
     // Run scan again - should match by fingerprint and update the series
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -127,7 +127,7 @@ async fn test_series_copy_creates_new_series() {
     .await;
 
     // Run initial scan
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_created, 2);
@@ -149,7 +149,7 @@ async fn test_series_copy_creates_new_series() {
     assert!(copied_series_path.exists());
 
     // Run scan again - should create a NEW series for the copy
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -202,7 +202,7 @@ async fn test_nested_folder_copy_creates_new_series() {
         setup_library_with_series(db, &temp_dir, "My Series", &["book.cbz"]).await;
 
     // Run initial scan
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
     assert_eq!(result.books_created, 1);
@@ -232,7 +232,7 @@ async fn test_nested_folder_copy_creates_new_series() {
     assert!(nested_file.exists());
 
     // Run scan again - should create a NEW series for the nested copy
-    let result = scan_library(db, library.id, ScanMode::Normal, None, None)
+    let result = scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -278,7 +278,7 @@ async fn test_deep_scan_respects_rename_vs_copy() {
     .await;
 
     // Run initial scan
-    scan_library(db, library.id, ScanMode::Normal, None, None)
+    scan_library(db, library.id, ScanMode::Normal, None, None, None)
         .await
         .unwrap();
 
@@ -292,7 +292,7 @@ async fn test_deep_scan_respects_rename_vs_copy() {
     copy_dir_recursive(&series_path, &copied_series_path).unwrap();
 
     // Run DEEP scan - should also create new series for copy
-    let result = scan_library(db, library.id, ScanMode::Deep, None, None)
+    let result = scan_library(db, library.id, ScanMode::Deep, None, None, None)
         .await
         .unwrap();
 

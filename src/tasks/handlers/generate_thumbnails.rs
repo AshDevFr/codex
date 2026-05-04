@@ -5,7 +5,7 @@ use tracing::{debug, info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, TaskRepository};
-use crate::events::EventBroadcaster;
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
@@ -25,7 +25,7 @@ impl TaskHandler for GenerateThumbnailsHandler {
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             info!(
@@ -124,11 +124,27 @@ impl TaskHandler for GenerateThumbnailsHandler {
                 ));
             }
 
+            if let Some(broadcaster) = event_broadcaster {
+                let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                    task.id,
+                    "generate_thumbnails",
+                    0,
+                    to_process,
+                    Some(format!(
+                        "Enqueueing thumbnail tasks for {} book(s) ({} skipped)",
+                        to_process, skipped
+                    )),
+                    library_id,
+                    series_id,
+                    None,
+                ));
+            }
+
             // Enqueue individual GenerateThumbnail tasks for each book
             let mut enqueued = 0;
             let mut errors = Vec::new();
 
-            for book in books_to_process {
+            for (idx, book) in books_to_process.iter().enumerate() {
                 let task_type = TaskType::GenerateThumbnail {
                     book_id: book.id,
                     force,
@@ -150,6 +166,25 @@ impl TaskHandler for GenerateThumbnailsHandler {
                         warn!("{}", error_msg);
                         errors.push(error_msg);
                     }
+                }
+
+                if let Some(broadcaster) = event_broadcaster {
+                    let current = idx + 1;
+                    let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                        task.id,
+                        "generate_thumbnails",
+                        current,
+                        to_process,
+                        Some(format!(
+                            "Enqueueing thumbnail tasks ({}/{}, {} failed)",
+                            current,
+                            to_process,
+                            errors.len()
+                        )),
+                        library_id,
+                        series_id,
+                        Some(book.id),
+                    ));
                 }
             }
 

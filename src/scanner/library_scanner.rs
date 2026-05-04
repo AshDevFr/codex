@@ -18,7 +18,7 @@ use crate::db::entities::{books, series};
 use crate::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
 };
-use crate::events::EventBroadcaster;
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::models::SeriesStrategy;
 use crate::tasks::types::TaskType;
 
@@ -154,16 +154,29 @@ struct SharedScanState {
     result: Arc<Mutex<ScanResult>>,
     /// Progress channel sender
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
+    /// Optional task id + broadcaster for emitting TaskProgressEvent
+    task_id: Option<Uuid>,
+    library_name: String,
+    event_broadcaster: Option<Arc<EventBroadcaster>>,
 }
 
 impl SharedScanState {
-    fn new(library_id: Uuid, progress_tx: Option<mpsc::Sender<ScanProgress>>) -> Self {
+    fn new(
+        library_id: Uuid,
+        library_name: String,
+        progress_tx: Option<mpsc::Sender<ScanProgress>>,
+        task_id: Option<Uuid>,
+        event_broadcaster: Option<Arc<EventBroadcaster>>,
+    ) -> Self {
         let mut progress = ScanProgress::new(library_id);
         progress.start();
         Self {
             progress: Arc::new(Mutex::new(progress)),
             result: Arc::new(Mutex::new(ScanResult::new())),
             progress_tx,
+            task_id,
+            library_name,
+            event_broadcaster,
         }
     }
 
@@ -199,13 +212,39 @@ impl SharedScanState {
         }
     }
 
-    /// Send current progress through the channel
+    /// Send current progress through the channel and emit a TaskProgressEvent
+    /// if a task id and broadcaster are available.
     async fn send_progress(&self) {
-        if let Some(ref tx) = self.progress_tx {
-            let progress = self.progress.lock().await.clone();
-            if let Err(e) = tx.send(progress).await {
-                warn!("Failed to send progress update: {}", e);
-            }
+        let progress = self.progress.lock().await.clone();
+
+        if let (Some(task_id), Some(broadcaster)) = (self.task_id, self.event_broadcaster.as_ref())
+        {
+            let total = progress.files_total;
+            let current = progress.files_processed.min(total.max(1));
+            let message = if total == 0 {
+                format!("Scanning {} (discovering files…)", self.library_name)
+            } else {
+                format!(
+                    "Scanning {} ({}/{} files, {} series, {} books)",
+                    self.library_name, current, total, progress.series_found, progress.books_found,
+                )
+            };
+            let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                task_id,
+                "scan_library",
+                current,
+                total.max(current),
+                Some(message),
+                Some(progress.library_id),
+                None,
+                None,
+            ));
+        }
+
+        if let Some(ref tx) = self.progress_tx
+            && let Err(e) = tx.send(progress).await
+        {
+            warn!("Failed to send progress update: {}", e);
         }
     }
 
@@ -244,6 +283,9 @@ impl Clone for SharedScanState {
             progress: Arc::clone(&self.progress),
             result: Arc::clone(&self.result),
             progress_tx: self.progress_tx.clone(),
+            task_id: self.task_id,
+            library_name: self.library_name.clone(),
+            event_broadcaster: self.event_broadcaster.clone(),
         }
     }
 }
@@ -376,6 +418,7 @@ pub async fn scan_library(
     mode: ScanMode,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    task_id: Option<Uuid>,
 ) -> Result<ScanResult> {
     let scan_start = Instant::now();
     info!("Starting {} scan for library {}", mode, library_id);
@@ -401,7 +444,15 @@ pub async fn scan_library(
 
     // Execute optimized batched scan (handles both Normal and Deep modes)
     // The batched scan manages its own progress tracking internally
-    let result = scan_batched(db, &library, mode, progress_tx.clone(), event_broadcaster).await;
+    let result = scan_batched(
+        db,
+        &library,
+        mode,
+        progress_tx.clone(),
+        event_broadcaster,
+        task_id,
+    )
+    .await;
 
     // Send final progress update
     let mut final_progress = ScanProgress::new(library_id);
@@ -482,6 +533,7 @@ async fn scan_batched(
     mode: ScanMode,
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    task_id: Option<Uuid>,
 ) -> Result<ScanResult> {
     // Load scanner configuration from database settings
     let config = ScannerConfig::load(db).await;
@@ -491,7 +543,13 @@ async fn scan_batched(
     );
 
     // Create shared state for thread-safe progress tracking
-    let shared_state = SharedScanState::new(library.id, progress_tx);
+    let shared_state = SharedScanState::new(
+        library.id,
+        library.name.clone(),
+        progress_tx,
+        task_id,
+        event_broadcaster.cloned(),
+    );
 
     // Always load existing books from database
     // - Normal mode: used for change detection (skip unchanged files)
