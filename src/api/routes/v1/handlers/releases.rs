@@ -483,13 +483,28 @@ pub async fn update_release_source(
             }
         })?;
 
+    // Best-effort reconcile so the scheduler picks up enable/disable or
+    // interval changes without a restart. Reconcile failures don't block
+    // the API response — the change is durable in the DB and the next
+    // scheduler restart picks it up.
+    if let Some(ref scheduler) = state.scheduler {
+        let mut guard = scheduler.lock().await;
+        if let Err(e) = guard.reconcile_release_sources().await {
+            tracing::warn!(
+                "Failed to reconcile release-source schedules after update: {}",
+                e
+            );
+        }
+    }
+
     Ok(Json(updated.into()))
 }
 
 /// Trigger a manual poll for a source.
 ///
-/// **Phase 2 stub**: returns `501 Not Implemented`. Phase 4 wires this into
-/// the task queue (`PollReleaseSource` task type).
+/// Enqueues a `PollReleaseSource` task immediately. The task runs
+/// asynchronously via the worker pool; the response confirms the enqueue,
+/// not the poll outcome.
 #[utoipa::path(
     post,
     path = "/api/v1/release-sources/{source_id}/poll-now",
@@ -497,9 +512,10 @@ pub async fn update_release_source(
         ("source_id" = Uuid, Path, description = "Source ID")
     ),
     responses(
-        (status = 501, description = "Not implemented yet (Phase 4)", body = PollNowResponse),
+        (status = 202, description = "Poll task enqueued", body = PollNowResponse),
         (status = 404, description = "Source not found"),
         (status = 403, description = "PluginsManage permission required"),
+        (status = 409, description = "Source disabled"),
     ),
     security(
         ("jwt_bearer" = []),
@@ -514,19 +530,28 @@ pub async fn poll_release_source_now(
 ) -> Result<(StatusCode, Json<PollNowResponse>), ApiError> {
     auth.require_permission(&Permission::PluginsManage)?;
 
-    // Confirm the source exists - fail fast with 404 even though we don't act.
-    ReleaseSourceRepository::get_by_id(&state.db, source_id)
+    // Confirm the source exists.
+    let source = ReleaseSourceRepository::get_by_id(&state.db, source_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch source: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Release source not found".to_string()))?;
 
+    if !source.enabled {
+        return Err(ApiError::Conflict(format!(
+            "Source '{}' is disabled; enable it before polling",
+            source.display_name
+        )));
+    }
+
+    let task_id = crate::scheduler::release_sources::enqueue_poll_now(&state.db, source_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to enqueue poll task: {}", e)))?;
+
     Ok((
-        StatusCode::NOT_IMPLEMENTED,
+        StatusCode::ACCEPTED,
         Json(PollNowResponse {
-            status: "not_implemented".to_string(),
-            message:
-                "Manual poll-now not implemented yet. Phase 4 (PollReleaseSource task) wires this."
-                    .to_string(),
+            status: "enqueued".to_string(),
+            message: format!("Poll task enqueued (task_id={})", task_id),
         }),
     ))
 }
