@@ -249,6 +249,36 @@ pub struct SeriesDto {
     #[schema(example = 2)]
     pub unread_count: Option<i64>,
 
+    /// Difference between the upstream original-language chapter count
+    /// (`series_metadata.total_chapter_count`, supplied by metadata
+    /// providers like MangaBaka or AniList) and the highest locally-owned
+    /// chapter (`local_max_chapter`).
+    ///
+    /// Always `None` unless the series is tracked AND `track_chapters` is
+    /// enabled AND the provider count is populated AND the rounded-to-1-
+    /// decimal gap is positive. **This is an informational signal, not a
+    /// release announcement** — Phase 6's MangaUpdates plugin owns the
+    /// translation-release feed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 3.0)]
+    pub upstream_chapter_gap: Option<f32>,
+
+    /// Difference between the upstream original-language volume count
+    /// (`series_metadata.total_volume_count`) and the highest locally-owned
+    /// volume (`local_max_volume`). Same suppression rules as
+    /// `upstream_chapter_gap`, gated on `track_volumes`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1)]
+    pub upstream_volume_gap: Option<i32>,
+
+    /// Display name of the metadata provider that supplied the upstream
+    /// counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
+    /// `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
+    /// the Phase 7 badge tooltip.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "MangaBaka")]
+    pub upstream_gap_provider: Option<String>,
+
     /// When the series was created
     #[schema(example = "2024-01-01T00:00:00Z")]
     pub created_at: DateTime<Utc>,
@@ -1264,6 +1294,22 @@ pub struct FullSeriesResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 14)]
     pub volumes_owned: Option<i64>,
+
+    /// Upstream-vs-local chapter delta. See `SeriesDto::upstream_chapter_gap`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 3.0)]
+    pub upstream_chapter_gap: Option<f32>,
+
+    /// Upstream-vs-local volume delta. See `SeriesDto::upstream_volume_gap`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1)]
+    pub upstream_volume_gap: Option<i32>,
+
+    /// Provider that supplied the upstream counts. See
+    /// `SeriesDto::upstream_gap_provider`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "MangaBaka")]
+    pub upstream_gap_provider: Option<String>,
 
     /// Number of unread books in this series (user-specific)
     #[serde(skip_serializing_if = "Option::is_none")]
