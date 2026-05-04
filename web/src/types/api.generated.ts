@@ -10133,6 +10133,24 @@ export interface components {
              */
             updatedAt: string;
             /**
+             * Format: float
+             * @description Upstream-vs-local chapter delta. See `SeriesDto::upstream_chapter_gap`.
+             * @example 3
+             */
+            upstreamChapterGap?: number | null;
+            /**
+             * @description Provider that supplied the upstream counts. See
+             *     `SeriesDto::upstream_gap_provider`.
+             * @example MangaBaka
+             */
+            upstreamGapProvider?: string | null;
+            /**
+             * Format: int32
+             * @description Upstream-vs-local volume delta. See `SeriesDto::upstream_volume_gap`.
+             * @example 1
+             */
+            upstreamVolumeGap?: number | null;
+            /**
              * Format: int64
              * @description Number of books classified as a complete volume (volume set, chapter null).
              *     See `SeriesDto::volumes_owned` for semantics.
@@ -12762,6 +12780,38 @@ export interface components {
                  * @example 2024-01-15T10:30:00Z
                  */
                 updatedAt: string;
+                /**
+                 * Format: float
+                 * @description Difference between the upstream original-language chapter count
+                 *     (`series_metadata.total_chapter_count`, supplied by metadata
+                 *     providers like MangaBaka or AniList) and the highest locally-owned
+                 *     chapter (`local_max_chapter`).
+                 *
+                 *     Always `None` unless the series is tracked AND `track_chapters` is
+                 *     enabled AND the provider count is populated AND the rounded-to-1-
+                 *     decimal gap is positive. **This is an informational signal, not a
+                 *     release announcement** — Phase 6's MangaUpdates plugin owns the
+                 *     translation-release feed.
+                 * @example 3
+                 */
+                upstreamChapterGap?: number | null;
+                /**
+                 * @description Display name of the metadata provider that supplied the upstream
+                 *     counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
+                 *     `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
+                 *     the Phase 7 badge tooltip.
+                 * @example MangaBaka
+                 */
+                upstreamGapProvider?: string | null;
+                /**
+                 * Format: int32
+                 * @description Difference between the upstream original-language volume count
+                 *     (`series_metadata.total_volume_count`) and the highest locally-owned
+                 *     volume (`local_max_volume`). Same suppression rules as
+                 *     `upstream_chapter_gap`, gated on `track_volumes`.
+                 * @example 1
+                 */
+                upstreamVolumeGap?: number | null;
                 /**
                  * Format: int64
                  * @description Number of books in this series classified as a complete volume
@@ -15427,6 +15477,38 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+            /**
+             * Format: float
+             * @description Difference between the upstream original-language chapter count
+             *     (`series_metadata.total_chapter_count`, supplied by metadata
+             *     providers like MangaBaka or AniList) and the highest locally-owned
+             *     chapter (`local_max_chapter`).
+             *
+             *     Always `None` unless the series is tracked AND `track_chapters` is
+             *     enabled AND the provider count is populated AND the rounded-to-1-
+             *     decimal gap is positive. **This is an informational signal, not a
+             *     release announcement** — Phase 6's MangaUpdates plugin owns the
+             *     translation-release feed.
+             * @example 3
+             */
+            upstreamChapterGap?: number | null;
+            /**
+             * @description Display name of the metadata provider that supplied the upstream
+             *     counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
+             *     `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
+             *     the Phase 7 badge tooltip.
+             * @example MangaBaka
+             */
+            upstreamGapProvider?: string | null;
+            /**
+             * Format: int32
+             * @description Difference between the upstream original-language volume count
+             *     (`series_metadata.total_volume_count`) and the highest locally-owned
+             *     volume (`local_max_volume`). Same suppression rules as
+             *     `upstream_chapter_gap`, gated on `track_volumes`.
+             * @example 1
+             */
+            upstreamVolumeGap?: number | null;
             /**
              * Format: int64
              * @description Number of books in this series classified as a complete volume

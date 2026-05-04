@@ -30,11 +30,14 @@ use crate::db::entities::{series, series_metadata};
 use crate::db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
     GenreRepository, LibraryRepository, ReadProgressRepository, SeriesCoversRepository,
-    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository, SharingTagRepository,
-    TagRepository, UserSeriesRatingRepository,
+    SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
+    SeriesTrackingRepository, SharingTagRepository, TagRepository, UserSeriesRatingRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
+use crate::services::release::upstream_gap::{
+    UpstreamGap, UpstreamGapInputs, compute_upstream_gap,
+};
 use crate::utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
     validate_custom_metadata_size,
@@ -180,6 +183,33 @@ async fn series_to_dto(
         .map(|m| m.title.clone())
         .unwrap_or_else(|| "Unknown Series".to_string());
 
+    // Phase 5 of release-tracking: compute the upstream-publication gap
+    // signal. Skipped entirely for untracked series.
+    let tracking = SeriesTrackingRepository::get(db, series.id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series tracking: {:?}", e)))?;
+    let external_ids = if tracking.as_ref().map(|t| t.tracked).unwrap_or(false) {
+        SeriesExternalIdRepository::get_for_series(db, series.id)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to fetch series external IDs: {:?}", e))
+            })?
+    } else {
+        Vec::new()
+    };
+    let UpstreamGap {
+        chapter_gap: upstream_chapter_gap,
+        volume_gap: upstream_volume_gap,
+        provider: upstream_gap_provider,
+    } = compute_upstream_gap(&UpstreamGapInputs {
+        tracking: tracking.as_ref(),
+        total_chapter_count: metadata.as_ref().and_then(|m| m.total_chapter_count),
+        total_volume_count: metadata.as_ref().and_then(|m| m.total_volume_count),
+        local_max_chapter: aggregates.local_max_chapter,
+        local_max_volume: aggregates.local_max_volume,
+        external_ids: &external_ids,
+    });
+
     Ok(SeriesDto {
         id: series.id,
         library_id: series.library_id,
@@ -197,6 +227,9 @@ async fn series_to_dto(
         selected_cover_source: selected_cover.map(|c| c.source),
         has_custom_cover: Some(has_custom_cover),
         unread_count,
+        upstream_chapter_gap,
+        upstream_volume_gap,
+        upstream_gap_provider,
         created_at: series.created_at,
         updated_at: series.updated_at,
     })
@@ -241,6 +274,7 @@ async fn series_to_full_dtos_batched(
         ext_ratings_map,
         ext_links_map,
         ext_ids_map,
+        tracking_map,
     ) = tokio::join!(
         SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
         SeriesRepository::get_book_counts_for_series_ids(db, &series_ids),
@@ -261,6 +295,7 @@ async fn series_to_full_dtos_batched(
         ExternalRatingRepository::get_for_series_ids(db, &series_ids),
         ExternalLinkRepository::get_for_series_ids(db, &series_ids),
         SeriesExternalIdRepository::get_for_series_ids(db, &series_ids),
+        SeriesTrackingRepository::get_for_series_ids(db, &series_ids),
     );
 
     // Handle errors
@@ -294,6 +329,8 @@ async fn series_to_full_dtos_batched(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch external links: {}", e)))?;
     let ext_ids_map = ext_ids_map
         .map_err(|e| ApiError::Internal(format!("Failed to fetch external IDs: {}", e)))?;
+    let tracking_map = tracking_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch tracking rows: {}", e)))?;
 
     // Build full responses
     let mut results = Vec::with_capacity(series_list.len());
@@ -415,6 +452,24 @@ async fn series_to_full_dtos_batched(
             .map(|ids| ids.iter().cloned().map(SeriesExternalIdDto::from).collect())
             .unwrap_or_default();
 
+        // Phase 5 of release-tracking: upstream-publication gap signal.
+        let series_external_ids = ext_ids_map
+            .get(&series_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+        let UpstreamGap {
+            chapter_gap: upstream_chapter_gap,
+            volume_gap: upstream_volume_gap,
+            provider: upstream_gap_provider,
+        } = compute_upstream_gap(&UpstreamGapInputs {
+            tracking: tracking_map.get(&series_id),
+            total_chapter_count: metadata.total_chapter_count,
+            total_volume_count: metadata.total_volume_count,
+            local_max_chapter: aggregates.local_max_chapter,
+            local_max_volume: aggregates.local_max_volume,
+            external_ids: series_external_ids,
+        });
+
         results.push(FullSeriesResponse {
             id: series.id,
             library_id: series.library_id,
@@ -423,6 +478,9 @@ async fn series_to_full_dtos_batched(
             local_max_volume: aggregates.local_max_volume,
             local_max_chapter: aggregates.local_max_chapter,
             volumes_owned: aggregates.volumes_owned,
+            upstream_chapter_gap,
+            upstream_volume_gap,
+            upstream_gap_provider,
             unread_count,
             path: Some(series.path),
             selected_cover_source: selected_cover.map(|c| c.source.clone()),

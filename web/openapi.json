@@ -24550,6 +24550,32 @@
             "description": "When the series was last updated",
             "example": "2024-01-15T10:30:00Z"
           },
+          "upstreamChapterGap": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Upstream-vs-local chapter delta. See `SeriesDto::upstream_chapter_gap`.",
+            "example": 3.0
+          },
+          "upstreamGapProvider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider that supplied the upstream counts. See\n`SeriesDto::upstream_gap_provider`.",
+            "example": "MangaBaka"
+          },
+          "upstreamVolumeGap": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Upstream-vs-local volume delta. See `SeriesDto::upstream_volume_gap`.",
+            "example": 1
+          },
           "volumesOwned": {
             "type": [
               "integer",
@@ -29395,6 +29421,32 @@
                   "description": "When the series was last updated",
                   "example": "2024-01-15T10:30:00Z"
                 },
+                "upstreamChapterGap": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float",
+                  "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement** — Phase 6's MangaUpdates plugin owns the\ntranslation-release feed.",
+                  "example": 3.0
+                },
+                "upstreamGapProvider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe Phase 7 badge tooltip.",
+                  "example": "MangaBaka"
+                },
+                "upstreamVolumeGap": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "Difference between the upstream original-language volume count\n(`series_metadata.total_volume_count`) and the highest locally-owned\nvolume (`local_max_volume`). Same suppression rules as\n`upstream_chapter_gap`, gated on `track_volumes`.",
+                  "example": 1
+                },
                 "volumesOwned": {
                   "type": [
                     "integer",
@@ -34130,6 +34182,32 @@
             "format": "date-time",
             "description": "When the series was last updated",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "upstreamChapterGap": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement** — Phase 6's MangaUpdates plugin owns the\ntranslation-release feed.",
+            "example": 3.0
+          },
+          "upstreamGapProvider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe Phase 7 badge tooltip.",
+            "example": "MangaBaka"
+          },
+          "upstreamVolumeGap": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Difference between the upstream original-language volume count\n(`series_metadata.total_volume_count`) and the highest locally-owned\nvolume (`local_max_volume`). Same suppression rules as\n`upstream_chapter_gap`, gated on `track_volumes`.",
+            "example": 1
           },
           "volumesOwned": {
             "type": [

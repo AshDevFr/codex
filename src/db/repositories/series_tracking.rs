@@ -184,6 +184,23 @@ impl SeriesTrackingRepository {
         Ok(results.into_iter().map(|m| m.series_id).collect())
     }
 
+    /// Batched lookup: fetch tracking rows for many series in one query and
+    /// return them keyed by `series_id`. Series without a tracking row are
+    /// absent from the map (callers should treat this as untracked).
+    pub async fn get_for_series_ids(
+        db: &DatabaseConnection,
+        series_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, SeriesTrackingRow>> {
+        if series_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        let rows = SeriesTracking::find()
+            .filter(series_tracking::Column::SeriesId.is_in(series_ids.to_vec()))
+            .all(db)
+            .await?;
+        Ok(rows.into_iter().map(|r| (r.series_id, r)).collect())
+    }
+
     /// Count tracked series.
     pub async fn count_tracked(db: &DatabaseConnection) -> Result<u64> {
         use sea_orm::PaginatorTrait;
@@ -386,6 +403,46 @@ mod tests {
 
         let count = SeriesTrackingRepository::count_tracked(conn).await.unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn get_for_series_ids_returns_only_existing_rows() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let s1 = SeriesRepository::create(conn, library.id, "A", None)
+            .await
+            .unwrap();
+        let s2 = SeriesRepository::create(conn, library.id, "B", None)
+            .await
+            .unwrap();
+        let s3 = SeriesRepository::create(conn, library.id, "C", None)
+            .await
+            .unwrap();
+
+        SeriesTrackingRepository::set_tracked(conn, s1.id, true)
+            .await
+            .unwrap();
+        SeriesTrackingRepository::set_tracked(conn, s2.id, false)
+            .await
+            .unwrap();
+        // s3 has no tracking row.
+
+        let map = SeriesTrackingRepository::get_for_series_ids(conn, &[s1.id, s2.id, s3.id])
+            .await
+            .unwrap();
+        assert_eq!(map.len(), 2);
+        assert!(map.get(&s1.id).map(|r| r.tracked).unwrap_or(false));
+        assert_eq!(map.get(&s2.id).map(|r| r.tracked), Some(false));
+        assert!(!map.contains_key(&s3.id));
+
+        let empty = SeriesTrackingRepository::get_for_series_ids(conn, &[])
+            .await
+            .unwrap();
+        assert!(empty.is_empty());
     }
 
     #[tokio::test]

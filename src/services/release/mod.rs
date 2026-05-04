@@ -9,6 +9,9 @@
 //!   same domain.
 //! - [`schedule`] — interval resolution and jitter for the polling
 //!   scheduler.
+//! - [`upstream_gap`] — Phase 5 metadata-derived publication-gap signal
+//!   surfaced on the series DTO. Read-side only; does not write to the
+//!   release ledger.
 //!
 //! Plugins emit candidates over the reverse-RPC channel; the matcher applies
 //! the threshold and hands the survivors to the ledger repository, which is
@@ -18,3 +21,4 @@ pub mod backoff;
 pub mod candidate;
 pub mod matcher;
 pub mod schedule;
+pub mod upstream_gap;
