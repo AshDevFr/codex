@@ -88,26 +88,50 @@ plugins:
     credential_delivery: env
 
   # AniList Recommendations - Personalized manga recommendations
+  # Recommendation plugins are gated by manifest capability + per-user enable;
+  # they don't write metadata, so no `permissions` or `scopes` are needed.
   - name: recommendations-anilist
     display_name: AniList Recommendations
     description: Personalized manga recommendations from AniList based on reading history
     plugin_type: user
     command: node
     args: ["/opt/codex/plugins/recommendations-anilist/dist/index.js"]
-    permissions:
-      - "metadata:read"
+    permissions: []
     scopes: []
     credential_delivery: env
 
   # AniList Sync - Reading progress sync
+  # Sync plugins are gated by manifest capability + per-user enable; they don't
+  # write series/book metadata, so no `permissions` or `scopes` are needed.
   - name: sync-anilist
     display_name: AniList Sync
     description: Sync manga reading progress between Codex and AniList
     plugin_type: user
     command: node
     args: ["/opt/codex/plugins/sync-anilist/dist/index.js"]
-    permissions:
-      - "metadata:read"
+    permissions: []
+    scopes: []
+    credential_delivery: env
+
+  # MangaUpdates Releases - Translation/scanlation release feed (no credentials needed)
+  # Release-source plugins are gated by manifest capability at reverse-RPC
+  # dispatch; they don't write metadata, so no `permissions` or `scopes` are needed.
+  - name: release-mangaupdates
+    display_name: MangaUpdates Releases
+    description: Announces new chapter releases for tracked series via MangaUpdates per-series RSS feeds
+    command: node
+    args: ["/opt/codex/plugins/release-mangaupdates/dist/index.js"]
+    permissions: []
+    scopes: []
+    credential_delivery: env
+
+  # Nyaa Releases - Acquisition-pointer source for trusted uploaders (no credentials needed)
+  - name: release-nyaa
+    display_name: Nyaa Releases
+    description: Announces new chapter / volume torrents for tracked series via Nyaa.si uploader RSS feeds
+    command: node
+    args: ["/opt/codex/plugins/release-nyaa/dist/index.js"]
+    permissions: []
     scopes: []
     credential_delivery: env
 

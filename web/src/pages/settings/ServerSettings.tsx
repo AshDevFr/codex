@@ -469,7 +469,14 @@ export function ServerSettings() {
             ) : (
               <Stack gap="md">
                 {Object.entries(groupedSettings)
-                  .filter(([category]) => category.toLowerCase() !== "display")
+                  // "display" is rendered above as a separate section.
+                  // "Release Tracking" has its own dedicated page at
+                  // /settings/release-tracking — hide it here so admins don't
+                  // have two surfaces editing the same keys.
+                  .filter(([category]) => {
+                    const c = category.toLowerCase();
+                    return c !== "display" && c !== "release tracking";
+                  })
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([category, categorySettings]) => (
                     <SettingsCategorySection

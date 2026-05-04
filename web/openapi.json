@@ -30653,6 +30653,10 @@
             },
             "description": "Content types this plugin can provide metadata for (e.g., [\"series\", \"book\"])"
           },
+          "releaseSource": {
+            "type": "boolean",
+            "description": "Whether the plugin declares the `release_source` capability (announces\nnew chapter / volume releases for tracked series)."
+          },
           "userReadSync": {
             "type": "boolean",
             "description": "Can sync user reading progress"

@@ -13514,6 +13514,11 @@ export interface components {
             externalIdSource?: string | null;
             /** @description Content types this plugin can provide metadata for (e.g., ["series", "book"]) */
             metadataProvider?: string[];
+            /**
+             * @description Whether the plugin declares the `release_source` capability (announces
+             *     new chapter / volume releases for tracked series).
+             */
+            releaseSource?: boolean;
             /** @description Can sync user reading progress */
             userReadSync?: boolean;
             /** @description Can provide personalized recommendations */
