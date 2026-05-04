@@ -453,11 +453,14 @@ export function JobEditor({ libraryId, opened, onClose, job }: JobEditorProps) {
           onChange={(e) => setExistingOnly(e.currentTarget.checked)}
         />
         <NumberInput
-          label="Skip if synced within (seconds)"
+          label="Skip if synced within (hours)"
           description="Skip series synced more recently than this. 0 disables the guard."
-          value={skipRecent}
-          onChange={(v) => setSkipRecent(typeof v === "number" ? v : 3600)}
+          value={skipRecent / 3600}
+          onChange={(v) =>
+            setSkipRecent(typeof v === "number" ? Math.max(0, v) * 3600 : 3600)
+          }
           min={0}
+          step={1}
         />
         <NumberInput
           label="Max concurrency"
