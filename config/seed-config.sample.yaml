@@ -29,7 +29,9 @@ users:
 # For production, use npx: command: "npx", args: ["-y", "@ashdev/codex-plugin-<name>"]
 #
 # credential_delivery options: "init_message" (default), "env", "both"
-# credentials: JSON object with API keys/tokens (optional, can be set later via UI)
+# credentials: YAML mapping of API keys/tokens (optional, can be set later via UI).
+#   Use a YAML mapping, NOT a quoted JSON string — quoting turns it into a string
+#   and the plugin will receive the raw text instead of an object.
 #
 # NOTE: If credentials are provided, CODEX_ENCRYPTION_KEY must be set.
 plugins:
@@ -48,7 +50,8 @@ plugins:
       - "library:detail"
       - "library:scan"
     credential_delivery: init_message
-    # credentials: { "api_key": "your-mangabaka-api-key" }
+    # credentials:
+    #   api_key: "your-mangabaka-api-key"
 
   # Echo - Test/debug plugin (no credentials needed)
   - name: metadata-echo
