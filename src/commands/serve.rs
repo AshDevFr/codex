@@ -285,7 +285,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             db.sea_orm_connection().clone(),
         ))
         .with_metrics_service(plugin_metrics_service.clone())
-        .with_plugin_file_storage(plugin_file_storage.clone()),
+        .with_plugin_file_storage(plugin_file_storage.clone())
+        .with_event_broadcaster(event_broadcaster.clone()),
     );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {
