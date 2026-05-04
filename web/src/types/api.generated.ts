@@ -2472,8 +2472,9 @@ export interface paths {
         put?: never;
         /**
          * Trigger a manual poll for a source.
-         * @description **Phase 2 stub**: returns `501 Not Implemented`. Phase 4 wires this into
-         *     the task queue (`PollReleaseSource` task type).
+         * @description Enqueues a `PollReleaseSource` task immediately. The task runs
+         *     asynchronously via the worker pool; the response confirms the enqueue,
+         *     not the poll outcome.
          */
         post: operations["poll_release_source_now"];
         delete?: never;
@@ -14024,13 +14025,16 @@ export interface components {
             total: number;
         };
         /**
-         * @description Response shape from the `poll-now` endpoint. Phase 4 wires this to the task
-         *     queue; Phase 2 returns a stub indicating the operation isn't implemented.
+         * @description Response shape from the `poll-now` endpoint.
+         *
+         *     `status` is `enqueued` after a successful enqueue. The `message` carries
+         *     the task ID for follow-up (`tasks.id`); the task runs asynchronously, so
+         *     this response does not reflect poll outcome.
          */
         PollNowResponse: {
-            /** @description Human-readable message. */
+            /** @description Human-readable message; includes the enqueued task ID. */
             message: string;
-            /** @description `enqueued` once Phase 4 lands; `not_implemented` until then. */
+            /** @description `enqueued` on success. */
             status: string;
         };
         /** @description Preview scan request */
@@ -16706,6 +16710,11 @@ export interface components {
             seriesIds?: string[] | null;
             /** @enum {string} */
             type: "backfill_tracking_from_metadata";
+        } | {
+            /** Format: uuid */
+            sourceId: string;
+            /** @enum {string} */
+            type: "poll_release_source";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -23152,6 +23161,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Poll task enqueued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollNowResponse"];
+                };
+            };
             /** @description PluginsManage permission required */
             403: {
                 headers: {
@@ -23166,14 +23184,12 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not implemented yet (Phase 4) */
-            501: {
+            /** @description Source disabled */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["PollNowResponse"];
-                };
+                content?: never;
             };
         };
     };

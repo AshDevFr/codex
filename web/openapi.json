@@ -7206,7 +7206,7 @@
           "Releases"
         ],
         "summary": "Trigger a manual poll for a source.",
-        "description": "**Phase 2 stub**: returns `501 Not Implemented`. Phase 4 wires this into\nthe task queue (`PollReleaseSource` task type).",
+        "description": "Enqueues a `PollReleaseSource` task immediately. The task runs\nasynchronously via the worker pool; the response confirms the enqueue,\nnot the poll outcome.",
         "operationId": "poll_release_source_now",
         "parameters": [
           {
@@ -7221,14 +7221,8 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "PluginsManage permission required"
-          },
-          "404": {
-            "description": "Source not found"
-          },
-          "501": {
-            "description": "Not implemented yet (Phase 4)",
+          "202": {
+            "description": "Poll task enqueued",
             "content": {
               "application/json": {
                 "schema": {
@@ -7236,6 +7230,15 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          },
+          "404": {
+            "description": "Source not found"
+          },
+          "409": {
+            "description": "Source disabled"
           }
         },
         "security": [
@@ -31625,7 +31628,7 @@
       },
       "PollNowResponse": {
         "type": "object",
-        "description": "Response shape from the `poll-now` endpoint. Phase 4 wires this to the task\nqueue; Phase 2 returns a stub indicating the operation isn't implemented.",
+        "description": "Response shape from the `poll-now` endpoint.\n\n`status` is `enqueued` after a successful enqueue. The `message` carries\nthe task ID for follow-up (`tasks.id`); the task runs asynchronously, so\nthis response does not reflect poll outcome.",
         "required": [
           "status",
           "message"
@@ -31633,11 +31636,11 @@
         "properties": {
           "message": {
             "type": "string",
-            "description": "Human-readable message."
+            "description": "Human-readable message; includes the enqueued task ID."
           },
           "status": {
             "type": "string",
-            "description": "`enqueued` once Phase 4 lands; `not_implemented` until then."
+            "description": "`enqueued` on success."
           }
         }
       },
@@ -36680,6 +36683,26 @@
                 "type": "string",
                 "enum": [
                   "backfill_tracking_from_metadata"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Poll a single `release_sources` row for new releases.\n\nResolves the source's owning plugin, calls `releases/poll` over the\nexisting plugin host, runs returned candidates through the matcher +\nthreshold, and writes accepted candidates to the ledger. On success\nupdates `last_polled_at` (and optionally `etag`); on failure records\n`last_error`. Idempotent: ledger writes dedup on\n`(source_id, external_release_id)` and `info_hash`.",
+            "required": [
+              "sourceId",
+              "type"
+            ],
+            "properties": {
+              "sourceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "poll_release_source"
                 ]
               }
             }

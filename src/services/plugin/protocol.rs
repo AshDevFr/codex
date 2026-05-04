@@ -248,7 +248,6 @@ pub mod methods {
 
     // Release-source methods (host -> plugin)
     /// Ask the plugin to poll its source for new releases.
-    #[allow(dead_code)] // Host -> plugin call wired in Phase 4 (PollReleaseSource task).
     pub const RELEASES_POLL: &str = "releases/poll";
 
     // Release-source reverse-RPC methods (plugin -> host)
@@ -1388,6 +1387,59 @@ pub struct InitializeParams {
     /// Plugins can use this for larger file-based storage (SQLite DBs, caches, etc.)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_dir: Option<String>,
+}
+
+// =============================================================================
+// Releases Poll (host -> plugin)
+// =============================================================================
+
+/// Parameters for `releases/poll` (host → plugin call).
+///
+/// The host invokes this once per scheduled poll for a single
+/// `release_sources` row. The plugin uses the `source_id` to scope its work
+/// (which feed/uploader/series to query) and may consult the supplied
+/// `etag` for conditional GETs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleasePollRequest {
+    /// Source row the plugin should poll. The plugin can call back into
+    /// `releases/source_state/get` for richer state (etag, last_polled_at)
+    /// or `releases/list_tracked` to harvest the tracked-series scope.
+    pub source_id: uuid::Uuid,
+    /// Etag value from the previous successful poll, if any. Plugins doing
+    /// HTTP conditional GETs (`If-None-Match`) can use it directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+}
+
+/// Response from `releases/poll`.
+///
+/// Plugins MAY also call `releases/record` directly during polling (the
+/// reverse-RPC channel is open). The `candidates` field is convenience for
+/// plugins that prefer to return everything at once; both styles are
+/// supported and the host treats them identically.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleasePollResponse {
+    /// Optional batch of candidates the host should evaluate and ledger
+    /// (in addition to anything the plugin already streamed via
+    /// `releases/record`).
+    #[serde(default)]
+    pub candidates: Vec<crate::services::release::candidate::ReleaseCandidate>,
+    /// New etag observed by the plugin (e.g. from the upstream feed's
+    /// `ETag` header). The host stores this on the source row for the
+    /// next poll's conditional-GET.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    /// Whether the upstream returned `304 Not Modified` (or equivalent
+    /// "no work" signal). Purely informational; the host doesn't act on it
+    /// beyond logging.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_modified: Option<bool>,
+    /// HTTP status code observed from the upstream feed, if any. Used by
+    /// the host's per-host backoff layer to detect 429 / 503.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_status: Option<u16>,
 }
 
 // =============================================================================

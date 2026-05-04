@@ -1,3 +1,5 @@
+pub mod release_sources;
+
 use anyhow::{Context, Result};
 use chrono_tz::Tz;
 use sea_orm::DatabaseConnection;
@@ -9,6 +11,7 @@ use crate::db::entities::library_jobs;
 use crate::db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
 use crate::scanner::{ScanMode, ScanningConfig};
 use crate::services::library_jobs::{LibraryJobConfig, parse_job_config};
+use crate::services::release::backoff::HostBackoff;
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
 use crate::utils::cron::{normalize_cron_expression, parse_timezone};
@@ -19,6 +22,13 @@ pub struct Scheduler {
     db: DatabaseConnection,
     /// Server-level default timezone for all cron schedules
     default_tz: Tz,
+    /// Per-host backoff state shared with the polling task handler. The
+    /// scheduler reads this when computing the effective interval at
+    /// reconcile time so a recently-throttled host doesn't immediately
+    /// get re-scheduled.
+    release_backoff: HostBackoff,
+    /// Reconcile state for the per-source release-polling jobs.
+    release_sources: release_sources::ReleaseSourceSchedule,
 }
 
 impl Scheduler {
@@ -49,7 +59,35 @@ impl Scheduler {
             scheduler,
             db,
             default_tz,
+            release_backoff: HostBackoff::new(),
+            release_sources: release_sources::ReleaseSourceSchedule::new(),
         })
+    }
+
+    /// Override the per-host backoff store with one shared from the
+    /// `TaskWorker`. Without this, the scheduler and the polling task have
+    /// independent (out of sync) backoff state, and 429/503 signals
+    /// observed by polls won't influence the next-tick interval.
+    #[allow(dead_code)] // Wired by main.rs once scheduler + worker share state; tests too.
+    pub fn with_release_backoff(mut self, backoff: HostBackoff) -> Self {
+        self.release_backoff = backoff;
+        self
+    }
+
+    /// Trigger a release-source reconcile. Call after writes to the
+    /// `release_sources` table so the scheduler picks up enable/disable
+    /// changes without a full restart.
+    pub async fn reconcile_release_sources(&mut self) -> Result<()> {
+        let settings = SettingsService::new(self.db.clone()).await?;
+        let default_interval = release_sources::read_default_poll_interval(&settings).await;
+        release_sources::reconcile(
+            &mut self.scheduler,
+            &mut self.release_sources,
+            &self.db,
+            self.release_backoff.clone(),
+            default_interval,
+        )
+        .await
     }
 
     /// Start the scheduler and load all scheduled jobs
@@ -77,6 +115,11 @@ impl Scheduler {
         // Load thumbnail generation schedules
         self.load_book_thumbnail_schedule().await?;
         self.load_series_thumbnail_schedule().await?;
+
+        // Load release-source polling schedules.
+        if let Err(e) = self.reconcile_release_sources().await {
+            warn!("Failed to load release-source schedules: {}", e);
+        }
 
         // Start the scheduler
         self.scheduler

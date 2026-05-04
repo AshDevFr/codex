@@ -515,11 +515,11 @@ async fn patch_source_requires_plugins_manage() {
 }
 
 // =============================================================================
-// POST /release-sources/{id}/poll-now (Phase 2 stub)
+// POST /release-sources/{id}/poll-now
 // =============================================================================
 
 #[tokio::test]
-async fn poll_now_returns_501_when_source_exists() {
+async fn poll_now_enqueues_task_when_source_exists() {
     let (db, _temp) = setup_test_db().await;
     let id = make_source(&db, "nyaa:user:tsuna69").await;
 
@@ -529,8 +529,52 @@ async fn poll_now_returns_501_when_source_exists() {
 
     let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/poll-now", id), &token);
     let (status, body): (StatusCode, Option<PollNowResponse>) = make_json_request(app, req).await;
-    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
-    assert_eq!(body.unwrap().status, "not_implemented");
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let body = body.unwrap();
+    assert_eq!(body.status, "enqueued");
+    assert!(body.message.contains("task_id="));
+
+    // Verify the task landed on the queue.
+    use codex::db::repositories::TaskRepository;
+    let pending = TaskRepository::list(
+        &db,
+        Some("pending".to_string()),
+        Some("poll_release_source".to_string()),
+        Some(10),
+    )
+    .await
+    .unwrap();
+    assert!(
+        !pending.is_empty(),
+        "expected a poll_release_source task to be pending"
+    );
+}
+
+#[tokio::test]
+async fn poll_now_conflicts_when_source_disabled() {
+    use codex::db::repositories::{ReleaseSourceRepository, ReleaseSourceUpdate};
+
+    let (db, _temp) = setup_test_db().await;
+    let id = make_source(&db, "nyaa:user:tsuna69").await;
+    // Disable it.
+    ReleaseSourceRepository::update(
+        &db,
+        id,
+        ReleaseSourceUpdate {
+            enabled: Some(false),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/poll-now", id), &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::CONFLICT);
 }
 
 #[tokio::test]

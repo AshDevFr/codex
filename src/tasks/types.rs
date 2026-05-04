@@ -221,6 +221,19 @@ pub enum TaskType {
         #[serde(rename = "seriesIds", default)]
         series_ids: Option<Vec<Uuid>>,
     },
+
+    /// Poll a single `release_sources` row for new releases.
+    ///
+    /// Resolves the source's owning plugin, calls `releases/poll` over the
+    /// existing plugin host, runs returned candidates through the matcher +
+    /// threshold, and writes accepted candidates to the ledger. On success
+    /// updates `last_polled_at` (and optionally `etag`); on failure records
+    /// `last_error`. Idempotent: ledger writes dedup on
+    /// `(source_id, external_release_id)` and `info_hash`.
+    PollReleaseSource {
+        #[serde(rename = "sourceId")]
+        source_id: Uuid,
+    },
 }
 
 fn default_mode() -> String {
@@ -268,6 +281,8 @@ impl TaskType {
             TaskType::UserPluginRecommendations { .. } => 180,
             // Release tracking maintenance
             TaskType::BackfillTrackingFromMetadata { .. } => 150,
+            // Release polling: scheduled background discovery
+            TaskType::PollReleaseSource { .. } => 170,
             // Cleanup
             TaskType::CleanupBookFiles { .. }
             | TaskType::CleanupSeriesFiles { .. }
@@ -310,6 +325,7 @@ impl TaskType {
                 "user_plugin_recommendation_dismiss"
             }
             TaskType::BackfillTrackingFromMetadata { .. } => "backfill_tracking_from_metadata",
+            TaskType::PollReleaseSource { .. } => "poll_release_source",
         }
     }
 
@@ -428,6 +444,9 @@ impl TaskType {
             }
             TaskType::BackfillTrackingFromMetadata { series_ids, .. } => {
                 serde_json::json!({ "series_ids": series_ids })
+            }
+            TaskType::PollReleaseSource { source_id } => {
+                serde_json::json!({ "source_id": source_id })
             }
             _ => serde_json::json!({}),
         }
@@ -1096,6 +1115,47 @@ mod tests {
         let deserialized: TaskType = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.type_string(), "refresh_library_metadata");
         assert_eq!(deserialized.job_id(), Some(job_id));
+    }
+
+    #[test]
+    fn test_poll_release_source_extraction() {
+        let source_id = Uuid::new_v4();
+        let task = TaskType::PollReleaseSource { source_id };
+
+        assert_eq!(task.type_string(), "poll_release_source");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+        assert_eq!(task.default_priority(), 170);
+
+        let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "poll_release_source");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(book_id, None);
+        let params = params.expect("expected source_id params");
+        assert_eq!(params["source_id"], serde_json::json!(source_id));
+    }
+
+    #[test]
+    fn test_poll_release_source_serialization() {
+        let source_id = Uuid::new_v4();
+        let task = TaskType::PollReleaseSource { source_id };
+
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("poll_release_source"));
+        assert!(json.contains(&source_id.to_string()));
+        // sourceId is the camelCase rename.
+        assert!(json.contains("sourceId"));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.type_string(), "poll_release_source");
+        match deserialized {
+            TaskType::PollReleaseSource { source_id: id } => {
+                assert_eq!(id, source_id);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]

@@ -177,13 +177,16 @@ pub struct UpdateReleaseSourceRequest {
     pub poll_interval_s: Option<i32>,
 }
 
-/// Response shape from the `poll-now` endpoint. Phase 4 wires this to the task
-/// queue; Phase 2 returns a stub indicating the operation isn't implemented.
+/// Response shape from the `poll-now` endpoint.
+///
+/// `status` is `enqueued` after a successful enqueue. The `message` carries
+/// the task ID for follow-up (`tasks.id`); the task runs asynchronously, so
+/// this response does not reflect poll outcome.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PollNowResponse {
-    /// `enqueued` once Phase 4 lands; `not_implemented` until then.
+    /// `enqueued` on success.
     pub status: String,
-    /// Human-readable message.
+    /// Human-readable message; includes the enqueued task ID.
     pub message: String,
 }
