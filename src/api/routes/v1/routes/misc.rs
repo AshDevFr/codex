@@ -80,9 +80,9 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/settings/public",
             get(handlers::settings::get_public_settings),
         )
-        // Static field-group catalog for the scheduled metadata refresh UI
+        // Static field-group catalog for the metadata-refresh job editor.
         .route(
-            "/metadata-refresh/field-groups",
-            get(handlers::metadata_refresh::list_field_groups),
+            "/library-jobs/metadata-refresh/field-groups",
+            get(handlers::library_jobs::list_field_groups),
         )
 }

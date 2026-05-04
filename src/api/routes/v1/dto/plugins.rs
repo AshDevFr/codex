@@ -1018,6 +1018,13 @@ pub struct PluginActionDto {
     /// URI template for searching on the plugin's website (from manifest)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_uri_template: Option<String>,
+
+    /// Capabilities the plugin advertises in its manifest. The library-jobs
+    /// editor uses this to decide which scope options are available for the
+    /// chosen provider. The `metadata_provider` array contains `"series"`
+    /// and/or `"book"` entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<PluginCapabilitiesDto>,
 }
 
 /// Response containing available plugin actions for a scope

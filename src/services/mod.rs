@@ -6,6 +6,7 @@ pub mod export_storage;
 pub mod file_cleanup;
 pub mod filter;
 pub mod inflight_thumbnails;
+pub mod library_jobs;
 pub mod metadata;
 pub mod oidc;
 pub mod pdf_cache;

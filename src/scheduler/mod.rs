@@ -1,14 +1,14 @@
 use anyhow::{Context, Result};
 use chrono_tz::Tz;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};
+use sea_orm::DatabaseConnection;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::{prelude::Tasks, tasks};
-use crate::db::repositories::{LibraryRepository, TaskRepository};
+use crate::db::entities::library_jobs;
+use crate::db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
 use crate::scanner::{ScanMode, ScanningConfig};
-use crate::services::metadata::parse_metadata_refresh_config;
+use crate::services::library_jobs::{LibraryJobConfig, parse_job_config};
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
 use crate::utils::cron::{normalize_cron_expression, parse_timezone};
@@ -541,36 +541,32 @@ impl Scheduler {
         Ok(())
     }
 
-    /// Load per-library scheduled metadata-refresh entries.
+    /// Load library-jobs cron entries.
     ///
-    /// Mirrors [`Self::load_library_schedules`] but reads `metadata_refresh_config`
-    /// instead of `scanning_config` and enqueues `RefreshLibraryMetadata` tasks.
-    /// Libraries with the schedule disabled (or missing config) get no entry.
+    /// Walks `library_jobs` rows where `enabled = true` and dispatches by
+    /// `r#type`. Phase 9 only handles `metadata_refresh`; future job types
+    /// extend the match.
     async fn load_library_metadata_refresh_schedules(&mut self) -> Result<()> {
-        let libraries = LibraryRepository::list_all(&self.db).await?;
-
-        for library in libraries {
-            if let Err(e) = self.add_library_metadata_refresh_schedule(library.id).await {
+        let jobs = LibraryJobRepository::list_enabled(&self.db, None).await?;
+        for job in jobs {
+            if let Err(e) = self.add_library_job_schedule(&job).await {
                 warn!(
-                    "Failed to add metadata refresh schedule for library {}: {}",
-                    library.name, e
+                    "Failed to add schedule for library job {} ('{}'): {}",
+                    job.id, job.name, e
                 );
             }
         }
-
         Ok(())
     }
 
-    /// Resolve the timezone for a library metadata-refresh job.
-    ///
-    /// Priority: refresh-config `timezone` > server default timezone.
-    fn resolve_metadata_refresh_timezone(&self, tz_str: Option<&str>) -> Tz {
+    /// Resolve the timezone for a library job.
+    fn resolve_library_job_timezone(&self, tz_str: Option<&str>) -> Tz {
         if let Some(tz_str) = tz_str {
             match parse_timezone(tz_str) {
                 Ok(tz) => return tz,
                 Err(e) => {
                     warn!(
-                        "Invalid metadata refresh timezone '{}': {}. Using server default ({})",
+                        "Invalid library-job timezone '{}': {}. Using server default ({})",
                         tz_str, e, self.default_tz
                     );
                 }
@@ -579,104 +575,83 @@ impl Scheduler {
         self.default_tz
     }
 
-    /// Add or update a library's scheduled metadata-refresh cron entry.
+    /// Register a single library-job's cron entry.
     ///
-    /// Reads `libraries.metadata_refresh_config`. When `enabled = true`, registers
-    /// a cron job that enqueues [`TaskType::RefreshLibraryMetadata`] with a
-    /// skip-if-already-running guard so a long previous run cannot pile up
-    /// duplicates if the next tick fires before it finishes.
-    pub async fn add_library_metadata_refresh_schedule(&mut self, library_id: Uuid) -> Result<()> {
-        let library = LibraryRepository::get_by_id(&self.db, library_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Library not found: {}", library_id))?;
-
-        let config = match parse_metadata_refresh_config(library.metadata_refresh_config.as_deref())
-        {
+    /// Each firing performs a per-job skip-if-already-running check
+    /// before enqueuing `RefreshLibraryMetadata { job_id }`. Two jobs on
+    /// the same library can run concurrently because the guard scopes
+    /// per-job, not per-library.
+    pub async fn add_library_job_schedule(&mut self, job: &library_jobs::Model) -> Result<()> {
+        // Type dispatch. Phase 9: only metadata_refresh.
+        let cfg = match parse_job_config(&job.r#type, &job.config) {
             Ok(c) => c,
             Err(e) => {
                 warn!(
-                    "Library {} has invalid metadata_refresh_config ({}); skipping schedule",
-                    library.name, e
+                    "Library job {} ('{}') has invalid config ({}); skipping schedule",
+                    job.id, job.name, e
                 );
                 return Ok(());
             }
         };
 
-        if !config.enabled {
-            debug!(
-                "Skipping library {} - scheduled metadata refresh disabled",
-                library.name
-            );
+        match cfg {
+            LibraryJobConfig::MetadataRefresh(_) => {}
+        }
+
+        if !job.enabled {
+            debug!("Skipping disabled library job {} ('{}')", job.id, job.name);
             return Ok(());
         }
 
-        let cron_schedule = normalize_cron_expression(&config.cron_schedule)
-            .context("Invalid cron expression for library metadata refresh schedule")?;
-
-        let tz = self.resolve_metadata_refresh_timezone(config.timezone.as_deref());
+        let cron_schedule = normalize_cron_expression(&job.cron_schedule)
+            .context("Invalid cron expression for library job")?;
+        let tz = self.resolve_library_job_timezone(job.timezone.as_deref());
 
         let db = self.db.clone();
-        let library_name = library.name.clone();
+        let job_id = job.id;
+        let job_name = job.name.clone();
 
-        let job = Job::new_async_tz(cron_schedule.as_str(), tz, move |_uuid, _lock| {
+        let scheduled_job = Job::new_async_tz(cron_schedule.as_str(), tz, move |_uuid, _lock| {
             let db = db.clone();
-            let library_name = library_name.clone();
+            let job_name = job_name.clone();
 
             Box::pin(async move {
-                // Skip-if-already-running guard: if a refresh task for this
-                // library is still pending or processing, drop this firing
-                // rather than letting cron ticks pile up duplicate work.
-                match has_active_refresh_for_library(&db, library_id).await {
+                match has_active_refresh_for_job(&db, job_id).await {
                     Ok(true) => {
                         warn!(
-                            "Skipping scheduled metadata refresh for library {}: previous task still running",
-                            library_name
+                            "Skipping library job '{}' ({}): previous run still active",
+                            job_name, job_id
                         );
                         return;
                     }
                     Ok(false) => {}
                     Err(e) => {
                         warn!(
-                            "Failed to check for in-flight refresh task for library {}: {}; proceeding",
-                            library_name, e
+                            "Failed to check in-flight task for job {}: {}; proceeding",
+                            job_id, e
                         );
                     }
                 }
 
-                info!(
-                    "Triggering scheduled metadata refresh for library {}",
-                    library_name
-                );
-
-                let task_type = TaskType::RefreshLibraryMetadata { library_id };
+                info!("Triggering library job '{}' ({})", job_name, job_id);
+                let task_type = TaskType::RefreshLibraryMetadata { job_id };
                 match TaskRepository::enqueue(&db, task_type, None).await {
-                    Ok(_) => {
-                        debug!(
-                            "Successfully enqueued scheduled metadata refresh for library {}",
-                            library_name
-                        );
-                    }
-                    Err(e) => {
-                        error!(
-                            "Failed to enqueue scheduled metadata refresh for library {}: {}",
-                            library_name, e
-                        );
-                    }
+                    Ok(_) => debug!("Enqueued library job '{}'", job_name),
+                    Err(e) => error!("Failed to enqueue library job {}: {}", job_id, e),
                 }
             })
         })
-        .context("Failed to create metadata refresh cron job")?;
+        .context("Failed to create library job cron")?;
 
         self.scheduler
-            .add(job)
+            .add(scheduled_job)
             .await
-            .context("Failed to add metadata refresh job to scheduler")?;
+            .context("Failed to add library job cron to scheduler")?;
 
         info!(
-            "Added metadata refresh schedule for library {} with cron '{}' (timezone: {})",
-            library.name, cron_schedule, tz
+            "Added library job '{}' ({}) cron='{}' tz={}",
+            job.name, job.id, cron_schedule, tz
         );
-
         Ok(())
     }
 
@@ -703,19 +678,42 @@ impl Scheduler {
 }
 
 /// Whether an active (`pending` or `processing`) `refresh_library_metadata`
-/// task already exists for the given library.
+/// task already exists for the given **job**.
 ///
-/// Used by the per-library refresh cron job to avoid stacking duplicate work
-/// when a previous run hasn't drained yet.
-async fn has_active_refresh_for_library(db: &DatabaseConnection, library_id: Uuid) -> Result<bool> {
-    let count = Tasks::find()
-        .filter(tasks::Column::TaskType.eq("refresh_library_metadata"))
-        .filter(tasks::Column::LibraryId.eq(library_id))
-        .filter(tasks::Column::Status.is_in(["pending", "processing"]))
-        .count(db)
+/// `job_id` is stored inside `tasks.params` as JSON, so we use a backend-
+/// specific JSON path query — same pattern as
+/// [`crate::db::repositories::TaskRepository::has_pending_or_processing`].
+pub async fn has_active_refresh_for_job(db: &DatabaseConnection, job_id: Uuid) -> Result<bool> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let job_id_str = job_id.to_string();
+    let backend = db.get_database_backend();
+    let stmt = match backend {
+        DbBackend::Postgres => Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            r#"SELECT 1 FROM tasks
+               WHERE task_type = $1
+                 AND status IN ('pending', 'processing')
+                 AND params->>'job_id' = $2
+               LIMIT 1"#,
+            vec!["refresh_library_metadata".into(), job_id_str.into()],
+        ),
+        _ => Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            r#"SELECT 1 FROM tasks
+               WHERE task_type = ?
+                 AND status IN ('pending', 'processing')
+                 AND json_extract(params, '$.job_id') = ?
+               LIMIT 1"#,
+            vec!["refresh_library_metadata".into(), job_id_str.into()],
+        ),
+    };
+
+    let result = db
+        .query_one(stmt)
         .await
-        .context("Failed to count active refresh tasks")?;
-    Ok(count > 0)
+        .context("Failed to check for active refresh tasks")?;
+    Ok(result.is_some())
 }
 
 #[cfg(test)]
@@ -733,70 +731,49 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn has_active_refresh_for_library_returns_false_when_no_tasks() {
+    async fn has_active_refresh_for_job_returns_false_when_no_tasks() {
         let db = setup_test_db().await;
-        let library = LibraryRepository::create(&db, "Lib", "/tmp/lib", ScanningStrategy::Default)
+        let _library = LibraryRepository::create(&db, "Lib", "/tmp/lib", ScanningStrategy::Default)
             .await
             .unwrap();
 
-        let active = has_active_refresh_for_library(&db, library.id)
+        let active = has_active_refresh_for_job(&db, Uuid::new_v4())
             .await
             .unwrap();
         assert!(
             !active,
-            "Fresh DB has no refresh tasks for the library, helper must report false"
+            "Fresh DB has no refresh tasks; helper must report false"
         );
     }
 
     #[tokio::test]
-    async fn has_active_refresh_for_library_detects_pending_task() {
+    async fn has_active_refresh_for_job_detects_pending_task() {
         let db = setup_test_db().await;
-        let library = LibraryRepository::create(&db, "Lib", "/tmp/lib", ScanningStrategy::Default)
+        let job_id = Uuid::new_v4();
+        TaskRepository::enqueue(&db, TaskType::RefreshLibraryMetadata { job_id }, None)
             .await
             .unwrap();
 
+        let active = has_active_refresh_for_job(&db, job_id).await.unwrap();
+        assert!(active, "Pending task for this job must be detected");
+    }
+
+    #[tokio::test]
+    async fn has_active_refresh_for_job_is_scoped_per_job() {
+        let db = setup_test_db().await;
+        let job_a = Uuid::new_v4();
+        let job_b = Uuid::new_v4();
         TaskRepository::enqueue(
             &db,
-            TaskType::RefreshLibraryMetadata {
-                library_id: library.id,
-            },
+            TaskType::RefreshLibraryMetadata { job_id: job_a },
             None,
         )
         .await
         .unwrap();
 
-        let active = has_active_refresh_for_library(&db, library.id)
-            .await
-            .unwrap();
-        assert!(
-            active,
-            "A pending refresh task for the same library must be detected"
-        );
-    }
-
-    #[tokio::test]
-    async fn has_active_refresh_for_library_is_scoped_per_library() {
-        let db = setup_test_db().await;
-        let lib_a = LibraryRepository::create(&db, "A", "/tmp/a", ScanningStrategy::Default)
-            .await
-            .unwrap();
-        let lib_b = LibraryRepository::create(&db, "B", "/tmp/b", ScanningStrategy::Default)
-            .await
-            .unwrap();
-
-        TaskRepository::enqueue(
-            &db,
-            TaskType::RefreshLibraryMetadata {
-                library_id: lib_a.id,
-            },
-            None,
-        )
-        .await
-        .unwrap();
-
-        let active_a = has_active_refresh_for_library(&db, lib_a.id).await.unwrap();
-        let active_b = has_active_refresh_for_library(&db, lib_b.id).await.unwrap();
-        assert!(active_a, "library A has the in-flight task");
-        assert!(!active_b, "library B has no in-flight task");
+        let active_a = has_active_refresh_for_job(&db, job_a).await.unwrap();
+        let active_b = has_active_refresh_for_job(&db, job_b).await.unwrap();
+        assert!(active_a, "job A has the in-flight task");
+        assert!(!active_b, "job B has no in-flight task");
     }
 }

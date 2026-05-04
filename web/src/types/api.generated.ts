@@ -8622,6 +8622,15 @@ export interface components {
              */
             voteCount?: number | null;
         };
+        /** @description Request body for `POST /api/v1/libraries/{id}/jobs`. */
+        CreateLibraryJobRequest: {
+            config: components["schemas"]["LibraryJobConfigDto"];
+            cronSchedule: string;
+            enabled?: boolean;
+            /** @description Optional user-facing name. Auto-generated when missing or empty. */
+            name?: string | null;
+            timezone?: string | null;
+        };
         /** @description Create library request */
         CreateLibraryRequest: {
             /**
@@ -8952,6 +8961,10 @@ export interface components {
             /** @description Whether the dismissal was recorded */
             dismissed: boolean;
         };
+        DryRunFieldChange: {
+            after: unknown;
+            before: unknown;
+        };
         /**
          * @description Dry-run preview attached to [`MetadataApplyResponse`] when the request
          *     set `dryRun = true`. Absent on real applies.
@@ -8959,65 +8972,51 @@ export interface components {
         DryRunReportDto: {
             changes: components["schemas"]["FieldChangeDto"][];
         };
-        /**
-         * @description Body for `POST /libraries/{id}/metadata-refresh/dry-run`.
-         *
-         *     `configOverride` lets the UI preview a config that hasn't been saved yet —
-         *     "what would happen if I clicked Save right now?". When absent, the saved
-         *     config is used.
-         */
+        /** @description Request body for `POST .../dry-run`. */
         DryRunRequest: {
-            /** @default null */
-            configOverride: null | components["schemas"]["MetadataRefreshConfigDto"];
+            configOverride?: null | components["schemas"]["LibraryJobConfigDto"];
             /**
              * Format: int32
-             * @description Number of series to preview. Defaults to 5, capped at 20.
-             * @default null
+             * @description Sample size, capped at 20 server-side.
              */
-            sampleSize: number | null;
+            sampleSize?: number | null;
         };
-        /** @description Full dry-run response. */
         DryRunResponse: {
             /**
              * Format: int32
-             * @description Estimated `(series, provider)` pairs the planner skipped because the
-             *     series has no stored external ID for the provider (strict mode only).
+             * @description Estimated count of series that would be skipped because they have no
+             *     external ID for the chosen provider.
              */
             estSkippedNoId: number;
             /**
              * Format: int32
-             * @description Estimated pairs skipped because their `last_synced_at` is younger than
-             *     the recency cutoff.
+             * @description Estimated count of series that would be skipped because they were
+             *     recently synced.
              */
             estSkippedRecentlySynced: number;
-            /** @description Per-series deltas, capped at the requested sample size. */
+            /** @description Provider resolution failure reason, if any. */
+            planFailure?: string | null;
+            /** @description Per-series deltas for the first N eligible series. */
             sample: components["schemas"]["DryRunSeriesDelta"][];
             /**
              * Format: int32
-             * @description Total number of `(series, provider)` pairs the planner produced before
-             *     the sample cap.
+             * @description Total number of series eligible to be refreshed (all of them, not
+             *     just the sample).
              */
             totalEligible: number;
-            /**
-             * @description Provider strings from the config that don't resolve to an enabled
-             *     plugin. Surfaced verbatim so the UI can highlight typos or disabled
-             *     plugins.
-             */
-            unresolvedProviders?: string[];
         };
-        /** @description One series' would-be deltas in a dry-run preview. */
+        /** @description One series's preview of would-be field changes. */
         DryRunSeriesDelta: {
-            /** @description Fields that would be written. */
-            changes: components["schemas"]["FieldChangeDto"][];
-            /** @description Plugin id (`"plugin:<name>"`) that produced this delta. */
-            provider: string;
+            /** @description Field name → `(before, after)` JSON values. */
+            changes: {
+                [key: string]: components["schemas"]["DryRunFieldChange"];
+            };
             /** Format: uuid */
             seriesId: string;
-            seriesTitle: string;
-            /** @description Fields that would be skipped (locked, no permission, etc.). */
-            skipped?: components["schemas"]["DryRunSkippedFieldDto"][];
+            seriesName: string;
+            /** @description Fields that would have been written but were skipped (locks, all-locked, etc.) */
+            skipped: components["schemas"]["DryRunSkippedFieldDto"][];
         };
-        /** @description A field skipped during a dry-run apply, with the reason. */
         DryRunSkippedFieldDto: {
             field: string;
             reason: string;
@@ -9537,16 +9536,10 @@ export interface components {
             before?: unknown;
             field: string;
         };
-        /** @description One entry from `GET /api/v1/metadata-refresh/field-groups`. */
+        /** @description Static field-group catalog row exposed for the editor UI. */
         FieldGroupDto: {
-            /**
-             * @description camelCase field names this group expands into. Match the
-             *     `should_apply_field` call sites in `MetadataApplier`.
-             */
             fields: string[];
-            /** @description Snake_case identifier stored in [`MetadataRefreshConfig::field_groups`]. */
             id: string;
-            /** @description Human-readable label for UI display. */
             label: string;
         };
         /** @description Operators for string and equality comparisons */
@@ -11071,6 +11064,36 @@ export interface components {
              */
             updatedAt: string;
         };
+        /**
+         * @description Type-discriminated job config exposed over the wire.
+         *
+         *     Phase 9 only ships the `metadata_refresh` variant; future job types
+         *     extend the enum.
+         */
+        LibraryJobConfigDto: components["schemas"]["MetadataRefreshJobConfigDto"] & {
+            /** @enum {string} */
+            type: "metadata_refresh";
+        };
+        /** @description Library job row exposed via GET / list / response. */
+        LibraryJobDto: {
+            config: components["schemas"]["LibraryJobConfigDto"];
+            /** Format: date-time */
+            createdAt: string;
+            cronSchedule: string;
+            enabled: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            lastRunAt?: string | null;
+            lastRunMessage?: string | null;
+            lastRunStatus?: string | null;
+            /** Format: uuid */
+            libraryId: string;
+            name: string;
+            timezone?: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         /** @description Metrics for a single library */
         LibraryMetricsDto: {
             /**
@@ -11125,6 +11148,10 @@ export interface components {
              * @example 5
              */
             totalGroups: number;
+        };
+        /** @description Response for `GET /libraries/{id}/jobs`. */
+        ListLibraryJobsResponse: {
+            jobs: components["schemas"]["LibraryJobDto"][];
         };
         /** @description Query parameters for listing settings */
         ListSettingsQuery: {
@@ -11519,62 +11546,32 @@ export interface components {
             /** @description Summary counts */
             summary: components["schemas"]["PreviewSummary"];
         };
-        /**
-         * @description Full read response for a library's scheduled metadata-refresh config.
-         *
-         *     When the library has no stored config, the server returns
-         *     [`MetadataRefreshConfig::default`] so clients always render something.
-         */
-        MetadataRefreshConfigDto: {
-            cronSchedule: string;
-            enabled: boolean;
-            existingSourceIdsOnly: boolean;
-            extraFields: string[];
-            fieldGroups: string[];
-            /** Format: int32 */
-            maxConcurrency: number;
-            perProviderOverrides?: {
-                [key: string]: components["schemas"]["ProviderOverrideDto"];
-            } | null;
-            providers: string[];
-            /** Format: int32 */
-            skipRecentlySyncedWithinS: number;
-            timezone?: string | null;
-        };
-        /**
-         * @description Partial PATCH body. Uses [`PatchValue`] for nullable fields so clients can
-         *     distinguish "leave alone" from "explicit clear".
-         *
-         *     All other fields use plain `Option<T>` because clearing a non-nullable
-         *     field doesn't make sense (e.g. you can't "unset" `enabled` — you can only
-         *     flip it).
-         */
-        MetadataRefreshConfigPatchDto: {
-            /** @default null */
-            cronSchedule: string | null;
-            /** @default null */
-            enabled: boolean | null;
-            /** @default null */
-            existingSourceIdsOnly: boolean | null;
-            /** @default null */
-            extraFields: string[] | null;
-            /** @default null */
-            fieldGroups: string[] | null;
+        /** @description Wire shape for the metadata-refresh job config. */
+        MetadataRefreshJobConfigDto: {
+            /** @description Reserved for the book-scope future work. */
+            bookExtraFields?: string[];
+            /** @description Reserved for the book-scope future work. */
+            bookFieldGroups?: string[];
+            /** @description When true, the planner skips series with no stored external ID. */
+            existingSourceIdsOnly?: boolean;
+            /** @description Series-side individual field overrides (camelCase). */
+            extraFields?: string[];
+            /** @description Series-side field groups (snake_case identifiers). */
+            fieldGroups?: string[];
             /**
              * Format: int32
-             * @default null
+             * @description Per-task fan-out; clamped at run time.
              */
-            maxConcurrency: number | null;
-            perProviderOverrides?: Record<string, never> | null;
-            /** @default null */
-            providers: string[] | null;
+            maxConcurrency?: number;
+            /** @description Plugin reference, e.g. `"plugin:mangabaka"`. */
+            provider: string;
+            /** @description Refresh scope. Phase 9 only honours `series_only` at runtime. */
+            scope?: components["schemas"]["RefreshScope"];
             /**
              * Format: int32
-             * @default null
+             * @description Skip series whose `last_synced_at` is younger than this many seconds.
              */
-            skipRecentlySyncedWithinS: number | null;
-            /** @default null */
-            timezone: string | null;
+            skipRecentlySyncedWithinS?: number;
         };
         /** @description Response for cleanup operation */
         MetricsCleanupResponse: {
@@ -12916,6 +12913,20 @@ export interface components {
             title?: string | null;
         };
         /**
+         * @description Request body for `PATCH /api/v1/libraries/{id}/jobs/{job_id}`.
+         *
+         *     All fields are optional. Top-level fields use [`PatchValue`] when their
+         *     underlying type is `Option<...>` so an explicit `null` clears the value
+         *     distinct from "not present".
+         */
+        PatchLibraryJobRequest: {
+            config?: null | components["schemas"]["LibraryJobConfigDto"];
+            cronSchedule?: string | null;
+            enabled?: boolean | null;
+            name?: string | null;
+            timezone?: string | null;
+        };
+        /**
          * @description PATCH request for partial update of series metadata
          *
          *     Only provided fields will be updated. Absent fields are unchanged.
@@ -13070,6 +13081,7 @@ export interface components {
         PluginActionDto: {
             /** @description Action type (e.g., "metadata_search", "metadata_get") */
             actionType: string;
+            capabilities?: null | components["schemas"]["PluginCapabilitiesDto"];
             /** @description Description of the action */
             description?: string | null;
             /** @description Icon hint for UI (optional) */
@@ -13744,14 +13756,6 @@ export interface components {
             willApply: number;
         };
         /**
-         * @description Per-provider override placeholder (Phase 8). Mirrors
-         *     [`crate::services::metadata::ProviderOverride`] for the wire format.
-         */
-        ProviderOverrideDto: {
-            extraFields?: string[];
-            fieldGroups?: string[];
-        };
-        /**
          * @description Public setting DTO (for non-admin users)
          *
          *     A simplified setting DTO that only includes the key and value,
@@ -14076,6 +14080,14 @@ export interface components {
             /** @description Status of a running/pending background task ("pending" or "running"), if any */
             taskStatus?: string | null;
         };
+        /**
+         * @description Scope of a metadata refresh job.
+         *
+         *     Phase 9 only honours [`RefreshScope::SeriesOnly`] at runtime. The
+         *     other variants are schema-accepted but rejected by the validator.
+         * @enum {string}
+         */
+        RefreshScope: "series_only" | "books_only" | "series_and_books";
         /** @description Register request */
         RegisterRequest: {
             /**
@@ -14539,13 +14551,9 @@ export interface components {
              */
             tasksEnqueued: number;
         };
-        /** @description Response for `POST /libraries/{id}/metadata-refresh/run-now`. */
+        /** @description Response for `POST .../run-now`. */
         RunNowResponse: {
-            /**
-             * Format: uuid
-             * @description Background task ID. Subscribe to events on `/api/v1/events/stream` to
-             *     follow progress.
-             */
+            /** Format: uuid */
             taskId: string;
         };
         /** @description Scan status response */
@@ -16069,7 +16077,7 @@ export interface components {
             type: "refresh_metadata";
         } | {
             /** Format: uuid */
-            libraryId: string;
+            jobId: string;
             /** @enum {string} */
             type: "refresh_library_metadata";
         } | {

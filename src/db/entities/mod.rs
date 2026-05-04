@@ -20,6 +20,7 @@ pub mod book_tags;
 pub mod books;
 pub mod email_verification_tokens;
 pub mod libraries;
+pub mod library_jobs;
 pub mod metadata_sources;
 pub mod pages;
 pub mod plugin_failures;

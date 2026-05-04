@@ -38,12 +38,6 @@ pub struct Model {
     /// Controls when auto-matching runs for this library
     #[sea_orm(column_type = "Text")]
     pub auto_match_conditions: Option<String>,
-    /// Scheduled metadata-refresh configuration as JSON object
-    /// Controls per-library cron, field groups, providers, and safety toggles
-    /// for the scheduled metadata refresh feature. NULL = feature off (defaults
-    /// applied when read).
-    #[sea_orm(column_type = "Text")]
-    pub metadata_refresh_config: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_scanned_at: Option<DateTime<Utc>>,

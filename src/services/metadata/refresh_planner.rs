@@ -1,23 +1,11 @@
 //! Planner that decides which `(series, provider)` pairs the scheduled
 //! metadata refresh should touch in a given run.
 //!
-//! The planner is intentionally side-effect free: it queries series and
-//! external-id state and returns a deterministic plan. The task handler is
-//! responsible for actually fetching from plugins and applying metadata.
-//!
-//! ## Filters
-//!
-//! - **Provider resolution**: config stores `"plugin:<name>"` strings. Only
-//!   providers that resolve to an enabled plugin contribute to the plan;
-//!   missing/disabled providers are recorded as plan-level skips.
-//! - **`existing_source_ids_only`**: skip series with no
-//!   `series_external_ids` row for the resolved provider.
-//! - **`skip_recently_synced_within_s`**: skip series whose
-//!   `last_synced_at` for the provider is younger than the cutoff.
-//!
-//! Phase 4 will add an explicit `MatchingStrategy` enum that callers (manual
-//! API vs scheduled task) can override; for Phase 2 the planner uses the
-//! library's `existing_source_ids_only` toggle directly.
+//! Phase 9: each job carries a single provider, so the planner now resolves
+//! one `"plugin:<name>"` reference, lists the library's series, and emits one
+//! `PlannedRefresh` per series (or skipped reason). The previous
+//! many-providers-per-config model has been removed alongside the per-provider
+//! override hatch.
 
 #![allow(dead_code)]
 
@@ -31,13 +19,11 @@ use crate::db::entities::plugins::Model as Plugin;
 use crate::db::entities::series_external_ids::{self, Model as SeriesExternalId};
 use crate::db::repositories::{PluginsRepository, SeriesExternalIdRepository, SeriesRepository};
 
-use super::refresh_config::MetadataRefreshConfig;
+use crate::services::library_jobs::MetadataRefreshJobConfig;
 
 /// Reason a series was skipped during planning.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SkipReason {
-    /// Provider config references a plugin that isn't installed/enabled.
-    ProviderUnavailable { provider: String },
     /// `existing_source_ids_only = true` and series has no external ID for the provider.
     NoExternalId,
     /// `last_synced_at` is younger than `skip_recently_synced_within_s`.
@@ -47,14 +33,13 @@ pub enum SkipReason {
 impl SkipReason {
     pub fn as_str(&self) -> &'static str {
         match self {
-            SkipReason::ProviderUnavailable { .. } => "provider_unavailable",
             SkipReason::NoExternalId => "no_external_id",
             SkipReason::RecentlySynced { .. } => "recently_synced",
         }
     }
 }
 
-/// One planned `(series_id, plugin)` pair plus the optional pre-fetched
+/// One planned `(series, plugin)` pair plus the optional pre-fetched
 /// external ID. Carrying the external ID through avoids a second DB lookup
 /// in the task handler when it dispatches `metadata/series/get`.
 #[derive(Debug, Clone)]
@@ -70,21 +55,43 @@ pub struct PlannedRefresh {
 #[derive(Debug, Clone)]
 pub struct SkippedRefresh {
     pub series_id: Uuid,
-    pub provider: String,
     pub reason: SkipReason,
+}
+
+/// Reason the entire plan resolved to "no work" before the per-series gate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlanFailure {
+    /// Provider string isn't `"plugin:<name>"`.
+    InvalidProviderString,
+    /// Plugin name doesn't resolve to an installed plugin.
+    PluginMissing,
+    /// Plugin exists but is disabled.
+    PluginDisabled,
+}
+
+impl PlanFailure {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PlanFailure::InvalidProviderString => "invalid_provider_string",
+            PlanFailure::PluginMissing => "plugin_missing",
+            PlanFailure::PluginDisabled => "plugin_disabled",
+        }
+    }
 }
 
 /// Output of [`RefreshPlanner::plan`].
 #[derive(Debug, Default)]
 pub struct RefreshPlan {
+    /// The plugin model the planner resolved against. `None` when the
+    /// provider couldn't be resolved (see [`Self::failure`]).
+    pub plugin: Option<Plugin>,
     /// Refreshes that should actually run.
     pub planned: Vec<PlannedRefresh>,
-    /// Per-`(series, provider)` skips with reasons.
+    /// Per-series skips with reasons.
     pub skipped: Vec<SkippedRefresh>,
-    /// Provider strings from the config that don't resolve to an enabled
-    /// plugin. Recorded once (not per series). Useful for warning the user
-    /// in the task summary.
-    pub unresolved_providers: Vec<String>,
+    /// Set when provider resolution failed before the per-series step.
+    /// Mutually exclusive with `planned`.
+    pub failure: Option<PlanFailure>,
 }
 
 impl RefreshPlan {
@@ -93,8 +100,7 @@ impl RefreshPlan {
         self.planned.len()
     }
 
-    /// Skip count grouped by reason key. Used by the task handler to surface
-    /// a structured summary (e.g. "skipped: 12 no_external_id, 3 recently_synced").
+    /// Skip count grouped by reason key.
     pub fn skipped_by_reason(&self) -> HashMap<&'static str, usize> {
         let mut out: HashMap<&'static str, usize> = HashMap::new();
         for s in &self.skipped {
@@ -111,51 +117,41 @@ impl RefreshPlanner {
     /// Build a refresh plan for `library_id` against `config`.
     ///
     /// The planner:
-    /// 1. Resolves each `plugin:<name>` provider string to an enabled plugin
-    ///    via [`PluginsRepository::get_by_name`]. Missing or disabled
-    ///    providers go into `unresolved_providers`.
+    /// 1. Resolves `config.provider`. Failure is recorded on `plan.failure`.
     /// 2. Lists every series in the library.
-    /// 3. Fetches all external IDs for those series in one query
-    ///    (`get_for_series_ids`).
-    /// 4. For each `(series, resolved_provider)` pair, decides:
-    ///    - `existing_source_ids_only` ⇒ skip when no external ID for that
-    ///      provider exists.
-    ///    - `skip_recently_synced_within_s` ⇒ skip when the provider's
-    ///      `last_synced_at` is too recent.
-    ///    - otherwise plan the refresh.
+    /// 3. Fetches all external IDs for those series in one query.
+    /// 4. For each `(series, plugin)` pair, emits a `PlannedRefresh` or a
+    ///    typed [`SkipReason`].
     pub async fn plan(
         db: &DatabaseConnection,
         library_id: Uuid,
-        config: &MetadataRefreshConfig,
+        config: &MetadataRefreshJobConfig,
     ) -> Result<RefreshPlan> {
         let mut plan = RefreshPlan::default();
 
-        if config.providers.is_empty() {
-            return Ok(plan);
-        }
-
-        // 1. Resolve providers — convert `"plugin:<name>"` strings to
-        //    `Plugin` models, recording unresolved entries.
-        let mut resolved_providers: Vec<(String, Plugin)> = Vec::new();
-        for provider in &config.providers {
-            match resolve_provider(db, provider).await {
-                Ok(Some(plugin)) => resolved_providers.push((provider.clone(), plugin)),
-                Ok(None) => plan.unresolved_providers.push(provider.clone()),
-                Err(e) => {
-                    return Err(e.context(format!("Failed to resolve provider '{}'", provider)));
-                }
+        // 1. Resolve provider.
+        let plugin = match resolve_provider(db, &config.provider).await? {
+            ProviderResolution::Resolved(p) => p,
+            ProviderResolution::InvalidString => {
+                plan.failure = Some(PlanFailure::InvalidProviderString);
+                return Ok(plan);
             }
-        }
+            ProviderResolution::Missing => {
+                plan.failure = Some(PlanFailure::PluginMissing);
+                return Ok(plan);
+            }
+            ProviderResolution::Disabled => {
+                plan.failure = Some(PlanFailure::PluginDisabled);
+                return Ok(plan);
+            }
+        };
 
-        if resolved_providers.is_empty() {
-            return Ok(plan);
-        }
-
-        // 2. List series in the library.
+        // 2. List series.
         let series_list = SeriesRepository::list_by_library(db, library_id)
             .await
             .context("Failed to list series for refresh planning")?;
         if series_list.is_empty() {
+            plan.plugin = Some(plugin);
             return Ok(plan);
         }
         let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
@@ -166,7 +162,6 @@ impl RefreshPlanner {
                 .await
                 .context("Failed to load external IDs for refresh planning")?;
 
-        // Pre-compute the recency cutoff once.
         let recently_synced_cutoff: Option<DateTime<Utc>> = if config.skip_recently_synced_within_s
             == 0
         {
@@ -175,98 +170,71 @@ impl RefreshPlanner {
             Some(Utc::now() - Duration::seconds(i64::from(config.skip_recently_synced_within_s)))
         };
 
-        // 4. For each (series, provider) pair, decide.
+        let plugin_source = series_external_ids::Model::plugin_source(&plugin.name);
+
+        // 4. For each series, decide.
         for series in &series_ids {
             let series_externals = external_ids_by_series.get(series);
-            for (provider_str, plugin) in &resolved_providers {
-                let plugin_source = series_external_ids::Model::plugin_source(&plugin.name);
-                let existing = series_externals
-                    .and_then(|list| list.iter().find(|e| e.source == plugin_source).cloned());
+            let existing = series_externals
+                .and_then(|list| list.iter().find(|e| e.source == plugin_source).cloned());
 
-                if config.existing_source_ids_only && existing.is_none() {
-                    plan.skipped.push(SkippedRefresh {
-                        series_id: *series,
-                        provider: provider_str.clone(),
-                        reason: SkipReason::NoExternalId,
-                    });
-                    continue;
-                }
-
-                if let (Some(cutoff), Some(ext)) = (recently_synced_cutoff, existing.as_ref())
-                    && let Some(last_synced_at) = ext.last_synced_at
-                    && last_synced_at >= cutoff
-                {
-                    plan.skipped.push(SkippedRefresh {
-                        series_id: *series,
-                        provider: provider_str.clone(),
-                        reason: SkipReason::RecentlySynced { last_synced_at },
-                    });
-                    continue;
-                }
-
-                plan.planned.push(PlannedRefresh {
+            if config.existing_source_ids_only && existing.is_none() {
+                plan.skipped.push(SkippedRefresh {
                     series_id: *series,
-                    plugin: plugin.clone(),
-                    existing_external_id: existing,
+                    reason: SkipReason::NoExternalId,
                 });
+                continue;
             }
+
+            if let (Some(cutoff), Some(ext)) = (recently_synced_cutoff, existing.as_ref())
+                && let Some(last_synced_at) = ext.last_synced_at
+                && last_synced_at >= cutoff
+            {
+                plan.skipped.push(SkippedRefresh {
+                    series_id: *series,
+                    reason: SkipReason::RecentlySynced { last_synced_at },
+                });
+                continue;
+            }
+
+            plan.planned.push(PlannedRefresh {
+                series_id: *series,
+                plugin: plugin.clone(),
+                existing_external_id: existing,
+            });
         }
 
+        plan.plugin = Some(plugin);
         Ok(plan)
     }
 }
 
-/// Resolve a `"plugin:<name>"` string to an enabled plugin.
-///
-/// Returns:
-/// - `Ok(Some(plugin))` if the string parses and an enabled plugin exists.
-/// - `Ok(None)` if the prefix is missing, the plugin doesn't exist, or the
-///   plugin exists but is disabled. Caller records this as a plan-level
-///   `unresolved_providers` entry.
-/// - `Err(_)` only on DB errors.
-async fn resolve_provider(db: &DatabaseConnection, provider: &str) -> Result<Option<Plugin>> {
-    let Some(name) = provider.strip_prefix("plugin:") else {
-        return Ok(None);
+/// Outcome of resolving the job's `provider` string.
+#[allow(clippy::large_enum_variant)]
+enum ProviderResolution {
+    Resolved(Plugin),
+    InvalidString,
+    Missing,
+    Disabled,
+}
+
+async fn resolve_provider(db: &DatabaseConnection, provider: &str) -> Result<ProviderResolution> {
+    let Some(name) = provider.strip_prefix("plugin:").filter(|s| !s.is_empty()) else {
+        return Ok(ProviderResolution::InvalidString);
     };
     let plugin = PluginsRepository::get_by_name(db, name).await?;
-    Ok(plugin.filter(|p| p.enabled))
-}
-
-/// Convenience: dedup + flatten the field allowlist that the task handler
-/// will pass to `MetadataApplier::apply` via `ApplyOptions::fields_filter`.
-///
-/// Group names in `config.field_groups` are expanded via
-/// [`crate::services::metadata::field_groups::fields_for_groups`] into the
-/// concrete camelCase field names the applier checks. `config.extra_fields`
-/// is unioned in verbatim (power-user hatch).
-///
-/// Returns `None` when both lists are empty (apply everything; existing
-/// `MetadataApplier` semantics). Unknown group names are silently skipped —
-/// the API layer is responsible for validating user input up front.
-pub fn fields_filter_from_config(config: &MetadataRefreshConfig) -> Option<HashSet<String>> {
-    super::field_groups::fields_for_groups(&config.field_groups, &config.extra_fields)
-}
-
-/// Per-provider variant of [`fields_filter_from_config`].
-///
-/// When `config.per_provider_overrides` contains an entry for `provider`, that
-/// override's `field_groups` + `extra_fields` are used in place of the
-/// library-wide selection. Without an override, the result is identical to
-/// [`fields_filter_from_config`].
-///
-/// `provider` is the wire-format string (e.g. `"plugin:mangabaka"`), matching
-/// the keys used in the per-library config and the planner's
-/// `unresolved_providers` list.
-pub fn fields_filter_for_provider(
-    config: &MetadataRefreshConfig,
-    provider: &str,
-) -> Option<HashSet<String>> {
-    if let Some(overrides) = config.per_provider_overrides.as_ref()
-        && let Some(ovr) = overrides.get(provider)
-    {
-        return super::field_groups::fields_for_groups(&ovr.field_groups, &ovr.extra_fields);
+    match plugin {
+        None => Ok(ProviderResolution::Missing),
+        Some(p) if !p.enabled => Ok(ProviderResolution::Disabled),
+        Some(p) => Ok(ProviderResolution::Resolved(p)),
     }
-    fields_filter_from_config(config)
+}
+
+/// Expand `field_groups + extra_fields` into the concrete camelCase field
+/// set the applier understands. Returns `None` when both lists are empty
+/// (apply everything; existing `MetadataApplier` semantics).
+pub fn fields_filter_from_job_config(config: &MetadataRefreshJobConfig) -> Option<HashSet<String>> {
+    super::field_groups::fields_for_groups(&config.field_groups, &config.extra_fields)
 }
 
 #[cfg(test)]
@@ -276,7 +244,7 @@ mod tests {
     use crate::db::entities::plugins::PluginPermission;
     use crate::db::repositories::{LibraryRepository, PluginsRepository, SeriesRepository};
     use crate::db::test_helpers::setup_test_db;
-    use crate::services::metadata::refresh_config::MetadataRefreshConfig;
+    use crate::services::library_jobs::{MetadataRefreshJobConfig, RefreshScope};
     use crate::services::plugin::protocol::PluginScope;
     use std::env;
     use std::sync::Once;
@@ -286,7 +254,7 @@ mod tests {
     fn setup_test_encryption_key() {
         INIT_ENCRYPTION.call_once(|| {
             if env::var("CODEX_ENCRYPTION_KEY").is_err() {
-                // SAFETY: tests run with shared env access; first writer wins.
+                // SAFETY: tests share env; first-writer-wins is safe with a constant.
                 unsafe {
                     env::set_var(
                         "CODEX_ENCRYPTION_KEY",
@@ -298,15 +266,10 @@ mod tests {
     }
 
     async fn create_library(db: &DatabaseConnection, name: &str) -> Uuid {
-        let lib = LibraryRepository::create(
-            db,
-            name,
-            &format!("/tmp/{}", name),
-            ScanningStrategy::Default,
-        )
-        .await
-        .unwrap();
-        lib.id
+        LibraryRepository::create(db, name, &format!("/tmp/{name}"), ScanningStrategy::Default)
+            .await
+            .unwrap()
+            .id
     }
 
     async fn create_series(db: &DatabaseConnection, library_id: Uuid, name: &str) -> Uuid {
@@ -342,400 +305,112 @@ mod tests {
         .unwrap()
     }
 
-    fn config_with_provider(provider: &str) -> MetadataRefreshConfig {
-        MetadataRefreshConfig {
-            providers: vec![provider.to_string()],
-            ..Default::default()
+    fn cfg(provider: &str) -> MetadataRefreshJobConfig {
+        MetadataRefreshJobConfig {
+            provider: provider.to_string(),
+            scope: RefreshScope::SeriesOnly,
+            field_groups: vec![],
+            extra_fields: vec![],
+            book_field_groups: vec![],
+            book_extra_fields: vec![],
+            existing_source_ids_only: true,
+            skip_recently_synced_within_s: 0,
+            max_concurrency: 4,
         }
     }
 
     #[tokio::test]
-    async fn plan_is_empty_when_no_providers_configured() {
+    async fn plan_invalid_provider_string() {
         let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let _series_id = create_series(&db, library_id, "Series A").await;
-
-        let cfg = MetadataRefreshConfig::default();
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert!(plan.planned.is_empty());
-        assert!(plan.skipped.is_empty());
-        assert!(plan.unresolved_providers.is_empty());
-    }
-
-    #[tokio::test]
-    async fn plan_records_unresolved_provider_for_missing_plugin() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let _series = create_series(&db, library_id, "Series A").await;
-
-        let cfg = config_with_provider("plugin:does-not-exist");
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert!(plan.planned.is_empty());
-        assert!(plan.skipped.is_empty());
-        assert_eq!(plan.unresolved_providers, vec!["plugin:does-not-exist"]);
-    }
-
-    #[tokio::test]
-    async fn plan_skips_disabled_plugin() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let _series = create_series(&db, library_id, "Series A").await;
-        let _plugin = create_plugin(&db, "mangabaka", false).await;
-
-        let cfg = config_with_provider("plugin:mangabaka");
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert!(plan.planned.is_empty());
-        assert_eq!(plan.unresolved_providers, vec!["plugin:mangabaka"]);
-    }
-
-    #[tokio::test]
-    async fn plan_strict_mode_skips_series_without_external_id() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let series_id = create_series(&db, library_id, "Series A").await;
-        let _plugin = create_plugin(&db, "mangabaka", true).await;
-
-        let cfg = MetadataRefreshConfig {
-            providers: vec!["plugin:mangabaka".to_string()],
-            existing_source_ids_only: true,
-            skip_recently_synced_within_s: 0,
-            ..Default::default()
-        };
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert!(plan.planned.is_empty());
-        assert_eq!(plan.skipped.len(), 1);
-        assert_eq!(plan.skipped[0].series_id, series_id);
-        assert_eq!(plan.skipped[0].reason, SkipReason::NoExternalId);
-    }
-
-    #[tokio::test]
-    async fn plan_strict_mode_includes_series_with_external_id() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let series_id = create_series(&db, library_id, "Series A").await;
-        let _plugin = create_plugin(&db, "mangabaka", true).await;
-
-        // Seed an external ID for plugin:mangabaka
-        SeriesExternalIdRepository::upsert_for_plugin(
-            &db,
-            series_id,
-            "mangabaka",
-            "ext-1",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        let cfg = MetadataRefreshConfig {
-            providers: vec!["plugin:mangabaka".to_string()],
-            existing_source_ids_only: true,
-            skip_recently_synced_within_s: 0,
-            ..Default::default()
-        };
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert_eq!(plan.planned.len(), 1);
-        assert_eq!(plan.planned[0].series_id, series_id);
-        assert_eq!(plan.planned[0].plugin.name, "mangabaka");
-        assert!(plan.planned[0].existing_external_id.is_some());
-        assert!(plan.skipped.is_empty());
-    }
-
-    #[tokio::test]
-    async fn plan_loose_mode_includes_unmatched_series() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let series_id = create_series(&db, library_id, "Series A").await;
-        let _plugin = create_plugin(&db, "mangabaka", true).await;
-
-        let cfg = MetadataRefreshConfig {
-            providers: vec!["plugin:mangabaka".to_string()],
-            existing_source_ids_only: false,
-            skip_recently_synced_within_s: 0,
-            ..Default::default()
-        };
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert_eq!(plan.planned.len(), 1);
-        assert_eq!(plan.planned[0].series_id, series_id);
-        assert!(plan.planned[0].existing_external_id.is_none());
-    }
-
-    #[tokio::test]
-    async fn plan_skips_recently_synced_series() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let series_id = create_series(&db, library_id, "Series A").await;
-        let _plugin = create_plugin(&db, "mangabaka", true).await;
-
-        // Seeded `last_synced_at` defaults to "now", which is < cutoff
-        SeriesExternalIdRepository::upsert_for_plugin(
-            &db,
-            series_id,
-            "mangabaka",
-            "ext-1",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        let cfg = MetadataRefreshConfig {
-            providers: vec!["plugin:mangabaka".to_string()],
-            existing_source_ids_only: true,
-            skip_recently_synced_within_s: 3600, // 1h
-            ..Default::default()
-        };
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert!(plan.planned.is_empty());
-        assert_eq!(plan.skipped.len(), 1);
+        let lib = create_library(&db, "lib").await;
+        let plan = RefreshPlanner::plan(&db, lib, &cfg("not-a-plugin"))
+            .await
+            .unwrap();
         assert!(matches!(
-            plan.skipped[0].reason,
-            SkipReason::RecentlySynced { .. }
+            plan.failure,
+            Some(PlanFailure::InvalidProviderString)
         ));
-    }
-
-    #[tokio::test]
-    async fn plan_includes_when_recency_guard_disabled() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let series_id = create_series(&db, library_id, "Series A").await;
-        let _plugin = create_plugin(&db, "mangabaka", true).await;
-
-        SeriesExternalIdRepository::upsert_for_plugin(
-            &db,
-            series_id,
-            "mangabaka",
-            "ext-1",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        let cfg = MetadataRefreshConfig {
-            providers: vec!["plugin:mangabaka".to_string()],
-            existing_source_ids_only: true,
-            skip_recently_synced_within_s: 0,
-            ..Default::default()
-        };
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert_eq!(plan.planned.len(), 1);
-        assert!(plan.skipped.is_empty());
-    }
-
-    #[tokio::test]
-    async fn plan_handles_multiple_providers_independently() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let series_id = create_series(&db, library_id, "Series A").await;
-        let _p1 = create_plugin(&db, "mangabaka", true).await;
-        let _p2 = create_plugin(&db, "anilist", true).await;
-
-        // Series matched on mangabaka but not anilist
-        SeriesExternalIdRepository::upsert_for_plugin(
-            &db,
-            series_id,
-            "mangabaka",
-            "ext-1",
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-
-        let cfg = MetadataRefreshConfig {
-            providers: vec!["plugin:mangabaka".to_string(), "plugin:anilist".to_string()],
-            existing_source_ids_only: true,
-            skip_recently_synced_within_s: 0,
-            ..Default::default()
-        };
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
-        assert_eq!(plan.planned.len(), 1);
-        assert_eq!(plan.planned[0].plugin.name, "mangabaka");
-        assert_eq!(plan.skipped.len(), 1);
-        assert_eq!(plan.skipped[0].provider, "plugin:anilist");
-        assert_eq!(plan.skipped[0].reason, SkipReason::NoExternalId);
-
-        let counts = plan.skipped_by_reason();
-        assert_eq!(counts.get("no_external_id").copied(), Some(1));
-    }
-
-    #[tokio::test]
-    async fn plan_empty_library_returns_empty_plan() {
-        let db = setup_test_db().await;
-        let library_id = create_library(&db, "lib").await;
-        let _plugin = create_plugin(&db, "mangabaka", true).await;
-
-        let cfg = config_with_provider("plugin:mangabaka");
-        let plan = RefreshPlanner::plan(&db, library_id, &cfg).await.unwrap();
-
         assert!(plan.planned.is_empty());
+    }
+
+    #[tokio::test]
+    async fn plan_missing_plugin() {
+        let db = setup_test_db().await;
+        let lib = create_library(&db, "lib").await;
+        let plan = RefreshPlanner::plan(&db, lib, &cfg("plugin:missing"))
+            .await
+            .unwrap();
+        assert!(matches!(plan.failure, Some(PlanFailure::PluginMissing)));
+    }
+
+    #[tokio::test]
+    async fn plan_disabled_plugin() {
+        let db = setup_test_db().await;
+        let lib = create_library(&db, "lib").await;
+        let _ = create_plugin(&db, "off", false).await;
+        let plan = RefreshPlanner::plan(&db, lib, &cfg("plugin:off"))
+            .await
+            .unwrap();
+        assert!(matches!(plan.failure, Some(PlanFailure::PluginDisabled)));
+    }
+
+    #[tokio::test]
+    async fn plan_strict_mode_skips_no_id() {
+        let db = setup_test_db().await;
+        let lib = create_library(&db, "lib").await;
+        let _ = create_series(&db, lib, "S1").await;
+        let _ = create_series(&db, lib, "S2").await;
+        let _ = create_plugin(&db, "x", true).await;
+        let mut config = cfg("plugin:x");
+        config.existing_source_ids_only = true;
+        let plan = RefreshPlanner::plan(&db, lib, &config).await.unwrap();
+        assert!(plan.failure.is_none());
+        assert!(plan.planned.is_empty());
+        assert_eq!(plan.skipped.len(), 2);
+        assert!(
+            plan.skipped
+                .iter()
+                .all(|s| s.reason == SkipReason::NoExternalId)
+        );
+    }
+
+    #[tokio::test]
+    async fn plan_loose_mode_keeps_no_id_pairs() {
+        let db = setup_test_db().await;
+        let lib = create_library(&db, "lib").await;
+        let _ = create_series(&db, lib, "S1").await;
+        let _ = create_plugin(&db, "x", true).await;
+        let mut config = cfg("plugin:x");
+        config.existing_source_ids_only = false;
+        let plan = RefreshPlanner::plan(&db, lib, &config).await.unwrap();
+        assert_eq!(plan.planned.len(), 1);
         assert!(plan.skipped.is_empty());
-        assert!(plan.unresolved_providers.is_empty());
     }
 
-    #[test]
-    fn fields_filter_returns_none_when_no_groups_or_extras() {
-        let cfg = MetadataRefreshConfig {
+    #[tokio::test]
+    async fn fields_filter_returns_none_when_empty() {
+        let cfg = MetadataRefreshJobConfig::default();
+        // Default has non-empty groups.
+        assert!(fields_filter_from_job_config(&cfg).is_some());
+        let empty = MetadataRefreshJobConfig {
             field_groups: vec![],
-            extra_fields: vec![],
-            ..Default::default()
+            ..cfg
         };
-        assert!(fields_filter_from_config(&cfg).is_none());
+        assert!(fields_filter_from_job_config(&empty).is_none());
     }
 
-    #[test]
-    fn fields_filter_expands_groups_to_concrete_fields() {
-        // "ratings" → ["rating", "externalRatings"]
-        // "status"  → ["status", "year"]
-        // extras    → ["language"]
-        let cfg = MetadataRefreshConfig {
+    #[tokio::test]
+    async fn fields_filter_expands_groups() {
+        let cfg = MetadataRefreshJobConfig {
             field_groups: vec!["ratings".to_string(), "status".to_string()],
             extra_fields: vec!["language".to_string()],
-            ..Default::default()
+            ..MetadataRefreshJobConfig::default()
         };
-        let filter = fields_filter_from_config(&cfg).unwrap();
-        assert!(filter.contains("rating"));
-        assert!(filter.contains("externalRatings"));
-        assert!(filter.contains("status"));
-        assert!(filter.contains("year"));
-        assert!(filter.contains("language"));
-        assert_eq!(filter.len(), 5);
-    }
-
-    #[test]
-    fn fields_filter_extras_only_passes_through() {
-        let cfg = MetadataRefreshConfig {
-            field_groups: vec![],
-            extra_fields: vec!["title".to_string(), "summary".to_string()],
-            ..Default::default()
-        };
-        let filter = fields_filter_from_config(&cfg).unwrap();
-        assert!(filter.contains("title"));
-        assert!(filter.contains("summary"));
-        assert_eq!(filter.len(), 2);
-    }
-
-    #[test]
-    fn fields_filter_silently_drops_unknown_groups() {
-        let cfg = MetadataRefreshConfig {
-            field_groups: vec!["ratings".to_string(), "made_up_group".to_string()],
-            extra_fields: vec![],
-            ..Default::default()
-        };
-        let filter = fields_filter_from_config(&cfg).unwrap();
-        assert!(filter.contains("rating"));
-        assert!(filter.contains("externalRatings"));
-        assert_eq!(filter.len(), 2);
-    }
-
-    #[test]
-    fn fields_filter_for_provider_uses_library_default_when_no_override() {
-        let cfg = MetadataRefreshConfig {
-            field_groups: vec!["ratings".to_string()],
-            extra_fields: vec![],
-            ..Default::default()
-        };
-        let filter = fields_filter_for_provider(&cfg, "plugin:mangabaka").unwrap();
-        assert!(filter.contains("rating"));
-        assert!(filter.contains("externalRatings"));
-        assert_eq!(filter.len(), 2);
-    }
-
-    #[test]
-    fn fields_filter_for_provider_uses_override_when_set() {
-        use crate::services::metadata::ProviderOverride;
-        use std::collections::BTreeMap;
-
-        let mut overrides = BTreeMap::new();
-        overrides.insert(
-            "plugin:anilist".to_string(),
-            ProviderOverride {
-                field_groups: vec!["ratings".to_string()],
-                extra_fields: vec![],
-            },
-        );
-        let cfg = MetadataRefreshConfig {
-            // Library default is "status" (so default ⇒ status, year)
-            field_groups: vec!["status".to_string()],
-            extra_fields: vec![],
-            per_provider_overrides: Some(overrides),
-            ..Default::default()
-        };
-
-        // anilist override → ratings only
-        let anilist = fields_filter_for_provider(&cfg, "plugin:anilist").unwrap();
-        assert!(anilist.contains("rating"));
-        assert!(anilist.contains("externalRatings"));
-        assert!(!anilist.contains("status"));
-        assert_eq!(anilist.len(), 2);
-
-        // mangabaka has no override → falls back to library default (status)
-        let mangabaka = fields_filter_for_provider(&cfg, "plugin:mangabaka").unwrap();
-        assert!(mangabaka.contains("status"));
-        assert!(mangabaka.contains("year"));
-        assert!(!mangabaka.contains("rating"));
-        assert_eq!(mangabaka.len(), 2);
-    }
-
-    #[test]
-    fn fields_filter_for_provider_override_with_only_extras() {
-        use crate::services::metadata::ProviderOverride;
-        use std::collections::BTreeMap;
-
-        let mut overrides = BTreeMap::new();
-        overrides.insert(
-            "plugin:custom".to_string(),
-            ProviderOverride {
-                field_groups: vec![],
-                extra_fields: vec!["coverUrl".to_string()],
-            },
-        );
-        let cfg = MetadataRefreshConfig {
-            field_groups: vec!["ratings".to_string()],
-            extra_fields: vec![],
-            per_provider_overrides: Some(overrides),
-            ..Default::default()
-        };
-
-        let filter = fields_filter_for_provider(&cfg, "plugin:custom").unwrap();
-        assert!(filter.contains("coverUrl"));
-        assert!(!filter.contains("rating"));
-        assert_eq!(filter.len(), 1);
-    }
-
-    #[test]
-    fn fields_filter_for_provider_empty_override_returns_none() {
-        use crate::services::metadata::ProviderOverride;
-        use std::collections::BTreeMap;
-
-        let mut overrides = BTreeMap::new();
-        overrides.insert(
-            "plugin:custom".to_string(),
-            ProviderOverride {
-                field_groups: vec![],
-                extra_fields: vec![],
-            },
-        );
-        let cfg = MetadataRefreshConfig {
-            field_groups: vec!["ratings".to_string()],
-            extra_fields: vec![],
-            per_provider_overrides: Some(overrides),
-            ..Default::default()
-        };
-
-        // An empty override is interpreted as "apply everything" — explicit
-        // user intent to bypass the library's restriction for this provider.
-        let filter = fields_filter_for_provider(&cfg, "plugin:custom");
-        assert!(filter.is_none());
+        let out = fields_filter_from_job_config(&cfg).unwrap();
+        assert!(out.contains("rating"));
+        assert!(out.contains("externalRatings"));
+        assert!(out.contains("status"));
+        assert!(out.contains("year"));
+        assert!(out.contains("language"));
     }
 }
