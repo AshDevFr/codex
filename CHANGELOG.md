@@ -2,6 +2,32 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.18.0] - 2026-05-04
+
+### 🚀 Features
+
+- *(metadata)* Add per-library scheduled refresh config storage
+- *(metadata)* Add scheduled per-library refresh task type and handler
+- *(metadata)* Add field-group resolver and dry-run mode to series metadata apply
+- *(metadata)* Add MatchingStrategy and re-match path to scheduled refresh
+- *(scheduler)* Wire per-library scheduled metadata refresh
+- *(api)* Add metadata-refresh CRUD, run-now, and dry-run endpoints
+- *(web)* Add per-library metadata refresh settings UI
+- *(metadata)* Add per-provider field-allowlist overrides to scheduled refresh
+- *(library-jobs)* Replace single per-library metadata refresh config with N typed jobs
+
+### 💼 Other
+
+- *(library-jobs)* Present recency guard in hours instead of seconds
+
+### 🚜 Refactor
+
+- *(metadata)* Drop unused scaffolding from scheduled refresh
+
+### 📚 Documentation
+
+- *(seed)* Clarify credentials must be a YAML mapping, not a quoted JSON string
+
 ## [1.17.0] - 2026-05-03
 
 ### 🚀 Features
