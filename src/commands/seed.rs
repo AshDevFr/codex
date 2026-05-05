@@ -66,6 +66,12 @@ pub struct SeedPluginConfig {
     pub credential_delivery: String,
     #[serde(default)]
     pub credentials: Option<serde_json::Value>,
+    /// Optional admin-side plugin configuration (the same JSON object that
+    /// the user would paste into "Configuration" in the plugin edit dialog).
+    /// Persisted on the plugin row so the plugin process receives it via
+    /// `InitializeParams.adminConfig` on first start.
+    #[serde(default, alias = "admin_config")]
+    pub config: Option<serde_json::Value>,
     #[serde(default = "default_true")]
     pub enabled: bool,
 }
@@ -332,7 +338,7 @@ async fn seed_plugins(
             vec![],                          // library_ids (empty = all libraries)
             plugin_cfg.credentials.as_ref(), // credentials
             &plugin_cfg.credential_delivery, // credential_delivery
-            None,                            // config
+            plugin_cfg.config.clone(),       // admin config
             plugin_cfg.enabled,
             None, // created_by
             None, // rate_limit_requests_per_minute

@@ -151,6 +151,9 @@ pub struct PluginHandle {
     /// Optional event broadcaster used by handlers that emit cross-process
     /// notifications (releases handler emits `ReleaseAnnounced`).
     event_broadcaster: Option<Arc<crate::events::EventBroadcaster>>,
+    /// Optional scheduler reference so the releases handler can reconcile
+    /// release-source schedules immediately after `releases/register_sources`.
+    scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
 }
 
 impl PluginHandle {
@@ -165,6 +168,7 @@ impl PluginHandle {
             storage_handler: None,
             release_db: None,
             event_broadcaster: None,
+            scheduler: None,
         }
     }
 
@@ -182,6 +186,7 @@ impl PluginHandle {
             storage_handler: Some(storage_handler),
             release_db: None,
             event_broadcaster: None,
+            scheduler: None,
         }
     }
 
@@ -200,6 +205,17 @@ impl PluginHandle {
         broadcaster: Arc<crate::events::EventBroadcaster>,
     ) -> Self {
         self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Attach a scheduler reference so the releases reverse-RPC handler can
+    /// trigger a release-source reconcile when the plugin calls
+    /// `releases/register_sources`. Builder-style.
+    pub fn with_scheduler(
+        mut self,
+        scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>,
+    ) -> Self {
+        self.scheduler = Some(scheduler);
         self
     }
 
@@ -332,6 +348,7 @@ impl PluginHandle {
         let plugin_name = manifest.name.clone();
         let release_db = self.release_db.clone();
         let event_broadcaster = self.event_broadcaster.clone();
+        let scheduler = self.scheduler.clone();
         client
             .update_reverse_ctx(move |ctx| {
                 ctx.set_capabilities(manifest_for_ctx.capabilities.clone());
@@ -342,6 +359,9 @@ impl PluginHandle {
                     let mut handler = ReleasesRequestHandler::new(db, plugin_name, cap);
                     if let Some(b) = event_broadcaster {
                         handler = handler.with_event_broadcaster(b);
+                    }
+                    if let Some(s) = scheduler {
+                        handler = handler.with_scheduler(s);
                     }
                     ctx.set_releases_handler(handler);
                 }

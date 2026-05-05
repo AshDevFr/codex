@@ -62,7 +62,7 @@ export const manifest = {
   userDescription:
     "Announces new chapters for series you've tracked, using their MangaUpdates IDs. Filters releases to languages you can read. Notification-only — Codex does not download anything.",
   adminSetupInstructions:
-    "No credentials are required: MangaUpdates' per-series RSS feeds are public. To get announcements for a series, edit its tracking panel and either paste a `mangaupdates` external ID or rely on the metadata-refresh path to populate it from MangaBaka cross-references. Optional language preferences and group blocklists can be configured per-series; defaults come from server settings (`release_tracking.default_languages`).",
+    "1. No config is required to get started — saving the plugin is enough. The plugin auto-registers a single source row (`MangaUpdates Releases`) in **Settings → Release tracking** on first start, where you can disable it, change the poll interval, or hit *Poll now*. 2. To get announcements for a series, edit its tracking panel and either paste a `mangaupdates` external ID or let the metadata-refresh path populate it from MangaBaka cross-references. 3. Optional: set `blockedGroups` (CSV, case-insensitive) to filter noisy scanlators server-wide; per-series language preferences live on each series' tracking config and override the server default (`release_tracking.default_languages`). No credentials are needed; MangaUpdates RSS feeds are public.",
 } as const satisfies PluginManifest & {
   capabilities: { releaseSource: { kinds: ["rss-series"] } };
 };

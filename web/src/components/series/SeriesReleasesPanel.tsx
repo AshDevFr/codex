@@ -113,7 +113,7 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
             <IconRss size={18} />
             <Text fw={600}>Releases</Text>
             <Badge color="gray" variant="light" size="sm">
-              {data?.pagination.total ?? 0}
+              {data?.total ?? 0}
             </Badge>
             {isMuted && (
               <Badge color="orange" variant="light" size="sm">

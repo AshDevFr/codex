@@ -116,6 +116,10 @@ plugins:
   # MangaUpdates Releases - Translation/scanlation release feed (no credentials needed)
   # Release-source plugins are gated by manifest capability at reverse-RPC
   # dispatch; they don't write metadata, so no `permissions` or `scopes` are needed.
+  #
+  # On first start the plugin auto-registers a single source row visible at
+  # Settings → Release tracking. Optional `config.blockedGroups` (CSV) filters
+  # noisy scanlators server-wide.
   - name: release-mangaupdates
     display_name: MangaUpdates Releases
     description: Announces new chapter releases for tracked series via MangaUpdates per-series RSS feeds
@@ -124,8 +128,22 @@ plugins:
     permissions: []
     scopes: []
     credential_delivery: env
+    # config:
+    #   blockedGroups: "LowQualityScans,MTL Group"
 
   # Nyaa Releases - Acquisition-pointer source for trusted uploaders (no credentials needed)
+  #
+  # The `uploaders` config below drives one source row per entry at
+  # Settings → Release tracking. Each entry is one of:
+  #   `username`        -> Nyaa user feed (https://nyaa.si/?page=rss&u=<username>)
+  #   `q:<text>`        -> plain site-wide search
+  #   `q:?<key=value>`  -> URL-style search with allowlisted keys (q, c, f, u),
+  #                        e.g. `q:?c=3_1&q=Berserk` for English-translated
+  #                        Literature category. See plugin docs for details.
+  #
+  # Removing an entry and re-saving prunes its source row (and its
+  # release_ledger history). Per-source poll interval / enable / "Poll now"
+  # live in the Release tracking UI.
   - name: release-nyaa
     display_name: Nyaa Releases
     description: Announces new chapter / volume torrents for tracked series via Nyaa.si uploader RSS feeds
@@ -134,6 +152,8 @@ plugins:
     permissions: []
     scopes: []
     credential_delivery: env
+    # config:
+    #   uploaders: "tsuna69,TankobonBlur,q:?c=3_1&q=Berserk"
 
 # =============================================================================
 # Libraries

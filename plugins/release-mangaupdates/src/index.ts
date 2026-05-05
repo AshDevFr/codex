@@ -357,6 +357,45 @@ async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<Rel
 // Plugin Initialization
 // =============================================================================
 
+/**
+ * Register a single static source row representing the MangaUpdates batch
+ * feed. Unlike Nyaa (one row per uploader), MangaUpdates polls all tracked
+ * series under one logical feed, so we always declare exactly one row keyed
+ * `default`. Retries on `METHOD_NOT_FOUND` to handle the brief race where
+ * the host has not yet installed the releases reverse-RPC handler.
+ */
+export async function registerSources(
+  rpc: HostRpcClient,
+): Promise<{ registered: number; pruned: number } | null> {
+  const sources = [
+    {
+      sourceKey: "default",
+      displayName: "MangaUpdates Releases",
+      kind: "rss-series" as const,
+      config: null,
+    },
+  ];
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await rpc.call<{ registered: number; pruned: number }>(
+        RELEASES_METHODS.REGISTER_SOURCES,
+        { sources },
+      );
+    } catch (err) {
+      const isMethodNotFound = err instanceof HostRpcError && err.code === -32601;
+      if (isMethodNotFound && attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 50 * attempt));
+        continue;
+      }
+      const reason = err instanceof Error ? err.message : String(err);
+      logger.error(`register_sources failed: ${reason}`);
+      return null;
+    }
+  }
+  return null;
+}
+
 createReleaseSourcePlugin({
   manifest,
   provider: {
@@ -368,7 +407,7 @@ createReleaseSourcePlugin({
     },
   },
   logLevel: "info",
-  onInitialize(params: InitializeParams) {
+  async onInitialize(params: InitializeParams) {
     state.hostRpc = params.hostRpc;
     const ac = params.adminConfig ?? {};
     if (typeof ac.blockedGroups === "string") {
@@ -380,6 +419,16 @@ createReleaseSourcePlugin({
     logger.info(
       `initialized: blockedGroups=${state.blockedGroupsCsv ? "set" : "empty"} timeoutMs=${state.requestTimeoutMs} defaultPoll=${DEFAULT_POLL_INTERVAL_S}s`,
     );
+
+    // Materialize the single static source row. Deferred to a microtask so
+    // we run *after* the host installs the releases reverse-RPC handler.
+    queueMicrotask(() => {
+      void registerSources(params.hostRpc).then((result) => {
+        if (result) {
+          logger.info(`register_sources: registered=${result.registered} pruned=${result.pruned}`);
+        }
+      });
+    });
   },
 });
 

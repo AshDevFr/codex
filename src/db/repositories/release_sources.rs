@@ -142,6 +142,65 @@ impl ReleaseSourceRepository {
         Self::create(db, params).await
     }
 
+    /// Idempotent upsert keyed on `(plugin_id, source_key)`.
+    ///
+    /// On insert, the row is created with `params` and defaults to enabled.
+    /// On update, **only the plugin-owned descriptive fields** are refreshed
+    /// (`display_name`, `kind`, `config`). User-managed fields (`enabled`,
+    /// `poll_interval_s`) are preserved so an admin's interval override or
+    /// disable toggle survives a plugin re-registration.
+    ///
+    /// Used by `releases/register_sources` so a plugin can declare its full
+    /// desired-state list on every initialize without trampling user choices.
+    pub async fn upsert(
+        db: &DatabaseConnection,
+        params: NewReleaseSource,
+    ) -> Result<ReleaseSource> {
+        if !kind::is_valid(&params.kind) {
+            anyhow::bail!("invalid kind: {}", params.kind);
+        }
+        if let Some(existing) = Self::find_by_key(db, &params.plugin_id, &params.source_key).await?
+        {
+            let mut active: release_sources::ActiveModel = existing.into();
+            active.display_name = Set(params.display_name);
+            active.kind = Set(params.kind);
+            active.config = Set(params.config);
+            active.updated_at = Set(Utc::now());
+            return Ok(active.update(db).await?);
+        }
+        Self::create(db, params).await
+    }
+
+    /// Return every row owned by `plugin_id`, ordered by `source_key`.
+    pub async fn list_by_plugin(
+        db: &DatabaseConnection,
+        plugin_id: &str,
+    ) -> Result<Vec<ReleaseSource>> {
+        Ok(ReleaseSources::find()
+            .filter(release_sources::Column::PluginId.eq(plugin_id))
+            .order_by_asc(release_sources::Column::SourceKey)
+            .all(db)
+            .await?)
+    }
+
+    /// Delete every row owned by `plugin_id` whose `source_key` is **not** in
+    /// `keep_keys`. Returns the number of rows removed. Cascades to
+    /// `release_ledger`. Used by `register_sources` to prune sources that the
+    /// plugin no longer declares.
+    pub async fn delete_by_plugin_excluding(
+        db: &DatabaseConnection,
+        plugin_id: &str,
+        keep_keys: &[String],
+    ) -> Result<u64> {
+        let mut query =
+            ReleaseSources::delete_many().filter(release_sources::Column::PluginId.eq(plugin_id));
+        if !keep_keys.is_empty() {
+            query = query.filter(release_sources::Column::SourceKey.is_not_in(keep_keys.to_vec()));
+        }
+        let result = query.exec(db).await?;
+        Ok(result.rows_affected)
+    }
+
     /// Apply a PATCH-style update.
     pub async fn update(
         db: &DatabaseConnection,
@@ -417,6 +476,154 @@ mod tests {
         // Same (plugin_id, source_key) - should fail at the unique index.
         let result = ReleaseSourceRepository::create(conn, nyaa_source()).await;
         assert!(result.is_err(), "duplicate key must fail");
+    }
+
+    #[tokio::test]
+    async fn upsert_creates_when_missing_and_preserves_user_fields_on_update() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        // First call creates the row.
+        let created = ReleaseSourceRepository::upsert(conn, nyaa_source())
+            .await
+            .unwrap();
+        assert!(created.enabled);
+        assert_eq!(created.poll_interval_s, 3600);
+
+        // Admin disables and overrides interval.
+        ReleaseSourceRepository::update(
+            conn,
+            created.id,
+            ReleaseSourceUpdate {
+                enabled: Some(false),
+                poll_interval_s: Some(900),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        // Plugin re-registers with a different display name, kind, and config.
+        let mut params = nyaa_source();
+        params.display_name = "Nyaa: tsuna69 (refreshed)".to_string();
+        params.config = Some(serde_json::json!({ "subscription": "tsuna69" }));
+        params.poll_interval_s = 7200; // would-be interval is ignored on update
+        let updated = ReleaseSourceRepository::upsert(conn, params).await.unwrap();
+
+        assert_eq!(updated.id, created.id, "same key returns same row");
+        assert_eq!(updated.display_name, "Nyaa: tsuna69 (refreshed)");
+        assert_eq!(
+            updated.config,
+            Some(serde_json::json!({ "subscription": "tsuna69" }))
+        );
+        assert!(
+            !updated.enabled,
+            "user-set enabled flag must survive a plugin re-register"
+        );
+        assert_eq!(
+            updated.poll_interval_s, 900,
+            "user-set poll_interval_s must survive a plugin re-register"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_by_plugin_returns_only_that_plugins_rows() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        let mut other = nyaa_source();
+        other.plugin_id = "release-mangaupdates".to_string();
+        other.source_key = "default".to_string();
+        ReleaseSourceRepository::create(conn, other).await.unwrap();
+
+        let nyaa = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        assert_eq!(nyaa.len(), 1);
+        assert_eq!(nyaa[0].plugin_id, "release-nyaa");
+    }
+
+    #[tokio::test]
+    async fn delete_by_plugin_excluding_prunes_missing_keys() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let mut a = nyaa_source();
+        a.source_key = "user:tsuna69".to_string();
+        let mut b = nyaa_source();
+        b.source_key = "user:other".to_string();
+        let mut c = nyaa_source();
+        c.source_key = "user:gone".to_string();
+        ReleaseSourceRepository::create(conn, a).await.unwrap();
+        ReleaseSourceRepository::create(conn, b).await.unwrap();
+        ReleaseSourceRepository::create(conn, c).await.unwrap();
+
+        // Keep only the first two.
+        let keep = vec!["user:tsuna69".to_string(), "user:other".to_string()];
+        let removed =
+            ReleaseSourceRepository::delete_by_plugin_excluding(conn, "release-nyaa", &keep)
+                .await
+                .unwrap();
+        assert_eq!(removed, 1);
+
+        let remaining = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        assert_eq!(remaining.len(), 2);
+        let keys: Vec<&str> = remaining.iter().map(|r| r.source_key.as_str()).collect();
+        assert!(keys.contains(&"user:tsuna69"));
+        assert!(keys.contains(&"user:other"));
+    }
+
+    #[tokio::test]
+    async fn delete_by_plugin_excluding_with_empty_keep_removes_all() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        let mut other = nyaa_source();
+        other.source_key = "user:other".to_string();
+        ReleaseSourceRepository::create(conn, other).await.unwrap();
+
+        let removed =
+            ReleaseSourceRepository::delete_by_plugin_excluding(conn, "release-nyaa", &[])
+                .await
+                .unwrap();
+        assert_eq!(removed, 2);
+
+        let remaining = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        assert!(remaining.is_empty());
+    }
+
+    #[tokio::test]
+    async fn delete_by_plugin_excluding_does_not_touch_other_plugins() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        let mut other = nyaa_source();
+        other.plugin_id = "release-mangaupdates".to_string();
+        other.source_key = "default".to_string();
+        ReleaseSourceRepository::create(conn, other).await.unwrap();
+
+        // Wipe everything for nyaa; mangaupdates row must survive.
+        ReleaseSourceRepository::delete_by_plugin_excluding(conn, "release-nyaa", &[])
+            .await
+            .unwrap();
+
+        let mu = ReleaseSourceRepository::list_by_plugin(conn, "release-mangaupdates")
+            .await
+            .unwrap();
+        assert_eq!(mu.len(), 1);
     }
 
     #[tokio::test]

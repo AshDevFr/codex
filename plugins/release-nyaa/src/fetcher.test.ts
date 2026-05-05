@@ -38,6 +38,59 @@ describe("parseSubscriptionToken", () => {
     expect(parseSubscriptionToken("q:")).toBeNull();
     expect(parseSubscriptionToken("query:   ")).toBeNull();
   });
+
+  it("parses `q:?key=value&…` as URL-style allowlisted params", () => {
+    expect(parseSubscriptionToken("q:?c=3_1&q=Berserk")).toEqual({
+      kind: "params",
+      identifier: "c=3_1&q=Berserk",
+    });
+  });
+
+  it("normalizes URL-style param order so reorderings dedupe", () => {
+    const a = parseSubscriptionToken("q:?q=Berserk&c=3_1");
+    const b = parseSubscriptionToken("q:?c=3_1&q=Berserk");
+    expect(a).toEqual(b);
+  });
+
+  it("URL-encodes special characters in URL-style params", () => {
+    expect(parseSubscriptionToken("q:?q=Berserk Volume")).toEqual({
+      kind: "params",
+      identifier: "q=Berserk+Volume",
+    });
+  });
+
+  it("drops keys that aren't on the allowlist", () => {
+    expect(parseSubscriptionToken("q:?q=Berserk&s=size&o=desc")).toEqual({
+      kind: "params",
+      identifier: "q=Berserk",
+    });
+  });
+
+  it("returns null when no allowlisted keys remain", () => {
+    expect(parseSubscriptionToken("q:?s=size&o=desc")).toBeNull();
+    expect(parseSubscriptionToken("q:?")).toBeNull();
+  });
+
+  it("collapses `q:?u=<x>` (only u) to a bare user token for dedup", () => {
+    expect(parseSubscriptionToken("q:?u=1r0n")).toEqual({
+      kind: "user",
+      identifier: "1r0n",
+    });
+  });
+
+  it("keeps `q:?u=…&c=…` as params so the category survives", () => {
+    expect(parseSubscriptionToken("q:?u=1r0n&c=3_1")).toEqual({
+      kind: "params",
+      identifier: "c=3_1&u=1r0n",
+    });
+  });
+
+  it("ignores empty values in URL-style params", () => {
+    expect(parseSubscriptionToken("q:?c=&q=Berserk")).toEqual({
+      kind: "params",
+      identifier: "q=Berserk",
+    });
+  });
 });
 
 describe("parseSubscriptionList", () => {
@@ -82,6 +135,11 @@ describe("feedUrl", () => {
   it("respects a custom base URL with trailing slash trimming", () => {
     const url = feedUrl({ kind: "user", identifier: "x" }, "https://mirror.example/");
     expect(url).toBe("https://mirror.example/?page=rss&u=x");
+  });
+
+  it("builds a URL from a params-kind subscription verbatim", () => {
+    const url = feedUrl({ kind: "params", identifier: "c=3_1&q=Berserk" });
+    expect(url).toBe("https://nyaa.si/?page=rss&c=3_1&q=Berserk");
   });
 });
 
