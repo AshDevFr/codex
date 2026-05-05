@@ -214,3 +214,31 @@ export function matchSeries(
   best.confidence = Number(confidence.toFixed(4));
   return best;
 }
+
+/**
+ * Match a list of alias guesses (e.g. from a `Title A / Title B` Nyaa title)
+ * and return the best result across them.
+ *
+ * Picks the highest-confidence match across all guesses, preferring
+ * `alias-exact` over `alias-fuzzy` when ties exist (because exact carries a
+ * fixed `CONFIDENCE_EXACT` and fuzzy is bounded below it). When two guesses
+ * both produce alias-exact matches against different series, the first guess
+ * wins — that's the same precedence rule `matchSeries` applies internally
+ * across candidates.
+ */
+export function matchSeriesAny(
+  seriesGuesses: string[],
+  candidates: AliasCandidate[],
+  opts: MatchOptions = {},
+): AliasMatch | null {
+  if (seriesGuesses.length === 0) return null;
+  let best: AliasMatch | null = null;
+  for (const guess of seriesGuesses) {
+    const m = matchSeries(guess, candidates, opts);
+    if (m === null) continue;
+    if (best === null || m.confidence > best.confidence) {
+      best = m;
+    }
+  }
+  return best;
+}
