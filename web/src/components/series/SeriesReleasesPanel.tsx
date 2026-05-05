@@ -21,6 +21,7 @@ import {
 import { format } from "date-fns";
 import { useMemo, useState } from "react";
 import type { ReleaseLedgerEntry } from "@/api/releases";
+import { MediaUrlIcon } from "@/components/releases/MediaUrlIcon";
 import {
   useDismissRelease,
   useMarkReleaseAcquired,
@@ -238,6 +239,12 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
                               <IconExternalLink size={16} />
                             </ActionIcon>
                           </Tooltip>
+                          {entry.mediaUrl && (
+                            <MediaUrlIcon
+                              url={entry.mediaUrl}
+                              kind={entry.mediaUrlKind}
+                            />
+                          )}
                           {entry.state === "announced" && (
                             <>
                               <Tooltip label="Mark acquired">

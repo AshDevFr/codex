@@ -31,6 +31,12 @@ pub struct Model {
     pub group_or_uploader: Option<String>,
     /// Where the user goes to acquire (Nyaa torrent page, MangaDex chapter, ...).
     pub payload_url: String,
+    /// Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL).
+    /// Travels paired with [`Self::media_url_kind`].
+    pub media_url: Option<String>,
+    /// `torrent` | `magnet` | `direct` | `other`. See
+    /// `services::release::candidate::MediaUrlKind` for the canonical list.
+    pub media_url_kind: Option<String>,
     pub confidence: f64,
     /// `announced` | `dismissed` | `marked_acquired` | `hidden`.
     pub state: String,

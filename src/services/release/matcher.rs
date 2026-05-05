@@ -33,6 +33,7 @@ impl AcceptedCandidate {
     /// the candidate itself doesn't carry it).
     pub fn into_ledger_entry(self, source_id: Uuid) -> NewReleaseEntry {
         let c = self.candidate;
+        let media_url_kind = c.media_url_kind.map(|k| k.as_str().to_string());
         NewReleaseEntry {
             series_id: c.series_match.codex_series_id,
             source_id,
@@ -44,6 +45,8 @@ impl AcceptedCandidate {
             format_hints: c.format_hints,
             group_or_uploader: c.group_or_uploader,
             payload_url: c.payload_url,
+            media_url: c.media_url,
+            media_url_kind,
             confidence: c.series_match.confidence,
             metadata: c.metadata,
             observed_at: c.observed_at,
@@ -63,6 +66,17 @@ pub fn evaluate(
     //    the most informative error.
     if candidate.payload_url.trim().is_empty() {
         return Err(CandidateReject::EmptyPayloadUrl);
+    }
+    // media_url and media_url_kind must travel together. Either both
+    // are present (and media_url is non-empty) or both are absent.
+    match (&candidate.media_url, &candidate.media_url_kind) {
+        (Some(url), Some(_)) if url.trim().is_empty() => {
+            return Err(CandidateReject::EmptyMediaUrl);
+        }
+        (Some(_), None) | (None, Some(_)) => {
+            return Err(CandidateReject::MediaUrlPairMismatch);
+        }
+        _ => {}
     }
     if candidate.external_release_id.trim().is_empty() {
         return Err(CandidateReject::EmptyExternalReleaseId);
@@ -125,6 +139,8 @@ mod tests {
             format_hints: None,
             group_or_uploader: None,
             payload_url: "https://example.com/r/1".to_string(),
+            media_url: None,
+            media_url_kind: None,
             info_hash: None,
             metadata: None,
             observed_at: Utc::now(),
@@ -219,6 +235,53 @@ mod tests {
         assert_eq!(entry.external_release_id, "rel-1");
         assert_eq!(entry.confidence, 0.85);
         assert_eq!(entry.language.as_deref(), Some("en"));
+        assert!(entry.media_url.is_none());
+        assert!(entry.media_url_kind.is_none());
+    }
+
+    #[test]
+    fn into_ledger_entry_carries_media_url_pair() {
+        use crate::services::release::candidate::MediaUrlKind;
+        let mut cand = make_candidate(0.9);
+        cand.media_url = Some("https://nyaa.si/download/1.torrent".to_string());
+        cand.media_url_kind = Some(MediaUrlKind::Torrent);
+        let entry = evaluate(cand, DEFAULT_CONFIDENCE_THRESHOLD)
+            .unwrap()
+            .into_ledger_entry(Uuid::new_v4());
+        assert_eq!(
+            entry.media_url.as_deref(),
+            Some("https://nyaa.si/download/1.torrent")
+        );
+        assert_eq!(entry.media_url_kind.as_deref(), Some("torrent"));
+    }
+
+    #[test]
+    fn rejects_media_url_without_kind() {
+        let mut cand = make_candidate(0.95);
+        cand.media_url = Some("https://example.com/x.torrent".to_string());
+        cand.media_url_kind = None;
+        let err = evaluate(cand, DEFAULT_CONFIDENCE_THRESHOLD).unwrap_err();
+        assert_eq!(err, CandidateReject::MediaUrlPairMismatch);
+    }
+
+    #[test]
+    fn rejects_kind_without_media_url() {
+        use crate::services::release::candidate::MediaUrlKind;
+        let mut cand = make_candidate(0.95);
+        cand.media_url = None;
+        cand.media_url_kind = Some(MediaUrlKind::Torrent);
+        let err = evaluate(cand, DEFAULT_CONFIDENCE_THRESHOLD).unwrap_err();
+        assert_eq!(err, CandidateReject::MediaUrlPairMismatch);
+    }
+
+    #[test]
+    fn rejects_empty_media_url() {
+        use crate::services::release::candidate::MediaUrlKind;
+        let mut cand = make_candidate(0.95);
+        cand.media_url = Some("   ".to_string());
+        cand.media_url_kind = Some(MediaUrlKind::Torrent);
+        let err = evaluate(cand, DEFAULT_CONFIDENCE_THRESHOLD).unwrap_err();
+        assert_eq!(err, CandidateReject::EmptyMediaUrl);
     }
 
     #[test]

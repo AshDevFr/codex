@@ -29561,6 +29561,20 @@
                     "null"
                   ]
                 },
+                "mediaUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL\nlink). Travels paired with [`Self::media_url_kind`]."
+                },
+                "mediaUrlKind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Classifies what `media_url` points at: `torrent` | `magnet` |\n`direct` | `other`. The frontend uses this to pick a kind-specific\nicon next to the standard external-link icon."
+                },
                 "metadata": {
                   "description": "Source-specific extras (free-form)."
                 },
@@ -29570,7 +29584,7 @@
                 },
                 "payloadUrl": {
                   "type": "string",
-                  "description": "Where to acquire the release."
+                  "description": "Where to acquire the release. Conventionally a human-readable\nlanding page (Nyaa view page, MangaUpdates release page)."
                 },
                 "seriesId": {
                   "type": "string",
@@ -32918,6 +32932,20 @@
               "null"
             ]
           },
+          "mediaUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL\nlink). Travels paired with [`Self::media_url_kind`]."
+          },
+          "mediaUrlKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Classifies what `media_url` points at: `torrent` | `magnet` |\n`direct` | `other`. The frontend uses this to pick a kind-specific\nicon next to the standard external-link icon."
+          },
           "metadata": {
             "description": "Source-specific extras (free-form)."
           },
@@ -32927,7 +32955,7 @@
           },
           "payloadUrl": {
             "type": "string",
-            "description": "Where to acquire the release."
+            "description": "Where to acquire the release. Conventionally a human-readable\nlanding page (Nyaa view page, MangaUpdates release page)."
           },
           "seriesId": {
             "type": "string",

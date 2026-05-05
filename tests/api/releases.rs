@@ -97,6 +97,8 @@ async fn record_announced(
             format_hints: None,
             group_or_uploader: Some("uploader".to_string()),
             payload_url: format!("https://nyaa.si/view/{}", external_id),
+            media_url: None,
+            media_url_kind: None,
             confidence: 0.95,
             metadata: None,
             observed_at: chrono::Utc::now(),

@@ -95,6 +95,35 @@ describe("ReleasesInbox", () => {
     });
   });
 
+  it("renders a kind-specific media-url icon when mediaUrl is set", async () => {
+    list.mockResolvedValueOnce(
+      paginated([
+        entry({
+          mediaUrl: "https://nyaa.si/download/1.torrent",
+          mediaUrlKind: "torrent",
+        }),
+      ]),
+    );
+    renderWithProviders(<ReleasesInbox />);
+    // Both the page-link icon and the torrent icon should be present.
+    const payloadLink = await screen.findByLabelText("Open payload URL");
+    expect(payloadLink).toHaveAttribute("href", "https://example.com/r/1");
+    const torrentLink = screen.getByLabelText("Download .torrent");
+    expect(torrentLink).toHaveAttribute(
+      "href",
+      "https://nyaa.si/download/1.torrent",
+    );
+  });
+
+  it("does not render a media-url icon when mediaUrl is absent", async () => {
+    list.mockResolvedValueOnce(paginated([entry()]));
+    renderWithProviders(<ReleasesInbox />);
+    await screen.findByLabelText("Open payload URL");
+    expect(screen.queryByLabelText("Download .torrent")).toBeNull();
+    expect(screen.queryByLabelText("Open magnet link")).toBeNull();
+    expect(screen.queryByLabelText("Direct download")).toBeNull();
+  });
+
   it("typing a series filter triggers a new query", async () => {
     list.mockResolvedValue(paginated([]));
     const user = userEvent.setup();

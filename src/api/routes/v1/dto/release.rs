@@ -56,8 +56,18 @@ pub struct ReleaseLedgerEntryDto {
     /// Group/scanlator/uploader attribution.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_or_uploader: Option<String>,
-    /// Where to acquire the release.
+    /// Where to acquire the release. Conventionally a human-readable
+    /// landing page (Nyaa view page, MangaUpdates release page).
     pub payload_url: String,
+    /// Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL
+    /// link). Travels paired with [`Self::media_url_kind`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_url: Option<String>,
+    /// Classifies what `media_url` points at: `torrent` | `magnet` |
+    /// `direct` | `other`. The frontend uses this to pick a kind-specific
+    /// icon next to the standard external-link icon.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_url_kind: Option<String>,
     pub confidence: f64,
     /// `announced` | `dismissed` | `marked_acquired` | `hidden`.
     pub state: String,
@@ -86,6 +96,8 @@ impl ReleaseLedgerEntryDto {
             format_hints: m.format_hints,
             group_or_uploader: m.group_or_uploader,
             payload_url: m.payload_url,
+            media_url: m.media_url,
+            media_url_kind: m.media_url_kind,
             confidence: m.confidence,
             state: m.state,
             metadata: m.metadata,

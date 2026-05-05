@@ -25,6 +25,7 @@ import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { ReleaseLedgerEntry } from "@/api/releases";
+import { MediaUrlIcon } from "@/components/releases/MediaUrlIcon";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   useDismissRelease,
@@ -237,6 +238,12 @@ export function ReleasesInbox() {
                               <IconExternalLink size={16} />
                             </ActionIcon>
                           </Tooltip>
+                          {entry.mediaUrl && (
+                            <MediaUrlIcon
+                              url={entry.mediaUrl}
+                              kind={entry.mediaUrlKind}
+                            />
+                          )}
                           {entry.state === "announced" && (
                             <>
                               <Tooltip label="Mark acquired">
