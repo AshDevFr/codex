@@ -29,13 +29,45 @@ export interface FetcherOptions {
 /** Public base URL for MangaUpdates' v1 RSS API. */
 export const MANGAUPDATES_RSS_BASE = "https://api.mangaupdates.com/v1/series";
 
-/** Build the per-series RSS URL. */
+/**
+ * Normalize a MangaUpdates series ID to its numeric form for API calls.
+ *
+ * MangaUpdates uses two interchangeable representations of the same ID:
+ *
+ *   - **Numeric** (e.g. `15180124327`) — the internal primary key. Every
+ *     `/v1/series/...` API endpoint requires this form.
+ *   - **Base36 slug** (e.g. `6z1uqw7`) — a base36 encoding of the numeric
+ *     ID, used in public URLs only (`mangaupdates.com/series/6z1uqw7/...`).
+ *     The API rejects this form with a 405.
+ *
+ * Metadata sources (MangaBaka, etc.) typically scrape the public URL and
+ * store the slug, so the value we receive on `entry.externalIds.mangaupdates`
+ * is whatever the source happened to grab. Decode here so callers don't
+ * have to know.
+ *
+ * Returns the input unchanged when it's already an all-digit string;
+ * `null` when the input contains characters outside the base36 alphabet
+ * (caller should surface as a configuration error).
+ */
+export function normalizeMangaUpdatesId(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  if (!/^[0-9a-z]+$/i.test(trimmed)) return null;
+  // parseInt('6z1uqw7', 36) = 15180124327. JS numbers are precise for
+  // integers up to 2^53; MangaUpdates IDs sit well below that.
+  const decoded = Number.parseInt(trimmed, 36);
+  if (!Number.isFinite(decoded) || decoded <= 0) return null;
+  return String(decoded);
+}
+
+/**
+ * Build the per-series RSS URL. Accepts either the numeric ID or the
+ * base36 slug — see `normalizeMangaUpdatesId` for the rationale.
+ */
 export function feedUrl(mangaUpdatesId: string): string {
-  // We don't URL-encode the id intentionally: MangaUpdates IDs are numeric
-  // strings, but if someone hand-pastes a malformed value we'd rather get a
-  // clean 404 than mask the issue with double-encoding. The fetch will fail
-  // visibly and the host's `last_error` will surface the upstream response.
-  return `${MANGAUPDATES_RSS_BASE}/${mangaUpdatesId}/rss`;
+  const normalized = normalizeMangaUpdatesId(mangaUpdatesId) ?? mangaUpdatesId;
+  return `${MANGAUPDATES_RSS_BASE}/${normalized}/rss`;
 }
 
 /**
