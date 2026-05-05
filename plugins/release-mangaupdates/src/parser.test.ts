@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFeed, parseItem, parseTitle, UNKNOWN_LANGUAGE } from "./parser.js";
+import { parseFeed, parseItem, parseTitle } from "./parser.js";
 
 // -----------------------------------------------------------------------------
 // parseTitle
@@ -47,11 +47,15 @@ describe("parseTitle", () => {
     expect(t.language).toBe("id");
   });
 
-  it("returns 'unknown' language sentinel when language is missing", () => {
+  it("defaults language to 'en' when no language tag is present", () => {
+    // The MangaUpdates v1 RSS endpoint serves the English-localized release
+    // stream and titles ship without a language tag. Defaulting to "en"
+    // (rather than the legacy `UNKNOWN_LANGUAGE` sentinel) keeps the
+    // client-side language gate from dropping every item.
     const t = parseTitle("c.143 by Best Group");
     expect(t.chapter).toBe(143);
     expect(t.group).toBe("Best Group");
-    expect(t.language).toBe(UNKNOWN_LANGUAGE);
+    expect(t.language).toBe("en");
   });
 
   it("handles volume-only bundle (no chapter)", () => {
@@ -207,7 +211,9 @@ describe("parseFeed", () => {
     expect(items[3]?.language).toBe("en");
     expect(items[3]?.volume).toBe(15);
     expect(items[3]?.chapter).toBeNull();
-    expect(items[4]?.language).toBe(UNKNOWN_LANGUAGE);
+    // Item 4's title carries no language tag; parser defaults to "en"
+    // because the MU v1 RSS feed is the English release stream.
+    expect(items[4]?.language).toBe("en");
   });
 
   it("returns an empty array for an empty channel", () => {

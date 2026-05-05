@@ -26,9 +26,12 @@ export interface ParsedRssItem {
   /** Volume number. */
   volume: number | null;
   /**
-   * Language tag (lowercased ISO 639-1 when extractable, otherwise the literal
-   * `"unknown"` sentinel — never empty). The plugin's filter treats `"unknown"`
-   * as out-of-language by default.
+   * Language tag (lowercased ISO 639-1). Defaults to `"en"` when the title
+   * doesn't carry an explicit `(xx)` code, since the MangaUpdates v1 RSS
+   * endpoint serves the English release stream. The legacy
+   * `UNKNOWN_LANGUAGE` sentinel is still exported for callers that want
+   * to surface "no tag detected" explicitly, but the parser no longer
+   * produces it on its own.
    */
   language: string;
   /** Scanlation group name (best-effort; nullable). */
@@ -134,7 +137,16 @@ export function parseTitle(title: string): {
   }
 
   // Language: trailing parenthesized 2-3 letter code (e.g. (en), (es), (id), (por)).
-  let language = UNKNOWN_LANGUAGE as string;
+  //
+  // The current MangaUpdates v1 RSS endpoint (`/v1/series/{id}/rss`) ships
+  // titles without a language tag — it's the English-localized release
+  // stream by design. Default to `"en"` so items aren't dropped by the
+  // client-side language gate; an explicit `(es)` / `(id)` / etc. still
+  // wins when present, and the host's per-series language list remains
+  // the authoritative gate downstream. The legacy `UNKNOWN_LANGUAGE`
+  // sentinel is kept exported for backwards compatibility but no longer
+  // produced by this parser.
+  let language = "en";
   const langMatch = trimmed.match(/\(([a-z]{2,3})\)\s*$/i);
   if (langMatch?.[1]) {
     language = langMatch[1].toLowerCase();
