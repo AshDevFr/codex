@@ -38,8 +38,8 @@ use crate::api::{
 };
 use crate::db::entities::release_ledger::state as ledger_state;
 use crate::db::repositories::{
-    LedgerInboxFilter, ReleaseLedgerRepository, ReleaseSourceRepository, ReleaseSourceUpdate,
-    SeriesRepository,
+    LedgerInboxFilter, PluginsRepository, ReleaseLedgerRepository, ReleaseSourceRepository,
+    ReleaseSourceUpdate, SeriesRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent};
 
@@ -566,4 +566,116 @@ pub async fn poll_release_source_now(
 #[allow(dead_code)]
 fn _opening_api_keepalive() -> ReleaseLedgerListResponse {
     ReleaseLedgerListResponse { entries: vec![] }
+}
+
+// =============================================================================
+// Applicability lookup
+// =============================================================================
+
+/// Query string for `GET /api/v1/release-sources/applicability`.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplicabilityQuery {
+    /// Optional library scope. When provided, only plugins that apply to
+    /// this library are considered (a plugin's `library_ids` field is
+    /// either empty = all, or contains this UUID).
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+}
+
+/// Response shape for `GET /api/v1/release-sources/applicability`.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplicabilityResponse {
+    /// `true` when at least one enabled `release_source` plugin applies to
+    /// the requested library (or, if no `libraryId` was supplied, to *any*
+    /// library). The frontend uses this to decide whether to render the
+    /// per-series Tracking panel and Releases tab, or to show the
+    /// bulk-track menu entry.
+    pub applicable: bool,
+    /// Plugin display names (or fallback to `name` when no manifest cached
+    /// yet) of the enabled release-source plugins covering this library.
+    /// Empty when `applicable` is `false`. Useful for surfacing "Powered by
+    /// MangaUpdates, Nyaa" hints in the UI.
+    pub plugin_display_names: Vec<String>,
+}
+
+/// Whether release tracking is available for a given library.
+///
+/// Read-only, requires only `SeriesRead`: the response carries no
+/// admin-sensitive data (no plugin IDs, no configs, no library
+/// allowlists), just the boolean and friendly display names. Used by the
+/// frontend to:
+///
+/// - hide the per-series Tracking panel + Releases tab on libraries with
+///   no applicable plugin (cleaner UX);
+/// - decide whether to show the "Track for releases" / "Don't track for
+///   releases" entries in the bulk-selection menu.
+#[utoipa::path(
+    get,
+    path = "/api/v1/release-sources/applicability",
+    params(ApplicabilityQuery),
+    responses(
+        (status = 200, description = "Applicability info", body = ApplicabilityResponse),
+        (status = 403, description = "SeriesRead permission required"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Releases"
+)]
+pub async fn get_release_tracking_applicability(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    axum::extract::Query(query): axum::extract::Query<ApplicabilityQuery>,
+) -> Result<Json<ApplicabilityResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
+    let plugins = PluginsRepository::get_enabled(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load plugins: {}", e)))?;
+
+    let mut display_names: Vec<String> = Vec::new();
+    for plugin in plugins {
+        // Capability check via the cached manifest. We deserialize the
+        // shape lightly via the canonical `PluginManifest` struct so
+        // a malformed manifest doesn't claim release-source capability.
+        let Some(manifest_json) = plugin.manifest.as_ref() else {
+            continue;
+        };
+        let Ok(manifest) = serde_json::from_value::<
+            crate::services::plugin::protocol::PluginManifest,
+        >(manifest_json.clone()) else {
+            continue;
+        };
+        if manifest.capabilities.release_source.is_none() {
+            continue;
+        }
+
+        // Library-scope check. The DB column is JSON; an empty array means
+        // "all libraries". Anything not deserializing into a Vec<Uuid>
+        // (NULL, non-array, etc.) is treated as "all libraries" too —
+        // that matches the existing convention elsewhere in the codebase.
+        let library_ids: Vec<Uuid> =
+            serde_json::from_value(plugin.library_ids.clone()).unwrap_or_default();
+        if let Some(lib) = query.library_id
+            && !library_ids.is_empty()
+            && !library_ids.contains(&lib)
+        {
+            continue;
+        }
+
+        let label = if plugin.display_name.trim().is_empty() {
+            plugin.name.clone()
+        } else {
+            plugin.display_name.clone()
+        };
+        display_names.push(label);
+    }
+
+    Ok(Json(ApplicabilityResponse {
+        applicable: !display_names.is_empty(),
+        plugin_display_names: display_names,
+    }))
 }

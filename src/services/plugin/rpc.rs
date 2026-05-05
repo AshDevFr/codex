@@ -421,20 +421,25 @@ async fn dispatch_reverse_rpc(
     let ctx_guard = reverse_ctx.read().await;
 
     // 1. Permission check. If capabilities haven't been set yet (i.e. the
-    //    plugin tried to make a reverse-RPC call before initialize
-    //    returned), we treat it as denied — there's nothing we can match
-    //    against.
+    //    plugin tried to make a reverse-RPC call before the host installed
+    //    the per-plugin reverse-RPC handlers), we return METHOD_NOT_FOUND
+    //    rather than AUTH_FAILED. From the plugin's perspective the method
+    //    isn't dispatchable *yet* — distinguishing this from a real
+    //    permission denial lets the plugin SDK retry with backoff to ride
+    //    out the brief initialization race (see e.g. release-nyaa's
+    //    `registerSources` retry on -32601). AUTH_FAILED stays reserved
+    //    for actual capability-declined-method denials.
     let caps = match ctx_guard.capabilities.as_ref() {
         Some(c) => c,
         None => {
             warn!(
                 method = %method,
-                "Reverse-RPC call before plugin initialized; rejecting"
+                "Reverse-RPC call before plugin initialized; deferring (METHOD_NOT_FOUND)"
             );
             return JsonRpcResponse::error(
                 Some(request_id),
                 JsonRpcError::new(
-                    error_codes::AUTH_FAILED,
+                    error_codes::METHOD_NOT_FOUND,
                     "plugin not initialized; capabilities unknown",
                 ),
             );

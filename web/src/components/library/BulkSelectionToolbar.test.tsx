@@ -35,19 +35,17 @@ vi.mock("@/api/series", () => ({
       tasksEnqueued: 5,
       message: "Enqueued 5 analysis tasks for 2 series",
     }),
-  },
-}));
-
-vi.mock("@/api/tracking", () => ({
-  trackingApi: {
-    updateTracking: vi.fn().mockResolvedValue({
-      seriesId: "series-1",
-      tracked: true,
-      trackingStatus: "unknown",
-      trackChapters: true,
-      trackVolumes: true,
-      createdAt: "2024-01-01T00:00:00Z",
-      updatedAt: "2024-01-01T00:00:00Z",
+    bulkTrackForReleases: vi.fn().mockResolvedValue({
+      changed: 2,
+      alreadyInState: 0,
+      errored: 0,
+      results: [],
+    }),
+    bulkUntrackForReleases: vi.fn().mockResolvedValue({
+      changed: 1,
+      alreadyInState: 0,
+      errored: 0,
+      results: [],
     }),
   },
 }));
@@ -55,6 +53,15 @@ vi.mock("@/api/tracking", () => ({
 // Mock the usePermissions hook - default to admin (all permissions)
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: vi.fn(),
+}));
+
+// Mock the applicability hook so the Release Tracking menu entries render.
+// Tests that need to hide them can override the mock.
+vi.mock("@/hooks/useReleaseTrackingApplicability", () => ({
+  useReleaseTrackingApplicability: vi.fn(() => ({
+    data: { applicable: true, pluginDisplayNames: ["Nyaa Releases"] },
+    isLoading: false,
+  })),
 }));
 
 const mockPermissionsAdmin = () => {
@@ -366,8 +373,8 @@ describe("BulkSelectionToolbar", () => {
       });
     });
 
-    it("should call updateTracking for each series when Mark as Tracked clicked", async () => {
-      const { trackingApi } = await import("@/api/tracking");
+    it("calls bulkTrackForReleases with all selected series when Track for releases is clicked", async () => {
+      const { seriesApi } = await import("@/api/series");
       const user = userEvent.setup();
 
       useBulkSelectionStore.getState().toggleSelection("series-1", "series");
@@ -377,22 +384,23 @@ describe("BulkSelectionToolbar", () => {
 
       await user.click(screen.getByRole("button", { name: /more actions/i }));
       await waitFor(() => {
-        expect(screen.getByText("Mark as Tracked")).toBeInTheDocument();
+        expect(screen.getByText("Track for releases")).toBeInTheDocument();
       });
-      await user.click(screen.getByText("Mark as Tracked"));
+      await user.click(screen.getByText("Track for releases"));
 
       await waitFor(() => {
-        expect(trackingApi.updateTracking).toHaveBeenCalledWith("series-1", {
-          tracked: true,
-        });
-        expect(trackingApi.updateTracking).toHaveBeenCalledWith("series-2", {
-          tracked: true,
-        });
+        expect(seriesApi.bulkTrackForReleases).toHaveBeenCalledTimes(1);
       });
+      // The toolbar passes the full selected-id list as a single argument.
+      const calls = (seriesApi.bulkTrackForReleases as ReturnType<typeof vi.fn>)
+        .mock.calls;
+      expect(calls[0][0]).toEqual(
+        expect.arrayContaining(["series-1", "series-2"]),
+      );
     });
 
-    it("should call updateTracking with tracked=false when Mark as Untracked clicked", async () => {
-      const { trackingApi } = await import("@/api/tracking");
+    it("calls bulkUntrackForReleases when Don't track for releases is clicked", async () => {
+      const { seriesApi } = await import("@/api/series");
       const user = userEvent.setup();
 
       useBulkSelectionStore.getState().toggleSelection("series-1", "series");
@@ -401,14 +409,16 @@ describe("BulkSelectionToolbar", () => {
 
       await user.click(screen.getByRole("button", { name: /more actions/i }));
       await waitFor(() => {
-        expect(screen.getByText("Mark as Untracked")).toBeInTheDocument();
+        expect(
+          screen.getByText("Don't track for releases"),
+        ).toBeInTheDocument();
       });
-      await user.click(screen.getByText("Mark as Untracked"));
+      await user.click(screen.getByText("Don't track for releases"));
 
       await waitFor(() => {
-        expect(trackingApi.updateTracking).toHaveBeenCalledWith("series-1", {
-          tracked: false,
-        });
+        expect(seriesApi.bulkUntrackForReleases).toHaveBeenCalledWith([
+          "series-1",
+        ]);
       });
     });
   });

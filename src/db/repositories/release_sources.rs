@@ -122,6 +122,7 @@ impl ReleaseSourceRepository {
             last_error_at: Set(None),
             etag: Set(None),
             config: Set(params.config),
+            last_summary: Set(None),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -242,6 +243,7 @@ impl ReleaseSourceRepository {
         id: Uuid,
         polled_at: DateTime<Utc>,
         etag: Option<String>,
+        summary: Option<String>,
     ) -> Result<()> {
         let existing = ReleaseSources::find_by_id(id)
             .one(db)
@@ -253,6 +255,11 @@ impl ReleaseSourceRepository {
         active.last_error_at = Set(None);
         if let Some(e) = etag {
             active.etag = Set(Some(e));
+        }
+        // None passed by the caller means "leave alone"; older callers can pass
+        // None and keep their existing behavior. Pass Some("…") to overwrite.
+        if let Some(s) = summary {
+            active.last_summary = Set(Some(s));
         }
         active.updated_at = Set(Utc::now());
         active.update(db).await?;
@@ -414,13 +421,14 @@ mod tests {
             .unwrap();
         assert_eq!(after_err.last_error.as_deref(), Some("503 upstream"));
 
-        // Successful poll clears the error and sets etag.
+        // Successful poll clears the error and sets etag + summary.
         let polled_at = Utc::now();
         ReleaseSourceRepository::record_poll_success(
             conn,
             s.id,
             polled_at,
             Some("\"etag-1\"".to_string()),
+            Some("Fetched 0 items".to_string()),
         )
         .await
         .unwrap();
@@ -432,6 +440,7 @@ mod tests {
         assert_eq!(after_ok.last_error_at, None);
         assert_eq!(after_ok.last_polled_at, Some(polled_at));
         assert_eq!(after_ok.etag.as_deref(), Some("\"etag-1\""));
+        assert_eq!(after_ok.last_summary.as_deref(), Some("Fetched 0 items"));
     }
 
     #[tokio::test]
@@ -444,7 +453,7 @@ mod tests {
 
         // First a success.
         let success_at = Utc::now();
-        ReleaseSourceRepository::record_poll_success(conn, s.id, success_at, None)
+        ReleaseSourceRepository::record_poll_success(conn, s.id, success_at, None, None)
             .await
             .unwrap();
 
