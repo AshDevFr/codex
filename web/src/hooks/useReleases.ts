@@ -1,5 +1,6 @@
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import {
   type PaginatedReleases,
   type ReleaseInboxParams,
@@ -12,6 +13,9 @@ import {
   type UpdateReleaseLedgerEntryRequest,
   type UpdateReleaseSourceRequest,
 } from "@/api/releases";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
+
+const RELEASE_POLL_TASK_TYPE = "poll_release_source";
 
 export const releasesKeys = {
   inbox: (params: ReleaseInboxParams) => ["releases", "inbox", params] as const,
@@ -92,10 +96,53 @@ export function usePatchRelease() {
 }
 
 export function useReleaseSources() {
-  return useQuery<ReleaseSource[]>({
+  const queryClient = useQueryClient();
+  const { activeTasks } = useTaskProgress();
+
+  const query = useQuery<ReleaseSource[]>({
     queryKey: releasesKeys.sourcesRoot,
     queryFn: () => releaseSourcesApi.list(),
+    // Belt-and-braces: SSE `release_source_polled` invalidates this query, but
+    // very fast polls can race the event pipeline. While any release-poll task
+    // is in flight, refetch every 5s so `lastPolledAt` / `lastSummary` /
+    // `lastError` catch up even if the event is missed. Stops once no polls
+    // are active.
+    refetchInterval: () => {
+      const hasActivePoll = Array.from(activeTasks.values()).some(
+        (task) =>
+          task.taskType === RELEASE_POLL_TASK_TYPE &&
+          (task.status === "pending" || task.status === "running"),
+      );
+      return hasActivePoll ? 5000 : false;
+    },
   });
+
+  // Refresh immediately when a release-poll task transitions to a terminal
+  // state. `useTaskProgress` keeps completed/failed entries around briefly,
+  // so we watch for the status flip rather than disappearance.
+  const prevStatusesRef = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    const prev = prevStatusesRef.current;
+    const next = new Map<string, string>();
+
+    for (const task of activeTasks.values()) {
+      if (task.taskType !== RELEASE_POLL_TASK_TYPE) continue;
+      next.set(task.taskId, task.status);
+
+      const prevStatus = prev.get(task.taskId);
+      if (
+        prevStatus &&
+        prevStatus !== task.status &&
+        (task.status === "completed" || task.status === "failed")
+      ) {
+        queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
+      }
+    }
+
+    prevStatusesRef.current = next;
+  }, [activeTasks, queryClient]);
+
+  return query;
 }
 
 export function useUpdateReleaseSource() {
