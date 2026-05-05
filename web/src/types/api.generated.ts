@@ -12837,11 +12837,25 @@ export interface components {
                 /** @description Torrent info_hash, if applicable. */
                 infoHash?: string | null;
                 language?: string | null;
+                /**
+                 * @description Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL
+                 *     link). Travels paired with [`Self::media_url_kind`].
+                 */
+                mediaUrl?: string | null;
+                /**
+                 * @description Classifies what `media_url` points at: `torrent` | `magnet` |
+                 *     `direct` | `other`. The frontend uses this to pick a kind-specific
+                 *     icon next to the standard external-link icon.
+                 */
+                mediaUrlKind?: string | null;
                 /** @description Source-specific extras (free-form). */
                 metadata?: unknown;
                 /** Format: date-time */
                 observedAt: string;
-                /** @description Where to acquire the release. */
+                /**
+                 * @description Where to acquire the release. Conventionally a human-readable
+                 *     landing page (Nyaa view page, MangaUpdates release page).
+                 */
                 payloadUrl: string;
                 /**
                  * Format: uuid
@@ -14742,11 +14756,25 @@ export interface components {
             /** @description Torrent info_hash, if applicable. */
             infoHash?: string | null;
             language?: string | null;
+            /**
+             * @description Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL
+             *     link). Travels paired with [`Self::media_url_kind`].
+             */
+            mediaUrl?: string | null;
+            /**
+             * @description Classifies what `media_url` points at: `torrent` | `magnet` |
+             *     `direct` | `other`. The frontend uses this to pick a kind-specific
+             *     icon next to the standard external-link icon.
+             */
+            mediaUrlKind?: string | null;
             /** @description Source-specific extras (free-form). */
             metadata?: unknown;
             /** Format: date-time */
             observedAt: string;
-            /** @description Where to acquire the release. */
+            /**
+             * @description Where to acquire the release. Conventionally a human-readable
+             *     landing page (Nyaa view page, MangaUpdates release page).
+             */
             payloadUrl: string;
             /**
              * Format: uuid

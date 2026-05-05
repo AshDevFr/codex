@@ -74,6 +74,7 @@ export type {
 export type {
   ListTrackedRequest,
   ListTrackedResponse,
+  MediaUrlKind,
   RecordRequest,
   RecordResponse,
   ReleaseCandidate,
