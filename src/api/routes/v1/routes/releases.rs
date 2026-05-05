@@ -28,6 +28,12 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/releases/{release_id}/mark-acquired",
             post(handlers::releases::mark_release_acquired),
         )
+        // Applicability (SeriesRead required) — used by the frontend to
+        // hide release-tracking UI on libraries not covered by any plugin.
+        .route(
+            "/release-sources/applicability",
+            get(handlers::releases::get_release_tracking_applicability),
+        )
         // Source admin (PluginsManage required)
         .route(
             "/release-sources",

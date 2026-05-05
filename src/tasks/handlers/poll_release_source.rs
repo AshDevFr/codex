@@ -317,6 +317,13 @@ impl TaskHandler for PollReleaseSourceHandler {
 
             // Process candidates (the plugin may have streamed some via
             // reverse-RPC already; those are already on the ledger).
+            // Snapshot fields needed *after* the consume-loop below so we
+            // can still build the `last_summary` once `response.candidates`
+            // is moved.
+            let response_etag = response.etag.clone();
+            let response_not_modified = response.not_modified;
+            let response_upstream_status = response.upstream_status;
+
             let mut result = PollReleaseSourceResult {
                 source_id,
                 candidates_returned: response.candidates.len() as u32,
@@ -374,13 +381,19 @@ impl TaskHandler for PollReleaseSourceHandler {
 
             // Persist source state. If we hit a successful 2xx upstream we
             // already noted it for backoff; clear `last_error` and stamp
-            // `last_polled_at`.
+            // `last_polled_at`. The one-line `summary` is surfaced in the
+            // Release tracking UI under the per-row status badge so users
+            // can see *why* a poll returned no announcements (no tracked
+            // series, upstream not modified, …) without container logs.
             let polled_at = Utc::now();
+            let summary =
+                build_poll_summary(response_not_modified, response_upstream_status, &result);
             if let Err(e) = ReleaseSourceRepository::record_poll_success(
                 db,
                 source.id,
                 polled_at,
-                response.etag.clone(),
+                response_etag,
+                Some(summary),
             )
             .await
             {
@@ -390,7 +403,7 @@ impl TaskHandler for PollReleaseSourceHandler {
             // If the plugin signalled an upstream error code but didn't
             // return an RPC error, also stamp `last_error` so admins see
             // it in the UI.
-            if let Some(status) = response.upstream_status
+            if let Some(status) = response_upstream_status
                 && is_backoff_status(status)
             {
                 let _ = ReleaseSourceRepository::record_poll_error(
@@ -403,7 +416,7 @@ impl TaskHandler for PollReleaseSourceHandler {
             }
 
             // Reset backoff on a clean run if we didn't already.
-            if backoff_url.is_none() && response.upstream_status.is_none() {
+            if backoff_url.is_none() && response_upstream_status.is_none() {
                 let url_hint = derive_url_hint(&source);
                 self.backoff.record_success(&url_hint).await;
             }
@@ -420,6 +433,55 @@ impl TaskHandler for PollReleaseSourceHandler {
             Ok(TaskResult::success_with_data(message, json!(result)))
         })
     }
+}
+
+/// Build the one-line `last_summary` string written to `release_sources`
+/// after a successful poll, intended for direct display under the Release
+/// tracking row's status badge.
+///
+/// Example outputs:
+/// - `"Up to date — upstream returned 304 (not modified)"`
+/// - `"Fetched 0 items"` (e.g. no tracked series with aliases for the source)
+/// - `"Fetched 12 items, recorded 0 (12 already in ledger)"`
+/// - `"Fetched 5 items, recorded 1, dropped 4 below threshold"`
+/// - `"Upstream warning: HTTP 429"` (when the plugin reports an error code
+///   but didn't fail the RPC outright)
+pub(crate) fn build_poll_summary(
+    not_modified: Option<bool>,
+    upstream_status: Option<u16>,
+    result: &PollReleaseSourceResult,
+) -> String {
+    if matches!(not_modified, Some(true)) {
+        return "Up to date — upstream returned 304 (not modified)".to_string();
+    }
+
+    let returned = result.candidates_returned;
+    let recorded = result.candidates_recorded;
+    let deduped = result.candidates_deduped;
+    let rejected = result.candidates_rejected;
+
+    let mut s = match returned {
+        0 => "Fetched 0 items".to_string(),
+        1 => format!("Fetched 1 item, recorded {}", recorded),
+        n => format!("Fetched {} items, recorded {}", n, recorded),
+    };
+    if deduped > 0 {
+        s.push_str(&format!(" ({} already in ledger)", deduped));
+    }
+    if rejected > 0 {
+        s.push_str(&format!(", dropped {} below threshold", rejected));
+    }
+
+    // Upstream warning takes a trailing-suffix slot so the count info isn't
+    // lost. Backoff-significant statuses (429 / 5xx) are paired with a
+    // `last_error` write elsewhere; this is just a friendly inline note.
+    if let Some(status) = upstream_status
+        && is_backoff_status(status)
+    {
+        s.push_str(&format!(" · upstream warning: HTTP {}", status));
+    }
+
+    s
 }
 
 /// Emit a `ReleaseAnnounced` event for a freshly-inserted ledger row.
@@ -587,6 +649,7 @@ mod tests {
             last_error_at: None,
             etag: None,
             config: None,
+            last_summary: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -756,5 +819,71 @@ mod tests {
             started_at: None,
             completed_at: None,
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // build_poll_summary — pins the user-facing copy that lands under the
+    // Release tracking row's status badge.
+    // -------------------------------------------------------------------------
+
+    fn empty_result() -> PollReleaseSourceResult {
+        PollReleaseSourceResult {
+            source_id: Uuid::new_v4(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn build_poll_summary_reports_not_modified_explicitly() {
+        let r = empty_result();
+        let s = build_poll_summary(Some(true), None, &r);
+        assert_eq!(s, "Up to date — upstream returned 304 (not modified)");
+    }
+
+    #[test]
+    fn build_poll_summary_zero_items() {
+        let r = empty_result();
+        let s = build_poll_summary(Some(false), None, &r);
+        assert_eq!(s, "Fetched 0 items");
+    }
+
+    #[test]
+    fn build_poll_summary_one_item_uses_singular() {
+        let mut r = empty_result();
+        r.candidates_returned = 1;
+        r.candidates_recorded = 1;
+        let s = build_poll_summary(None, None, &r);
+        assert_eq!(s, "Fetched 1 item, recorded 1");
+    }
+
+    #[test]
+    fn build_poll_summary_includes_dedup_and_threshold_breakdown() {
+        let mut r = empty_result();
+        r.candidates_returned = 12;
+        r.candidates_recorded = 1;
+        r.candidates_deduped = 7;
+        r.candidates_rejected = 4;
+        let s = build_poll_summary(None, None, &r);
+        assert_eq!(
+            s,
+            "Fetched 12 items, recorded 1 (7 already in ledger), dropped 4 below threshold"
+        );
+    }
+
+    #[test]
+    fn build_poll_summary_appends_upstream_warning_for_backoff_status() {
+        let mut r = empty_result();
+        r.candidates_returned = 0;
+        let s = build_poll_summary(None, Some(429), &r);
+        assert_eq!(s, "Fetched 0 items · upstream warning: HTTP 429");
+    }
+
+    #[test]
+    fn build_poll_summary_does_not_append_for_clean_2xx() {
+        let mut r = empty_result();
+        r.candidates_returned = 2;
+        r.candidates_recorded = 2;
+        let s = build_poll_summary(None, Some(200), &r);
+        assert_eq!(s, "Fetched 2 items, recorded 2");
     }
 }

@@ -9,6 +9,8 @@ export type UpdateReleaseSourceRequest =
   components["schemas"]["UpdateReleaseSourceRequest"];
 export type PaginatedReleases =
   components["schemas"]["PaginatedResponse_ReleaseLedgerEntryDto"];
+export type ReleaseTrackingApplicability =
+  components["schemas"]["ApplicabilityResponse"];
 
 export interface ReleaseInboxParams {
   state?: string;
@@ -106,6 +108,29 @@ export const releaseSourcesApi = {
   ): Promise<{ status: string; message: string }> => {
     const response = await api.post<{ status: string; message: string }>(
       `/release-sources/${sourceId}/poll-now`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Whether release tracking is available for a given library scope.
+   *
+   * Returns `applicable: true` when at least one enabled release-source
+   * plugin applies to `libraryId` (or, with `libraryId` omitted, to any
+   * library). The frontend uses this to hide the per-series Tracking panel
+   * and Releases tab on libraries that aren't covered, and to gate the
+   * bulk-track menu entry.
+   */
+  applicability: async (
+    libraryId?: string,
+  ): Promise<ReleaseTrackingApplicability> => {
+    const params = new URLSearchParams();
+    if (libraryId) {
+      params.set("libraryId", libraryId);
+    }
+    const qs = params.toString();
+    const response = await api.get<ReleaseTrackingApplicability>(
+      `/release-sources/applicability${qs ? `?${qs}` : ""}`,
     );
     return response.data;
   },

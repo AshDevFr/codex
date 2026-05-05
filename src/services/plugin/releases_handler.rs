@@ -871,6 +871,7 @@ pub fn is_releases_method(method: &str) -> bool {
             | "releases/record"
             | "releases/source_state/get"
             | "releases/source_state/set"
+            | "releases/register_sources"
     )
 }
 
@@ -1244,6 +1245,7 @@ mod tests {
             source_id,
             Utc::now(),
             Some("etag-123".to_string()),
+            None,
         )
         .await
         .unwrap();
@@ -1331,6 +1333,7 @@ mod tests {
         assert!(is_releases_method(methods::RELEASES_RECORD));
         assert!(is_releases_method(methods::RELEASES_SOURCE_STATE_GET));
         assert!(is_releases_method(methods::RELEASES_SOURCE_STATE_SET));
+        assert!(is_releases_method(methods::RELEASES_REGISTER_SOURCES));
         assert!(!is_releases_method("releases/poll"));
         assert!(!is_releases_method("storage/get"));
     }

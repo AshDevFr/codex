@@ -31,6 +31,13 @@ pub struct Model {
     pub last_error_at: Option<DateTime<Utc>>,
     pub etag: Option<String>,
     pub config: Option<serde_json::Value>,
+    /// One-line human-readable summary of the most recent poll (e.g.
+    /// `"fetched 12 items, matched 0, recorded 0"`). Written by the
+    /// poll-source task on every successful completion. NULL until the
+    /// first successful poll. Surfaced by the Release tracking settings UI
+    /// under the per-row status badge so users can tell *why* a poll
+    /// returned no announcements without grepping container logs.
+    pub last_summary: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

@@ -7139,6 +7139,54 @@
         ]
       }
     },
+    "/api/v1/release-sources/applicability": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Whether release tracking is available for a given library.",
+        "description": "Read-only, requires only `SeriesRead`: the response carries no\nadmin-sensitive data (no plugin IDs, no configs, no library\nallowlists), just the boolean and friendly display names. Used by the\nfrontend to:\n\n- hide the per-series Tracking panel + Releases tab on libraries with\n  no applicable plugin (cleaner UX);\n- decide whether to show the \"Track for releases\" / \"Don't track for\n  releases\" entries in the bulk-selection menu.",
+        "operationId": "get_release_tracking_applicability",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Optional library scope. When provided, only plugins that apply to\nthis library are considered (a plugin's `library_ids` field is\neither empty = all, or contains this UUID).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Applicability info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicabilityResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SeriesRead permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/release-sources/{source_id}": {
       "patch": {
         "tags": [
@@ -8197,6 +8245,52 @@
         ]
       }
     },
+    "/api/v1/series/bulk/track-for-releases": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk-enable release tracking for multiple series.",
+        "description": "For each `series_id` in the request, flips `series_tracking.tracked` to\n`true` and runs the seed pass (auto-derives aliases, `latest_known_*`,\n`track_chapters` / `track_volumes` from existing data). Series that don't\nexist are reported as `outcome: skipped`. Series already tracked are\nreported as `outcome: skipped, detail: \"already tracked\"` and the seed is\nnot re-run (idempotent — a re-run would simply re-derive identical\nvalues, but we skip the work).\n\nMirrors the per-series PATCH `false -> true` transition: same seed\nfunction, same idempotency guarantees.",
+        "operationId": "bulk_track_series_for_releases",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk-tracked series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTrackForReleasesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/bulk/unread": {
       "post": {
         "tags": [
@@ -8222,6 +8316,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MarkReadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/bulk/untrack-for-releases": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk-disable release tracking for multiple series.",
+        "description": "Flips `series_tracking.tracked` to `false`. Does not delete aliases,\n`latest_known_*`, or other tracking config — the user can re-track\nwithout losing customizations, and the seed will re-derive any\nauto-derived fields on the next track-on transition.",
+        "operationId": "bulk_untrack_series_for_releases",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk-untracked series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTrackForReleasesResponse"
                 }
               }
             }
@@ -17660,6 +17800,27 @@
           }
         }
       },
+      "ApplicabilityResponse": {
+        "type": "object",
+        "description": "Response shape for `GET /api/v1/release-sources/applicability`.",
+        "required": [
+          "applicable",
+          "pluginDisplayNames"
+        ],
+        "properties": {
+          "applicable": {
+            "type": "boolean",
+            "description": "`true` when at least one enabled `release_source` plugin applies to\nthe requested library (or, if no `libraryId` was supplied, to *any*\nlibrary). The frontend uses this to decide whether to render the\nper-series Tracking panel and Releases tab, or to show the\nbulk-track menu entry."
+          },
+          "pluginDisplayNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Plugin display names (or fallback to `name` when no manifest cached\nyet) of the enabled release-source plugins covering this library.\nEmpty when `applicable` is `false`. Useful for surfacing \"Powered by\nMangaUpdates, Nyaa\" hints in the UI."
+          }
+        }
+      },
       "AuthorContextDto": {
         "type": "object",
         "description": "Author context for template evaluation.",
@@ -21362,6 +21523,65 @@
             "format": "uuid",
             "description": "ID of the fan-out task that was created",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "BulkTrackForReleasesItem": {
+        "type": "object",
+        "description": "Per-series outcome of a bulk track / untrack operation.\n\nReturned in `BulkTrackForReleasesResponse.results` so the UI can show a\nper-row status (e.g. \"tracked\", \"skipped: not found\", \"errored: …\") without\nre-querying the tracking config endpoint per series.",
+        "required": [
+          "seriesId",
+          "outcome"
+        ],
+        "properties": {
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free-form detail (error message for `errored`, reason for `skipped`).\n`None` for the success cases."
+          },
+          "outcome": {
+            "type": "string",
+            "description": "`tracked` | `untracked` | `skipped` | `errored`."
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BulkTrackForReleasesResponse": {
+        "type": "object",
+        "description": "Aggregate result of `POST /series/bulk/track-for-releases` and its untrack\ncounterpart. Counts and per-series outcomes for client-side display.",
+        "required": [
+          "changed",
+          "alreadyInState",
+          "errored",
+          "results"
+        ],
+        "properties": {
+          "alreadyInState": {
+            "type": "integer",
+            "description": "Series whose `tracked` flag was already in the target state. No-ops.",
+            "minimum": 0
+          },
+          "changed": {
+            "type": "integer",
+            "description": "Series successfully flipped to `tracked = true` (or `false` for the\nuntrack endpoint).",
+            "minimum": 0
+          },
+          "errored": {
+            "type": "integer",
+            "description": "Series that could not be processed (missing, error, etc.).",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkTrackForReleasesItem"
+            },
+            "description": "Per-series outcomes in input order."
           }
         }
       },
@@ -32727,6 +32947,13 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "lastSummary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "One-line summary of the most recent successful poll. Surfaced under\nthe row's status badge so users can see *why* a poll returned no\nannouncements without grepping logs. NULL until the first successful\npoll on the source."
           },
           "pluginId": {
             "type": "string",

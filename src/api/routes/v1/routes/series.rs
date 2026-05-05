@@ -272,6 +272,14 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             post(handlers::bulk_renumber_series),
         )
         .route(
+            "/series/bulk/track-for-releases",
+            post(handlers::bulk_track_series_for_releases),
+        )
+        .route(
+            "/series/bulk/untrack-for-releases",
+            post(handlers::bulk_untrack_series_for_releases),
+        )
+        .route(
             "/series/bulk/thumbnails/generate",
             post(handlers::bulk_generate_series_thumbnails),
         )

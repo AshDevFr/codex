@@ -398,7 +398,14 @@ function ReleaseSourceRow({
         </Group>
       </Table.Td>
       <Table.Td>
-        <Text size="xs">{lastPolled}</Text>
+        <Stack gap={2}>
+          <Text size="xs">{lastPolled}</Text>
+          {source.lastSummary && (
+            <Text size="xs" c="dimmed" lineClamp={2}>
+              {source.lastSummary}
+            </Text>
+          )}
+        </Stack>
       </Table.Td>
       <Table.Td>
         {source.lastError ? (
@@ -414,9 +421,20 @@ function ReleaseSourceRow({
             </Badge>
           </Tooltip>
         ) : source.lastPolledAt ? (
-          <Badge color="green" variant="light" size="sm">
-            OK
-          </Badge>
+          // Wrap the OK badge in a tooltip carrying `lastSummary` so users
+          // can see *why* a poll returned nothing (no tracked series, 304,
+          // dropped below threshold, etc.) without grepping logs.
+          <Tooltip
+            label={source.lastSummary ?? "Last poll completed successfully."}
+            multiline
+            w={300}
+            withArrow
+            position="top"
+          >
+            <Badge color="green" variant="light" size="sm">
+              OK
+            </Badge>
+          </Tooltip>
         ) : (
           <Badge color="gray" variant="light" size="sm">
             Never polled

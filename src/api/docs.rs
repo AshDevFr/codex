@@ -272,6 +272,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::releases::list_release_sources,
         v1::handlers::releases::update_release_source,
         v1::handlers::releases::poll_release_source_now,
+        v1::handlers::releases::get_release_tracking_applicability,
 
         // Cover management endpoints
         v1::handlers::list_series_covers,
@@ -346,6 +347,8 @@ The following paths are exempt from rate limiting:
         v1::handlers::bulk_mark_series_as_unread,
         v1::handlers::bulk_analyze_series,
         v1::handlers::bulk_renumber_series,
+        v1::handlers::bulk_track_series_for_releases,
+        v1::handlers::bulk_untrack_series_for_releases,
         v1::handlers::bulk_generate_series_thumbnails,
         v1::handlers::bulk_generate_series_book_thumbnails,
         v1::handlers::bulk_reprocess_series_titles,
@@ -710,6 +713,7 @@ The following paths are exempt from rate limiting:
             v1::dto::release::ReleaseSourceListResponse,
             v1::dto::release::UpdateReleaseSourceRequest,
             v1::dto::release::PollNowResponse,
+            v1::handlers::releases::ApplicabilityResponse,
             v1::dto::PaginatedResponse<v1::dto::release::ReleaseLedgerEntryDto>,
 
             // External Rating DTOs
@@ -828,6 +832,8 @@ The following paths are exempt from rate limiting:
             v1::dto::BulkSeriesRequest,
             v1::dto::BulkAnalyzeSeriesRequest,
             v1::dto::BulkAnalyzeResponse,
+            v1::dto::BulkTrackForReleasesItem,
+            v1::dto::BulkTrackForReleasesResponse,
             v1::dto::BulkRenumberSeriesRequest,
             v1::dto::BulkGenerateBookThumbnailsRequest,
             v1::dto::BulkGenerateSeriesBookThumbnailsRequest,

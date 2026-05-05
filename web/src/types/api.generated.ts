@@ -2441,6 +2441,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/release-sources/applicability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether release tracking is available for a given library.
+         * @description Read-only, requires only `SeriesRead`: the response carries no
+         *     admin-sensitive data (no plugin IDs, no configs, no library
+         *     allowlists), just the boolean and friendly display names. Used by the
+         *     frontend to:
+         *
+         *     - hide the per-series Tracking panel + Releases tab on libraries with
+         *       no applicable plugin (cleaner UX);
+         *     - decide whether to show the "Track for releases" / "Don't track for
+         *       releases" entries in the bulk-selection menu.
+         */
+        get: operations["get_release_tracking_applicability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/release-sources/{source_id}": {
         parameters: {
             query?: never;
@@ -2840,6 +2868,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/bulk/track-for-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-enable release tracking for multiple series.
+         * @description For each `series_id` in the request, flips `series_tracking.tracked` to
+         *     `true` and runs the seed pass (auto-derives aliases, `latest_known_*`,
+         *     `track_chapters` / `track_volumes` from existing data). Series that don't
+         *     exist are reported as `outcome: skipped`. Series already tracked are
+         *     reported as `outcome: skipped, detail: "already tracked"` and the seed is
+         *     not re-run (idempotent — a re-run would simply re-derive identical
+         *     values, but we skip the work).
+         *
+         *     Mirrors the per-series PATCH `false -> true` transition: same seed
+         *     function, same idempotency guarantees.
+         */
+        post: operations["bulk_track_series_for_releases"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/bulk/unread": {
         parameters: {
             query?: never;
@@ -2855,6 +2912,29 @@ export interface paths {
          *     Series that don't exist are silently skipped.
          */
         post: operations["bulk_mark_series_as_unread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/untrack-for-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-disable release tracking for multiple series.
+         * @description Flips `series_tracking.tracked` to `false`. Does not delete aliases,
+         *     `latest_known_*`, or other tracking config — the user can re-track
+         *     without losing customizations, and the seed will re-derive any
+         *     auto-derived fields on the next track-on transition.
+         */
+        post: operations["bulk_untrack_series_for_releases"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6433,6 +6513,24 @@ export interface components {
              */
             version: string;
         };
+        /** @description Response shape for `GET /api/v1/release-sources/applicability`. */
+        ApplicabilityResponse: {
+            /**
+             * @description `true` when at least one enabled `release_source` plugin applies to
+             *     the requested library (or, if no `libraryId` was supplied, to *any*
+             *     library). The frontend uses this to decide whether to render the
+             *     per-series Tracking panel and Releases tab, or to show the
+             *     bulk-track menu entry.
+             */
+            applicable: boolean;
+            /**
+             * @description Plugin display names (or fallback to `name` when no manifest cached
+             *     yet) of the enabled release-source plugins covering this library.
+             *     Empty when `applicable` is `false`. Useful for surfacing "Powered by
+             *     MangaUpdates, Nyaa" hints in the UI.
+             */
+            pluginDisplayNames: string[];
+        };
         /** @description Author context for template evaluation. */
         AuthorContextDto: {
             /**
@@ -8602,6 +8700,41 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             taskId: string;
+        };
+        /**
+         * @description Per-series outcome of a bulk track / untrack operation.
+         *
+         *     Returned in `BulkTrackForReleasesResponse.results` so the UI can show a
+         *     per-row status (e.g. "tracked", "skipped: not found", "errored: …") without
+         *     re-querying the tracking config endpoint per series.
+         */
+        BulkTrackForReleasesItem: {
+            /**
+             * @description Free-form detail (error message for `errored`, reason for `skipped`).
+             *     `None` for the success cases.
+             */
+            detail?: string | null;
+            /** @description `tracked` | `untracked` | `skipped` | `errored`. */
+            outcome: string;
+            /** Format: uuid */
+            seriesId: string;
+        };
+        /**
+         * @description Aggregate result of `POST /series/bulk/track-for-releases` and its untrack
+         *     counterpart. Counts and per-series outcomes for client-side display.
+         */
+        BulkTrackForReleasesResponse: {
+            /** @description Series whose `tracked` flag was already in the target state. No-ops. */
+            alreadyInState: number;
+            /**
+             * @description Series successfully flipped to `tracked = true` (or `false` for the
+             *     untrack endpoint).
+             */
+            changed: number;
+            /** @description Series that could not be processed (missing, error, etc.). */
+            errored: number;
+            /** @description Per-series outcomes in input order. */
+            results: components["schemas"]["BulkTrackForReleasesItem"][];
         };
         /** @description Request to update metadata locks for multiple books */
         BulkUpdateBookLocksRequest: components["schemas"]["UpdateBookMetadataLocksRequest"] & {
@@ -14603,6 +14736,13 @@ export interface components {
             lastErrorAt?: string | null;
             /** Format: date-time */
             lastPolledAt?: string | null;
+            /**
+             * @description One-line summary of the most recent successful poll. Surfaced under
+             *     the row's status badge so users can see *why* a poll returned no
+             *     announcements without grepping logs. NULL until the first successful
+             *     poll on the source.
+             */
+            lastSummary?: string | null;
             /**
              * @description Owning plugin id, or `core` for in-core synthetic sources.
              * @example release-nyaa
@@ -23225,6 +23365,40 @@ export interface operations {
             };
         };
     };
+    get_release_tracking_applicability: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Optional library scope. When provided, only plugins that apply to
+                 *     this library are considered (a plugin's `library_ids` field is
+                 *     either empty = all, or contains this UUID).
+                 */
+                libraryId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applicability info */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicabilityResponse"];
+                };
+            };
+            /** @description SeriesRead permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     update_release_source: {
         parameters: {
             query?: never;
@@ -24017,6 +24191,44 @@ export interface operations {
             };
         };
     };
+    bulk_track_series_for_releases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk-tracked series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTrackForReleasesResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bulk_mark_series_as_unread: {
         parameters: {
             query?: never;
@@ -24037,6 +24249,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_untrack_series_for_releases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk-untracked series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTrackForReleasesResponse"];
                 };
             };
             /** @description Unauthorized */

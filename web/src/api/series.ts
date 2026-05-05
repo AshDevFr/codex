@@ -7,7 +7,11 @@ import type {
   SeriesCondition,
   SeriesListRequest,
 } from "@/types";
+import type { components } from "@/types/api.generated";
 import { api } from "./client";
+
+export type BulkTrackForReleasesResponse =
+  components["schemas"]["BulkTrackForReleasesResponse"];
 
 export interface SeriesFilters {
   page?: number;
@@ -371,6 +375,36 @@ export const seriesApi = {
   ): Promise<{ count: number; message: string }> => {
     const response = await api.post<{ count: number; message: string }>(
       "/series/bulk/unread",
+      { seriesIds },
+    );
+    return response.data;
+  },
+
+  /**
+   * Bulk-enable release tracking. Flips `tracked: true` on each series and
+   * runs the seed pass (auto-derives aliases, latest_known_*, track_*).
+   * Series already tracked are reported as `outcome: skipped`.
+   */
+  bulkTrackForReleases: async (
+    seriesIds: string[],
+  ): Promise<BulkTrackForReleasesResponse> => {
+    const response = await api.post<BulkTrackForReleasesResponse>(
+      "/series/bulk/track-for-releases",
+      { seriesIds },
+    );
+    return response.data;
+  },
+
+  /**
+   * Bulk-disable release tracking. Flips `tracked: false` without deleting
+   * aliases or other tracking config — re-tracking later still re-seeds
+   * the auto-derived fields.
+   */
+  bulkUntrackForReleases: async (
+    seriesIds: string[],
+  ): Promise<BulkTrackForReleasesResponse> => {
+    const response = await api.post<BulkTrackForReleasesResponse>(
+      "/series/bulk/untrack-for-releases",
       { seriesIds },
     );
     return response.data;

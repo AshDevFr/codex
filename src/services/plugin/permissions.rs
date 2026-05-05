@@ -75,7 +75,8 @@ pub fn required_capability(method: &str) -> Option<RequiredCapability> {
         methods::RELEASES_LIST_TRACKED
         | methods::RELEASES_RECORD
         | methods::RELEASES_SOURCE_STATE_GET
-        | methods::RELEASES_SOURCE_STATE_SET => Some(RequiredCapability::ReleaseSource),
+        | methods::RELEASES_SOURCE_STATE_SET
+        | methods::RELEASES_REGISTER_SOURCES => Some(RequiredCapability::ReleaseSource),
 
         _ => None,
     }
@@ -164,6 +165,7 @@ mod tests {
             methods::RELEASES_RECORD,
             methods::RELEASES_SOURCE_STATE_GET,
             methods::RELEASES_SOURCE_STATE_SET,
+            methods::RELEASES_REGISTER_SOURCES,
         ] {
             // Release-source plugin: allowed.
             assert!(enforce(m, &release_caps()).is_ok(), "{m} should be allowed");

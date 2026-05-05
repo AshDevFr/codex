@@ -1,25 +1,26 @@
 //! `BackfillTrackingFromMetadata` task handler.
 //!
-//! Walks series in scope and seeds `series_aliases` rows from existing metadata
-//! (canonical title + alternate titles). Idempotent on re-run — `SeriesAliasRepository::create`
-//! returns the existing row when the same alias already exists for a series.
+//! Walks series in scope and (re-)seeds tracking defaults from existing
+//! data: aliases from metadata, `latest_known_*` from local book
+//! classification, and per-axis `track_*` flags from book metadata. Routes
+//! through `services::release::seed::seed_tracking_for_series` so the per-
+//! series PATCH path, the bulk track-for-releases endpoint, and this task
+//! all share one canonical seeding implementation.
 //!
 //! Does NOT toggle `tracked`. Enabling tracking is always an explicit user
-//! action; this task is a one-time data-prep pass that the admin can run after
-//! upgrading or after a metadata refresh.
+//! action; this task is a maintenance pass that refreshes auto-derived
+//! fields after a metadata refresh or library re-scan.
 
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::series_aliases::alias_source;
 use crate::db::entities::tasks;
-use crate::db::repositories::{
-    AlternateTitleRepository, SeriesAliasRepository, SeriesMetadataRepository, SeriesRepository,
-};
+use crate::db::repositories::SeriesRepository;
 use crate::events::EventBroadcaster;
+use crate::services::release::seed::{SeedReport, seed_tracking_for_series};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 
@@ -61,32 +62,34 @@ impl TaskHandler for BackfillTrackingFromMetadataHandler {
 
             let mut summary = BackfillSummary::default();
             for series_id in series_to_process {
-                match backfill_one(db, series_id).await {
-                    Ok(per_series) => {
-                        summary.merge(per_series);
-                    }
+                match seed_tracking_for_series(db, series_id).await {
+                    Ok(report) => summary.merge(report),
                     Err(e) => {
-                        warn!("Backfill failed for series {}: {}", series_id, e);
+                        warn!("Seed failed for series {}: {}", series_id, e);
                         summary.errors += 1;
                     }
                 }
             }
 
             info!(
-                "Backfill complete ({}): {} series processed, {} aliases inserted, {} skipped, {} errors",
+                "Backfill complete ({}): {} series processed, {} aliases inserted, \
+                 {} skipped duplicate, {} skipped non-latin, {} errors",
                 scope,
                 summary.processed,
                 summary.aliases_inserted,
                 summary.aliases_skipped_duplicate,
+                summary.aliases_skipped_non_latin,
                 summary.errors,
             );
 
             Ok(TaskResult::success_with_data(
                 format!(
-                    "Processed {} series, inserted {} new aliases ({} duplicates skipped, {} errors)",
+                    "Processed {} series, inserted {} new aliases \
+                     ({} duplicates, {} non-Latin skipped, {} errors)",
                     summary.processed,
                     summary.aliases_inserted,
                     summary.aliases_skipped_duplicate,
+                    summary.aliases_skipped_non_latin,
                     summary.errors,
                 ),
                 serde_json::json!({
@@ -94,6 +97,7 @@ impl TaskHandler for BackfillTrackingFromMetadataHandler {
                     "series_processed": summary.processed,
                     "aliases_inserted": summary.aliases_inserted,
                     "aliases_skipped_duplicate": summary.aliases_skipped_duplicate,
+                    "aliases_skipped_non_latin": summary.aliases_skipped_non_latin,
                     "errors": summary.errors,
                 }),
             ))
@@ -106,21 +110,17 @@ struct BackfillSummary {
     processed: usize,
     aliases_inserted: usize,
     aliases_skipped_duplicate: usize,
+    aliases_skipped_non_latin: usize,
     errors: usize,
 }
 
 impl BackfillSummary {
-    fn merge(&mut self, other: PerSeriesSummary) {
+    fn merge(&mut self, report: SeedReport) {
         self.processed += 1;
-        self.aliases_inserted += other.inserted;
-        self.aliases_skipped_duplicate += other.skipped_duplicate;
+        self.aliases_inserted += report.aliases_inserted;
+        self.aliases_skipped_duplicate += report.aliases_skipped_duplicate;
+        self.aliases_skipped_non_latin += report.aliases_skipped_non_latin;
     }
-}
-
-#[derive(Default)]
-struct PerSeriesSummary {
-    inserted: usize,
-    skipped_duplicate: usize,
 }
 
 fn describe_scope(library_id: Option<Uuid>, series_ids: Option<&[Uuid]>) -> String {
@@ -147,67 +147,14 @@ async fn resolve_series_scope(
     Ok(all.into_iter().map(|s| s.id).collect())
 }
 
-async fn backfill_one(db: &DatabaseConnection, series_id: Uuid) -> Result<PerSeriesSummary> {
-    let metadata = match SeriesMetadataRepository::get_by_series_id(db, series_id).await? {
-        Some(m) => m,
-        None => {
-            // Metadata is required for a series to exist normally; if missing,
-            // the series row is in an unexpected state - skip it.
-            debug!("Series {} has no metadata, skipping", series_id);
-            return Ok(PerSeriesSummary::default());
-        }
-    };
-
-    let mut candidates: Vec<String> = Vec::new();
-    candidates.push(metadata.title.clone());
-    if let Some(sort) = metadata.title_sort.as_ref()
-        && !sort.trim().is_empty()
-    {
-        candidates.push(sort.clone());
-    }
-
-    let alt_titles = AlternateTitleRepository::get_for_series(db, series_id).await?;
-    for alt in alt_titles {
-        if !alt.title.trim().is_empty() {
-            candidates.push(alt.title);
-        }
-    }
-
-    let mut summary = PerSeriesSummary::default();
-    for alias in candidates {
-        let trimmed = alias.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        // Track inserts vs idempotent skips by counting before/after.
-        let before = SeriesAliasRepository::count_for_series(db, series_id).await?;
-        match SeriesAliasRepository::create(db, series_id, trimmed, alias_source::METADATA).await {
-            Ok(_) => {
-                let after = SeriesAliasRepository::count_for_series(db, series_id).await?;
-                if after > before {
-                    summary.inserted += 1;
-                } else {
-                    summary.skipped_duplicate += 1;
-                }
-            }
-            Err(e) => {
-                // Aliases that normalize to empty (e.g., "!!!---!!!" entries from
-                // odd metadata) are non-fatal — log and skip.
-                debug!(
-                    "Skipping alias '{}' for series {}: {}",
-                    trimmed, series_id, e
-                );
-            }
-        }
-    }
-    Ok(summary)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::ScanningStrategy;
-    use crate::db::repositories::{LibraryRepository, SeriesAliasRepository, SeriesRepository};
+    use crate::db::repositories::{
+        AlternateTitleRepository, LibraryRepository, SeriesAliasRepository, SeriesRepository,
+        SeriesTrackingRepository,
+    };
     use crate::db::test_helpers::create_test_db;
 
     async fn make_series(
@@ -227,8 +174,11 @@ mod tests {
         series.id
     }
 
+    /// The handler now delegates to `seed_tracking_for_series`; this test
+    /// pins the latin-only filtering behavior at the seeded layer (the
+    /// previous handler-internal logic seeded all scripts and is gone).
     #[tokio::test]
-    async fn handler_seeds_aliases_from_title_and_alternates() {
+    async fn delegated_seed_inserts_latin_aliases_skipping_non_latin() {
         let (db, _temp) = create_test_db().await;
         let conn = db.sea_orm_connection();
         let lib = LibraryRepository::create(conn, "L", "/p", ScanningStrategy::Default)
@@ -242,21 +192,22 @@ mod tests {
         )
         .await;
 
-        let summary = backfill_one(conn, s1).await.unwrap();
-        assert_eq!(summary.inserted, 2);
-        assert_eq!(summary.skipped_duplicate, 0);
+        let report = seed_tracking_for_series(conn, s1).await.unwrap();
+        // "My Hero Academia" appears in both `series.name` and metadata title;
+        // dedup folds them. Japanese alt is skipped.
+        assert_eq!(report.aliases_inserted, 1);
+        assert_eq!(report.aliases_skipped_non_latin, 1);
 
         let aliases = SeriesAliasRepository::get_for_series(conn, s1)
             .await
             .unwrap();
         let texts: Vec<&str> = aliases.iter().map(|a| a.alias.as_str()).collect();
         assert!(texts.contains(&"My Hero Academia"));
-        assert!(texts.contains(&"僕のヒーローアカデミア"));
-        assert!(aliases.iter().all(|a| a.source == "metadata"));
+        assert!(!texts.iter().any(|a| a.contains('僕')));
     }
 
     #[tokio::test]
-    async fn handler_is_idempotent_on_rerun() {
+    async fn delegated_seed_is_idempotent_on_rerun() {
         let (db, _temp) = create_test_db().await;
         let conn = db.sea_orm_connection();
         let lib = LibraryRepository::create(conn, "L", "/p", ScanningStrategy::Default)
@@ -264,12 +215,13 @@ mod tests {
             .unwrap();
         let s1 = make_series(conn, lib.id, "Series A", Some("Alt A")).await;
 
-        let first = backfill_one(conn, s1).await.unwrap();
-        assert_eq!(first.inserted, 2);
+        let first = seed_tracking_for_series(conn, s1).await.unwrap();
+        // "Series A" + "Alt A" — both Latin, both inserted.
+        assert_eq!(first.aliases_inserted, 2);
 
-        let second = backfill_one(conn, s1).await.unwrap();
-        assert_eq!(second.inserted, 0, "re-run should not insert duplicates");
-        assert_eq!(second.skipped_duplicate, 2);
+        let second = seed_tracking_for_series(conn, s1).await.unwrap();
+        assert_eq!(second.aliases_inserted, 0);
+        assert_eq!(second.aliases_skipped_duplicate, 2);
 
         let aliases = SeriesAliasRepository::get_for_series(conn, s1)
             .await
@@ -278,8 +230,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn handler_does_not_enable_tracking() {
-        use crate::db::repositories::SeriesTrackingRepository;
+    async fn delegated_seed_does_not_enable_tracking() {
         let (db, _temp) = create_test_db().await;
         let conn = db.sea_orm_connection();
         let lib = LibraryRepository::create(conn, "L", "/p", ScanningStrategy::Default)
@@ -287,12 +238,12 @@ mod tests {
             .unwrap();
         let s1 = make_series(conn, lib.id, "Some Title", None).await;
 
-        backfill_one(conn, s1).await.unwrap();
+        seed_tracking_for_series(conn, s1).await.unwrap();
 
         let row = SeriesTrackingRepository::get(conn, s1).await.unwrap();
         assert!(
-            row.is_none(),
-            "backfill should not create or modify tracking row"
+            row.map(|r| !r.tracked).unwrap_or(true),
+            "seeding must not flip `tracked` on"
         );
     }
 
