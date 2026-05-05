@@ -76,8 +76,8 @@ export function ReleasesInbox() {
   const markAcquired = useMarkReleaseAcquired();
 
   const entries = data?.data ?? [];
-  const total = data?.pagination.total ?? 0;
-  const totalPages = data?.pagination.totalPages ?? 1;
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   return (
     <Box p="md">

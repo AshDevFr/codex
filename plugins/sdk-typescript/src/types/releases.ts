@@ -27,6 +27,18 @@ export const RELEASES_METHODS = {
   SOURCE_STATE_GET: "releases/source_state/get",
   /** Set persisted per-source state (etag only — other fields are host-owned). */
   SOURCE_STATE_SET: "releases/source_state/set",
+  /**
+   * Replace the set of `release_sources` rows owned by this plugin.
+   *
+   * Plugins call this from `onInitialize` (and after any config change, which
+   * triggers a process restart that re-runs `onInitialize`). Each call carries
+   * the plugin's full desired-state list; the host upserts every entry on
+   * `(plugin_id, source_key)` and prunes rows whose `source_key` is not in
+   * the request. User-managed fields (`enabled`, `pollIntervalS`) are
+   * preserved across re-registrations so an admin's overrides aren't
+   * trampled by a plugin restart.
+   */
+  REGISTER_SOURCES: "releases/register_sources",
 } as const;
 
 // =============================================================================
@@ -153,16 +165,71 @@ export interface SourceStateSetRequest {
 }
 
 // =============================================================================
+// releases/register_sources
+// =============================================================================
+
+/**
+ * One source the plugin wants the host to materialize as a `release_sources`
+ * row. The plugin owns the `sourceKey` namespace; the host treats it as an
+ * opaque string for dedup keyed on `(pluginId, sourceKey)`.
+ */
+export interface RegisteredSourceInput {
+  /**
+   * Stable per-plugin identifier. Reuse the same key across calls so user
+   * overrides (enabled, pollIntervalS) survive plugin restarts.
+   */
+  sourceKey: string;
+  /** Human-readable label shown in the Release tracking settings UI. */
+  displayName: string;
+  /**
+   * Must be one of the kinds the plugin declared in its
+   * `releaseSource.kinds` capability — the host rejects anything else.
+   */
+  kind: "rss-uploader" | "rss-series" | "api-feed" | "metadata-feed";
+  /**
+   * Optional opaque per-source config snapshot persisted on the row. The
+   * host doesn't interpret it; the plugin reads its own admin config
+   * directly. Useful for surfacing "what did this source originate from?"
+   * in the UI / logs.
+   */
+  config?: Record<string, unknown> | null;
+}
+
+export interface RegisterSourcesRequest {
+  sources: RegisteredSourceInput[];
+}
+
+export interface RegisterSourcesResponse {
+  /** Number of sources upserted (created or refreshed). */
+  registered: number;
+  /** Number of sources removed because they were not in the request. */
+  pruned: number;
+}
+
+// =============================================================================
 // releases/poll (host -> plugin)
 // =============================================================================
 
 /**
  * Parameters for the host's call into a release-source plugin's
  * `releases/poll` handler. Carries the source row to poll plus any ETag the
- * plugin recorded on its previous poll.
+ * plugin recorded on its previous poll, plus the plugin-defined source key
+ * and per-source config snapshot so the plugin can dispatch directly without
+ * a reverse-RPC roundtrip.
  */
 export interface ReleasePollRequest {
   sourceId: string;
+  /**
+   * The same `sourceKey` the plugin passed to `releases/register_sources`.
+   * Useful when one plugin process owns multiple source rows (e.g., one per
+   * Nyaa uploader) and needs to know which one to poll.
+   */
+  sourceKey?: string;
+  /**
+   * Snapshot of `release_sources.config` for this row. Plugins that stash
+   * per-source config on register can read it back here.
+   */
+  config?: Record<string, unknown> | null;
   etag?: string;
 }
 

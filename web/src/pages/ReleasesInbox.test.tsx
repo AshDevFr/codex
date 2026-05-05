@@ -46,12 +46,10 @@ function entry(over: Partial<ReleaseLedgerEntry> = {}): ReleaseLedgerEntry {
 function paginated(entries: ReleaseLedgerEntry[]): PaginatedReleases {
   return {
     data: entries,
-    pagination: {
-      page: 1,
-      pageSize: 50,
-      total: entries.length,
-      totalPages: 1,
-    },
+    page: 1,
+    pageSize: 50,
+    total: entries.length,
+    totalPages: 1,
     links: {
       self: "/api/v1/releases",
     },

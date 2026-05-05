@@ -1,6 +1,6 @@
-import { HostRpcClient } from "@ashdev/codex-plugin-sdk";
+import { HostRpcClient, HostRpcError } from "@ashdev/codex-plugin-sdk";
 import { describe, expect, it, vi } from "vitest";
-import { pollSubscription } from "./index.js";
+import { pollSubscription, registerSources } from "./index.js";
 import type { AliasCandidate } from "./matcher.js";
 
 // -----------------------------------------------------------------------------
@@ -32,8 +32,10 @@ function makeMockRpc(respond: (method: string, params: unknown) => unknown): {
     try {
       result = respond(req.method, req.params);
     } catch (err) {
+      // Preserve HostRpcError.code so tests can simulate METHOD_NOT_FOUND etc.
+      const code = err instanceof HostRpcError ? err.code : -32_000;
       error = {
-        code: -32_000,
+        code,
         message: err instanceof Error ? err.message : "synthetic error",
       };
     }
@@ -248,5 +250,70 @@ describe("pollSubscription", () => {
     expect(out.matched).toBe(0);
     expect(out.recorded).toBe(0);
     expect(calls.filter((c) => c.method === "releases/record")).toHaveLength(0);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// registerSources
+// -----------------------------------------------------------------------------
+
+describe("registerSources", () => {
+  it("emits one source per subscription with stable kind:identifier keys", async () => {
+    const { rpc, calls } = makeMockRpc(() => ({ registered: 3, pruned: 0 }));
+    const result = await registerSources(rpc, [
+      { kind: "user", identifier: "tsuna69" },
+      { kind: "query", identifier: "LuminousScans" },
+      { kind: "params", identifier: "c=3_1&q=Berserk" },
+    ]);
+    expect(result).toEqual({ registered: 3, pruned: 0 });
+
+    const reg = calls.find((c) => c.method === "releases/register_sources");
+    expect(reg).toBeDefined();
+    if (!reg) return;
+    const payload = reg.params as {
+      sources: { sourceKey: string; displayName: string; kind: string; config: unknown }[];
+    };
+    const keys = payload.sources.map((s) => s.sourceKey);
+    expect(keys).toEqual(["user:tsuna69", "query:luminousscans", "params:c=3_1&q=berserk"]);
+    expect(payload.sources.every((s) => s.kind === "rss-uploader")).toBe(true);
+    // Round-trip data: config carries the original (case-preserving) subscription.
+    const userSrc = payload.sources[0];
+    expect(
+      (userSrc?.config as { subscription: { identifier: string } }).subscription.identifier,
+    ).toBe("tsuna69");
+  });
+
+  it("retries on METHOD_NOT_FOUND while the host installs the handler", async () => {
+    let calls = 0;
+    const { rpc } = makeMockRpc(() => {
+      calls++;
+      if (calls < 3) {
+        throw new HostRpcError("Method not found", -32601);
+      }
+      return { registered: 1, pruned: 0 };
+    });
+    const result = await registerSources(rpc, [{ kind: "user", identifier: "a" }]);
+    expect(result).toEqual({ registered: 1, pruned: 0 });
+    expect(calls).toBe(3);
+  });
+
+  it("does not retry on non-method-not-found errors", async () => {
+    let calls = 0;
+    const { rpc } = makeMockRpc(() => {
+      calls++;
+      throw new HostRpcError("server boom", -32000);
+    });
+    const result = await registerSources(rpc, [{ kind: "user", identifier: "a" }]);
+    expect(result).toBeNull();
+    expect(calls).toBe(1);
+  });
+
+  it("sends an empty list when no subscriptions are configured (host wipes plugin's rows)", async () => {
+    const { rpc, calls } = makeMockRpc(() => ({ registered: 0, pruned: 2 }));
+    const result = await registerSources(rpc, []);
+    expect(result).toEqual({ registered: 0, pruned: 2 });
+    const reg = calls.find((c) => c.method === "releases/register_sources");
+    expect(reg).toBeDefined();
+    expect((reg?.params as { sources: unknown[] }).sources).toEqual([]);
   });
 });
