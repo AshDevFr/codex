@@ -50,11 +50,41 @@ pub struct RecordOutcome {
 /// Filters for the inbox query.
 #[derive(Debug, Default, Clone)]
 pub struct LedgerInboxFilter {
-    /// Only rows in this state. Defaults to `announced` when `None`.
+    /// Only rows in this state. `None` means "all states" (no filter).
+    /// Note: `list_inbox` historically defaulted to `announced` when `None`;
+    /// callers that want the "all states" view must opt in explicitly via
+    /// the [`LedgerInboxFilter::all_states`] flag.
     pub state: Option<String>,
+    /// When `true`, no state filter is applied even if `state` is `None`.
+    /// Used by the inbox UI's "All" state option.
+    pub all_states: bool,
     pub series_id: Option<Uuid>,
     pub source_id: Option<Uuid>,
     pub language: Option<String>,
+    /// Restrict to series belonging to this library.
+    pub library_id: Option<Uuid>,
+}
+
+/// Per-series facet entry.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SeriesFacet {
+    pub series_id: Uuid,
+    pub library_id: Uuid,
+    pub count: u64,
+}
+
+/// Per-library facet entry.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LibraryFacet {
+    pub library_id: Uuid,
+    pub count: u64,
+}
+
+/// Per-language facet entry.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LanguageFacet {
+    pub language: String,
+    pub count: u64,
 }
 
 pub struct ReleaseLedgerRepository;
@@ -164,19 +194,8 @@ impl ReleaseLedgerRepository {
         limit: u64,
         offset: u64,
     ) -> Result<Vec<ReleaseLedgerRow>> {
-        let state_filter = filter.state.as_deref().unwrap_or(state::ANNOUNCED);
-        let mut query = ReleaseLedger::find()
-            .filter(release_ledger::Column::State.eq(state_filter))
-            .order_by_desc(release_ledger::Column::ObservedAt);
-        if let Some(sid) = filter.series_id {
-            query = query.filter(release_ledger::Column::SeriesId.eq(sid));
-        }
-        if let Some(src) = filter.source_id {
-            query = query.filter(release_ledger::Column::SourceId.eq(src));
-        }
-        if let Some(ref lang) = filter.language {
-            query = query.filter(release_ledger::Column::Language.eq(lang));
-        }
+        let mut query = ReleaseLedger::find().order_by_desc(release_ledger::Column::ObservedAt);
+        query = apply_inbox_filter(query, &filter, false);
         if limit > 0 {
             query = query.limit(limit);
         }
@@ -188,19 +207,111 @@ impl ReleaseLedgerRepository {
 
     /// Total count for the inbox view (paginator support).
     pub async fn count_inbox(db: &DatabaseConnection, filter: LedgerInboxFilter) -> Result<u64> {
-        let state_filter = filter.state.as_deref().unwrap_or(state::ANNOUNCED);
-        let mut query =
-            ReleaseLedger::find().filter(release_ledger::Column::State.eq(state_filter));
-        if let Some(sid) = filter.series_id {
-            query = query.filter(release_ledger::Column::SeriesId.eq(sid));
-        }
-        if let Some(src) = filter.source_id {
-            query = query.filter(release_ledger::Column::SourceId.eq(src));
-        }
-        if let Some(ref lang) = filter.language {
-            query = query.filter(release_ledger::Column::Language.eq(lang));
-        }
+        let mut query = ReleaseLedger::find();
+        query = apply_inbox_filter(query, &filter, false);
         Ok(query.count(db).await?)
+    }
+
+    /// List the distinct series present in the inbox under a given filter,
+    /// each with the row count. Used by the inbox UI to populate the series
+    /// facet dropdown. Joins the `series` table to surface `library_id` so
+    /// the frontend can group by library.
+    pub async fn list_series_facets(
+        db: &DatabaseConnection,
+        filter: LedgerInboxFilter,
+    ) -> Result<Vec<SeriesFacet>> {
+        // We join via series.id to get library_id, then count rows. Excluding
+        // `series_id` from the filter is the caller's job; the facet itself
+        // _is_ the series dimension.
+        use sea_orm::{FromQueryResult, JoinType, RelationTrait};
+        #[derive(Debug, FromQueryResult)]
+        struct Row {
+            series_id: Uuid,
+            library_id: Uuid,
+            count: i64,
+        }
+        let mut query = ReleaseLedger::find()
+            .select_only()
+            .column(release_ledger::Column::SeriesId)
+            .column(crate::db::entities::series::Column::LibraryId)
+            .column_as(release_ledger::Column::Id.count(), "count")
+            .join(JoinType::InnerJoin, release_ledger::Relation::Series.def())
+            .group_by(release_ledger::Column::SeriesId)
+            .group_by(crate::db::entities::series::Column::LibraryId);
+        query = apply_inbox_filter(query, &filter, true);
+        let rows = query.into_model::<Row>().all(db).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| SeriesFacet {
+                series_id: r.series_id,
+                library_id: r.library_id,
+                count: r.count.max(0) as u64,
+            })
+            .collect())
+    }
+
+    /// List the distinct libraries present in the inbox under a given filter,
+    /// each with the row count.
+    pub async fn list_library_facets(
+        db: &DatabaseConnection,
+        filter: LedgerInboxFilter,
+    ) -> Result<Vec<LibraryFacet>> {
+        use sea_orm::{FromQueryResult, JoinType, RelationTrait};
+        #[derive(Debug, FromQueryResult)]
+        struct Row {
+            library_id: Uuid,
+            count: i64,
+        }
+        let mut query = ReleaseLedger::find()
+            .select_only()
+            .column(crate::db::entities::series::Column::LibraryId)
+            .column_as(release_ledger::Column::Id.count(), "count")
+            .join(JoinType::InnerJoin, release_ledger::Relation::Series.def())
+            .group_by(crate::db::entities::series::Column::LibraryId);
+        query = apply_inbox_filter(query, &filter, true);
+        let rows = query.into_model::<Row>().all(db).await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| LibraryFacet {
+                library_id: r.library_id,
+                count: r.count.max(0) as u64,
+            })
+            .collect())
+    }
+
+    /// List the distinct languages present in the inbox under a given filter,
+    /// each with the row count. Skips rows with NULL/empty language.
+    pub async fn list_language_facets(
+        db: &DatabaseConnection,
+        filter: LedgerInboxFilter,
+    ) -> Result<Vec<LanguageFacet>> {
+        use sea_orm::FromQueryResult;
+        #[derive(Debug, FromQueryResult)]
+        struct Row {
+            language: Option<String>,
+            count: i64,
+        }
+        let mut query = ReleaseLedger::find()
+            .select_only()
+            .column(release_ledger::Column::Language)
+            .column_as(release_ledger::Column::Id.count(), "count")
+            .filter(release_ledger::Column::Language.is_not_null())
+            .group_by(release_ledger::Column::Language);
+        query = apply_inbox_filter(query, &filter, false);
+        let rows = query.into_model::<Row>().all(db).await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| {
+                let lang = r.language?;
+                if lang.is_empty() {
+                    return None;
+                }
+                Some(LanguageFacet {
+                    language: lang,
+                    count: r.count.max(0) as u64,
+                })
+            })
+            .collect())
     }
 
     /// Set the state of a ledger row. Validates the state string.
@@ -237,6 +348,121 @@ impl ReleaseLedgerRepository {
             .await?;
         Ok(result.rows_affected)
     }
+
+    /// Fetch rows by id list, in unspecified order.
+    pub async fn find_by_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+    ) -> Result<Vec<ReleaseLedgerRow>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(ReleaseLedger::find()
+            .filter(release_ledger::Column::Id.is_in(ids.to_vec()))
+            .all(db)
+            .await?)
+    }
+
+    /// Look up the distinct `source_id`s touched by a set of ledger rows.
+    /// Used by the inbox's per-row "delete" so we can clear each affected
+    /// source's etag in the same transaction (forcing the next poll to
+    /// bypass `If-None-Match` and re-announce the deleted rows).
+    pub async fn distinct_sources_for_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+    ) -> Result<Vec<Uuid>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = ReleaseLedger::find()
+            .filter(release_ledger::Column::Id.is_in(ids.to_vec()))
+            .all(db)
+            .await?;
+        let mut sources: Vec<Uuid> = rows.into_iter().map(|r| r.source_id).collect();
+        sources.sort_unstable();
+        sources.dedup();
+        Ok(sources)
+    }
+
+    /// Bulk-delete ledger rows by id. Returns the number of rows removed.
+    pub async fn delete_many(db: &DatabaseConnection, ids: &[Uuid]) -> Result<u64> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let result = ReleaseLedger::delete_many()
+            .filter(release_ledger::Column::Id.is_in(ids.to_vec()))
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected)
+    }
+
+    /// Bulk-update state on ledger rows by id. Returns the number of rows
+    /// updated.
+    pub async fn set_state_many(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        new_state: &str,
+    ) -> Result<u64> {
+        if !state::is_valid(new_state) {
+            anyhow::bail!("invalid state: {}", new_state);
+        }
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let result = ReleaseLedger::update_many()
+            .col_expr(
+                release_ledger::Column::State,
+                sea_orm::sea_query::Expr::value(new_state.to_string()),
+            )
+            .filter(release_ledger::Column::Id.is_in(ids.to_vec()))
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected)
+    }
+}
+
+/// Apply the inbox filter to a `Select` query. Centralised so the inbox
+/// list/count and the facets queries stay in sync.
+///
+/// State semantics:
+/// - `filter.all_states == true` → no state filter.
+/// - `filter.state.is_some()` → exact match.
+/// - otherwise → defaults to `announced` (legacy default).
+///
+/// `series_already_joined`: pass `true` when the caller has already inner
+/// joined `release_ledger.series_id → series.id` (e.g. the facet queries
+/// that need `series.library_id` in `SELECT`/`GROUP BY`). When `false`,
+/// this function will add the join itself if the filter needs it.
+fn apply_inbox_filter<E>(
+    mut query: sea_orm::Select<E>,
+    filter: &LedgerInboxFilter,
+    series_already_joined: bool,
+) -> sea_orm::Select<E>
+where
+    E: EntityTrait,
+{
+    use sea_orm::{JoinType, RelationTrait};
+
+    if !filter.all_states {
+        let state_filter = filter.state.as_deref().unwrap_or(state::ANNOUNCED);
+        query = query.filter(release_ledger::Column::State.eq(state_filter));
+    }
+    if let Some(sid) = filter.series_id {
+        query = query.filter(release_ledger::Column::SeriesId.eq(sid));
+    }
+    if let Some(src) = filter.source_id {
+        query = query.filter(release_ledger::Column::SourceId.eq(src));
+    }
+    if let Some(ref lang) = filter.language {
+        query = query.filter(release_ledger::Column::Language.eq(lang));
+    }
+    if let Some(lib_id) = filter.library_id {
+        if !series_already_joined {
+            query = query.join(JoinType::InnerJoin, release_ledger::Relation::Series.def());
+        }
+        query = query.filter(crate::db::entities::series::Column::LibraryId.eq(lib_id));
+    }
+    query
 }
 
 #[cfg(test)]

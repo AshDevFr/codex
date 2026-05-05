@@ -14,11 +14,23 @@ use std::sync::Arc;
 
 pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
-        // Inbox + state transitions
+        // Inbox + state transitions. Note: `/releases/facets` and
+        // `/releases/bulk` come **before** the parameterised
+        // `/releases/{release_id}` PATCH/DELETE so axum's matcher doesn't
+        // try to parse "facets" or "bulk" as a UUID.
         .route("/releases", get(handlers::releases::list_release_inbox))
         .route(
+            "/releases/facets",
+            get(handlers::releases::list_release_facets),
+        )
+        .route(
+            "/releases/bulk",
+            post(handlers::releases::bulk_release_action),
+        )
+        .route(
             "/releases/{release_id}",
-            patch(handlers::releases::update_release_entry),
+            patch(handlers::releases::update_release_entry)
+                .delete(handlers::releases::delete_release),
         )
         .route(
             "/releases/{release_id}/dismiss",

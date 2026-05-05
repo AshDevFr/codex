@@ -7358,7 +7358,7 @@
           {
             "name": "state",
             "in": "query",
-            "description": "Filter by state. Defaults to `announced`.",
+            "description": "Filter by state. Defaults to `announced`. Pass `all` to disable\nstate filtering entirely (returns rows in every state).",
             "required": false,
             "schema": {
               "type": [
@@ -7400,6 +7400,19 @@
                 "string",
                 "null"
               ]
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Restrict to series belonging to this library.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
             }
           },
           {
@@ -7448,7 +7461,195 @@
         ]
       }
     },
+    "/api/v1/releases/bulk": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Apply an action to a batch of ledger rows.",
+        "description": "`dismiss` and `mark-acquired` set state in-place. `delete` removes\nthe rows and clears the affected sources' etags so the next poll\nre-fetches without `If-None-Match`. All three run as bulk SQL — no\nper-row round trips — so this scales to deleting thousands of rows in\none call.",
+        "operationId": "bulk_release_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkReleaseActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk action applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkReleaseActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty ID list or invalid action"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/facets": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Distinct values present in the inbox under the given filters.",
+        "description": "Returns the languages, libraries, and series that have at least one\nmatching ledger row. The frontend uses this to populate cascading\nSelect dropdowns so users never have to type a UUID and never see\ndropdown options that would yield zero results.",
+        "operationId": "list_release_facets",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sourceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Facets for the inbox view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFacetsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state filter"
+          },
+          "403": {
+            "description": "SeriesRead permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/releases/{release_id}": {
+      "delete": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Hard-delete a single ledger row.",
+        "description": "Also clears the source's `etag` so the next poll bypasses\n`If-None-Match` and re-records the deleted row in `announced` state\n(assuming the upstream still lists it). This is the lever users want\nwhen they marked something incorrectly and need to \"get it back\".",
+        "operationId": "delete_release",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteReleaseResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
       "patch": {
         "tags": [
           "Releases"
@@ -21446,6 +21647,55 @@
           }
         }
       },
+      "BulkReleaseAction": {
+        "type": "string",
+        "description": "Action requested by `POST /api/v1/releases/bulk`.",
+        "enum": [
+          "dismiss",
+          "mark-acquired",
+          "delete"
+        ]
+      },
+      "BulkReleaseActionRequest": {
+        "type": "object",
+        "description": "Request body for `POST /api/v1/releases/bulk`.",
+        "required": [
+          "ids",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BulkReleaseAction"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "BulkReleaseActionResponse": {
+        "type": "object",
+        "description": "Response from `POST /api/v1/releases/bulk`.",
+        "required": [
+          "affected",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BulkReleaseAction",
+            "description": "Action that ran (echoed back for client-side confirmation toasts)."
+          },
+          "affected": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of ledger rows actually affected. Less than `ids.len()` when\nsome IDs were already deleted concurrently.",
+            "minimum": 0
+          }
+        }
+      },
       "BulkRenumberSeriesRequest": {
         "type": "object",
         "description": "Request for bulk renumber operations on multiple series",
@@ -22668,6 +22918,19 @@
             "type": "string",
             "description": "Message describing the result",
             "example": "Preference 'ui.theme' was reset to default"
+          }
+        }
+      },
+      "DeleteReleaseResponse": {
+        "type": "object",
+        "description": "Response from `DELETE /api/v1/releases/{id}`.\n\nSingle-row delete returns a small confirmation rather than 204 so the\nfrontend can surface a toast that mentions the etag clear (\"the next\npoll will re-fetch this release\"). Mirrors the bulk-delete shape with\n`affected = 1`.",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "`true` if the row was deleted, `false` if it didn't exist."
           }
         }
       },
@@ -32867,6 +33130,53 @@
           }
         }
       },
+      "ReleaseFacetsResponse": {
+        "type": "object",
+        "description": "Response shape for `GET /api/v1/releases/facets`.\n\nEach list reflects the distinct values present in the ledger under the\n**other** active filters (Solr-style facet exclusion), so dropdowns\nnever offer combinations that would yield zero results. The frontend\nuses these to populate cascading filter Select inputs without forcing\nthe user to type UUIDs.",
+        "required": [
+          "languages",
+          "libraries",
+          "series"
+        ],
+        "properties": {
+          "languages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseLanguageFacetDto"
+            }
+          },
+          "libraries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseLibraryFacetDto"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseSeriesFacetDto"
+            }
+          }
+        }
+      },
+      "ReleaseLanguageFacetDto": {
+        "type": "object",
+        "description": "One language option in the inbox facets response.",
+        "required": [
+          "language",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "language": {
+            "type": "string"
+          }
+        }
+      },
       "ReleaseLedgerEntryDto": {
         "type": "object",
         "description": "A single release announcement. Sources write these; the inbox reads them.",
@@ -32996,6 +33306,62 @@
             "items": {
               "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
             }
+          }
+        }
+      },
+      "ReleaseLibraryFacetDto": {
+        "type": "object",
+        "description": "One library option in the inbox facets response.",
+        "required": [
+          "libraryId",
+          "libraryName",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "libraryName": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseSeriesFacetDto": {
+        "type": "object",
+        "description": "One series option in the inbox facets response. Carries the joined\n`library_id` and `library_name` so the frontend can group the dropdown\nby library without a follow-up call.",
+        "required": [
+          "seriesId",
+          "seriesTitle",
+          "libraryId",
+          "libraryName",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of ledger rows matching the active filter for this series.",
+            "minimum": 0
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "libraryName": {
+            "type": "string"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seriesTitle": {
+            "type": "string"
           }
         }
       },

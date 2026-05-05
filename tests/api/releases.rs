@@ -5,8 +5,10 @@ mod common;
 
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::release::{
-    PollNowResponse, ReleaseLedgerEntryDto, ReleaseSourceDto, ReleaseSourceListResponse,
-    ResetReleaseSourceResponse, UpdateReleaseLedgerEntryRequest, UpdateReleaseSourceRequest,
+    BulkReleaseAction, BulkReleaseActionRequest, BulkReleaseActionResponse, DeleteReleaseResponse,
+    PollNowResponse, ReleaseFacetsResponse, ReleaseLedgerEntryDto, ReleaseSourceDto,
+    ReleaseSourceListResponse, ResetReleaseSourceResponse, UpdateReleaseLedgerEntryRequest,
+    UpdateReleaseSourceRequest,
 };
 use codex::db::ScanningStrategy;
 use codex::db::entities::release_sources::kind;
@@ -1103,4 +1105,393 @@ async fn applicability_skips_disabled_plugins() {
         !body.applicable,
         "disabled plugins must not contribute to applicability"
     );
+}
+
+// =============================================================================
+// GET /releases (state=all + libraryId filter)
+// =============================================================================
+
+async fn make_series_in(db: &DatabaseConnection, library_name: &str, series_name: &str) -> Uuid {
+    let library = LibraryRepository::create(
+        db,
+        library_name,
+        &format!("/{}", library_name),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(db, library.id, series_name, None)
+        .await
+        .unwrap();
+    series.id
+}
+
+async fn library_id_for_series(db: &DatabaseConnection, series_id: Uuid) -> Uuid {
+    SeriesRepository::get_by_id(db, series_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .library_id
+}
+
+#[tokio::test]
+async fn inbox_state_all_returns_all_states() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let r1 = record_announced(&db, series, source, "rel-1").await;
+    record_announced(&db, series, source, "rel-2").await;
+    ReleaseLedgerRepository::set_state(&db, r1, "dismissed")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth("/api/v1/releases?state=all", &token);
+    let (status, body): (
+        StatusCode,
+        Option<PaginatedDtoResponse<ReleaseLedgerEntryDto>>,
+    ) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(
+        body.total, 2,
+        "state=all must return both announced and dismissed rows"
+    );
+}
+
+#[tokio::test]
+async fn inbox_filters_by_library_id() {
+    let (db, _temp) = setup_test_db().await;
+    let s_manga = make_series_in(&db, "Manga", "Manga Series").await;
+    let s_books = make_series_in(&db, "Books", "Book Series").await;
+    let manga_lib = library_id_for_series(&db, s_manga).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    record_announced(&db, s_manga, source, "rel-manga").await;
+    record_announced(&db, s_books, source, "rel-book").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth(&format!("/api/v1/releases?libraryId={}", manga_lib), &token);
+    let (status, body): (
+        StatusCode,
+        Option<PaginatedDtoResponse<ReleaseLedgerEntryDto>>,
+    ) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(body.total, 1);
+    assert_eq!(body.data[0].external_release_id, "rel-manga");
+}
+
+// =============================================================================
+// GET /releases/facets
+// =============================================================================
+
+#[tokio::test]
+async fn facets_returns_distinct_languages_libraries_series() {
+    let (db, _temp) = setup_test_db().await;
+    let s_manga = make_series_in(&db, "Manga", "Manga Series").await;
+    let s_books = make_series_in(&db, "Books", "Book Series").await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    record_announced(&db, s_manga, source, "rel-1").await;
+    record_announced(&db, s_manga, source, "rel-2").await;
+    record_announced(&db, s_books, source, "rel-3").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth("/api/v1/releases/facets", &token);
+    let (status, body): (StatusCode, Option<ReleaseFacetsResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+
+    // One language ("en"), two libraries, two series.
+    assert_eq!(body.languages.len(), 1);
+    assert_eq!(body.languages[0].language, "en");
+    assert_eq!(body.languages[0].count, 3);
+
+    assert_eq!(body.libraries.len(), 2);
+    let manga_lib = body
+        .libraries
+        .iter()
+        .find(|l| l.library_name == "Manga")
+        .expect("Manga library facet present");
+    assert_eq!(manga_lib.count, 2);
+
+    assert_eq!(body.series.len(), 2);
+    let manga_series = body
+        .series
+        .iter()
+        .find(|s| s.series_title == "Manga Series")
+        .expect("Manga series facet present");
+    assert_eq!(manga_series.library_name, "Manga");
+    assert_eq!(manga_series.count, 2);
+}
+
+#[tokio::test]
+async fn facets_excludes_self_dimension_so_dropdowns_dont_collapse() {
+    // When the caller passes seriesId=X, the *series* facet should still
+    // list all series (not just X). Otherwise the dropdown would collapse
+    // to the active selection and the user couldn't switch series.
+    let (db, _temp) = setup_test_db().await;
+    let s1 = make_series_in(&db, "Manga", "S1").await;
+    let s2 = make_series_in(&db, "Manga", "S2").await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    record_announced(&db, s1, source, "rel-1").await;
+    record_announced(&db, s2, source, "rel-2").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth(&format!("/api/v1/releases/facets?seriesId={}", s1), &token);
+    let (status, body): (StatusCode, Option<ReleaseFacetsResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(
+        body.series.len(),
+        2,
+        "series facet must not be filtered by the active seriesId"
+    );
+}
+
+#[tokio::test]
+async fn facets_requires_auth() {
+    let (db, _temp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request("/api/v1/releases/facets");
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+// =============================================================================
+// DELETE /releases/{id}
+// =============================================================================
+
+#[tokio::test]
+async fn delete_release_removes_row_and_clears_source_etag() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let id = record_announced(&db, series, source, "rel-1").await;
+
+    // Seed an etag so we can verify it gets cleared.
+    ReleaseSourceRepository::record_poll_success(
+        &db,
+        source,
+        chrono::Utc::now(),
+        Some("\"abc123\"".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+    let pre = ReleaseSourceRepository::get_by_id(&db, source)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(pre.etag.is_some(), "test setup: etag should be set");
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = delete_request_with_auth(&format!("/api/v1/releases/{}", id), &token);
+    let (status, body): (StatusCode, Option<DeleteReleaseResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.unwrap().deleted);
+
+    // Row gone.
+    assert!(
+        ReleaseLedgerRepository::get_by_id(&db, id)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    // Etag cleared.
+    let post = ReleaseSourceRepository::get_by_id(&db, source)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        post.etag.is_none(),
+        "delete must clear the source's etag so the next poll re-fetches"
+    );
+}
+
+#[tokio::test]
+async fn delete_release_404_for_missing() {
+    let (db, _temp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = delete_request_with_auth(&format!("/api/v1/releases/{}", Uuid::new_v4()), &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn delete_release_forbidden_for_reader() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let id = record_announced(&db, series, source, "rel-1").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_reader_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = delete_request_with_auth(&format!("/api/v1/releases/{}", id), &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// =============================================================================
+// POST /releases/bulk
+// =============================================================================
+
+#[tokio::test]
+async fn bulk_dismiss_updates_state_for_listed_ids() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let id1 = record_announced(&db, series, source, "rel-1").await;
+    let id2 = record_announced(&db, series, source, "rel-2").await;
+    let id3 = record_announced(&db, series, source, "rel-3").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = BulkReleaseActionRequest {
+        ids: vec![id1, id2],
+        action: BulkReleaseAction::Dismiss,
+    };
+    let req = post_json_request_with_auth("/api/v1/releases/bulk", &body, &token);
+    let (status, resp): (StatusCode, Option<BulkReleaseActionResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let resp = resp.unwrap();
+    assert_eq!(resp.affected, 2);
+    assert_eq!(resp.action, BulkReleaseAction::Dismiss);
+
+    // Selected rows were dismissed; the third stays announced.
+    assert_eq!(
+        ReleaseLedgerRepository::get_by_id(&db, id1)
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
+        "dismissed"
+    );
+    assert_eq!(
+        ReleaseLedgerRepository::get_by_id(&db, id3)
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
+        "announced"
+    );
+}
+
+#[tokio::test]
+async fn bulk_delete_clears_etags_on_affected_sources_only() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let src_a = make_source(&db, "nyaa:user:a").await;
+    let src_b = make_source(&db, "nyaa:user:b").await;
+    let id_a = record_announced(&db, series, src_a, "rel-a").await;
+    let _id_b = record_announced(&db, series, src_b, "rel-b").await;
+
+    // Seed etags on both sources.
+    for src in [src_a, src_b] {
+        ReleaseSourceRepository::record_poll_success(
+            &db,
+            src,
+            chrono::Utc::now(),
+            Some("\"etag\"".to_string()),
+            None,
+        )
+        .await
+        .unwrap();
+    }
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = BulkReleaseActionRequest {
+        ids: vec![id_a],
+        action: BulkReleaseAction::Delete,
+    };
+    let req = post_json_request_with_auth("/api/v1/releases/bulk", &body, &token);
+    let (status, resp): (StatusCode, Option<BulkReleaseActionResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp.unwrap().affected, 1);
+
+    // src_a touched (etag cleared), src_b untouched (etag preserved).
+    assert!(
+        ReleaseSourceRepository::get_by_id(&db, src_a)
+            .await
+            .unwrap()
+            .unwrap()
+            .etag
+            .is_none()
+    );
+    assert!(
+        ReleaseSourceRepository::get_by_id(&db, src_b)
+            .await
+            .unwrap()
+            .unwrap()
+            .etag
+            .is_some(),
+        "untouched sources must keep their etag"
+    );
+}
+
+#[tokio::test]
+async fn bulk_rejects_empty_ids() {
+    let (db, _temp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = BulkReleaseActionRequest {
+        ids: vec![],
+        action: BulkReleaseAction::Dismiss,
+    };
+    let req = post_json_request_with_auth("/api/v1/releases/bulk", &body, &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn bulk_forbidden_for_reader() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let id = record_announced(&db, series, source, "rel-1").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_reader_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = BulkReleaseActionRequest {
+        ids: vec![id],
+        action: BulkReleaseAction::Dismiss,
+    };
+    let req = post_json_request_with_auth("/api/v1/releases/bulk", &body, &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
