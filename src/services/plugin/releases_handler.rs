@@ -199,23 +199,31 @@ impl ReleasesRequestHandler {
                 match SeriesExternalIdRepository::get_for_series(&self.db, entry.series_id).await {
                     Ok(rows) => {
                         // Filter: only sources the plugin asked for.
-                        // Source naming convention: `plugin:<name>` for
-                        // plugin-provided IDs; we accept either bare source
-                        // names (e.g. "mangaupdates") or the prefixed form.
+                        //
+                        // Two namespace conventions exist in stored
+                        // `series_external_ids.source` strings:
+                        //
+                        //   - `api:<service>`    (used by metadata plugins
+                        //     like MangaBaka, OpenLibrary, AniList — this is
+                        //     the dominant convention and the SDK docs).
+                        //   - `plugin:<name>`    (legacy / plugin-private).
+                        //
+                        // Plugin manifests declare `requiresExternalIds`
+                        // with the bare service name (e.g. "mangaupdates"),
+                        // so we strip both prefixes before matching. The
+                        // returned map is keyed by the bare name so plugins
+                        // can read `externalIds["mangaupdates"]` regardless
+                        // of how the row was stored.
                         let mut by_source: HashMap<String, String> = HashMap::new();
                         for row in rows {
-                            let normalized = row
-                                .source
-                                .strip_prefix("plugin:")
-                                .unwrap_or(&row.source)
-                                .to_string();
+                            let normalized = strip_external_id_namespace(&row.source);
                             if self
                                 .capability
                                 .requires_external_ids
                                 .iter()
-                                .any(|req| req == &normalized)
+                                .any(|req| req == normalized)
                             {
-                                by_source.insert(normalized, row.external_id);
+                                by_source.insert(normalized.to_string(), row.external_id);
                             }
                         }
                         if !by_source.is_empty() {
@@ -827,6 +835,28 @@ struct SourceStateView {
     last_error_at: Option<DateTime<Utc>>,
 }
 
+/// Strip a leading namespace prefix (`api:`, `plugin:`) from an external-ID
+/// `source` string and return the bare service name.
+///
+/// Stored `series_external_ids.source` values use one of:
+///   - `api:<service>` (dominant; written by metadata plugins like
+///     MangaBaka, OpenLibrary, AniList).
+///   - `plugin:<name>` (legacy plugin-private form).
+///   - `<service>` (bare; older rows).
+///
+/// Plugin manifests declare `requiresExternalIds` with the bare service
+/// name, so we normalize on read. Anything else (`urn:...`, `mal:`, etc.)
+/// passes through unchanged.
+pub(crate) fn strip_external_id_namespace(source: &str) -> &str {
+    if let Some(rest) = source.strip_prefix("api:") {
+        return rest;
+    }
+    if let Some(rest) = source.strip_prefix("plugin:") {
+        return rest;
+    }
+    source
+}
+
 // =============================================================================
 // Param parsing helpers
 // =============================================================================
@@ -1049,6 +1079,62 @@ mod tests {
         assert_eq!(ext.len(), 1, "only requested source should leak");
         assert_eq!(ext.get("mangaupdates").map(String::as_str), Some("12345"));
         assert!(ext.get("anilist").is_none());
+    }
+
+    #[tokio::test]
+    async fn list_tracked_accepts_api_prefixed_external_ids() {
+        // Regression: MangaBaka writes external IDs as `api:mangaupdates`
+        // (the dominant convention per the SDK docs). The host used to
+        // strip only `plugin:`, so MangaUpdates plugins received zero IDs
+        // and reported "Fetched 0 items" forever. Strip both prefixes.
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesExternalIdRepository::upsert(
+            conn,
+            series_id,
+            "api:mangaupdates",
+            "12345",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec!["mangaupdates"]),
+        );
+        let req = make_request(
+            methods::RELEASES_LIST_TRACKED,
+            json!({"sourceId": source_id}),
+        );
+        let resp = handler.handle_request(&req).await;
+        let body: ListTrackedResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
+        let ext = body.tracked[0].external_ids.as_ref().unwrap();
+        assert_eq!(
+            ext.get("mangaupdates").map(String::as_str),
+            Some("12345"),
+            "api: prefix should be stripped to match bare-name manifest declaration"
+        );
+    }
+
+    #[test]
+    fn strip_external_id_namespace_handles_known_prefixes() {
+        assert_eq!(
+            strip_external_id_namespace("api:mangaupdates"),
+            "mangaupdates"
+        );
+        assert_eq!(strip_external_id_namespace("plugin:anilist"), "anilist");
+        assert_eq!(strip_external_id_namespace("mangadex"), "mangadex");
+        // Unknown prefixes pass through — we'd rather fail closed than guess.
+        assert_eq!(
+            strip_external_id_namespace("urn:isbn:1234"),
+            "urn:isbn:1234"
+        );
+        assert_eq!(strip_external_id_namespace(""), "");
     }
 
     #[tokio::test]

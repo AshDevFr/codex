@@ -72,7 +72,6 @@ async fn get_tracking_returns_virtual_default_when_no_row() {
     let dto = dto.unwrap();
     assert_eq!(dto.series_id, series_id);
     assert!(!dto.tracked);
-    assert_eq!(dto.tracking_status, "unknown");
     assert!(dto.track_chapters);
     assert!(dto.track_volumes);
 }
@@ -105,7 +104,6 @@ async fn patch_tracking_creates_then_updates() {
     let app1 = create_test_router(state.clone()).await;
     let body = UpdateSeriesTrackingRequest {
         tracked: Some(true),
-        tracking_status: Some("ongoing".to_string()),
         latest_known_chapter: Some(Some(142.5)),
         ..Default::default()
     };
@@ -118,7 +116,6 @@ async fn patch_tracking_creates_then_updates() {
     assert_eq!(status, StatusCode::OK);
     let dto = dto.unwrap();
     assert!(dto.tracked);
-    assert_eq!(dto.tracking_status, "ongoing");
     assert_eq!(dto.latest_known_chapter, Some(142.5));
 
     // Second PATCH: only update one field; others persist.
@@ -136,29 +133,7 @@ async fn patch_tracking_creates_then_updates() {
     assert_eq!(status, StatusCode::OK);
     let dto = dto.unwrap();
     assert!(dto.tracked, "tracked should persist");
-    assert_eq!(dto.tracking_status, "ongoing", "status should persist");
     assert_eq!(dto.latest_known_chapter, Some(143.0));
-}
-
-#[tokio::test]
-async fn patch_tracking_rejects_invalid_status() {
-    let (db, _temp) = setup_test_db().await;
-    let (_lib, series_id) = create_test_series(&db).await;
-    let state = create_test_auth_state(db.clone()).await;
-    let token = create_admin_and_token(&db, &state).await;
-    let app = create_test_router(state).await;
-
-    let body = UpdateSeriesTrackingRequest {
-        tracking_status: Some("paused".to_string()),
-        ..Default::default()
-    };
-    let req = patch_json_request_with_auth(
-        &format!("/api/v1/series/{}/tracking", series_id),
-        &body,
-        &token,
-    );
-    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

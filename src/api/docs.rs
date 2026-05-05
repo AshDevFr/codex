@@ -272,6 +272,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::releases::list_release_sources,
         v1::handlers::releases::update_release_source,
         v1::handlers::releases::poll_release_source_now,
+        v1::handlers::releases::reset_release_source,
         v1::handlers::releases::get_release_tracking_applicability,
 
         // Cover management endpoints
@@ -713,6 +714,7 @@ The following paths are exempt from rate limiting:
             v1::dto::release::ReleaseSourceListResponse,
             v1::dto::release::UpdateReleaseSourceRequest,
             v1::dto::release::PollNowResponse,
+            v1::dto::release::ResetReleaseSourceResponse,
             v1::handlers::releases::ApplicabilityResponse,
             v1::dto::PaginatedResponse<v1::dto::release::ReleaseLedgerEntryDto>,
 

@@ -369,6 +369,75 @@ impl TaskRepository {
         Ok(result.is_some())
     }
 
+    /// Find a pending or processing task by `task_type` and a single
+    /// JSON-param key/value match. Returns the first matching task ID, if
+    /// any. Used by enqueue paths that want to coalesce concurrent
+    /// requests onto an in-flight task instead of stacking duplicates.
+    ///
+    /// `param_value` is matched as a string against `params->>key`. UUIDs
+    /// should be passed as their canonical hyphenated form.
+    pub async fn find_pending_or_processing_by_param(
+        db: &DatabaseConnection,
+        task_type: &str,
+        param_key: &str,
+        param_value: &str,
+    ) -> Result<Option<Uuid>> {
+        let backend = db.get_database_backend();
+        let stmt = match backend {
+            DbBackend::Postgres => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"SELECT id FROM tasks
+                   WHERE task_type = $1
+                     AND status IN ('pending', 'processing')
+                     AND params->>$2 = $3
+                   ORDER BY created_at ASC
+                   LIMIT 1"#,
+                vec![task_type.into(), param_key.into(), param_value.into()],
+            ),
+            _ => {
+                // SQLite's json_extract path needs a string literal, not a
+                // bind parameter, so we splice the key into the JSON path.
+                // Reject anything that isn't a simple identifier to avoid
+                // injection — callers pass static keys (`source_id`, etc.).
+                if !param_key
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+                {
+                    anyhow::bail!("invalid param_key: {}", param_key);
+                }
+                let path = format!("$.{}", param_key);
+                Statement::from_sql_and_values(
+                    DbBackend::Sqlite,
+                    format!(
+                        r#"SELECT id FROM tasks
+                           WHERE task_type = ?
+                             AND status IN ('pending', 'processing')
+                             AND json_extract(params, '{}') = ?
+                           ORDER BY created_at ASC
+                           LIMIT 1"#,
+                        path
+                    ),
+                    vec![task_type.into(), param_value.into()],
+                )
+            }
+        };
+
+        let result = db
+            .query_one(stmt)
+            .await
+            .context("Failed to query for in-flight task")?;
+        match result {
+            Some(row) => {
+                let task_id: Uuid = row.try_get::<Uuid>("", "id").or_else(|_| {
+                    let id_str: String = row.try_get("", "id")?;
+                    Uuid::parse_str(&id_str).map_err(|e| sea_orm::DbErr::Type(e.to_string()))
+                })?;
+                Ok(Some(task_id))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Find a pending or processing task with matching params, returning its ID and status.
     ///
     /// Like `has_pending_or_processing` but returns the task ID and status string

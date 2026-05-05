@@ -222,6 +222,17 @@ impl ReleaseLedgerRepository {
         let result = ReleaseLedger::delete_by_id(id).exec(db).await?;
         Ok(result.rows_affected > 0)
     }
+
+    /// Delete all ledger rows for a source. Returns the number of rows
+    /// removed. Used by the source-reset admin endpoint to give testers a
+    /// clean slate without dropping the source itself.
+    pub async fn delete_by_source(db: &DatabaseConnection, source_id: Uuid) -> Result<u64> {
+        let result = ReleaseLedger::delete_many()
+            .filter(release_ledger::Column::SourceId.eq(source_id))
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected)
+    }
 }
 
 #[cfg(test)]
@@ -498,6 +509,62 @@ mod tests {
             .await
             .unwrap();
         assert!(rows.is_empty(), "ledger rows cascaded with series");
+    }
+
+    #[tokio::test]
+    async fn delete_by_source_removes_only_that_sources_rows() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_a) = setup_world(conn).await;
+
+        // Add a second source so we can prove scoping.
+        let source_b = ReleaseSourceRepository::create(
+            conn,
+            NewReleaseSource {
+                plugin_id: "release-nyaa".to_string(),
+                source_key: "nyaa:user:other".to_string(),
+                display_name: "Nyaa - other".to_string(),
+                kind: kind::RSS_UPLOADER.to_string(),
+                poll_interval_s: 3600,
+                enabled: None,
+                config: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        ReleaseLedgerRepository::record(conn, entry(series_id, source_a, "rel-1"))
+            .await
+            .unwrap();
+        ReleaseLedgerRepository::record(conn, entry(series_id, source_a, "rel-2"))
+            .await
+            .unwrap();
+        ReleaseLedgerRepository::record(conn, entry(series_id, source_b.id, "rel-3"))
+            .await
+            .unwrap();
+
+        let removed = ReleaseLedgerRepository::delete_by_source(conn, source_a)
+            .await
+            .unwrap();
+        assert_eq!(removed, 2);
+
+        // Source A is empty; source B still has its row.
+        let after_a =
+            ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|r| r.source_id == source_a)
+                .count();
+        assert_eq!(after_a, 0);
+        let after_b =
+            ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|r| r.source_id == source_b.id)
+                .count();
+        assert_eq!(after_b, 1);
     }
 
     #[tokio::test]

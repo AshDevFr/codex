@@ -5,6 +5,7 @@ import {
   type ReleaseInboxParams,
   type ReleaseLedgerEntry,
   type ReleaseSource,
+  type ResetReleaseSourceResponse,
   releaseSourcesApi,
   releasesApi,
   type SeriesReleaseListParams,
@@ -126,5 +127,26 @@ export function usePollReleaseSourceNow() {
       queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
     },
     onError: notifyError("Failed to enqueue poll"),
+  });
+}
+
+export function useResetReleaseSource() {
+  const queryClient = useQueryClient();
+  return useMutation<ResetReleaseSourceResponse, Error, string>({
+    mutationFn: (sourceId) => releaseSourcesApi.reset(sourceId),
+    onSuccess: (data) => {
+      notifications.show({
+        title: "Source reset",
+        message: `Cleared ${data.deletedLedgerEntries} ledger ${
+          data.deletedLedgerEntries === 1 ? "entry" : "entries"
+        }. Click "Poll now" to re-fetch.`,
+        color: "blue",
+      });
+      // Reset wipes ledger rows, so invalidate everything that reads them.
+      queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
+      queryClient.invalidateQueries({ queryKey: releasesKeys.inboxRoot });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
+    },
+    onError: notifyError("Failed to reset source"),
   });
 }

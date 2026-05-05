@@ -46,13 +46,6 @@ impl MigrationTrait for Migration {
                     .not_null()
                     .default(false),
             )
-            // 'ongoing' | 'complete' | 'hiatus' | 'cancelled' | 'unknown'
-            .col(
-                ColumnDef::new(SeriesTracking::TrackingStatus)
-                    .string_len(20)
-                    .not_null()
-                    .default("unknown"),
-            )
             .col(
                 ColumnDef::new(SeriesTracking::TrackChapters)
                     .boolean()
@@ -232,7 +225,6 @@ pub enum SeriesTracking {
     Table,
     SeriesId,
     Tracked,
-    TrackingStatus,
     TrackChapters,
     TrackVolumes,
     LatestKnownChapter,

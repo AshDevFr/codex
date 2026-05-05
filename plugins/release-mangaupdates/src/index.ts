@@ -204,7 +204,11 @@ export interface SeriesPollOutcome {
   fetched: boolean;
   notModified: boolean;
   parsed: number;
+  /** Of those parsed, how many passed client-side filters and were sent to record. */
+  matched: number;
   recorded: number;
+  /** Of those sent to record, how many the host deduped onto an existing row. */
+  deduped: number;
   upstreamStatus: number;
   /** New ETag returned by upstream (only set when fetched=true). */
   etag: string | null;
@@ -236,7 +240,9 @@ export async function pollSeries(
       fetched: false,
       notModified: false,
       parsed: 0,
+      matched: 0,
       recorded: 0,
+      deduped: 0,
       upstreamStatus: 0,
       etag: null,
       error: "missing mangaupdates external ID",
@@ -260,7 +266,9 @@ export async function pollSeries(
       fetched: true,
       notModified: true,
       parsed: 0,
+      matched: 0,
       recorded: 0,
+      deduped: 0,
       upstreamStatus: 304,
       etag: null,
       error: "",
@@ -273,7 +281,9 @@ export async function pollSeries(
       fetched: false,
       notModified: false,
       parsed: 0,
+      matched: 0,
       recorded: 0,
+      deduped: 0,
       upstreamStatus: result.status,
       etag: null,
       error: result.message,
@@ -286,19 +296,29 @@ export async function pollSeries(
     languages: effectiveLanguagesForSeries(entry),
     blockedGroups: options.blockedGroups,
   });
+  let matched = 0;
   let recorded = 0;
+  let deduped = 0;
   for (const item of items) {
     if (!passesFilters(item, filters)) continue;
+    matched++;
     const candidate = toCandidate(entry, item);
     const outcome = await recordCandidate(rpc, sourceId, candidate);
-    if (outcome && !outcome.deduped) recorded++;
+    if (!outcome) continue;
+    if (outcome.deduped) {
+      deduped++;
+    } else {
+      recorded++;
+    }
   }
   return {
     seriesId: entry.seriesId,
     fetched: true,
     notModified: false,
     parsed: items.length,
+    matched,
     recorded,
+    deduped,
     upstreamStatus: 200,
     etag: result.etag,
     error: "",
@@ -314,10 +334,17 @@ async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<Rel
   const blockedGroups = parseCommaList(state.blockedGroupsCsv);
 
   let parsed = 0;
+  let matched = 0;
   let recorded = 0;
+  let deduped = 0;
   let worstStatus = 200;
   let lastEtag: string | null = null;
   let seenSeries = 0;
+  // Series the host returned that lack a MangaUpdates external ID. A high
+  // count here is the most common cause of an "empty" poll: the plugin
+  // can't fetch a feed without an MU ID, so the user needs to populate
+  // those (manual paste or metadata refresh from MangaBaka).
+  let skippedNoMuId = 0;
 
   for await (const entry of iterateTrackedSeries(rpc, sourceId)) {
     seenSeries++;
@@ -326,29 +353,45 @@ async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<Rel
       timeoutMs: state.requestTimeoutMs,
     });
     parsed += outcome.parsed;
+    matched += outcome.matched;
     recorded += outcome.recorded;
+    deduped += outcome.deduped;
     if (outcome.upstreamStatus > worstStatus) {
       worstStatus = outcome.upstreamStatus;
     }
     if (outcome.etag) lastEtag = outcome.etag;
 
-    if (outcome.error) {
+    if (outcome.error === "missing mangaupdates external ID") {
+      skippedNoMuId++;
+    } else if (outcome.error) {
       logger.warn(`series ${entry.seriesId}: ${outcome.error} (status ${outcome.upstreamStatus})`);
     }
   }
 
+  if (skippedNoMuId > 0) {
+    logger.info(
+      `skipped ${skippedNoMuId} of ${seenSeries} tracked series for source=${sourceId}: no mangaupdates external ID. Add one in the Tracking panel or run a metadata refresh.`,
+    );
+  }
+
   logger.info(
-    `poll complete: source=${sourceId} series=${seenSeries} parsed=${parsed} recorded=${recorded} worst_status=${worstStatus}`,
+    `poll complete: source=${sourceId} series=${seenSeries} skipped=${skippedNoMuId} parsed=${parsed} matched=${matched} recorded=${recorded} deduped=${deduped} worst_status=${worstStatus}`,
   );
 
-  // The plugin streamed candidates already (no `candidates` payload). Pass
-  // through the worst upstream status the host should consider for backoff.
+  // Report counters back to the host so the source's `last_summary` is
+  // accurate. Without these the host only sees the (empty) `candidates`
+  // payload — we record via reverse-RPC mid-poll — and the badge reads
+  // "Fetched 0 items" no matter what actually happened.
   // Per-series ETags don't align with the per-source state slot, so we
-  // intentionally leave `etag` undefined here unless we actually saw one
+  // intentionally leave `etag` undefined unless we actually saw one
   // (which today we won't, since we don't pass If-None-Match per series).
   return {
     notModified: false,
     upstreamStatus: worstStatus,
+    parsed,
+    matched,
+    recorded,
+    deduped,
     ...(lastEtag !== null ? { etag: lastEtag } : {}),
   };
 }

@@ -58,14 +58,21 @@ const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
 #[serde(rename_all = "camelCase")]
 pub struct PollReleaseSourceResult {
     pub source_id: Uuid,
-    /// Number of candidates the plugin returned in its response payload.
+    /// Number of upstream items the plugin produced for this poll. Counts
+    /// both candidates returned inline in the response payload AND any
+    /// items the plugin streamed via `releases/record` (reported back via
+    /// `ReleasePollResponse.parsed`). Used to drive the `last_summary`
+    /// "Fetched N items" line.
     pub candidates_returned: u32,
     /// Number of candidates accepted by the matcher and recorded.
+    /// Includes both host-side records (from inline `response.candidates`)
+    /// and plugin-streamed records (from `ReleasePollResponse.recorded`).
     pub candidates_recorded: u32,
     /// Number of candidates dropped before the ledger (validation failures
     /// or below-threshold).
     pub candidates_rejected: u32,
-    /// Number of accepted candidates that landed as a duplicate.
+    /// Number of accepted candidates that landed as a duplicate. Includes
+    /// host-side dedupes and plugin-reported dedupes.
     pub candidates_deduped: u32,
     /// Whether the upstream returned `304 Not Modified` (or the plugin's
     /// equivalent).
@@ -201,13 +208,13 @@ impl TaskHandler for PollReleaseSourceHandler {
                 Ok(None) => {
                     let msg = format!("plugin {} not registered", source.plugin_id);
                     warn!("Task {}: {}", task.id, msg);
-                    record_error(db, source.id, &msg).await;
+                    record_error(db, &source, event_broadcaster, &msg).await;
                     return Ok(TaskResult::failure(msg));
                 }
                 Err(e) => {
                     let msg = format!("failed to lookup plugin: {}", e);
                     error!("Task {}: {}", task.id, msg);
-                    record_error(db, source.id, &msg).await;
+                    record_error(db, &source, event_broadcaster, &msg).await;
                     return Ok(TaskResult::failure(msg));
                 }
             };
@@ -231,7 +238,7 @@ impl TaskHandler for PollReleaseSourceHandler {
                 Err(e) => {
                     let msg = format!("failed to start plugin: {}", e);
                     error!("Task {}: {}", task.id, msg);
-                    record_error(db, source.id, &msg).await;
+                    record_error(db, &source, event_broadcaster, &msg).await;
                     return Ok(TaskResult::failure(msg));
                 }
             };
@@ -254,7 +261,7 @@ impl TaskHandler for PollReleaseSourceHandler {
                     Err(_) => {
                         let msg = format!("poll timed out after {:?}", t);
                         warn!("Task {}: {}", task.id, msg);
-                        record_error(db, source.id, &msg).await;
+                        record_error(db, &source, event_broadcaster, &msg).await;
                         return Ok(TaskResult::failure(msg));
                     }
                 }
@@ -279,7 +286,7 @@ impl TaskHandler for PollReleaseSourceHandler {
                         );
                     }
                     error!("Task {}: {}", task.id, msg);
-                    record_error(db, source.id, &msg).await;
+                    record_error(db, &source, event_broadcaster, &msg).await;
                     return Ok(TaskResult::failure(msg));
                 }
             };
@@ -323,6 +330,14 @@ impl TaskHandler for PollReleaseSourceHandler {
             let response_etag = response.etag.clone();
             let response_not_modified = response.not_modified;
             let response_upstream_status = response.upstream_status;
+            // Plugin-reported counters (populated by streaming plugins that
+            // record via `releases/record` mid-poll, since their response's
+            // `candidates` array is empty). When present, these win over the
+            // host-side count below.
+            let plugin_reported_parsed = response.parsed;
+            let plugin_reported_matched = response.matched;
+            let plugin_reported_recorded = response.recorded;
+            let plugin_reported_deduped = response.deduped;
 
             let mut result = PollReleaseSourceResult {
                 source_id,
@@ -379,6 +394,14 @@ impl TaskHandler for PollReleaseSourceHandler {
                 }
             }
 
+            fold_streaming_counters(
+                &mut result,
+                plugin_reported_parsed,
+                plugin_reported_matched,
+                plugin_reported_recorded,
+                plugin_reported_deduped,
+            );
+
             // Persist source state. If we hit a successful 2xx upstream we
             // already noted it for backoff; clear `last_error` and stamp
             // `last_polled_at`. The one-line `summary` is surfaced in the
@@ -421,6 +444,21 @@ impl TaskHandler for PollReleaseSourceHandler {
                 self.backoff.record_success(&url_hint).await;
             }
 
+            // Emit a `ReleaseSourcePolled` event so the Release tracking
+            // settings page refreshes the row in real time. Best-effort:
+            // missing subscribers are a benign noop, the persisted source
+            // state is the source of truth.
+            let had_error = response_upstream_status
+                .map(is_backoff_status)
+                .unwrap_or(false);
+            if let Some(b) = event_broadcaster {
+                let _ = b.emit(EntityChangeEvent::release_source_polled(
+                    source.id,
+                    &source.plugin_id,
+                    had_error,
+                ));
+            }
+
             let message = format!(
                 "Polled {}: returned {}, recorded {}, deduped {}, rejected {}",
                 source.display_name,
@@ -432,6 +470,40 @@ impl TaskHandler for PollReleaseSourceHandler {
             info!("Task {}: {}", task.id, message);
             Ok(TaskResult::success_with_data(message, json!(result)))
         })
+    }
+}
+
+/// Merge plugin-reported counters from `ReleasePollResponse` into the
+/// host's running `PollReleaseSourceResult`.
+///
+/// Streaming plugins (Nyaa, MangaUpdates) record via `releases/record`
+/// mid-poll and return an empty `candidates` array. They report what they
+/// saw via the response's optional counter fields; the host's `result`
+/// already counts whatever came back inline in `candidates`, so we
+/// **additively merge** the two so a plugin that mixes both modes gets a
+/// correct summary.
+///
+/// `deduped` falls back to `matched - recorded` when the plugin only sent
+/// the latter two — older plugins won't know about the dedicated field.
+pub(crate) fn fold_streaming_counters(
+    result: &mut PollReleaseSourceResult,
+    parsed: Option<u32>,
+    matched: Option<u32>,
+    recorded: Option<u32>,
+    deduped: Option<u32>,
+) {
+    if let Some(p) = parsed {
+        result.candidates_returned = result.candidates_returned.saturating_add(p);
+    }
+    if let Some(r) = recorded {
+        result.candidates_recorded = result.candidates_recorded.saturating_add(r);
+    }
+    if let Some(d) = deduped {
+        result.candidates_deduped = result.candidates_deduped.saturating_add(d);
+    } else if let (Some(m), Some(r)) = (matched, recorded)
+        && m >= r
+    {
+        result.candidates_deduped = result.candidates_deduped.saturating_add(m - r);
     }
 }
 
@@ -514,14 +586,29 @@ fn derive_url_hint(source: &crate::db::entities::release_sources::Model) -> Stri
     source.plugin_id.clone()
 }
 
-async fn record_error(db: &DatabaseConnection, source_id: Uuid, message: &str) {
+async fn record_error(
+    db: &DatabaseConnection,
+    source: &crate::db::entities::release_sources::Model,
+    event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    message: &str,
+) {
     if let Err(e) =
-        ReleaseSourceRepository::record_poll_error(db, source_id, message, Utc::now()).await
+        ReleaseSourceRepository::record_poll_error(db, source.id, message, Utc::now()).await
     {
         warn!(
             "Failed to persist poll error on source {}: {}",
-            source_id, e
+            source.id, e
         );
+    }
+    // Emit a `ReleaseSourcePolled` event so the Release tracking settings
+    // page refreshes in real time. Best-effort: missing subscribers are a
+    // benign noop, the persisted state is the source of truth.
+    if let Some(b) = event_broadcaster {
+        let _ = b.emit(EntityChangeEvent::release_source_polled(
+            source.id,
+            &source.plugin_id,
+            true, // had_error
+        ));
     }
 }
 
@@ -885,5 +972,65 @@ mod tests {
         r.candidates_recorded = 2;
         let s = build_poll_summary(None, Some(200), &r);
         assert_eq!(s, "Fetched 2 items, recorded 2");
+    }
+
+    // -------------------------------------------------------------------------
+    // fold_streaming_counters — protects against the regression where a
+    // streaming plugin (Nyaa, MangaUpdates) records via reverse-RPC and the
+    // host's summary always reads "Fetched 0 items" because the response's
+    // `candidates` array was empty.
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn fold_streaming_counters_adds_plugin_reported_values() {
+        let mut r = empty_result();
+        fold_streaming_counters(&mut r, Some(12), Some(3), Some(1), Some(2));
+        assert_eq!(r.candidates_returned, 12);
+        assert_eq!(r.candidates_recorded, 1);
+        assert_eq!(r.candidates_deduped, 2);
+    }
+
+    #[test]
+    fn fold_streaming_counters_infers_deduped_when_only_matched_and_recorded() {
+        let mut r = empty_result();
+        fold_streaming_counters(&mut r, Some(10), Some(8), Some(3), None);
+        assert_eq!(r.candidates_returned, 10);
+        assert_eq!(r.candidates_recorded, 3);
+        assert_eq!(r.candidates_deduped, 5, "matched - recorded fallback");
+    }
+
+    #[test]
+    fn fold_streaming_counters_handles_absent_fields_for_older_plugins() {
+        let mut r = empty_result();
+        r.candidates_returned = 4;
+        r.candidates_recorded = 4;
+        fold_streaming_counters(&mut r, None, None, None, None);
+        assert_eq!(r.candidates_returned, 4, "host counts preserved");
+        assert_eq!(r.candidates_recorded, 4);
+        assert_eq!(r.candidates_deduped, 0);
+    }
+
+    #[test]
+    fn fold_streaming_counters_additively_merges_with_inline_candidates() {
+        let mut r = empty_result();
+        // Host counted some inline candidates already.
+        r.candidates_returned = 2;
+        r.candidates_recorded = 2;
+        // Plugin also streamed a few.
+        fold_streaming_counters(&mut r, Some(3), Some(3), Some(2), Some(1));
+        assert_eq!(r.candidates_returned, 5);
+        assert_eq!(r.candidates_recorded, 4);
+        assert_eq!(r.candidates_deduped, 1);
+    }
+
+    #[test]
+    fn build_poll_summary_uses_streaming_counters_via_fold() {
+        // Pin the end-to-end shape: a streaming plugin returns no inline
+        // candidates but reports it parsed 5 and recorded 5 — the badge
+        // must say "Fetched 5 items, recorded 5", not "Fetched 0 items".
+        let mut r = empty_result();
+        fold_streaming_counters(&mut r, Some(5), Some(5), Some(5), Some(0));
+        let s = build_poll_summary(None, Some(200), &r);
+        assert_eq!(s, "Fetched 5 items, recorded 5");
     }
 }

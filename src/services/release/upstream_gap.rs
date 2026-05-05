@@ -167,7 +167,6 @@ mod tests {
         SeriesTrackingRow {
             series_id: Uuid::new_v4(),
             tracked,
-            tracking_status: "ongoing".to_string(),
             track_chapters,
             track_volumes,
             latest_known_chapter: None,

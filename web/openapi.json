@@ -7299,6 +7299,54 @@
         ]
       }
     },
+    "/api/v1/release-sources/{source_id}/reset": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Reset a release source to a clean slate.",
+        "description": "Deletes every `release_ledger` row owned by the source and clears the\nsource's transient poll state (`etag`, `last_polled_at`, `last_error`,\n`last_error_at`, `last_summary`). User-managed fields (`enabled`,\n`poll_interval_s`, `display_name`, `config`) are preserved.\n\nIntended for testing/troubleshooting: after a reset, the next poll\nfetches the upstream feed without an `If-None-Match` header (so no 304\nshort-circuit) and re-records every release as `announced`. Does NOT\nauto-enqueue a poll — call `POST /release-sources/{id}/poll-now` after\nresetting if you want immediate re-fetch.",
+        "operationId": "reset_release_source",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Source ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetReleaseSourceResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          },
+          "404": {
+            "description": "Source not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/releases": {
       "get": {
         "tags": [
@@ -12331,9 +12379,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Invalid tracking_status"
           },
           "403": {
             "description": "Forbidden"
@@ -23554,6 +23599,36 @@
                 "description": "Volume announced (if the source emits volumes)."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A release source's poll task completed.\n\nEmitted at the end of every `poll_release_source` task run, after\n`release_sources.last_summary` / `last_polled_at` / `etag` have been\npersisted. The frontend uses this to refresh the Release tracking\nsettings page in real time so users don't have to reload to see a\n\"Poll now\" finish. Carries no diff details — receivers should\ninvalidate the source query and re-read the row.",
+            "required": [
+              "sourceId",
+              "pluginId",
+              "hadError",
+              "type"
+            ],
+            "properties": {
+              "hadError": {
+                "type": "boolean",
+                "description": "`true` if the poll wrote a `last_error`. Cheap \"did it fail\"\nhint without forcing the client to refetch."
+              },
+              "pluginId": {
+                "type": "string",
+                "description": "Plugin that owns the source (`release_sources.plugin_id`).\nCheap filter for clients only watching certain plugins."
+              },
+              "sourceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "release_source_polled"
+                ]
+              }
+            }
           }
         ],
         "description": "Specific event types for entity changes"
@@ -29427,6 +29502,7 @@
               "required": [
                 "id",
                 "seriesId",
+                "seriesTitle",
                 "sourceId",
                 "externalReleaseId",
                 "payloadUrl",
@@ -29500,6 +29576,11 @@
                   "type": "string",
                   "format": "uuid",
                   "example": "550e8400-e29b-41d4-a716-446655440002"
+                },
+                "seriesTitle": {
+                  "type": "string",
+                  "description": "Series title at the time of the response. Joined from the `series`\ntable so the inbox UI can render a human-readable label without a\nfollow-up fetch. Falls back to the empty string only if the series\nrow was hard-deleted between the join and the read.",
+                  "example": "Chainsaw Man"
                 },
                 "sourceId": {
                   "type": "string",
@@ -32778,6 +32859,7 @@
         "required": [
           "id",
           "seriesId",
+          "seriesTitle",
           "sourceId",
           "externalReleaseId",
           "payloadUrl",
@@ -32851,6 +32933,11 @@
             "type": "string",
             "format": "uuid",
             "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "seriesTitle": {
+            "type": "string",
+            "description": "Series title at the time of the response. Joined from the `series`\ntable so the inbox UI can render a human-readable label without a\nfollow-up fetch. Falls back to the empty string only if the series\nrow was hard-deleted between the join and the read.",
+            "example": "Chainsaw Man"
           },
           "sourceId": {
             "type": "string",
@@ -33599,6 +33686,21 @@
             "type": "string",
             "description": "Success message",
             "example": "Verification email sent"
+          }
+        }
+      },
+      "ResetReleaseSourceResponse": {
+        "type": "object",
+        "description": "Response shape from the `reset` endpoint.\n\nReturns the number of ledger rows removed so callers can show a\nconfirmation toast. The source's transient poll state (etag,\nlast_polled_at, last_error, last_summary) is also cleared, but those\nare not counted here.",
+        "required": [
+          "deletedLedgerEntries"
+        ],
+        "properties": {
+          "deletedLedgerEntries": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of `release_ledger` rows deleted for this source.",
+            "minimum": 0
           }
         }
       },
@@ -35082,7 +35184,6 @@
         "required": [
           "seriesId",
           "tracked",
-          "trackingStatus",
           "trackChapters",
           "trackVolumes",
           "createdAt",
@@ -35153,11 +35254,6 @@
           "tracked": {
             "type": "boolean",
             "description": "Whether release tracking is enabled."
-          },
-          "trackingStatus": {
-            "type": "string",
-            "description": "Publication status: `ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`.",
-            "example": "ongoing"
           },
           "updatedAt": {
             "type": "string",
@@ -38272,13 +38368,6 @@
               "boolean",
               "null"
             ]
-          },
-          "trackingStatus": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "`ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`."
           },
           "volumeChapterMap": {}
         }

@@ -2511,6 +2511,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/release-sources/{source_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a release source to a clean slate.
+         * @description Deletes every `release_ledger` row owned by the source and clears the
+         *     source's transient poll state (`etag`, `last_polled_at`, `last_error`,
+         *     `last_error_at`, `last_summary`). User-managed fields (`enabled`,
+         *     `poll_interval_s`, `display_name`, `config`) are preserved.
+         *
+         *     Intended for testing/troubleshooting: after a reset, the next poll
+         *     fetches the upstream feed without an `If-None-Match` header (so no 304
+         *     short-circuit) and re-records every release as `announced`. Does NOT
+         *     auto-enqueue a poll — call `POST /release-sources/{id}/poll-now` after
+         *     resetting if you want immediate re-fetch.
+         */
+        post: operations["reset_release_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/releases": {
         parameters: {
             query?: never;
@@ -9632,6 +9661,21 @@ export interface components {
              * @description Volume announced (if the source emits volumes).
              */
             volume?: number | null;
+        } | {
+            /**
+             * @description `true` if the poll wrote a `last_error`. Cheap "did it fail"
+             *     hint without forcing the client to refetch.
+             */
+            hadError: boolean;
+            /**
+             * @description Plugin that owns the source (`release_sources.plugin_id`).
+             *     Cheap filter for clients only watching certain plugins.
+             */
+            pluginId: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @enum {string} */
+            type: "release_source_polled";
         };
         /**
          * @description Type of entity that was changed
@@ -12805,6 +12849,14 @@ export interface components {
                  */
                 seriesId: string;
                 /**
+                 * @description Series title at the time of the response. Joined from the `series`
+                 *     table so the inbox UI can render a human-readable label without a
+                 *     follow-up fetch. Falls back to the empty string only if the series
+                 *     row was hard-deleted between the join and the read.
+                 * @example Chainsaw Man
+                 */
+                seriesTitle: string;
+                /**
                  * Format: uuid
                  * @example 550e8400-e29b-41d4-a716-446655440b00
                  */
@@ -14702,6 +14754,14 @@ export interface components {
              */
             seriesId: string;
             /**
+             * @description Series title at the time of the response. Joined from the `series`
+             *     table so the inbox UI can render a human-readable label without a
+             *     follow-up fetch. Falls back to the empty string only if the series
+             *     row was hard-deleted between the join and the read.
+             * @example Chainsaw Man
+             */
+            seriesTitle: string;
+            /**
              * Format: uuid
              * @example 550e8400-e29b-41d4-a716-446655440b00
              */
@@ -15144,6 +15204,21 @@ export interface components {
              * @example Verification email sent
              */
             message: string;
+        };
+        /**
+         * @description Response shape from the `reset` endpoint.
+         *
+         *     Returns the number of ledger rows removed so callers can show a
+         *     confirmation toast. The source's transient poll state (etag,
+         *     last_polled_at, last_error, last_summary) is also cleared, but those
+         *     are not counted here.
+         */
+        ResetReleaseSourceResponse: {
+            /**
+             * Format: int64
+             * @description Number of `release_ledger` rows deleted for this source.
+             */
+            deletedLedgerEntries: number;
         };
         /** @description Request body for bulk retrying all book errors */
         RetryAllErrorsRequest: {
@@ -16050,11 +16125,6 @@ export interface components {
             trackVolumes: boolean;
             /** @description Whether release tracking is enabled. */
             tracked: boolean;
-            /**
-             * @description Publication status: `ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`.
-             * @example ongoing
-             */
-            trackingStatus: string;
             /**
              * Format: date-time
              * @description When the row was last updated (epoch when virtual).
@@ -17584,8 +17654,6 @@ export interface components {
             trackChapters?: boolean | null;
             trackVolumes?: boolean | null;
             tracked?: boolean | null;
-            /** @description `ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`. */
-            trackingStatus?: string | null;
             volumeChapterMap?: unknown;
         };
         /** @description Update setting request */
@@ -23491,6 +23559,43 @@ export interface operations {
             };
         };
     };
+    reset_release_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source ID */
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source reset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetReleaseSourceResponse"];
+                };
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_release_inbox: {
         parameters: {
             query?: {
@@ -27236,13 +27341,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SeriesTrackingDto"];
                 };
-            };
-            /** @description Invalid tracking_status */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Forbidden */
             403: {

@@ -174,8 +174,11 @@ export function ReleasesInbox() {
                           component={Link}
                           to={`/series/${entry.seriesId}#releases`}
                           size="sm"
+                          lineClamp={1}
                         >
-                          {entry.seriesId.slice(0, 8)}…
+                          {entry.seriesTitle.length > 0
+                            ? entry.seriesTitle
+                            : `${entry.seriesId.slice(0, 8)}…`}
                         </Anchor>
                       </Table.Td>
                       <Table.Td>

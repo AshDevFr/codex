@@ -90,7 +90,6 @@ pub async fn get_series_tracking(
     request_body = UpdateSeriesTrackingRequest,
     responses(
         (status = 200, description = "Tracking config updated", body = SeriesTrackingDto),
-        (status = 400, description = "Invalid tracking_status"),
         (status = 404, description = "Series not found"),
         (status = 403, description = "Forbidden"),
     ),
@@ -138,7 +137,6 @@ pub async fn update_series_tracking(
 
     let update = TrackingUpdate {
         tracked: request.tracked,
-        tracking_status: request.tracking_status,
         track_chapters: request.track_chapters,
         track_volumes: request.track_volumes,
         latest_known_chapter: request.latest_known_chapter,
@@ -153,14 +151,7 @@ pub async fn update_series_tracking(
 
     let row = SeriesTrackingRepository::upsert(&state.db, series_id, update)
         .await
-        .map_err(|e| {
-            // Surface validation errors (e.g., invalid tracking_status) as 400.
-            if e.to_string().contains("invalid tracking_status") {
-                ApiError::BadRequest(e.to_string())
-            } else {
-                ApiError::Internal(format!("Failed to update tracking: {}", e))
-            }
-        })?;
+        .map_err(|e| ApiError::Internal(format!("Failed to update tracking: {}", e)))?;
 
     let event = EntityChangeEvent {
         event: EntityEvent::SeriesUpdated {

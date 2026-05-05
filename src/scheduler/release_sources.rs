@@ -244,14 +244,55 @@ fn derive_url_hint(source: &crate::db::entities::release_sources::Model) -> Stri
     source.plugin_id.clone()
 }
 
+/// Outcome of an `enqueue_poll_now` call.
+#[derive(Debug, Clone, Copy)]
+pub struct EnqueuePollOutcome {
+    /// The ID of the task — either the freshly enqueued one or the
+    /// in-flight task we coalesced onto.
+    pub task_id: Uuid,
+    /// `true` when a pending/processing task already existed for this
+    /// source and we returned its ID instead of enqueuing a new one.
+    pub coalesced: bool,
+}
+
 /// Wrapper for callers (e.g., HTTP handlers) that want to enqueue a poll
 /// directly instead of waiting for the scheduler tick.
-pub async fn enqueue_poll_now(db: &DatabaseConnection, source_id: Uuid) -> Result<Uuid> {
+///
+/// **Dedup**: if a `poll_release_source` task for the same `source_id` is
+/// already pending or processing, returns that task's ID instead of
+/// enqueuing another one. This guards against the "click Poll now twice
+/// and only one finishes" footgun: with a worker pool size > 1, two
+/// independent tasks for the same source would race on `last_summary` /
+/// `last_polled_at` writes and overlap upstream fetches. Coalescing onto
+/// the in-flight task gives the user the same UX (their click acks) and
+/// keeps the source's state coherent.
+pub async fn enqueue_poll_now(
+    db: &DatabaseConnection,
+    source_id: Uuid,
+) -> Result<EnqueuePollOutcome> {
+    if let Some(existing) = TaskRepository::find_pending_or_processing_by_param(
+        db,
+        "poll_release_source",
+        "source_id",
+        &source_id.to_string(),
+    )
+    .await
+    .context("Failed to check for in-flight poll task")?
+    {
+        return Ok(EnqueuePollOutcome {
+            task_id: existing,
+            coalesced: true,
+        });
+    }
+
     let task_type = TaskType::PollReleaseSource { source_id };
     let task_id = TaskRepository::enqueue(db, task_type, None)
         .await
         .context("Failed to enqueue PollReleaseSource task")?;
-    Ok(task_id)
+    Ok(EnqueuePollOutcome {
+        task_id,
+        coalesced: false,
+    })
 }
 
 #[cfg(test)]

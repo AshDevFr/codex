@@ -18,8 +18,6 @@ pub struct Model {
     pub series_id: Uuid,
     /// Whether release tracking is enabled for this series.
     pub tracked: bool,
-    /// 'ongoing' | 'complete' | 'hiatus' | 'cancelled' | 'unknown'.
-    pub tracking_status: String,
     pub track_chapters: bool,
     pub track_volumes: bool,
     /// Latest external chapter (decimal handles 12.5, 110.1, etc.).
@@ -59,32 +57,3 @@ impl Related<super::series::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
-
-/// Canonical strings for `tracking_status`.
-pub mod tracking_status {
-    pub const ONGOING: &str = "ongoing";
-    pub const COMPLETE: &str = "complete";
-    pub const HIATUS: &str = "hiatus";
-    pub const CANCELLED: &str = "cancelled";
-    pub const UNKNOWN: &str = "unknown";
-
-    pub fn is_valid(s: &str) -> bool {
-        matches!(s, ONGOING | COMPLETE | HIATUS | CANCELLED | UNKNOWN)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tracking_status_validates_known_values() {
-        assert!(tracking_status::is_valid("ongoing"));
-        assert!(tracking_status::is_valid("complete"));
-        assert!(tracking_status::is_valid("hiatus"));
-        assert!(tracking_status::is_valid("cancelled"));
-        assert!(tracking_status::is_valid("unknown"));
-        assert!(!tracking_status::is_valid("paused"));
-        assert!(!tracking_status::is_valid(""));
-    }
-}

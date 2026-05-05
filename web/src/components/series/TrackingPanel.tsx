@@ -8,7 +8,6 @@ import {
   Divider,
   Group,
   NumberInput,
-  Select,
   Stack,
   Switch,
   Text,
@@ -37,14 +36,6 @@ interface TrackingPanelProps {
   /** When false, shows read-only state (used for users without SeriesWrite). */
   canEdit: boolean;
 }
-
-const STATUS_OPTIONS = [
-  { value: "unknown", label: "Unknown" },
-  { value: "ongoing", label: "Ongoing" },
-  { value: "complete", label: "Complete" },
-  { value: "hiatus", label: "Hiatus" },
-  { value: "cancelled", label: "Cancelled" },
-];
 
 /**
  * Inline panel on the series detail page for release-tracking config.
@@ -145,45 +136,33 @@ export function TrackingPanel({ seriesId, canEdit }: TrackingPanelProps) {
           <Stack gap="sm" mt="xs">
             {tracking?.tracked && (
               <>
-                <Group grow align="flex-start">
-                  <Select
-                    label="Status"
-                    value={tracking.trackingStatus}
-                    onChange={(value) => {
-                      if (value)
-                        updateTracking.mutate({ trackingStatus: value });
-                    }}
-                    data={STATUS_OPTIONS}
-                    disabled={!canEdit}
-                  />
-                  <Stack gap={4}>
-                    <Text size="sm" fw={500}>
-                      Announce
-                    </Text>
-                    <Group gap="md">
-                      <Switch
-                        label="Chapters"
-                        checked={tracking.trackChapters}
-                        onChange={(e) =>
-                          updateTracking.mutate({
-                            trackChapters: e.currentTarget.checked,
-                          })
-                        }
-                        disabled={!canEdit}
-                      />
-                      <Switch
-                        label="Volumes"
-                        checked={tracking.trackVolumes}
-                        onChange={(e) =>
-                          updateTracking.mutate({
-                            trackVolumes: e.currentTarget.checked,
-                          })
-                        }
-                        disabled={!canEdit}
-                      />
-                    </Group>
-                  </Stack>
-                </Group>
+                <Stack gap={4}>
+                  <Text size="sm" fw={500}>
+                    Announce
+                  </Text>
+                  <Group gap="md">
+                    <Switch
+                      label="Chapters"
+                      checked={tracking.trackChapters}
+                      onChange={(e) =>
+                        updateTracking.mutate({
+                          trackChapters: e.currentTarget.checked,
+                        })
+                      }
+                      disabled={!canEdit}
+                    />
+                    <Switch
+                      label="Volumes"
+                      checked={tracking.trackVolumes}
+                      onChange={(e) =>
+                        updateTracking.mutate({
+                          trackVolumes: e.currentTarget.checked,
+                        })
+                      }
+                      disabled={!canEdit}
+                    />
+                  </Group>
+                </Stack>
 
                 <Group grow>
                   <NumberInput

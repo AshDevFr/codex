@@ -28,6 +28,7 @@ function entry(over: Partial<ReleaseLedgerEntry> = {}): ReleaseLedgerEntry {
   return {
     id: "ent-1",
     seriesId: "00000000-0000-0000-0000-000000000001",
+    seriesTitle: "Solo Leveling",
     sourceId: "11111111-1111-1111-1111-111111111111",
     externalReleaseId: "ext-1",
     payloadUrl: "https://example.com/r/1",
@@ -73,7 +74,17 @@ describe("ReleasesInbox", () => {
     await waitFor(() => {
       expect(screen.getByText("GroupZ")).toBeInTheDocument();
     });
+    // Series column should show the human title, not a sliced UUID.
+    expect(screen.getByText("Solo Leveling")).toBeInTheDocument();
     expect(useReleaseAnnouncementsStore.getState().unseenCount).toBe(0);
+  });
+
+  it("falls back to a truncated UUID when the series title is empty", async () => {
+    list.mockResolvedValueOnce(paginated([entry({ seriesTitle: "" })]));
+    renderWithProviders(<ReleasesInbox />);
+    await waitFor(() => {
+      expect(screen.getByText(/^00000000…$/)).toBeInTheDocument();
+    });
   });
 
   it("shows empty-state copy when no entries match", async () => {

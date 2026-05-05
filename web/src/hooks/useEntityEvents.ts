@@ -352,6 +352,14 @@ function handleEntityEvent(
       break;
     }
 
+    case "release_source_polled": {
+      // A release source's poll task finished; refresh the Release tracking
+      // settings list so users see updated last_polled_at / last_summary
+      // / status without manually reloading. Cheap: one query invalidate.
+      queryClient.invalidateQueries({ queryKey: ["release-sources"] });
+      break;
+    }
+
     default:
       log("Unknown event type:", event);
   }

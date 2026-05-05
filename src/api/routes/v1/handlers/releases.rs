@@ -28,7 +28,8 @@ use super::super::dto::common::{
 };
 use super::super::dto::release::{
     PollNowResponse, ReleaseLedgerEntryDto, ReleaseLedgerListResponse, ReleaseSourceDto,
-    ReleaseSourceListResponse, UpdateReleaseLedgerEntryRequest, UpdateReleaseSourceRequest,
+    ReleaseSourceListResponse, ResetReleaseSourceResponse, UpdateReleaseLedgerEntryRequest,
+    UpdateReleaseSourceRequest,
 };
 use super::paginated_response;
 use crate::api::{
@@ -42,6 +43,40 @@ use crate::db::repositories::{
     ReleaseSourceUpdate, SeriesRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent};
+
+/// Hydrate ledger rows with series titles via a single batched lookup.
+///
+/// The DTO carries `series_title` so the inbox UI can render a human label
+/// without a follow-up call. We do this in the handler (rather than a SQL
+/// JOIN in the repo) to keep the repository surface narrow and reuse the
+/// existing `SeriesRepository::get_by_ids` batch query.
+async fn hydrate_ledger_dtos(
+    db: &sea_orm::DatabaseConnection,
+    rows: Vec<crate::db::entities::release_ledger::Model>,
+) -> Result<Vec<ReleaseLedgerEntryDto>, ApiError> {
+    let mut series_ids: Vec<Uuid> = rows.iter().map(|r| r.series_id).collect();
+    series_ids.sort_unstable();
+    series_ids.dedup();
+
+    let title_by_id: std::collections::HashMap<Uuid, String> = if series_ids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        SeriesRepository::get_by_ids(db, &series_ids)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to load series titles: {}", e)))?
+            .into_iter()
+            .map(|s| (s.id, s.name))
+            .collect()
+    };
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let title = title_by_id.get(&row.series_id).cloned().unwrap_or_default();
+            ReleaseLedgerEntryDto::from_model_with_series_title(row, title)
+        })
+        .collect())
+}
 
 // =============================================================================
 // Per-series ledger
@@ -99,7 +134,7 @@ pub async fn list_series_releases(
 ) -> Result<Response, ApiError> {
     auth.require_permission(&Permission::SeriesRead)?;
 
-    SeriesRepository::get_by_id(&state.db, series_id)
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
@@ -152,7 +187,12 @@ pub async fn list_series_releases(
         total.div_ceil(page_size)
     };
 
-    let dtos: Vec<ReleaseLedgerEntryDto> = rows.into_iter().map(Into::into).collect();
+    // All rows belong to the same series, so we can reuse the title we
+    // already loaded for the existence check rather than re-fetching it.
+    let dtos: Vec<ReleaseLedgerEntryDto> = rows
+        .into_iter()
+        .map(|row| ReleaseLedgerEntryDto::from_model_with_series_title(row, series.name.clone()))
+        .collect();
     let base_path = format!("/api/v1/series/{}/releases", series_id);
     let mut builder = PaginationLinkBuilder::new(&base_path, page, page_size, total_pages);
     if let Some(ref s) = params.state {
@@ -236,7 +276,7 @@ pub async fn list_release_inbox(
         total.div_ceil(page_size)
     };
 
-    let dtos: Vec<ReleaseLedgerEntryDto> = rows.into_iter().map(Into::into).collect();
+    let dtos = hydrate_ledger_dtos(&state.db, rows).await?;
     let mut builder = PaginationLinkBuilder::new("/api/v1/releases", page, page_size, total_pages);
     if let Some(ref s) = params.state {
         builder = builder.with_param("state", s);
@@ -379,14 +419,19 @@ async fn update_state_internal(
             }
         })?;
 
-    // Look up the series to get library_id for the SSE event payload. If the
-    // series was deleted concurrently we still return the updated row -
-    // dropping the event is safe.
-    if let Ok(Some(series)) = SeriesRepository::get_by_id(&state.db, series_id).await {
+    // Look up the series for both the SSE event (library_id) and the DTO
+    // (series_title). If the series was deleted concurrently we still return
+    // the updated row, dropping the event and using an empty title — the
+    // ledger row's series_id remains valid for navigation.
+    let series = SeriesRepository::get_by_id(&state.db, series_id)
+        .await
+        .ok()
+        .flatten();
+    if let Some(ref s) = series {
         let event = EntityChangeEvent {
             event: EntityEvent::SeriesUpdated {
                 series_id,
-                library_id: series.library_id,
+                library_id: s.library_id,
                 fields: Some(vec!["releases".to_string()]),
             },
             timestamp: Utc::now(),
@@ -395,7 +440,10 @@ async fn update_state_internal(
         let _ = state.event_broadcaster.emit(event);
     }
 
-    Ok(Json(updated.into()))
+    let title = series.map(|s| s.name).unwrap_or_default();
+    Ok(Json(ReleaseLedgerEntryDto::from_model_with_series_title(
+        updated, title,
+    )))
 }
 
 // =============================================================================
@@ -543,17 +591,84 @@ pub async fn poll_release_source_now(
         )));
     }
 
-    let task_id = crate::scheduler::release_sources::enqueue_poll_now(&state.db, source_id)
+    let outcome = crate::scheduler::release_sources::enqueue_poll_now(&state.db, source_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to enqueue poll task: {}", e)))?;
 
+    let (status, message) = if outcome.coalesced {
+        (
+            "already_running".to_string(),
+            format!(
+                "A poll for this source is already running (task_id={}); coalesced",
+                outcome.task_id
+            ),
+        )
+    } else {
+        (
+            "enqueued".to_string(),
+            format!("Poll task enqueued (task_id={})", outcome.task_id),
+        )
+    };
+
     Ok((
         StatusCode::ACCEPTED,
-        Json(PollNowResponse {
-            status: "enqueued".to_string(),
-            message: format!("Poll task enqueued (task_id={})", task_id),
-        }),
+        Json(PollNowResponse { status, message }),
     ))
+}
+
+/// Reset a release source to a clean slate.
+///
+/// Deletes every `release_ledger` row owned by the source and clears the
+/// source's transient poll state (`etag`, `last_polled_at`, `last_error`,
+/// `last_error_at`, `last_summary`). User-managed fields (`enabled`,
+/// `poll_interval_s`, `display_name`, `config`) are preserved.
+///
+/// Intended for testing/troubleshooting: after a reset, the next poll
+/// fetches the upstream feed without an `If-None-Match` header (so no 304
+/// short-circuit) and re-records every release as `announced`. Does NOT
+/// auto-enqueue a poll — call `POST /release-sources/{id}/poll-now` after
+/// resetting if you want immediate re-fetch.
+#[utoipa::path(
+    post,
+    path = "/api/v1/release-sources/{source_id}/reset",
+    params(
+        ("source_id" = Uuid, Path, description = "Source ID")
+    ),
+    responses(
+        (status = 200, description = "Source reset", body = ResetReleaseSourceResponse),
+        (status = 404, description = "Source not found"),
+        (status = 403, description = "PluginsManage permission required"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Releases"
+)]
+pub async fn reset_release_source(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+    Path(source_id): Path<Uuid>,
+) -> Result<Json<ResetReleaseSourceResponse>, ApiError> {
+    auth.require_permission(&Permission::PluginsManage)?;
+
+    // Confirm existence to return a clean 404.
+    ReleaseSourceRepository::get_by_id(&state.db, source_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch source: {}", e)))?
+        .ok_or_else(|| ApiError::NotFound("Release source not found".to_string()))?;
+
+    let deleted = ReleaseLedgerRepository::delete_by_source(&state.db, source_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to clear ledger: {}", e)))?;
+
+    ReleaseSourceRepository::clear_poll_state(&state.db, source_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to reset source state: {}", e)))?;
+
+    Ok(Json(ResetReleaseSourceResponse {
+        deleted_ledger_entries: deleted,
+    }))
 }
 
 // =============================================================================

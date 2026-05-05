@@ -6,7 +6,7 @@ mod common;
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::release::{
     PollNowResponse, ReleaseLedgerEntryDto, ReleaseSourceDto, ReleaseSourceListResponse,
-    UpdateReleaseLedgerEntryRequest, UpdateReleaseSourceRequest,
+    ResetReleaseSourceResponse, UpdateReleaseLedgerEntryRequest, UpdateReleaseSourceRequest,
 };
 use codex::db::ScanningStrategy;
 use codex::db::entities::release_sources::kind;
@@ -145,6 +145,10 @@ async fn list_series_releases_returns_entries_for_series() {
     assert_eq!(body.data.len(), 2);
     for entry in &body.data {
         assert_eq!(entry.series_id, series);
+        assert_eq!(
+            entry.series_title, "Series",
+            "DTO should carry the series title joined from the series row"
+        );
     }
 }
 
@@ -274,6 +278,10 @@ async fn inbox_filters_by_series() {
     let body = body.unwrap();
     assert_eq!(body.total, 1);
     assert_eq!(body.data[0].external_release_id, "rel-1");
+    assert_eq!(
+        body.data[0].series_title, "Series",
+        "inbox DTO should carry the series title for cross-series rendering"
+    );
 }
 
 // =============================================================================
@@ -551,6 +559,60 @@ async fn poll_now_enqueues_task_when_source_exists() {
 }
 
 #[tokio::test]
+async fn poll_now_dedupes_concurrent_requests_onto_in_flight_task() {
+    // Regression: clicking "Poll now" twice quickly previously enqueued
+    // two independent tasks. With worker_count >= 2 they'd race on
+    // last_summary / last_polled_at writes and overlap upstream fetches.
+    // We now coalesce onto the existing pending/processing task.
+    use codex::db::repositories::TaskRepository;
+
+    let (db, _temp) = setup_test_db().await;
+    let id = make_source(&db, "nyaa:user:tsuna69").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app1 = create_test_router(state.clone()).await;
+    let app2 = create_test_router(state).await;
+
+    // First click: enqueues a fresh task.
+    let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/poll-now", id), &token);
+    let (s1, b1): (StatusCode, Option<PollNowResponse>) = make_json_request(app1, req).await;
+    assert_eq!(s1, StatusCode::ACCEPTED);
+    let b1 = b1.unwrap();
+    assert_eq!(b1.status, "enqueued");
+
+    // Second click while the first is still pending: coalesce.
+    let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/poll-now", id), &token);
+    let (s2, b2): (StatusCode, Option<PollNowResponse>) = make_json_request(app2, req).await;
+    assert_eq!(s2, StatusCode::ACCEPTED);
+    let b2 = b2.unwrap();
+    assert_eq!(
+        b2.status, "already_running",
+        "second poll-now must coalesce onto the in-flight task"
+    );
+    assert!(
+        b2.message.contains("coalesced"),
+        "human-readable message should explain the coalesce"
+    );
+
+    // Only one task should sit on the queue, not two.
+    let pending = TaskRepository::list(
+        &db,
+        Some("pending".to_string()),
+        Some("poll_release_source".to_string()),
+        Some(10),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        pending.len(),
+        1,
+        "duplicate poll-now must not stack tasks; got {} pending",
+        pending.len()
+    );
+}
+
+#[tokio::test]
 async fn poll_now_conflicts_when_source_disabled() {
     use codex::db::repositories::{ReleaseSourceRepository, ReleaseSourceUpdate};
 
@@ -602,6 +664,129 @@ async fn poll_now_requires_plugins_manage() {
     let app = create_test_router(state).await;
 
     let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/poll-now", id), &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// =============================================================================
+// POST /release-sources/{id}/reset
+// =============================================================================
+
+#[tokio::test]
+async fn reset_clears_ledger_rows_and_poll_state() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let other_source = make_source(&db, "nyaa:user:other").await;
+
+    record_announced(&db, series, source, "rel-1").await;
+    record_announced(&db, series, source, "rel-2").await;
+    // A row on a different source must NOT be touched.
+    record_announced(&db, series, other_source, "rel-keep").await;
+
+    // Seed poll state on the target source so we can prove it's cleared.
+    ReleaseSourceRepository::record_poll_success(
+        &db,
+        source,
+        chrono::Utc::now(),
+        Some("\"etag-1\"".to_string()),
+        Some("Fetched 2 items".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/reset", source), &token);
+    let (status, body): (StatusCode, Option<ResetReleaseSourceResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body.unwrap().deleted_ledger_entries, 2);
+
+    // Target source: ledger rows gone, poll state cleared.
+    let after = ReleaseSourceRepository::get_by_id(&db, source)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(after.etag.is_none());
+    assert!(after.last_polled_at.is_none());
+    assert!(after.last_summary.is_none());
+
+    // Other source's row survives.
+    let surviving = ReleaseLedgerRepository::list_for_series(&db, series, None, 100, 0)
+        .await
+        .unwrap();
+    assert_eq!(surviving.len(), 1);
+    assert_eq!(surviving[0].source_id, other_source);
+    assert_eq!(surviving[0].external_release_id, "rel-keep");
+}
+
+#[tokio::test]
+async fn reset_preserves_user_managed_source_fields() {
+    use codex::db::repositories::ReleaseSourceUpdate;
+
+    let (db, _temp) = setup_test_db().await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+
+    // Admin disables the source and overrides the interval.
+    ReleaseSourceRepository::update(
+        &db,
+        source,
+        ReleaseSourceUpdate {
+            enabled: Some(false),
+            poll_interval_s: Some(900),
+            display_name: Some("Custom Name".to_string()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/reset", source), &token);
+    let (status, _): (StatusCode, Option<ResetReleaseSourceResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let after = ReleaseSourceRepository::get_by_id(&db, source)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!after.enabled, "user-set enabled flag must survive a reset");
+    assert_eq!(after.poll_interval_s, 900, "interval override survives");
+    assert_eq!(after.display_name, "Custom Name", "display name preserved");
+}
+
+#[tokio::test]
+async fn reset_404_when_source_missing() {
+    let (db, _temp) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = post_request_with_auth(
+        &format!("/api/v1/release-sources/{}/reset", Uuid::new_v4()),
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn reset_requires_plugins_manage() {
+    let (db, _temp) = setup_test_db().await;
+    let id = make_source(&db, "nyaa:user:tsuna69").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_reader_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = post_request_with_auth(&format!("/api/v1/release-sources/{}/reset", id), &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
