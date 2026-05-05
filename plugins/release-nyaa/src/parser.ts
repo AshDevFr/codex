@@ -35,6 +35,14 @@ export interface ParsedRssItem {
   title: string;
   /** Series-name guess after stripping volume/chapter/group/format tokens. */
   seriesGuess: string;
+  /**
+   * All alias candidates extracted from the series-name region. When the title
+   * uses `Title A / Title B` (a common 1r0n / LuCaZ convention for "JP name /
+   * EN name"), both halves are surfaced here so the matcher can score against
+   * either. For titles without a slash separator this is a single-element
+   * array equal to `[seriesGuess]`.
+   */
+  seriesGuessAliases: string[];
   /** Chapter number (decimals supported). Null if untyped. */
   chapter: number | null;
   /** Trailing chapter of a chapter range (e.g. `c126-142` → 126..142). */
@@ -119,62 +127,194 @@ function extractLeadingGroup(title: string): { rest: string; group: string | nul
 }
 
 /**
- * Pull a chapter / chapter-range out of the noise.
- *
- * Accepts:
- *   - `c.143`, `ch.143`, `Chapter 143`, `chapter 143`
- *   - `c143`, `ch143` (no separator)
- *   - `c126-142` (range — we keep both ends)
- *   - decimals (`c.47.5`)
+ * Strip every `(...)` group from a string. Used to keep year ranges, uploader
+ * credits, and format-hint tags out of the chapter/volume tokenizer — those
+ * always live inside parentheses, so anything inside them must not be
+ * interpreted as release-info.
  */
-function extractChapter(s: string): { chapter: number | null; chapterRangeEnd: number | null } {
-  // Range: `c126-142` (also `ch.126-142`, `Chapter 126-142`)
-  const rangeRe = /\b(?:c|ch|chapter)\.?\s*([0-9]+(?:\.[0-9]+)?)\s*[-–]\s*([0-9]+(?:\.[0-9]+)?)\b/i;
-  const range = s.match(rangeRe);
-  if (range?.[1] && range[2]) {
-    const start = Number.parseFloat(range[1]);
-    const end = Number.parseFloat(range[2]);
-    if (Number.isFinite(start) && Number.isFinite(end)) {
-      return { chapter: start, chapterRangeEnd: end };
-    }
-  }
-  // Single: `c.143`, `c143`, `Chapter 143`. Exclude things like `c8000` that
-  // look like a resolution/codec by capping at 5 digits — Nyaa chapters
-  // seldom go above 9999.
-  const singleRe = /\b(?:c|ch|chapter)\.?\s*([0-9]{1,4}(?:\.[0-9]+)?)\b/i;
-  const single = s.match(singleRe);
-  if (single?.[1]) {
-    const n = Number.parseFloat(single[1]);
-    if (Number.isFinite(n)) return { chapter: n, chapterRangeEnd: null };
-  }
-  return { chapter: null, chapterRangeEnd: null };
+function stripParens(s: string): string {
+  return s.replace(/\([^)]*\)/g, " ");
 }
 
 /**
- * Pull a volume / volume-range out of the noise.
+ * Locate the start of the "release-info span" — the offset in `s` (which has
+ * already had `(...)` groups blanked) where chapter/volume tokens begin.
  *
- * Accepts:
- *   - `v01`, `v1`, `vol.1`, `vol 1`, `Volume 1`, `Vol. 1`
- *   - ranges: `v01-14`, `Vol. 1-14`
+ * Anchors, in priority order:
+ *   1. A `v##`, `vol.##`, `volume ##` token (with or without a range).
+ *   2. A bare numeric range with both sides at 3+ digits (`031-037`,
+ *      `001-069`). Two-digit forms are rejected to avoid false positives
+ *      inside series names (`30s`, `My 100`, etc.).
+ *   3. A `c##` / `ch.##` / `Chapter ##` token.
+ *
+ * Returns the index of the anchor, or -1 if no release-info is present (the
+ * whole string is then treated as a series name).
  */
-function extractVolume(s: string): { volume: number | null; volumeRangeEnd: number | null } {
-  // Range first.
-  const rangeRe = /\b(?:v|vol|volume)\.?\s*([0-9]+)\s*[-–]\s*([0-9]+)\b/i;
-  const range = s.match(rangeRe);
-  if (range?.[1] && range[2]) {
-    const start = Number.parseInt(range[1], 10);
-    const end = Number.parseInt(range[2], 10);
-    if (Number.isFinite(start) && Number.isFinite(end)) {
-      return { volume: start, volumeRangeEnd: end };
+function findReleaseInfoStart(s: string): number {
+  const anchors: RegExp[] = [
+    /\b(?:v|vol|volume)\.?\s*[0-9]+/i,
+    /\b[0-9]{3,4}\s*[-–]\s*[0-9]{3,4}\b/,
+    /\b(?:c|ch|chapter)\.?\s*[0-9]+/i,
+  ];
+  let best = -1;
+  for (const re of anchors) {
+    const m = s.match(re);
+    if (m && m.index !== undefined && (best === -1 || m.index < best)) {
+      best = m.index;
     }
   }
-  const singleRe = /\b(?:v|vol|volume)\.?\s*([0-9]{1,4})\b/i;
-  const single = s.match(singleRe);
-  if (single?.[1]) {
-    const n = Number.parseInt(single[1], 10);
-    if (Number.isFinite(n)) return { volume: n, volumeRangeEnd: null };
+  return best;
+}
+
+/**
+ * Spread tokens are the comma- / `+`- / whitespace- / `as`-separated atoms
+ * that make up the release-info span:
+ *
+ *   - `volume`     : single volume number      (`v01`, `Vol. 13`)
+ *   - `volRange`   : volume range              (`v01-14`)
+ *   - `chapter`    : single chapter number     (`c143`, bare `70`)
+ *   - `chapRange`  : chapter range             (`c126-142`, bare `031-037`)
+ *
+ * The tokenizer scans left-to-right and consumes one token per match. Bare
+ * numeric tokens are only accepted *after* the release-info anchor — see
+ * `findReleaseInfoStart` — so series-name digits don't leak in.
+ */
+type SpreadToken =
+  | { kind: "volume"; value: number }
+  | { kind: "volRange"; start: number; end: number }
+  | { kind: "chapter"; value: number }
+  | { kind: "chapRange"; start: number; end: number };
+
+/**
+ * Tokenize the release-info span into volume/chapter atoms.
+ *
+ * `s` should be the parens-stripped substring starting at the release-info
+ * anchor. The tokenizer is intentionally permissive about separators (commas,
+ * `+`, whitespace, `as`) — we just consume tokens greedily and aggregate
+ * downstream.
+ */
+function tokenizeReleaseInfo(s: string): SpreadToken[] {
+  const tokens: SpreadToken[] = [];
+
+  // Match either a prefixed volume/chapter token, or a bare numeric range /
+  // single. The order in the alternation matters: ranges must be tried before
+  // single tokens, and prefixed forms must be tried before bare numerics so
+  // we don't mis-classify `v05` as bare-chapter `5`.
+  //
+  //   1. `v##-##` / `vol.##-##` / `volume ##-##`              → volRange
+  //   2. `v##` / `vol.##` / `volume ##`                       → volume
+  //   3. `c##.##-##.##` / `ch.##-##` / `Chapter ##-##`        → chapRange
+  //   4. `c##.##` / `ch.##` / `Chapter ##`                    → chapter
+  //   5. bare `###-###` (3+ digits each side)                 → chapRange
+  //   6. bare `##` (1+ digits) — only matches *after* the first anchor token
+  //      has been emitted, see `acceptShortBare` below. Lets us pick up
+  //      "extra" chapters expressed as short numerics (`+ 70`) without
+  //      promoting incidental name-region digits.
+  const tokenRe = new RegExp(
+    [
+      "\\b(?<vrs>v|vol|volume)\\.?\\s*([0-9]+)\\s*[-–]\\s*([0-9]+)\\b",
+      "\\b(?<vss>v|vol|volume)\\.?\\s*([0-9]+)\\b",
+      "\\b(?<crs>c|ch|chapter)\\.?\\s*([0-9]+(?:\\.[0-9]+)?)\\s*[-–]\\s*([0-9]+(?:\\.[0-9]+)?)\\b",
+      "\\b(?<css>c|ch|chapter)\\.?\\s*([0-9]+(?:\\.[0-9]+)?)\\b",
+      "\\b(?<brs>)([0-9]{3,4})\\s*[-–]\\s*([0-9]{3,4})\\b",
+      "\\b(?<bss>)([0-9]{1,4})\\b",
+    ].join("|"),
+    "gi",
+  );
+
+  for (;;) {
+    const m = tokenRe.exec(s);
+    if (m === null) break;
+    const groups = m.groups ?? {};
+    if (groups.vrs !== undefined) {
+      const start = Number.parseInt(m[2] ?? "", 10);
+      const end = Number.parseInt(m[3] ?? "", 10);
+      if (Number.isFinite(start) && Number.isFinite(end)) {
+        tokens.push({ kind: "volRange", start, end });
+      }
+      continue;
+    }
+    if (groups.vss !== undefined) {
+      const value = Number.parseInt(m[5] ?? "", 10);
+      if (Number.isFinite(value)) tokens.push({ kind: "volume", value });
+      continue;
+    }
+    if (groups.crs !== undefined) {
+      const start = Number.parseFloat(m[7] ?? "");
+      const end = Number.parseFloat(m[8] ?? "");
+      if (Number.isFinite(start) && Number.isFinite(end)) {
+        tokens.push({ kind: "chapRange", start, end });
+      }
+      continue;
+    }
+    if (groups.css !== undefined) {
+      const value = Number.parseFloat(m[10] ?? "");
+      if (Number.isFinite(value)) tokens.push({ kind: "chapter", value });
+      continue;
+    }
+    if (groups.brs !== undefined) {
+      const start = Number.parseInt(m[12] ?? "", 10);
+      const end = Number.parseInt(m[13] ?? "", 10);
+      if (Number.isFinite(start) && Number.isFinite(end)) {
+        tokens.push({ kind: "chapRange", start, end });
+      }
+      continue;
+    }
+    if (groups.bss !== undefined) {
+      const raw = m[15] ?? "";
+      const value = Number.parseInt(raw, 10);
+      if (!Number.isFinite(value)) continue;
+      // Only accept short (≤2 digit) bare numerics once we've already
+      // committed to a richer token; on its own a `42` is more likely a
+      // year fragment or noise than a chapter. 3+ digits is unambiguous in
+      // this corpus so we always accept it.
+      if (raw.length < 3 && tokens.length === 0) continue;
+      tokens.push({ kind: "chapter", value });
+    }
   }
-  return { volume: null, volumeRangeEnd: null };
+
+  return tokens;
+}
+
+/**
+ * Aggregate spread tokens into volume + chapter axes by taking min/max across
+ * each kind. Downstream matching just needs to know the span a release covers
+ * ("does this release include chapter X?") — a min..max window answers that
+ * question conservatively without picking a single canonical token.
+ */
+function aggregateTokens(tokens: SpreadToken[]): {
+  volume: number | null;
+  volumeRangeEnd: number | null;
+  chapter: number | null;
+  chapterRangeEnd: number | null;
+} {
+  let vMin: number | null = null;
+  let vMax: number | null = null;
+  let cMin: number | null = null;
+  let cMax: number | null = null;
+  for (const t of tokens) {
+    if (t.kind === "volume") {
+      vMin = vMin === null || t.value < vMin ? t.value : vMin;
+      vMax = vMax === null || t.value > vMax ? t.value : vMax;
+    } else if (t.kind === "volRange") {
+      vMin = vMin === null || t.start < vMin ? t.start : vMin;
+      vMax = vMax === null || t.end > vMax ? t.end : vMax;
+    } else if (t.kind === "chapter") {
+      cMin = cMin === null || t.value < cMin ? t.value : cMin;
+      cMax = cMax === null || t.value > cMax ? t.value : cMax;
+    } else {
+      cMin = cMin === null || t.start < cMin ? t.start : cMin;
+      cMax = cMax === null || t.end > cMax ? t.end : cMax;
+    }
+  }
+  return {
+    volume: vMin,
+    // Only emit a range-end when it actually differs from the start: a single
+    // volume is `volume=N, volumeRangeEnd=null`, matching the prior contract.
+    volumeRangeEnd: vMin !== null && vMax !== null && vMax !== vMin ? vMax : null,
+    chapter: cMin,
+    chapterRangeEnd: cMin !== null && cMax !== null && cMax !== cMin ? cMax : null,
+  };
 }
 
 /**
@@ -184,6 +324,7 @@ function extractVolume(s: string): { volume: number | null; volumeRangeEnd: numb
  *   - `(Digital)` → `digital`
  *   - `(JXL)` → `jxl`
  *   - `(Mag-Z)` / `(Magazine)` → `magazine`
+ *   - `(Omnibus Edition)` / `(Omnibus)` → `omnibus`
  *   - `(2024)` is a year, ignored (we'd need it for naming dedup but not for filtering)
  */
 function extractFormatHints(s: string): Record<string, boolean> {
@@ -200,47 +341,52 @@ function extractFormatHints(s: string): Record<string, boolean> {
     else if (tag === "webtoon") hints.webtoon = true;
     else if (tag === "bw" || tag === "b&w") hints.bw = true;
     else if (tag === "color") hints.color = true;
+    else if (tag === "omnibus" || tag === "omnibus edition") hints.omnibus = true;
   }
   return hints;
 }
 
 /**
- * Heuristic: strip everything that looks like a chapter/volume/format token,
- * a parenthesized tag, or a leading `[Group]` to expose a clean series-name
- * guess. The remaining string is alias-normalized downstream by the matcher.
+ * Strip a trailing `[...]` token (e.g. `[Oak]` at the end of some
+ * danke-Empire releases). Mirrors `extractLeadingGroup` but at the tail and
+ * without surfacing the value — trailing brackets are credit, not a parsing
+ * signal we currently use.
  */
-function extractSeriesGuess(input: string, group: string | null): string {
-  let s = input;
-
-  // Drop everything in (...) — format hints, year, group repeated.
-  s = s.replace(/\([^)]*\)/g, " ");
-
-  // Drop chapter/volume tokens (single or range).
-  s = s.replace(
-    /\b(?:c|ch|chapter)\.?\s*[0-9]+(?:\.[0-9]+)?(?:\s*[-–]\s*[0-9]+(?:\.[0-9]+)?)?\b/gi,
-    " ",
-  );
-  s = s.replace(/\b(?:v|vol|volume)\.?\s*[0-9]+(?:\s*[-–]\s*[0-9]+)?\b/gi, " ");
-
-  // Drop trailing/leading separator dashes used as titling glue (e.g.
-  // `Boruto - Two Blue Vortex - Volume 02` → `Boruto Two Blue Vortex`).
-  s = s.replace(/\s+[-–—]\s+/g, " ");
-
-  // If the leading group token survived, drop it.
-  if (group) {
-    const groupRe = new RegExp(`\\[\\s*${escapeRegex(group)}\\s*\\]`, "gi");
-    s = s.replace(groupRe, " ");
-  }
-
-  // Drop misc dotted-extension tokens (filenames sometimes leak through).
-  s = s.replace(/\b\w+\.(?:cbz|cbr|epub|pdf|mobi|7z|zip)\b/gi, " ");
-
-  // Collapse whitespace.
-  return s.replace(/\s+/g, " ").trim();
+function stripTrailingBracket(s: string): string {
+  return s.replace(/\s*\[[^\]]+\]\s*$/g, "").trim();
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * Take the "name region" of a release title (everything before the first
+ * release-info anchor, with parens already stripped) and reduce it to a clean
+ * primary guess plus alias candidates.
+ *
+ * The name region may still contain:
+ *   - subtitle dashes: `Boruto - Two Blue Vortex` → joined with spaces
+ *   - alias separator: `Ao no Hako / Blue Box` → both halves returned
+ *
+ * Apostrophes and hyphenated words (`Amagami-san`, `Chillin'`) are preserved
+ * — the host's `normalize_alias` strips them at match time, but we want to
+ * keep them readable in logs and admin surfaces.
+ */
+function extractSeriesAliases(nameRegion: string): {
+  primary: string;
+  aliases: string[];
+} {
+  // Subtitle dashes: ` - `, ` – `, ` — ` are titling glue, not separators.
+  // Joining the halves with a single space mirrors the prior behavior the
+  // existing tests assert (`Boruto Two Blue Vortex`).
+  const dashJoined = nameRegion.replace(/\s+[-–—]\s+/g, " ");
+
+  // Alias separator. Only ` / ` (with whitespace on both sides) splits — bare
+  // `/` survives so e.g. `AC/DC Tales` stays one alias.
+  const parts = dashJoined
+    .split(/\s+\/\s+/)
+    .map((p) => p.replace(/\s+/g, " ").trim())
+    .filter((p) => p.length > 0);
+
+  if (parts.length === 0) return { primary: "", aliases: [] };
+  return { primary: parts[0] ?? "", aliases: parts };
 }
 
 /**
@@ -253,6 +399,7 @@ function escapeRegex(s: string): string {
  */
 export function parseTitle(title: string): {
   seriesGuess: string;
+  seriesGuessAliases: string[];
   chapter: number | null;
   chapterRangeEnd: number | null;
   volume: number | null;
@@ -264,13 +411,23 @@ export function parseTitle(title: string): {
   if (trimmed.length === 0) return null;
 
   const { rest, group } = extractLeadingGroup(trimmed);
-  const { chapter, chapterRangeEnd } = extractChapter(rest);
-  const { volume, volumeRangeEnd } = extractVolume(rest);
   const formatHints = extractFormatHints(rest);
-  const seriesGuess = extractSeriesGuess(rest, group);
+
+  // Blank out `(...)` groups so years and uploader credits can't be picked up
+  // by the release-info tokenizer, then split into name region / release-info
+  // region at the first chapter/volume anchor.
+  const flattened = stripTrailingBracket(stripParens(rest));
+  const anchor = findReleaseInfoStart(flattened);
+  const nameRegion = anchor === -1 ? flattened : flattened.slice(0, anchor);
+  const infoRegion = anchor === -1 ? "" : flattened.slice(anchor);
+
+  const tokens = tokenizeReleaseInfo(infoRegion);
+  const { volume, volumeRangeEnd, chapter, chapterRangeEnd } = aggregateTokens(tokens);
+  const { primary, aliases } = extractSeriesAliases(nameRegion);
 
   return {
-    seriesGuess,
+    seriesGuess: primary,
+    seriesGuessAliases: aliases.length > 0 ? aliases : [primary],
     chapter,
     chapterRangeEnd,
     volume,
@@ -346,6 +503,7 @@ export function parseItem(itemXml: string): ParsedRssItem | null {
     externalReleaseId: deriveExternalReleaseId(guid, link, infoHash, title, pubDate),
     title,
     seriesGuess: parsedTitle.seriesGuess,
+    seriesGuessAliases: parsedTitle.seriesGuessAliases,
     chapter: parsedTitle.chapter,
     chapterRangeEnd: parsedTitle.chapterRangeEnd,
     volume: parsedTitle.volume,
