@@ -11,25 +11,30 @@
 //! and validation.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::{debug, error, warn};
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use super::protocol::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, ReleaseSourceCapability, RequestId, error_codes,
     methods,
 };
+use crate::db::entities::release_sources::kind as source_kind;
 use crate::db::repositories::{
-    ReleaseLedgerRepository, ReleaseSourceRepository, SeriesAliasRepository,
+    NewReleaseSource, ReleaseLedgerRepository, ReleaseSourceRepository, SeriesAliasRepository,
     SeriesExternalIdRepository, SeriesTrackingRepository, TrackingUpdate,
 };
+use crate::scheduler::Scheduler;
 use crate::services::release::candidate::ReleaseCandidate;
 use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
+use crate::services::release::schedule::{DEFAULT_POLL_INTERVAL_S, MIN_POLL_INTERVAL_S};
 
 /// Default page size for `releases/list_tracked` when the caller doesn't
 /// specify one. Matches the Phase 3 risk-mitigation note.
@@ -55,6 +60,9 @@ pub struct ReleasesRequestHandler {
     /// Optional event broadcaster used to emit `ReleaseAnnounced` events on
     /// successful (non-deduped) `releases/record` inserts.
     event_broadcaster: Option<std::sync::Arc<crate::events::EventBroadcaster>>,
+    /// Optional scheduler reference used by `releases/register_sources` to
+    /// reconcile schedules immediately after the source set changes.
+    scheduler: Option<Arc<Mutex<Scheduler>>>,
 }
 
 impl ReleasesRequestHandler {
@@ -68,6 +76,7 @@ impl ReleasesRequestHandler {
             plugin_name,
             capability,
             event_broadcaster: None,
+            scheduler: None,
         }
     }
 
@@ -78,6 +87,13 @@ impl ReleasesRequestHandler {
         broadcaster: std::sync::Arc<crate::events::EventBroadcaster>,
     ) -> Self {
         self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Attach a scheduler reference so `releases/register_sources` reconciles
+    /// schedules without waiting for a server restart. Builder-style.
+    pub fn with_scheduler(mut self, scheduler: Arc<Mutex<Scheduler>>) -> Self {
+        self.scheduler = Some(scheduler);
         self
     }
 
@@ -97,6 +113,7 @@ impl ReleasesRequestHandler {
             methods::RELEASES_RECORD => self.handle_record(request).await,
             methods::RELEASES_SOURCE_STATE_GET => self.handle_state_get(request).await,
             methods::RELEASES_SOURCE_STATE_SET => self.handle_state_set(request).await,
+            methods::RELEASES_REGISTER_SOURCES => self.handle_register_sources(request).await,
             _ => JsonRpcResponse::error(
                 Some(id),
                 JsonRpcError::new(
@@ -490,6 +507,171 @@ impl ReleasesRequestHandler {
         }
     }
 
+    /// Replace the set of `release_sources` rows owned by this plugin.
+    ///
+    /// This is the materialization endpoint plugins call from `onInitialize`
+    /// (and on any subsequent config change, which is delivered via plugin
+    /// process restart). Each call carries the plugin's full desired-state
+    /// list:
+    ///
+    /// - **Upsert** every entry on `(plugin_id, source_key)`. New rows are
+    ///   inserted; existing rows have only the plugin-owned descriptive
+    ///   fields refreshed. User-managed fields (`enabled`, `poll_interval_s`)
+    ///   survive across re-registrations so an admin's interval override or
+    ///   disable toggle isn't trampled when the plugin restarts.
+    /// - **Prune** rows owned by this plugin whose `source_key` is not in the
+    ///   request. Deletes cascade to `release_ledger`. An empty `sources`
+    ///   list wipes the plugin's row set, which is the correct behavior when
+    ///   an admin clears the plugin's config.
+    /// - **Reconcile** the scheduler so newly-registered sources start polling
+    ///   on their next cron tick (and pruned ones stop). Best-effort: if the
+    ///   reconcile fails (or no scheduler is wired), the call still succeeds
+    ///   because the row writes are persisted.
+    ///
+    /// `kind` is validated against the `release_source` capability the plugin
+    /// declared in its manifest, so a plugin can't register sources of a
+    /// `kind` outside its declared capability surface. `poll_interval_s` is
+    /// taken from the request only when creating new rows; updates ignore it.
+    async fn handle_register_sources(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
+        let id = request.id.clone();
+        let params: RegisterSourcesRequest = match parse_params(&request.params) {
+            Ok(p) => p,
+            Err(resp) => return resp.with_id(id),
+        };
+
+        // Validate every source up front so we don't write partial state on a
+        // bad request.
+        for src in &params.sources {
+            if src.source_key.trim().is_empty() {
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(error_codes::INVALID_PARAMS, "source_key cannot be empty"),
+                );
+            }
+            if src.display_name.trim().is_empty() {
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(error_codes::INVALID_PARAMS, "display_name cannot be empty"),
+                );
+            }
+            if !source_kind::is_valid(&src.kind) {
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(
+                        error_codes::INVALID_PARAMS,
+                        format!("invalid kind: {}", src.kind),
+                    ),
+                );
+            }
+            if !self.capability.kinds.iter().any(|k| k.as_str() == src.kind) {
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(
+                        error_codes::INVALID_PARAMS,
+                        format!(
+                            "kind {} not declared in plugin's release_source capability",
+                            src.kind
+                        ),
+                    ),
+                );
+            }
+        }
+        // Reject duplicate source_keys in the same request — they would
+        // collapse to one row at upsert time and silently drop the second
+        // entry's display_name/config, which is almost always a plugin bug.
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for src in &params.sources {
+            if !seen.insert(src.source_key.as_str()) {
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(
+                        error_codes::INVALID_PARAMS,
+                        format!("duplicate source_key in request: {}", src.source_key),
+                    ),
+                );
+            }
+        }
+
+        // Resolve the per-source default poll interval. Used only when
+        // creating new rows; existing rows keep their interval. Falls back
+        // to the host-wide default when the plugin's manifest declares 0.
+        let raw = if self.capability.default_poll_interval_s == 0 {
+            DEFAULT_POLL_INTERVAL_S
+        } else {
+            self.capability.default_poll_interval_s
+        };
+        let default_interval = (raw as i32).max(MIN_POLL_INTERVAL_S as i32);
+
+        let keep_keys: Vec<String> = params
+            .sources
+            .iter()
+            .map(|s| s.source_key.clone())
+            .collect();
+
+        // Upsert each source.
+        let mut registered = 0u32;
+        for src in params.sources {
+            let new = NewReleaseSource {
+                plugin_id: self.plugin_name.clone(),
+                source_key: src.source_key,
+                display_name: src.display_name,
+                kind: src.kind,
+                poll_interval_s: default_interval,
+                enabled: None,
+                config: src.config,
+            };
+            if let Err(e) = ReleaseSourceRepository::upsert(&self.db, new).await {
+                error!(error = %e, "release source upsert failed");
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                );
+            }
+            registered += 1;
+        }
+
+        // Prune sources the plugin no longer declares.
+        let pruned = match ReleaseSourceRepository::delete_by_plugin_excluding(
+            &self.db,
+            &self.plugin_name,
+            &keep_keys,
+        )
+        .await
+        {
+            Ok(n) => n,
+            Err(e) => {
+                error!(error = %e, "release source prune failed");
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                );
+            }
+        };
+
+        info!(
+            plugin = %self.plugin_name,
+            registered,
+            pruned,
+            "release sources registered"
+        );
+
+        // Reconcile schedules. Best-effort — log failures but don't fail the
+        // RPC, since the rows are already persisted and the next scheduler
+        // start (or HTTP-driven reconcile) will catch up.
+        if let Some(ref scheduler) = self.scheduler {
+            let mut guard = scheduler.lock().await;
+            if let Err(e) = guard.reconcile_release_sources().await {
+                warn!(error = %e, "scheduler reconcile after register_sources failed");
+            }
+        }
+
+        let response = RegisterSourcesResponse {
+            registered,
+            pruned: pruned as u32,
+        };
+        JsonRpcResponse::success(id, serde_json::to_value(response).unwrap())
+    }
+
     /// Confirm `source_id` exists and belongs to the calling plugin. Returns
     /// an error response if either check fails.
     async fn assert_source_belongs(
@@ -601,6 +783,37 @@ struct SourceStateSetRequest {
     etag: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisterSourcesRequest {
+    sources: Vec<RegisteredSourceInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisteredSourceInput {
+    /// Stable per-plugin identifier for the source. Opaque to the host.
+    source_key: String,
+    /// Human-readable label shown in the Release tracking settings table.
+    display_name: String,
+    /// One of the canonical `release_sources.kind` values; must also be
+    /// declared in the plugin's `release_source` capability.
+    kind: String,
+    /// Optional opaque per-source config snapshot. Stored on the row for
+    /// the host's reference; the plugin reads its own admin config directly.
+    #[serde(default)]
+    config: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisterSourcesResponse {
+    /// Number of sources upserted (created or refreshed).
+    registered: u32,
+    /// Number of sources removed because they were not in the request.
+    pruned: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SourceStateView {
@@ -665,10 +878,11 @@ pub fn is_releases_method(method: &str) -> bool {
 mod tests {
     use super::*;
     use crate::db::ScanningStrategy;
-    use crate::db::entities::release_sources::kind;
+    use crate::db::entities::release_sources::{self, kind};
     use crate::db::repositories::{
-        LibraryRepository, NewReleaseSource, ReleaseSourceRepository, SeriesAliasRepository,
-        SeriesExternalIdRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
+        LibraryRepository, NewReleaseSource, ReleaseSourceRepository, ReleaseSourceUpdate,
+        SeriesAliasRepository, SeriesExternalIdRepository, SeriesRepository,
+        SeriesTrackingRepository, TrackingUpdate,
     };
     use crate::db::test_helpers::create_test_db;
     use crate::services::plugin::protocol::ReleaseSourceKind;
@@ -1469,5 +1683,314 @@ mod tests {
             row.latest_known_chapter, None,
             "untracked series must not have its high-water mark moved"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // register_sources
+    // -------------------------------------------------------------------------
+
+    fn register_request(sources: Value) -> JsonRpcRequest {
+        make_request(
+            methods::RELEASES_REGISTER_SOURCES,
+            json!({ "sources": sources }),
+        )
+    }
+
+    #[tokio::test]
+    async fn register_sources_creates_rows_for_a_fresh_plugin() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let req = register_request(json!([
+            {
+                "sourceKey": "user:tsuna69",
+                "displayName": "Nyaa: tsuna69",
+                "kind": "rss-uploader",
+                "config": { "subscription": { "kind": "user", "identifier": "tsuna69" } }
+            },
+            {
+                "sourceKey": "query:LuminousScans",
+                "displayName": "Nyaa search: LuminousScans",
+                "kind": "rss-uploader"
+            }
+        ]));
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error(), "unexpected error: {:?}", resp.error);
+        let body: Value = resp.result.unwrap();
+        assert_eq!(body["registered"], 2);
+        assert_eq!(body["pruned"], 0);
+
+        let rows = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        let by_key: HashMap<&str, &release_sources::Model> =
+            rows.iter().map(|r| (r.source_key.as_str(), r)).collect();
+        assert!(by_key.contains_key("user:tsuna69"));
+        assert!(by_key.contains_key("query:LuminousScans"));
+        assert!(
+            by_key["user:tsuna69"].enabled,
+            "new rows default to enabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn register_sources_prunes_rows_no_longer_declared() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        // First call creates two rows.
+        let _ = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "user:a", "displayName": "A", "kind": "rss-uploader" },
+                { "sourceKey": "user:b", "displayName": "B", "kind": "rss-uploader" }
+            ])))
+            .await;
+
+        // Second call drops `user:b` and adds `user:c`.
+        let resp = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "user:a", "displayName": "A", "kind": "rss-uploader" },
+                { "sourceKey": "user:c", "displayName": "C", "kind": "rss-uploader" }
+            ])))
+            .await;
+        assert!(!resp.is_error());
+        let body: Value = resp.result.unwrap();
+        assert_eq!(body["registered"], 2);
+        assert_eq!(body["pruned"], 1);
+
+        let rows = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        let keys: Vec<&str> = rows.iter().map(|r| r.source_key.as_str()).collect();
+        assert!(keys.contains(&"user:a"));
+        assert!(keys.contains(&"user:c"));
+        assert!(!keys.contains(&"user:b"), "stale source must be pruned");
+    }
+
+    #[tokio::test]
+    async fn register_sources_with_empty_list_wipes_plugins_rows() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let _ = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "user:a", "displayName": "A", "kind": "rss-uploader" }
+            ])))
+            .await;
+
+        let resp = handler.handle_request(&register_request(json!([]))).await;
+        assert!(!resp.is_error());
+        let body: Value = resp.result.unwrap();
+        assert_eq!(body["registered"], 0);
+        assert_eq!(body["pruned"], 1);
+
+        let rows = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn register_sources_preserves_user_managed_fields_on_re_register() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        // Initial register.
+        let _ = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "user:tsuna69", "displayName": "Nyaa: tsuna69", "kind": "rss-uploader" }
+            ])))
+            .await;
+
+        // Admin disables it and pins a custom interval.
+        let row = ReleaseSourceRepository::find_by_key(conn, "release-nyaa", "user:tsuna69")
+            .await
+            .unwrap()
+            .unwrap();
+        ReleaseSourceRepository::update(
+            conn,
+            row.id,
+            ReleaseSourceUpdate {
+                enabled: Some(false),
+                poll_interval_s: Some(900),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        // Plugin re-registers (e.g., after restart) with a refreshed display name + new config.
+        let _ = handler
+            .handle_request(&register_request(json!([
+                {
+                    "sourceKey": "user:tsuna69",
+                    "displayName": "Nyaa: tsuna69 (refreshed)",
+                    "kind": "rss-uploader",
+                    "config": { "subscription": "fresh" }
+                }
+            ])))
+            .await;
+
+        let after = ReleaseSourceRepository::find_by_key(conn, "release-nyaa", "user:tsuna69")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after.display_name, "Nyaa: tsuna69 (refreshed)");
+        assert_eq!(after.config, Some(json!({ "subscription": "fresh" })));
+        assert!(!after.enabled, "user-set disabled must survive re-register");
+        assert_eq!(
+            after.poll_interval_s, 900,
+            "user-set poll_interval_s must survive re-register"
+        );
+    }
+
+    #[tokio::test]
+    async fn register_sources_does_not_touch_other_plugins_rows() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        // Pre-existing source from a different plugin.
+        ReleaseSourceRepository::create(
+            conn,
+            NewReleaseSource {
+                plugin_id: "release-mangaupdates".to_string(),
+                source_key: "default".to_string(),
+                display_name: "MangaUpdates".to_string(),
+                kind: kind::RSS_SERIES.to_string(),
+                poll_interval_s: 3600,
+                enabled: None,
+                config: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+        // Empty register from nyaa — must not nuke mangaupdates' row.
+        let _ = handler.handle_request(&register_request(json!([]))).await;
+
+        let mu_rows = ReleaseSourceRepository::list_by_plugin(conn, "release-mangaupdates")
+            .await
+            .unwrap();
+        assert_eq!(mu_rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn register_sources_rejects_kind_outside_capability() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            // Only declares rss-uploader.
+            make_capability(false, vec![]),
+        );
+
+        let resp = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "x", "displayName": "X", "kind": "rss-series" }
+            ])))
+            .await;
+        assert!(resp.is_error());
+        assert!(resp.error.unwrap().message.contains("not declared"));
+
+        // Nothing was written.
+        let rows = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn register_sources_rejects_invalid_kind_string() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let resp = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "x", "displayName": "X", "kind": "frobnicate" }
+            ])))
+            .await;
+        assert!(resp.is_error());
+        assert!(resp.error.unwrap().message.contains("invalid kind"));
+    }
+
+    #[tokio::test]
+    async fn register_sources_rejects_duplicate_keys_in_request() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let resp = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "dup", "displayName": "A", "kind": "rss-uploader" },
+                { "sourceKey": "dup", "displayName": "B", "kind": "rss-uploader" }
+            ])))
+            .await;
+        assert!(resp.is_error());
+        assert!(resp.error.unwrap().message.contains("duplicate"));
+        let rows = ReleaseSourceRepository::list_by_plugin(conn, "release-nyaa")
+            .await
+            .unwrap();
+        assert!(rows.is_empty(), "validation must run before any write");
+    }
+
+    #[tokio::test]
+    async fn register_sources_rejects_empty_source_key_or_display_name() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let resp1 = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "  ", "displayName": "X", "kind": "rss-uploader" }
+            ])))
+            .await;
+        assert!(resp1.is_error());
+
+        let resp2 = handler
+            .handle_request(&register_request(json!([
+                { "sourceKey": "x", "displayName": "  ", "kind": "rss-uploader" }
+            ])))
+            .await;
+        assert!(resp2.is_error());
     }
 }

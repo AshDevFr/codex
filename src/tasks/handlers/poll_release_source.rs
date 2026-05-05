@@ -239,6 +239,8 @@ impl TaskHandler for PollReleaseSourceHandler {
             // Build the poll request.
             let req = ReleasePollRequest {
                 source_id: source.id,
+                source_key: Some(source.source_key.clone()),
+                config: source.config.clone(),
                 etag: source.etag.clone(),
             };
             let timeout = self.task_request_timeout().await;

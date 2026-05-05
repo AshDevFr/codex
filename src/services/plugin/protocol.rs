@@ -259,6 +259,10 @@ pub mod methods {
     pub const RELEASES_SOURCE_STATE_GET: &str = "releases/source_state/get";
     /// Set persisted state for a release source.
     pub const RELEASES_SOURCE_STATE_SET: &str = "releases/source_state/set";
+    /// Replace the set of release-source rows owned by this plugin.
+    /// The host upserts each entry by `(plugin_id, source_key)` and prunes
+    /// rows whose `source_key` is no longer in the input list.
+    pub const RELEASES_REGISTER_SOURCES: &str = "releases/register_sources";
 }
 
 // =============================================================================
@@ -435,6 +439,20 @@ pub enum ReleaseSourceKind {
     /// Metadata-derived signal (informational; usually doesn't write the
     /// ledger - see Phase 5).
     MetadataFeed,
+}
+
+impl ReleaseSourceKind {
+    /// Canonical kebab-case string matching `release_sources.kind` and the
+    /// serde representation. Used when comparing against string-typed
+    /// `kind` fields parsed from RPC requests.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::RssUploader => "rss-uploader",
+            Self::RssSeries => "rss-series",
+            Self::ApiFeed => "api-feed",
+            Self::MetadataFeed => "metadata-feed",
+        }
+    }
 }
 
 impl PluginCapabilities {
@@ -1406,6 +1424,18 @@ pub struct ReleasePollRequest {
     /// `releases/source_state/get` for richer state (etag, last_polled_at)
     /// or `releases/list_tracked` to harvest the tracked-series scope.
     pub source_id: uuid::Uuid,
+    /// Plugin-defined stable key for this source row (the same value the
+    /// plugin originally passed to `releases/register_sources`). Carried in
+    /// the poll request so the plugin can dispatch directly without a
+    /// reverse-RPC roundtrip — useful when one plugin process owns multiple
+    /// source rows (e.g., one per Nyaa uploader).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<String>,
+    /// Snapshot of `release_sources.config` at poll time, if any. Plugins
+    /// that store per-source config on register can read it back here to
+    /// avoid keeping their own `(sourceKey, config)` map in memory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
     /// Etag value from the previous successful poll, if any. Plugins doing
     /// HTTP conditional GETs (`If-None-Match`) can use it directly.
     #[serde(default, skip_serializing_if = "Option::is_none")]

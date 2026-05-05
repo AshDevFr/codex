@@ -335,6 +335,10 @@ pub struct PluginManager {
     /// Optional event broadcaster handed to per-plugin handles so reverse-RPC
     /// handlers (releases/record) can emit cross-process notifications.
     event_broadcaster: Option<Arc<crate::events::EventBroadcaster>>,
+    /// Optional scheduler handle so the releases reverse-RPC handler can
+    /// trigger a release-source reconcile when a plugin calls
+    /// `releases/register_sources`.
+    scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
 }
 
 impl PluginManager {
@@ -350,6 +354,7 @@ impl PluginManager {
             metrics_service: None,
             plugin_file_storage: None,
             event_broadcaster: None,
+            scheduler: None,
         }
     }
 
@@ -381,6 +386,17 @@ impl PluginManager {
         broadcaster: Arc<crate::events::EventBroadcaster>,
     ) -> Self {
         self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Hand the scheduler to per-plugin handles so the releases reverse-RPC
+    /// handler can reconcile release-source schedules when a plugin calls
+    /// `releases/register_sources`. Builder-style.
+    pub fn with_scheduler(
+        mut self,
+        scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>,
+    ) -> Self {
+        self.scheduler = Some(scheduler);
         self
     }
 
@@ -603,6 +619,9 @@ impl PluginManager {
         if let Some(ref b) = self.event_broadcaster {
             handle = handle.with_event_broadcaster(b.clone());
         }
+        if let Some(ref s) = self.scheduler {
+            handle = handle.with_scheduler(s.clone());
+        }
 
         // Start the plugin
         match handle.start().await {
@@ -742,6 +761,9 @@ impl PluginManager {
             .with_release_db(self.db.as_ref().clone());
         if let Some(ref b) = self.event_broadcaster {
             handle = handle.with_event_broadcaster(b.clone());
+        }
+        if let Some(ref s) = self.scheduler {
+            handle = handle.with_scheduler(s.clone());
         }
 
         // Start the plugin

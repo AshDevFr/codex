@@ -286,7 +286,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         ))
         .with_metrics_service(plugin_metrics_service.clone())
         .with_plugin_file_storage(plugin_file_storage.clone())
-        .with_event_broadcaster(event_broadcaster.clone()),
+        .with_event_broadcaster(event_broadcaster.clone())
+        .with_scheduler(scheduler.clone()),
     );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {

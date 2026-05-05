@@ -9,29 +9,26 @@
  * candidate is silently dropped (the host's threshold would reject it
  * anyway).
  *
+ * Source-row model:
+ *   - On `onInitialize` (which the host re-runs after every config save),
+ *     the plugin parses the admin's `uploaders` CSV and calls
+ *     `releases/register_sources` with one entry per subscription. The host
+ *     materializes one `release_sources` row per uploader, keyed on
+ *     `(plugin_id, sourceKey)` where `sourceKey` is `kind:identifier`
+ *     (e.g. `user:tsuna69`, `query:luminousscans`, `params:c=3_1&q=berserk`).
+ *   - The host scheduler fires one `releases/poll` task per source row, so
+ *     each uploader has its own poll cadence, ETag, and last-error status.
+ *
  * Flow per `releases/poll`:
- *   1. Read uploader subscriptions from admin config.
+ *   1. Recover the subscription from `params.config.subscription` (or fall
+ *      back to parsing `params.sourceKey`).
  *   2. Pull tracked-series + aliases from the host
  *      (`releases/list_tracked`).
- *   3. For each subscription, conditional GET the RSS feed (ETag stored on
- *      the source row; we don't have per-subscription state slots).
+ *   3. Conditional GET the RSS feed using `params.etag`.
  *   4. Parse each item; match against tracked aliases; emit a candidate via
  *      `releases/record`.
- *   5. Aggregate the worst upstream status across all subscriptions for the
- *      host's per-host backoff layer.
- *
- * Design notes:
- *   - **One source row, many uploaders.** The plan calls for "one source
- *     row per uploader", but the host has no admin endpoint for creating
- *     `release_sources` rows; admins create one row when enabling the
- *     plugin and the plugin walks all subscriptions during a single poll.
- *     Mirrors how MangaUpdates polls all tracked series within one source
- *     row's `poll(sourceId)` call.
- *   - **ETag is a single bucket.** The source row stores one ETag — we use
- *     it on the *first* uploader fetched and rotate fresh ETags out of the
- *     response on subsequent polls. Daily polls + small RSS bodies make
- *     this acceptable; per-subscription ETags would need per-(source,
- *     subscription) state, deferred.
+ *   5. Return the new ETag and upstream status for the host's per-host
+ *      backoff layer.
  */
 
 import {
@@ -49,6 +46,8 @@ import {
 import {
   fetchSubscriptionFeed,
   parseSubscriptionList,
+  sourceKeyToSubscription,
+  subscriptionToSourceKey,
   type UploaderSubscription,
 } from "./fetcher.js";
 import {
@@ -315,11 +314,39 @@ export async function pollSubscription(
 // Top-level poll handler
 // =============================================================================
 
+/**
+ * Resolve the subscription this poll request is for. The host stamps every
+ * `release_sources` row with its plugin-defined `config` (set at register
+ * time), so the preferred path is `params.config.subscription`. If a row
+ * pre-dates the config field (e.g. created in a previous plugin version),
+ * fall back to parsing `params.sourceKey`.
+ */
+function resolveSubscription(params: ReleasePollRequest): UploaderSubscription | null {
+  const cfg = params.config as { subscription?: unknown } | undefined | null;
+  const fromConfig = cfg?.subscription;
+  if (fromConfig && typeof fromConfig === "object") {
+    const obj = fromConfig as Record<string, unknown>;
+    const kind = obj.kind;
+    const identifier = obj.identifier;
+    if (
+      typeof identifier === "string" &&
+      identifier.length > 0 &&
+      (kind === "user" || kind === "query" || kind === "params")
+    ) {
+      return { kind, identifier };
+    }
+  }
+  if (typeof params.sourceKey === "string" && params.sourceKey.length > 0) {
+    return sourceKeyToSubscription(params.sourceKey);
+  }
+  return null;
+}
+
 async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<ReleasePollResponse> {
   const sourceId = params.sourceId;
-
-  if (state.subscriptions.length === 0) {
-    logger.warn("no uploader subscriptions configured; nothing to poll");
+  const subscription = resolveSubscription(params);
+  if (subscription === null) {
+    logger.warn(`source=${sourceId} no resolvable subscription on poll request; skipping`);
     return { notModified: false, upstreamStatus: 200 };
   }
 
@@ -330,51 +357,85 @@ async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<Rel
     return { notModified: false, upstreamStatus: 200 };
   }
 
-  let parsed = 0;
-  let matched = 0;
-  let recorded = 0;
-  let worstStatus = 200;
-  let lastEtag: string | null = null;
-
-  // 2. Walk subscriptions in declaration order. We use the ETag stored on
-  //    the source row (passed as `params.etag`) for the *first* fetch;
-  //    subsequent fetches start fresh because the ETag belongs to whichever
-  //    subscription was polled last, not this one.
-  let firstFetch = true;
-  for (const sub of state.subscriptions) {
-    const outcome = await pollSubscription(rpc, sourceId, sub, tracked, {
-      previousEtag: firstFetch ? (params.etag ?? null) : null,
-      timeoutMs: state.requestTimeoutMs,
-      minConfidence: state.minConfidence,
-      ...(state.baseUrl ? { baseUrl: state.baseUrl } : {}),
-    });
-    firstFetch = false;
-    parsed += outcome.parsed;
-    matched += outcome.matched;
-    recorded += outcome.recorded;
-    if (outcome.upstreamStatus > worstStatus) worstStatus = outcome.upstreamStatus;
-    if (outcome.etag) lastEtag = outcome.etag;
-    if (outcome.error) {
-      logger.warn(
-        `subscription ${sub.kind}:${sub.identifier}: ${outcome.error} (status ${outcome.upstreamStatus})`,
-      );
-    }
+  // 2. Conditional GET against this subscription's feed.
+  const outcome = await pollSubscription(rpc, sourceId, subscription, tracked, {
+    previousEtag: params.etag ?? null,
+    timeoutMs: state.requestTimeoutMs,
+    minConfidence: state.minConfidence,
+    ...(state.baseUrl ? { baseUrl: state.baseUrl } : {}),
+  });
+  if (outcome.error) {
+    logger.warn(
+      `source=${sourceId} ${subscription.kind}:${subscription.identifier}: ${outcome.error} (status ${outcome.upstreamStatus})`,
+    );
   }
 
   logger.info(
-    `poll complete: source=${sourceId} subscriptions=${state.subscriptions.length} tracked=${tracked.length} parsed=${parsed} matched=${matched} recorded=${recorded} worst_status=${worstStatus}`,
+    `poll complete: source=${sourceId} subscription=${subscription.kind}:${subscription.identifier} tracked=${tracked.length} parsed=${outcome.parsed} matched=${outcome.matched} recorded=${outcome.recorded} status=${outcome.upstreamStatus}${outcome.notModified ? " (304)" : ""}`,
   );
 
   return {
-    notModified: false,
-    upstreamStatus: worstStatus,
-    ...(lastEtag !== null ? { etag: lastEtag } : {}),
+    notModified: outcome.notModified,
+    upstreamStatus: outcome.upstreamStatus,
+    ...(outcome.etag !== null ? { etag: outcome.etag } : {}),
   };
 }
 
 // =============================================================================
 // Plugin Initialization
 // =============================================================================
+
+/**
+ * Send the desired-state list of source rows to the host. Called from
+ * `onInitialize` (after the host has installed the releases reverse-RPC
+ * handler) so the plugin's source rows are materialized whenever the
+ * config changes.
+ *
+ * Retries on `METHOD_NOT_FOUND` with linear backoff: the host installs the
+ * releases handler shortly after `initialize` returns, and there is a small
+ * race window where the plugin's first reverse-RPC call may land before the
+ * handler is in place.
+ */
+export async function registerSources(
+  rpc: HostRpcClient,
+  subscriptions: UploaderSubscription[],
+): Promise<{ registered: number; pruned: number } | null> {
+  const sources = subscriptions.map((sub) => ({
+    sourceKey: subscriptionToSourceKey(sub),
+    displayName: displayNameFor(sub),
+    kind: "rss-uploader" as const,
+    config: { subscription: { kind: sub.kind, identifier: sub.identifier } },
+  }));
+
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await rpc.call<{ registered: number; pruned: number }>(
+        RELEASES_METHODS.REGISTER_SOURCES,
+        { sources },
+      );
+    } catch (err) {
+      const isMethodNotFound = err instanceof HostRpcError && err.code === -32601;
+      if (isMethodNotFound && attempt < maxAttempts) {
+        // Wait for the host to finish installing the releases reverse-RPC
+        // handler. Linear backoff: 50ms, 100ms, 150ms, 200ms.
+        await new Promise((r) => setTimeout(r, 50 * attempt));
+        continue;
+      }
+      const reason = err instanceof Error ? err.message : String(err);
+      logger.error(`register_sources failed: ${reason}`);
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Human-readable label shown in the Release tracking settings table. */
+function displayNameFor(sub: UploaderSubscription): string {
+  if (sub.kind === "user") return `Nyaa: ${sub.identifier}`;
+  if (sub.kind === "query") return `Nyaa search: ${sub.identifier}`;
+  return `Nyaa params: ${sub.identifier}`;
+}
 
 createReleaseSourcePlugin({
   manifest,
@@ -387,7 +448,7 @@ createReleaseSourcePlugin({
     },
   },
   logLevel: "info",
-  onInitialize(params: InitializeParams) {
+  async onInitialize(params: InitializeParams) {
     state.hostRpc = params.hostRpc;
     const ac = params.adminConfig ?? {};
     if (typeof ac.uploaders === "string") {
@@ -402,6 +463,17 @@ createReleaseSourcePlugin({
     logger.info(
       `initialized: subscriptions=${state.subscriptions.length} timeoutMs=${state.requestTimeoutMs} minConfidence=${state.minConfidence} defaultPoll=${DEFAULT_POLL_INTERVAL_S}s`,
     );
+
+    // Materialize source rows. Deferred to a microtask + retry on
+    // METHOD_NOT_FOUND so we run *after* the host installs the releases
+    // reverse-RPC handler (it does so right after `initialize` returns).
+    queueMicrotask(() => {
+      void registerSources(params.hostRpc, state.subscriptions).then((result) => {
+        if (result) {
+          logger.info(`register_sources: registered=${result.registered} pruned=${result.pruned}`);
+        }
+      });
+    });
   },
 });
 

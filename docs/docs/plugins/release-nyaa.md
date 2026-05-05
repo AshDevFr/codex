@@ -27,34 +27,48 @@ Use Nyaa when you've already decided on a small allowlist of trusted uploaders (
 
 ## How it works
 
-1. Codex schedules a poll for the source row (default: once per 24 hours).
-2. The plugin reads the configured uploader subscription list.
-3. The plugin asks the host for tracked series along with their aliases (`releases/list_tracked` with `requires_aliases: true`).
-4. For each subscription, the plugin fetches the Nyaa feed:
+The plugin auto-materializes one **release source row** per uploader entry on first start (and on every config save, which restarts the plugin).
+
+1. You set the plugin's `uploaders` config to a comma-separated list (see [Setup](#setup) below).
+2. On startup the plugin parses the list and calls `releases/register_sources` over the host RPC channel. The host upserts one row per entry in `release_sources` keyed on `(plugin_id, sourceKey)` where `sourceKey` is `kind:identifier` (e.g. `user:tsuna69`, `query:luminousscans`, `params:c=3_1&q=berserk`).
+3. Each row gets its own poll cadence (default 24h, overridable in **Settings → Release tracking**), its own ETag, and its own last-error / last-polled status. The scheduler fires one `releases/poll` task per row.
+4. When the host calls `releases/poll(sourceId, sourceKey, config, etag)`, the plugin recovers the subscription from `config.subscription` and fetches just that uploader's feed:
    - User feed: `https://nyaa.si/?page=rss&u=<username>`
-   - Search feed (for groups without a user account): `https://nyaa.si/?page=rss&q=<query>`
+   - Plain search: `https://nyaa.si/?page=rss&q=<query>`
+   - URL-style params: `https://nyaa.si/?page=rss&<allowlisted-params>`
 5. Each RSS item is parsed: a leading `[Group]` token, chapter / volume token (single or range), and parenthesized format hints are extracted; the remaining text is the *series guess*.
 6. The series guess is normalized and matched against tracked-series aliases. Confidence ≥ 0.95 on exact normalized match; otherwise the matcher computes a token-level Dice ratio and rejects below 0.85.
 7. Matching candidates are submitted to the host's release ledger via `releases/record`. The host applies its threshold (default 0.7) and dedups on `(source_id, external_release_id)` and on `info_hash` (Nyaa's `nyaa:infoHash` element).
+
+Removing an entry from the `uploaders` list and re-saving prunes the corresponding row and its `release_ledger` history (cascade delete). User-managed fields (`enabled`, `pollIntervalS`) survive plugin restarts.
 
 The plugin **never** downloads release files. The "Open" link on the inbox row sends you to the Nyaa view page or the `.torrent` URL; how you acquire the chapter is up to you.
 
 ## Setup
 
-### Configure uploader subscriptions
+### 1. Configure uploader subscriptions
 
-The plugin's `uploaders` admin field is a comma-separated list of trusted uploader handles or queries:
+The plugin's `uploaders` admin field is a comma-separated list of trusted uploader handles or queries. Each entry takes one of three forms:
 
+| Form              | Example                  | What it polls                                                                |
+| ----------------- | ------------------------ | ---------------------------------------------------------------------------- |
+| `username`        | `tsuna69`                | `https://nyaa.si/?page=rss&u=tsuna69` — that uploader's full RSS feed.       |
+| `q:<text>`        | `q:LuminousScans`        | `https://nyaa.si/?page=rss&q=LuminousScans` — a plain site-wide search.      |
+| `q:?<key=value>`  | `q:?c=3_1&q=Berserk`     | URL-style search with allowlisted keys: `q`, `c`, `f`, `u`. The example here scopes a search to the Literature → English-translated category. |
+
+Mix freely:
+
+```json
+{
+  "uploaders": "tsuna69,TankobonBlur,q:LuminousScans,q:?c=3_1&q=Berserk"
+}
 ```
-uploaders: "1r0n,TankobonBlur,q:LuminousScans"
-```
 
-- Plain identifier (`1r0n`) → user feed (`https://nyaa.si/?page=rss&u=1r0n`).
-- `q:<query>` or `query:<query>` → search feed (`https://nyaa.si/?page=rss&q=<query>`). Use this for groups without a Nyaa account, or to scope by tag.
+Empty tokens are dropped; case-insensitive duplicates are silently deduplicated. URL-style entries normalize their param order so `q:?q=X&c=3_1` and `q:?c=3_1&q=X` collapse to the same source row. Anything not on the allowlist (`s=`, `o=`, etc.) is dropped without error.
 
-Empty tokens are dropped; case-insensitive duplicates are silently deduplicated. The plugin walks subscriptions in declaration order on each poll.
+After saving, head to **Settings → Release tracking** to see the per-source rows the plugin registered. Each row has its own enable toggle, poll-interval input, and "Poll now" button. Disabling a row pauses its scheduled polls; deleting an entry from the `uploaders` CSV (and saving) removes the row entirely.
 
-### Make sure tracked series have aliases
+### 2. Make sure tracked series have aliases
 
 Nyaa releases identify a series only by name in the title. The plugin matches titles to series via the `series_aliases` table:
 
@@ -63,25 +77,19 @@ Nyaa releases identify a series only by name in the title. The plugin matches ti
 
 For best results, add aliases that mirror how your trusted uploaders name the release. Example: 1r0n names `Boruto: Two Blue Vortex` as `[1r0n] Boruto - Two Blue Vortex - Volume NN (Digital)`. The default normalization produces `boruto two blue vortex` from both forms, so an exact match is automatic — but if you track *Boruto* with only the alias `Boruto`, the matcher will see `boruto two blue vortex` and reject it as not similar enough to `boruto`.
 
-### Source row
-
-A `release_sources` row with `plugin_id="release-nyaa"` and `kind="rss-uploader"` must exist before the scheduler will poll. (See [Release tracking architecture](../architecture/release-tracking.md) for the broader picture; admin UI to create and manage source rows is tracked as a follow-up.)
-
 ## Configuration reference
 
 | Field              | Scope        | Default                | Notes                                                                                              |
 | ------------------ | ------------ | ---------------------- | -------------------------------------------------------------------------------------------------- |
-| `uploaders`        | admin        | `""`                   | Comma-separated subscription list. Plain identifier = user feed; `q:<query>` = search feed.        |
+| `uploaders`        | admin        | `""`                   | Comma-separated subscription list. See the table above for the three accepted entry forms.         |
 | `requestTimeoutMs` | admin        | `10000`                | Hard timeout per Nyaa fetch. Clamped to `[1000, 60000]`.                                           |
 | `baseUrl`          | admin        | `https://nyaa.si`      | Override base URL — useful for mirrors. Trailing slashes are trimmed.                              |
 
 ## Limitations
 
-- **One source row, many uploaders.** The plan called for one source row per uploader subscription, but the host has no admin endpoint for creating `release_sources` rows yet. Until that ships, all uploader subscriptions ride a single source row's poll cadence and ETag bucket. With daily polls the difference is academic; if you're adding many uploaders or want per-uploader poll intervals, this will need revisiting.
-- **ETag is single-bucket.** The source row stores one ETag — the plugin uses it on the *first* uploader fetched and walks subsequent uploaders unconditionally. Daily polls + small RSS bodies make this acceptable; per-subscription ETags would need per-(source, subscription) state.
-- **Language is hardcoded to English.** Nyaa releases don't carry a language tag, and 99% of the uploaders this plugin targets release English-language scans. Admins who add non-English uploaders should configure tracked series' `languages` accordingly so the host's `latest_known_*` advance gate doesn't pollute the high-water mark with releases the user can't read.
+- **Language is hardcoded to English.** Nyaa releases don't carry a language tag, and the uploaders this plugin targets predominantly release English-language scans. Admins who add non-English uploaders should configure tracked series' `languages` accordingly so the host's `latest_known_*` advance gate doesn't pollute the high-water mark with releases the user can't read.
 - **Title parsing is best-effort.** The corpus covers the common 1r0n / TankobonBlur shapes plus generic `Volume NN` / `Chapter NNN` forms. Edge-case titles (e.g. unusual punctuation, missing separators) may parse with an empty `seriesGuess`; the matcher silently rejects those entries (no false positives).
-- **No per-uploader confidence weighting in v1.** Every matched candidate gets the same confidence based on the alias match alone. Adding per-uploader trust scores (downgrade an uploader after N user dismissals) is on the roadmap but not load-bearing at v1's tracked-series scale.
+- **No per-uploader confidence weighting yet.** Every matched candidate gets the same confidence based on the alias match alone. Adding per-uploader trust scores (downgrade an uploader after N user dismissals) is a future enhancement.
 
 ## Risks
 
