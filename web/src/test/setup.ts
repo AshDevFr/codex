@@ -120,6 +120,13 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
 } as any;
 
+// jsdom doesn't implement Element.scrollIntoView, but Mantine's Combobox
+// calls it on the active option after clicks. Stubbing here prevents
+// "scrollIntoView is not a function" unhandled errors in dropdown tests.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}
+
 // Mock EventSource for SSE tests
 global.EventSource = class EventSource {
   url: string;

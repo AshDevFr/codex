@@ -2,7 +2,12 @@ import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import {
+  type BulkReleaseActionRequest,
+  type BulkReleaseActionResponse,
+  type DeleteReleaseResponse,
   type PaginatedReleases,
+  type ReleaseFacets,
+  type ReleaseFacetsParams,
   type ReleaseInboxParams,
   type ReleaseLedgerEntry,
   type ReleaseSource,
@@ -19,11 +24,72 @@ const RELEASE_POLL_TASK_TYPE = "poll_release_source";
 
 export const releasesKeys = {
   inbox: (params: ReleaseInboxParams) => ["releases", "inbox", params] as const,
+  facets: (params: ReleaseFacetsParams) =>
+    ["releases", "facets", params] as const,
   series: (seriesId: string, params: SeriesReleaseListParams) =>
     ["series", seriesId, "releases", params] as const,
   inboxRoot: ["releases", "inbox"] as const,
   sourcesRoot: ["release-sources"] as const,
 };
+
+export function useReleaseFacets(params: ReleaseFacetsParams = {}) {
+  return useQuery<ReleaseFacets>({
+    queryKey: releasesKeys.facets(params),
+    queryFn: () => releasesApi.facets(params),
+  });
+}
+
+export function useDeleteRelease() {
+  const queryClient = useQueryClient();
+  return useMutation<DeleteReleaseResponse, Error, string>({
+    mutationFn: (releaseId) => releasesApi.delete(releaseId),
+    onSuccess: () => {
+      // Delete touches the ledger and (server-side) the source's etag.
+      // Invalidate both so the table and the source-admin row refresh.
+      queryClient.invalidateQueries({ queryKey: ["releases"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
+      queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
+    },
+    onError: notifyError("Failed to delete release"),
+  });
+}
+
+export function useBulkReleaseAction() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    BulkReleaseActionResponse,
+    Error,
+    BulkReleaseActionRequest
+  >({
+    mutationFn: (request) => releasesApi.bulk(request),
+    onSuccess: (data) => {
+      const { affected, action } = data;
+      const verb =
+        action === "dismiss"
+          ? "Dismissed"
+          : action === "mark-acquired"
+            ? "Marked acquired"
+            : "Deleted";
+      const noun = affected === 1 ? "release" : "releases";
+      notifications.show({
+        title: `${verb} ${affected} ${noun}`,
+        // Surface the etag-clear side effect for delete so the user knows
+        // the row will come back on the next poll.
+        message:
+          action === "delete"
+            ? "Affected sources will re-fetch on the next poll."
+            : undefined,
+        color: action === "delete" ? "orange" : "blue",
+      });
+      queryClient.invalidateQueries({ queryKey: ["releases"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
+      if (action === "delete") {
+        queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
+      }
+    },
+    onError: notifyError("Bulk action failed"),
+  });
+}
 
 export function useReleaseInbox(params: ReleaseInboxParams = {}) {
   return useQuery<PaginatedReleases>({
