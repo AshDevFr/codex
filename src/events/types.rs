@@ -195,6 +195,26 @@ pub enum EntityEvent {
         /// preference filters.
         language: String,
     },
+    /// A release source's poll task completed.
+    ///
+    /// Emitted at the end of every `poll_release_source` task run, after
+    /// `release_sources.last_summary` / `last_polled_at` / `etag` have been
+    /// persisted. The frontend uses this to refresh the Release tracking
+    /// settings page in real time so users don't have to reload to see a
+    /// "Poll now" finish. Carries no diff details — receivers should
+    /// invalidate the source query and re-read the row.
+    ReleaseSourcePolled {
+        #[serde(rename = "sourceId")]
+        source_id: Uuid,
+        /// Plugin that owns the source (`release_sources.plugin_id`).
+        /// Cheap filter for clients only watching certain plugins.
+        #[serde(rename = "pluginId")]
+        plugin_id: String,
+        /// `true` if the poll wrote a `last_error`. Cheap "did it fail"
+        /// hint without forcing the client to refetch.
+        #[serde(rename = "hadError")]
+        had_error: bool,
+    },
     /// Internal signal to indicate shutdown (not sent to clients)
     #[serde(skip)]
     Shutdown,
@@ -244,6 +264,7 @@ impl EntityChangeEvent {
             | EntityEvent::PluginDisabled { .. }
             | EntityEvent::PluginDeleted { .. }
             | EntityEvent::ReleaseAnnounced { .. }
+            | EntityEvent::ReleaseSourcePolled { .. }
             | EntityEvent::Shutdown => None,
         }
     }
@@ -279,6 +300,22 @@ impl EntityChangeEvent {
                 chapter: row.chapter,
                 volume: row.volume,
                 language: row.language.clone().unwrap_or_default(),
+            },
+            None,
+        )
+    }
+
+    /// Build a `ReleaseSourcePolled` event for the end of a poll task run.
+    ///
+    /// Carries only IDs and a single boolean error hint; receivers should
+    /// invalidate any cached `release_sources` query and re-read the row
+    /// for fresh `last_summary` / `last_polled_at` / etc.
+    pub fn release_source_polled(source_id: Uuid, plugin_id: &str, had_error: bool) -> Self {
+        Self::new(
+            EntityEvent::ReleaseSourcePolled {
+                source_id,
+                plugin_id: plugin_id.to_string(),
+                had_error,
             },
             None,
         )

@@ -11,6 +11,8 @@ export type PaginatedReleases =
   components["schemas"]["PaginatedResponse_ReleaseLedgerEntryDto"];
 export type ReleaseTrackingApplicability =
   components["schemas"]["ApplicabilityResponse"];
+export type ResetReleaseSourceResponse =
+  components["schemas"]["ResetReleaseSourceResponse"];
 
 export interface ReleaseInboxParams {
   state?: string;
@@ -108,6 +110,22 @@ export const releaseSourcesApi = {
   ): Promise<{ status: string; message: string }> => {
     const response = await api.post<{ status: string; message: string }>(
       `/release-sources/${sourceId}/poll-now`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Drop every ledger row for this source and clear its transient poll
+   * state (etag, last_polled_at, last_error, last_summary). User-managed
+   * fields (enabled, pollIntervalS, displayName, config) are preserved.
+   *
+   * Used as a "force re-emit" lever for testing: after a reset, the next
+   * poll fetches the upstream feed without `If-None-Match` (no 304
+   * short-circuit) and re-records every release as `announced`.
+   */
+  reset: async (sourceId: string): Promise<ResetReleaseSourceResponse> => {
+    const response = await api.post<ResetReleaseSourceResponse>(
+      `/release-sources/${sourceId}/reset`,
     );
     return response.data;
   },

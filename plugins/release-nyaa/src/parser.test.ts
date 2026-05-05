@@ -147,6 +147,7 @@ describe("parseItem", () => {
     if (item === null) return;
     expect(item.title).toBe("[1r0n] Chainsaw Man - Chapter 142 (Digital)");
     expect(item.link).toBe("https://nyaa.si/download/12345.torrent");
+    expect(item.pageUrl).toBe("https://nyaa.si/view/12345");
     expect(item.externalReleaseId).toBe("https://nyaa.si/view/12345"); // guid wins
     expect(item.infoHash).toBe("abc123def456"); // lowercased
     expect(item.chapter).toBe(142);
@@ -156,6 +157,18 @@ describe("parseItem", () => {
 
   it("returns null when title is missing", () => {
     expect(parseItem("<item><link>x</link></item>")).toBeNull();
+  });
+
+  it("returns null pageUrl when guid is not a /view/ permalink", () => {
+    const xml = `<item>
+      <title><![CDATA[[1r0n] Foo c.1 (Digital)]]></title>
+      <link>https://nyaa.si/download/9.torrent</link>
+      <guid isPermaLink="false">tag:nyaa.si,2026:9</guid>
+    </item>`;
+    const item = parseItem(xml);
+    expect(item).not.toBeNull();
+    if (item === null) return;
+    expect(item.pageUrl).toBeNull();
   });
 
   it("derives a deterministic externalReleaseId from infoHash when guid+link missing", () => {

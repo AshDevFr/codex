@@ -28,9 +28,6 @@ pub struct SeriesTrackingDto {
     pub series_id: Uuid,
     /// Whether release tracking is enabled.
     pub tracked: bool,
-    /// Publication status: `ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`.
-    #[schema(example = "ongoing")]
-    pub tracking_status: String,
     /// Whether to announce new chapters.
     pub track_chapters: bool,
     /// Whether to announce new volumes.
@@ -66,7 +63,6 @@ impl From<series_tracking::Model> for SeriesTrackingDto {
         Self {
             series_id: m.series_id,
             tracked: m.tracked,
-            tracking_status: m.tracking_status,
             track_chapters: m.track_chapters,
             track_volumes: m.track_volumes,
             latest_known_chapter: m.latest_known_chapter,
@@ -88,8 +84,6 @@ impl From<series_tracking::Model> for SeriesTrackingDto {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSeriesTrackingRequest {
     pub tracked: Option<bool>,
-    /// `ongoing` | `complete` | `hiatus` | `cancelled` | `unknown`.
-    pub tracking_status: Option<String>,
     pub track_chapters: Option<bool>,
     pub track_volumes: Option<bool>,
     /// Use `Some(null)` to clear, `Some(<value>)` to set, omit to leave alone.
