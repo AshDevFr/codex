@@ -72,6 +72,7 @@ import {
 import { formatSeriesCounts } from "@/components/series/seriesCounts";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
 import { useSeriesTracking } from "@/hooks/useSeriesTracking";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
@@ -159,6 +160,15 @@ export function SeriesDetail() {
   // upstream: upstreamChapterGap > 0). The query is cheap and shared with
   // the TrackingPanel below.
   const { data: tracking } = useSeriesTracking(seriesId ?? "", !!seriesId);
+
+  // Whether any enabled release-source plugin applies to this series's
+  // library. Drives whether the TrackingPanel + SeriesReleasesPanel render
+  // at all — on libraries with no covering plugin the panels would be a
+  // dead-end (you can flip `tracked: true` but nothing would ever poll).
+  const { data: releaseTrackingApplicability } =
+    useReleaseTrackingApplicability(series?.libraryId);
+  const releaseTrackingAvailable =
+    releaseTrackingApplicability?.applicable === true;
 
   // Fetch available plugin actions for series:detail scope, filtered by library
   const { data: pluginActions } = useQuery({
@@ -1019,15 +1029,19 @@ export function SeriesDetail() {
             </Group>
           )}
 
-          {/* Release tracking (admin/editor surface; query stays cheap when collapsed) */}
-          {canEditSeries && (
+          {/* Release tracking (admin/editor surface; query stays cheap when collapsed).
+              Hidden on libraries with no covering release-source plugin. */}
+          {canEditSeries && releaseTrackingAvailable && (
             <TrackingPanel seriesId={series.id} canEdit={canEditSeries} />
           )}
 
-          {/* Releases panel: ledger entries grouped by chapter/volume.
-              Shows whenever the series has tracking enabled — the panel
-              renders an empty-state message if no entries exist yet. */}
-          {tracking?.tracked && <SeriesReleasesPanel seriesId={series.id} />}
+          {/* Releases panel: ledger entries grouped by chapter/volume. Shows
+              whenever the series has tracking enabled and a plugin can
+              actually deliver releases — otherwise the panel would render
+              an empty inbox with no path to ever populate. */}
+          {tracking?.tracked && releaseTrackingAvailable && (
+            <SeriesReleasesPanel seriesId={series.id} />
+          )}
 
           {/* External Links */}
           {series.externalLinks && series.externalLinks.length > 0 && (

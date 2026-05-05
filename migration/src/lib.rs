@@ -157,6 +157,8 @@ mod m20260504_000074_add_tracking_languages;
 mod m20260504_000075_seed_release_tracking_languages;
 // Release tracking (Phase 8 follow-up): server-wide notification filter settings
 mod m20260504_000076_seed_release_tracking_notify_filters;
+// Release tracking: per-source last-poll summary surfaced in the UI
+mod m20260505_000077_add_release_sources_last_summary;
 
 pub struct Migrator;
 
@@ -284,6 +286,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260504_000075_seed_release_tracking_languages::Migration),
             // Release tracking (Phase 8 follow-up): notification filter settings
             Box::new(m20260504_000076_seed_release_tracking_notify_filters::Migration),
+            // Release tracking: per-source last-poll summary
+            Box::new(m20260505_000077_add_release_sources_last_summary::Migration),
         ]
     }
 }

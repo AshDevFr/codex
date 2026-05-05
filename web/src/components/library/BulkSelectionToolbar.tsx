@@ -29,9 +29,9 @@ import { useEffect, useMemo, useState } from "react";
 import { booksApi } from "@/api/books";
 import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
-import { trackingApi } from "@/api/tracking";
 import { BulkMetadataEditModal } from "@/components/library/BulkMetadataEditModal";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
 import {
   selectPageItems,
   selectSelectionCount,
@@ -97,6 +97,16 @@ export function BulkSelectionToolbar() {
     staleTime: 5 * 60 * 1000,
     enabled: selectionType === "book" && count > 0,
   });
+
+  // Whether any enabled release-source plugin exists in the install at all.
+  // Bulk selections may span libraries, so we use the global (no library
+  // filter) applicability — it just hides the "Mark as Tracked" / "Mark as
+  // Untracked" entries when no plugin is configured anywhere. Per-library
+  // plugin scopes still apply at poll time.
+  const { data: releaseTrackingApplicability } =
+    useReleaseTrackingApplicability();
+  const showReleaseTrackingMenu =
+    releaseTrackingApplicability?.applicable === true;
 
   // Helper to refetch all related queries
   const refetchAll = () => {
@@ -392,6 +402,10 @@ export function BulkSelectionToolbar() {
   // Bulk set release-tracking flag. No dedicated bulk endpoint exists yet —
   // fan out per-series PATCH calls. Acceptable scale for a hand-managed library
   // (hundreds of series, low-frequency action).
+  // Single-call bulk track/untrack via the dedicated endpoints. The host
+  // runs the seed pass per series on track-on transitions (auto-derives
+  // aliases, latest_known_*, track_chapters/volumes) so users get
+  // notification-ready tracking without touching the per-series panel.
   const bulkSetTrackedMutation = useMutation({
     mutationFn: async ({
       seriesIds,
@@ -400,23 +414,26 @@ export function BulkSelectionToolbar() {
       seriesIds: string[];
       tracked: boolean;
     }) => {
-      const results = await Promise.allSettled(
-        seriesIds.map((id) => trackingApi.updateTracking(id, { tracked })),
-      );
-      const failed = results.filter((r) => r.status === "rejected").length;
-      return { total: seriesIds.length, failed };
+      const response = tracked
+        ? await seriesApi.bulkTrackForReleases(seriesIds)
+        : await seriesApi.bulkUntrackForReleases(seriesIds);
+      return { total: seriesIds.length, response };
     },
-    onSuccess: ({ total, failed }, { tracked }) => {
-      if (failed === 0) {
+    onSuccess: ({ total, response }, { tracked }) => {
+      const errored = response.errored;
+      if (errored === 0) {
         notifications.show({
           title: tracked ? "Tracking enabled" : "Tracking disabled",
-          message: `Updated ${total} series.`,
+          message:
+            response.alreadyInState > 0
+              ? `Updated ${response.changed} series (${response.alreadyInState} already in this state).`
+              : `Updated ${response.changed} of ${total} series.`,
           color: tracked ? "green" : "blue",
         });
       } else {
         notifications.show({
           title: "Some updates failed",
-          message: `${total - failed} of ${total} series updated; ${failed} failed.`,
+          message: `${response.changed} updated, ${response.alreadyInState} unchanged, ${errored} failed.`,
           color: "yellow",
         });
       }
@@ -846,32 +863,36 @@ export function BulkSelectionToolbar() {
                     Reprocess Titles
                   </Menu.Item>
 
-                  <Menu.Divider />
-                  <Menu.Label>Release Tracking</Menu.Label>
-                  <Menu.Item
-                    leftSection={<IconBell size={16} />}
-                    onClick={() =>
-                      bulkSetTrackedMutation.mutate({
-                        seriesIds: selectedIds,
-                        tracked: true,
-                      })
-                    }
-                    disabled={isAnyPending}
-                  >
-                    Mark as Tracked
-                  </Menu.Item>
-                  <Menu.Item
-                    leftSection={<IconBellOff size={16} />}
-                    onClick={() =>
-                      bulkSetTrackedMutation.mutate({
-                        seriesIds: selectedIds,
-                        tracked: false,
-                      })
-                    }
-                    disabled={isAnyPending}
-                  >
-                    Mark as Untracked
-                  </Menu.Item>
+                  {showReleaseTrackingMenu && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Label>Release Tracking</Menu.Label>
+                      <Menu.Item
+                        leftSection={<IconBell size={16} />}
+                        onClick={() =>
+                          bulkSetTrackedMutation.mutate({
+                            seriesIds: selectedIds,
+                            tracked: true,
+                          })
+                        }
+                        disabled={isAnyPending}
+                      >
+                        Track for releases
+                      </Menu.Item>
+                      <Menu.Item
+                        leftSection={<IconBellOff size={16} />}
+                        onClick={() =>
+                          bulkSetTrackedMutation.mutate({
+                            seriesIds: selectedIds,
+                            tracked: false,
+                          })
+                        }
+                        disabled={isAnyPending}
+                      >
+                        Don't track for releases
+                      </Menu.Item>
+                    </>
+                  )}
 
                   <Menu.Divider />
                   <Menu.Label>Metadata</Menu.Label>

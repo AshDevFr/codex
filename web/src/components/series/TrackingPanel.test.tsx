@@ -99,13 +99,18 @@ describe("TrackingPanel", () => {
     });
   });
 
-  it("renders aliases and supports add", async () => {
+  it("renders aliases and supports add (after expanding the collapsed panel)", async () => {
     const user = userEvent.setup();
     get.mockResolvedValue({ ...baseTracking, tracked: true });
     list.mockResolvedValue([baseAlias("Existing")]);
     create.mockImplementation(async (_id, req) => baseAlias(req.alias));
 
     renderWithProviders(<TrackingPanel seriesId={SERIES_ID} canEdit={true} />);
+
+    // The panel is collapsed by default — expand to reach the alias UI.
+    await user.click(
+      await screen.findByRole("button", { name: /Expand release tracking/i }),
+    );
 
     await screen.findByText("Existing");
 
@@ -146,9 +151,14 @@ describe("TrackingPanel", () => {
 
     renderWithProviders(<TrackingPanel seriesId={SERIES_ID} canEdit={true} />);
 
-    await screen.findByText("Delete Me");
+    // Expand to reveal the alias list.
+    await user.click(
+      await screen.findByRole("button", { name: /Expand release tracking/i }),
+    );
 
-    const removeButton = screen.getByRole("button", {
+    // findByRole waits past Mantine's Collapse animation into the
+    // accessibility tree; getByRole here would race against it.
+    const removeButton = await screen.findByRole("button", {
       name: /Remove alias Delete Me/i,
     });
     await user.click(removeButton);

@@ -136,6 +136,12 @@ pub struct ReleaseSourceDto {
     /// Source-specific configuration (free-form).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
+    /// One-line summary of the most recent successful poll. Surfaced under
+    /// the row's status badge so users can see *why* a poll returned no
+    /// announcements without grepping logs. NULL until the first successful
+    /// poll on the source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_summary: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -155,6 +161,7 @@ impl From<release_sources::Model> for ReleaseSourceDto {
             last_error_at: m.last_error_at,
             etag: m.etag,
             config: m.config,
+            last_summary: m.last_summary,
             created_at: m.created_at,
             updated_at: m.updated_at,
         }

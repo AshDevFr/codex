@@ -31,6 +31,7 @@ use crate::db::repositories::{
 };
 use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::require_permission;
+use crate::services::release::seed::seed_tracking_for_series;
 
 // =============================================================================
 // Tracking config handlers
@@ -111,6 +112,29 @@ pub async fn update_series_tracking(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
+
+    // Detect the false -> true tracked transition so we can seed defaults
+    // before applying the user's patch. This eliminates the empty-form UX
+    // where a freshly-tracked series has no aliases / no latest_known_*.
+    //
+    // The user's patch is applied *after* the seed, so any explicit value
+    // they sent (e.g. a custom latest_known_chapter override) still wins.
+    let was_tracked = SeriesTrackingRepository::get(&state.db, series_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch tracking: {}", e)))?
+        .map(|r| r.tracked)
+        .unwrap_or(false);
+    let is_flipping_to_tracked = matches!(request.tracked, Some(true)) && !was_tracked;
+    if is_flipping_to_tracked && let Err(e) = seed_tracking_for_series(&state.db, series_id).await {
+        // Best-effort: if seeding fails (e.g. transient DB error), still
+        // honor the user's intent to flip tracked on. The next re-toggle
+        // or a manual backfill task can re-seed.
+        tracing::warn!(
+            "Seed failed for series {} on track-on transition: {}",
+            series_id,
+            e
+        );
+    }
 
     let update = TrackingUpdate {
         tracked: request.tracked,
