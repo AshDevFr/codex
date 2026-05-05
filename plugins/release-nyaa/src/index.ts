@@ -217,6 +217,18 @@ function toCandidate(
   }
   formatHints.subscription = `${subscription.kind}:${subscription.identifier}`;
 
+  // Nyaa RSS carries two URLs per item:
+  //   <guid>: the human-readable post page (`/view/<id>`)
+  //   <link>: the actual `.torrent` download
+  // We surface the page as `payloadUrl` (the inbox's external-link icon)
+  // and the torrent as `mediaUrl` with kind=torrent so the UI can render a
+  // second, kind-specific icon for one-click acquisition. When the page URL
+  // is missing we fall back to the torrent for `payloadUrl` and skip the
+  // separate media link to avoid pointing both icons at the same URL.
+  const torrentLink = item.link.length > 0 ? item.link : null;
+  const payloadUrl = item.pageUrl ?? torrentLink ?? `urn:nyaa:${item.externalReleaseId}`;
+  const hasDistinctMedia = item.pageUrl !== null && torrentLink !== null;
+
   return {
     seriesMatch: {
       codexSeriesId: match.seriesId,
@@ -228,8 +240,8 @@ function toCandidate(
     volume: item.volume,
     language: "en",
     groupOrUploader: item.group ?? (subscription.kind === "user" ? subscription.identifier : null),
-    payloadUrl:
-      item.pageUrl ?? (item.link.length > 0 ? item.link : `urn:nyaa:${item.externalReleaseId}`),
+    payloadUrl,
+    ...(hasDistinctMedia ? { mediaUrl: torrentLink, mediaUrlKind: "torrent" as const } : {}),
     infoHash: item.infoHash,
     formatHints,
     observedAt: item.observedAt,

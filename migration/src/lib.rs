@@ -159,6 +159,8 @@ mod m20260504_000075_seed_release_tracking_languages;
 mod m20260504_000076_seed_release_tracking_notify_filters;
 // Release tracking: per-source last-poll summary surfaced in the UI
 mod m20260505_000077_add_release_sources_last_summary;
+// Release tracking: per-row media_url + media_url_kind for torrent/magnet/DDL
+mod m20260505_000078_add_release_ledger_media_url;
 
 pub struct Migrator;
 
@@ -288,6 +290,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260504_000076_seed_release_tracking_notify_filters::Migration),
             // Release tracking: per-source last-poll summary
             Box::new(m20260505_000077_add_release_sources_last_summary::Migration),
+            // Release tracking: per-row media_url + media_url_kind
+            Box::new(m20260505_000078_add_release_ledger_media_url::Migration),
         ]
     }
 }

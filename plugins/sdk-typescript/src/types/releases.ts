@@ -77,7 +77,13 @@ export interface SeriesMatch {
  * - `groupOrUploader`: Scanlation group (MangaUpdates) or torrent uploader
  *   handle (Nyaa). Optional but strongly recommended.
  * - `payloadUrl`: The link the user follows to actually consume / acquire
- *   the release. Must be non-empty.
+ *   the release. Must be non-empty. Conventionally a human-readable landing
+ *   page (Nyaa view page, MangaUpdates release page).
+ * - `mediaUrl` / `mediaUrlKind`: Optional second URL describing how to
+ *   actually fetch the bits — a `.torrent` file, a magnet link, or a direct
+ *   download. Set both together; leave both unset for sources that only
+ *   surface a landing page. The UI renders a kind-specific icon next to
+ *   the standard external-link icon when these are present.
  * - `infoHash`: Torrent info_hash if applicable. Cross-source dedup key.
  * - `metadata` / `formatHints`: Free-form JSON for plugin-specific data
  *   (Nyaa size in bytes, MangaUpdates "is volume bundle" flag, etc.).
@@ -93,11 +99,24 @@ export interface ReleaseCandidate {
   formatHints?: Record<string, unknown> | null;
   groupOrUploader?: string | null;
   payloadUrl: string;
+  mediaUrl?: string | null;
+  mediaUrlKind?: MediaUrlKind | null;
   infoHash?: string | null;
   metadata?: Record<string, unknown> | null;
   /** ISO-8601 timestamp. */
   observedAt: string;
 }
+
+/**
+ * Classifies what `mediaUrl` points at so the UI can pick an appropriate
+ * icon and the host can label it consistently across sources.
+ *
+ * - `torrent`: HTTP(S) URL to a `.torrent` file.
+ * - `magnet`:  `magnet:` URI.
+ * - `direct`:  HTTP(S) URL to the file itself (DDL host, CDN, etc.).
+ * - `other`:   anything else; render a generic download icon.
+ */
+export type MediaUrlKind = "torrent" | "magnet" | "direct" | "other";
 
 // =============================================================================
 // releases/list_tracked

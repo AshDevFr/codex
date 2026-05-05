@@ -35,7 +35,18 @@ pub struct ReleaseCandidate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_or_uploader: Option<String>,
     /// URL the user can navigate to in order to acquire/read the release.
+    /// Conventionally a human-readable landing page (Nyaa view page,
+    /// MangaUpdates release page).
     pub payload_url: String,
+    /// Optional second URL describing how to actually fetch the bits — a
+    /// `.torrent` file, a magnet link, or a direct download. Set together
+    /// with [`Self::media_url_kind`] or leave both unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_url: Option<String>,
+    /// Classifies what [`Self::media_url`] points at. Required when
+    /// `media_url` is set, must be unset otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_url_kind: Option<MediaUrlKind>,
     /// Optional torrent info hash (enables cross-source dedup).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub info_hash: Option<String>,
@@ -44,6 +55,35 @@ pub struct ReleaseCandidate {
     pub metadata: Option<serde_json::Value>,
     /// When the upstream source observed this release.
     pub observed_at: DateTime<Utc>,
+}
+
+/// Classifies what [`ReleaseCandidate::media_url`] points at so the UI can
+/// pick a kind-specific icon and the host can surface it consistently across
+/// sources.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MediaUrlKind {
+    /// HTTP(S) URL to a `.torrent` file.
+    Torrent,
+    /// `magnet:` URI.
+    Magnet,
+    /// HTTP(S) URL to the file itself (DDL host, CDN, etc.).
+    Direct,
+    /// Anything that doesn't fit the above; UI renders a generic icon.
+    Other,
+}
+
+impl MediaUrlKind {
+    /// Stable, lowercase string used in the database column and on the
+    /// wire. Mirrors the serde `rename_all = "lowercase"` representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Torrent => "torrent",
+            Self::Magnet => "magnet",
+            Self::Direct => "direct",
+            Self::Other => "other",
+        }
+    }
 }
 
 /// Match details emitted alongside a candidate.
@@ -68,6 +108,12 @@ pub enum CandidateReject {
     BelowThreshold { confidence: f64, threshold: f64 },
     /// `payload_url` is empty / whitespace.
     EmptyPayloadUrl,
+    /// `media_url` is set but empty / whitespace.
+    EmptyMediaUrl,
+    /// `media_url` is set without `media_url_kind`, or vice versa.
+    /// The host requires the two travel together so the UI can always
+    /// resolve a kind for the icon.
+    MediaUrlPairMismatch,
     /// `external_release_id` is empty / whitespace.
     EmptyExternalReleaseId,
     /// `language` is empty.
@@ -91,6 +137,11 @@ impl std::fmt::Display for CandidateReject {
                 threshold,
             } => write!(f, "confidence {} below threshold {}", confidence, threshold),
             Self::EmptyPayloadUrl => write!(f, "payload_url cannot be empty"),
+            Self::EmptyMediaUrl => write!(f, "media_url cannot be empty when set"),
+            Self::MediaUrlPairMismatch => write!(
+                f,
+                "media_url and media_url_kind must be set together (or both unset)"
+            ),
             Self::EmptyExternalReleaseId => write!(f, "external_release_id cannot be empty"),
             Self::EmptyLanguage => write!(f, "language cannot be empty"),
             Self::InvalidChapter => write!(f, "chapter must be a finite number"),
@@ -127,6 +178,8 @@ mod tests {
             format_hints: Some(json!({"jxl": true})),
             group_or_uploader: Some("tsuna69".to_string()),
             payload_url: "https://nyaa.si/view/12345".to_string(),
+            media_url: Some("https://nyaa.si/download/12345.torrent".to_string()),
+            media_url_kind: Some(MediaUrlKind::Torrent),
             info_hash: Some("deadbeef".to_string()),
             metadata: None,
             observed_at: Utc::now(),
@@ -159,6 +212,8 @@ mod tests {
         cand.info_hash = None;
         cand.metadata = None;
         cand.group_or_uploader = None;
+        cand.media_url = None;
+        cand.media_url_kind = None;
         let json = serde_json::to_value(&cand).unwrap();
         let obj = json.as_object().unwrap();
         for key in [
@@ -168,8 +223,34 @@ mod tests {
             "infoHash",
             "metadata",
             "groupOrUploader",
+            "mediaUrl",
+            "mediaUrlKind",
         ] {
             assert!(!obj.contains_key(key), "expected `{}` to be skipped", key);
+        }
+    }
+
+    #[test]
+    fn media_url_kind_serializes_lowercase() {
+        let cand = good_candidate();
+        let json = serde_json::to_value(&cand).unwrap();
+        assert_eq!(json["mediaUrl"], "https://nyaa.si/download/12345.torrent");
+        assert_eq!(json["mediaUrlKind"], "torrent");
+    }
+
+    #[test]
+    fn media_url_kind_round_trips_via_json() {
+        for (kind, expected) in [
+            (MediaUrlKind::Torrent, "torrent"),
+            (MediaUrlKind::Magnet, "magnet"),
+            (MediaUrlKind::Direct, "direct"),
+            (MediaUrlKind::Other, "other"),
+        ] {
+            let json = serde_json::to_value(kind).unwrap();
+            assert_eq!(json, serde_json::Value::String(expected.to_string()));
+            let back: MediaUrlKind = serde_json::from_value(json).unwrap();
+            assert_eq!(back, kind);
+            assert_eq!(kind.as_str(), expected);
         }
     }
 }

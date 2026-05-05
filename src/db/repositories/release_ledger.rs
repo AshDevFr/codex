@@ -32,6 +32,8 @@ pub struct NewReleaseEntry {
     pub format_hints: Option<serde_json::Value>,
     pub group_or_uploader: Option<String>,
     pub payload_url: String,
+    pub media_url: Option<String>,
+    pub media_url_kind: Option<String>,
     pub confidence: f64,
     pub metadata: Option<serde_json::Value>,
     pub observed_at: chrono::DateTime<Utc>,
@@ -116,6 +118,8 @@ impl ReleaseLedgerRepository {
             format_hints: Set(entry.format_hints),
             group_or_uploader: Set(entry.group_or_uploader),
             payload_url: Set(entry.payload_url),
+            media_url: Set(entry.media_url),
+            media_url_kind: Set(entry.media_url_kind),
             confidence: Set(entry.confidence),
             state: Set(state::ANNOUNCED.to_string()),
             metadata: Set(entry.metadata),
@@ -281,10 +285,40 @@ mod tests {
             format_hints: None,
             group_or_uploader: Some("tsuna69".to_string()),
             payload_url: format!("https://nyaa.si/view/{}", ext_id),
+            media_url: None,
+            media_url_kind: None,
             confidence: 0.95,
             metadata: None,
             observed_at: Utc::now(),
         }
+    }
+
+    #[tokio::test]
+    async fn record_persists_media_url_pair() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup_world(conn).await;
+
+        let mut e = entry(series_id, source_id, "rel-media");
+        e.media_url = Some("https://nyaa.si/download/1.torrent".to_string());
+        e.media_url_kind = Some("torrent".to_string());
+        let outcome = ReleaseLedgerRepository::record(conn, e).await.unwrap();
+        assert!(!outcome.deduped);
+        assert_eq!(
+            outcome.row.media_url.as_deref(),
+            Some("https://nyaa.si/download/1.torrent")
+        );
+        assert_eq!(outcome.row.media_url_kind.as_deref(), Some("torrent"));
+
+        let fetched = ReleaseLedgerRepository::get_by_id(conn, outcome.row.id)
+            .await
+            .unwrap()
+            .expect("row exists");
+        assert_eq!(
+            fetched.media_url.as_deref(),
+            Some("https://nyaa.si/download/1.torrent")
+        );
+        assert_eq!(fetched.media_url_kind.as_deref(), Some("torrent"));
     }
 
     #[tokio::test]

@@ -204,12 +204,48 @@ describe("pollSubscription", () => {
         infoHash: string | null;
         formatHints: Record<string, unknown>;
         volume: number | null;
+        payloadUrl: string;
+        mediaUrl?: string | null;
+        mediaUrlKind?: string | null;
       };
     };
     expect(params.candidate.infoHash).toBe("aaa");
     expect(params.candidate.formatHints.digital).toBe(true);
     expect(params.candidate.formatHints.subscription).toBe("user:1r0n");
     expect(params.candidate.volume).toBe(2);
+    // Page url -> payloadUrl, .torrent -> mediaUrl with kind=torrent.
+    expect(params.candidate.payloadUrl).toBe("https://nyaa.si/view/1");
+    expect(params.candidate.mediaUrl).toBe("https://nyaa.si/download/1.torrent");
+    expect(params.candidate.mediaUrlKind).toBe("torrent");
+  });
+
+  it("falls back to torrent link as payloadUrl when guid permalink is missing", async () => {
+    const noPermalinkXml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa">
+  <channel>
+    <item>
+      <title><![CDATA[[1r0n] Dandadan c126-142 (Digital)]]></title>
+      <link>https://nyaa.si/download/99.torrent</link>
+      <guid>nyaa-99</guid>
+      <pubDate>Sun, 03 May 2026 12:00:00 GMT</pubDate>
+      <nyaa:infoHash>zzz</nyaa:infoHash>
+    </item>
+  </channel>
+</rss>`;
+    const { rpc, calls } = makeMockRpc(() => ({ ledgerId: "ld", deduped: false }));
+    await pollSubscription(rpc, "src-1", { kind: "user", identifier: "1r0n" }, trackedCandidates, {
+      previousEtag: null,
+      timeoutMs: 1000,
+      minConfidence: 0.7,
+      fetchImpl: mockFetchOk(noPermalinkXml),
+    });
+    const record = calls.find((c) => c.method === "releases/record");
+    expect(record).toBeDefined();
+    const cand = (record?.params as { candidate: Record<string, unknown> }).candidate;
+    expect(cand.payloadUrl).toBe("https://nyaa.si/download/99.torrent");
+    // Both fields would point at the same URL — skip the duplicate.
+    expect(cand.mediaUrl).toBeUndefined();
+    expect(cand.mediaUrlKind).toBeUndefined();
   });
 
   it("counts deduped records as not-newly-recorded", async () => {
