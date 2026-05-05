@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type PaginatedReleases,
+  type ReleaseFacets,
   type ReleaseLedgerEntry,
   releaseSourcesApi,
   releasesApi,
@@ -16,6 +17,9 @@ vi.mock("@/api/releases", () => ({
     patchEntry: vi.fn(),
     dismiss: vi.fn(),
     markAcquired: vi.fn(),
+    delete: vi.fn(),
+    bulk: vi.fn(),
+    facets: vi.fn(),
   },
   releaseSourcesApi: {
     list: vi.fn(),
@@ -57,7 +61,14 @@ function paginated(entries: ReleaseLedgerEntry[]): PaginatedReleases {
   } as PaginatedReleases;
 }
 
+function emptyFacets(): ReleaseFacets {
+  return { languages: [], libraries: [], series: [] };
+}
+
 const list = vi.mocked(releasesApi.listInbox);
+const facets = vi.mocked(releasesApi.facets);
+const bulk = vi.mocked(releasesApi.bulk);
+const remove = vi.mocked(releasesApi.delete);
 
 describe("ReleasesInbox", () => {
   beforeEach(() => {
@@ -65,6 +76,7 @@ describe("ReleasesInbox", () => {
     useReleaseAnnouncementsStore.getState().reset();
     useReleaseAnnouncementsStore.getState().bump();
     void releaseSourcesApi;
+    facets.mockResolvedValue(emptyFacets());
   });
 
   it("renders releases and resets the unseen badge on mount", async () => {
@@ -105,7 +117,6 @@ describe("ReleasesInbox", () => {
       ]),
     );
     renderWithProviders(<ReleasesInbox />);
-    // Both the page-link icon and the torrent icon should be present.
     const payloadLink = await screen.findByLabelText("Open payload URL");
     expect(payloadLink).toHaveAttribute("href", "https://example.com/r/1");
     const torrentLink = screen.getByLabelText("Download .torrent");
@@ -124,7 +135,33 @@ describe("ReleasesInbox", () => {
     expect(screen.queryByLabelText("Direct download")).toBeNull();
   });
 
-  it("typing a series filter triggers a new query", async () => {
+  it("loads facets with the active filter context", async () => {
+    list.mockResolvedValue(paginated([]));
+    facets.mockResolvedValue({
+      languages: [{ language: "en", count: 7 }],
+      libraries: [
+        { libraryId: "lib-a", libraryName: "Manga", count: 5 },
+        { libraryId: "lib-b", libraryName: "Books", count: 2 },
+      ],
+      series: [
+        {
+          seriesId: "s-1",
+          seriesTitle: "Solo Leveling",
+          libraryId: "lib-a",
+          libraryName: "Manga",
+          count: 5,
+        },
+      ],
+    });
+    renderWithProviders(<ReleasesInbox />);
+    await waitFor(() => {
+      expect(facets).toHaveBeenCalledWith(
+        expect.objectContaining({ state: "announced" }),
+      );
+    });
+  });
+
+  it("supports state=all by passing 'all' to the inbox query", async () => {
     list.mockResolvedValue(paginated([]));
     const user = userEvent.setup();
     renderWithProviders(<ReleasesInbox />);
@@ -133,14 +170,86 @@ describe("ReleasesInbox", () => {
         expect.objectContaining({ state: "announced" }),
       );
     });
-
-    const seriesInput = screen.getByPlaceholderText(/Optional UUID/i);
-    await user.type(seriesInput, "abc-123");
-
+    const stateInput = screen.getByTestId(
+      "releases-state-filter",
+    ) as HTMLInputElement;
+    await user.click(stateInput);
+    const allOption = await screen.findByText("All", {
+      selector: "[role=option] *, [role=option]",
+    });
+    await user.click(allOption);
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(
-        expect.objectContaining({ seriesId: "abc-123" }),
+        expect.objectContaining({ state: "all" }),
       );
+    });
+  });
+
+  it("bulk-dismisses the selected rows", async () => {
+    list.mockResolvedValue(paginated([entry({ id: "a" }), entry({ id: "b" })]));
+    bulk.mockResolvedValue({ affected: 2, action: "dismiss" });
+    const user = userEvent.setup();
+    renderWithProviders(<ReleasesInbox />);
+    await screen.findAllByText("GroupZ");
+
+    await user.click(screen.getByLabelText("Select release a"));
+    await user.click(screen.getByLabelText("Select release b"));
+    // The bulk action bar's Dismiss button has the IconX icon; the
+    // per-row dismiss button has aria-label "Dismiss" but no visible
+    // text. The bar's button has visible "Dismiss" text inside it.
+    const dismissButtons = await screen.findAllByRole("button", {
+      name: /Dismiss/,
+    });
+    // Bar button is the only "button" tagged with the visible word.
+    const barButton = dismissButtons.find((b) =>
+      b.textContent?.includes("Dismiss"),
+    );
+    await user.click(barButton!);
+    await waitFor(() => {
+      expect(bulk).toHaveBeenCalledWith({
+        ids: ["a", "b"],
+        action: "dismiss",
+      });
+    });
+  });
+
+  it("requires confirmation before bulk-deleting", async () => {
+    list.mockResolvedValue(paginated([entry({ id: "a" })]));
+    bulk.mockResolvedValue({ affected: 1, action: "delete" });
+    const user = userEvent.setup();
+    renderWithProviders(<ReleasesInbox />);
+    await screen.findAllByText("GroupZ");
+
+    await user.click(screen.getByLabelText("Select release a"));
+    // The bulk-bar Delete button has visible "Delete" text; the per-row
+    // delete has aria-label only.
+    const deleteButtons = await screen.findAllByRole("button", {
+      name: /Delete/,
+    });
+    const barButton = deleteButtons.find((b) =>
+      b.textContent?.includes("Delete"),
+    );
+    await user.click(barButton!);
+    // Confirmation modal opens — bulk hasn't fired yet.
+    expect(bulk).not.toHaveBeenCalled();
+    await user.click(
+      await screen.findByRole("button", { name: /Delete 1 release/ }),
+    );
+    await waitFor(() => {
+      expect(bulk).toHaveBeenCalledWith({ ids: ["a"], action: "delete" });
+    });
+  });
+
+  it("per-row delete fires the delete API", async () => {
+    list.mockResolvedValue(paginated([entry({ id: "a" })]));
+    remove.mockResolvedValue({ deleted: true });
+    const user = userEvent.setup();
+    renderWithProviders(<ReleasesInbox />);
+    await screen.findByText("GroupZ");
+
+    await user.click(screen.getByLabelText("Delete"));
+    await waitFor(() => {
+      expect(remove).toHaveBeenCalledWith("a");
     });
   });
 });

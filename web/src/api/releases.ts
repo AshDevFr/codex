@@ -13,14 +13,37 @@ export type ReleaseTrackingApplicability =
   components["schemas"]["ApplicabilityResponse"];
 export type ResetReleaseSourceResponse =
   components["schemas"]["ResetReleaseSourceResponse"];
+export type ReleaseFacets = components["schemas"]["ReleaseFacetsResponse"];
+export type ReleaseSeriesFacet = components["schemas"]["ReleaseSeriesFacetDto"];
+export type ReleaseLibraryFacet =
+  components["schemas"]["ReleaseLibraryFacetDto"];
+export type ReleaseLanguageFacet =
+  components["schemas"]["ReleaseLanguageFacetDto"];
+export type BulkReleaseAction = components["schemas"]["BulkReleaseAction"];
+export type BulkReleaseActionRequest =
+  components["schemas"]["BulkReleaseActionRequest"];
+export type BulkReleaseActionResponse =
+  components["schemas"]["BulkReleaseActionResponse"];
+export type DeleteReleaseResponse =
+  components["schemas"]["DeleteReleaseResponse"];
 
 export interface ReleaseInboxParams {
+  /** State filter. Use `"all"` for no state restriction; defaults to `"announced"` server-side. */
   state?: string;
   seriesId?: string;
   sourceId?: string;
   language?: string;
+  libraryId?: string;
   page?: number;
   pageSize?: number;
+}
+
+export interface ReleaseFacetsParams {
+  state?: string;
+  seriesId?: string;
+  sourceId?: string;
+  language?: string;
+  libraryId?: string;
 }
 
 export interface SeriesReleaseListParams {
@@ -81,6 +104,46 @@ export const releasesApi = {
   markAcquired: async (releaseId: string): Promise<ReleaseLedgerEntry> => {
     const response = await api.post<ReleaseLedgerEntry>(
       `/releases/${releaseId}/mark-acquired`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Hard-delete a single ledger row. The affected source's `etag` is
+   * cleared so the next poll re-fetches without `If-None-Match` and
+   * re-announces the row.
+   */
+  delete: async (releaseId: string): Promise<DeleteReleaseResponse> => {
+    const response = await api.delete<DeleteReleaseResponse>(
+      `/releases/${releaseId}`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Apply an action (`dismiss`, `mark-acquired`, `delete`) to a batch
+   * of ledger rows in a single request. Server caps at 500 ids; clients
+   * should batch larger selections.
+   */
+  bulk: async (
+    request: BulkReleaseActionRequest,
+  ): Promise<BulkReleaseActionResponse> => {
+    const response = await api.post<BulkReleaseActionResponse>(
+      `/releases/bulk`,
+      request,
+    );
+    return response.data;
+  },
+
+  /**
+   * Distinct values present in the inbox under a given filter set.
+   * Each facet excludes its own dimension so dropdowns never collapse
+   * to the active selection. Used by the inbox UI to populate cascading
+   * filter Selects without forcing UUID input.
+   */
+  facets: async (params: ReleaseFacetsParams = {}): Promise<ReleaseFacets> => {
+    const response = await api.get<ReleaseFacets>(
+      `/releases/facets${buildQuery(params)}`,
     );
     return response.data;
   },

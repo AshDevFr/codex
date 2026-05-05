@@ -2557,6 +2557,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/releases/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply an action to a batch of ledger rows.
+         * @description `dismiss` and `mark-acquired` set state in-place. `delete` removes
+         *     the rows and clears the affected sources' etags so the next poll
+         *     re-fetches without `If-None-Match`. All three run as bulk SQL — no
+         *     per-row round trips — so this scales to deleting thousands of rows in
+         *     one call.
+         */
+        post: operations["bulk_release_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Distinct values present in the inbox under the given filters.
+         * @description Returns the languages, libraries, and series that have at least one
+         *     matching ledger row. The frontend uses this to populate cascading
+         *     Select dropdowns so users never have to type a UUID and never see
+         *     dropdown options that would yield zero results.
+         */
+        get: operations["list_release_facets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/releases/{release_id}": {
         parameters: {
             query?: never;
@@ -2567,7 +2614,14 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Hard-delete a single ledger row.
+         * @description Also clears the source's `etag` so the next poll bypasses
+         *     `If-None-Match` and re-records the deleted row in `announced` state
+         *     (assuming the upstream still lists it). This is the lever users want
+         *     when they marked something incorrectly and need to "get it back".
+         */
+        delete: operations["delete_release"];
         options?: never;
         head?: never;
         /** PATCH a ledger entry's state (general-purpose state transition). */
@@ -8657,6 +8711,27 @@ export interface components {
              */
             year?: number | null;
         };
+        /**
+         * @description Action requested by `POST /api/v1/releases/bulk`.
+         * @enum {string}
+         */
+        BulkReleaseAction: "dismiss" | "mark-acquired" | "delete";
+        /** @description Request body for `POST /api/v1/releases/bulk`. */
+        BulkReleaseActionRequest: {
+            action: components["schemas"]["BulkReleaseAction"];
+            ids: string[];
+        };
+        /** @description Response from `POST /api/v1/releases/bulk`. */
+        BulkReleaseActionResponse: {
+            /** @description Action that ran (echoed back for client-side confirmation toasts). */
+            action: components["schemas"]["BulkReleaseAction"];
+            /**
+             * Format: int64
+             * @description Number of ledger rows actually affected. Less than `ids.len()` when
+             *     some IDs were already deleted concurrently.
+             */
+            affected: number;
+        };
         /** @description Request for bulk renumber operations on multiple series */
         BulkRenumberSeriesRequest: {
             /**
@@ -9315,6 +9390,18 @@ export interface components {
              * @example Preference 'ui.theme' was reset to default
              */
             message: string;
+        };
+        /**
+         * @description Response from `DELETE /api/v1/releases/{id}`.
+         *
+         *     Single-row delete returns a small confirmation rather than 204 so the
+         *     frontend can surface a toast that mentions the etag clear ("the next
+         *     poll will re-fetch this release"). Mirrors the bulk-delete shape with
+         *     `affected = 1`.
+         */
+        DeleteReleaseResponse: {
+            /** @description `true` if the row was deleted, `false` if it didn't exist. */
+            deleted: boolean;
         };
         /** @description Detected series information for preview */
         DetectedSeriesDto: {
@@ -14728,6 +14815,26 @@ export interface components {
             /** @description User information */
             user: components["schemas"]["UserInfo"];
         };
+        /**
+         * @description Response shape for `GET /api/v1/releases/facets`.
+         *
+         *     Each list reflects the distinct values present in the ledger under the
+         *     **other** active filters (Solr-style facet exclusion), so dropdowns
+         *     never offer combinations that would yield zero results. The frontend
+         *     uses these to populate cascading filter Select inputs without forcing
+         *     the user to type UUIDs.
+         */
+        ReleaseFacetsResponse: {
+            languages: components["schemas"]["ReleaseLanguageFacetDto"][];
+            libraries: components["schemas"]["ReleaseLibraryFacetDto"][];
+            series: components["schemas"]["ReleaseSeriesFacetDto"][];
+        };
+        /** @description One language option in the inbox facets response. */
+        ReleaseLanguageFacetDto: {
+            /** Format: int64 */
+            count: number;
+            language: string;
+        };
         /** @description A single release announcement. Sources write these; the inbox reads them. */
         ReleaseLedgerEntryDto: {
             /**
@@ -14801,6 +14908,32 @@ export interface components {
         };
         ReleaseLedgerListResponse: {
             entries: components["schemas"]["ReleaseLedgerEntryDto"][];
+        };
+        /** @description One library option in the inbox facets response. */
+        ReleaseLibraryFacetDto: {
+            /** Format: int64 */
+            count: number;
+            /** Format: uuid */
+            libraryId: string;
+            libraryName: string;
+        };
+        /**
+         * @description One series option in the inbox facets response. Carries the joined
+         *     `library_id` and `library_name` so the frontend can group the dropdown
+         *     by library without a follow-up call.
+         */
+        ReleaseSeriesFacetDto: {
+            /**
+             * Format: int64
+             * @description Number of ledger rows matching the active filter for this series.
+             */
+            count: number;
+            /** Format: uuid */
+            libraryId: string;
+            libraryName: string;
+            /** Format: uuid */
+            seriesId: string;
+            seriesTitle: string;
         };
         /** @description A configured release source (one row per logical feed). */
         ReleaseSourceDto: {
@@ -23627,11 +23760,16 @@ export interface operations {
     list_release_inbox: {
         parameters: {
             query?: {
-                /** @description Filter by state. Defaults to `announced`. */
+                /**
+                 * @description Filter by state. Defaults to `announced`. Pass `all` to disable
+                 *     state filtering entirely (returns rows in every state).
+                 */
                 state?: string | null;
                 seriesId?: string | null;
                 sourceId?: string | null;
                 language?: string | null;
+                /** @description Restrict to series belonging to this library. */
+                libraryId?: string | null;
                 page?: number;
                 pageSize?: number;
             };
@@ -23652,6 +23790,121 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_release_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkReleaseActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk action applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkReleaseActionResponse"];
+                };
+            };
+            /** @description Empty ID list or invalid action */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_release_facets: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                seriesId?: string | null;
+                sourceId?: string | null;
+                language?: string | null;
+                libraryId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets for the inbox view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseFacetsResponse"];
+                };
+            };
+            /** @description Invalid state filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description SeriesRead permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteReleaseResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -315,6 +315,51 @@ impl ReleaseSourceRepository {
         active.update(db).await?;
         Ok(())
     }
+
+    /// Clear only the `etag` for this source. Used when a user deletes
+    /// individual ledger rows and wants the next poll to bypass the
+    /// upstream's `If-None-Match` cache (so the deleted row gets re-recorded
+    /// in `announced` state). Lighter than `clear_poll_state`: poll history
+    /// (`last_polled_at`, `last_error`, `last_summary`) is preserved.
+    pub async fn clear_etag(db: &DatabaseConnection, id: Uuid) -> Result<()> {
+        // Use update_many so a missing row is a silent no-op rather than an
+        // error. Per-row ledger deletes can race with a source deletion; the
+        // dropped ledger row is the user's intent regardless of whether the
+        // source still exists.
+        ReleaseSources::update_many()
+            .col_expr(
+                release_sources::Column::Etag,
+                sea_orm::sea_query::Expr::value(Option::<String>::None),
+            )
+            .col_expr(
+                release_sources::Column::UpdatedAt,
+                sea_orm::sea_query::Expr::value(Utc::now()),
+            )
+            .filter(release_sources::Column::Id.eq(id))
+            .exec(db)
+            .await?;
+        Ok(())
+    }
+
+    /// Clear `etag` on every source in `ids` in a single statement.
+    pub async fn clear_etag_many(db: &DatabaseConnection, ids: &[Uuid]) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        ReleaseSources::update_many()
+            .col_expr(
+                release_sources::Column::Etag,
+                sea_orm::sea_query::Expr::value(Option::<String>::None),
+            )
+            .col_expr(
+                release_sources::Column::UpdatedAt,
+                sea_orm::sea_query::Expr::value(Utc::now()),
+            )
+            .filter(release_sources::Column::Id.is_in(ids.to_vec()))
+            .exec(db)
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

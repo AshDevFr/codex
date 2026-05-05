@@ -219,6 +219,106 @@ pub struct ResetReleaseSourceResponse {
     pub deleted_ledger_entries: u64,
 }
 
+// =============================================================================
+// Facets
+// =============================================================================
+
+/// One series option in the inbox facets response. Carries the joined
+/// `library_id` and `library_name` so the frontend can group the dropdown
+/// by library without a follow-up call.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseSeriesFacetDto {
+    pub series_id: Uuid,
+    pub series_title: String,
+    pub library_id: Uuid,
+    pub library_name: String,
+    /// Number of ledger rows matching the active filter for this series.
+    pub count: u64,
+}
+
+/// One library option in the inbox facets response.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseLibraryFacetDto {
+    pub library_id: Uuid,
+    pub library_name: String,
+    pub count: u64,
+}
+
+/// One language option in the inbox facets response.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseLanguageFacetDto {
+    pub language: String,
+    pub count: u64,
+}
+
+/// Response shape for `GET /api/v1/releases/facets`.
+///
+/// Each list reflects the distinct values present in the ledger under the
+/// **other** active filters (Solr-style facet exclusion), so dropdowns
+/// never offer combinations that would yield zero results. The frontend
+/// uses these to populate cascading filter Select inputs without forcing
+/// the user to type UUIDs.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseFacetsResponse {
+    pub languages: Vec<ReleaseLanguageFacetDto>,
+    pub libraries: Vec<ReleaseLibraryFacetDto>,
+    pub series: Vec<ReleaseSeriesFacetDto>,
+}
+
+// =============================================================================
+// Bulk operations
+// =============================================================================
+
+/// Action requested by `POST /api/v1/releases/bulk`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum BulkReleaseAction {
+    /// Set state to `dismissed`.
+    Dismiss,
+    /// Set state to `marked_acquired`.
+    MarkAcquired,
+    /// Hard-delete the ledger rows. Each affected source's `etag` is
+    /// cleared so the next poll re-fetches without `If-None-Match` and
+    /// re-announces the deleted releases.
+    Delete,
+}
+
+/// Request body for `POST /api/v1/releases/bulk`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkReleaseActionRequest {
+    pub ids: Vec<Uuid>,
+    pub action: BulkReleaseAction,
+}
+
+/// Response from `POST /api/v1/releases/bulk`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkReleaseActionResponse {
+    /// Number of ledger rows actually affected. Less than `ids.len()` when
+    /// some IDs were already deleted concurrently.
+    pub affected: u64,
+    /// Action that ran (echoed back for client-side confirmation toasts).
+    pub action: BulkReleaseAction,
+}
+
+/// Response from `DELETE /api/v1/releases/{id}`.
+///
+/// Single-row delete returns a small confirmation rather than 204 so the
+/// frontend can surface a toast that mentions the etag clear ("the next
+/// poll will re-fetch this release"). Mirrors the bulk-delete shape with
+/// `affected = 1`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteReleaseResponse {
+    /// `true` if the row was deleted, `false` if it didn't exist.
+    pub deleted: bool,
+}
+
 /// Response shape from the `poll-now` endpoint.
 ///
 /// `status` is `enqueued` after a successful enqueue. The `message` carries
