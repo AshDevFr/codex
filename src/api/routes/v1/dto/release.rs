@@ -29,6 +29,12 @@ pub struct ReleaseLedgerEntryDto {
     pub id: Uuid,
     #[schema(example = "550e8400-e29b-41d4-a716-446655440002")]
     pub series_id: Uuid,
+    /// Series title at the time of the response. Joined from the `series`
+    /// table so the inbox UI can render a human-readable label without a
+    /// follow-up fetch. Falls back to the empty string only if the series
+    /// row was hard-deleted between the join and the read.
+    #[schema(example = "Chainsaw Man")]
+    pub series_title: String,
     #[schema(example = "550e8400-e29b-41d4-a716-446655440b00")]
     pub source_id: Uuid,
     /// Plugin-stable identity for the release (used for dedup).
@@ -62,11 +68,15 @@ pub struct ReleaseLedgerEntryDto {
     pub created_at: DateTime<Utc>,
 }
 
-impl From<release_ledger::Model> for ReleaseLedgerEntryDto {
-    fn from(m: release_ledger::Model) -> Self {
+impl ReleaseLedgerEntryDto {
+    /// Build a DTO from a ledger row plus the joined series title. The title
+    /// must be looked up by the caller (typically a batch query in the
+    /// handler) since `From<Model>` alone can't carry it.
+    pub fn from_model_with_series_title(m: release_ledger::Model, series_title: String) -> Self {
         Self {
             id: m.id,
             series_id: m.series_id,
+            series_title,
             source_id: m.source_id,
             external_release_id: m.external_release_id,
             info_hash: m.info_hash,
@@ -182,6 +192,19 @@ pub struct UpdateReleaseSourceRequest {
     pub enabled: Option<bool>,
     /// Polling interval override (seconds). Must be > 0.
     pub poll_interval_s: Option<i32>,
+}
+
+/// Response shape from the `reset` endpoint.
+///
+/// Returns the number of ledger rows removed so callers can show a
+/// confirmation toast. The source's transient poll state (etag,
+/// last_polled_at, last_error, last_summary) is also cleared, but those
+/// are not counted here.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetReleaseSourceResponse {
+    /// Number of `release_ledger` rows deleted for this source.
+    pub deleted_ledger_entries: u64,
 }
 
 /// Response shape from the `poll-now` endpoint.

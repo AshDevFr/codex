@@ -1448,6 +1448,12 @@ pub struct ReleasePollRequest {
 /// reverse-RPC channel is open). The `candidates` field is convenience for
 /// plugins that prefer to return everything at once; both styles are
 /// supported and the host treats them identically.
+///
+/// Plugins that stream via `releases/record` should also populate the
+/// counter fields (`parsed`, `matched`, `recorded`, `deduped`) so the host
+/// can build an accurate `last_summary` for the source. Without those, the
+/// host can only see what came back in `candidates` and a streaming
+/// plugin's status badge will read "Fetched 0 items" no matter what.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleasePollResponse {
@@ -1470,6 +1476,27 @@ pub struct ReleasePollResponse {
     /// the host's per-host backoff layer to detect 429 / 503.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upstream_status: Option<u16>,
+    /// Items the plugin parsed from the upstream feed before any matching
+    /// or threshold filtering. Streaming plugins should populate this so
+    /// the host's `last_summary` reflects upstream activity, not just the
+    /// shape of the response payload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parsed: Option<u32>,
+    /// Of those parsed, the count that matched a tracked series alias
+    /// (i.e. that became candidates the plugin then evaluated/streamed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matched: Option<u32>,
+    /// Of those matched, the count actually inserted into the ledger
+    /// (excludes dedupes). For plugins that stream via `releases/record`,
+    /// this is the count of non-deduped record outcomes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recorded: Option<u32>,
+    /// Of those matched, the count that the host deduped onto an existing
+    /// ledger row. Optional; when omitted the host infers `matched -
+    /// recorded`. Provided explicitly by streaming plugins that already
+    /// know.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deduped: Option<u32>,
 }
 
 // =============================================================================

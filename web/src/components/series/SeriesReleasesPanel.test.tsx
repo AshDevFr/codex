@@ -29,6 +29,7 @@ function entry(over: Partial<ReleaseLedgerEntry> = {}): ReleaseLedgerEntry {
   return {
     id: "ent-1",
     seriesId: SERIES_ID,
+    seriesTitle: "Series",
     sourceId: "11111111-1111-1111-1111-111111111111",
     externalReleaseId: "ext-1",
     payloadUrl: "https://example.com/r/1",

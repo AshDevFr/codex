@@ -47,8 +47,14 @@ export interface ParsedRssItem {
   group: string | null;
   /** Format hints as a small dictionary (digital, jxl, ...). */
   formatHints: Record<string, boolean>;
-  /** Magnet/torrent link or release page URL. */
+  /** RSS `<link>` value. On Nyaa this is the `.torrent` download URL. */
   link: string;
+  /**
+   * Permalink to the release post page (e.g. `https://nyaa.si/view/12345`),
+   * derived from the `<guid isPermaLink="true">` tag. Null when the guid is
+   * missing or doesn't look like a post URL.
+   */
+  pageUrl: string | null;
   /** `nyaa:infoHash` value, lowercased; null if missing. */
   infoHash: string | null;
   /** ISO-8601 timestamp. Falls back to "now" if pubDate is missing/invalid. */
@@ -286,6 +292,20 @@ function pubDateToIso(raw: string | null): string {
   return new Date().toISOString();
 }
 
+/**
+ * Pull the post-page URL out of the guid when it looks like a Nyaa
+ * `/view/<id>` permalink. The `<link>` tag in Nyaa feeds is the `.torrent`
+ * download URL, which is not what we want to surface to users.
+ */
+function derivePageUrl(guid: string | null): string | null {
+  if (!guid) return null;
+  const trimmed = guid.trim();
+  if (trimmed.length === 0) return null;
+  // Match http(s)://<host>/view/<id> with optional trailing slash / query.
+  if (/^https?:\/\/[^/]+\/view\/[^/?#]+/i.test(trimmed)) return trimmed;
+  return null;
+}
+
 function deriveExternalReleaseId(
   guid: string | null,
   link: string | null,
@@ -333,6 +353,7 @@ export function parseItem(itemXml: string): ParsedRssItem | null {
     group: parsedTitle.group,
     formatHints: parsedTitle.formatHints,
     link: link ?? "",
+    pageUrl: derivePageUrl(guid),
     infoHash,
     observedAt: pubDateToIso(pubDate),
   };

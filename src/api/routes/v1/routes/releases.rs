@@ -47,4 +47,8 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/release-sources/{source_id}/poll-now",
             post(handlers::releases::poll_release_source_now),
         )
+        .route(
+            "/release-sources/{source_id}/reset",
+            post(handlers::releases::reset_release_source),
+        )
 }

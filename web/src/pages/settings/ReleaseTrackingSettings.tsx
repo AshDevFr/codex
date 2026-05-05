@@ -22,6 +22,7 @@ import {
   IconBellRinging,
   IconClockHour4,
   IconRefresh,
+  IconRestore,
   IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,6 +34,7 @@ import { settingsApi } from "@/api/settings";
 import {
   usePollReleaseSourceNow,
   useReleaseSources,
+  useResetReleaseSource,
   useUpdateReleaseSource,
 } from "@/hooks/useReleases";
 import { useUserPreference } from "@/hooks/useUserPreference";
@@ -73,6 +75,7 @@ export function ReleaseTrackingSettings() {
   const sourcesQuery = useReleaseSources();
   const update = useUpdateReleaseSource();
   const pollNow = usePollReleaseSourceNow();
+  const reset = useResetReleaseSource();
 
   return (
     <Box p="md">
@@ -145,6 +148,16 @@ export function ReleaseTrackingSettings() {
                     }
                     onPollNow={() => pollNow.mutate(source.id)}
                     pollNowPending={pollNow.isPending}
+                    onReset={() => {
+                      if (
+                        window.confirm(
+                          `Reset "${source.displayName}"?\n\nThis deletes every release ledger row for this source and clears its poll state (etag, last poll time). User-managed settings (enabled, interval, name) are preserved. The next poll will re-record everything as new.\n\nThis cannot be undone.`,
+                        )
+                      ) {
+                        reset.mutate(source.id);
+                      }
+                    }}
+                    resetPending={reset.isPending}
                   />
                 ))}
               </Table.Tbody>
@@ -328,6 +341,8 @@ interface RowProps {
   onIntervalChange: (seconds: number) => void;
   onPollNow: () => void;
   pollNowPending: boolean;
+  onReset: () => void;
+  resetPending: boolean;
 }
 
 function ReleaseSourceRow({
@@ -336,6 +351,8 @@ function ReleaseSourceRow({
   onIntervalChange,
   onPollNow,
   pollNowPending,
+  onReset,
+  resetPending,
 }: RowProps) {
   const [draft, setDraft] = useState<number | null>(source.pollIntervalS);
 
@@ -449,17 +466,30 @@ function ReleaseSourceRow({
         />
       </Table.Td>
       <Table.Td>
-        <Tooltip label={source.enabled ? "Poll now" : "Enable to poll"}>
-          <ActionIcon
-            variant="subtle"
-            onClick={onPollNow}
-            disabled={!source.enabled || pollNowPending}
-            loading={pollNowPending}
-            aria-label="Poll now"
-          >
-            <IconRefresh size={16} />
-          </ActionIcon>
-        </Tooltip>
+        <Group gap={4} wrap="nowrap">
+          <Tooltip label={source.enabled ? "Poll now" : "Enable to poll"}>
+            <ActionIcon
+              variant="subtle"
+              onClick={onPollNow}
+              disabled={!source.enabled || pollNowPending}
+              loading={pollNowPending}
+              aria-label="Poll now"
+            >
+              <IconRefresh size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Reset: drop ledger rows and clear poll state">
+            <ActionIcon
+              variant="subtle"
+              color="red"
+              onClick={onReset}
+              loading={resetPending}
+              aria-label="Reset source"
+            >
+              <IconRestore size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Table.Td>
     </Table.Tr>
   );

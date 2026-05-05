@@ -239,6 +239,12 @@ export interface ReleasePollRequest {
  * Plugins may also stream candidates over `releases/record` mid-poll; the
  * host treats both styles identically. Use `candidates` for plugins that
  * prefer to return everything at once.
+ *
+ * Plugins that stream via `releases/record` should also populate the
+ * counter fields (`parsed`, `matched`, `recorded`, `deduped`). Without
+ * them, the host can only see what came back in `candidates` and the
+ * source's status badge will read "Fetched 0 items" no matter what
+ * actually happened.
  */
 export interface ReleasePollResponse {
   /** Optional batch of candidates the host should evaluate and ledger. */
@@ -249,4 +255,27 @@ export interface ReleasePollResponse {
   notModified?: boolean;
   /** HTTP status code observed (used by host's per-host backoff). */
   upstreamStatus?: number;
+  /**
+   * Items the plugin parsed from the upstream feed before any matching
+   * or threshold filtering. Streaming plugins should set this so the
+   * host's `last_summary` reflects upstream activity, not just the shape
+   * of the response payload.
+   */
+  parsed?: number;
+  /**
+   * Of those parsed, the count that matched a tracked-series alias (i.e.
+   * became candidates the plugin then evaluated/streamed).
+   */
+  matched?: number;
+  /**
+   * Of those matched, the count actually inserted into the ledger
+   * (excludes dedupes). For plugins that stream via `releases/record`,
+   * this is the count of non-deduped record outcomes.
+   */
+  recorded?: number;
+  /**
+   * Of those matched, the count the host deduped onto an existing ledger
+   * row. Optional; when omitted the host infers `matched - recorded`.
+   */
+  deduped?: number;
 }

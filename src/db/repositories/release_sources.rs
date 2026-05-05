@@ -291,6 +291,30 @@ impl ReleaseSourceRepository {
         let result = ReleaseSources::delete_by_id(id).exec(db).await?;
         Ok(result.rows_affected > 0)
     }
+
+    /// Reset all transient poll state on a source: clears `etag`,
+    /// `last_polled_at`, `last_error`, `last_error_at`, and `last_summary`.
+    /// Leaves user-managed fields (`enabled`, `poll_interval_s`,
+    /// `display_name`, `config`) untouched.
+    ///
+    /// Used by the source-reset admin endpoint so a forced re-poll fetches
+    /// the upstream feed afresh (no `If-None-Match` 304) and re-records
+    /// every release as `announced`.
+    pub async fn clear_poll_state(db: &DatabaseConnection, id: Uuid) -> Result<()> {
+        let existing = ReleaseSources::find_by_id(id)
+            .one(db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("release source {} not found", id))?;
+        let mut active: release_sources::ActiveModel = existing.into();
+        active.last_polled_at = Set(None);
+        active.last_error = Set(None);
+        active.last_error_at = Set(None);
+        active.etag = Set(None);
+        active.last_summary = Set(None);
+        active.updated_at = Set(Utc::now());
+        active.update(db).await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -633,6 +657,54 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(mu.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn clear_poll_state_resets_transient_fields_only() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let s = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+
+        // Seed some poll state and a user override.
+        ReleaseSourceRepository::record_poll_success(
+            conn,
+            s.id,
+            Utc::now(),
+            Some("\"etag-1\"".to_string()),
+            Some("Fetched 3 items".to_string()),
+        )
+        .await
+        .unwrap();
+        ReleaseSourceRepository::update(
+            conn,
+            s.id,
+            ReleaseSourceUpdate {
+                enabled: Some(false),
+                poll_interval_s: Some(900),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        ReleaseSourceRepository::clear_poll_state(conn, s.id)
+            .await
+            .unwrap();
+
+        let after = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(after.etag.is_none());
+        assert!(after.last_polled_at.is_none());
+        assert!(after.last_error.is_none());
+        assert!(after.last_error_at.is_none());
+        assert!(after.last_summary.is_none());
+        // User-managed fields preserved.
+        assert!(!after.enabled);
+        assert_eq!(after.poll_interval_s, 900);
     }
 
     #[tokio::test]

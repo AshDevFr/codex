@@ -185,6 +185,8 @@ export interface SubscriptionPollOutcome {
   parsed: number;
   matched: number;
   recorded: number;
+  /** Of those sent to record, how many the host deduped onto an existing row. */
+  deduped: number;
   upstreamStatus: number;
   /** New ETag returned by upstream (only set when fetched=true). */
   etag: string | null;
@@ -226,7 +228,8 @@ function toCandidate(
     volume: item.volume,
     language: "en",
     groupOrUploader: item.group ?? (subscription.kind === "user" ? subscription.identifier : null),
-    payloadUrl: item.link.length > 0 ? item.link : `urn:nyaa:${item.externalReleaseId}`,
+    payloadUrl:
+      item.pageUrl ?? (item.link.length > 0 ? item.link : `urn:nyaa:${item.externalReleaseId}`),
     infoHash: item.infoHash,
     formatHints,
     observedAt: item.observedAt,
@@ -263,6 +266,7 @@ export async function pollSubscription(
       parsed: 0,
       matched: 0,
       recorded: 0,
+      deduped: 0,
       upstreamStatus: 304,
       etag: null,
       error: "",
@@ -277,6 +281,7 @@ export async function pollSubscription(
       parsed: 0,
       matched: 0,
       recorded: 0,
+      deduped: 0,
       upstreamStatus: result.status,
       etag: null,
       error: result.message,
@@ -287,6 +292,7 @@ export async function pollSubscription(
   const items = parseFeed(result.body);
   let matched = 0;
   let recorded = 0;
+  let deduped = 0;
   for (const item of items) {
     const m = matchSeries(item.seriesGuess, candidates, {
       fuzzyFloor: options.minConfidence,
@@ -295,7 +301,12 @@ export async function pollSubscription(
     matched++;
     const candidate = toCandidate(m, item, subscription);
     const outcome = await recordCandidate(rpc, sourceId, candidate);
-    if (outcome && !outcome.deduped) recorded++;
+    if (!outcome) continue;
+    if (outcome.deduped) {
+      deduped++;
+    } else {
+      recorded++;
+    }
   }
   return {
     subscription,
@@ -304,6 +315,7 @@ export async function pollSubscription(
     parsed: items.length,
     matched,
     recorded,
+    deduped,
     upstreamStatus: 200,
     etag: result.etag,
     error: "",
@@ -371,12 +383,20 @@ async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<Rel
   }
 
   logger.info(
-    `poll complete: source=${sourceId} subscription=${subscription.kind}:${subscription.identifier} tracked=${tracked.length} parsed=${outcome.parsed} matched=${outcome.matched} recorded=${outcome.recorded} status=${outcome.upstreamStatus}${outcome.notModified ? " (304)" : ""}`,
+    `poll complete: source=${sourceId} subscription=${subscription.kind}:${subscription.identifier} tracked=${tracked.length} parsed=${outcome.parsed} matched=${outcome.matched} recorded=${outcome.recorded} deduped=${outcome.deduped} status=${outcome.upstreamStatus}${outcome.notModified ? " (304)" : ""}`,
   );
 
+  // Report counters back to the host so it can build a meaningful
+  // `last_summary` for the source. Without these, the host only sees the
+  // (empty) `candidates` payload — we record via reverse-RPC mid-poll —
+  // and the status badge reads "Fetched 0 items" even on a busy poll.
   return {
     notModified: outcome.notModified,
     upstreamStatus: outcome.upstreamStatus,
+    parsed: outcome.parsed,
+    matched: outcome.matched,
+    recorded: outcome.recorded,
+    deduped: outcome.deduped,
     ...(outcome.etag !== null ? { etag: outcome.etag } : {}),
   };
 }

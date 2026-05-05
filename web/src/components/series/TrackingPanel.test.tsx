@@ -24,7 +24,6 @@ const SERIES_ID = "00000000-0000-0000-0000-000000000001";
 const baseTracking = {
   seriesId: SERIES_ID,
   tracked: false,
-  trackingStatus: "unknown",
   trackChapters: true,
   trackVolumes: true,
   createdAt: "2024-01-01T00:00:00Z",
@@ -60,24 +59,22 @@ describe("TrackingPanel", () => {
       ).not.toBeChecked();
     });
 
-    // Status select is hidden when not tracked.
-    expect(screen.queryByText("Status")).not.toBeInTheDocument();
+    // Announce switches are hidden when not tracked.
+    expect(screen.queryByText("Announce")).not.toBeInTheDocument();
   });
 
-  it("shows status and announce flags when tracked", async () => {
+  it("shows announce flags when tracked", async () => {
     get.mockResolvedValue({
       ...baseTracking,
       tracked: true,
-      trackingStatus: "ongoing",
       latestKnownChapter: 142.5,
     });
 
     renderWithProviders(<TrackingPanel seriesId={SERIES_ID} canEdit={true} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Status")).toBeInTheDocument();
+      expect(screen.getByText("Announce")).toBeInTheDocument();
     });
-    expect(screen.getByText(/Ongoing/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Chapters")).toBeChecked();
     expect(screen.getByLabelText("Volumes")).toBeChecked();
   });

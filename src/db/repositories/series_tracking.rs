@@ -14,7 +14,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Qu
 use uuid::Uuid;
 
 use crate::db::entities::series_tracking::{
-    self, Entity as SeriesTracking, Model as SeriesTrackingRow, tracking_status,
+    self, Entity as SeriesTracking, Model as SeriesTrackingRow,
 };
 
 /// Parameters for upserting a tracking row. Each `Option<Option<T>>` distinguishes
@@ -22,7 +22,6 @@ use crate::db::entities::series_tracking::{
 #[derive(Debug, Default, Clone)]
 pub struct TrackingUpdate {
     pub tracked: Option<bool>,
-    pub tracking_status: Option<String>,
     pub track_chapters: Option<bool>,
     pub track_volumes: Option<bool>,
     /// Outer `None` = leave alone; inner `None` = clear.
@@ -61,7 +60,6 @@ impl SeriesTrackingRepository {
         Ok(SeriesTrackingRow {
             series_id,
             tracked: false,
-            tracking_status: tracking_status::UNKNOWN.to_string(),
             track_chapters: true,
             track_volumes: true,
             latest_known_chapter: None,
@@ -82,13 +80,6 @@ impl SeriesTrackingRepository {
         series_id: Uuid,
         update: TrackingUpdate,
     ) -> Result<SeriesTrackingRow> {
-        // Validate tracking_status before doing any DB work.
-        if let Some(ref status) = update.tracking_status
-            && !tracking_status::is_valid(status)
-        {
-            anyhow::bail!("invalid tracking_status: {}", status);
-        }
-
         let now = Utc::now();
         let existing = SeriesTracking::find_by_id(series_id).one(db).await?;
 
@@ -97,9 +88,6 @@ impl SeriesTrackingRepository {
                 let mut active: series_tracking::ActiveModel = existing.into();
                 if let Some(v) = update.tracked {
                     active.tracked = Set(v);
-                }
-                if let Some(v) = update.tracking_status {
-                    active.tracking_status = Set(v);
                 }
                 if let Some(v) = update.track_chapters {
                     active.track_chapters = Set(v);
@@ -133,9 +121,6 @@ impl SeriesTrackingRepository {
                 let active = series_tracking::ActiveModel {
                     series_id: Set(series_id),
                     tracked: Set(update.tracked.unwrap_or(false)),
-                    tracking_status: Set(update
-                        .tracking_status
-                        .unwrap_or_else(|| tracking_status::UNKNOWN.to_string())),
                     track_chapters: Set(update.track_chapters.unwrap_or(true)),
                     track_volumes: Set(update.track_volumes.unwrap_or(true)),
                     latest_known_chapter: Set(update.latest_known_chapter.unwrap_or(None)),
@@ -267,7 +252,6 @@ mod tests {
             .unwrap();
         assert_eq!(row.series_id, series_id);
         assert!(!row.tracked);
-        assert_eq!(row.tracking_status, "unknown");
         assert!(row.track_chapters);
         assert!(row.track_volumes);
     }
@@ -283,7 +267,6 @@ mod tests {
             series_id,
             TrackingUpdate {
                 tracked: Some(true),
-                tracking_status: Some("ongoing".to_string()),
                 latest_known_chapter: Some(Some(142.0)),
                 ..Default::default()
             },
@@ -291,7 +274,6 @@ mod tests {
         .await
         .unwrap();
         assert!(row.tracked);
-        assert_eq!(row.tracking_status, "ongoing");
         assert_eq!(row.latest_known_chapter, Some(142.0));
 
         // Second upsert updates only specified fields.
@@ -306,10 +288,6 @@ mod tests {
         .await
         .unwrap();
         assert!(row2.tracked, "tracked should be preserved");
-        assert_eq!(
-            row2.tracking_status, "ongoing",
-            "status should be preserved"
-        );
         assert_eq!(row2.latest_known_chapter, Some(143.0));
     }
 
@@ -341,24 +319,6 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(cleared.latest_known_chapter, None);
-    }
-
-    #[tokio::test]
-    async fn upsert_rejects_invalid_status() {
-        let (db, _temp) = create_test_db().await;
-        let series_id = make_series(db.sea_orm_connection()).await;
-
-        let err = SeriesTrackingRepository::upsert(
-            db.sea_orm_connection(),
-            series_id,
-            TrackingUpdate {
-                tracking_status: Some("paused".to_string()),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap_err();
-        assert!(err.to_string().contains("invalid tracking_status"));
     }
 
     #[tokio::test]
@@ -516,7 +476,7 @@ mod tests {
             conn,
             series_id,
             TrackingUpdate {
-                tracking_status: Some("ongoing".to_string()),
+                tracked: Some(true),
                 ..Default::default()
             },
         )
