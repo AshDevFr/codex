@@ -638,3 +638,298 @@ async fn test_bulk_analyze_series_unauthorized() {
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+// ============================================================================
+// Bulk track / untrack for releases (round D)
+// ============================================================================
+
+use codex::api::routes::v1::dto::tracking::BulkTrackForReleasesResponse;
+
+#[tokio::test]
+async fn bulk_track_for_releases_flips_tracked_and_seeds() {
+    use codex::db::repositories::{SeriesAliasRepository, SeriesTrackingRepository};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let s1 = SeriesRepository::create(&db, library.id, "Vinland Saga", None)
+        .await
+        .unwrap();
+    let s2 = SeriesRepository::create(&db, library.id, "Berserk", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BulkSeriesRequest {
+        series_ids: vec![s1.id, s2.id],
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/track-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(body.changed, 2);
+    assert_eq!(body.already_in_state, 0);
+    assert_eq!(body.errored, 0);
+    assert_eq!(body.results.len(), 2);
+    for r in &body.results {
+        assert_eq!(r.outcome, "tracked");
+    }
+
+    // Both series should now be tracked + have at least one seeded alias.
+    for series_id in [s1.id, s2.id] {
+        let row = SeriesTrackingRepository::get(&db, series_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(row.tracked, "series {} should be tracked", series_id);
+
+        let aliases = SeriesAliasRepository::get_for_series(&db, series_id)
+            .await
+            .unwrap();
+        assert!(
+            !aliases.is_empty(),
+            "series {} should have a seeded alias",
+            series_id
+        );
+    }
+}
+
+#[tokio::test]
+async fn bulk_track_for_releases_skips_already_tracked() {
+    use codex::db::repositories::{SeriesTrackingRepository, TrackingUpdate};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let already = SeriesRepository::create(&db, library.id, "Already", None)
+        .await
+        .unwrap();
+    let fresh = SeriesRepository::create(&db, library.id, "Fresh", None)
+        .await
+        .unwrap();
+
+    // Pre-track `already`.
+    SeriesTrackingRepository::upsert(
+        &db,
+        already.id,
+        TrackingUpdate {
+            tracked: Some(true),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BulkSeriesRequest {
+        series_ids: vec![already.id, fresh.id],
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/track-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(body.changed, 1, "only `fresh` should flip");
+    assert_eq!(body.already_in_state, 1, "`already` is a no-op");
+    assert_eq!(body.errored, 0);
+
+    // Per-series outcomes preserved in input order.
+    assert_eq!(body.results[0].series_id, already.id);
+    assert_eq!(body.results[0].outcome, "skipped");
+    assert_eq!(body.results[1].series_id, fresh.id);
+    assert_eq!(body.results[1].outcome, "tracked");
+}
+
+#[tokio::test]
+async fn bulk_track_for_releases_reports_missing_series() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let real = SeriesRepository::create(&db, library.id, "Real", None)
+        .await
+        .unwrap();
+    let bogus = uuid::Uuid::new_v4();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BulkSeriesRequest {
+        series_ids: vec![bogus, real.id],
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/track-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+        make_json_request(app, request).await;
+
+    // The whole request still succeeds (200) — one bad series doesn't
+    // poison the others. The bogus row gets `outcome: skipped` with a
+    // detail string, by design (see bulk handler doc).
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(body.changed, 1);
+    assert_eq!(body.already_in_state, 1);
+    assert_eq!(body.errored, 0);
+    assert_eq!(body.results[0].series_id, bogus);
+    assert_eq!(body.results[0].outcome, "skipped");
+    assert!(
+        body.results[0]
+            .detail
+            .as_deref()
+            .unwrap_or("")
+            .contains("not found"),
+        "missing series detail should mention 'not found'"
+    );
+}
+
+#[tokio::test]
+async fn bulk_untrack_for_releases_flips_tracked_off_preserves_aliases() {
+    use codex::db::repositories::{
+        SeriesAliasRepository, SeriesTrackingRepository, TrackingUpdate,
+    };
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let s = SeriesRepository::create(&db, library.id, "Tracked", None)
+        .await
+        .unwrap();
+    SeriesTrackingRepository::upsert(
+        &db,
+        s.id,
+        TrackingUpdate {
+            tracked: Some(true),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    // Add a manual alias the user may want to keep.
+    SeriesAliasRepository::create(&db, s.id, "User Alias", "manual")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BulkSeriesRequest {
+        series_ids: vec![s.id],
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/untrack-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(body.changed, 1);
+    assert_eq!(body.results[0].outcome, "untracked");
+
+    let row = SeriesTrackingRepository::get(&db, s.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!row.tracked);
+
+    // Aliases must survive — untrack is a soft toggle, not a delete.
+    let aliases = SeriesAliasRepository::get_for_series(&db, s.id)
+        .await
+        .unwrap();
+    assert!(aliases.iter().any(|a| a.alias == "User Alias"));
+}
+
+#[tokio::test]
+async fn bulk_untrack_for_releases_skips_already_untracked() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let s = SeriesRepository::create(&db, library.id, "Never tracked", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BulkSeriesRequest {
+        series_ids: vec![s.id],
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/untrack-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert_eq!(body.changed, 0);
+    assert_eq!(body.already_in_state, 1);
+    assert_eq!(body.results[0].outcome, "skipped");
+}
+
+#[tokio::test]
+async fn bulk_track_for_releases_requires_series_write() {
+    use codex::api::error::ErrorResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let s = SeriesRepository::create(&db, library.id, "Anything", None)
+        .await
+        .unwrap();
+
+    // Regular (non-admin) user — has reads but not SeriesWrite.
+    let password_hash = password::hash_password("user123").unwrap();
+    let user = create_test_user("regular", "regular@example.com", &password_hash, false);
+    let created = UserRepository::create(&db, &user).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = state
+        .jwt_service
+        .generate_token(created.id, created.username.clone(), created.get_role())
+        .unwrap();
+    let app = create_test_router(state).await;
+
+    let request_body = BulkSeriesRequest {
+        series_ids: vec![s.id],
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/track-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}

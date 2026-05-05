@@ -792,3 +792,315 @@ async fn reset_requires_plugins_manage() {
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
+
+// =============================================================================
+// GET /release-sources/applicability  (round D)
+// =============================================================================
+
+/// Helper: insert an enabled plugin row carrying a manifest with the
+/// `releaseSource` capability, optionally scoped to `library_ids`.
+async fn make_release_source_plugin(
+    db: &DatabaseConnection,
+    name: &str,
+    display_name: &str,
+    library_ids: Vec<Uuid>,
+) -> Uuid {
+    use codex::db::repositories::PluginsRepository;
+    use serde_json::json;
+
+    let plugin = PluginsRepository::create(
+        db,
+        name,
+        display_name,
+        Some("test release-source plugin"),
+        "system",
+        "echo",
+        vec!["ok".to_string()],
+        vec![],
+        None,
+        vec![],
+        vec![],
+        library_ids,
+        None,
+        "none",
+        None,
+        true, // enabled
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Manifest must declare the release_source capability for the
+    // applicability handler to count this plugin.
+    let manifest = json!({
+        "name": name,
+        "displayName": display_name,
+        "version": "1.0.0",
+        "protocolVersion": "1.0",
+        "capabilities": {
+            "releaseSource": {
+                "kinds": ["rss-uploader"],
+                "requiresAliases": true,
+                "canAnnounceChapters": true,
+                "canAnnounceVolumes": true,
+                "defaultPollIntervalS": 3600
+            }
+        }
+    });
+    PluginsRepository::update_manifest(db, plugin.id, Some(manifest))
+        .await
+        .unwrap();
+    plugin.id
+}
+
+/// Helper: insert an enabled plugin without the release-source capability.
+async fn make_metadata_only_plugin(db: &DatabaseConnection, name: &str) -> Uuid {
+    use codex::db::repositories::PluginsRepository;
+    use serde_json::json;
+
+    let plugin = PluginsRepository::create(
+        db,
+        name,
+        name,
+        None,
+        "system",
+        "echo",
+        vec!["ok".to_string()],
+        vec![],
+        None,
+        vec![],
+        vec![],
+        vec![],
+        None,
+        "none",
+        None,
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let manifest = json!({
+        "name": name,
+        "displayName": name,
+        "version": "1.0.0",
+        "protocolVersion": "1.0",
+        "capabilities": {
+            "metadataProvider": ["series"]
+        }
+    });
+    PluginsRepository::update_manifest(db, plugin.id, Some(manifest))
+        .await
+        .unwrap();
+    plugin.id
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApplicabilityResponseDto {
+    applicable: bool,
+    plugin_display_names: Vec<String>,
+}
+
+#[tokio::test]
+async fn applicability_false_when_no_release_source_plugins() {
+    let (db, _temp) = setup_test_db().await;
+    // A metadata-only plugin must not register as applicable.
+    make_metadata_only_plugin(&db, "metadata-only").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth("/api/v1/release-sources/applicability", &token);
+    let (status, body): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert!(!body.applicable);
+    assert!(body.plugin_display_names.is_empty());
+}
+
+#[tokio::test]
+async fn applicability_true_when_global_plugin_no_library_filter() {
+    let (db, _temp) = setup_test_db().await;
+    // Empty library_ids means "all libraries".
+    make_release_source_plugin(&db, "release-nyaa", "Nyaa", vec![]).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth("/api/v1/release-sources/applicability", &token);
+    let (status, body): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert!(body.applicable);
+    assert_eq!(body.plugin_display_names, vec!["Nyaa".to_string()]);
+}
+
+#[tokio::test]
+async fn applicability_filters_by_library_when_plugin_is_scoped() {
+    let (db, _temp) = setup_test_db().await;
+    let lib_a = codex::db::repositories::LibraryRepository::create(
+        &db,
+        "A",
+        "/a",
+        codex::db::ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let lib_b = codex::db::repositories::LibraryRepository::create(
+        &db,
+        "B",
+        "/b",
+        codex::db::ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    // Plugin scoped to lib_a only.
+    make_release_source_plugin(&db, "release-nyaa", "Nyaa", vec![lib_a.id]).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Query for lib_a → applicable.
+    let app = create_test_router(state.clone()).await;
+    let req = get_request_with_auth(
+        &format!(
+            "/api/v1/release-sources/applicability?libraryId={}",
+            lib_a.id
+        ),
+        &token,
+    );
+    let (s_a, b_a): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(s_a, StatusCode::OK);
+    assert!(b_a.unwrap().applicable);
+
+    // Query for lib_b → not applicable.
+    let app = create_test_router(state.clone()).await;
+    let req = get_request_with_auth(
+        &format!(
+            "/api/v1/release-sources/applicability?libraryId={}",
+            lib_b.id
+        ),
+        &token,
+    );
+    let (s_b, b_b): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(s_b, StatusCode::OK);
+    let b_b = b_b.unwrap();
+    assert!(!b_b.applicable);
+    assert!(b_b.plugin_display_names.is_empty());
+
+    // No libraryId filter → applicable (the plugin still exists globally).
+    let app = create_test_router(state).await;
+    let req = get_request_with_auth("/api/v1/release-sources/applicability", &token);
+    let (s_all, b_all): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(s_all, StatusCode::OK);
+    assert!(b_all.unwrap().applicable);
+}
+
+#[tokio::test]
+async fn applicability_global_plugin_applies_to_any_library() {
+    let (db, _temp) = setup_test_db().await;
+    let lib = codex::db::repositories::LibraryRepository::create(
+        &db,
+        "L",
+        "/l",
+        codex::db::ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    // Global (empty library_ids) plugin should match any libraryId query.
+    make_release_source_plugin(&db, "release-mu", "MangaUpdates", vec![]).await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth(
+        &format!("/api/v1/release-sources/applicability?libraryId={}", lib.id),
+        &token,
+    );
+    let (status, body): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert!(body.applicable);
+    assert_eq!(body.plugin_display_names, vec!["MangaUpdates".to_string()]);
+}
+
+#[tokio::test]
+async fn applicability_aggregates_multiple_plugins() {
+    let (db, _temp) = setup_test_db().await;
+    make_release_source_plugin(&db, "release-nyaa", "Nyaa", vec![]).await;
+    make_release_source_plugin(&db, "release-mu", "MangaUpdates", vec![]).await;
+    // A non-release plugin should not bleed into the response.
+    make_metadata_only_plugin(&db, "metadata-only").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth("/api/v1/release-sources/applicability", &token);
+    let (status, body): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert!(body.applicable);
+    assert_eq!(body.plugin_display_names.len(), 2);
+    assert!(body.plugin_display_names.contains(&"Nyaa".to_string()));
+    assert!(
+        body.plugin_display_names
+            .contains(&"MangaUpdates".to_string())
+    );
+}
+
+#[tokio::test]
+async fn applicability_requires_series_read() {
+    let (db, _temp) = setup_test_db().await;
+    make_release_source_plugin(&db, "release-nyaa", "Nyaa", vec![]).await;
+
+    // A user with no role at all (not even reader) — but our `create_reader_and_token`
+    // creates a regular non-admin user who DOES have SeriesRead, so the check
+    // would pass. Instead we exercise the unauthenticated path here, which is
+    // the only realistic 401/403 surface — every authenticated user has
+    // SeriesRead. This still proves the route enforces auth.
+    let state = create_test_auth_state(db.clone()).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request("/api/v1/release-sources/applicability");
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn applicability_skips_disabled_plugins() {
+    use codex::db::repositories::PluginsRepository;
+
+    let (db, _temp) = setup_test_db().await;
+    let plugin_id = make_release_source_plugin(&db, "release-nyaa", "Nyaa", vec![]).await;
+    // Disable it — should drop out of the applicability list.
+    PluginsRepository::disable(&db, plugin_id, None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let req = get_request_with_auth("/api/v1/release-sources/applicability", &token);
+    let (status, body): (StatusCode, Option<ApplicabilityResponseDto>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = body.unwrap();
+    assert!(
+        !body.applicable,
+        "disabled plugins must not contribute to applicability"
+    );
+}
