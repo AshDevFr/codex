@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { feedUrl, fetchSeriesFeed, MANGAUPDATES_RSS_BASE } from "./fetcher.js";
+import {
+  feedUrl,
+  fetchSeriesFeed,
+  MANGAUPDATES_RSS_BASE,
+  normalizeMangaUpdatesId,
+} from "./fetcher.js";
 
 function mockResponse(status: number, body = "", headers: Record<string, string> = {}): Response {
   // Some status codes (204, 304) can't be set on a constructed `Response`
@@ -15,9 +20,48 @@ function mockResponse(status: number, body = "", headers: Record<string, string>
   } as unknown as Response;
 }
 
+describe("normalizeMangaUpdatesId", () => {
+  it("passes numeric IDs through unchanged", () => {
+    expect(normalizeMangaUpdatesId("12345")).toBe("12345");
+    expect(normalizeMangaUpdatesId("15180124327")).toBe("15180124327");
+  });
+
+  it("decodes base36 slugs to their numeric form", () => {
+    // Real example: Solo Leveling. parseInt("6z1uqw7", 36) === 15180124327.
+    expect(normalizeMangaUpdatesId("6z1uqw7")).toBe("15180124327");
+    // Another real shape — slug with letters.
+    expect(normalizeMangaUpdatesId("abc")).toBe(String(Number.parseInt("abc", 36)));
+  });
+
+  it("does not decode all-digit input even though parseInt(_, 36) would", () => {
+    // An all-digit slug is ambiguous, but every legacy integer ID is
+    // all-digit, so we have to treat that form as authoritative. Otherwise
+    // a series whose slug just happens to be e.g. "12345" would round-trip
+    // through base36 and end up pointing at a different series.
+    expect(normalizeMangaUpdatesId("12345")).toBe("12345");
+  });
+
+  it("trims surrounding whitespace before decoding", () => {
+    expect(normalizeMangaUpdatesId("  6z1uqw7  ")).toBe("15180124327");
+  });
+
+  it("rejects out-of-alphabet input as a config error", () => {
+    expect(normalizeMangaUpdatesId("not-a-real-id")).toBeNull();
+    expect(normalizeMangaUpdatesId("")).toBeNull();
+    expect(normalizeMangaUpdatesId("   ")).toBeNull();
+  });
+});
+
 describe("feedUrl", () => {
-  it("builds the per-series RSS URL", () => {
+  it("builds the per-series RSS URL from a numeric ID", () => {
     expect(feedUrl("12345")).toBe(`${MANGAUPDATES_RSS_BASE}/12345/rss`);
+  });
+
+  it("decodes a base36 slug before building the URL", () => {
+    // Metadata sources (MangaBaka et al.) often store the public-URL slug;
+    // the API itself only accepts the numeric form, so the fetcher
+    // normalizes transparently.
+    expect(feedUrl("6z1uqw7")).toBe(`${MANGAUPDATES_RSS_BASE}/15180124327/rss`);
   });
 });
 
