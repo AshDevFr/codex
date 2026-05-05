@@ -56,7 +56,7 @@ import {
   DEFAULT_REQUEST_TIMEOUT_MS,
   manifest,
 } from "./manifest.js";
-import { type AliasCandidate, type AliasMatch, matchSeries } from "./matcher.js";
+import { type AliasCandidate, type AliasMatch, matchSeriesAny } from "./matcher.js";
 import { type ParsedRssItem, parseFeed } from "./parser.js";
 
 const logger = createLogger({ name: manifest.name, level: "info" });
@@ -294,7 +294,13 @@ export async function pollSubscription(
   let recorded = 0;
   let deduped = 0;
   for (const item of items) {
-    const m = matchSeries(item.seriesGuess, candidates, {
+    // Prefer the alias-list form: a `Title A / Title B` Nyaa title surfaces
+    // both halves in `seriesGuessAliases`, so the matcher can hit on either
+    // the JP or EN side of the alias separator. Falls back to the single
+    // guess for titles without a slash.
+    const guesses =
+      item.seriesGuessAliases.length > 0 ? item.seriesGuessAliases : [item.seriesGuess];
+    const m = matchSeriesAny(guesses, candidates, {
       fuzzyFloor: options.minConfidence,
     });
     if (m === null) continue;

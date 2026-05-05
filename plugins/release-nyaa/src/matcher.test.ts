@@ -4,6 +4,7 @@ import {
   DEFAULT_FUZZY_FLOOR,
   diceRatio,
   matchSeries,
+  matchSeriesAny,
   normalizeAlias,
 } from "./matcher.js";
 
@@ -126,5 +127,62 @@ describe("matchSeries", () => {
     const m = matchSeries("Boruto Two Blue Vortex", c);
     expect(m?.seriesId).toBe("s-good");
     expect(m?.reason).toBe("alias-exact");
+  });
+});
+
+// -----------------------------------------------------------------------------
+// matchSeriesAny — multi-alias matcher used for `Title A / Title B` Nyaa
+// titles (1r0n / LuCaZ alias convention).
+// -----------------------------------------------------------------------------
+
+describe("matchSeriesAny", () => {
+  const candidates = [
+    { seriesId: "s-slime", aliases: ["That Time I Got Reincarnated as a Slime"] },
+    { seriesId: "s-bluebox", aliases: ["Blue Box"] },
+    { seriesId: "s-onepiece", aliases: ["One Piece"] },
+  ];
+
+  it("returns null on an empty guess list", () => {
+    expect(matchSeriesAny([], candidates)).toBeNull();
+  });
+
+  it("matches when only the second alias hits a tracked series", () => {
+    const m = matchSeriesAny(
+      ["Tensei Shitara Slime Datta Ken", "That Time I Got Reincarnated as a Slime"],
+      candidates,
+    );
+    expect(m).not.toBeNull();
+    if (m === null) return;
+    expect(m.seriesId).toBe("s-slime");
+    expect(m.reason).toBe("alias-exact");
+    expect(m.confidence).toBe(CONFIDENCE_EXACT);
+  });
+
+  it("matches when only the first alias hits a tracked series (alias-split with EN-first)", () => {
+    const m = matchSeriesAny(["Blue Box", "Ao no Hako"], candidates);
+    expect(m?.seriesId).toBe("s-bluebox");
+    expect(m?.reason).toBe("alias-exact");
+  });
+
+  it("picks the higher-confidence match when both aliases score", () => {
+    const c = [
+      { seriesId: "s-fuzzy", aliases: ["Boruto Two Vortex"] }, // fuzzy on guess A
+      { seriesId: "s-exact", aliases: ["Blue Box"] }, // exact on guess B
+    ];
+    const m = matchSeriesAny(["Boruto Two Blue Vortex", "Blue Box"], c, {
+      fuzzyFloor: DEFAULT_FUZZY_FLOOR,
+    });
+    expect(m?.seriesId).toBe("s-exact");
+    expect(m?.reason).toBe("alias-exact");
+  });
+
+  it("returns null when no alias hits the floor", () => {
+    const m = matchSeriesAny(["Berserk", "Holyland"], candidates);
+    expect(m).toBeNull();
+  });
+
+  it("falls back to single-string semantics when given one alias", () => {
+    expect(matchSeriesAny(["One Piece"], candidates)?.seriesId).toBe("s-onepiece");
+    expect(matchSeriesAny(["Berserk"], candidates)).toBeNull();
   });
 });

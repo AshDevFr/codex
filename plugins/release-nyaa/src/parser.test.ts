@@ -127,6 +127,242 @@ describe("parseTitle", () => {
 });
 
 // -----------------------------------------------------------------------------
+// parseTitle — multi-uploader/aggregated bundles (1r0n, danke-Empire, LuCaZ).
+//
+// Real-world bundle titles mix volumes, bare-numeric chapter ranges, and
+// numeric "extras" (chapters not yet collected into a tankobon). Patterns we
+// see in the wild:
+//
+//   v01-09                    → volume range only
+//   v01-111 + 1134-1176       → vol range + bare chapter range, "+" joined
+//   v01-28,125-137            → vol range + bare chapter range, "," joined
+//   v01-31, 276-293           → same, with whitespace after comma
+//   v01,009-090               → single volume + bare chapter range
+//   v01-16 + 70               → vol range + single bare chapter
+//   001-069 as v01-16 + 70    → bare chapter range followed by vol info
+//   031-037                   → bare chapter range as primary identifier
+//
+// Bare numeric ranges are zero-padded to 3 digits in the corpus, which we use
+// to distinguish chapter tokens from incidental numbers in series names.
+// Year ranges always live inside `(...)` so they stay clear of the chapter
+// tokenizer.
+// -----------------------------------------------------------------------------
+
+describe("parseTitle — aggregated bundle releases", () => {
+  it("After God v01-09 — volume range only", () => {
+    const t = parseTitle("After God v01-09 (2024-2026) (Digital) (1r0n)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(9);
+    expect(t.chapter).toBeNull();
+    expect(t.chapterRangeEnd).toBeNull();
+    expect(t.seriesGuess).toBe("After God");
+    expect(t.formatHints.digital).toBe(true);
+  });
+
+  it("One Piece v001-111 + 1134-1176 — vol range + bare chapter range joined by '+'", () => {
+    const t = parseTitle("One Piece v001-111 + 1134-1176 (2003-2026) (Digital) (1r0n)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(111);
+    expect(t.chapter).toBe(1134);
+    expect(t.chapterRangeEnd).toBe(1176);
+    expect(t.seriesGuess).toBe("One Piece");
+  });
+
+  it("Tensei… v01-28,125-137 — alias-split series, comma-joined chapter range", () => {
+    const t = parseTitle(
+      "Tensei Shitara Slime Datta Ken / That Time I Got Reincarnated as a Slime v01-28,125-137 (2017-2025) (Digital) (danke-Empire + nao)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(28);
+    expect(t.chapter).toBe(125);
+    expect(t.chapterRangeEnd).toBe(137);
+    // Primary guess is the first alias.
+    expect(t.seriesGuess).toBe("Tensei Shitara Slime Datta Ken");
+    // Both halves of `A / B` are exposed for matching.
+    expect(t.seriesGuessAliases).toEqual([
+      "Tensei Shitara Slime Datta Ken",
+      "That Time I Got Reincarnated as a Slime",
+    ]);
+  });
+
+  it("Chillin'… 001-069 as v01-16 + 70 — bare chapter range + 'as' + vol range + extra chapter", () => {
+    const t = parseTitle(
+      "Chillin' in My 30s after Getting Fired from the Demon King's Army 001-069 as v01-16 + 70 (Digital) (danke-Empire + Aquila) [Oak]",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(16);
+    // Aggregated min/max across all chapter tokens in the release header.
+    expect(t.chapter).toBe(1);
+    expect(t.chapterRangeEnd).toBe(70);
+    expect(t.seriesGuess).toBe("Chillin' in My 30s after Getting Fired from the Demon King's Army");
+  });
+
+  it("Never Say Ugly 031-037 — bare chapter range only, no volume token", () => {
+    const t = parseTitle(
+      "Never Say Ugly 031-037 (2024-2025) (Digital) (danke-Empire, Stick, Aquila)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBeNull();
+    expect(t.chapter).toBe(31);
+    expect(t.chapterRangeEnd).toBe(37);
+    expect(t.seriesGuess).toBe("Never Say Ugly");
+  });
+
+  it("Edens Zero v01-31, 276-293 — comma+space separator", () => {
+    const t = parseTitle(
+      "Edens Zero v01-31, 276-293 (2018-2025) (Digital) (danke-Empire, DeadMan, SlikkyOak)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(31);
+    expect(t.chapter).toBe(276);
+    expect(t.chapterRangeEnd).toBe(293);
+    expect(t.seriesGuess).toBe("Edens Zero");
+  });
+
+  it("Ultimate Exorcist Kiyoshi v01,009-090 — single volume + bare chapter range", () => {
+    const t = parseTitle("Ultimate Exorcist Kiyoshi v01,009-090 (2024-2026) (Digital) (LuCaZ)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBeNull();
+    expect(t.chapter).toBe(9);
+    expect(t.chapterRangeEnd).toBe(90);
+    expect(t.seriesGuess).toBe("Ultimate Exorcist Kiyoshi");
+  });
+
+  it("Boruto - Two Blue Vortex v01-05,021-033 — subtitle dash + comma-joined ranges", () => {
+    const t = parseTitle("Boruto - Two Blue Vortex v01-05,021-033 (2025-2026) (Digital) (LuCaZ)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(5);
+    expect(t.chapter).toBe(21);
+    expect(t.chapterRangeEnd).toBe(33);
+    expect(t.seriesGuess).toBe("Boruto Two Blue Vortex");
+  });
+
+  it("Ao no Hako / Blue Box v01-20,181-240 — alias-split + comma chapters", () => {
+    const t = parseTitle("Ao no Hako / Blue Box v01-20,181-240 (2022-2026) (Digital) (LuCaZ)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(20);
+    expect(t.chapter).toBe(181);
+    expect(t.chapterRangeEnd).toBe(240);
+    expect(t.seriesGuess).toBe("Ao no Hako");
+    expect(t.seriesGuessAliases).toEqual(["Ao no Hako", "Blue Box"]);
+  });
+
+  it("Ashita no Joe — Omnibus Edition is captured as a format hint", () => {
+    const t = parseTitle(
+      "Ashita no Joe - Fighting for Tomorrow v01-02 (2024-2025) (Omnibus Edition) (Digital) (LuCaZ)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(2);
+    expect(t.formatHints.digital).toBe(true);
+    expect(t.formatHints.omnibus).toBe(true);
+    expect(t.seriesGuess).toBe("Ashita no Joe Fighting for Tomorrow");
+  });
+
+  it("Dragon Ball Super v01-23,101-104", () => {
+    const t = parseTitle("Dragon Ball Super v01-23,101-104 (2017-2025) (Digital) (LuCaZ)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(23);
+    expect(t.chapter).toBe(101);
+    expect(t.chapterRangeEnd).toBe(104);
+    expect(t.seriesGuess).toBe("Dragon Ball Super");
+  });
+
+  it("Becoming a Princess Knight... v01-04 — apostrophe-free long title with vol range only", () => {
+    const t = parseTitle(
+      "Becoming a Princess Knight and Working at a Yuri Brothel v01-04 (2024-2025) (Digital) (LuCaZ)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(4);
+    expect(t.chapter).toBeNull();
+    expect(t.seriesGuess).toBe("Becoming a Princess Knight and Working at a Yuri Brothel");
+  });
+
+  it("Amagami-san / Tying the Knot — alias-split + chapter range", () => {
+    const t = parseTitle(
+      "Amagami-san Chi no Enmusubi / Tying the Knot with an Amagami Sister v01-17,150-172 (2022-2025) (Digital) (LuCaZ)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(17);
+    expect(t.chapter).toBe(150);
+    expect(t.chapterRangeEnd).toBe(172);
+    expect(t.seriesGuess).toBe("Amagami-san Chi no Enmusubi");
+    expect(t.seriesGuessAliases).toEqual([
+      "Amagami-san Chi no Enmusubi",
+      "Tying the Knot with an Amagami Sister",
+    ]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// parseTitle — defensive: bare-number heuristics must not eat year ranges,
+// and short bare numbers (1-2 digits) must not be promoted to chapters.
+// -----------------------------------------------------------------------------
+
+describe("parseTitle — bare-number safety net", () => {
+  it("does not treat a year range inside (...) as a chapter range", () => {
+    const t = parseTitle("Some Series v01-05 (2018-2025) (Digital)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.chapter).toBeNull();
+    expect(t.chapterRangeEnd).toBeNull();
+    expect(t.volume).toBe(1);
+    expect(t.volumeRangeEnd).toBe(5);
+  });
+
+  it("ignores bare 1-2 digit numbers in the series name (avoids false positives)", () => {
+    // "30s" appeared in the Chillin' title; standalone short numbers shouldn't
+    // be picked up as chapters.
+    const t = parseTitle("My 30s Adventure v01 (Digital)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.chapter).toBeNull();
+    expect(t.volume).toBe(1);
+    expect(t.seriesGuess).toBe("My 30s Adventure");
+  });
+
+  it("does not split on '/' when there is no surrounding spacing (URL-like fragments)", () => {
+    // Defensive: only ` / ` (spaced slash) is treated as an alias separator.
+    const t = parseTitle("AC/DC Tales v01 (Digital)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.seriesGuess).toBe("AC/DC Tales");
+    expect(t.seriesGuessAliases).toEqual(["AC/DC Tales"]);
+  });
+
+  it("alias-split returns single-element array when no slash present", () => {
+    const t = parseTitle("Berserk Volume 42 (Digital)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.seriesGuessAliases).toEqual(["Berserk"]);
+  });
+});
+
+// -----------------------------------------------------------------------------
 // parseItem
 // -----------------------------------------------------------------------------
 
