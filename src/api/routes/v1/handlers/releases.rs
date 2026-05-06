@@ -713,11 +713,11 @@ pub async fn delete_release(
 
 /// Apply an action to a batch of ledger rows.
 ///
-/// `dismiss` and `mark-acquired` set state in-place. `delete` removes
-/// the rows and clears the affected sources' etags so the next poll
-/// re-fetches without `If-None-Match`. All three run as bulk SQL — no
-/// per-row round trips — so this scales to deleting thousands of rows in
-/// one call.
+/// `dismiss`, `mark-acquired`, `ignore`, and `reset` all set state
+/// in-place. `delete` removes the rows and clears the affected sources'
+/// etags so the next poll re-fetches without `If-None-Match`. All run
+/// as bulk SQL (no per-row round trips), so this scales to thousands of
+/// rows in one call.
 #[utoipa::path(
     post,
     path = "/api/v1/releases/bulk",
@@ -784,6 +784,18 @@ pub async fn bulk_release_action(
         )
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to mark releases acquired: {}", e)))?,
+        BulkReleaseAction::Ignore => {
+            ReleaseLedgerRepository::set_state_many(&state.db, &request.ids, ledger_state::IGNORED)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to ignore releases: {}", e)))?
+        }
+        BulkReleaseAction::Reset => ReleaseLedgerRepository::set_state_many(
+            &state.db,
+            &request.ids,
+            ledger_state::ANNOUNCED,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to reset releases: {}", e)))?,
         BulkReleaseAction::Delete => {
             let count = ReleaseLedgerRepository::delete_many(&state.db, &request.ids)
                 .await

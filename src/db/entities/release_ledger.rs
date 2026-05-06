@@ -38,7 +38,7 @@ pub struct Model {
     /// `services::release::candidate::MediaUrlKind` for the canonical list.
     pub media_url_kind: Option<String>,
     pub confidence: f64,
-    /// `announced` | `dismissed` | `marked_acquired` | `hidden`.
+    /// `announced` | `dismissed` | `marked_acquired` | `ignored` | `hidden`.
     pub state: String,
     pub metadata: Option<serde_json::Value>,
     pub observed_at: DateTime<Utc>,
@@ -84,10 +84,18 @@ pub mod state {
     pub const ANNOUNCED: &str = "announced";
     pub const DISMISSED: &str = "dismissed";
     pub const MARKED_ACQUIRED: &str = "marked_acquired";
+    /// Auto-applied at ingestion when the release matches a book the user
+    /// already owns (direct match on volume or chapter). Distinct from
+    /// `dismissed`, which is a user decision. Reversible via the bulk
+    /// `reset` action.
+    pub const IGNORED: &str = "ignored";
     pub const HIDDEN: &str = "hidden";
 
     pub fn is_valid(s: &str) -> bool {
-        matches!(s, ANNOUNCED | DISMISSED | MARKED_ACQUIRED | HIDDEN)
+        matches!(
+            s,
+            ANNOUNCED | DISMISSED | MARKED_ACQUIRED | IGNORED | HIDDEN
+        )
     }
 }
 
@@ -100,6 +108,7 @@ mod tests {
         assert!(state::is_valid("announced"));
         assert!(state::is_valid("dismissed"));
         assert!(state::is_valid("marked_acquired"));
+        assert!(state::is_valid("ignored"));
         assert!(state::is_valid("hidden"));
         assert!(!state::is_valid("acquired"));
         assert!(!state::is_valid("new"));

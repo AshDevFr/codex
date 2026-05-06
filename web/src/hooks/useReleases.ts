@@ -69,7 +69,11 @@ export function useBulkReleaseAction() {
           ? "Dismissed"
           : action === "mark-acquired"
             ? "Marked acquired"
-            : "Deleted";
+            : action === "ignore"
+              ? "Ignored"
+              : action === "reset"
+                ? "Reset"
+                : "Deleted";
       const noun = affected === 1 ? "release" : "releases";
       notifications.show({
         title: `${verb} ${affected} ${noun}`,

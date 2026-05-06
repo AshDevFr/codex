@@ -1,5 +1,11 @@
 import { Button, Card, Group, Text } from "@mantine/core";
-import { IconCheck, IconTrash, IconX } from "@tabler/icons-react";
+import {
+  IconCheck,
+  IconEyeOff,
+  IconRefresh,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
 import type { BulkReleaseAction } from "@/api/releases";
 
 interface ReleasesBulkActionBarProps {
@@ -55,6 +61,26 @@ export function ReleasesBulkActionBar({
             onClick={() => onAction("dismiss")}
           >
             Dismiss
+          </Button>
+          <Button
+            size="xs"
+            variant="light"
+            color="gray"
+            leftSection={<IconEyeOff size={14} />}
+            loading={isPending}
+            onClick={() => onAction("ignore")}
+          >
+            Ignore
+          </Button>
+          <Button
+            size="xs"
+            variant="light"
+            color="blue"
+            leftSection={<IconRefresh size={14} />}
+            loading={isPending}
+            onClick={() => onAction("reset")}
+          >
+            Reset
           </Button>
           {onDeleteClick && (
             <Button

@@ -25,12 +25,14 @@ use super::protocol::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, ReleaseSourceCapability, RequestId, error_codes,
     methods,
 };
+use crate::db::entities::release_ledger::state as ledger_state;
 use crate::db::entities::release_sources::kind as source_kind;
 use crate::db::repositories::{
     NewReleaseSource, ReleaseLedgerRepository, ReleaseSourceRepository, SeriesAliasRepository,
-    SeriesExternalIdRepository, SeriesTrackingRepository, TrackingUpdate,
+    SeriesExternalIdRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
 };
 use crate::scheduler::Scheduler;
+use crate::services::release::auto_ignore::should_auto_ignore;
 use crate::services::release::candidate::ReleaseCandidate;
 use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
@@ -288,8 +290,30 @@ impl ReleasesRequestHandler {
         let candidate_volume = accepted.candidate.volume;
         let candidate_language = accepted.candidate.language.clone();
 
+        // Auto-ignore: if the user already owns this volume/chapter, insert
+        // the row directly as `ignored` so it skips the inbox + notify path.
+        // Best-effort; on failure we fall back to the default state.
+        let initial_state = if candidate_volume.is_some() || candidate_chapter.is_some() {
+            match SeriesRepository::get_owned_release_keys_for_series(&self.db, series_id).await {
+                Ok(owned) => {
+                    if should_auto_ignore(candidate_volume, candidate_chapter, &owned) {
+                        Some(ledger_state::IGNORED.to_string())
+                    } else {
+                        None
+                    }
+                }
+                Err(e) => {
+                    warn!(error = %e, %series_id, "owned-keys lookup failed; defaulting to announced");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // 4. Hand off to the ledger (which is itself idempotent).
-        let entry = accepted.into_ledger_entry(params.source_id);
+        let mut entry = accepted.into_ledger_entry(params.source_id);
+        entry.initial_state = initial_state;
         let outcome = match ReleaseLedgerRepository::record(&self.db, entry).await {
             Ok(o) => o,
             Err(e) => {
@@ -339,7 +363,17 @@ impl ReleasesRequestHandler {
             // any task context (today: shouldn't happen for releases since
             // every record path runs inside a poll task). We log and skip
             // rather than silently emitting into a void.
-            if let Some(broadcaster) = crate::events::current_recording_broadcaster() {
+            // Auto-ignored rows skip the announce event: the row is on the
+            // ledger for audit/recovery, but the user already owns the
+            // matching volume/chapter so there's nothing to notify about.
+            if outcome.row.state != ledger_state::ANNOUNCED {
+                debug!(
+                    series_id = %outcome.row.series_id,
+                    plugin = %self.plugin_name,
+                    state = %outcome.row.state,
+                    "Skipping release_announced emit for non-announced state"
+                );
+            } else if let Some(broadcaster) = crate::events::current_recording_broadcaster() {
                 let _ = broadcaster.emit(crate::events::EntityChangeEvent::release_announced(
                     &outcome.row,
                     &self.plugin_name,

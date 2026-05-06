@@ -103,6 +103,7 @@ async fn record_announced(
             confidence: 0.95,
             metadata: None,
             observed_at: chrono::Utc::now(),
+            initial_state: None,
         },
     )
     .await
@@ -1439,6 +1440,83 @@ async fn bulk_dismiss_updates_state_for_listed_ids() {
             .state,
         "announced"
     );
+}
+
+#[tokio::test]
+async fn bulk_ignore_sets_state_to_ignored() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let id = record_announced(&db, series, source, "rel-i").await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = BulkReleaseActionRequest {
+        ids: vec![id],
+        action: BulkReleaseAction::Ignore,
+    };
+    let req = post_json_request_with_auth("/api/v1/releases/bulk", &body, &token);
+    let (status, resp): (StatusCode, Option<BulkReleaseActionResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp.unwrap().affected, 1);
+
+    assert_eq!(
+        ReleaseLedgerRepository::get_by_id(&db, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
+        "ignored"
+    );
+}
+
+#[tokio::test]
+async fn bulk_reset_returns_state_to_announced_from_any_state() {
+    let (db, _temp) = setup_test_db().await;
+    let series = make_series(&db).await;
+    let source = make_source(&db, "nyaa:user:tsuna69").await;
+    let id_d = record_announced(&db, series, source, "rel-d").await;
+    let id_a = record_announced(&db, series, source, "rel-a").await;
+    let id_i = record_announced(&db, series, source, "rel-i").await;
+
+    // Move each into a different non-announced state via direct repo call.
+    ReleaseLedgerRepository::set_state(&db, id_d, "dismissed")
+        .await
+        .unwrap();
+    ReleaseLedgerRepository::set_state(&db, id_a, "marked_acquired")
+        .await
+        .unwrap();
+    ReleaseLedgerRepository::set_state(&db, id_i, "ignored")
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let body = BulkReleaseActionRequest {
+        ids: vec![id_d, id_a, id_i],
+        action: BulkReleaseAction::Reset,
+    };
+    let req = post_json_request_with_auth("/api/v1/releases/bulk", &body, &token);
+    let (status, resp): (StatusCode, Option<BulkReleaseActionResponse>) =
+        make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp.unwrap().affected, 3);
+
+    for id in [id_d, id_a, id_i] {
+        assert_eq!(
+            ReleaseLedgerRepository::get_by_id(&db, id)
+                .await
+                .unwrap()
+                .unwrap()
+                .state,
+            "announced",
+        );
+    }
 }
 
 #[tokio::test]
