@@ -34,7 +34,6 @@ use crate::scheduler::Scheduler;
 use crate::services::release::candidate::ReleaseCandidate;
 use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
-use crate::services::release::schedule::{DEFAULT_POLL_INTERVAL_S, MIN_POLL_INTERVAL_S};
 
 /// Default page size for `releases/list_tracked` when the caller doesn't
 /// specify one. Matches the Phase 3 risk-mitigation note.
@@ -528,8 +527,8 @@ impl ReleasesRequestHandler {
     ///
     /// - **Upsert** every entry on `(plugin_id, source_key)`. New rows are
     ///   inserted; existing rows have only the plugin-owned descriptive
-    ///   fields refreshed. User-managed fields (`enabled`, `poll_interval_s`)
-    ///   survive across re-registrations so an admin's interval override or
+    ///   fields refreshed. User-managed fields (`enabled`, `cron_schedule`)
+    ///   survive across re-registrations so an admin's schedule override or
     ///   disable toggle isn't trampled when the plugin restarts.
     /// - **Prune** rows owned by this plugin whose `source_key` is not in the
     ///   request. Deletes cascade to `release_ledger`. An empty `sources`
@@ -542,8 +541,9 @@ impl ReleasesRequestHandler {
     ///
     /// `kind` is validated against the `release_source` capability the plugin
     /// declared in its manifest, so a plugin can't register sources of a
-    /// `kind` outside its declared capability surface. `poll_interval_s` is
-    /// taken from the request only when creating new rows; updates ignore it.
+    /// `kind` outside its declared capability surface. New rows always start
+    /// with `cron_schedule = NULL` (inherit the server-wide default); admins
+    /// override per-row in the settings UI.
     async fn handle_register_sources(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
         let id = request.id.clone();
         let params: RegisterSourcesRequest = match parse_params(&request.params) {
@@ -604,23 +604,17 @@ impl ReleasesRequestHandler {
             }
         }
 
-        // Resolve the per-source default poll interval. Used only when
-        // creating new rows; existing rows keep their interval. Falls back
-        // to the host-wide default when the plugin's manifest declares 0.
-        let raw = if self.capability.default_poll_interval_s == 0 {
-            DEFAULT_POLL_INTERVAL_S
-        } else {
-            self.capability.default_poll_interval_s
-        };
-        let default_interval = (raw as i32).max(MIN_POLL_INTERVAL_S as i32);
-
         let keep_keys: Vec<String> = params
             .sources
             .iter()
             .map(|s| s.source_key.clone())
             .collect();
 
-        // Upsert each source.
+        // Upsert each source. New rows start with `cron_schedule = NULL`,
+        // i.e. they inherit the server-wide
+        // `release_tracking.default_cron_schedule`. Admins override per-row
+        // via the settings UI; existing rows preserve their override on
+        // re-register.
         let mut registered = 0u32;
         for src in params.sources {
             let new = NewReleaseSource {
@@ -628,7 +622,6 @@ impl ReleasesRequestHandler {
                 source_key: src.source_key,
                 display_name: src.display_name,
                 kind: src.kind,
-                poll_interval_s: default_interval,
                 enabled: None,
                 config: src.config,
             };
@@ -937,7 +930,6 @@ mod tests {
                 .collect(),
             can_announce_chapters: true,
             can_announce_volumes: true,
-            default_poll_interval_s: 3600,
         }
     }
 
@@ -965,7 +957,6 @@ mod tests {
                 source_key: "feed:1".to_string(),
                 display_name: "Feed 1".to_string(),
                 kind: kind::RSS_UPLOADER.to_string(),
-                poll_interval_s: 3600,
                 enabled: None,
                 config: None,
             },
@@ -1967,7 +1958,7 @@ mod tests {
             row.id,
             ReleaseSourceUpdate {
                 enabled: Some(false),
-                poll_interval_s: Some(900),
+                cron_schedule: Some(Some("0 */6 * * *".to_string())),
                 ..Default::default()
             },
         )
@@ -1994,8 +1985,9 @@ mod tests {
         assert_eq!(after.config, Some(json!({ "subscription": "fresh" })));
         assert!(!after.enabled, "user-set disabled must survive re-register");
         assert_eq!(
-            after.poll_interval_s, 900,
-            "user-set poll_interval_s must survive re-register"
+            after.cron_schedule.as_deref(),
+            Some("0 */6 * * *"),
+            "user-set cron_schedule must survive re-register"
         );
     }
 
@@ -2012,7 +2004,6 @@ mod tests {
                 source_key: "default".to_string(),
                 display_name: "MangaUpdates".to_string(),
                 kind: kind::RSS_SERIES.to_string(),
-                poll_interval_s: 3600,
                 enabled: None,
                 config: None,
             },

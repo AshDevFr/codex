@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Anchor,
   Badge,
   Box,
   Button,
@@ -7,7 +8,6 @@ import {
   Group,
   Loader,
   MultiSelect,
-  NumberInput,
   Stack,
   Switch,
   Table,
@@ -26,11 +26,14 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CronExpressionParser } from "cron-parser";
+import { toString as cronToString } from "cronstrue";
 import { formatDistanceToNow } from "date-fns";
 import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
 import { pluginsApi } from "@/api/plugins";
 import type { ReleaseSource } from "@/api/releases";
 import { settingsApi } from "@/api/settings";
+import { CronInput } from "@/components/forms/CronInput";
 import {
   usePollReleaseSourceNow,
   useReleaseSources,
@@ -56,19 +59,28 @@ function parseArraySetting(value: string | undefined | null): string[] {
   }
 }
 
-const PRESETS = [
-  { value: 3600, label: "1h" },
-  { value: 21600, label: "6h" },
-  { value: 43200, label: "12h" },
-  { value: 86400, label: "Daily" },
-  { value: 604800, label: "Weekly" },
-];
-
-function intervalLabel(seconds: number): string {
-  const preset = PRESETS.find((p) => p.value === seconds);
-  if (preset) return preset.label;
-  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
-  return `${seconds}s`;
+/**
+ * Render a cron expression as a human-readable phrase. Mirrors the logic in
+ * `<CronInput>` (5-part → cronstrue normalization). Returns the raw expression
+ * as a fallback if parsing fails so we still show *something* meaningful.
+ */
+function describeCron(expression: string): string {
+  const trimmed = expression.trim();
+  if (!trimmed) return "";
+  try {
+    CronExpressionParser.parse(trimmed);
+    const parts = trimmed.split(/\s+/);
+    const normalized =
+      parts.length === 5
+        ? parts.map((p) => (p.startsWith("/") ? `*${p}` : p)).join(" ")
+        : trimmed;
+    return cronToString(normalized, {
+      throwExceptionOnParseError: false,
+      verbose: false,
+    });
+  } catch {
+    return trimmed;
+  }
 }
 
 export function ReleaseTrackingSettings() {
@@ -164,10 +176,12 @@ export function ReleaseTrackingSettings() {
                         update: { enabled },
                       })
                     }
-                    onIntervalChange={(seconds) =>
+                    onCronScheduleChange={(cronSchedule) =>
                       update.mutate({
                         sourceId: source.id,
-                        update: { pollIntervalS: seconds },
+                        // Send `null` to clear the override and revert to
+                        // inheriting the server-wide default.
+                        update: { cronSchedule },
                       })
                     }
                     onPollNow={() => {
@@ -370,7 +384,8 @@ function NotificationPreferencesCard() {
 interface RowProps {
   source: ReleaseSource;
   onToggle: (enabled: boolean) => void;
-  onIntervalChange: (seconds: number) => void;
+  /** `null` clears the override and reverts to the server-wide default. */
+  onCronScheduleChange: (cronSchedule: string | null) => void;
   onPollNow: () => void;
   pollNowPending: boolean;
   onReset: () => void;
@@ -380,17 +395,45 @@ interface RowProps {
 function ReleaseSourceRow({
   source,
   onToggle,
-  onIntervalChange,
+  onCronScheduleChange,
   onPollNow,
   pollNowPending,
   onReset,
   resetPending,
 }: RowProps) {
-  const [draft, setDraft] = useState<number | null>(source.pollIntervalS);
+  // `cronSchedule != null` means the row has a per-source override; render the
+  // editor inline. Otherwise render the inherited default with an "Override"
+  // affordance.
+  const [isOverriding, setIsOverriding] = useState(
+    source.cronSchedule !== null,
+  );
+  const [draft, setDraft] = useState<string>(
+    source.cronSchedule ?? source.effectiveCronSchedule,
+  );
 
   const lastPolled = source.lastPolledAt
     ? formatDistanceToNow(new Date(source.lastPolledAt), { addSuffix: true })
     : "—";
+
+  const commitDraft = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      // Empty editor = revert to inherit.
+      if (source.cronSchedule !== null) onCronScheduleChange(null);
+      setIsOverriding(false);
+      setDraft(source.effectiveCronSchedule);
+      return;
+    }
+    if (trimmed !== source.cronSchedule) {
+      onCronScheduleChange(trimmed);
+    }
+  };
+
+  const resetToDefault = () => {
+    if (source.cronSchedule !== null) onCronScheduleChange(null);
+    setIsOverriding(false);
+    setDraft(source.effectiveCronSchedule);
+  };
 
   return (
     <Table.Tr>
@@ -413,38 +456,46 @@ function ReleaseSourceRow({
         </Badge>
       </Table.Td>
       <Table.Td>
-        <Group gap="xs" wrap="nowrap">
-          <NumberInput
-            value={draft ?? undefined}
-            onChange={(value) => {
-              if (typeof value === "number") {
-                setDraft(value);
-              } else if (value === "") {
-                setDraft(null);
-              }
-            }}
-            onBlur={() => {
-              if (
-                draft !== null &&
-                draft > 0 &&
-                draft !== source.pollIntervalS
-              ) {
-                onIntervalChange(draft);
-              } else {
-                setDraft(source.pollIntervalS);
-              }
-            }}
-            min={60}
-            max={604800}
-            step={60}
-            w={120}
-            suffix=" s"
-            aria-label="Poll interval seconds"
-          />
-          <Text size="xs" c="dimmed">
-            ≈ {intervalLabel(source.pollIntervalS)}
-          </Text>
-        </Group>
+        {isOverriding ? (
+          <Stack gap={4}>
+            <CronInput
+              value={draft}
+              onChange={setDraft}
+              onBlur={commitDraft}
+              showNextRun={false}
+              placeholder="0 0 * * *"
+              aria-label="Cron schedule override"
+            />
+            <Anchor
+              size="xs"
+              component="button"
+              type="button"
+              onClick={resetToDefault}
+            >
+              Reset to default
+            </Anchor>
+          </Stack>
+        ) : (
+          <Stack gap={2}>
+            <Text size="sm">
+              {describeCron(source.effectiveCronSchedule)}{" "}
+              <Text component="span" size="xs" c="dimmed">
+                (Default)
+              </Text>
+            </Text>
+            <Anchor
+              size="xs"
+              component="button"
+              type="button"
+              onClick={() => {
+                setIsOverriding(true);
+                setDraft(source.effectiveCronSchedule);
+              }}
+            >
+              Override
+            </Anchor>
+          </Stack>
+        )}
       </Table.Td>
       <Table.Td>
         <Stack gap={2}>

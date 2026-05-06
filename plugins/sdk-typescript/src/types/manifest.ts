@@ -63,12 +63,6 @@ export interface ReleaseSourceCapability {
   canAnnounceChapters?: boolean;
   /** Whether the plugin announces volume-level releases. */
   canAnnounceVolumes?: boolean;
-  /**
-   * Default poll interval in seconds. Used when a `release_sources` row for
-   * this plugin doesn't override it. Server settings can also set a global
-   * default that takes precedence at schedule resolution time.
-   */
-  defaultPollIntervalS?: number;
 }
 
 /**

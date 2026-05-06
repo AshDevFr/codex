@@ -19,6 +19,21 @@ use uuid::Uuid;
 use crate::db::entities::release_sources::{
     self, Entity as ReleaseSources, Model as ReleaseSource, kind,
 };
+use crate::utils::cron::validate_cron_expression;
+
+/// Normalize a caller-supplied cron schedule: trim, treat empty as `None`,
+/// validate the parse, and return the trimmed string. Errors when the
+/// expression is non-empty but invalid.
+fn sanitize_cron_schedule(value: Option<String>) -> Result<Option<String>> {
+    let Some(raw) = value else { return Ok(None) };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    validate_cron_expression(trimmed)
+        .map_err(|e| anyhow::anyhow!("invalid cron_schedule: {}", e))?;
+    Ok(Some(trimmed.to_string()))
+}
 
 /// Parameters for creating a new release source. Only the fields a caller is
 /// expected to choose live here; `created_at` / `updated_at` / `id` are
@@ -29,20 +44,19 @@ pub struct NewReleaseSource {
     pub source_key: String,
     pub display_name: String,
     pub kind: String,
-    pub poll_interval_s: i32,
     pub enabled: Option<bool>,
     pub config: Option<serde_json::Value>,
 }
 
 /// PATCH-style update payload. Each `Option<T>` distinguishes "leave alone"
-/// (`None`) from "set". For nullable columns a simple `Option<Option<T>>` is
-/// not needed at this stage because the existing fields are status fields
-/// that the caller can read-modify-write through dedicated helpers.
+/// (`None`) from "set". `cron_schedule` uses `Option<Option<String>>` so the
+/// caller can explicitly clear a row's override (revert to inheriting the
+/// server-wide default) by sending `Some(None)`.
 #[derive(Debug, Default, Clone)]
 pub struct ReleaseSourceUpdate {
     pub display_name: Option<String>,
     pub enabled: Option<bool>,
-    pub poll_interval_s: Option<i32>,
+    pub cron_schedule: Option<Option<String>>,
     pub config: Option<Option<serde_json::Value>>,
 }
 
@@ -91,15 +105,14 @@ impl ReleaseSourceRepository {
     }
 
     /// Create a new source. Validates `kind` against the canonical set.
+    /// New rows always start with `cron_schedule = NULL` (inherit the
+    /// server-wide default); admins can override per-row via PATCH.
     pub async fn create(
         db: &DatabaseConnection,
         params: NewReleaseSource,
     ) -> Result<ReleaseSource> {
         if !kind::is_valid(&params.kind) {
             anyhow::bail!("invalid kind: {}", params.kind);
-        }
-        if params.poll_interval_s <= 0 {
-            anyhow::bail!("poll_interval_s must be positive");
         }
         if params.plugin_id.trim().is_empty() {
             anyhow::bail!("plugin_id cannot be empty");
@@ -116,7 +129,7 @@ impl ReleaseSourceRepository {
             display_name: Set(params.display_name),
             kind: Set(params.kind),
             enabled: Set(params.enabled.unwrap_or(true)),
-            poll_interval_s: Set(params.poll_interval_s),
+            cron_schedule: Set(None),
             last_polled_at: Set(None),
             last_error: Set(None),
             last_error_at: Set(None),
@@ -148,7 +161,7 @@ impl ReleaseSourceRepository {
     /// On insert, the row is created with `params` and defaults to enabled.
     /// On update, **only the plugin-owned descriptive fields** are refreshed
     /// (`display_name`, `kind`, `config`). User-managed fields (`enabled`,
-    /// `poll_interval_s`) are preserved so an admin's interval override or
+    /// `cron_schedule`) are preserved so an admin's schedule override or
     /// disable toggle survives a plugin re-registration.
     ///
     /// Used by `releases/register_sources` so a plugin can declare its full
@@ -213,12 +226,6 @@ impl ReleaseSourceRepository {
             .await?
             .ok_or_else(|| anyhow::anyhow!("release source {} not found", id))?;
 
-        if let Some(interval) = update.poll_interval_s
-            && interval <= 0
-        {
-            anyhow::bail!("poll_interval_s must be positive");
-        }
-
         let mut active: release_sources::ActiveModel = existing.into();
         if let Some(name) = update.display_name {
             active.display_name = Set(name);
@@ -226,8 +233,10 @@ impl ReleaseSourceRepository {
         if let Some(enabled) = update.enabled {
             active.enabled = Set(enabled);
         }
-        if let Some(interval) = update.poll_interval_s {
-            active.poll_interval_s = Set(interval);
+        if let Some(cron) = update.cron_schedule {
+            // Some(None) -> clear (inherit server default); Some(Some(s)) -> set override.
+            let sanitized = sanitize_cron_schedule(cron)?;
+            active.cron_schedule = Set(sanitized);
         }
         if let Some(cfg) = update.config {
             active.config = Set(cfg);
@@ -294,7 +303,7 @@ impl ReleaseSourceRepository {
 
     /// Reset all transient poll state on a source: clears `etag`,
     /// `last_polled_at`, `last_error`, `last_error_at`, and `last_summary`.
-    /// Leaves user-managed fields (`enabled`, `poll_interval_s`,
+    /// Leaves user-managed fields (`enabled`, `cron_schedule`,
     /// `display_name`, `config`) untouched.
     ///
     /// Used by the source-reset admin endpoint so a forced re-poll fetches
@@ -373,7 +382,6 @@ mod tests {
             source_key: "nyaa:user:tsuna69".to_string(),
             display_name: "Nyaa - tsuna69".to_string(),
             kind: kind::RSS_UPLOADER.to_string(),
-            poll_interval_s: 3600,
             enabled: None,
             config: None,
         }
@@ -418,16 +426,103 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_rejects_non_positive_interval() {
+    async fn update_rejects_invalid_cron() {
         let (db, _temp) = create_test_db().await;
         let conn = db.sea_orm_connection();
 
-        let mut params = nyaa_source();
-        params.poll_interval_s = 0;
-        let err = ReleaseSourceRepository::create(conn, params)
+        let s = ReleaseSourceRepository::create(conn, nyaa_source())
             .await
-            .unwrap_err();
-        assert!(err.to_string().contains("positive"));
+            .unwrap();
+        let err = ReleaseSourceRepository::update(
+            conn,
+            s.id,
+            ReleaseSourceUpdate {
+                cron_schedule: Some(Some("not a cron".to_string())),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().to_lowercase().contains("cron"));
+    }
+
+    #[tokio::test]
+    async fn update_clears_cron_schedule_with_explicit_none() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let s = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        // Set an override.
+        ReleaseSourceRepository::update(
+            conn,
+            s.id,
+            ReleaseSourceUpdate {
+                cron_schedule: Some(Some("0 */6 * * *".to_string())),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let after_set = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after_set.cron_schedule.as_deref(), Some("0 */6 * * *"));
+
+        // Clear back to inherit.
+        ReleaseSourceRepository::update(
+            conn,
+            s.id,
+            ReleaseSourceUpdate {
+                cron_schedule: Some(None),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let after_clear = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(after_clear.cron_schedule.is_none());
+    }
+
+    #[tokio::test]
+    async fn update_treats_empty_cron_as_clear() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let s = ReleaseSourceRepository::create(conn, nyaa_source())
+            .await
+            .unwrap();
+        ReleaseSourceRepository::update(
+            conn,
+            s.id,
+            ReleaseSourceUpdate {
+                cron_schedule: Some(Some("0 */6 * * *".to_string())),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        ReleaseSourceRepository::update(
+            conn,
+            s.id,
+            ReleaseSourceUpdate {
+                cron_schedule: Some(Some("   ".to_string())),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let after = ReleaseSourceRepository::get_by_id(conn, s.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(after.cron_schedule.is_none());
     }
 
     #[tokio::test]
@@ -566,15 +661,18 @@ mod tests {
             .await
             .unwrap();
         assert!(created.enabled);
-        assert_eq!(created.poll_interval_s, 3600);
+        assert!(
+            created.cron_schedule.is_none(),
+            "fresh row inherits server-wide default"
+        );
 
-        // Admin disables and overrides interval.
+        // Admin disables and sets a cron override.
         ReleaseSourceRepository::update(
             conn,
             created.id,
             ReleaseSourceUpdate {
                 enabled: Some(false),
-                poll_interval_s: Some(900),
+                cron_schedule: Some(Some("0 */6 * * *".to_string())),
                 ..Default::default()
             },
         )
@@ -585,7 +683,6 @@ mod tests {
         let mut params = nyaa_source();
         params.display_name = "Nyaa: tsuna69 (refreshed)".to_string();
         params.config = Some(serde_json::json!({ "subscription": "tsuna69" }));
-        params.poll_interval_s = 7200; // would-be interval is ignored on update
         let updated = ReleaseSourceRepository::upsert(conn, params).await.unwrap();
 
         assert_eq!(updated.id, created.id, "same key returns same row");
@@ -599,8 +696,9 @@ mod tests {
             "user-set enabled flag must survive a plugin re-register"
         );
         assert_eq!(
-            updated.poll_interval_s, 900,
-            "user-set poll_interval_s must survive a plugin re-register"
+            updated.cron_schedule.as_deref(),
+            Some("0 */6 * * *"),
+            "user-set cron_schedule must survive a plugin re-register"
         );
     }
 
@@ -727,7 +825,7 @@ mod tests {
             s.id,
             ReleaseSourceUpdate {
                 enabled: Some(false),
-                poll_interval_s: Some(900),
+                cron_schedule: Some(Some("0 */6 * * *".to_string())),
                 ..Default::default()
             },
         )
@@ -749,7 +847,7 @@ mod tests {
         assert!(after.last_summary.is_none());
         // User-managed fields preserved.
         assert!(!after.enabled);
-        assert_eq!(after.poll_interval_s, 900);
+        assert_eq!(after.cron_schedule.as_deref(), Some("0 */6 * * *"));
     }
 
     #[tokio::test]
