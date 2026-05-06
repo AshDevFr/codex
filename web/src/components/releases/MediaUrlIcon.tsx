@@ -21,7 +21,7 @@ const KIND_META: Record<
 };
 
 export function MediaUrlIcon({ url, kind }: MediaUrlIconProps) {
-  const meta = (kind && KIND_META[kind]) ?? KIND_META.other;
+  const meta = (kind ? KIND_META[kind] : undefined) ?? KIND_META.other;
   const { label, Icon } = meta;
 
   return (
