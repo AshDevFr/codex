@@ -39,6 +39,7 @@ const STATE_OPTIONS = [
   { value: "announced", label: "New" },
   { value: "marked_acquired", label: "Acquired" },
   { value: "dismissed", label: "Dismissed" },
+  { value: "ignored", label: "Ignored" },
 ];
 
 const PAGE_SIZE = 50;

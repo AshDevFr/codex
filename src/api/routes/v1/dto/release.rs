@@ -344,6 +344,13 @@ pub enum BulkReleaseAction {
     Dismiss,
     /// Set state to `marked_acquired`.
     MarkAcquired,
+    /// Set state to `ignored`. Same effect as auto-ignore at ingestion,
+    /// but applied manually after the fact.
+    Ignore,
+    /// Reset state back to `announced`. Universal undo for `dismissed`,
+    /// `marked_acquired`, and `ignored`. Does not re-emit the release-
+    /// announced SSE event (the user is the one driving the change).
+    Reset,
     /// Hard-delete the ledger rows. Each affected source's `etag` is
     /// cleared so the next poll re-fetches without `If-None-Match` and
     /// re-announces the deleted releases.

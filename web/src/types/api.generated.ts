@@ -2570,11 +2570,11 @@ export interface paths {
         put?: never;
         /**
          * Apply an action to a batch of ledger rows.
-         * @description `dismiss` and `mark-acquired` set state in-place. `delete` removes
-         *     the rows and clears the affected sources' etags so the next poll
-         *     re-fetches without `If-None-Match`. All three run as bulk SQL — no
-         *     per-row round trips — so this scales to deleting thousands of rows in
-         *     one call.
+         * @description `dismiss`, `mark-acquired`, `ignore`, and `reset` all set state
+         *     in-place. `delete` removes the rows and clears the affected sources'
+         *     etags so the next poll re-fetches without `If-None-Match`. All run
+         *     as bulk SQL (no per-row round trips), so this scales to thousands of
+         *     rows in one call.
          */
         post: operations["bulk_release_action"];
         delete?: never;
@@ -8717,7 +8717,7 @@ export interface components {
          * @description Action requested by `POST /api/v1/releases/bulk`.
          * @enum {string}
          */
-        BulkReleaseAction: "dismiss" | "mark-acquired" | "delete";
+        BulkReleaseAction: "dismiss" | "mark-acquired" | "ignore" | "reset" | "delete";
         /** @description Request body for `POST /api/v1/releases/bulk`. */
         BulkReleaseActionRequest: {
             action: components["schemas"]["BulkReleaseAction"];
