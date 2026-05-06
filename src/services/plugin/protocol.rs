@@ -62,6 +62,17 @@ pub struct JsonRpcRequest {
     pub method: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<Value>,
+    /// Reverse-RPC only: id of the forward call the plugin is currently
+    /// servicing. Lets the host route the reverse-RPC back to the originating
+    /// caller's task so emitted events land in that caller's recording
+    /// broadcaster. Absent for forward calls and for plugins that predate the
+    /// field.
+    #[serde(
+        default,
+        rename = "parentRequestId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub parent_request_id: Option<RequestId>,
 }
 
 impl JsonRpcRequest {
@@ -73,6 +84,7 @@ impl JsonRpcRequest {
             id: id.into(),
             method: method.into(),
             params,
+            parent_request_id: None,
         }
     }
 

@@ -604,10 +604,20 @@ impl TaskWorker {
             let recording_broadcaster = Arc::new(EventBroadcaster::new_with_recording(1000, true));
             let broadcaster_clone = recording_broadcaster.clone();
 
-            // Execute task with recording broadcaster
-            let result = handler
-                .handle(&task, &self.db, Some(&recording_broadcaster))
-                .await;
+            // Execute the handler inside a task-local scope that exposes the
+            // recording broadcaster to any code on this task's await chain —
+            // including reverse-RPC handlers (e.g. `releases/record`), which
+            // are dispatched on this task by `RpcClient::call_with_timeout`
+            // when the plugin tags reverse-RPCs with the parent forward
+            // request id. Without this, plugins that emit events via
+            // reverse-RPC (rather than synchronously through the handler's
+            // broadcaster argument) would have no recording context and
+            // their events would never replay.
+            let result = crate::events::with_recording_broadcaster(
+                recording_broadcaster.clone(),
+                handler.handle(&task, &self.db, Some(&recording_broadcaster)),
+            )
+            .await;
 
             // Get recorded events before returning
             let events = broadcaster_clone.take_recorded_events();
@@ -634,10 +644,22 @@ impl TaskWorker {
             (self.event_broadcaster.clone(), None)
         };
 
-        // Execute task with shared broadcaster (single-process mode)
-        let result = handler
-            .handle(&task, &self.db, task_broadcaster.as_ref())
-            .await;
+        // Execute task with shared broadcaster (single-process mode).
+        // Set the task-local to the shared broadcaster too, so reverse-RPC
+        // handlers see *the same* broadcaster the rest of the task uses.
+        // The shared broadcaster has recording disabled here (web/single-
+        // process mode), so emits flow straight to live SSE subscribers.
+        let result = if let Some(ref shared) = task_broadcaster {
+            crate::events::with_recording_broadcaster(
+                shared.clone(),
+                handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+            )
+            .await
+        } else {
+            handler
+                .handle(&task, &self.db, task_broadcaster.as_ref())
+                .await
+        };
 
         // Update task status based on result
         match result {

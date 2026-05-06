@@ -57,9 +57,6 @@ pub struct ReleasesRequestHandler {
     /// to scope `releases/list_tracked` responses to what the plugin asked
     /// for.
     capability: ReleaseSourceCapability,
-    /// Optional event broadcaster used to emit `ReleaseAnnounced` events on
-    /// successful (non-deduped) `releases/record` inserts.
-    event_broadcaster: Option<std::sync::Arc<crate::events::EventBroadcaster>>,
     /// Optional scheduler reference used by `releases/register_sources` to
     /// reconcile schedules immediately after the source set changes.
     scheduler: Option<Arc<Mutex<Scheduler>>>,
@@ -75,19 +72,8 @@ impl ReleasesRequestHandler {
             db,
             plugin_name,
             capability,
-            event_broadcaster: None,
             scheduler: None,
         }
-    }
-
-    /// Attach an event broadcaster so the handler emits `ReleaseAnnounced`
-    /// events on inserts. Builder-style.
-    pub fn with_event_broadcaster(
-        mut self,
-        broadcaster: std::sync::Arc<crate::events::EventBroadcaster>,
-    ) -> Self {
-        self.event_broadcaster = Some(broadcaster);
-        self
     }
 
     /// Attach a scheduler reference so `releases/register_sources` reconciles
@@ -342,11 +328,29 @@ impl ReleasesRequestHandler {
                 warn!(error = %e, %series_id, "latest_known advance failed; ledger insert preserved");
             }
 
-            if let Some(ref broadcaster) = self.event_broadcaster {
+            // Emit through the task-local recording broadcaster set up by
+            // `crate::tasks::worker` around the running task. This routes
+            // the event into `tasks.result.emitted_events` so the web
+            // server's `TaskListener` replays it to live SSE subscribers in
+            // distributed deployments. In single-process mode the same
+            // task-local points at the live broadcaster, so subscribers see
+            // the event directly.
+            //
+            // No task-local set means we're handling a reverse-RPC outside
+            // any task context (today: shouldn't happen for releases since
+            // every record path runs inside a poll task). We log and skip
+            // rather than silently emitting into a void.
+            if let Some(broadcaster) = crate::events::current_recording_broadcaster() {
                 let _ = broadcaster.emit(crate::events::EntityChangeEvent::release_announced(
                     &outcome.row,
                     &self.plugin_name,
                 ));
+            } else {
+                debug!(
+                    series_id = %outcome.row.series_id,
+                    plugin = %self.plugin_name,
+                    "No recording broadcaster in scope; skipping release_announced emit"
+                );
             }
         }
 
@@ -1159,11 +1163,12 @@ mod tests {
         assert_eq!(resp.error.unwrap().code, error_codes::AUTH_FAILED);
     }
 
-    /// `releases/record` emits a `ReleaseAnnounced` event on insert and
-    /// suppresses it on dedup.
+    /// `releases/record` emits a `ReleaseAnnounced` event on insert (via the
+    /// task-local recording broadcaster set up by the worker) and suppresses
+    /// it on dedup.
     #[tokio::test]
     async fn record_emits_release_announced_on_insert_only() {
-        use crate::events::{EntityEvent, EventBroadcaster};
+        use crate::events::{EntityEvent, EventBroadcaster, with_recording_broadcaster};
 
         let (db, _t) = create_test_db().await;
         let conn = db.sea_orm_connection();
@@ -1176,8 +1181,7 @@ mod tests {
             conn.clone(),
             "release-nyaa".to_string(),
             make_capability(false, vec![]),
-        )
-        .with_event_broadcaster(broadcaster.clone());
+        );
 
         let cand = good_candidate(series_id);
         let req = make_request(
@@ -1185,7 +1189,12 @@ mod tests {
             json!({"sourceId": source_id, "candidate": cand}),
         );
 
-        let first = handler.handle_request(&req).await;
+        let req_clone = req.clone();
+        let handler_clone = handler.clone();
+        let first = with_recording_broadcaster(broadcaster.clone(), async move {
+            handler_clone.handle_request(&req_clone).await
+        })
+        .await;
         assert!(!first.is_error(), "unexpected error: {:?}", first.error);
         let body: RecordResponse = serde_json::from_value(first.result.unwrap()).unwrap();
         assert!(!body.deduped);
@@ -1210,13 +1219,45 @@ mod tests {
         }
 
         // Re-recording the same release dedups; no new event should fire.
-        let second = handler.handle_request(&req).await;
+        let req_clone = req.clone();
+        let handler_clone = handler.clone();
+        let second = with_recording_broadcaster(broadcaster.clone(), async move {
+            handler_clone.handle_request(&req_clone).await
+        })
+        .await;
         let body: RecordResponse = serde_json::from_value(second.result.unwrap()).unwrap();
         assert!(body.deduped);
         assert!(
             rx.try_recv().is_err(),
             "dedup must not emit a new ReleaseAnnounced event"
         );
+    }
+
+    /// Without a task-local recording broadcaster in scope, `releases/record`
+    /// completes successfully but emits no event (the operation is logged
+    /// at debug; we don't surface a fake "live" emit anywhere).
+    #[tokio::test]
+    async fn record_skips_emit_when_no_broadcaster_in_scope() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-nyaa").await;
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let cand = good_candidate(series_id);
+        let req = make_request(
+            methods::RELEASES_RECORD,
+            json!({"sourceId": source_id, "candidate": cand}),
+        );
+
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error(), "unexpected error: {:?}", resp.error);
+        let body: RecordResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
+        assert!(!body.deduped, "ledger row still inserted");
     }
 
     #[tokio::test]

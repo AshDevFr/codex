@@ -148,9 +148,6 @@ pub struct PluginHandle {
     /// Optional database connection for handlers that need DB access
     /// post-initialization (releases handler, etc.).
     release_db: Option<DatabaseConnection>,
-    /// Optional event broadcaster used by handlers that emit cross-process
-    /// notifications (releases handler emits `ReleaseAnnounced`).
-    event_broadcaster: Option<Arc<crate::events::EventBroadcaster>>,
     /// Optional scheduler reference so the releases handler can reconcile
     /// release-source schedules immediately after `releases/register_sources`.
     scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
@@ -167,7 +164,6 @@ impl PluginHandle {
             manifest: Arc::new(RwLock::new(None)),
             storage_handler: None,
             release_db: None,
-            event_broadcaster: None,
             scheduler: None,
         }
     }
@@ -185,7 +181,6 @@ impl PluginHandle {
             manifest: Arc::new(RwLock::new(None)),
             storage_handler: Some(storage_handler),
             release_db: None,
-            event_broadcaster: None,
             scheduler: None,
         }
     }
@@ -195,16 +190,6 @@ impl PluginHandle {
     /// `release_source` capability. Builder-style, returns `self`.
     pub fn with_release_db(mut self, db: DatabaseConnection) -> Self {
         self.release_db = Some(db);
-        self
-    }
-
-    /// Attach an event broadcaster so the releases reverse-RPC handler can
-    /// emit `ReleaseAnnounced` events on inserts. Builder-style.
-    pub fn with_event_broadcaster(
-        mut self,
-        broadcaster: Arc<crate::events::EventBroadcaster>,
-    ) -> Self {
-        self.event_broadcaster = Some(broadcaster);
         self
     }
 
@@ -344,10 +329,14 @@ impl PluginHandle {
         // plugin declared `release_source` and we have a database
         // connection, install the releases handler too. Both happen under
         // the same write lock so the dispatcher sees them together.
+        //
+        // The releases handler emits `ReleaseAnnounced` through the
+        // task-local recording broadcaster set by `crate::tasks::worker`
+        // around the running task — no broadcaster injection needed here.
+        // See [`crate::events::with_recording_broadcaster`].
         let manifest_for_ctx = manifest.clone();
         let plugin_name = manifest.name.clone();
         let release_db = self.release_db.clone();
-        let event_broadcaster = self.event_broadcaster.clone();
         let scheduler = self.scheduler.clone();
         client
             .update_reverse_ctx(move |ctx| {
@@ -357,9 +346,6 @@ impl PluginHandle {
                     release_db,
                 ) {
                     let mut handler = ReleasesRequestHandler::new(db, plugin_name, cap);
-                    if let Some(b) = event_broadcaster {
-                        handler = handler.with_event_broadcaster(b);
-                    }
                     if let Some(s) = scheduler {
                         handler = handler.with_scheduler(s);
                     }

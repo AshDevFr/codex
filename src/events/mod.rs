@@ -8,9 +8,11 @@
 //! them on the web server when tasks complete.
 
 mod broadcaster;
+mod task_context;
 mod types;
 
 pub use broadcaster::{EventBroadcaster, RecordedEvent};
+pub use task_context::{current_recording_broadcaster, with_recording_broadcaster};
 // TaskProgress is part of the public API for task progress reporting
 #[allow(unused_imports)]
 pub use types::{

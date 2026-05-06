@@ -14,6 +14,7 @@ import { createInterface } from "node:readline";
 import { PluginError } from "./errors.js";
 import { HostRpcClient } from "./host-rpc.js";
 import { createLogger, type Logger } from "./logger.js";
+import { runWithParentRequestId } from "./request-context.js";
 import { PluginStorage } from "./storage.js";
 import type {
   BookMetadataProvider,
@@ -289,14 +290,12 @@ async function handleLine(
 
     logger.debug(`Received request: ${request.method}`, { id: request.id });
 
-    const response = await handleRequest(
-      request,
-      manifest,
-      onInitialize,
-      router,
-      logger,
-      storage,
-      hostRpc,
+    // Run the request handler inside the parent-request async-local context.
+    // Reverse-RPCs the handler issues via `HostRpcClient.call` will read this
+    // and stamp `parentRequestId` so the host can route the call back to the
+    // originating task. See `request-context.ts`.
+    const response = await runWithParentRequestId(request.id, () =>
+      handleRequest(request, manifest, onInitialize, router, logger, storage, hostRpc),
     );
     if (response !== null) {
       writeResponse(response);

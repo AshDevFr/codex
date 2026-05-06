@@ -279,6 +279,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     ));
 
     // Initialize plugin manager (before workers so they can handle plugin tasks)
+    //
+    // Note: no broadcaster injection. Reverse-RPC handlers (e.g.
+    // `releases/record`) emit through the task-local recording broadcaster
+    // set up by `TaskWorker::run_task`, not through a manager-held one.
+    // See `crate::events::with_recording_broadcaster`.
     info!("Initializing plugin manager...");
     let plugin_manager = Arc::new(
         crate::services::plugin::PluginManager::with_defaults(Arc::new(
@@ -286,7 +291,6 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         ))
         .with_metrics_service(plugin_metrics_service.clone())
         .with_plugin_file_storage(plugin_file_storage.clone())
-        .with_event_broadcaster(event_broadcaster.clone())
         .with_scheduler(scheduler.clone()),
     );
     // Load enabled plugins from database
