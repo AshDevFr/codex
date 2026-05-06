@@ -34559,6 +34559,13 @@
             "format": "uuid",
             "description": "Associated book ID (if applicable)"
           },
+          "bookTitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Resolved title of the associated book (from `book_metadata.title`).\nPopulated only when the task is book-scoped and metadata exists."
+          },
           "completedAt": {
             "type": [
               "string",
@@ -34594,6 +34601,13 @@
             "format": "uuid",
             "description": "Associated library ID (if applicable)",
             "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "libraryName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Resolved name of the associated library (from `libraries.name`).\nPopulated only when the task is library-scoped."
           },
           "lockedBy": {
             "type": [
@@ -34642,6 +34656,13 @@
             ],
             "format": "uuid",
             "description": "Associated series ID (if applicable)"
+          },
+          "seriesTitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Resolved title of the associated series (from `series_metadata.title`).\nPopulated only when the task is series-scoped and metadata exists."
           },
           "startedAt": {
             "type": [
