@@ -8921,7 +8921,11 @@ export interface components {
             label: string;
             /** @description Whether this field is required */
             required?: boolean;
-            /** @description Field type: "number", "string", or "boolean" */
+            /**
+             * @description Field type — free-form documentation hint. Common values: "number",
+             *     "string", "boolean", "string-array", "object". The host never validates
+             *     stored config against this; it forwards the raw JSON to the plugin.
+             */
             type: string;
         };
         /** @description Plugin configuration schema - documents available config options */

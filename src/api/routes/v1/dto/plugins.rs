@@ -233,7 +233,9 @@ pub struct ConfigFieldDto {
     /// Description of what this field does
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Field type: "number", "string", or "boolean"
+    /// Field type — free-form documentation hint. Common values: "number",
+    /// "string", "boolean", "string-array", "object". The host never validates
+    /// stored config against this; it forwards the raw JSON to the plugin.
     #[serde(rename = "type")]
     pub field_type: String,
     /// Whether this field is required

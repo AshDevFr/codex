@@ -19,6 +19,7 @@ export type {
   ConfigField,
   ConfigSchema,
   CredentialField,
+  JsonValue,
   OAuthConfig,
   PluginCapabilities,
   PluginManifest,

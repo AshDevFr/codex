@@ -165,14 +165,27 @@ export function sourceKeyToSubscription(key: string): UploaderSubscription | nul
 }
 
 /**
- * Parse the admin `uploaders` CSV into a clean list of subscriptions.
- * Skips empty tokens; preserves order; deduplicates.
+ * Parse the admin `uploaders` config into a clean list of subscriptions.
+ *
+ * Accepts either a JSON array (preferred — what the manifest now declares) or
+ * a legacy comma-separated string. The string path is retained so existing
+ * stored configs and CLI/env-driven setups keep working without a migration.
+ *
+ * Skips empty tokens; preserves order; deduplicates case-insensitively.
  */
 export function parseSubscriptionList(raw: unknown): UploaderSubscription[] {
-  if (typeof raw !== "string") return [];
+  let tokens: string[];
+  if (Array.isArray(raw)) {
+    tokens = raw.filter((t): t is string => typeof t === "string");
+  } else if (typeof raw === "string") {
+    tokens = raw.split(",");
+  } else {
+    return [];
+  }
+
   const seen = new Set<string>();
   const out: UploaderSubscription[] = [];
-  for (const token of raw.split(",")) {
+  for (const token of tokens) {
     const sub = parseSubscriptionToken(token);
     if (sub === null) continue;
     const key = subscriptionToSourceKey(sub);
