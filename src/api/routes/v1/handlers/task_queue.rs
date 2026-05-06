@@ -126,6 +126,21 @@ pub struct TaskResponse {
 
     /// When task execution completed
     pub completed_at: Option<DateTime<Utc>>,
+
+    /// Resolved title of the associated book (from `book_metadata.title`).
+    /// Populated only when the task is book-scoped and metadata exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub book_title: Option<String>,
+
+    /// Resolved title of the associated series (from `series_metadata.title`).
+    /// Populated only when the task is series-scoped and metadata exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_title: Option<String>,
+
+    /// Resolved name of the associated library (from `libraries.name`).
+    /// Populated only when the task is library-scoped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library_name: Option<String>,
 }
 
 impl From<crate::db::entities::tasks::Model> for TaskResponse {
@@ -149,7 +164,20 @@ impl From<crate::db::entities::tasks::Model> for TaskResponse {
             created_at: task.created_at,
             started_at: task.started_at,
             completed_at: task.completed_at,
+            book_title: None,
+            series_title: None,
+            library_name: None,
         }
+    }
+}
+
+impl From<crate::db::repositories::task::TaskWithTargets> for TaskResponse {
+    fn from(enriched: crate::db::repositories::task::TaskWithTargets) -> Self {
+        let mut response = Self::from(enriched.task);
+        response.book_title = enriched.book_title;
+        response.series_title = enriched.series_title;
+        response.library_name = enriched.library_name;
+        response
     }
 }
 
@@ -208,7 +236,7 @@ pub async fn list_tasks(
     // Check permission
     auth.require_permission(&Permission::TasksRead)?;
 
-    let tasks = TaskRepository::list(
+    let tasks = TaskRepository::list_with_targets(
         &state.db,
         params.status,
         params.task_type,

@@ -176,6 +176,17 @@ export type TaskProgress = Schemas["TaskProgress"];
 export type TaskProgressEvent = Schemas["TaskProgressEvent"];
 export type TaskResponse = Schemas["TaskResponse"];
 
+/**
+ * Frontend-only active-task shape that augments `TaskProgressEvent` with the
+ * resolved target titles returned by `GET /api/v1/tasks` (which reach the
+ * client via the polling snapshot, not the SSE stream).
+ */
+export type ActiveTask = TaskProgressEvent & {
+  bookTitle?: string | null;
+  seriesTitle?: string | null;
+  libraryName?: string | null;
+};
+
 // =============================================================================
 // Type guards for entity events
 // =============================================================================
