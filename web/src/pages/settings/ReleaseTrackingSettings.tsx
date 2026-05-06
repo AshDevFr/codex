@@ -44,6 +44,7 @@ import { useUserPreference } from "@/hooks/useUserPreference";
 
 const SETTING_NOTIFY_LANGUAGES = "release_tracking.notify_languages";
 const SETTING_NOTIFY_PLUGINS = "release_tracking.notify_plugins";
+const SETTING_DEFAULT_CRON_SCHEDULE = "release_tracking.default_cron_schedule";
 const PREF_MUTED_SERIES = "release_tracking.muted_series_ids";
 
 /** Parse a settings-table JSON-array value back to a string list. */
@@ -127,6 +128,8 @@ export function ReleaseTrackingSettings() {
           source pauses its scheduled polls; "Poll now" enqueues an immediate
           fetch.
         </Text>
+
+        <DefaultScheduleCard />
 
         <NotificationPreferencesCard />
 
@@ -212,6 +215,90 @@ export function ReleaseTrackingSettings() {
         )}
       </Stack>
     </Box>
+  );
+}
+
+/**
+ * Server-wide default cron schedule for release-source polling. Each
+ * `release_sources` row whose `cron_schedule` is NULL inherits this value.
+ * The compile-time fallback (`"0 0 * * *"`) only applies if the setting row
+ * itself is missing.
+ */
+function DefaultScheduleCard() {
+  const queryClient = useQueryClient();
+  const settingQuery = useQuery({
+    queryKey: ["admin-setting", SETTING_DEFAULT_CRON_SCHEDULE],
+    queryFn: () => settingsApi.get(SETTING_DEFAULT_CRON_SCHEDULE),
+  });
+
+  const serverValue = settingQuery.data?.value ?? "";
+  const [draft, setDraft] = useState<string>(serverValue);
+  // Sync local draft when the server value changes (initial load, refetch).
+  // We deliberately don't useEffect: comparing the string each render is
+  // cheap, and we only update when the upstream value actually changes.
+  if (draft === "" && serverValue !== "" && !settingQuery.isFetching) {
+    setDraft(serverValue);
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: (value: string) =>
+      settingsApi.update(SETTING_DEFAULT_CRON_SCHEDULE, { value }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["admin-setting", SETTING_DEFAULT_CRON_SCHEDULE],
+      });
+      // Source rows display `effectiveCronSchedule` resolved server-side,
+      // so a default change must invalidate the source list to refresh
+      // every inheriting row's "(Default)" label.
+      queryClient.invalidateQueries({ queryKey: ["release-sources"] });
+      notifications.show({
+        title: "Default schedule saved",
+        message:
+          "All sources without a per-row override will use the new schedule.",
+        color: "green",
+      });
+    },
+    onError: (err: Error) =>
+      notifications.show({
+        title: "Failed to save",
+        message: err.message ?? "Could not update default schedule.",
+        color: "red",
+      }),
+  });
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === serverValue) {
+      setDraft(serverValue);
+      return;
+    }
+    updateMutation.mutate(trimmed);
+  };
+
+  return (
+    <Card withBorder padding="md" radius="md">
+      <Stack gap="sm">
+        <Group gap="xs">
+          <IconClockHour4 size={18} />
+          <Text fw={600}>Default schedule</Text>
+        </Group>
+        <Text size="xs" c="dimmed">
+          Server-wide default cron used by every release source that doesn't
+          have its own per-row override. Changing this propagates immediately to
+          inheriting rows.
+        </Text>
+        <CronInput
+          label="Cron expression"
+          description="5-field POSIX cron (minute hour day-of-month month day-of-week)"
+          placeholder="0 0 * * *"
+          value={draft}
+          onChange={setDraft}
+          onBlur={commit}
+          disabled={settingQuery.isLoading || updateMutation.isPending}
+          required
+        />
+      </Stack>
+    </Card>
   );
 }
 
@@ -401,14 +488,14 @@ function ReleaseSourceRow({
   onReset,
   resetPending,
 }: RowProps) {
-  // `cronSchedule != null` means the row has a per-source override; render the
-  // editor inline. Otherwise render the inherited default with an "Override"
-  // affordance.
-  const [isOverriding, setIsOverriding] = useState(
-    source.cronSchedule !== null,
-  );
+  // Truthy `cronSchedule` means the row has a per-source override; render the
+  // editor inline. The server omits the field entirely (rather than sending
+  // `null`) when the row is inheriting, so accept both `null` and `undefined`
+  // as "no override."
+  const hasOverride = Boolean(source.cronSchedule);
+  const [isOverriding, setIsOverriding] = useState(hasOverride);
   const [draft, setDraft] = useState<string>(
-    source.cronSchedule ?? source.effectiveCronSchedule,
+    source.cronSchedule || source.effectiveCronSchedule,
   );
 
   const lastPolled = source.lastPolledAt
@@ -419,7 +506,7 @@ function ReleaseSourceRow({
     const trimmed = draft.trim();
     if (!trimmed) {
       // Empty editor = revert to inherit.
-      if (source.cronSchedule !== null) onCronScheduleChange(null);
+      if (source.cronSchedule) onCronScheduleChange(null);
       setIsOverriding(false);
       setDraft(source.effectiveCronSchedule);
       return;
@@ -430,7 +517,7 @@ function ReleaseSourceRow({
   };
 
   const resetToDefault = () => {
-    if (source.cronSchedule !== null) onCronScheduleChange(null);
+    if (source.cronSchedule) onCronScheduleChange(null);
     setIsOverriding(false);
     setDraft(source.effectiveCronSchedule);
   };
