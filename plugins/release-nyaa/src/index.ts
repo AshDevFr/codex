@@ -484,9 +484,7 @@ createReleaseSourcePlugin({
   async onInitialize(params: InitializeParams) {
     state.hostRpc = params.hostRpc;
     const ac = params.adminConfig ?? {};
-    if (typeof ac.uploaders === "string") {
-      state.subscriptions = parseSubscriptionList(ac.uploaders);
-    }
+    state.subscriptions = parseSubscriptionList(ac.uploaders);
     if (typeof ac.requestTimeoutMs === "number" && Number.isFinite(ac.requestTimeoutMs)) {
       state.requestTimeoutMs = Math.max(1_000, Math.min(ac.requestTimeoutMs, 60_000));
     }

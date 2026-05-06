@@ -22070,7 +22070,7 @@
           },
           "type": {
             "type": "string",
-            "description": "Field type: \"number\", \"string\", or \"boolean\""
+            "description": "Field type — free-form documentation hint. Common values: \"number\",\n\"string\", \"boolean\", \"string-array\", \"object\". The host never validates\nstored config against this; it forwards the raw JSON to the plugin."
           }
         }
       },
