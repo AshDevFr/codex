@@ -64,6 +64,10 @@ async function pluginStoreScreenshots(page: Page): Promise<void> {
   // === ADD ANILIST RECOMMENDATIONS PLUGIN ===
   await addPluginFromStore(page, "AniList Recommendations", "plugins/store-add-recommendations");
 
+  // === ADD MANGAUPDATES RELEASES PLUGIN ===
+  // Drives the Release tracking screenshots later in the run.
+  await addPluginFromStore(page, "MangaUpdates Releases", "plugins/store-add-mangaupdates");
+
   // Navigate back to plugins page to see all installed plugins
   await page.goto("/settings/plugins");
   await waitForPageReady(page);

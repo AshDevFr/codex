@@ -92,6 +92,33 @@ async function main(): Promise<void> {
       console.log("⚠️  Plugins scenario not found, skipping");
     }
 
+    // Series-detail extras need plugins installed (the Fetch Metadata
+    // submenu sources its entries from installed plugins).
+    try {
+      const seriesDetail = await import("./scenarios/series-detail.js");
+      scenarios.push({ name: "Series Detail", run: seriesDetail.run });
+    } catch {
+      console.log("⚠️  Series Detail scenario not found, skipping");
+    }
+
+    // Library jobs editor needs at least one metadata-provider plugin
+    // installed so the provider dropdown is populated.
+    try {
+      const libraryJobs = await import("./scenarios/library-jobs.js");
+      scenarios.push({ name: "Library Jobs", run: libraryJobs.run });
+    } catch {
+      console.log("⚠️  Library Jobs scenario not found, skipping");
+    }
+
+    // Releases scenario depends on the MangaUpdates plugin being
+    // installed by the Plugins scenario, so it runs after.
+    try {
+      const releases = await import("./scenarios/releases.js");
+      scenarios.push({ name: "Releases", run: releases.run });
+    } catch {
+      console.log("⚠️  Releases scenario not found, skipping");
+    }
+
     // Logout runs last since it logs out and captures the login page
     try {
       const logout = await import("./scenarios/logout.js");

@@ -29,9 +29,10 @@ import { ReaderToolbar } from "./ReaderToolbar";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 
-// Configure PDF.js worker - use CDN with the exact version bundled in react-pdf
-// This avoids version mismatches when pdfjs-dist is also installed as a direct dependency
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
 
 export type PdfZoomLevel =
   | "fit-page"
