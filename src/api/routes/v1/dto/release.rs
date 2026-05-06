@@ -145,7 +145,15 @@ pub struct ReleaseSourceDto {
     /// `rss-uploader` | `rss-series` | `api-feed` | `metadata-feed` | `metadata-piggyback`.
     pub kind: String,
     pub enabled: bool,
-    pub poll_interval_s: i32,
+    /// Per-source cron override (5-field POSIX cron). NULL when the row
+    /// inherits the server-wide `release_tracking.default_cron_schedule`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cron_schedule: Option<String>,
+    /// The cron expression actually used by the scheduler for this source:
+    /// the row's `cron_schedule` if set, otherwise the resolved server-wide
+    /// default. Lets the UI display "Daily (Default)" without needing to
+    /// fetch the global setting separately.
+    pub effective_cron_schedule: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_polled_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -168,8 +176,15 @@ pub struct ReleaseSourceDto {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<release_sources::Model> for ReleaseSourceDto {
-    fn from(m: release_sources::Model) -> Self {
+impl ReleaseSourceDto {
+    /// Build the DTO from a model + the resolved server-wide default cron
+    /// schedule. Use this in handlers that already have the default in
+    /// hand (avoids a settings round-trip per row).
+    pub fn from_model_with_default(m: release_sources::Model, server_default: &str) -> Self {
+        let effective = crate::services::release::schedule::resolve_cron_schedule(
+            m.cron_schedule.as_deref(),
+            server_default,
+        );
         Self {
             id: m.id,
             plugin_id: m.plugin_id,
@@ -177,7 +192,8 @@ impl From<release_sources::Model> for ReleaseSourceDto {
             display_name: m.display_name,
             kind: m.kind,
             enabled: m.enabled,
-            poll_interval_s: m.poll_interval_s,
+            cron_schedule: m.cron_schedule,
+            effective_cron_schedule: effective,
             last_polled_at: m.last_polled_at,
             last_error: m.last_error,
             last_error_at: m.last_error_at,
@@ -190,6 +206,16 @@ impl From<release_sources::Model> for ReleaseSourceDto {
     }
 }
 
+impl From<release_sources::Model> for ReleaseSourceDto {
+    /// Convenience for callers that don't have the server default handy
+    /// (e.g. unit tests). Falls back to the compile-time
+    /// `DEFAULT_CRON_SCHEDULE` for resolution. Production handlers should
+    /// prefer [`ReleaseSourceDto::from_model_with_default`].
+    fn from(m: release_sources::Model) -> Self {
+        Self::from_model_with_default(m, crate::services::release::schedule::DEFAULT_CRON_SCHEDULE)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseSourceListResponse {
@@ -197,13 +223,49 @@ pub struct ReleaseSourceListResponse {
 }
 
 /// PATCH payload for a release source. All fields optional; omit to leave alone.
+///
+/// `cron_schedule` uses double-Option semantics:
+/// - field absent (`None`): leave the row's cron_schedule unchanged
+/// - explicit `null` (`Some(None)`) / `""` / `"   "`: clear the override
+///   (revert to inheriting the server-wide
+///   `release_tracking.default_cron_schedule`)
+/// - `Some(Some("0 */6 * * *"))`: set a per-source override
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateReleaseSourceRequest {
     pub display_name: Option<String>,
     pub enabled: Option<bool>,
-    /// Polling interval override (seconds). Must be > 0.
-    pub poll_interval_s: Option<i32>,
+    /// 5-field POSIX cron expression. Use `null` (or empty string) to
+    /// clear the override and inherit the server-wide default.
+    #[serde(default, with = "double_option")]
+    pub cron_schedule: Option<Option<String>>,
+}
+
+/// Local copy of the `Option<Option<T>>` serde adapter used by `tracking.rs`.
+/// See that module for the full rationale; in short: distinguishes "field
+/// absent" (leave alone) from "explicit null" (clear).
+mod double_option {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, T>(value: &Option<Option<T>>, ser: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        match value {
+            Some(Some(v)) => v.serialize(ser),
+            Some(None) => ser.serialize_none(),
+            None => ser.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        Option::<T>::deserialize(de).map(Some)
+    }
 }
 
 /// Response shape from the `reset` endpoint.

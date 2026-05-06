@@ -50,12 +50,7 @@ import {
   subscriptionToSourceKey,
   type UploaderSubscription,
 } from "./fetcher.js";
-import {
-  DEFAULT_MIN_CONFIDENCE,
-  DEFAULT_POLL_INTERVAL_S,
-  DEFAULT_REQUEST_TIMEOUT_MS,
-  manifest,
-} from "./manifest.js";
+import { DEFAULT_MIN_CONFIDENCE, DEFAULT_REQUEST_TIMEOUT_MS, manifest } from "./manifest.js";
 import { type AliasCandidate, type AliasMatch, matchSeriesAny } from "./matcher.js";
 import { type ParsedRssItem, parseFeed } from "./parser.js";
 
@@ -499,7 +494,7 @@ createReleaseSourcePlugin({
       state.baseUrl = ac.baseUrl.trim();
     }
     logger.info(
-      `initialized: subscriptions=${state.subscriptions.length} timeoutMs=${state.requestTimeoutMs} minConfidence=${state.minConfidence} defaultPoll=${DEFAULT_POLL_INTERVAL_S}s`,
+      `initialized: subscriptions=${state.subscriptions.length} timeoutMs=${state.requestTimeoutMs} minConfidence=${state.minConfidence}`,
     );
 
     // Materialize source rows. Deferred to a microtask + retry on

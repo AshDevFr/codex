@@ -7193,7 +7193,7 @@
           "Releases"
         ],
         "summary": "PATCH a release source (admin-only).",
-        "description": "Toggle `enabled`, override `pollIntervalS`, or rename `displayName`.",
+        "description": "Toggle `enabled`, override `cronSchedule`, or rename `displayName`.\nSending `cronSchedule: null` clears the override and reverts the row to\ninheriting the server-wide `release_tracking.default_cron_schedule`.",
         "operationId": "update_release_source",
         "parameters": [
           {
@@ -7305,7 +7305,7 @@
           "Releases"
         ],
         "summary": "Reset a release source to a clean slate.",
-        "description": "Deletes every `release_ledger` row owned by the source and clears the\nsource's transient poll state (`etag`, `last_polled_at`, `last_error`,\n`last_error_at`, `last_summary`). User-managed fields (`enabled`,\n`poll_interval_s`, `display_name`, `config`) are preserved.\n\nIntended for testing/troubleshooting: after a reset, the next poll\nfetches the upstream feed without an `If-None-Match` header (so no 304\nshort-circuit) and re-records every release as `announced`. Does NOT\nauto-enqueue a poll — call `POST /release-sources/{id}/poll-now` after\nresetting if you want immediate re-fetch.",
+        "description": "Deletes every `release_ledger` row owned by the source and clears the\nsource's transient poll state (`etag`, `last_polled_at`, `last_error`,\n`last_error_at`, `last_summary`). User-managed fields (`enabled`,\n`cron_schedule`, `display_name`, `config`) are preserved.\n\nIntended for testing/troubleshooting: after a reset, the next poll\nfetches the upstream feed without an `If-None-Match` header (so no 304\nshort-circuit) and re-records every release as `announced`. Does NOT\nauto-enqueue a poll — call `POST /release-sources/{id}/poll-now` after\nresetting if you want immediate re-fetch.",
         "operationId": "reset_release_source",
         "parameters": [
           {
@@ -33375,7 +33375,7 @@
           "displayName",
           "kind",
           "enabled",
-          "pollIntervalS",
+          "effectiveCronSchedule",
           "createdAt",
           "updatedAt"
         ],
@@ -33387,8 +33387,19 @@
             "type": "string",
             "format": "date-time"
           },
+          "cronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Per-source cron override (5-field POSIX cron). NULL when the row\ninherits the server-wide `release_tracking.default_cron_schedule`."
+          },
           "displayName": {
             "type": "string"
+          },
+          "effectiveCronSchedule": {
+            "type": "string",
+            "description": "The cron expression actually used by the scheduler for this source:\nthe row's `cron_schedule` if set, otherwise the resolved server-wide\ndefault. Lets the UI display \"Daily (Default)\" without needing to\nfetch the global setting separately."
           },
           "enabled": {
             "type": "boolean"
@@ -33440,10 +33451,6 @@
             "type": "string",
             "description": "Owning plugin id, or `core` for in-core synthetic sources.",
             "example": "release-nyaa"
-          },
-          "pollIntervalS": {
-            "type": "integer",
-            "format": "int32"
           },
           "sourceKey": {
             "type": "string",
@@ -38678,8 +38685,15 @@
       },
       "UpdateReleaseSourceRequest": {
         "type": "object",
-        "description": "PATCH payload for a release source. All fields optional; omit to leave alone.",
+        "description": "PATCH payload for a release source. All fields optional; omit to leave alone.\n\n`cron_schedule` uses double-Option semantics:\n- field absent (`None`): leave the row's cron_schedule unchanged\n- explicit `null` (`Some(None)`) / `\"\"` / `\"   \"`: clear the override\n  (revert to inheriting the server-wide\n  `release_tracking.default_cron_schedule`)\n- `Some(Some(\"0 */6 * * *\"))`: set a per-source override",
         "properties": {
+          "cronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "5-field POSIX cron expression. Use `null` (or empty string) to\nclear the override and inherit the server-wide default."
+          },
           "displayName": {
             "type": [
               "string",
@@ -38691,14 +38705,6 @@
               "boolean",
               "null"
             ]
-          },
-          "pollIntervalS": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Polling interval override (seconds). Must be > 0."
           }
         }
       },

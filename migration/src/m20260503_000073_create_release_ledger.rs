@@ -78,11 +78,11 @@ impl MigrationTrait for Migration {
                     .not_null()
                     .default(true),
             )
-            .col(
-                ColumnDef::new(ReleaseSources::PollIntervalS)
-                    .integer()
-                    .not_null(),
-            )
+            // Per-source cron schedule override. NULL means "inherit the
+            // server-wide `release_tracking.default_cron_schedule` setting".
+            // Stored as a 5-field POSIX cron expression (the host normalizes
+            // to 6-field at scheduler-load time).
+            .col(ColumnDef::new(ReleaseSources::CronSchedule).string_len(120))
             .col(ColumnDef::new(ReleaseSources::LastPolledAt).timestamp_with_time_zone())
             .col(ColumnDef::new(ReleaseSources::LastError).text())
             .col(ColumnDef::new(ReleaseSources::LastErrorAt).timestamp_with_time_zone())
@@ -307,7 +307,7 @@ pub enum ReleaseSources {
     DisplayName,
     Kind,
     Enabled,
-    PollIntervalS,
+    CronSchedule,
     LastPolledAt,
     LastError,
     LastErrorAt,

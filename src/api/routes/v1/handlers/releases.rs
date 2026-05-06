@@ -855,14 +855,39 @@ pub async fn list_release_sources(
     let sources = ReleaseSourceRepository::list_all(&state.db)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to list sources: {}", e)))?;
+    let server_default = resolve_server_default_cron(&state.db).await;
     Ok(Json(ReleaseSourceListResponse {
-        sources: sources.into_iter().map(Into::into).collect(),
+        sources: sources
+            .into_iter()
+            .map(|m| ReleaseSourceDto::from_model_with_default(m, &server_default))
+            .collect(),
     }))
+}
+
+/// Fetch the server-wide default cron schedule for release-source polling.
+/// Falls back to the compile-time default on a settings-fetch failure
+/// rather than 500-ing the request — the field is informational on the
+/// response shape.
+async fn resolve_server_default_cron(db: &sea_orm::DatabaseConnection) -> String {
+    use crate::services::release::schedule::{DEFAULT_CRON_SCHEDULE, read_default_cron_schedule};
+    use crate::services::settings::SettingsService;
+    match SettingsService::new(db.clone()).await {
+        Ok(svc) => read_default_cron_schedule(&svc).await,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to load settings service for cron resolution; using compile-time default: {}",
+                e
+            );
+            DEFAULT_CRON_SCHEDULE.to_string()
+        }
+    }
 }
 
 /// PATCH a release source (admin-only).
 ///
-/// Toggle `enabled`, override `pollIntervalS`, or rename `displayName`.
+/// Toggle `enabled`, override `cronSchedule`, or rename `displayName`.
+/// Sending `cronSchedule: null` clears the override and reverts the row to
+/// inheriting the server-wide `release_tracking.default_cron_schedule`.
 #[utoipa::path(
     patch,
     path = "/api/v1/release-sources/{source_id}",
@@ -899,7 +924,7 @@ pub async fn update_release_source(
     let update = ReleaseSourceUpdate {
         display_name: request.display_name,
         enabled: request.enabled,
-        poll_interval_s: request.poll_interval_s,
+        cron_schedule: request.cron_schedule,
         config: None, // config edits go through plugin admin, not here
     };
 
@@ -907,7 +932,7 @@ pub async fn update_release_source(
         .await
         .map_err(|e| {
             let msg = e.to_string();
-            if msg.contains("positive") {
+            if msg.to_lowercase().contains("cron") {
                 ApiError::BadRequest(msg)
             } else {
                 ApiError::Internal(format!("Failed to update source: {}", e))
@@ -928,7 +953,11 @@ pub async fn update_release_source(
         }
     }
 
-    Ok(Json(updated.into()))
+    let server_default = resolve_server_default_cron(&state.db).await;
+    Ok(Json(ReleaseSourceDto::from_model_with_default(
+        updated,
+        &server_default,
+    )))
 }
 
 /// Trigger a manual poll for a source.
@@ -1004,7 +1033,7 @@ pub async fn poll_release_source_now(
 /// Deletes every `release_ledger` row owned by the source and clears the
 /// source's transient poll state (`etag`, `last_polled_at`, `last_error`,
 /// `last_error_at`, `last_summary`). User-managed fields (`enabled`,
-/// `poll_interval_s`, `display_name`, `config`) are preserved.
+/// `cron_schedule`, `display_name`, `config`) are preserved.
 ///
 /// Intended for testing/troubleshooting: after a reset, the next poll
 /// fetches the upstream feed without an `If-None-Match` header (so no 304

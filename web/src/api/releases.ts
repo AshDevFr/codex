@@ -180,7 +180,7 @@ export const releaseSourcesApi = {
   /**
    * Drop every ledger row for this source and clear its transient poll
    * state (etag, last_polled_at, last_error, last_summary). User-managed
-   * fields (enabled, pollIntervalS, displayName, config) are preserved.
+   * fields (enabled, cronSchedule, displayName, config) are preserved.
    *
    * Used as a "force re-emit" lever for testing: after a reset, the next
    * poll fetches the upstream feed without `If-None-Match` (no 304

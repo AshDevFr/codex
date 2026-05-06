@@ -14,7 +14,7 @@ use codex::db::ScanningStrategy;
 use codex::db::entities::release_sources::kind;
 use codex::db::repositories::{
     LibraryRepository, NewReleaseEntry, NewReleaseSource, ReleaseLedgerRepository,
-    ReleaseSourceRepository, SeriesRepository, UserRepository,
+    ReleaseSourceRepository, ReleaseSourceUpdate, SeriesRepository, UserRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -70,7 +70,6 @@ async fn make_source(db: &DatabaseConnection, source_key: &str) -> Uuid {
             source_key: source_key.to_string(),
             display_name: format!("Nyaa - {}", source_key),
             kind: kind::RSS_UPLOADER.to_string(),
-            poll_interval_s: 3600,
             enabled: None,
             config: None,
         },
@@ -456,7 +455,7 @@ async fn patch_source_can_disable_and_change_interval() {
 
     let body = UpdateReleaseSourceRequest {
         enabled: Some(false),
-        poll_interval_s: Some(7200),
+        cron_schedule: Some(Some("0 */6 * * *".to_string())),
         ..Default::default()
     };
     let req =
@@ -465,11 +464,12 @@ async fn patch_source_can_disable_and_change_interval() {
     assert_eq!(status, StatusCode::OK);
     let dto = dto.unwrap();
     assert!(!dto.enabled);
-    assert_eq!(dto.poll_interval_s, 7200);
+    assert_eq!(dto.cron_schedule.as_deref(), Some("0 */6 * * *"));
+    assert_eq!(dto.effective_cron_schedule, "0 */6 * * *");
 }
 
 #[tokio::test]
-async fn patch_source_rejects_non_positive_interval() {
+async fn patch_source_rejects_invalid_cron() {
     let (db, _temp) = setup_test_db().await;
     let id = make_source(&db, "nyaa:user:tsuna69").await;
 
@@ -478,13 +478,46 @@ async fn patch_source_rejects_non_positive_interval() {
     let app = create_test_router(state).await;
 
     let body = UpdateReleaseSourceRequest {
-        poll_interval_s: Some(0),
+        cron_schedule: Some(Some("not a cron".to_string())),
         ..Default::default()
     };
     let req =
         patch_json_request_with_auth(&format!("/api/v1/release-sources/{}", id), &body, &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, req).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn patch_source_clears_cron_with_explicit_null() {
+    let (db, _temp) = setup_test_db().await;
+    let id = make_source(&db, "nyaa:user:tsuna69").await;
+
+    // Seed a per-source override.
+    ReleaseSourceRepository::update(
+        &db,
+        id,
+        ReleaseSourceUpdate {
+            cron_schedule: Some(Some("0 */6 * * *".to_string())),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // Send `cron_schedule: null` to clear the override.
+    let body = serde_json::json!({ "cronSchedule": null });
+    let req =
+        patch_json_request_with_auth(&format!("/api/v1/release-sources/{}", id), &body, &token);
+    let (status, dto): (StatusCode, Option<ReleaseSourceDto>) = make_json_request(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let dto = dto.unwrap();
+    assert!(dto.cron_schedule.is_none(), "override cleared");
+    // effectiveCronSchedule falls through to the server-wide default.
+    assert!(!dto.effective_cron_schedule.is_empty());
 }
 
 #[tokio::test]
@@ -734,13 +767,13 @@ async fn reset_preserves_user_managed_source_fields() {
     let (db, _temp) = setup_test_db().await;
     let source = make_source(&db, "nyaa:user:tsuna69").await;
 
-    // Admin disables the source and overrides the interval.
+    // Admin disables the source and overrides the schedule.
     ReleaseSourceRepository::update(
         &db,
         source,
         ReleaseSourceUpdate {
             enabled: Some(false),
-            poll_interval_s: Some(900),
+            cron_schedule: Some(Some("0 */6 * * *".to_string())),
             display_name: Some("Custom Name".to_string()),
             ..Default::default()
         },
@@ -762,7 +795,11 @@ async fn reset_preserves_user_managed_source_fields() {
         .unwrap()
         .unwrap();
     assert!(!after.enabled, "user-set enabled flag must survive a reset");
-    assert_eq!(after.poll_interval_s, 900, "interval override survives");
+    assert_eq!(
+        after.cron_schedule.as_deref(),
+        Some("0 */6 * * *"),
+        "schedule override survives"
+    );
     assert_eq!(after.display_name, "Custom Name", "display name preserved");
 }
 

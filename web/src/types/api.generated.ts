@@ -2484,7 +2484,9 @@ export interface paths {
         head?: never;
         /**
          * PATCH a release source (admin-only).
-         * @description Toggle `enabled`, override `pollIntervalS`, or rename `displayName`.
+         * @description Toggle `enabled`, override `cronSchedule`, or rename `displayName`.
+         *     Sending `cronSchedule: null` clears the override and reverts the row to
+         *     inheriting the server-wide `release_tracking.default_cron_schedule`.
          */
         patch: operations["update_release_source"];
         trace?: never;
@@ -2525,7 +2527,7 @@ export interface paths {
          * @description Deletes every `release_ledger` row owned by the source and clears the
          *     source's transient poll state (`etag`, `last_polled_at`, `last_error`,
          *     `last_error_at`, `last_summary`). User-managed fields (`enabled`,
-         *     `poll_interval_s`, `display_name`, `config`) are preserved.
+         *     `cron_schedule`, `display_name`, `config`) are preserved.
          *
          *     Intended for testing/troubleshooting: after a reset, the next poll
          *     fetches the upstream feed without an `If-None-Match` header (so no 304
@@ -14941,7 +14943,19 @@ export interface components {
             config?: unknown;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * @description Per-source cron override (5-field POSIX cron). NULL when the row
+             *     inherits the server-wide `release_tracking.default_cron_schedule`.
+             */
+            cronSchedule?: string | null;
             displayName: string;
+            /**
+             * @description The cron expression actually used by the scheduler for this source:
+             *     the row's `cron_schedule` if set, otherwise the resolved server-wide
+             *     default. Lets the UI display "Daily (Default)" without needing to
+             *     fetch the global setting separately.
+             */
+            effectiveCronSchedule: string;
             enabled: boolean;
             /** @description Opaque etag/cursor used for conditional fetches. */
             etag?: string | null;
@@ -14969,8 +14983,6 @@ export interface components {
              * @example release-nyaa
              */
             pluginId: string;
-            /** Format: int32 */
-            pollIntervalS: number;
             /**
              * @description Plugin-defined unique key.
              * @example nyaa:user:tsuna69
@@ -17783,15 +17795,24 @@ export interface components {
             /** @description New state. See [`ReleaseLedgerEntryDto::state`] for allowed values. */
             state?: string | null;
         };
-        /** @description PATCH payload for a release source. All fields optional; omit to leave alone. */
+        /**
+         * @description PATCH payload for a release source. All fields optional; omit to leave alone.
+         *
+         *     `cron_schedule` uses double-Option semantics:
+         *     - field absent (`None`): leave the row's cron_schedule unchanged
+         *     - explicit `null` (`Some(None)`) / `""` / `"   "`: clear the override
+         *       (revert to inheriting the server-wide
+         *       `release_tracking.default_cron_schedule`)
+         *     - `Some(Some("0 *\/6 * * *"))`: set a per-source override
+         */
         UpdateReleaseSourceRequest: {
+            /**
+             * @description 5-field POSIX cron expression. Use `null` (or empty string) to
+             *     clear the override and inherit the server-wide default.
+             */
+            cronSchedule?: string | null;
             displayName?: string | null;
             enabled?: boolean | null;
-            /**
-             * Format: int32
-             * @description Polling interval override (seconds). Must be > 0.
-             */
-            pollIntervalS?: number | null;
         };
         /**
          * @description PATCH payload for tracking config. All fields are optional:
