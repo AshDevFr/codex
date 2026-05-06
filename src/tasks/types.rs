@@ -481,6 +481,26 @@ impl TaskType {
         }
     }
 
+    /// JSON-param key/value pair to use as a dedup discriminator for task
+    /// types whose identity lives in `params` rather than in FK columns.
+    ///
+    /// Returning `Some((key, value))` tells the dedup path in
+    /// `TaskRepository::find_existing_task` to additionally filter by
+    /// `params->>key = value`. Without this, two `poll_release_source` tasks
+    /// for *different* `source_id`s would falsely collide because they share
+    /// the same `task_type` and have no FK columns set, causing the second
+    /// "Poll now" click to be silently coalesced onto the first source's
+    /// in-flight poll.
+    ///
+    /// `key` must be a simple identifier (alphanumeric + underscore) since
+    /// SQLite splices it into a JSON path string.
+    pub fn dedup_params(&self) -> Option<(&'static str, String)> {
+        match self {
+            TaskType::PollReleaseSource { source_id } => Some(("source_id", source_id.to_string())),
+            _ => None,
+        }
+    }
+
     /// Extract all fields needed for database insertion
     /// Returns: (type_string, library_id, series_id, book_id, params)
     pub fn extract_fields(

@@ -3,6 +3,7 @@ import {
   type PaginatedReleases,
   type ReleaseFacets,
   type ReleaseLedgerEntry,
+  type ReleaseSource,
   releaseSourcesApi,
   releasesApi,
 } from "@/api/releases";
@@ -65,18 +66,34 @@ function emptyFacets(): ReleaseFacets {
   return { languages: [], libraries: [], series: [] };
 }
 
+function source(over: Partial<ReleaseSource> = {}): ReleaseSource {
+  return {
+    id: "11111111-1111-1111-1111-111111111111",
+    displayName: "MangaUpdates Releases",
+    sourceKey: "default",
+    pluginId: "release-mangaupdates",
+    kind: "metadata-feed",
+    enabled: true,
+    pollIntervalS: 86400,
+    createdAt: "2026-05-01T00:00:00Z",
+    updatedAt: "2026-05-01T00:00:00Z",
+    ...over,
+  } as ReleaseSource;
+}
+
 const list = vi.mocked(releasesApi.listInbox);
 const facets = vi.mocked(releasesApi.facets);
 const bulk = vi.mocked(releasesApi.bulk);
 const remove = vi.mocked(releasesApi.delete);
+const sourcesList = vi.mocked(releaseSourcesApi.list);
 
 describe("ReleasesInbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useReleaseAnnouncementsStore.getState().reset();
     useReleaseAnnouncementsStore.getState().bump();
-    void releaseSourcesApi;
     facets.mockResolvedValue(emptyFacets());
+    sourcesList.mockResolvedValue([source()]);
   });
 
   it("renders releases and resets the unseen badge on mount", async () => {
@@ -97,6 +114,23 @@ describe("ReleasesInbox", () => {
     await waitFor(() => {
       expect(screen.getByText(/^00000000…$/)).toBeInTheDocument();
     });
+  });
+
+  it("renders the source's display name instead of a UUID", async () => {
+    list.mockResolvedValueOnce(paginated([entry()]));
+    renderWithProviders(<ReleasesInbox />);
+    expect(
+      await screen.findByText("MangaUpdates Releases"),
+    ).toBeInTheDocument();
+    // The bare UUID slice should no longer appear in the row.
+    expect(screen.queryByText(/^source: 11111111…$/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to a truncated source UUID when the source is unknown", async () => {
+    sourcesList.mockResolvedValue([]);
+    list.mockResolvedValueOnce(paginated([entry()]));
+    renderWithProviders(<ReleasesInbox />);
+    expect(await screen.findByText(/^11111111…$/)).toBeInTheDocument();
   });
 
   it("shows empty-state copy when no entries match", async () => {
