@@ -50,6 +50,7 @@ impl AcceptedCandidate {
             confidence: c.series_match.confidence,
             metadata: c.metadata,
             observed_at: c.observed_at,
+            initial_state: None,
         }
     }
 }

@@ -20,6 +20,7 @@
 //! the threshold and hands the survivors to the ledger repository, which is
 //! itself idempotent on the natural dedup keys.
 
+pub mod auto_ignore;
 pub mod backoff;
 pub mod candidate;
 pub mod languages;

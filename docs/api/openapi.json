@@ -7467,7 +7467,7 @@
           "Releases"
         ],
         "summary": "Apply an action to a batch of ledger rows.",
-        "description": "`dismiss` and `mark-acquired` set state in-place. `delete` removes\nthe rows and clears the affected sources' etags so the next poll\nre-fetches without `If-None-Match`. All three run as bulk SQL — no\nper-row round trips — so this scales to deleting thousands of rows in\none call.",
+        "description": "`dismiss`, `mark-acquired`, `ignore`, and `reset` all set state\nin-place. `delete` removes the rows and clears the affected sources'\netags so the next poll re-fetches without `If-None-Match`. All run\nas bulk SQL (no per-row round trips), so this scales to thousands of\nrows in one call.",
         "operationId": "bulk_release_action",
         "requestBody": {
           "content": {
@@ -21653,6 +21653,8 @@
         "enum": [
           "dismiss",
           "mark-acquired",
+          "ignore",
+          "reset",
           "delete"
         ]
       },

@@ -37,6 +37,10 @@ pub struct NewReleaseEntry {
     pub confidence: f64,
     pub metadata: Option<serde_json::Value>,
     pub observed_at: chrono::DateTime<Utc>,
+    /// State to insert with. `None` defaults to `announced`. Used by the
+    /// poll/reverse-RPC path to insert directly as `ignored` when the
+    /// release matches a book the user already owns.
+    pub initial_state: Option<String>,
 }
 
 /// Outcome of a `record` call.
@@ -136,6 +140,11 @@ impl ReleaseLedgerRepository {
             });
         }
 
+        let initial_state = match entry.initial_state {
+            Some(s) if state::is_valid(&s) => s,
+            Some(invalid) => anyhow::bail!("invalid initial_state: {}", invalid),
+            None => state::ANNOUNCED.to_string(),
+        };
         let active = release_ledger::ActiveModel {
             id: Set(Uuid::new_v4()),
             series_id: Set(entry.series_id),
@@ -151,7 +160,7 @@ impl ReleaseLedgerRepository {
             media_url: Set(entry.media_url),
             media_url_kind: Set(entry.media_url_kind),
             confidence: Set(entry.confidence),
-            state: Set(state::ANNOUNCED.to_string()),
+            state: Set(initial_state),
             metadata: Set(entry.metadata),
             observed_at: Set(entry.observed_at),
             created_at: Set(Utc::now()),
@@ -554,7 +563,32 @@ mod tests {
             confidence: 0.95,
             metadata: None,
             observed_at: Utc::now(),
+            initial_state: None,
         }
+    }
+
+    #[tokio::test]
+    async fn record_uses_initial_state_when_provided() {
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup_world(conn).await;
+
+        // Default: lands as announced.
+        let default = ReleaseLedgerRepository::record(conn, entry(series_id, source_id, "rel-d"))
+            .await
+            .unwrap();
+        assert_eq!(default.row.state, state::ANNOUNCED);
+
+        // Caller-specified ignored: lands as ignored.
+        let mut e = entry(series_id, source_id, "rel-i");
+        e.initial_state = Some(state::IGNORED.to_string());
+        let ignored = ReleaseLedgerRepository::record(conn, e).await.unwrap();
+        assert_eq!(ignored.row.state, state::IGNORED);
+
+        // Invalid state: rejected.
+        let mut e = entry(series_id, source_id, "rel-x");
+        e.initial_state = Some("not_a_state".to_string());
+        assert!(ReleaseLedgerRepository::record(conn, e).await.is_err());
     }
 
     #[tokio::test]

@@ -33,17 +33,19 @@ use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+use crate::db::entities::release_ledger::state as ledger_state;
 use crate::db::entities::release_sources::plugin_id as source_plugin_id;
 use crate::db::entities::tasks;
 use crate::db::repositories::{
     NewReleaseEntry, PluginsRepository, ReleaseLedgerRepository, ReleaseSourceRepository,
-    SeriesTrackingRepository,
+    SeriesRepository, SeriesTrackingRepository,
 };
 use crate::events::{EntityChangeEvent, EventBroadcaster};
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::handle::PluginError;
 use crate::services::plugin::protocol::{ReleasePollRequest, ReleasePollResponse, methods};
+use crate::services::release::auto_ignore::{OwnedReleaseKeys, should_auto_ignore};
 use crate::services::release::backoff::{HostBackoff, is_backoff_status};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
 use crate::tasks::handlers::TaskHandler;
@@ -346,6 +348,12 @@ impl TaskHandler for PollReleaseSourceHandler {
                 ..Default::default()
             };
 
+            // Cache per-series owned-keys lookups across candidates in this
+            // poll. A single source typically returns many candidates for
+            // the same series, so we don't want N+1 queries here.
+            let mut owned_cache: std::collections::HashMap<Uuid, OwnedReleaseKeys> =
+                std::collections::HashMap::new();
+
             for cand in response.candidates {
                 let series_id = cand.series_match.codex_series_id;
                 let threshold = match SeriesTrackingRepository::get(db, series_id).await {
@@ -362,14 +370,45 @@ impl TaskHandler for PollReleaseSourceHandler {
                 };
                 match evaluate(cand, threshold) {
                     Ok(accepted) => {
-                        let entry: NewReleaseEntry = accepted.into_ledger_entry(source.id);
+                        let cand_volume = accepted.candidate.volume;
+                        let cand_chapter = accepted.candidate.chapter;
+
+                        let initial_state = match resolve_initial_state(
+                            db,
+                            &mut owned_cache,
+                            series_id,
+                            cand_volume,
+                            cand_chapter,
+                        )
+                        .await
+                        {
+                            Ok(s) => s,
+                            Err(e) => {
+                                warn!(
+                                    "Task {}: owned-keys lookup failed for series {}: {} \
+                                    (defaulting to announced)",
+                                    task.id, series_id, e
+                                );
+                                None
+                            }
+                        };
+
+                        let mut entry: NewReleaseEntry = accepted.into_ledger_entry(source.id);
+                        entry.initial_state = initial_state.clone();
                         match ReleaseLedgerRepository::record(db, entry).await {
                             Ok(outcome) => {
                                 if outcome.deduped {
                                     result.candidates_deduped += 1;
                                 } else {
                                     result.candidates_recorded += 1;
-                                    if let Some(broadcaster) = event_broadcaster {
+                                    // Only emit the SSE/notify event when the
+                                    // row landed as `announced`. Auto-ignored
+                                    // rows are bookkeeping; users see them
+                                    // only on demand via the "All" filter.
+                                    let landed_announced =
+                                        outcome.row.state == ledger_state::ANNOUNCED;
+                                    if landed_announced && let Some(broadcaster) = event_broadcaster
+                                    {
                                         emit_release_announced(
                                             broadcaster,
                                             &outcome.row,
@@ -566,6 +605,35 @@ pub(crate) fn emit_release_announced(
     plugin_id: &str,
 ) {
     let _ = broadcaster.emit(EntityChangeEvent::release_announced(row, plugin_id));
+}
+
+/// Compute the initial ledger state for a candidate. Returns
+/// `Some("ignored")` when the user already owns this volume/chapter;
+/// `None` falls back to the repository's default (`announced`).
+///
+/// Uses `owned_cache` so multiple candidates against the same series in
+/// one poll only hit the DB once.
+async fn resolve_initial_state(
+    db: &DatabaseConnection,
+    owned_cache: &mut std::collections::HashMap<Uuid, OwnedReleaseKeys>,
+    series_id: Uuid,
+    volume: Option<i32>,
+    chapter: Option<f64>,
+) -> Result<Option<String>> {
+    // Skip the lookup entirely when the candidate has nothing to match against.
+    if volume.is_none() && chapter.is_none() {
+        return Ok(None);
+    }
+    if let std::collections::hash_map::Entry::Vacant(e) = owned_cache.entry(series_id) {
+        let owned = SeriesRepository::get_owned_release_keys_for_series(db, series_id).await?;
+        e.insert(owned);
+    }
+    let owned = &owned_cache[&series_id];
+    if should_auto_ignore(volume, chapter, owned) {
+        Ok(Some(ledger_state::IGNORED.to_string()))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Best-effort URL hint extraction used for backoff keying.
