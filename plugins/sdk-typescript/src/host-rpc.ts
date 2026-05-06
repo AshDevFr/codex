@@ -19,6 +19,7 @@
  * belongs to — it can fan out to both, and at most one will match.
  */
 
+import { currentParentRequestId } from "./request-context.js";
 import type { JsonRpcError, JsonRpcRequest } from "./types/rpc.js";
 
 /** Write function signature for sending JSON-RPC requests. */
@@ -79,11 +80,17 @@ export class HostRpcClient {
    */
   async call<T = unknown>(method: string, params?: unknown): Promise<T> {
     const id = this.nextId++;
+    // Stamp the forward call we're inside so the host can route this
+    // reverse-RPC back to the originating caller's task. Lifted from the
+    // `request-context` async-local storage that `server.ts` sets around
+    // every forward-request handler.
+    const parent = currentParentRequestId();
     const request: JsonRpcRequest = {
       jsonrpc: "2.0",
       id,
       method,
       params,
+      ...(parent !== undefined ? { parentRequestId: parent } : {}),
     };
 
     return new Promise<T>((resolve, reject) => {
