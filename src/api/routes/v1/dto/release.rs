@@ -145,9 +145,10 @@ pub struct ReleaseSourceDto {
     /// `rss-uploader` | `rss-series` | `api-feed` | `metadata-feed` | `metadata-piggyback`.
     pub kind: String,
     pub enabled: bool,
-    /// Per-source cron override (5-field POSIX cron). NULL when the row
+    /// Per-source cron override (5-field POSIX cron). `null` when the row
     /// inherits the server-wide `release_tracking.default_cron_schedule`.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Always present in the response (not omitted on null) so clients can
+    /// distinguish "inheriting" from "field missing."
     pub cron_schedule: Option<String>,
     /// The cron expression actually used by the scheduler for this source:
     /// the row's `cron_schedule` if set, otherwise the resolved server-wide

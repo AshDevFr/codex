@@ -14944,8 +14944,10 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /**
-             * @description Per-source cron override (5-field POSIX cron). NULL when the row
+             * @description Per-source cron override (5-field POSIX cron). `null` when the row
              *     inherits the server-wide `release_tracking.default_cron_schedule`.
+             *     Always present in the response (not omitted on null) so clients can
+             *     distinguish "inheriting" from "field missing."
              */
             cronSchedule?: string | null;
             displayName: string;

@@ -33392,7 +33392,7 @@
               "string",
               "null"
             ],
-            "description": "Per-source cron override (5-field POSIX cron). NULL when the row\ninherits the server-wide `release_tracking.default_cron_schedule`."
+            "description": "Per-source cron override (5-field POSIX cron). `null` when the row\ninherits the server-wide `release_tracking.default_cron_schedule`.\nAlways present in the response (not omitted on null) so clients can\ndistinguish \"inheriting\" from \"field missing.\""
           },
           "displayName": {
             "type": "string"
