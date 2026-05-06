@@ -1,12 +1,12 @@
 import {
   ActionIcon,
-  Anchor,
   Badge,
   Box,
   Card,
   Collapse,
   Group,
   Loader,
+  SegmentedControl,
   Stack,
   Text,
   Tooltip,
@@ -39,11 +39,11 @@ interface SeriesReleasesPanelProps {
 }
 
 export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
-  const [showDismissed, setShowDismissed] = useState(false);
+  const [stateView, setStateView] = useState<"new" | "all">("new");
   // Releases panel collapses by default — series detail is the user's main
   // landing point and the panel can grow long. They open it deliberately.
   const [opened, { toggle }] = useDisclosure(false);
-  const stateFilter = showDismissed ? undefined : "announced";
+  const stateFilter = stateView === "new" ? "announced" : undefined;
 
   // Per-user mute. Persisted via the user_preferences store with localStorage
   // caching + debounced server sync.
@@ -78,7 +78,7 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps are change-triggers
   useEffect(() => {
     setSelected(new Set());
-  }, [showDismissed, seriesId]);
+  }, [stateView, seriesId]);
   const toggleAll = () => {
     setSelected((prev) => {
       const allSelected =
@@ -176,14 +176,16 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
                 </ActionIcon>
               </Tooltip>
               {opened && (
-                <Anchor
-                  component="button"
-                  type="button"
-                  size="sm"
-                  onClick={() => setShowDismissed((prev) => !prev)}
-                >
-                  {showDismissed ? "Hide dismissed" : "Show all states"}
-                </Anchor>
+                <SegmentedControl
+                  size="xs"
+                  value={stateView}
+                  onChange={(v) => setStateView(v as "new" | "all")}
+                  data={[
+                    { value: "new", label: "New" },
+                    { value: "all", label: "All" },
+                  ]}
+                  aria-label="Release state filter"
+                />
               )}
             </Group>
           </Group>
