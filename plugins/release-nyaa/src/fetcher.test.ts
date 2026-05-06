@@ -103,10 +103,11 @@ describe("parseSubscriptionList", () => {
     ]);
   });
 
-  it("returns an empty list for non-string input", () => {
+  it("returns an empty list for non-string / non-array input", () => {
     expect(parseSubscriptionList(undefined)).toEqual([]);
     expect(parseSubscriptionList(null)).toEqual([]);
     expect(parseSubscriptionList(42)).toEqual([]);
+    expect(parseSubscriptionList({ uploaders: "1r0n" })).toEqual([]);
   });
 
   it("drops empty tokens (trailing comma, double commas)", () => {
@@ -114,6 +115,43 @@ describe("parseSubscriptionList", () => {
       { kind: "user", identifier: "foo" },
       { kind: "user", identifier: "bar" },
     ]);
+  });
+
+  it("parses a JSON array of entries (preferred manifest shape)", () => {
+    const list = parseSubscriptionList([
+      "1r0n",
+      " TankobonBlur ",
+      "1r0n",
+      "q:LuminousScans",
+      "q:?c=3_1&q=Berserk",
+    ]);
+    expect(list).toEqual([
+      { kind: "user", identifier: "1r0n" },
+      { kind: "user", identifier: "TankobonBlur" },
+      { kind: "query", identifier: "LuminousScans" },
+      { kind: "params", identifier: "c=3_1&q=Berserk" },
+    ]);
+  });
+
+  it("returns an empty list for an empty array", () => {
+    expect(parseSubscriptionList([])).toEqual([]);
+  });
+
+  it("ignores non-string entries inside an array", () => {
+    const list = parseSubscriptionList(["1r0n", 42, null, undefined, "q:Foo"]);
+    expect(list).toEqual([
+      { kind: "user", identifier: "1r0n" },
+      { kind: "query", identifier: "Foo" },
+    ]);
+  });
+
+  it("array entries are NOT comma-split — pre-tokenization is the caller's job", () => {
+    // Contract: in the array path, each element is one token. CSV-style
+    // splitting only happens on the legacy string path. So `"a,b"` becomes
+    // a literal user identifier — which Nyaa won't match against, but the
+    // parser doesn't reject it.
+    const list = parseSubscriptionList(["a,b"]);
+    expect(list).toEqual([{ kind: "user", identifier: "a,b" }]);
   });
 });
 

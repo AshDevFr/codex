@@ -95,7 +95,26 @@ export interface PluginCapabilities {
 }
 
 /**
- * Configuration field definition for documenting plugin config options
+ * Any value that can round-trip through JSON. Used for config field defaults
+ * and examples, which the host carries as opaque `serde_json::Value` and
+ * forwards verbatim to plugins.
+ */
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+/**
+ * Configuration field definition for documenting plugin config options.
+ *
+ * `type` is a free-form hint, not a wire constraint. The host never validates
+ * stored config against this schema — it forwards the raw JSON to the plugin,
+ * which parses whatever shape it expects. Common values are `"number"`,
+ * `"string"`, `"boolean"`, `"string-array"`, and `"object"`; renderers fall
+ * back to a generic JSON editor for unrecognized types.
  */
 export interface ConfigField {
   /** Field name (key in JSON config) */
@@ -104,14 +123,14 @@ export interface ConfigField {
   label: string;
   /** Description of what this field does */
   description?: string;
-  /** Field type */
-  type: "number" | "string" | "boolean";
+  /** Field type — free-form hint; see interface docs for common values. */
+  type: string;
   /** Whether this field is required */
   required?: boolean;
   /** Default value if not provided */
-  default?: number | string | boolean;
+  default?: JsonValue;
   /** Example value for documentation */
-  example?: number | string | boolean;
+  example?: JsonValue;
 }
 
 /**

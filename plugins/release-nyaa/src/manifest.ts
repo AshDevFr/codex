@@ -38,11 +38,11 @@ export const manifest = {
         key: "uploaders",
         label: "Uploader Subscriptions",
         description:
-          "Comma-separated list of trusted uploader handles or queries. Each entry is one of: `username` (a Nyaa user feed); `q:<query>` (a plain site-wide search); or `q:?<params>` (URL-style allowlisted params: `q`, `c`, `f`, `u` — e.g. `q:?c=3_1&q=Berserk` to search the Literature → English-translated category). Confidence stays above the rejection threshold only for entries that match a tracked series alias.",
-        type: "string" as const,
+          "List of trusted uploader handles or queries. Each entry is one of: `username` (a Nyaa user feed); `q:<query>` (a plain site-wide search); or `q:?<params>` (URL-style allowlisted params: `q`, `c`, `f`, `u` — e.g. `q:?c=3_1&q=Berserk` to search the Literature → English-translated category). Accepts a JSON array (preferred) or a legacy comma-separated string. Confidence stays above the rejection threshold only for entries that match a tracked series alias.",
+        type: "string-array" as const,
         required: false,
-        default: "",
-        example: "1r0n,TankobonBlur,q:LuminousScans,q:?c=3_1&q=Berserk",
+        default: [],
+        example: ["1r0n", "TankobonBlur", "q:LuminousScans", "q:?c=3_1&q=Berserk"],
       },
       {
         key: "requestTimeoutMs",
@@ -68,7 +68,7 @@ export const manifest = {
   userDescription:
     "Watches Nyaa.si uploader feeds for new releases of tracked series. Matches by title alias — make sure your series' aliases (auto-populated from metadata or added manually in the Tracking panel) cover the way the uploader names them. Notification-only — Codex never downloads anything.",
   adminSetupInstructions:
-    "1. Set the **Uploaders** config field to a comma-separated list. Each entry is one of: `username` (a Nyaa user feed, e.g. `tsuna69`), `q:<query>` (a plain site-wide search, e.g. `q:LuminousScans`), or `q:?<params>` (URL-style search with allowlisted keys `q`, `c`, `f`, `u`, e.g. `q:?c=3_1&q=Berserk` for the English-translated Literature category). 2. Save. The plugin restarts and the host materializes one row per entry in **Settings → Release tracking** — that's where you flip rows on/off, override the poll interval, or hit *Poll now*. 3. Make sure tracked series have aliases that match how the uploader names releases (alternate spellings, romanizations, volume-range tags). The plugin auto-prunes rows when you remove an entry from the list and re-save, so the Release tracking table stays in sync with this CSV.",
+    "1. Set the **Uploaders** config field to a JSON array of entries (a comma-separated string is still accepted for backwards compatibility). Each entry is one of: `username` (a Nyaa user feed, e.g. `tsuna69`), `q:<query>` (a plain site-wide search, e.g. `q:LuminousScans`), or `q:?<params>` (URL-style search with allowlisted keys `q`, `c`, `f`, `u`, e.g. `q:?c=3_1&q=Berserk` for the English-translated Literature category). 2. Save. The plugin restarts and the host materializes one row per entry in **Settings → Release tracking** — that's where you flip rows on/off, override the poll interval, or hit *Poll now*. 3. Make sure tracked series have aliases that match how the uploader names releases (alternate spellings, romanizations, volume-range tags). The plugin auto-prunes rows when you remove an entry from the list and re-save, so the Release tracking table stays in sync with this list.",
 } as const satisfies PluginManifest & {
   capabilities: { releaseSource: { kinds: ["rss-uploader"] } };
 };
