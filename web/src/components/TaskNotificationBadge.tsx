@@ -1,4 +1,4 @@
-import { Badge, Group, Stack, Text, Tooltip } from "@mantine/core";
+import { Badge, Group, Progress, Stack, Text, Tooltip } from "@mantine/core";
 import { IconLoader2 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -64,36 +64,69 @@ export function TaskNotificationBadge() {
       ? ` (${task.progress.current}/${task.progress.total})`
       : "";
 
+    // Show the progress bar only when total is positive. Discovery-phase
+    // updates emit total=0 while files are still being enumerated, so a bar
+    // would be meaningless and would jitter to 0%.
+    const total = task.progress?.total ?? 0;
+    const current = task.progress?.current ?? 0;
+    const showBar = total > 0;
+    const percent = showBar ? Math.min(100, (current / total) * 100) : 0;
+    const message = task.progress?.message ?? null;
+
     return (
-      <Group key={task.taskId} gap="xs" wrap="nowrap" align="center">
-        <IconLoader2
-          size={12}
-          style={{ color: "var(--mantine-color-blue-4)", flexShrink: 0 }}
-          className="rotating-icon-small"
-        />
-        <Text size="xs" style={{ flexShrink: 0 }}>
-          {taskName}
-          {progressSuffix}
-        </Text>
-        {target ? (
+      <Stack key={task.taskId} gap={2} style={{ minWidth: 240 }}>
+        <Group gap="xs" wrap="nowrap" align="center">
+          <IconLoader2
+            size={12}
+            style={{ color: "var(--mantine-color-blue-4)", flexShrink: 0 }}
+            className="rotating-icon-small"
+          />
+          <Text size="xs" style={{ flexShrink: 0 }}>
+            {taskName}
+            {progressSuffix}
+          </Text>
+          {target ? (
+            <Text
+              size="xs"
+              c="dimmed"
+              title={target}
+              style={{
+                maxWidth: 180,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              · {target}
+            </Text>
+          ) : null}
+          <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+            · {elapsed}
+          </Text>
+        </Group>
+        {showBar ? (
+          <Progress value={percent} size="xs" radius="xl" color="blue" />
+        ) : null}
+        {message ? (
+          // RTL ellipsis keeps the meaningful tail of long file paths visible
+          // while the leading directories truncate.
           <Text
             size="xs"
             c="dimmed"
-            title={target}
+            title={message}
             style={{
-              maxWidth: 180,
+              direction: "rtl",
+              textAlign: "left",
+              maxWidth: 240,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
           >
-            · {target}
+            {message}
           </Text>
         ) : null}
-        <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-          · {elapsed}
-        </Text>
-      </Group>
+      </Stack>
     );
   };
 
