@@ -385,6 +385,8 @@ services:
       start_period: 30s
     networks:
       - codex-network
+    ports:
+      - "8081:8080"
     profiles:
       - screenshots
 

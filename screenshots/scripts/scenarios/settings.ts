@@ -20,6 +20,10 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
     { path: "/settings/book-errors", name: "settings/book-errors", label: "Book Errors" },
     { path: "/settings/cleanup", name: "settings/cleanup", label: "Thumbnail Cleanup" },
     { path: "/settings/pdf-cache", name: "settings/pdf-cache", label: "PDF Cache" },
+    { path: "/settings/release-tracking", name: "settings/release-tracking", label: "Release Tracking" },
+    { path: "/settings/plugin-storage", name: "settings/plugin-storage", label: "Plugin Storage" },
+    { path: "/settings/exports", name: "settings/exports", label: "Series Exports" },
+    { path: "/settings/integrations", name: "settings/integrations", label: "Integrations" },
     { path: "/settings/profile", name: "settings/profile", label: "Profile" },
   ];
 

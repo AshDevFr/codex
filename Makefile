@@ -271,7 +271,12 @@ plugins-outdated: ## Check for outdated plugin dependencies
 
 plugins-build: ## Build all plugins
 	@echo "$(BLUE)Building plugins...$(NC)"
-	@for dir in $(PLUGIN_DIRS); do \
+	@# sdk-typescript must build first: every other plugin imports from
+	@# its compiled dist, and esbuild fails fast on missing exports if
+	@# the SDK dist is stale.
+	@echo "$(YELLOW)Building sdk-typescript...$(NC)"
+	@(cd plugins/sdk-typescript && npm run build)
+	@for dir in $(PLUGIN_ONLY_DIRS); do \
 		echo "$(YELLOW)Building $$dir...$(NC)"; \
 		(cd plugins/$$dir && npm run build); \
 	done
