@@ -25,7 +25,11 @@ pub struct Model {
     /// `rss-uploader` | `rss-series` | `api-feed` | `metadata-feed` | `metadata-piggyback`.
     pub kind: String,
     pub enabled: bool,
-    pub poll_interval_s: i32,
+    /// 5-field POSIX cron expression. NULL means "inherit the server-wide
+    /// `release_tracking.default_cron_schedule` setting." The host
+    /// normalizes to the 6-field format expected by `tokio-cron-scheduler`
+    /// at scheduler-load time.
+    pub cron_schedule: Option<String>,
     pub last_polled_at: Option<DateTime<Utc>>,
     pub last_error: Option<String>,
     pub last_error_at: Option<DateTime<Utc>>,

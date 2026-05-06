@@ -1,10 +1,6 @@
 import type { PluginManifest } from "@ashdev/codex-plugin-sdk";
 import packageJson from "../package.json" with { type: "json" };
 
-/** Default poll interval: 24 hours. Daily polls keep the per-uploader fan-out
- * gentle and respect Nyaa's preference for low-frequency clients. */
-export const DEFAULT_POLL_INTERVAL_S = 86_400;
-
 /** Default per-fetch HTTP timeout. Nyaa is usually fast; 10s is generous. */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -32,7 +28,6 @@ export const manifest = {
       requiresAliases: true,
       canAnnounceChapters: true,
       canAnnounceVolumes: true,
-      defaultPollIntervalS: DEFAULT_POLL_INTERVAL_S,
     },
   },
   configSchema: {

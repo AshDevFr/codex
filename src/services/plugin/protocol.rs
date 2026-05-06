@@ -416,11 +416,6 @@ pub struct ReleaseSourceCapability {
     /// Whether the plugin announces volume-level releases.
     #[serde(default)]
     pub can_announce_volumes: bool,
-    /// Default poll interval in seconds. Used when a `release_sources` row
-    /// for this plugin doesn't override it. Server settings can also set a
-    /// global default that takes precedence at schedule resolution time.
-    #[serde(default)]
-    pub default_poll_interval_s: u32,
 }
 
 impl Default for ReleaseSourceCapability {
@@ -431,7 +426,6 @@ impl Default for ReleaseSourceCapability {
             requires_external_ids: Vec::new(),
             can_announce_chapters: true,
             can_announce_volumes: true,
-            default_poll_interval_s: 86_400,
         }
     }
 }
@@ -2273,7 +2267,6 @@ mod tests {
             requires_external_ids: vec!["mangaupdates".to_string()],
             can_announce_chapters: true,
             can_announce_volumes: false,
-            default_poll_interval_s: 3600,
         };
         let json = serde_json::to_value(&cap).unwrap();
         assert_eq!(json["kinds"], json!(["rss-uploader"]));
@@ -2281,7 +2274,6 @@ mod tests {
         assert_eq!(json["requiresExternalIds"], json!(["mangaupdates"]));
         assert!(json["canAnnounceChapters"].as_bool().unwrap());
         assert!(!json["canAnnounceVolumes"].as_bool().unwrap());
-        assert_eq!(json["defaultPollIntervalS"], 3600);
     }
 
     #[test]
@@ -2324,8 +2316,7 @@ mod tests {
                     "requiresAliases": true,
                     "requiresExternalIds": [],
                     "canAnnounceChapters": true,
-                    "canAnnounceVolumes": true,
-                    "defaultPollIntervalS": 3600
+                    "canAnnounceVolumes": true
                 }
             }
         });
@@ -2334,7 +2325,6 @@ mod tests {
         let cap = manifest.capabilities.release_source.unwrap();
         assert_eq!(cap.kinds, vec![ReleaseSourceKind::RssUploader]);
         assert!(cap.requires_aliases);
-        assert_eq!(cap.default_poll_interval_s, 3600);
     }
 
     #[test]

@@ -38,7 +38,7 @@ import {
 } from "@ashdev/codex-plugin-sdk";
 import { fetchSeriesFeed } from "./fetcher.js";
 import { parseCommaList, passesFilters, resolveFilters } from "./filter.js";
-import { DEFAULT_POLL_INTERVAL_S, EXTERNAL_ID_SOURCE_MANGAUPDATES, manifest } from "./manifest.js";
+import { EXTERNAL_ID_SOURCE_MANGAUPDATES, manifest } from "./manifest.js";
 import { type ParsedRssItem, parseFeed } from "./parser.js";
 
 const logger = createLogger({ name: manifest.name, level: "info" });
@@ -460,7 +460,7 @@ createReleaseSourcePlugin({
       state.requestTimeoutMs = Math.max(1_000, Math.min(ac.requestTimeoutMs, 60_000));
     }
     logger.info(
-      `initialized: blockedGroups=${state.blockedGroupsCsv ? "set" : "empty"} timeoutMs=${state.requestTimeoutMs} defaultPoll=${DEFAULT_POLL_INTERVAL_S}s`,
+      `initialized: blockedGroups=${state.blockedGroupsCsv ? "set" : "empty"} timeoutMs=${state.requestTimeoutMs}`,
     );
 
     // Materialize the single static source row. Deferred to a microtask so

@@ -11,10 +11,6 @@ import packageJson from "../package.json" with { type: "json" };
  */
 export const EXTERNAL_ID_SOURCE_MANGAUPDATES = "mangaupdates" as const;
 
-/** Default poll interval: 24 hours. Daily polls match upstream cadence and
- * keep the per-series fan-out gentle for users tracking hundreds of series. */
-export const DEFAULT_POLL_INTERVAL_S = 86_400;
-
 export const manifest = {
   name: "release-mangaupdates",
   displayName: "MangaUpdates Releases",
@@ -31,7 +27,6 @@ export const manifest = {
       requiresExternalIds: [EXTERNAL_ID_SOURCE_MANGAUPDATES],
       canAnnounceChapters: true,
       canAnnounceVolumes: true,
-      defaultPollIntervalS: DEFAULT_POLL_INTERVAL_S,
     },
   },
   configSchema: {
