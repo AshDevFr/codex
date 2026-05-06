@@ -1,9 +1,13 @@
 import { Badge, Group, Stack, Text, Tooltip } from "@mantine/core";
 import { IconLoader2 } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import type { ActiveTask } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
+import { elapsedSince, formatElapsed } from "@/utils/duration";
+import { getTaskTarget } from "@/utils/tasks";
 
 /**
  * Task notification badge that appears at the bottom of the navigation sidebar
@@ -16,52 +20,89 @@ export function TaskNotificationBadge() {
   const canReadTasks = hasPermission(PERMISSIONS.TASKS_READ);
   const { activeTasks, pendingCounts } = useTaskProgress();
 
-  // Don't show task badge for users without TASKS_READ permission
+  // Filter to only running tasks (processing tasks are shown as running).
+  // pending tasks are shown separately via pendingCounts, not from activeTasks.
+  const runningTasks = activeTasks.filter((task) => task.status === "running");
+  const hasRunning = runningTasks.length > 0;
+
+  // Tick once per second only while running tasks exist, so elapsed times
+  // refresh without burning CPU when the panel is otherwise idle.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!hasRunning) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [hasRunning]);
+
   if (!canReadTasks) {
     return null;
   }
 
-  // Filter to only running tasks (processing tasks are shown as running)
-  // Note: pending tasks are shown separately via pendingCounts, not from activeTasks
-  const runningTasks = activeTasks.filter((task) => task.status === "running");
-
-  // Calculate total pending count
   const totalPendingCount = Object.values(pendingCounts).reduce(
     (sum, count) => sum + count,
     0,
   );
 
-  // If no running tasks and no pending tasks, don't show the badge
-  if (runningTasks.length === 0 && totalPendingCount === 0) {
+  if (!hasRunning && totalPendingCount === 0) {
     return null;
   }
 
-  const formatTaskType = (type: string) => {
-    return type
+  const formatTaskType = (type: string) =>
+    type
       .replace(/([A-Z])/g, " $1")
       .replace(/_/g, " ")
       .trim()
       .split(" ")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
-  };
 
-  const getTaskSummary = (task: (typeof runningTasks)[0]) => {
+  const renderRunningTask = (task: ActiveTask) => {
     const taskName = formatTaskType(task.taskType);
-    const progress = task.progress
+    const target = getTaskTarget(task);
+    const elapsed = formatElapsed(elapsedSince(task.startedAt, now));
+    const progressSuffix = task.progress
       ? ` (${task.progress.current}/${task.progress.total})`
       : "";
-    return `${taskName}${progress}`;
+
+    return (
+      <Group key={task.taskId} gap="xs" wrap="nowrap" align="center">
+        <IconLoader2
+          size={12}
+          style={{ color: "var(--mantine-color-blue-4)", flexShrink: 0 }}
+          className="rotating-icon-small"
+        />
+        <Text size="xs" style={{ flexShrink: 0 }}>
+          {taskName}
+          {progressSuffix}
+        </Text>
+        {target ? (
+          <Text
+            size="xs"
+            c="dimmed"
+            title={target}
+            style={{
+              maxWidth: 180,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            · {target}
+          </Text>
+        ) : null}
+        <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+          · {elapsed}
+        </Text>
+      </Group>
+    );
   };
 
-  // Sort running tasks by formatted task type name
   const sortedRunningTasks = [...runningTasks].sort((a, b) => {
     const nameA = formatTaskType(a.taskType);
     const nameB = formatTaskType(b.taskType);
     return nameA.localeCompare(nameB);
   });
 
-  // Filter and sort pending task entries by formatted name, excluding entries with 0 count
   const sortedPendingEntries = Object.entries(pendingCounts)
     .filter(([, count]) => count > 0)
     .sort(([typeA], [typeB]) => {
@@ -77,16 +118,7 @@ export function TaskNotificationBadge() {
           <Text size="xs" fw={600}>
             Running Tasks
           </Text>
-          {sortedRunningTasks.map((task) => (
-            <Group key={task.taskId} gap="xs">
-              <IconLoader2
-                size={12}
-                style={{ color: "var(--mantine-color-blue-4)" }}
-                className="rotating-icon-small"
-              />
-              <Text size="xs">{getTaskSummary(task)}</Text>
-            </Group>
-          ))}
+          {sortedRunningTasks.map(renderRunningTask)}
         </Stack>
       )}
 

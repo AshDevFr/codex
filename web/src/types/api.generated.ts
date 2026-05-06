@@ -15942,6 +15942,11 @@ export interface components {
              */
             bookId?: string | null;
             /**
+             * @description Resolved title of the associated book (from `book_metadata.title`).
+             *     Populated only when the task is book-scoped and metadata exists.
+             */
+            bookTitle?: string | null;
+            /**
              * Format: date-time
              * @description When task execution completed
              */
@@ -15966,6 +15971,11 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440001
              */
             libraryId?: string | null;
+            /**
+             * @description Resolved name of the associated library (from `libraries.name`).
+             *     Populated only when the task is library-scoped.
+             */
+            libraryName?: string | null;
             /**
              * @description Worker ID that has locked this task
              * @example worker-1
@@ -16003,6 +16013,11 @@ export interface components {
              * @description Associated series ID (if applicable)
              */
             seriesId?: string | null;
+            /**
+             * @description Resolved title of the associated series (from `series_metadata.title`).
+             *     Populated only when the task is series-scoped and metadata exists.
+             */
+            seriesTitle?: string | null;
             /**
              * Format: date-time
              * @description When task execution started

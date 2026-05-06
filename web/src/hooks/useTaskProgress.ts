@@ -7,7 +7,7 @@ import {
 } from "@/api/tasks";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthStore } from "@/store/authStore";
-import type { TaskProgressEvent, TaskStatus } from "@/types";
+import type { ActiveTask, TaskProgressEvent, TaskStatus } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
 
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
@@ -31,9 +31,9 @@ export function useTaskProgress() {
   const { isAuthenticated } = useAuthStore();
   const { hasPermission } = usePermissions();
   const canReadTasks = hasPermission(PERMISSIONS.TASKS_READ);
-  const [activeTasks, setActiveTasks] = useState<
-    Map<string, TaskProgressEvent>
-  >(new Map());
+  const [activeTasks, setActiveTasks] = useState<Map<string, ActiveTask>>(
+    new Map(),
+  );
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const [pendingCounts, setPendingCounts] = useState<PendingTaskCounts>({});
@@ -64,7 +64,8 @@ export function useTaskProgress() {
     }
     hasSubscribedRef.current = true;
 
-    // Convert API task response to TaskProgressEvent format
+    // Convert API task response to ActiveTask format. Titles come from the
+    // polling snapshot (`GET /api/v1/tasks`); SSE events do not carry them.
     const convertTaskToEvent = (task: {
       id: string;
       taskType: string;
@@ -73,7 +74,10 @@ export function useTaskProgress() {
       seriesId?: string | null;
       bookId?: string | null;
       startedAt?: string | null;
-    }): TaskProgressEvent => {
+      bookTitle?: string | null;
+      seriesTitle?: string | null;
+      libraryName?: string | null;
+    }): ActiveTask => {
       // Map "processing" status to "running" for UI consistency
       const status: TaskStatus =
         task.status === "processing" ? "running" : (task.status as TaskStatus);
@@ -89,6 +93,9 @@ export function useTaskProgress() {
         libraryId: task.libraryId ?? undefined,
         seriesId: task.seriesId ?? undefined,
         bookId: task.bookId ?? undefined,
+        bookTitle: task.bookTitle ?? undefined,
+        seriesTitle: task.seriesTitle ?? undefined,
+        libraryName: task.libraryName ?? undefined,
       };
     };
 
@@ -221,7 +228,17 @@ export function useTaskProgress() {
           }, 5000);
         }
 
-        next.set(event.taskId, event);
+        // SSE events do not carry resolved target titles. Preserve any titles
+        // already stashed on this task from the most recent polling snapshot
+        // so the UI keeps showing the human-readable label across progress
+        // updates.
+        const existing = prev.get(event.taskId);
+        next.set(event.taskId, {
+          ...event,
+          bookTitle: existing?.bookTitle,
+          seriesTitle: existing?.seriesTitle,
+          libraryName: existing?.libraryName,
+        });
         return next;
       });
     };
@@ -251,7 +268,7 @@ export function useTaskProgress() {
   }, [isAuthenticated, canReadTasks]);
 
   // Sort helper for consistent ordering (by task_type alphabetically)
-  const sortTasks = (tasks: TaskProgressEvent[]): TaskProgressEvent[] =>
+  const sortTasks = (tasks: ActiveTask[]): ActiveTask[] =>
     tasks.sort((a, b) => a.taskType.localeCompare(b.taskType));
 
   return {
@@ -270,7 +287,7 @@ export function useTaskProgress() {
     /**
      * Get all tasks with a specific status (sorted by task_type)
      */
-    getTasksByStatus: (status: TaskStatus): TaskProgressEvent[] => {
+    getTasksByStatus: (status: TaskStatus): ActiveTask[] => {
       return sortTasks(
         Array.from(activeTasks.values()).filter(
           (task) => task.status === status,
@@ -280,7 +297,7 @@ export function useTaskProgress() {
     /**
      * Get all tasks for a specific library (sorted by task_type)
      */
-    getTasksByLibrary: (libraryId: string): TaskProgressEvent[] => {
+    getTasksByLibrary: (libraryId: string): ActiveTask[] => {
       return sortTasks(
         Array.from(activeTasks.values()).filter(
           (task) => task.libraryId === libraryId,
@@ -290,7 +307,7 @@ export function useTaskProgress() {
     /**
      * Get a specific task by ID
      */
-    getTask: (taskId: string): TaskProgressEvent | undefined => {
+    getTask: (taskId: string): ActiveTask | undefined => {
       return activeTasks.get(taskId);
     },
   };

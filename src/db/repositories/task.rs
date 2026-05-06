@@ -2,14 +2,97 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait, entity::prelude::*,
+    FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Set, Statement,
+    TransactionTrait, entity::prelude::*,
 };
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::entities::{prelude::*, tasks};
+use crate::db::entities::{
+    book_metadata, books, libraries, prelude::*, series, series_metadata, tasks,
+};
 use crate::tasks::error::DEFAULT_MAX_RESCHEDULES;
 use crate::tasks::types::{TaskStats, TaskType};
+
+/// Task row enriched with the resolved title of its target (book, series, or library).
+///
+/// Returned by [`TaskRepository::list_with_targets`]. Use this for UI surfaces that
+/// need a human-readable label for each task (e.g. the active-tasks tooltip).
+/// For internal task-processing call sites that only need the `tasks` row,
+/// prefer [`TaskRepository::list`] to avoid the join overhead.
+#[derive(Debug, Clone)]
+pub struct TaskWithTargets {
+    pub task: tasks::Model,
+    /// Title from `book_metadata.title` when `task.book_id` is set and metadata exists.
+    pub book_title: Option<String>,
+    /// Title from `series_metadata.title` when `task.series_id` is set and metadata exists.
+    pub series_title: Option<String>,
+    /// Name from `libraries.name` when `task.library_id` is set.
+    pub library_name: Option<String>,
+}
+
+/// Internal flat row used to deserialise the joined query result.
+/// Mirrors [`tasks::Model`] plus three nullable target-name columns.
+#[derive(Debug, FromQueryResult)]
+struct TaskWithTargetsRow {
+    // tasks columns
+    id: Uuid,
+    task_type: String,
+    library_id: Option<Uuid>,
+    series_id: Option<Uuid>,
+    book_id: Option<Uuid>,
+    params: Option<serde_json::Value>,
+    status: String,
+    priority: i32,
+    locked_by: Option<String>,
+    locked_until: Option<DateTime<Utc>>,
+    attempts: i32,
+    max_attempts: i32,
+    last_error: Option<String>,
+    reschedule_count: i32,
+    max_reschedules: i32,
+    result: Option<serde_json::Value>,
+    scheduled_for: DateTime<Utc>,
+    created_at: DateTime<Utc>,
+    started_at: Option<DateTime<Utc>>,
+    completed_at: Option<DateTime<Utc>>,
+    // joined target columns (aliased to avoid `id`/`title` collisions)
+    book_title: Option<String>,
+    series_title: Option<String>,
+    library_name: Option<String>,
+}
+
+impl From<TaskWithTargetsRow> for TaskWithTargets {
+    fn from(row: TaskWithTargetsRow) -> Self {
+        Self {
+            task: tasks::Model {
+                id: row.id,
+                task_type: row.task_type,
+                library_id: row.library_id,
+                series_id: row.series_id,
+                book_id: row.book_id,
+                params: row.params,
+                status: row.status,
+                priority: row.priority,
+                locked_by: row.locked_by,
+                locked_until: row.locked_until,
+                attempts: row.attempts,
+                max_attempts: row.max_attempts,
+                last_error: row.last_error,
+                reschedule_count: row.reschedule_count,
+                max_reschedules: row.max_reschedules,
+                result: row.result,
+                scheduled_for: row.scheduled_for,
+                created_at: row.created_at,
+                started_at: row.started_at,
+                completed_at: row.completed_at,
+            },
+            book_title: row.book_title,
+            series_title: row.series_title,
+            library_name: row.library_name,
+        }
+    }
+}
 
 /// Repository for Task operations
 pub struct TaskRepository;
@@ -796,6 +879,77 @@ impl TaskRepository {
             .all(db)
             .await
             .context("Failed to list tasks")
+    }
+
+    /// List tasks with their target titles (book / series / library) resolved via LEFT JOIN.
+    ///
+    /// Use this for UI surfaces (e.g. the active-tasks tooltip) that need a human-readable
+    /// label per task. The query projects only `tasks.*`, `book_metadata.title`,
+    /// `series_metadata.title`, and `libraries.name` to avoid pulling heavy columns
+    /// (covers, descriptions) from the joined entities.
+    ///
+    /// Indexes used: `idx_tasks_status` for the status filter; `idx_tasks_book`,
+    /// `idx_tasks_series`, `idx_tasks_library` for the FK joins. Confirmed in
+    /// `migration/src/m20260106_000019_create_tasks.rs`.
+    pub async fn list_with_targets(
+        db: &DatabaseConnection,
+        status: Option<String>,
+        task_type: Option<String>,
+        limit: Option<u64>,
+    ) -> Result<Vec<TaskWithTargets>> {
+        let mut query = Tasks::find()
+            .select_only()
+            // tasks columns
+            .column(tasks::Column::Id)
+            .column(tasks::Column::TaskType)
+            .column(tasks::Column::LibraryId)
+            .column(tasks::Column::SeriesId)
+            .column(tasks::Column::BookId)
+            .column(tasks::Column::Params)
+            .column(tasks::Column::Status)
+            .column(tasks::Column::Priority)
+            .column(tasks::Column::LockedBy)
+            .column(tasks::Column::LockedUntil)
+            .column(tasks::Column::Attempts)
+            .column(tasks::Column::MaxAttempts)
+            .column(tasks::Column::LastError)
+            .column(tasks::Column::RescheduleCount)
+            .column(tasks::Column::MaxReschedules)
+            .column(tasks::Column::Result)
+            .column(tasks::Column::ScheduledFor)
+            .column(tasks::Column::CreatedAt)
+            .column(tasks::Column::StartedAt)
+            .column(tasks::Column::CompletedAt)
+            // joined target name columns (aliased to avoid collisions on `id` / `title`)
+            .column_as(book_metadata::Column::Title, "book_title")
+            .column_as(series_metadata::Column::Title, "series_title")
+            .column_as(libraries::Column::Name, "library_name")
+            .join(JoinType::LeftJoin, tasks::Relation::Books.def())
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .join(JoinType::LeftJoin, tasks::Relation::Series.def())
+            .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+            .join(JoinType::LeftJoin, tasks::Relation::Libraries.def());
+
+        if let Some(s) = status {
+            query = query.filter(tasks::Column::Status.eq(s));
+        }
+
+        if let Some(t) = task_type {
+            query = query.filter(tasks::Column::TaskType.eq(t));
+        }
+
+        if let Some(l) = limit {
+            query = query.limit(l);
+        }
+
+        let rows = query
+            .order_by_desc(tasks::Column::CreatedAt)
+            .into_model::<TaskWithTargetsRow>()
+            .all(db)
+            .await
+            .context("Failed to list tasks with targets")?;
+
+        Ok(rows.into_iter().map(TaskWithTargets::from).collect())
     }
 
     /// Get task by ID

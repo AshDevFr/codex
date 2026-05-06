@@ -1,12 +1,16 @@
 mod common;
 
-use codex::db::repositories::{TaskRepository, UserRepository};
+use codex::db::repositories::{
+    BookMetadataRepository, LibraryRepository, SeriesRepository, TaskRepository, UserRepository,
+};
+use codex::models::ScanningStrategy;
 use codex::tasks::types::TaskType;
 use codex::utils::password;
 use common::{
-    create_test_app_state, create_test_router_with_app_state, create_test_user_with_permissions,
-    delete_request_with_auth, get_request_with_auth, make_json_request, make_request,
-    post_json_request_with_auth, post_request_with_auth, setup_test_db,
+    create_test_app_state, create_test_book_with_hash, create_test_router_with_app_state,
+    create_test_user_with_permissions, delete_request_with_auth, get_request_with_auth,
+    make_json_request, make_request, post_json_request_with_auth, post_request_with_auth,
+    setup_test_db,
 };
 use hyper::StatusCode;
 use serde_json::json;
@@ -380,4 +384,136 @@ async fn test_api_nuke_tasks_admin_only() {
 
     // Should succeed for admin
     assert_eq!(status, StatusCode::OK);
+}
+
+/// Verify that GET /api/v1/tasks resolves bookTitle / seriesTitle / libraryName
+/// from the joined metadata tables, so the active-tasks UI can render labels
+/// without follow-up requests.
+#[tokio::test]
+async fn test_api_list_tasks_resolves_target_titles() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Auth: a user with tasks-read permission
+    let password = "test_password";
+    let password_hash = password::hash_password(password).unwrap();
+    let user = create_test_user_with_permissions(
+        "tasks_reader",
+        "tasks_reader@example.com",
+        &password_hash,
+        false,
+        vec!["tasks-read".to_string()],
+    );
+    UserRepository::create(&db, &user).await.unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let login_request = json!({"username": "tasks_reader", "password": password});
+    let request = post_json_request_with_auth("/api/v1/auth/login", &login_request, "");
+    let (login_status, login_response): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app.clone(), request).await;
+    assert_eq!(login_status, StatusCode::OK);
+    let token = login_response.unwrap()["accessToken"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Build a library / series / book with metadata so the joins have something to resolve.
+    let library = LibraryRepository::create(
+        &db,
+        "Manga Library",
+        "/lib/manga",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Naruto", None)
+        .await
+        .unwrap();
+    let book = create_test_book_with_hash(
+        &db,
+        &library,
+        &series,
+        "ignored",
+        "/lib/manga/naruto/v12.cbz",
+        "hash_v12",
+    )
+    .await;
+    BookMetadataRepository::create_with_title_and_number(
+        &db,
+        book.id,
+        Some("Naruto Vol. 12".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Enqueue tasks at all three scopes so we can assert each title field independently.
+    TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeBook {
+            book_id: book.id,
+            force: false,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    TaskRepository::enqueue(
+        &db,
+        TaskType::AnalyzeSeries {
+            series_id: series.id,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    TaskRepository::enqueue(
+        &db,
+        TaskType::ScanLibrary {
+            library_id: library.id,
+            mode: "normal".to_string(),
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let request = get_request_with_auth("/api/v1/tasks", &token);
+    let (status, body): (StatusCode, Option<serde_json::Value>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let body = body.expect("response body");
+    let tasks = body.as_array().expect("array of tasks");
+    assert!(
+        tasks.len() >= 3,
+        "expected at least three tasks, got {}",
+        tasks.len()
+    );
+
+    let book_task = tasks
+        .iter()
+        .find(|t| t["taskType"] == "analyze_book")
+        .expect("analyze_book task missing");
+    assert_eq!(book_task["bookTitle"], "Naruto Vol. 12");
+    // seriesTitle / libraryName are skipped via skip_serializing_if when None.
+    assert!(book_task.get("seriesTitle").is_none());
+    assert!(book_task.get("libraryName").is_none());
+
+    let series_task = tasks
+        .iter()
+        .find(|t| t["taskType"] == "analyze_series")
+        .expect("analyze_series task missing");
+    assert_eq!(series_task["seriesTitle"], "Naruto");
+    assert!(series_task.get("bookTitle").is_none());
+    assert!(series_task.get("libraryName").is_none());
+
+    let library_task = tasks
+        .iter()
+        .find(|t| t["taskType"] == "scan_library")
+        .expect("scan_library task missing");
+    assert_eq!(library_task["libraryName"], "Manga Library");
+    assert!(library_task.get("bookTitle").is_none());
+    assert!(library_task.get("seriesTitle").is_none());
 }

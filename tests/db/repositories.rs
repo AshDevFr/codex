@@ -6,9 +6,11 @@ use codex::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
 use codex::db::Database;
 use codex::db::entities::{books, libraries, read_progress, series, users};
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository,
+    BookMetadataRepository, BookRepository, LibraryRepository, PageRepository,
+    SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
 use codex::models::ScanningStrategy;
+use codex::tasks::types::TaskType;
 use common::*;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, Set,
@@ -1506,6 +1508,164 @@ async fn test_purge_deleted_in_series_keeps_series_when_not_empty() {
     assert!(
         series_after.is_some(),
         "Series should still exist since it has remaining books"
+    );
+
+    db.close().await;
+}
+
+// ============================================================================
+// TaskRepository::list_with_targets Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_with_targets_resolves_book_series_library_titles() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // Library is named directly via libraries.name.
+    let library = LibraryRepository::create(
+        conn,
+        "Manga Library",
+        "/lib/manga",
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // SeriesRepository::create populates series_metadata.title from `name`.
+    let series = SeriesRepository::create(conn, library.id, "Naruto", None)
+        .await
+        .unwrap();
+
+    // Book row carries no title; book_metadata.title is what we surface.
+    let book = create_test_book_with_hash(
+        conn,
+        &library,
+        &series,
+        "ignored",
+        "/lib/manga/naruto/v1.cbz",
+        "abc123",
+    )
+    .await;
+    BookMetadataRepository::create_with_title_and_number(
+        conn,
+        book.id,
+        Some("Naruto Vol. 12".to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+
+    // Enqueue three tasks scoped at each level.
+    TaskRepository::enqueue(
+        conn,
+        TaskType::AnalyzeBook {
+            book_id: book.id,
+            force: false,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    TaskRepository::enqueue(
+        conn,
+        TaskType::AnalyzeSeries {
+            series_id: series.id,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+    TaskRepository::enqueue(
+        conn,
+        TaskType::ScanLibrary {
+            library_id: library.id,
+            mode: "normal".to_string(),
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let rows = TaskRepository::list_with_targets(conn, None, None, Some(50))
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 3, "expected three enqueued tasks");
+
+    // Find each task by its task_type and verify the resolved target name.
+    let book_task = rows
+        .iter()
+        .find(|r| r.task.task_type == "analyze_book")
+        .expect("analyze_book row missing");
+    assert_eq!(book_task.book_title.as_deref(), Some("Naruto Vol. 12"));
+    assert_eq!(book_task.series_title, None);
+    assert_eq!(book_task.library_name, None);
+
+    let series_task = rows
+        .iter()
+        .find(|r| r.task.task_type == "analyze_series")
+        .expect("analyze_series row missing");
+    assert_eq!(series_task.series_title.as_deref(), Some("Naruto"));
+    assert_eq!(series_task.book_title, None);
+    assert_eq!(series_task.library_name, None);
+
+    let library_task = rows
+        .iter()
+        .find(|r| r.task.task_type == "scan_library")
+        .expect("scan_library row missing");
+    assert_eq!(library_task.library_name.as_deref(), Some("Manga Library"));
+    assert_eq!(library_task.book_title, None);
+    assert_eq!(library_task.series_title, None);
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_list_with_targets_omits_titles_when_metadata_missing() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    let library =
+        LibraryRepository::create(conn, "Comics", "/lib/comics", ScanningStrategy::Default)
+            .await
+            .unwrap();
+    let series = SeriesRepository::create(conn, library.id, "Mystery Series", None)
+        .await
+        .unwrap();
+    let book = create_test_book_with_hash(
+        conn,
+        &library,
+        &series,
+        "ignored",
+        "/lib/comics/mystery/i1.cbz",
+        "def456",
+    )
+    .await;
+    // Intentionally do NOT create book_metadata: book_title should remain None
+    // even though tasks.book_id is populated.
+
+    TaskRepository::enqueue(
+        conn,
+        TaskType::AnalyzeBook {
+            book_id: book.id,
+            force: false,
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let rows = TaskRepository::list_with_targets(conn, None, None, Some(10))
+        .await
+        .unwrap();
+    let task = rows
+        .iter()
+        .find(|r| r.task.task_type == "analyze_book")
+        .expect("analyze_book row missing");
+    assert!(
+        task.book_title.is_none(),
+        "book_title should be None when book_metadata row is absent"
     );
 
     db.close().await;
