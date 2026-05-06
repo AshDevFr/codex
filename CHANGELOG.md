@@ -2,6 +2,22 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.18.1] - 2026-05-06
+
+### 🚀 Features
+
+- *(tasks)* Emit progress events from nine more task handlers
+- *(tasks)* Show target titles and live elapsed time in active-tasks badge
+- *(ui)* Render progress bar and message for live tasks in active-tasks badge
+
+### 🐛 Bug Fixes
+
+- *(scanner)* Stop overriding book strategy with ComicInfo on volume/chapter
+
+### 🧪 Testing
+
+- *(scanner)* Use MetadataFirst strategy for ComicInfo metadata test
+
 ## [1.18.0] - 2026-05-04
 
 ### 🚀 Features
