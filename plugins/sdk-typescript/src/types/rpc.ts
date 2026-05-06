@@ -7,6 +7,15 @@ export interface JsonRpcRequest {
   id: string | number | null;
   method: string;
   params?: unknown;
+  /**
+   * Reverse-RPC only: id of the forward call this plugin is currently
+   * servicing. Tells the host to route the reverse-RPC back to the
+   * originating caller's task so emitted events land in that caller's
+   * recording broadcaster (and replay correctly in distributed
+   * deployments). The SDK stamps this automatically via
+   * `AsyncLocalStorage` — plugin authors don't set it.
+   */
+  parentRequestId?: string | number | null;
 }
 
 export interface JsonRpcSuccessResponse {
