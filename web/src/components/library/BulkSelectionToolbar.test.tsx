@@ -35,12 +35,33 @@ vi.mock("@/api/series", () => ({
       tasksEnqueued: 5,
       message: "Enqueued 5 analysis tasks for 2 series",
     }),
+    bulkTrackForReleases: vi.fn().mockResolvedValue({
+      changed: 2,
+      alreadyInState: 0,
+      errored: 0,
+      results: [],
+    }),
+    bulkUntrackForReleases: vi.fn().mockResolvedValue({
+      changed: 1,
+      alreadyInState: 0,
+      errored: 0,
+      results: [],
+    }),
   },
 }));
 
 // Mock the usePermissions hook - default to admin (all permissions)
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: vi.fn(),
+}));
+
+// Mock the applicability hook so the Release Tracking menu entries render.
+// Tests that need to hide them can override the mock.
+vi.mock("@/hooks/useReleaseTrackingApplicability", () => ({
+  useReleaseTrackingApplicability: vi.fn(() => ({
+    data: { applicable: true, pluginDisplayNames: ["Nyaa Releases"] },
+    isLoading: false,
+  })),
 }));
 
 const mockPermissionsAdmin = () => {
@@ -349,6 +370,55 @@ describe("BulkSelectionToolbar", () => {
 
       await waitFor(() => {
         expect(seriesApi.bulkAnalyze).toHaveBeenCalledWith(["series-1"]);
+      });
+    });
+
+    it("calls bulkTrackForReleases with all selected series when Track for releases is clicked", async () => {
+      const { seriesApi } = await import("@/api/series");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+      useBulkSelectionStore.getState().toggleSelection("series-2", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Track for releases")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Track for releases"));
+
+      await waitFor(() => {
+        expect(seriesApi.bulkTrackForReleases).toHaveBeenCalledTimes(1);
+      });
+      // The toolbar passes the full selected-id list as a single argument.
+      const calls = (seriesApi.bulkTrackForReleases as ReturnType<typeof vi.fn>)
+        .mock.calls;
+      expect(calls[0][0]).toEqual(
+        expect.arrayContaining(["series-1", "series-2"]),
+      );
+    });
+
+    it("calls bulkUntrackForReleases when Don't track for releases is clicked", async () => {
+      const { seriesApi } = await import("@/api/series");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(
+          screen.getByText("Don't track for releases"),
+        ).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Don't track for releases"));
+
+      await waitFor(() => {
+        expect(seriesApi.bulkUntrackForReleases).toHaveBeenCalledWith([
+          "series-1",
+        ]);
       });
     });
   });

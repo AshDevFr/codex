@@ -26,11 +26,12 @@ use crate::services::user_plugin::OAuthStateManager;
 use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
-    AnalyzeBookHandler, AnalyzeSeriesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
-    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesExportsHandler,
-    CleanupSeriesFilesHandler, ExportSeriesHandler, FindDuplicatesHandler,
-    GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
-    GenerateThumbnailsHandler, PluginAutoMatchHandler, PurgeDeletedHandler,
+    AnalyzeBookHandler, AnalyzeSeriesHandler, BackfillTrackingFromMetadataHandler,
+    CleanupBookFilesHandler, CleanupOrphanedFilesHandler, CleanupPdfCacheHandler,
+    CleanupPluginDataHandler, CleanupSeriesExportsHandler, CleanupSeriesFilesHandler,
+    ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
+    GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
+    PluginAutoMatchHandler, PollReleaseSourceHandler, PurgeDeletedHandler,
     RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
     ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
@@ -48,6 +49,10 @@ pub struct TaskWorker {
     thumbnail_service: Option<Arc<ThumbnailService>>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     plugin_manager: Option<Arc<PluginManager>>,
+    /// Shared per-host backoff state used by the `PollReleaseSourceHandler`.
+    /// Exposed via [`Self::release_backoff`] so the scheduler can read the
+    /// same multipliers when picking next-poll intervals.
+    release_backoff: crate::services::release::backoff::HostBackoff,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -101,6 +106,11 @@ impl TaskWorker {
             "cleanup_plugin_data".to_string(),
             Arc::new(CleanupPluginDataHandler::new()),
         );
+        // Release-tracking maintenance: backfill aliases from metadata.
+        handlers.insert(
+            "backfill_tracking_from_metadata".to_string(),
+            Arc::new(BackfillTrackingFromMetadataHandler::new()),
+        );
 
         // Generate worker ID from hostname or random UUID
         let worker_id = std::env::var("HOSTNAME")
@@ -117,8 +127,16 @@ impl TaskWorker {
             thumbnail_service: None,
             task_metrics_service: None,
             plugin_manager: None,
+            release_backoff: crate::services::release::backoff::HostBackoff::new(),
             shutdown_tx: None,
         }
+    }
+
+    /// Shared per-host backoff used by `PollReleaseSourceHandler`. The
+    /// scheduler reads this when computing the effective interval for the
+    /// next poll.
+    pub fn release_backoff(&self) -> crate::services::release::backoff::HostBackoff {
+        self.release_backoff.clone()
     }
 
     /// Set the poll interval
@@ -270,6 +288,15 @@ impl TaskWorker {
             "user_plugin_recommendation_dismiss".to_string(),
             Arc::new(dismiss_handler),
         );
+        // Register release-polling handler. Shares the worker's HostBackoff
+        // so the scheduler can also consult the same multipliers.
+        let mut poll_handler = PollReleaseSourceHandler::new(plugin_manager.clone())
+            .with_backoff(self.release_backoff.clone());
+        if let Some(ref settings_service) = self.settings_service {
+            poll_handler = poll_handler.with_settings_service(settings_service.clone());
+        }
+        self.handlers
+            .insert("poll_release_source".to_string(), Arc::new(poll_handler));
         self.plugin_manager = Some(plugin_manager);
         self
     }
@@ -577,10 +604,20 @@ impl TaskWorker {
             let recording_broadcaster = Arc::new(EventBroadcaster::new_with_recording(1000, true));
             let broadcaster_clone = recording_broadcaster.clone();
 
-            // Execute task with recording broadcaster
-            let result = handler
-                .handle(&task, &self.db, Some(&recording_broadcaster))
-                .await;
+            // Execute the handler inside a task-local scope that exposes the
+            // recording broadcaster to any code on this task's await chain —
+            // including reverse-RPC handlers (e.g. `releases/record`), which
+            // are dispatched on this task by `RpcClient::call_with_timeout`
+            // when the plugin tags reverse-RPCs with the parent forward
+            // request id. Without this, plugins that emit events via
+            // reverse-RPC (rather than synchronously through the handler's
+            // broadcaster argument) would have no recording context and
+            // their events would never replay.
+            let result = crate::events::with_recording_broadcaster(
+                recording_broadcaster.clone(),
+                handler.handle(&task, &self.db, Some(&recording_broadcaster)),
+            )
+            .await;
 
             // Get recorded events before returning
             let events = broadcaster_clone.take_recorded_events();
@@ -607,10 +644,22 @@ impl TaskWorker {
             (self.event_broadcaster.clone(), None)
         };
 
-        // Execute task with shared broadcaster (single-process mode)
-        let result = handler
-            .handle(&task, &self.db, task_broadcaster.as_ref())
-            .await;
+        // Execute task with shared broadcaster (single-process mode).
+        // Set the task-local to the shared broadcaster too, so reverse-RPC
+        // handlers see *the same* broadcaster the rest of the task uses.
+        // The shared broadcaster has recording disabled here (web/single-
+        // process mode), so emits flow straight to live SSE subscribers.
+        let result = if let Some(ref shared) = task_broadcaster {
+            crate::events::with_recording_broadcaster(
+                shared.clone(),
+                handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+            )
+            .await
+        } else {
+            handler
+                .handle(&task, &self.db, task_broadcaster.as_ref())
+                .await
+        };
 
         // Update task status based on result
         match result {

@@ -206,6 +206,34 @@ pub enum TaskType {
         #[serde(default)]
         reason: Option<String>,
     },
+
+    /// Backfill release-tracking aliases from existing series metadata.
+    ///
+    /// Walks series in scope, harvests the canonical title plus alternate titles
+    /// from `series_metadata` and `series_alternate_titles`, and seeds them as
+    /// `metadata`-source aliases in `series_aliases`. Idempotent — re-runs do
+    /// not create duplicates. Does NOT enable tracking; that stays explicit.
+    BackfillTrackingFromMetadata {
+        /// If set, scope to this library; otherwise all series.
+        #[serde(rename = "libraryId", default)]
+        library_id: Option<Uuid>,
+        /// If set, scope to these specific series (takes precedence over library_id).
+        #[serde(rename = "seriesIds", default)]
+        series_ids: Option<Vec<Uuid>>,
+    },
+
+    /// Poll a single `release_sources` row for new releases.
+    ///
+    /// Resolves the source's owning plugin, calls `releases/poll` over the
+    /// existing plugin host, runs returned candidates through the matcher +
+    /// threshold, and writes accepted candidates to the ledger. On success
+    /// updates `last_polled_at` (and optionally `etag`); on failure records
+    /// `last_error`. Idempotent: ledger writes dedup on
+    /// `(source_id, external_release_id)` and `info_hash`.
+    PollReleaseSource {
+        #[serde(rename = "sourceId")]
+        source_id: Uuid,
+    },
 }
 
 fn default_mode() -> String {
@@ -251,6 +279,10 @@ impl TaskType {
             TaskType::UserPluginRecommendationDismiss { .. } => 200,
             TaskType::UserPluginSync { .. } => 190,
             TaskType::UserPluginRecommendations { .. } => 180,
+            // Release tracking maintenance
+            TaskType::BackfillTrackingFromMetadata { .. } => 150,
+            // Release polling: scheduled background discovery
+            TaskType::PollReleaseSource { .. } => 170,
             // Cleanup
             TaskType::CleanupBookFiles { .. }
             | TaskType::CleanupSeriesFiles { .. }
@@ -292,6 +324,8 @@ impl TaskType {
             TaskType::UserPluginRecommendationDismiss { .. } => {
                 "user_plugin_recommendation_dismiss"
             }
+            TaskType::BackfillTrackingFromMetadata { .. } => "backfill_tracking_from_metadata",
+            TaskType::PollReleaseSource { .. } => "poll_release_source",
         }
     }
 
@@ -308,6 +342,7 @@ impl TaskType {
             TaskType::GenerateThumbnails { library_id, .. } => *library_id,
             TaskType::GenerateSeriesThumbnails { library_id, .. } => *library_id,
             TaskType::ReprocessSeriesTitles { library_id, .. } => *library_id,
+            TaskType::BackfillTrackingFromMetadata { library_id, .. } => *library_id,
             _ => None,
         }
     }
@@ -407,6 +442,12 @@ impl TaskType {
                     "reason": reason,
                 })
             }
+            TaskType::BackfillTrackingFromMetadata { series_ids, .. } => {
+                serde_json::json!({ "series_ids": series_ids })
+            }
+            TaskType::PollReleaseSource { source_id } => {
+                serde_json::json!({ "source_id": source_id })
+            }
             _ => serde_json::json!({}),
         }
     }
@@ -436,6 +477,26 @@ impl TaskType {
             TaskType::GenerateThumbnail { book_id, .. } => Some(*book_id),
             // CleanupBookFiles intentionally NOT included - book_id is stored in params
             // because the book is already deleted when the cleanup task runs
+            _ => None,
+        }
+    }
+
+    /// JSON-param key/value pair to use as a dedup discriminator for task
+    /// types whose identity lives in `params` rather than in FK columns.
+    ///
+    /// Returning `Some((key, value))` tells the dedup path in
+    /// `TaskRepository::find_existing_task` to additionally filter by
+    /// `params->>key = value`. Without this, two `poll_release_source` tasks
+    /// for *different* `source_id`s would falsely collide because they share
+    /// the same `task_type` and have no FK columns set, causing the second
+    /// "Poll now" click to be silently coalesced onto the first source's
+    /// in-flight poll.
+    ///
+    /// `key` must be a simple identifier (alphanumeric + underscore) since
+    /// SQLite splices it into a JSON path string.
+    pub fn dedup_params(&self) -> Option<(&'static str, String)> {
+        match self {
+            TaskType::PollReleaseSource { source_id } => Some(("source_id", source_id.to_string())),
             _ => None,
         }
     }
@@ -1074,6 +1135,47 @@ mod tests {
         let deserialized: TaskType = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.type_string(), "refresh_library_metadata");
         assert_eq!(deserialized.job_id(), Some(job_id));
+    }
+
+    #[test]
+    fn test_poll_release_source_extraction() {
+        let source_id = Uuid::new_v4();
+        let task = TaskType::PollReleaseSource { source_id };
+
+        assert_eq!(task.type_string(), "poll_release_source");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+        assert_eq!(task.default_priority(), 170);
+
+        let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "poll_release_source");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(book_id, None);
+        let params = params.expect("expected source_id params");
+        assert_eq!(params["source_id"], serde_json::json!(source_id));
+    }
+
+    #[test]
+    fn test_poll_release_source_serialization() {
+        let source_id = Uuid::new_v4();
+        let task = TaskType::PollReleaseSource { source_id };
+
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("poll_release_source"));
+        assert!(json.contains(&source_id.to_string()));
+        // sourceId is the camelCase rename.
+        assert!(json.contains("sourceId"));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.type_string(), "poll_release_source");
+        match deserialized {
+            TaskType::PollReleaseSource { source_id: id } => {
+                assert_eq!(id, source_id);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]

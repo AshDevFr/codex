@@ -10,16 +10,68 @@ use std::time::Duration;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::time::timeout;
 use tracing::{debug, error, warn};
 
+use super::permissions::{self, PermissionError};
 use super::process::{PluginProcess, ProcessError};
 use super::protocol::{
-    JSONRPC_VERSION, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId, error_codes,
+    JSONRPC_VERSION, JsonRpcError, JsonRpcRequest, JsonRpcResponse, PluginCapabilities, RequestId,
+    error_codes,
 };
+use super::releases_handler::{ReleasesRequestHandler, is_releases_method};
 use super::storage::is_storage_method;
 use super::storage_handler::StorageRequestHandler;
+
+/// Bag of handlers + capabilities that mediate plugin reverse-RPC calls.
+///
+/// Constructed before the plugin starts, but the capability snapshot and the
+/// release-source handler are filled in once `initialize` returns and the
+/// host knows what the plugin can do. The reader task holds an `Arc<RwLock>`
+/// to this struct so updates land without restarting the task.
+pub struct ReverseRpcContext {
+    storage_handler: Option<StorageRequestHandler>,
+    releases_handler: Option<ReleasesRequestHandler>,
+    /// `None` until the plugin has been initialized.
+    capabilities: Option<PluginCapabilities>,
+}
+
+impl ReverseRpcContext {
+    pub fn new() -> Self {
+        Self {
+            storage_handler: None,
+            releases_handler: None,
+            capabilities: None,
+        }
+    }
+
+    pub fn with_storage(storage_handler: StorageRequestHandler) -> Self {
+        Self {
+            storage_handler: Some(storage_handler),
+            releases_handler: None,
+            capabilities: None,
+        }
+    }
+
+    /// Replace the plugin's capability snapshot, used by [`super::handle::PluginHandle`]
+    /// once `initialize` returns.
+    pub fn set_capabilities(&mut self, caps: PluginCapabilities) {
+        self.capabilities = Some(caps);
+    }
+
+    /// Install the releases handler. Called after capabilities are known
+    /// and the plugin declared `release_source`.
+    pub fn set_releases_handler(&mut self, handler: ReleasesRequestHandler) {
+        self.releases_handler = Some(handler);
+    }
+}
+
+impl Default for ReverseRpcContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Error type for RPC operations
 #[derive(Debug, thiserror::Error)]
@@ -89,9 +141,32 @@ impl From<JsonRpcError> for RpcError {
     }
 }
 
+/// Frame delivered from the response reader to a pending forward call.
+///
+/// Forward calls await an `mpsc::Receiver<PendingFrame>` instead of a single
+/// `oneshot::Receiver`. The reader pushes either:
+/// - one `Response` (terminal — the receiver loop stops), or
+/// - zero or more `ReverseRpc` frames (mid-flight — the caller dispatches
+///   each one on its own tokio task and writes the response back to the
+///   plugin), followed eventually by exactly one `Response`.
+///
+/// Routing reverse-RPCs back to the caller (instead of dispatching them on
+/// the reader task) is what lets task-local context — most importantly the
+/// recording broadcaster set up by [`crate::tasks::worker`] — propagate into
+/// the dispatcher. Without this, events emitted by reverse-RPC handlers
+/// (like `releases/record`) would have no recording context and would never
+/// reach the web server's SSE stream in distributed deployments.
+enum PendingFrame {
+    /// The plugin returned a response for this forward call. Terminal.
+    Response(Result<Value, RpcError>),
+    /// The plugin made a reverse-RPC call while servicing this forward
+    /// call. The caller must dispatch and write the response back.
+    ReverseRpc(JsonRpcRequest),
+}
+
 /// Pending request waiting for a response
 struct PendingRequest {
-    tx: oneshot::Sender<Result<Value, RpcError>>,
+    tx: mpsc::UnboundedSender<PendingFrame>,
 }
 
 /// JSON-RPC client for communicating with a plugin process
@@ -110,12 +185,14 @@ pub struct RpcClient {
     /// Set to false when the response reader task detects process termination.
     /// This prevents writing to a dead process, which would cause EPIPE errors.
     process_alive: Arc<AtomicBool>,
+    /// Reverse-RPC handlers + capability snapshot, mutable after init.
+    reverse_ctx: Arc<RwLock<ReverseRpcContext>>,
 }
 
 impl RpcClient {
     /// Create a new RPC client wrapping a plugin process
     pub fn new(process: PluginProcess, default_timeout: Duration) -> Self {
-        Self::new_internal(process, default_timeout, None)
+        Self::new_internal(process, default_timeout, ReverseRpcContext::new())
     }
 
     /// Create a new RPC client with storage request handling support.
@@ -129,26 +206,32 @@ impl RpcClient {
         default_timeout: Duration,
         storage_handler: StorageRequestHandler,
     ) -> Self {
-        Self::new_internal(process, default_timeout, Some(storage_handler))
+        Self::new_internal(
+            process,
+            default_timeout,
+            ReverseRpcContext::with_storage(storage_handler),
+        )
     }
 
     fn new_internal(
         process: PluginProcess,
         default_timeout: Duration,
-        storage_handler: Option<StorageRequestHandler>,
+        ctx: ReverseRpcContext,
     ) -> Self {
         let process = Arc::new(Mutex::new(process));
         let pending: Arc<Mutex<HashMap<i64, PendingRequest>>> =
             Arc::new(Mutex::new(HashMap::new()));
         let process_alive = Arc::new(AtomicBool::new(true));
+        let reverse_ctx = Arc::new(RwLock::new(ctx));
 
         // Start the response reader task
         let reader_handle = {
             let process = Arc::clone(&process);
             let pending = Arc::clone(&pending);
             let process_alive = Arc::clone(&process_alive);
+            let reverse_ctx = Arc::clone(&reverse_ctx);
             tokio::spawn(async move {
-                response_reader_task(process, pending, process_alive, storage_handler).await;
+                response_reader_task(process, pending, process_alive, reverse_ctx).await;
             })
         };
 
@@ -159,7 +242,19 @@ impl RpcClient {
             default_timeout,
             reader_handle: Some(reader_handle),
             process_alive,
+            reverse_ctx,
         }
+    }
+
+    /// Update the reverse-RPC context after initialization. Used by
+    /// [`super::handle::PluginHandle`] to inject the capability snapshot and
+    /// install the releases handler once the manifest is known.
+    pub async fn update_reverse_ctx<F>(&self, f: F)
+    where
+        F: FnOnce(&mut ReverseRpcContext),
+    {
+        let mut ctx = self.reverse_ctx.write().await;
+        f(&mut ctx);
     }
 
     /// Send a request and wait for a response
@@ -172,7 +267,18 @@ impl RpcClient {
             .await
     }
 
-    /// Send a request and wait for a response with custom timeout
+    /// Send a request and wait for a response with custom timeout.
+    ///
+    /// While awaiting the response, this also services any reverse-RPC
+    /// requests the plugin makes that are tagged with `parent_request_id =
+    /// id` of this call. Dispatching here (rather than on the reader task)
+    /// keeps the dispatch on the caller's tokio task, so task-local state
+    /// (notably the recording broadcaster set by the worker) propagates into
+    /// the reverse-RPC handlers — see [`PendingFrame`] for context.
+    ///
+    /// The `request_timeout` bounds *the entire forward call*, including
+    /// any reverse-RPC servicing in between. That matches the previous
+    /// semantics from the caller's point of view.
     pub async fn call_with_timeout<P, R>(
         &self,
         method: &str,
@@ -205,6 +311,7 @@ impl RpcClient {
             } else {
                 Some(params_value)
             },
+            parent_request_id: None,
         };
 
         let request_json = serde_json::to_string(&request)?;
@@ -215,8 +322,11 @@ impl RpcClient {
             "Sending RPC request"
         );
 
-        // Create response channel
-        let (tx, rx) = oneshot::channel();
+        // Create response channel. Unbounded because reverse-RPCs are
+        // dispatched inline and the queue depth is naturally bounded by the
+        // plugin's behavior; bounding it would risk deadlock if the plugin
+        // bursts reverse-RPCs faster than the caller drains them.
+        let (tx, mut rx) = mpsc::unbounded_channel::<PendingFrame>();
         {
             let mut pending = self.pending.lock().await;
             pending.insert(id, PendingRequest { tx });
@@ -237,20 +347,68 @@ impl RpcClient {
             process.write_line(&request_json).await?;
         }
 
-        // Wait for response with timeout
+        // Loop, servicing reverse-RPC frames until the response frame
+        // arrives or we time out. Dispatching reverse-RPCs here (on the
+        // caller's task) is what lets task-local recording broadcasters
+        // propagate into the handlers — see [`PendingFrame`].
         debug!(
             id = id,
             timeout_ms = request_timeout.as_millis(),
             "Waiting for RPC response"
         );
-        let result = match timeout(request_timeout, rx).await {
+        let response_result = timeout(request_timeout, async {
+            loop {
+                match rx.recv().await {
+                    Some(PendingFrame::Response(result)) => return Ok::<_, RpcError>(result),
+                    Some(PendingFrame::ReverseRpc(reverse_request)) => {
+                        // Dispatch on this task so task-locals propagate.
+                        let reverse_method = reverse_request.method.clone();
+                        let response = dispatch_reverse_rpc(
+                            &reverse_method,
+                            &reverse_request,
+                            &self.reverse_ctx,
+                        )
+                        .await;
+                        // Write the response back to the plugin. Best-effort:
+                        // a write failure here is logged but doesn't abort
+                        // the forward call (the plugin may still complete).
+                        match serde_json::to_string(&response) {
+                            Ok(response_json) => {
+                                let process_guard = self.process.lock().await;
+                                if let Err(e) = process_guard.write_line(&response_json).await {
+                                    error!(
+                                        error = %e,
+                                        method = %reverse_method,
+                                        forward_id = id,
+                                        "Failed to write reverse-RPC response to plugin"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                error!(
+                                    error = %e,
+                                    method = %reverse_method,
+                                    "Failed to serialize reverse-RPC response"
+                                );
+                            }
+                        }
+                    }
+                    None => {
+                        // Channel closed — plugin process died and the
+                        // reader cancelled all pending requests.
+                        return Err(RpcError::Cancelled);
+                    }
+                }
+            }
+        })
+        .await;
+
+        let result = match response_result {
             Ok(Ok(result)) => {
                 debug!(id = id, "RPC response received");
                 result
             }
-            Ok(Err(_)) => {
-                // Channel was closed - likely because the plugin process died
-                // and the response reader task cancelled all pending requests
+            Ok(Err(RpcError::Cancelled)) => {
                 error!(
                     id = id,
                     method = method,
@@ -259,8 +417,11 @@ impl RpcClient {
                 self.remove_pending(id).await;
                 return Err(RpcError::Cancelled);
             }
+            Ok(Err(e)) => {
+                self.remove_pending(id).await;
+                return Err(e);
+            }
             Err(_) => {
-                // Timeout
                 error!(
                     id = id,
                     timeout_ms = request_timeout.as_millis(),
@@ -301,7 +462,9 @@ impl RpcClient {
         {
             let mut pending = self.pending.lock().await;
             for (_, req) in pending.drain() {
-                let _ = req.tx.send(Err(RpcError::Cancelled));
+                let _ = req
+                    .tx
+                    .send(PendingFrame::Response(Err(RpcError::Cancelled)));
             }
         }
 
@@ -329,17 +492,137 @@ impl Drop for RpcClient {
     }
 }
 
-/// Task that reads lines from the plugin process and dispatches them.
+/// Dispatch a single reverse-RPC request to the appropriate handler after
+/// running the permission check.
 ///
-/// Handles two types of messages:
-/// 1. **Responses**: Lines with `result` or `error` → dispatched to pending requests
-/// 2. **Reverse RPC requests**: Lines with `method` (e.g., `storage/*`) → handled by
-///    the storage handler and response written back to the plugin's stdin
+/// Permission failures map to:
+/// - `Denied` → `AUTH_FAILED` (the plugin called a method it isn't allowed
+///   to call; tracing-friendly).
+/// - `UnknownMethod` → `METHOD_NOT_FOUND` (no mapping; either a typo or the
+///   method belongs to a future namespace).
+async fn dispatch_reverse_rpc(
+    method: &str,
+    request: &JsonRpcRequest,
+    reverse_ctx: &Arc<RwLock<ReverseRpcContext>>,
+) -> JsonRpcResponse {
+    let request_id = request.id.clone();
+
+    // Take a read snapshot of the context. We keep it as long as we're
+    // dispatching so the handlers don't get swapped mid-call.
+    let ctx_guard = reverse_ctx.read().await;
+
+    // 1. Permission check. If capabilities haven't been set yet (i.e. the
+    //    plugin tried to make a reverse-RPC call before the host installed
+    //    the per-plugin reverse-RPC handlers), we return METHOD_NOT_FOUND
+    //    rather than AUTH_FAILED. From the plugin's perspective the method
+    //    isn't dispatchable *yet* — distinguishing this from a real
+    //    permission denial lets the plugin SDK retry with backoff to ride
+    //    out the brief initialization race (see e.g. release-nyaa's
+    //    `registerSources` retry on -32601). AUTH_FAILED stays reserved
+    //    for actual capability-declined-method denials.
+    let caps = match ctx_guard.capabilities.as_ref() {
+        Some(c) => c,
+        None => {
+            warn!(
+                method = %method,
+                "Reverse-RPC call before plugin initialized; deferring (METHOD_NOT_FOUND)"
+            );
+            return JsonRpcResponse::error(
+                Some(request_id),
+                JsonRpcError::new(
+                    error_codes::METHOD_NOT_FOUND,
+                    "plugin not initialized; capabilities unknown",
+                ),
+            );
+        }
+    };
+
+    if let Err(err) = permissions::enforce(method, caps) {
+        match &err {
+            PermissionError::Denied { required, .. } => {
+                warn!(method = %method, required = ?required, "Permission denied for reverse-RPC call");
+                return JsonRpcResponse::error(
+                    Some(request_id),
+                    JsonRpcError::new(error_codes::AUTH_FAILED, err.to_string()),
+                );
+            }
+            PermissionError::UnknownMethod { .. } => {
+                warn!(method = %method, "Unknown reverse-RPC method");
+                return JsonRpcResponse::error(
+                    Some(request_id),
+                    JsonRpcError::new(error_codes::METHOD_NOT_FOUND, err.to_string()),
+                );
+            }
+        }
+    }
+
+    // 2. Route to the matching handler.
+    if is_storage_method(method) {
+        match ctx_guard.storage_handler.as_ref() {
+            Some(handler) => {
+                debug!(method = %method, "Routing to storage handler");
+                handler.handle_request(request).await
+            }
+            None => {
+                warn!(method = %method, "Storage method called but no storage handler installed");
+                JsonRpcResponse::error(
+                    Some(request_id),
+                    JsonRpcError::new(
+                        error_codes::METHOD_NOT_FOUND,
+                        "Storage is not available for this plugin",
+                    ),
+                )
+            }
+        }
+    } else if is_releases_method(method) {
+        match ctx_guard.releases_handler.as_ref() {
+            Some(handler) => {
+                debug!(method = %method, "Routing to releases handler");
+                handler.handle_request(request).await
+            }
+            None => {
+                warn!(method = %method, "Releases method called but no releases handler installed");
+                JsonRpcResponse::error(
+                    Some(request_id),
+                    JsonRpcError::new(
+                        error_codes::INTERNAL_ERROR,
+                        "Releases handler not configured",
+                    ),
+                )
+            }
+        }
+    } else {
+        // Permission check passed but no handler match — should be
+        // unreachable if the permissions table and handler set agree.
+        warn!(method = %method, "Permission-allowed method has no handler routing");
+        JsonRpcResponse::error(
+            Some(request_id),
+            JsonRpcError::new(
+                error_codes::METHOD_NOT_FOUND,
+                format!("No handler for method `{}`", method),
+            ),
+        )
+    }
+}
+
+/// Task that reads lines from the plugin process and routes them.
+///
+/// Handles three categories of message:
+/// 1. **Responses**: Lines with `result` or `error` → routed to the matching
+///    pending caller via [`PendingFrame::Response`].
+/// 2. **Reverse-RPC requests with a `parentRequestId`**: routed to the
+///    pending caller of that forward call via [`PendingFrame::ReverseRpc`].
+///    The caller dispatches on its own tokio task so task-locals propagate.
+/// 3. **Reverse-RPC requests without a `parentRequestId`** (legacy plugins
+///    that predate the field, or true orphans): dispatched on the reader
+///    task as before. These won't have a recording broadcaster in scope and
+///    won't replay in distributed deployments — but that's no regression
+///    from the prior behavior.
 async fn response_reader_task(
     process: Arc<Mutex<PluginProcess>>,
     pending: Arc<Mutex<HashMap<i64, PendingRequest>>>,
     process_alive: Arc<AtomicBool>,
-    storage_handler: Option<StorageRequestHandler>,
+    reverse_ctx: Arc<RwLock<ReverseRpcContext>>,
 ) {
     debug!("RPC response reader task started");
     loop {
@@ -399,57 +682,56 @@ async fn response_reader_task(
             .map(|m| m.to_string());
 
         if let Some(method) = is_request {
-            if is_storage_method(&method) {
-                if let Some(ref handler) = storage_handler {
-                    // Parse as a full request
-                    let request: JsonRpcRequest = match serde_json::from_value(json_value) {
-                        Ok(r) => r,
-                        Err(e) => {
-                            warn!(error = %e, "Failed to parse storage request");
-                            continue;
-                        }
-                    };
-
-                    debug!(method = %method, "Handling reverse RPC storage request from plugin");
-                    let response = handler.handle_request(&request).await;
-
-                    // Write the response back to the plugin's stdin
-                    let response_json = match serde_json::to_string(&response) {
-                        Ok(j) => j,
-                        Err(e) => {
-                            error!(error = %e, "Failed to serialize storage response");
-                            continue;
-                        }
-                    };
-
-                    let process = process.lock().await;
-                    if let Err(e) = process.write_line(&response_json).await {
-                        error!(error = %e, "Failed to write storage response to plugin");
-                    }
-                } else {
-                    warn!(
-                        method = %method,
-                        "Plugin sent storage request but no storage handler is configured"
-                    );
-                    // Send error response back to plugin
-                    if let Ok(request) = serde_json::from_value::<JsonRpcRequest>(json_value) {
-                        let error_response = JsonRpcResponse::error(
-                            Some(request.id),
-                            JsonRpcError::new(
-                                error_codes::METHOD_NOT_FOUND,
-                                "Storage is not available for this plugin",
-                            ),
-                        );
-                        if let Ok(resp_json) = serde_json::to_string(&error_response) {
-                            let process = process.lock().await;
-                            let _ = process.write_line(&resp_json).await;
-                        }
-                    }
+            let request: JsonRpcRequest = match serde_json::from_value(json_value) {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!(error = %e, method = %method, "Failed to parse reverse-RPC request");
+                    continue;
                 }
-                continue;
+            };
+
+            // Try to route to the originating forward call so dispatch
+            // happens on the caller's task (and task-locals propagate).
+            let parent_id = request
+                .parent_request_id
+                .as_ref()
+                .and_then(parent_id_to_i64);
+
+            if let Some(parent_id) = parent_id {
+                let routed = {
+                    let pending_map = pending.lock().await;
+                    pending_map.get(&parent_id).map(|p| p.tx.clone())
+                };
+                if let Some(tx) = routed {
+                    if let Err(send_err) = tx.send(PendingFrame::ReverseRpc(request)) {
+                        // Receiver dropped between lookup and send — race
+                        // with timeout/shutdown. Fall back to dispatching
+                        // on the reader so the plugin still gets a response.
+                        let dropped = match send_err.0 {
+                            PendingFrame::ReverseRpc(req) => req,
+                            // Unreachable: we just constructed a ReverseRpc
+                            // frame above, and `send` returns whatever it
+                            // failed to deliver.
+                            PendingFrame::Response(_) => continue,
+                        };
+                        warn!(
+                            method = %method,
+                            parent_id = parent_id,
+                            "Caller dropped pending channel; falling back to reader-task dispatch"
+                        );
+                        dispatch_and_write(dropped, method.clone(), &reverse_ctx, &process).await;
+                    }
+                    continue;
+                }
+                warn!(
+                    method = %method,
+                    parent_id = parent_id,
+                    "Reverse-RPC parent request id not found in pending map; dispatching on reader"
+                );
             }
-            // Non-storage methods from the plugin are not supported
-            warn!(method = %method, "Plugin sent unsupported reverse RPC request");
+
+            // No parent id, or parent not pending: dispatch on the reader.
+            dispatch_and_write(request, method, &reverse_ctx, &process).await;
             continue;
         }
 
@@ -512,7 +794,7 @@ async fn response_reader_task(
                 ))
             };
 
-            if req.tx.send(result).is_err() {
+            if req.tx.send(PendingFrame::Response(result)).is_err() {
                 debug!("Request {} receiver dropped", id);
             }
         } else {
@@ -541,9 +823,49 @@ async fn response_reader_task(
             request_id = id,
             "Cancelling pending request due to plugin process exit"
         );
-        let _ = req
-            .tx
-            .send(Err(RpcError::Process(ProcessError::ProcessTerminated)));
+        let _ = req.tx.send(PendingFrame::Response(Err(RpcError::Process(
+            ProcessError::ProcessTerminated,
+        ))));
+    }
+}
+
+/// Coerce a reverse-RPC `parentRequestId` to the `i64` we use as our
+/// pending-map key. Numbers map directly; strings parse as numbers (the host
+/// only ever issues numeric ids, but the field type is `RequestId` for
+/// protocol generality).
+fn parent_id_to_i64(id: &RequestId) -> Option<i64> {
+    match id {
+        RequestId::Number(n) => Some(*n),
+        RequestId::String(s) => s.parse::<i64>().ok(),
+    }
+}
+
+/// Dispatch a reverse-RPC on the *current* task and write the response back
+/// to the plugin. Used as the fallback when no parent forward call is
+/// available to dispatch on (legacy plugins, or the parent's caller has
+/// already gone away).
+async fn dispatch_and_write(
+    request: JsonRpcRequest,
+    method: String,
+    reverse_ctx: &Arc<RwLock<ReverseRpcContext>>,
+    process: &Arc<Mutex<PluginProcess>>,
+) {
+    let request_id = request.id.clone();
+    let response = dispatch_reverse_rpc(&method, &request, reverse_ctx).await;
+    let response_json = match serde_json::to_string(&response) {
+        Ok(j) => j,
+        Err(e) => {
+            error!(error = %e, method = %method, "Failed to serialize reverse-RPC response");
+            let fallback = JsonRpcResponse::error(
+                Some(request_id),
+                JsonRpcError::new(error_codes::INTERNAL_ERROR, "failed to serialize response"),
+            );
+            serde_json::to_string(&fallback).unwrap_or_default()
+        }
+    };
+    let process_guard = process.lock().await;
+    if let Err(e) = process_guard.write_line(&response_json).await {
+        error!(error = %e, method = %method, "Failed to write reverse-RPC response to plugin");
     }
 }
 
@@ -666,6 +988,132 @@ mod tests {
             }
             _ => panic!("Expected ConfigError"),
         }
+    }
+
+    /// Reverse-RPC dispatch should reject calls before the plugin has been
+    /// initialized — at that point the host doesn't yet know the plugin's
+    /// capabilities. Returned as `METHOD_NOT_FOUND` (rather than
+    /// `AUTH_FAILED`) so plugin SDKs can retry with backoff to ride out the
+    /// brief init race; an `AUTH_FAILED` response would tell the SDK to
+    /// give up. See the doc comment on `dispatch_reverse_rpc`.
+    #[tokio::test]
+    async fn test_dispatch_rejects_before_init() {
+        let ctx = Arc::new(RwLock::new(ReverseRpcContext::new()));
+        let request = JsonRpcRequest::new(
+            1i64,
+            super::super::protocol::methods::STORAGE_GET,
+            Some(json!({"key": "x"})),
+        );
+        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        assert!(resp.is_error());
+        assert_eq!(resp.error.unwrap().code, error_codes::METHOD_NOT_FOUND);
+    }
+
+    /// A plugin without `release_source` calling `releases/record` should be
+    /// rejected with AUTH_FAILED, regardless of payload.
+    #[tokio::test]
+    async fn test_dispatch_denies_release_method_without_capability() {
+        use super::super::protocol::{MetadataContentType, PluginCapabilities};
+
+        let mut ctx_inner = ReverseRpcContext::new();
+        ctx_inner.set_capabilities(PluginCapabilities {
+            metadata_provider: vec![MetadataContentType::Series],
+            ..Default::default()
+        });
+        let ctx = Arc::new(RwLock::new(ctx_inner));
+
+        let request = JsonRpcRequest::new(
+            1i64,
+            super::super::protocol::methods::RELEASES_RECORD,
+            Some(json!({})),
+        );
+        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        assert!(resp.is_error());
+        assert_eq!(resp.error.unwrap().code, error_codes::AUTH_FAILED);
+    }
+
+    /// Unknown methods are rejected with `METHOD_NOT_FOUND` (rather than
+    /// silently ignored, as the previous code did).
+    #[tokio::test]
+    async fn test_dispatch_unknown_method_returns_method_not_found() {
+        use super::super::protocol::PluginCapabilities;
+
+        let mut ctx_inner = ReverseRpcContext::new();
+        ctx_inner.set_capabilities(PluginCapabilities::default());
+        let ctx = Arc::new(RwLock::new(ctx_inner));
+
+        let request = JsonRpcRequest::new(1i64, "frobnicate/zap", Some(json!({})));
+        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        assert!(resp.is_error());
+        assert_eq!(resp.error.unwrap().code, error_codes::METHOD_NOT_FOUND);
+    }
+
+    /// Storage methods (`AlwaysAllowed`) work for any plugin once initialized,
+    /// but if no storage handler is installed they fall through to a clear
+    /// error rather than silently failing.
+    #[tokio::test]
+    async fn test_dispatch_storage_without_handler_returns_method_not_found() {
+        use super::super::protocol::PluginCapabilities;
+
+        let mut ctx_inner = ReverseRpcContext::new();
+        ctx_inner.set_capabilities(PluginCapabilities::default());
+        let ctx = Arc::new(RwLock::new(ctx_inner));
+
+        let request = JsonRpcRequest::new(
+            1i64,
+            super::super::protocol::methods::STORAGE_GET,
+            Some(json!({"key": "x"})),
+        );
+        let resp = dispatch_reverse_rpc(&request.method, &request, &ctx).await;
+        assert!(resp.is_error());
+        assert_eq!(resp.error.unwrap().code, error_codes::METHOD_NOT_FOUND);
+    }
+
+    /// `parentRequestId` round-trips through serde with the camelCase wire
+    /// name and is omitted when None. This is the protocol contract we
+    /// share with the plugin SDK.
+    #[test]
+    fn parent_request_id_serializes_as_camel_case_and_omits_when_none() {
+        let mut req = JsonRpcRequest::new(42i64, "releases/record", Some(json!({"x": 1})));
+        // Default: omitted on the wire.
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(
+            !json.contains("parentRequestId"),
+            "absent field should be skipped: {json}"
+        );
+
+        // Set: serialized as camelCase.
+        req.parent_request_id = Some(RequestId::Number(7));
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(
+            json.contains("\"parentRequestId\":7"),
+            "expected camelCase parentRequestId in: {json}"
+        );
+
+        // Round-trip: a wire payload deserializes back with the field set.
+        let wire = r#"{"jsonrpc":"2.0","id":1,"method":"releases/record","parentRequestId":99}"#;
+        let parsed: JsonRpcRequest = serde_json::from_str(wire).unwrap();
+        assert!(matches!(
+            parsed.parent_request_id,
+            Some(RequestId::Number(99))
+        ));
+    }
+
+    /// `parent_id_to_i64` accepts both numeric and string ids — we use it to
+    /// look up the parent forward call in the pending map, which is keyed by
+    /// `i64`. The host only ever issues numeric ids, but the protocol type
+    /// is `RequestId` for generality.
+    #[test]
+    fn parent_id_to_i64_handles_numeric_and_string_ids() {
+        assert_eq!(parent_id_to_i64(&RequestId::Number(42)), Some(42));
+        assert_eq!(
+            parent_id_to_i64(&RequestId::String("17".to_string())),
+            Some(17)
+        );
+        assert_eq!(
+            parent_id_to_i64(&RequestId::String("nope".to_string())),
+            None
+        );
     }
 
     /// Verify that dropping an RpcClient aborts the reader task, releasing the

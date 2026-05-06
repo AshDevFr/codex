@@ -25,6 +25,47 @@ export interface CredentialField {
 }
 
 /**
+ * Source kinds a release-source plugin can expose.
+ *
+ * - `rss-uploader`: Per-uploader feed (e.g., a Nyaa user RSS feed).
+ * - `rss-series`: Per-series feed (e.g., MangaUpdates RSS for a single series).
+ * - `api-feed`: Generic API-driven feed.
+ * - `metadata-feed`: Metadata-derived signal (informational; usually doesn't
+ *   write the ledger).
+ *
+ * Mirrors the Rust `ReleaseSourceKind` enum (kebab-case on the wire).
+ */
+export type ReleaseSourceKind = "rss-uploader" | "rss-series" | "api-feed" | "metadata-feed";
+
+/**
+ * Release-source capability declaration.
+ *
+ * Declares both *what* the plugin can announce (chapters/volumes) and *what*
+ * it needs from the host (aliases, external IDs). The host uses these fields
+ * to scope `releases/list_tracked` responses so plugins only see data they
+ * asked for.
+ */
+export interface ReleaseSourceCapability {
+  /** Source kinds this plugin exposes. */
+  kinds: ReleaseSourceKind[];
+  /**
+   * Whether the plugin needs title aliases (set when the plugin matches by
+   * title rather than by external ID, e.g. Nyaa).
+   */
+  requiresAliases?: boolean;
+  /**
+   * External-ID sources the plugin needs, e.g. `["mangaupdates"]` or
+   * `["mangadex"]`. The host filters `series_external_ids` to these sources
+   * when responding to `releases/list_tracked`.
+   */
+  requiresExternalIds?: string[];
+  /** Whether the plugin announces chapter-level releases. */
+  canAnnounceChapters?: boolean;
+  /** Whether the plugin announces volume-level releases. */
+  canAnnounceVolumes?: boolean;
+}
+
+/**
  * Plugin capabilities
  */
 export interface PluginCapabilities {
@@ -46,10 +87,34 @@ export interface PluginCapabilities {
   externalIdSource?: string;
   /** Can provide recommendations */
   userRecommendationProvider?: boolean;
+  /**
+   * Release-source plugin capability. Set when this plugin announces new
+   * chapter/volume releases for tracked series via `releases/poll`.
+   */
+  releaseSource?: ReleaseSourceCapability;
 }
 
 /**
- * Configuration field definition for documenting plugin config options
+ * Any value that can round-trip through JSON. Used for config field defaults
+ * and examples, which the host carries as opaque `serde_json::Value` and
+ * forwards verbatim to plugins.
+ */
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+/**
+ * Configuration field definition for documenting plugin config options.
+ *
+ * `type` is a free-form hint, not a wire constraint. The host never validates
+ * stored config against this schema — it forwards the raw JSON to the plugin,
+ * which parses whatever shape it expects. Common values are `"number"`,
+ * `"string"`, `"boolean"`, `"string-array"`, and `"object"`; renderers fall
+ * back to a generic JSON editor for unrecognized types.
  */
 export interface ConfigField {
   /** Field name (key in JSON config) */
@@ -58,14 +123,14 @@ export interface ConfigField {
   label: string;
   /** Description of what this field does */
   description?: string;
-  /** Field type */
-  type: "number" | "string" | "boolean";
+  /** Field type — free-form hint; see interface docs for common values. */
+  type: string;
   /** Whether this field is required */
   required?: boolean;
   /** Default value if not provided */
-  default?: number | string | boolean;
+  default?: JsonValue;
   /** Example value for documentation */
-  example?: number | string | boolean;
+  example?: JsonValue;
 }
 
 /**
@@ -192,5 +257,17 @@ export function hasBookMetadataProvider(manifest: PluginManifest): manifest is P
   return (
     Array.isArray(manifest.capabilities.metadataProvider) &&
     manifest.capabilities.metadataProvider.includes("book")
+  );
+}
+
+/**
+ * Type guard to check if manifest declares the release-source capability.
+ */
+export function hasReleaseSource(manifest: PluginManifest): manifest is PluginManifest & {
+  capabilities: { releaseSource: ReleaseSourceCapability };
+} {
+  return (
+    manifest.capabilities.releaseSource !== undefined &&
+    manifest.capabilities.releaseSource !== null
   );
 }

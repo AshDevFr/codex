@@ -297,4 +297,89 @@ describe("PluginConfigModal", () => {
       screen.queryByText("Configure: Test Plugin"),
     ).not.toBeInTheDocument();
   });
+
+  it("hides permission selectors and shows an explanatory note for release-source plugins", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "release-mangaupdates",
+        displayName: "MangaUpdates Releases",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        capabilities: { releaseSource: true },
+        contentTypes: [],
+      } as never,
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    expect(
+      screen.getByText(/No permission settings for this plugin/),
+    ).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Select permissions")).toBeNull();
+    expect(screen.queryByPlaceholderText("Select scopes")).toBeNull();
+    expect(screen.queryByText("Library Filter")).toBeNull();
+  });
+
+  it("hides permission selectors for recommendation-only plugins", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "recommendations-anilist",
+        displayName: "AniList Recommendations",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        capabilities: { userRecommendationProvider: true },
+        contentTypes: [],
+      } as never,
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    expect(
+      screen.getByText(/No permission settings for this plugin/),
+    ).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Select permissions")).toBeNull();
+  });
+
+  it("hides permission selectors for sync-only plugins", () => {
+    const plugin = createMockPlugin({
+      manifest: {
+        name: "sync-anilist",
+        displayName: "AniList Sync",
+        version: "1.0.0",
+        protocolVersion: "1.0",
+        capabilities: { metadataProvider: [], userReadSync: true },
+        contentTypes: [],
+      } as never,
+    });
+
+    renderWithProviders(
+      <PluginConfigModal
+        plugin={plugin}
+        opened={true}
+        onClose={vi.fn()}
+        libraries={mockLibraries}
+      />,
+    );
+
+    expect(
+      screen.getByText(/No permission settings for this plugin/),
+    ).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Select permissions")).toBeNull();
+    expect(screen.queryByPlaceholderText("Select scopes")).toBeNull();
+    expect(screen.queryByText("Library Filter")).toBeNull();
+  });
 });

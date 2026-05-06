@@ -256,6 +256,28 @@ The following paths are exempt from rate limiting:
         v1::handlers::create_series_external_id,
         v1::handlers::delete_series_external_id,
 
+        // Release-tracking config + aliases
+        v1::handlers::tracking::get_series_tracking,
+        v1::handlers::tracking::update_series_tracking,
+        v1::handlers::tracking::list_series_aliases,
+        v1::handlers::tracking::create_series_alias,
+        v1::handlers::tracking::delete_series_alias,
+
+        // Release ledger + sources (Phase 2)
+        v1::handlers::releases::list_series_releases,
+        v1::handlers::releases::list_release_inbox,
+        v1::handlers::releases::update_release_entry,
+        v1::handlers::releases::dismiss_release,
+        v1::handlers::releases::mark_release_acquired,
+        v1::handlers::releases::list_release_sources,
+        v1::handlers::releases::update_release_source,
+        v1::handlers::releases::poll_release_source_now,
+        v1::handlers::releases::reset_release_source,
+        v1::handlers::releases::get_release_tracking_applicability,
+        v1::handlers::releases::list_release_facets,
+        v1::handlers::releases::delete_release,
+        v1::handlers::releases::bulk_release_action,
+
         // Cover management endpoints
         v1::handlers::list_series_covers,
         v1::handlers::get_series_cover_image,
@@ -329,6 +351,8 @@ The following paths are exempt from rate limiting:
         v1::handlers::bulk_mark_series_as_unread,
         v1::handlers::bulk_analyze_series,
         v1::handlers::bulk_renumber_series,
+        v1::handlers::bulk_track_series_for_releases,
+        v1::handlers::bulk_untrack_series_for_releases,
         v1::handlers::bulk_generate_series_thumbnails,
         v1::handlers::bulk_generate_series_book_thumbnails,
         v1::handlers::bulk_reprocess_series_titles,
@@ -678,6 +702,33 @@ The following paths are exempt from rate limiting:
             v1::dto::CreateAlternateTitleRequest,
             v1::dto::UpdateAlternateTitleRequest,
 
+            // Release-tracking DTOs
+            v1::dto::tracking::SeriesTrackingDto,
+            v1::dto::tracking::UpdateSeriesTrackingRequest,
+            v1::dto::tracking::SeriesAliasDto,
+            v1::dto::tracking::SeriesAliasListResponse,
+            v1::dto::tracking::CreateSeriesAliasRequest,
+
+            // Release-ledger + source DTOs (Phase 2)
+            v1::dto::release::ReleaseLedgerEntryDto,
+            v1::dto::release::ReleaseLedgerListResponse,
+            v1::dto::release::UpdateReleaseLedgerEntryRequest,
+            v1::dto::release::ReleaseSourceDto,
+            v1::dto::release::ReleaseSourceListResponse,
+            v1::dto::release::UpdateReleaseSourceRequest,
+            v1::dto::release::PollNowResponse,
+            v1::dto::release::ResetReleaseSourceResponse,
+            v1::dto::release::ReleaseSeriesFacetDto,
+            v1::dto::release::ReleaseLibraryFacetDto,
+            v1::dto::release::ReleaseLanguageFacetDto,
+            v1::dto::release::ReleaseFacetsResponse,
+            v1::dto::release::BulkReleaseAction,
+            v1::dto::release::BulkReleaseActionRequest,
+            v1::dto::release::BulkReleaseActionResponse,
+            v1::dto::release::DeleteReleaseResponse,
+            v1::handlers::releases::ApplicabilityResponse,
+            v1::dto::PaginatedResponse<v1::dto::release::ReleaseLedgerEntryDto>,
+
             // External Rating DTOs
             v1::dto::ExternalRatingDto,
             v1::dto::ExternalRatingListResponse,
@@ -794,6 +845,8 @@ The following paths are exempt from rate limiting:
             v1::dto::BulkSeriesRequest,
             v1::dto::BulkAnalyzeSeriesRequest,
             v1::dto::BulkAnalyzeResponse,
+            v1::dto::BulkTrackForReleasesItem,
+            v1::dto::BulkTrackForReleasesResponse,
             v1::dto::BulkRenumberSeriesRequest,
             v1::dto::BulkGenerateBookThumbnailsRequest,
             v1::dto::BulkGenerateSeriesBookThumbnailsRequest,
@@ -1002,6 +1055,8 @@ The following paths are exempt from rate limiting:
         // Library Content
         (name = "Libraries", description = "Library management endpoints"),
         (name = "Series", description = "Series browsing and search endpoints"),
+        (name = "Tracking", description = "Release-tracking config and matcher aliases"),
+        (name = "Releases", description = "Release ledger (announcements) and source admin"),
         (name = "Books", description = "Book details and metadata endpoints"),
         (name = "Pages", description = "Page image serving endpoints"),
 
@@ -1144,7 +1199,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "Library Content",
-                "tags": ["Libraries", "Series", "Books", "Pages"]
+                "tags": ["Libraries", "Series", "Tracking", "Releases", "Books", "Pages"]
             },
             {
                 "name": "Metadata & Taxonomy",

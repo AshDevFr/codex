@@ -22,6 +22,7 @@ pub mod plugin_storage;
 pub mod plugins;
 pub mod read_progress;
 pub mod recommendations;
+pub mod release;
 pub mod scan;
 pub mod series;
 pub mod series_export;
@@ -29,6 +30,7 @@ pub mod settings;
 pub mod setup;
 pub mod sharing_tag;
 pub mod task_metrics;
+pub mod tracking;
 pub mod user;
 pub mod user_plugins;
 pub mod user_preferences;
@@ -54,6 +56,8 @@ pub use plugins::*;
 pub use read_progress::*;
 #[allow(unused_imports)]
 pub use recommendations::*;
+#[allow(unused_imports)]
+pub use release::*;
 pub use scan::*;
 pub use series::*;
 #[allow(unused_imports)]
@@ -62,6 +66,8 @@ pub use settings::*;
 pub use setup::*;
 pub use sharing_tag::*;
 pub use task_metrics::*;
+#[allow(unused_imports)]
+pub use tracking::*;
 pub use user::*;
 #[allow(unused_imports)]
 pub use user_plugins::*;

@@ -147,6 +147,22 @@ mod m20260503_000070_backfill_book_volume_chapter;
 // Filename retains the original Phase 1 name for git-history continuity; module
 // now creates the generic `library_jobs` table instead of adding a JSON column.
 mod m20260503_000071_add_metadata_refresh_config;
+// Release tracking (Phase 1): series_tracking sidecar + series_aliases
+mod m20260503_000072_create_release_tracking;
+// Release tracking (Phase 2): release_sources + release_ledger
+mod m20260503_000073_create_release_ledger;
+// Release tracking (Phase 6): per-series language preference for scanlation feeds
+mod m20260504_000074_add_tracking_languages;
+// Release tracking (Phase 6): server-wide default language list
+mod m20260504_000075_seed_release_tracking_languages;
+// Release tracking (Phase 8 follow-up): server-wide notification filter settings
+mod m20260504_000076_seed_release_tracking_notify_filters;
+// Release tracking: per-source last-poll summary surfaced in the UI
+mod m20260505_000077_add_release_sources_last_summary;
+// Release tracking: per-row media_url + media_url_kind for torrent/magnet/DDL
+mod m20260505_000078_add_release_ledger_media_url;
+// Release tracking: server-wide default cron schedule for release-source polling
+mod m20260505_000079_seed_release_tracking_default_cron;
 
 pub struct Migrator;
 
@@ -264,6 +280,22 @@ impl MigratorTrait for Migrator {
             Box::new(m20260503_000070_backfill_book_volume_chapter::Migration),
             // Per-library scheduled metadata refresh config (Phase 1)
             Box::new(m20260503_000071_add_metadata_refresh_config::Migration),
+            // Release tracking (Phase 1)
+            Box::new(m20260503_000072_create_release_tracking::Migration),
+            // Release tracking (Phase 2)
+            Box::new(m20260503_000073_create_release_ledger::Migration),
+            // Release tracking (Phase 6): per-series language preference
+            Box::new(m20260504_000074_add_tracking_languages::Migration),
+            // Release tracking (Phase 6): server-wide default language list
+            Box::new(m20260504_000075_seed_release_tracking_languages::Migration),
+            // Release tracking (Phase 8 follow-up): notification filter settings
+            Box::new(m20260504_000076_seed_release_tracking_notify_filters::Migration),
+            // Release tracking: per-source last-poll summary
+            Box::new(m20260505_000077_add_release_sources_last_summary::Migration),
+            // Release tracking: per-row media_url + media_url_kind
+            Box::new(m20260505_000078_add_release_ledger_media_url::Migration),
+            // Release tracking: server-wide default cron schedule
+            Box::new(m20260505_000079_seed_release_tracking_default_cron::Migration),
         ]
     }
 }

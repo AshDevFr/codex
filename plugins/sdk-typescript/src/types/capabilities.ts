@@ -36,6 +36,7 @@ import type {
   RecommendationRequest,
   RecommendationResponse,
 } from "./recommendations.js";
+import type { ReleasePollRequest, ReleasePollResponse } from "./releases.js";
 import type {
   ExternalUserInfo,
   SyncPullRequest,
@@ -239,6 +240,38 @@ export interface RecommendationProvider {
 // =============================================================================
 // Type Helpers
 // =============================================================================
+
+// =============================================================================
+// Release Source Provider Capability
+// =============================================================================
+
+/**
+ * Interface for plugins that announce new chapter/volume releases for tracked
+ * series.
+ *
+ * The host invokes `poll()` once per scheduled poll for a single
+ * `release_sources` row. The plugin can:
+ *  1. Return all candidates in the response (`ReleasePollResponse.candidates`).
+ *  2. Stream candidates mid-poll via the `releases/record` reverse-RPC call
+ *     (using the storage-style RPC channel).
+ *  3. Mix both styles — the host treats them identically.
+ *
+ * Plugins should consult `releases/list_tracked` to discover which series are
+ * tracked (scoped by the manifest's `requiresAliases` / `requiresExternalIds`
+ * declarations) and `releases/source_state/get` to retrieve the previous
+ * ETag / cursor for conditional GETs.
+ *
+ * Declare this capability in the plugin manifest with `releaseSource: { ... }`.
+ */
+export interface ReleaseSourceProvider {
+  /**
+   * Poll the source for new releases and return any candidates.
+   *
+   * @param params - Source row to poll plus the previous ETag (if any).
+   * @returns Optional batch of candidates plus updated state hints.
+   */
+  poll(params: ReleasePollRequest): Promise<ReleasePollResponse>;
+}
 
 /**
  * Partial series metadata provider - allows implementing only some methods

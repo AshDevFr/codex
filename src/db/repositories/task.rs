@@ -35,9 +35,7 @@ impl TaskRepository {
         let params = task_type.params();
 
         // Check if a task already exists for this entity
-        if let Some(existing_task) =
-            Self::find_existing_task(db, type_str, library_id, series_id, book_id).await?
-        {
+        if let Some(existing_task) = Self::find_existing_task(db, &task_type).await? {
             info!(
                 "Task already exists: {} ({}) - skipping duplicate",
                 existing_task.id, type_str
@@ -83,10 +81,7 @@ impl TaskRepository {
                 if err_str.contains("unique") || err_str.contains("duplicate") {
                     // Race condition: another task was inserted between our check and insert
                     // Find and return the existing task
-                    if let Some(existing_task) =
-                        Self::find_existing_task(db, type_str, library_id, series_id, book_id)
-                            .await?
-                    {
+                    if let Some(existing_task) = Self::find_existing_task(db, &task_type).await? {
                         info!(
                             "Task was created concurrently: {} ({}) - using existing task",
                             existing_task.id, type_str
@@ -119,9 +114,7 @@ impl TaskRepository {
         let params = task_type.params();
 
         // Check if a task already exists for this entity
-        if let Some(existing_task) =
-            Self::find_existing_task(db, type_str, library_id, series_id, book_id).await?
-        {
+        if let Some(existing_task) = Self::find_existing_task(db, &task_type).await? {
             info!(
                 "Task already exists: {} ({}) - skipping duplicate",
                 existing_task.id, type_str
@@ -166,10 +159,7 @@ impl TaskRepository {
             Err(e) => {
                 let err_str = e.to_string().to_lowercase();
                 if err_str.contains("unique") || err_str.contains("duplicate") {
-                    if let Some(existing_task) =
-                        Self::find_existing_task(db, type_str, library_id, series_id, book_id)
-                            .await?
-                    {
+                    if let Some(existing_task) = Self::find_existing_task(db, &task_type).await? {
                         info!(
                             "Task was created concurrently: {} ({}) - using existing task",
                             existing_task.id, type_str
@@ -299,14 +289,26 @@ impl TaskRepository {
         Ok(enqueued)
     }
 
-    /// Find an existing pending/processing task for the given entity
+    /// Find an existing pending/processing task for the given task.
+    ///
+    /// Dedup key, in order of preference:
+    /// 1. The most specific FK column set on the task (`book_id` >
+    ///    `series_id` > `library_id`).
+    /// 2. The JSON-param pair returned by `TaskType::dedup_params()`, for
+    ///    task types whose identity lives in `params` (e.g.
+    ///    `PollReleaseSource`). Without this, two such tasks differing only
+    ///    in `params` would falsely collide on `task_type` alone.
+    /// 3. None — only `task_type` and status are matched. This is the
+    ///    desired behavior for singleton task types like `FindDuplicates`.
     async fn find_existing_task(
         db: &DatabaseConnection,
-        task_type: &str,
-        library_id: Option<Uuid>,
-        series_id: Option<Uuid>,
-        book_id: Option<Uuid>,
+        task: &TaskType,
     ) -> Result<Option<tasks::Model>> {
+        let task_type = task.type_string();
+        let library_id = task.library_id();
+        let series_id = task.series_id();
+        let book_id = task.book_id();
+
         let mut query = Tasks::find()
             .filter(tasks::Column::TaskType.eq(task_type))
             .filter(tasks::Column::Status.is_in(["pending", "processing"]));
@@ -318,6 +320,18 @@ impl TaskRepository {
             query = query.filter(tasks::Column::SeriesId.eq(ser_id));
         } else if let Some(lib_id) = library_id {
             query = query.filter(tasks::Column::LibraryId.eq(lib_id));
+        } else if let Some((key, value)) = task.dedup_params() {
+            // Params-based dedup: route through the helper that knows how
+            // to query JSON params portably across SQLite and Postgres.
+            return match Self::find_pending_or_processing_by_param(db, task_type, key, &value)
+                .await?
+            {
+                Some(id) => Tasks::find_by_id(id)
+                    .one(db)
+                    .await
+                    .context("Failed to load existing task by id"),
+                None => Ok(None),
+            };
         }
 
         query.one(db).await.context("Failed to find existing task")
@@ -367,6 +381,75 @@ impl TaskRepository {
             .context("Failed to check for existing tasks")?;
 
         Ok(result.is_some())
+    }
+
+    /// Find a pending or processing task by `task_type` and a single
+    /// JSON-param key/value match. Returns the first matching task ID, if
+    /// any. Used by enqueue paths that want to coalesce concurrent
+    /// requests onto an in-flight task instead of stacking duplicates.
+    ///
+    /// `param_value` is matched as a string against `params->>key`. UUIDs
+    /// should be passed as their canonical hyphenated form.
+    pub async fn find_pending_or_processing_by_param(
+        db: &DatabaseConnection,
+        task_type: &str,
+        param_key: &str,
+        param_value: &str,
+    ) -> Result<Option<Uuid>> {
+        let backend = db.get_database_backend();
+        let stmt = match backend {
+            DbBackend::Postgres => Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"SELECT id FROM tasks
+                   WHERE task_type = $1
+                     AND status IN ('pending', 'processing')
+                     AND params->>$2 = $3
+                   ORDER BY created_at ASC
+                   LIMIT 1"#,
+                vec![task_type.into(), param_key.into(), param_value.into()],
+            ),
+            _ => {
+                // SQLite's json_extract path needs a string literal, not a
+                // bind parameter, so we splice the key into the JSON path.
+                // Reject anything that isn't a simple identifier to avoid
+                // injection — callers pass static keys (`source_id`, etc.).
+                if !param_key
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+                {
+                    anyhow::bail!("invalid param_key: {}", param_key);
+                }
+                let path = format!("$.{}", param_key);
+                Statement::from_sql_and_values(
+                    DbBackend::Sqlite,
+                    format!(
+                        r#"SELECT id FROM tasks
+                           WHERE task_type = ?
+                             AND status IN ('pending', 'processing')
+                             AND json_extract(params, '{}') = ?
+                           ORDER BY created_at ASC
+                           LIMIT 1"#,
+                        path
+                    ),
+                    vec![task_type.into(), param_value.into()],
+                )
+            }
+        };
+
+        let result = db
+            .query_one(stmt)
+            .await
+            .context("Failed to query for in-flight task")?;
+        match result {
+            Some(row) => {
+                let task_id: Uuid = row.try_get::<Uuid>("", "id").or_else(|_| {
+                    let id_str: String = row.try_get("", "id")?;
+                    Uuid::parse_str(&id_str).map_err(|e| sea_orm::DbErr::Type(e.to_string()))
+                })?;
+                Ok(Some(task_id))
+            }
+            None => Ok(None),
+        }
     }
 
     /// Find a pending or processing task with matching params, returning its ID and status.

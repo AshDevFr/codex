@@ -627,3 +627,73 @@ async fn test_completed_task_allows_new_task() {
         "New task should have different ID after previous task completed"
     );
 }
+
+/// Regression test: enqueueing `poll_release_source` for two different
+/// `source_id`s in quick succession must yield two distinct tasks. The dedup
+/// path used to match by `task_type` alone for tasks whose identity lives in
+/// JSON params (no FK columns), causing the second click on "Poll now" to be
+/// silently coalesced onto the first source's in-flight poll.
+#[tokio::test]
+async fn test_poll_release_source_dedup_is_per_source() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let source_a = Uuid::new_v4();
+    let source_b = Uuid::new_v4();
+
+    let task_a = TaskRepository::enqueue(
+        &db,
+        TaskType::PollReleaseSource {
+            source_id: source_a,
+        },
+        None,
+    )
+    .await
+    .expect("Failed to enqueue poll for source A");
+
+    let task_b = TaskRepository::enqueue(
+        &db,
+        TaskType::PollReleaseSource {
+            source_id: source_b,
+        },
+        None,
+    )
+    .await
+    .expect("Failed to enqueue poll for source B");
+
+    assert_ne!(
+        task_a, task_b,
+        "Polls for distinct release sources must not be deduplicated against each other"
+    );
+
+    let stats = TaskRepository::get_stats(&db)
+        .await
+        .expect("Failed to get stats");
+    assert_eq!(stats.pending, 2, "Both polls should be pending");
+}
+
+/// Re-enqueueing a poll for the *same* source must still coalesce onto the
+/// in-flight task. This is the inverse of the per-source guarantee above and
+/// matches the documented `enqueue_poll_now` UX.
+#[tokio::test]
+async fn test_poll_release_source_dedup_same_source_coalesces() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let source_id = Uuid::new_v4();
+
+    let first = TaskRepository::enqueue(&db, TaskType::PollReleaseSource { source_id }, None)
+        .await
+        .expect("Failed to enqueue first poll");
+
+    let second = TaskRepository::enqueue(&db, TaskType::PollReleaseSource { source_id }, None)
+        .await
+        .expect("Failed to enqueue duplicate poll");
+
+    assert_eq!(
+        first, second,
+        "Polls for the same source should coalesce onto the in-flight task"
+    );
+
+    let stats = TaskRepository::get_stats(&db)
+        .await
+        .expect("Failed to get stats");
+    assert_eq!(stats.pending, 1, "Only one pending poll task should exist");
+}

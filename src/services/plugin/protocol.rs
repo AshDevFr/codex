@@ -62,6 +62,17 @@ pub struct JsonRpcRequest {
     pub method: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<Value>,
+    /// Reverse-RPC only: id of the forward call the plugin is currently
+    /// servicing. Lets the host route the reverse-RPC back to the originating
+    /// caller's task so emitted events land in that caller's recording
+    /// broadcaster. Absent for forward calls and for plugins that predate the
+    /// field.
+    #[serde(
+        default,
+        rename = "parentRequestId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub parent_request_id: Option<RequestId>,
 }
 
 impl JsonRpcRequest {
@@ -73,6 +84,7 @@ impl JsonRpcRequest {
             id: id.into(),
             method: method.into(),
             params,
+            parent_request_id: None,
         }
     }
 
@@ -245,6 +257,24 @@ pub mod methods {
     pub const RECOMMENDATIONS_CLEAR: &str = "recommendations/clear";
     /// Dismiss a recommendation (user not interested)
     pub const RECOMMENDATIONS_DISMISS: &str = "recommendations/dismiss";
+
+    // Release-source methods (host -> plugin)
+    /// Ask the plugin to poll its source for new releases.
+    pub const RELEASES_POLL: &str = "releases/poll";
+
+    // Release-source reverse-RPC methods (plugin -> host)
+    /// List tracked series scoped to what the source needs.
+    pub const RELEASES_LIST_TRACKED: &str = "releases/list_tracked";
+    /// Record a release candidate in the ledger.
+    pub const RELEASES_RECORD: &str = "releases/record";
+    /// Get the persisted state for a release source (etag, cursor, etc.).
+    pub const RELEASES_SOURCE_STATE_GET: &str = "releases/source_state/get";
+    /// Set persisted state for a release source.
+    pub const RELEASES_SOURCE_STATE_SET: &str = "releases/source_state/set";
+    /// Replace the set of release-source rows owned by this plugin.
+    /// The host upserts each entry by `(plugin_id, source_key)` and prunes
+    /// rows whose `source_key` is no longer in the input list.
+    pub const RELEASES_REGISTER_SOURCES: &str = "releases/register_sources";
 }
 
 // =============================================================================
@@ -351,6 +381,84 @@ pub struct PluginCapabilities {
     /// Can provide personalized recommendations (v2)
     #[serde(default)]
     pub user_recommendation_provider: bool,
+    /// Can announce new releases (chapters/volumes) for tracked series.
+    /// When present, the plugin may invoke the `releases/*` reverse-RPC
+    /// methods. The capability struct declares the data the plugin needs
+    /// (aliases, external IDs) so the host can scope its responses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_source: Option<ReleaseSourceCapability>,
+}
+
+/// Release-source capability declaration.
+///
+/// Plugins that want to announce releases declare this capability in their
+/// manifest. The struct describes both *what* the plugin can announce and
+/// *what* it needs from the host. The host uses these fields when filling
+/// `releases/list_tracked` responses so plugins only see data they asked for.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseSourceCapability {
+    /// Source kinds this plugin exposes (e.g. `["rss-uploader"]`).
+    #[serde(default)]
+    pub kinds: Vec<ReleaseSourceKind>,
+    /// Whether the plugin needs title aliases (set when the plugin matches
+    /// by title rather than by external ID, e.g. Nyaa).
+    #[serde(default)]
+    pub requires_aliases: bool,
+    /// External-ID sources the plugin needs, e.g. `["mangaupdates"]` or
+    /// `["mangadex"]`. The host filters `series_external_ids` to these
+    /// sources when responding to `releases/list_tracked`.
+    #[serde(default)]
+    pub requires_external_ids: Vec<String>,
+    /// Whether the plugin announces chapter-level releases.
+    #[serde(default)]
+    pub can_announce_chapters: bool,
+    /// Whether the plugin announces volume-level releases.
+    #[serde(default)]
+    pub can_announce_volumes: bool,
+}
+
+impl Default for ReleaseSourceCapability {
+    fn default() -> Self {
+        Self {
+            kinds: Vec::new(),
+            requires_aliases: false,
+            requires_external_ids: Vec::new(),
+            can_announce_chapters: true,
+            can_announce_volumes: true,
+        }
+    }
+}
+
+/// Kind of release source. Mirrors the `release_sources.kind` column on the
+/// host side, but lives here so plugins can declare it without depending on
+/// the database schema.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReleaseSourceKind {
+    /// Per-uploader feed (e.g., a Nyaa user RSS feed).
+    RssUploader,
+    /// Per-series feed (e.g., MangaUpdates RSS for a single series).
+    RssSeries,
+    /// Generic API-driven feed.
+    ApiFeed,
+    /// Metadata-derived signal (informational; usually doesn't write the
+    /// ledger - see Phase 5).
+    MetadataFeed,
+}
+
+impl ReleaseSourceKind {
+    /// Canonical kebab-case string matching `release_sources.kind` and the
+    /// serde representation. Used when comparing against string-typed
+    /// `kind` fields parsed from RPC requests.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::RssUploader => "rss-uploader",
+            Self::RssSeries => "rss-series",
+            Self::ApiFeed => "api-feed",
+            Self::MetadataFeed => "metadata-feed",
+        }
+    }
 }
 
 impl PluginCapabilities {
@@ -365,15 +473,21 @@ impl PluginCapabilities {
         self.metadata_provider.contains(&MetadataContentType::Book)
     }
 
+    /// Whether this plugin declares the `release_source` capability.
+    pub fn is_release_source(&self) -> bool {
+        self.release_source.is_some()
+    }
+
     /// Infer the plugin type from capabilities.
     ///
     /// User-facing capabilities (`user_read_sync`, `user_recommendation_provider`)
-    /// indicate a "user" plugin. Metadata provider capabilities indicate a
-    /// "system" plugin. Returns `None` when capabilities are empty.
+    /// indicate a "user" plugin. Metadata-provider and release-source
+    /// capabilities indicate a "system" plugin. Returns `None` when
+    /// capabilities are empty.
     pub fn inferred_plugin_type(&self) -> Option<PluginManifestType> {
         if self.user_read_sync || self.user_recommendation_provider {
             Some(PluginManifestType::User)
-        } else if !self.metadata_provider.is_empty() {
+        } else if !self.metadata_provider.is_empty() || self.release_source.is_some() {
             Some(PluginManifestType::System)
         } else {
             None
@@ -1300,6 +1414,98 @@ pub struct InitializeParams {
 }
 
 // =============================================================================
+// Releases Poll (host -> plugin)
+// =============================================================================
+
+/// Parameters for `releases/poll` (host → plugin call).
+///
+/// The host invokes this once per scheduled poll for a single
+/// `release_sources` row. The plugin uses the `source_id` to scope its work
+/// (which feed/uploader/series to query) and may consult the supplied
+/// `etag` for conditional GETs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleasePollRequest {
+    /// Source row the plugin should poll. The plugin can call back into
+    /// `releases/source_state/get` for richer state (etag, last_polled_at)
+    /// or `releases/list_tracked` to harvest the tracked-series scope.
+    pub source_id: uuid::Uuid,
+    /// Plugin-defined stable key for this source row (the same value the
+    /// plugin originally passed to `releases/register_sources`). Carried in
+    /// the poll request so the plugin can dispatch directly without a
+    /// reverse-RPC roundtrip — useful when one plugin process owns multiple
+    /// source rows (e.g., one per Nyaa uploader).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<String>,
+    /// Snapshot of `release_sources.config` at poll time, if any. Plugins
+    /// that store per-source config on register can read it back here to
+    /// avoid keeping their own `(sourceKey, config)` map in memory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
+    /// Etag value from the previous successful poll, if any. Plugins doing
+    /// HTTP conditional GETs (`If-None-Match`) can use it directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+}
+
+/// Response from `releases/poll`.
+///
+/// Plugins MAY also call `releases/record` directly during polling (the
+/// reverse-RPC channel is open). The `candidates` field is convenience for
+/// plugins that prefer to return everything at once; both styles are
+/// supported and the host treats them identically.
+///
+/// Plugins that stream via `releases/record` should also populate the
+/// counter fields (`parsed`, `matched`, `recorded`, `deduped`) so the host
+/// can build an accurate `last_summary` for the source. Without those, the
+/// host can only see what came back in `candidates` and a streaming
+/// plugin's status badge will read "Fetched 0 items" no matter what.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleasePollResponse {
+    /// Optional batch of candidates the host should evaluate and ledger
+    /// (in addition to anything the plugin already streamed via
+    /// `releases/record`).
+    #[serde(default)]
+    pub candidates: Vec<crate::services::release::candidate::ReleaseCandidate>,
+    /// New etag observed by the plugin (e.g. from the upstream feed's
+    /// `ETag` header). The host stores this on the source row for the
+    /// next poll's conditional-GET.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    /// Whether the upstream returned `304 Not Modified` (or equivalent
+    /// "no work" signal). Purely informational; the host doesn't act on it
+    /// beyond logging.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_modified: Option<bool>,
+    /// HTTP status code observed from the upstream feed, if any. Used by
+    /// the host's per-host backoff layer to detect 429 / 503.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_status: Option<u16>,
+    /// Items the plugin parsed from the upstream feed before any matching
+    /// or threshold filtering. Streaming plugins should populate this so
+    /// the host's `last_summary` reflects upstream activity, not just the
+    /// shape of the response payload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parsed: Option<u32>,
+    /// Of those parsed, the count that matched a tracked series alias
+    /// (i.e. that became candidates the plugin then evaluated/streamed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matched: Option<u32>,
+    /// Of those matched, the count actually inserted into the ledger
+    /// (excludes dedupes). For plugins that stream via `releases/record`,
+    /// this is the count of non-deduped record outcomes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recorded: Option<u32>,
+    /// Of those matched, the count that the host deduped onto an existing
+    /// ledger row. Optional; when omitted the host infers `matched -
+    /// recorded`. Provided explicitly by streaming plugins that already
+    /// know.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deduped: Option<u32>,
+}
+
+// =============================================================================
 // Rate Limit Error Data
 // =============================================================================
 
@@ -2051,6 +2257,74 @@ mod tests {
     fn test_inferred_plugin_type_empty_capabilities() {
         let caps = PluginCapabilities::default();
         assert_eq!(caps.inferred_plugin_type(), None);
+    }
+
+    #[test]
+    fn test_release_source_capability_serializes_camel_case() {
+        let cap = ReleaseSourceCapability {
+            kinds: vec![ReleaseSourceKind::RssUploader],
+            requires_aliases: true,
+            requires_external_ids: vec!["mangaupdates".to_string()],
+            can_announce_chapters: true,
+            can_announce_volumes: false,
+        };
+        let json = serde_json::to_value(&cap).unwrap();
+        assert_eq!(json["kinds"], json!(["rss-uploader"]));
+        assert!(json["requiresAliases"].as_bool().unwrap());
+        assert_eq!(json["requiresExternalIds"], json!(["mangaupdates"]));
+        assert!(json["canAnnounceChapters"].as_bool().unwrap());
+        assert!(!json["canAnnounceVolumes"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn test_release_source_capability_kind_round_trip() {
+        for kind in [
+            ReleaseSourceKind::RssUploader,
+            ReleaseSourceKind::RssSeries,
+            ReleaseSourceKind::ApiFeed,
+            ReleaseSourceKind::MetadataFeed,
+        ] {
+            let json = serde_json::to_value(kind).unwrap();
+            let back: ReleaseSourceKind = serde_json::from_value(json).unwrap();
+            assert_eq!(kind, back);
+        }
+    }
+
+    #[test]
+    fn test_plugin_capabilities_release_source_inferred_type() {
+        let caps = PluginCapabilities {
+            release_source: Some(ReleaseSourceCapability::default()),
+            ..Default::default()
+        };
+        assert!(caps.is_release_source());
+        assert_eq!(
+            caps.inferred_plugin_type(),
+            Some(PluginManifestType::System)
+        );
+    }
+
+    #[test]
+    fn test_plugin_capabilities_manifest_parses_release_source() {
+        let manifest_json = json!({
+            "name": "release-nyaa",
+            "displayName": "Nyaa Releases",
+            "version": "0.1.0",
+            "protocolVersion": "1.2",
+            "capabilities": {
+                "releaseSource": {
+                    "kinds": ["rss-uploader"],
+                    "requiresAliases": true,
+                    "requiresExternalIds": [],
+                    "canAnnounceChapters": true,
+                    "canAnnounceVolumes": true
+                }
+            }
+        });
+        let manifest: PluginManifest = serde_json::from_value(manifest_json).unwrap();
+        assert!(manifest.capabilities.is_release_source());
+        let cap = manifest.capabilities.release_source.unwrap();
+        assert_eq!(cap.kinds, vec![ReleaseSourceKind::RssUploader]);
+        assert!(cap.requires_aliases);
     }
 
     #[test]

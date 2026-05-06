@@ -332,6 +332,10 @@ pub struct PluginManager {
     metrics_service: Option<Arc<PluginMetricsService>>,
     /// Optional plugin file storage for resolving plugin data directories
     plugin_file_storage: Option<Arc<crate::services::PluginFileStorage>>,
+    /// Optional scheduler handle so the releases reverse-RPC handler can
+    /// trigger a release-source reconcile when a plugin calls
+    /// `releases/register_sources`.
+    scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
 }
 
 impl PluginManager {
@@ -346,6 +350,7 @@ impl PluginManager {
             health_check_handle: RwLock::new(None),
             metrics_service: None,
             plugin_file_storage: None,
+            scheduler: None,
         }
     }
 
@@ -369,6 +374,17 @@ impl PluginManager {
         self
     }
 
+    /// Hand the scheduler to per-plugin handles so the releases reverse-RPC
+    /// handler can reconcile release-source schedules when a plugin calls
+    /// `releases/register_sources`. Builder-style.
+    pub fn with_scheduler(
+        mut self,
+        scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>,
+    ) -> Self {
+        self.scheduler = Some(scheduler);
+        self
+    }
+
     /// Load all enabled plugins from database
     pub async fn load_all(&self) -> Result<usize, PluginManagerError> {
         debug!("Loading enabled plugins from database...");
@@ -376,35 +392,58 @@ impl PluginManager {
         let count = enabled_plugins.len();
         debug!("Found {} enabled plugins in database", count);
 
-        let mut plugins = self.plugins.write().await;
+        // Identify release-source plugins so we can eager-spawn them after the
+        // write lock is released; this lets their `onInitialize` run and call
+        // `releases/register_sources` to materialize source rows on startup.
+        let eager_spawn_ids: Vec<Uuid> = enabled_plugins
+            .iter()
+            .filter(|p| Self::is_release_source(p))
+            .map(|p| p.id)
+            .collect();
 
-        // Preserve existing handles - we don't want to kill running plugin processes
-        // Just update the db_config for existing entries and add new ones
-        let mut existing_handles: HashMap<Uuid, Option<Arc<PluginHandle>>> = HashMap::new();
-        for (id, entry) in plugins.drain() {
-            existing_handles.insert(id, entry.handle);
-        }
+        {
+            let mut plugins = self.plugins.write().await;
 
-        for plugin in enabled_plugins {
-            let id = plugin.id;
-            debug!("Loading plugin: {} ({})", plugin.name, id);
-            let mut entry = PluginEntry::new(plugin);
-            // Restore handle if we had one
-            if let Some(handle) = existing_handles.remove(&id) {
-                entry.handle = handle;
+            // Preserve existing handles - we don't want to kill running plugin processes
+            // Just update the db_config for existing entries and add new ones
+            let mut existing_handles: HashMap<Uuid, Option<Arc<PluginHandle>>> = HashMap::new();
+            for (id, entry) in plugins.drain() {
+                existing_handles.insert(id, entry.handle);
             }
-            plugins.insert(id, entry);
-        }
 
-        // Stop any handles for plugins that are no longer enabled
-        for (_id, handle) in existing_handles {
-            if let Some(h) = handle {
-                let _ = h.stop().await;
+            for plugin in enabled_plugins {
+                let id = plugin.id;
+                debug!("Loading plugin: {} ({})", plugin.name, id);
+                let mut entry = PluginEntry::new(plugin);
+                // Restore handle if we had one
+                if let Some(handle) = existing_handles.remove(&id) {
+                    entry.handle = handle;
+                }
+                plugins.insert(id, entry);
+            }
+
+            // Stop any handles for plugins that are no longer enabled
+            for (_id, handle) in existing_handles {
+                if let Some(h) = handle {
+                    let _ = h.stop().await;
+                }
             }
         }
 
         // Update cache timestamp
         *self.cache_loaded_at.write().await = Some(Instant::now());
+
+        // Eager-start release-source plugins so they can register their
+        // sources on boot. Best-effort: a single plugin failing must not
+        // block the rest of startup.
+        for id in eager_spawn_ids {
+            if let Err(e) = self.get_or_spawn(id).await {
+                warn!(
+                    "Eager start of release-source plugin {} failed on load_all: {}",
+                    id, e
+                );
+            }
+        }
 
         info!("Loaded {} enabled plugins from database", count);
         Ok(count)
@@ -462,28 +501,54 @@ impl PluginManager {
             plugin_id, plugin.name, plugin.enabled, plugin.scopes
         );
 
-        let mut plugins = self.plugins.write().await;
+        // Note whether this plugin should be eagerly spawned after the
+        // reload completes (release-source plugins need their onInitialize
+        // to run so they can call `releases/register_sources` — nothing
+        // else would trigger a spawn).
+        let eager_spawn = plugin.enabled && Self::is_release_source(&plugin);
 
-        if plugin.enabled {
-            // If plugin exists and has a handle, stop it first
-            if let Some(entry) = plugins.get_mut(&plugin_id) {
-                debug!("Updating existing plugin entry for {}", plugin_id);
-                if let Some(handle) = entry.handle.take() {
+        {
+            let mut plugins = self.plugins.write().await;
+
+            if plugin.enabled {
+                // If plugin exists and has a handle, stop it first
+                if let Some(entry) = plugins.get_mut(&plugin_id) {
+                    debug!("Updating existing plugin entry for {}", plugin_id);
+                    if let Some(handle) = entry.handle.take() {
+                        let _ = handle.stop().await;
+                    }
+                    entry.update_config(plugin);
+                } else {
+                    debug!("Inserting new plugin entry for {}", plugin_id);
+                    plugins.insert(plugin_id, PluginEntry::new(plugin));
+                }
+                debug!("Plugin manager now has {} plugins loaded", plugins.len());
+            } else {
+                // Plugin is disabled, remove it from managed plugins
+                debug!("Plugin {} is disabled, removing from memory", plugin_id);
+                if let Some(entry) = plugins.remove(&plugin_id)
+                    && let Some(handle) = entry.handle
+                {
                     let _ = handle.stop().await;
                 }
-                entry.update_config(plugin);
-            } else {
-                debug!("Inserting new plugin entry for {}", plugin_id);
-                plugins.insert(plugin_id, PluginEntry::new(plugin));
             }
-            debug!("Plugin manager now has {} plugins loaded", plugins.len());
-        } else {
-            // Plugin is disabled, remove it from managed plugins
-            debug!("Plugin {} is disabled, removing from memory", plugin_id);
-            if let Some(entry) = plugins.remove(&plugin_id)
-                && let Some(handle) = entry.handle
-            {
-                let _ = handle.stop().await;
+        }
+
+        if eager_spawn {
+            // Spawn out-of-band so reload returns promptly even if the
+            // plugin's onInitialize is slow. `get_or_spawn` takes its own
+            // locks and is safe to call here.
+            if let Err(e) = self.get_or_spawn(plugin_id).await {
+                warn!(
+                    "Eager start of release-source plugin {} failed: {}",
+                    plugin_id, e
+                );
+            } else {
+                debug!(
+                    "Eager-started release-source plugin {} so onInitialize \
+                     can register its sources",
+                    plugin_id
+                );
             }
         }
 
@@ -584,7 +649,10 @@ impl PluginManager {
 
         // Need to spawn/initialize the plugin
         let handle_config = self.create_plugin_config(&entry.db_config).await?;
-        let handle = PluginHandle::new(handle_config);
+        let mut handle = PluginHandle::new(handle_config).with_release_db(self.db.as_ref().clone());
+        if let Some(ref s) = self.scheduler {
+            handle = handle.with_scheduler(s.clone());
+        }
 
         // Start the plugin
         match handle.start().await {
@@ -720,7 +788,11 @@ impl PluginManager {
 
         // Create handle with storage support for user plugins
         let storage_handler = StorageRequestHandler::new(self.db.as_ref().clone(), user_plugin.id);
-        let handle = PluginHandle::new_with_storage(handle_config, storage_handler);
+        let mut handle = PluginHandle::new_with_storage(handle_config, storage_handler)
+            .with_release_db(self.db.as_ref().clone());
+        if let Some(ref s) = self.scheduler {
+            handle = handle.with_scheduler(s.clone());
+        }
 
         // Start the plugin
         match handle.start().await {
@@ -908,6 +980,22 @@ impl PluginManager {
         let manifest_json = plugin.manifest.as_ref()?;
         let manifest: PluginManifest = serde_json::from_value(manifest_json.clone()).ok()?;
         manifest.oauth
+    }
+
+    /// Whether this plugin's cached manifest declares the `release_source`
+    /// capability. Release-source plugins must be eagerly spawned (rather
+    /// than lazy on first call) so their `onInitialize` runs and the plugin
+    /// can call `releases/register_sources` to materialize its source rows
+    /// — otherwise the scheduler has nothing to poll, and nothing else
+    /// would ever trigger a spawn.
+    fn is_release_source(plugin: &plugins::Model) -> bool {
+        let Some(manifest_json) = plugin.manifest.as_ref() else {
+            return false;
+        };
+        let Ok(manifest) = serde_json::from_value::<PluginManifest>(manifest_json.clone()) else {
+            return false;
+        };
+        manifest.capabilities.release_source.is_some()
     }
 
     /// Get the OAuth client_id for a plugin (config override > manifest default)

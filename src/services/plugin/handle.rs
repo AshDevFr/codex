@@ -6,6 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use sea_orm::DatabaseConnection;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -19,6 +20,7 @@ use super::protocol::{
     MetadataSearchResponse, PluginBookMetadata, PluginManifest, PluginSeriesMetadata, SearchResult,
     methods,
 };
+use super::releases_handler::ReleasesRequestHandler;
 use super::rpc::{RpcClient, RpcError};
 use super::secrets::SecretValue;
 use super::storage_handler::StorageRequestHandler;
@@ -143,6 +145,12 @@ pub struct PluginHandle {
     health: Arc<HealthTracker>,
     /// Optional storage handler for user plugin reverse RPC
     storage_handler: Option<StorageRequestHandler>,
+    /// Optional database connection for handlers that need DB access
+    /// post-initialization (releases handler, etc.).
+    release_db: Option<DatabaseConnection>,
+    /// Optional scheduler reference so the releases handler can reconcile
+    /// release-source schedules immediately after `releases/register_sources`.
+    scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
 }
 
 impl PluginHandle {
@@ -155,6 +163,8 @@ impl PluginHandle {
             client: Arc::new(RwLock::new(None)),
             manifest: Arc::new(RwLock::new(None)),
             storage_handler: None,
+            release_db: None,
+            scheduler: None,
         }
     }
 
@@ -170,7 +180,28 @@ impl PluginHandle {
             client: Arc::new(RwLock::new(None)),
             manifest: Arc::new(RwLock::new(None)),
             storage_handler: Some(storage_handler),
+            release_db: None,
+            scheduler: None,
         }
+    }
+
+    /// Attach a database connection so the handle can install the releases
+    /// reverse-RPC handler post-initialization when the plugin declares the
+    /// `release_source` capability. Builder-style, returns `self`.
+    pub fn with_release_db(mut self, db: DatabaseConnection) -> Self {
+        self.release_db = Some(db);
+        self
+    }
+
+    /// Attach a scheduler reference so the releases reverse-RPC handler can
+    /// trigger a release-source reconcile when the plugin calls
+    /// `releases/register_sources`. Builder-style.
+    pub fn with_scheduler(
+        mut self,
+        scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>,
+    ) -> Self {
+        self.scheduler = Some(scheduler);
+        self
     }
 
     /// Get the current plugin state
@@ -293,6 +324,35 @@ impl PluginHandle {
             version = %manifest.version,
             "Plugin initialized successfully"
         );
+
+        // Push the capability snapshot into the reverse-RPC context. If the
+        // plugin declared `release_source` and we have a database
+        // connection, install the releases handler too. Both happen under
+        // the same write lock so the dispatcher sees them together.
+        //
+        // The releases handler emits `ReleaseAnnounced` through the
+        // task-local recording broadcaster set by `crate::tasks::worker`
+        // around the running task — no broadcaster injection needed here.
+        // See [`crate::events::with_recording_broadcaster`].
+        let manifest_for_ctx = manifest.clone();
+        let plugin_name = manifest.name.clone();
+        let release_db = self.release_db.clone();
+        let scheduler = self.scheduler.clone();
+        client
+            .update_reverse_ctx(move |ctx| {
+                ctx.set_capabilities(manifest_for_ctx.capabilities.clone());
+                if let (Some(cap), Some(db)) = (
+                    manifest_for_ctx.capabilities.release_source.clone(),
+                    release_db,
+                ) {
+                    let mut handler = ReleasesRequestHandler::new(db, plugin_name, cap);
+                    if let Some(s) = scheduler {
+                        handler = handler.with_scheduler(s);
+                    }
+                    ctx.set_releases_handler(handler);
+                }
+            })
+            .await;
 
         // Store the client and manifest
         {

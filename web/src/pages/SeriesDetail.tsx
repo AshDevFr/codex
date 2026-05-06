@@ -55,6 +55,7 @@ import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar"
 import { MetadataApplyFlow } from "@/components/metadata";
 import {
   AlternateTitles,
+  BehindByBadge,
   CommunityRating,
   CustomMetadataDisplay,
   ExternalIds,
@@ -65,10 +66,14 @@ import {
   SeriesInfoModal,
   SeriesMetadataEditModal,
   SeriesRating,
+  SeriesReleasesPanel,
+  TrackingPanel,
 } from "@/components/series";
 import { formatSeriesCounts } from "@/components/series/seriesCounts";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
+import { useSeriesTracking } from "@/hooks/useSeriesTracking";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
 import { transformFullSeriesToSeriesContext } from "@/utils/templateUtils";
@@ -149,6 +154,21 @@ export function SeriesDetail() {
     queryFn: () => sharingTagsApi.getForSeries(seriesId!),
     enabled: !!seriesId && isAdmin,
   });
+
+  // Fetch tracking config so we can render Behind-by-N badges next to the
+  // header counts (translation: latestKnownChapter > localMaxChapter,
+  // upstream: upstreamChapterGap > 0). The query is cheap and shared with
+  // the TrackingPanel below.
+  const { data: tracking } = useSeriesTracking(seriesId ?? "", !!seriesId);
+
+  // Whether any enabled release-source plugin applies to this series's
+  // library. Drives whether the TrackingPanel + SeriesReleasesPanel render
+  // at all — on libraries with no covering plugin the panels would be a
+  // dead-end (you can flip `tracked: true` but nothing would ever poll).
+  const { data: releaseTrackingApplicability } =
+    useReleaseTrackingApplicability(series?.libraryId);
+  const releaseTrackingAvailable =
+    releaseTrackingApplicability?.applicable === true;
 
   // Fetch available plugin actions for series:detail scope, filtered by library
   const { data: pluginActions } = useQuery({
@@ -780,6 +800,66 @@ export function SeriesDetail() {
                 ) : null;
               })()}
 
+              {/* Behind-by-N badges: translation gap (Phase 6 release sources)
+                  and upstream gap (Phase 5 metadata signal). Each badge is a
+                  no-op when the gap is zero/missing, the series isn't tracked,
+                  or the corresponding axis is disabled. */}
+              {tracking?.tracked && (
+                <Group gap={6} wrap="wrap">
+                  {tracking.trackChapters &&
+                    tracking.latestKnownChapter != null &&
+                    series.localMaxChapter != null &&
+                    tracking.latestKnownChapter > series.localMaxChapter && (
+                      <BehindByBadge
+                        variant="translation"
+                        axis="chapter"
+                        delta={
+                          Math.round(
+                            (tracking.latestKnownChapter -
+                              series.localMaxChapter) *
+                              10,
+                          ) / 10
+                        }
+                        seriesId={series.id}
+                        language={tracking.languages?.[0] ?? undefined}
+                      />
+                    )}
+                  {tracking.trackVolumes &&
+                    tracking.latestKnownVolume != null &&
+                    series.localMaxVolume != null &&
+                    tracking.latestKnownVolume > series.localMaxVolume && (
+                      <BehindByBadge
+                        variant="translation"
+                        axis="volume"
+                        delta={
+                          tracking.latestKnownVolume - series.localMaxVolume
+                        }
+                        seriesId={series.id}
+                      />
+                    )}
+                  {series.upstreamChapterGap != null &&
+                    series.upstreamChapterGap > 0 && (
+                      <BehindByBadge
+                        variant="upstream"
+                        axis="chapter"
+                        delta={Math.round(series.upstreamChapterGap * 10) / 10}
+                        seriesId={series.id}
+                        provider={series.upstreamGapProvider ?? undefined}
+                      />
+                    )}
+                  {series.upstreamVolumeGap != null &&
+                    series.upstreamVolumeGap > 0 && (
+                      <BehindByBadge
+                        variant="upstream"
+                        axis="volume"
+                        delta={series.upstreamVolumeGap}
+                        seriesId={series.id}
+                        provider={series.upstreamGapProvider ?? undefined}
+                      />
+                    )}
+                </Group>
+              )}
+
               {/* Alternate titles inline */}
               {series.alternateTitles && series.alternateTitles.length > 0 && (
                 <AlternateTitles titles={series.alternateTitles} compact />
@@ -984,6 +1064,22 @@ export function SeriesDetail() {
                 publicSettings?.["display.custom_metadata_template"]?.value
               }
             />
+          )}
+
+          {/* Release tracking (admin/editor surface; query stays cheap when collapsed).
+              Hidden on libraries with no covering release-source plugin.
+              Sits below the metadata panels: it's an action surface, not
+              identifying data. */}
+          {canEditSeries && releaseTrackingAvailable && (
+            <TrackingPanel seriesId={series.id} canEdit={canEditSeries} />
+          )}
+
+          {/* Releases panel: ledger entries grouped by chapter/volume. Shows
+              whenever the series has tracking enabled and a plugin can
+              actually deliver releases — otherwise the panel would render
+              an empty inbox with no path to ever populate. */}
+          {tracking?.tracked && releaseTrackingAvailable && (
+            <SeriesReleasesPanel seriesId={series.id} />
           )}
         </Stack>
 

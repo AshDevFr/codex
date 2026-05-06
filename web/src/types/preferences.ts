@@ -15,6 +15,15 @@ export interface TypedPreferences {
 
   // Library preferences
   "library.show_deleted_books": boolean;
+
+  // Release-tracking preferences
+  /**
+   * Series IDs whose `release_announced` events should NOT bump the badge or
+   * surface a toast for this user. The series detail page exposes a per-series
+   * mute toggle that writes here; the Release Tracking settings page exposes
+   * a "Clear all mutes" action that deletes the preference.
+   */
+  "release_tracking.muted_series_ids": string[];
 }
 
 /**
@@ -28,6 +37,7 @@ export type PreferenceKey = keyof TypedPreferences;
 export const PREFERENCE_DEFAULTS: TypedPreferences = {
   "ui.theme": "system",
   "library.show_deleted_books": false,
+  "release_tracking.muted_series_ids": [],
 };
 
 /**

@@ -1,4 +1,5 @@
 export { AlternateTitles } from "./AlternateTitles";
+export { BehindByBadge } from "./BehindByBadge";
 export { CommunityRating } from "./CommunityRating";
 export { CustomMetadataDisplay } from "./CustomMetadataDisplay";
 export { ExternalIds } from "./ExternalIds";
@@ -11,4 +12,6 @@ export { SeriesMetadata } from "./SeriesMetadata";
 export { SeriesMetadataEditModal } from "./SeriesMetadataEditModal";
 export { SeriesRating } from "./SeriesRating";
 export { SeriesRatingModal } from "./SeriesRatingModal";
+export { SeriesReleasesPanel } from "./SeriesReleasesPanel";
 export { SeriesSharingTags } from "./SeriesSharingTags";
+export { TrackingPanel } from "./TrackingPanel";

@@ -7107,6 +7107,702 @@
         ]
       }
     },
+    "/api/v1/release-sources": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "List all configured release sources (admin-only).",
+        "operationId": "list_release_sources",
+        "responses": {
+          "200": {
+            "description": "Source list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSourceListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/release-sources/applicability": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Whether release tracking is available for a given library.",
+        "description": "Read-only, requires only `SeriesRead`: the response carries no\nadmin-sensitive data (no plugin IDs, no configs, no library\nallowlists), just the boolean and friendly display names. Used by the\nfrontend to:\n\n- hide the per-series Tracking panel + Releases tab on libraries with\n  no applicable plugin (cleaner UX);\n- decide whether to show the \"Track for releases\" / \"Don't track for\n  releases\" entries in the bulk-selection menu.",
+        "operationId": "get_release_tracking_applicability",
+        "parameters": [
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Optional library scope. When provided, only plugins that apply to\nthis library are considered (a plugin's `library_ids` field is\neither empty = all, or contains this UUID).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Applicability info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicabilityResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SeriesRead permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/release-sources/{source_id}": {
+      "patch": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "PATCH a release source (admin-only).",
+        "description": "Toggle `enabled`, override `cronSchedule`, or rename `displayName`.\nSending `cronSchedule: null` clears the override and reverts the row to\ninheriting the server-wide `release_tracking.default_cron_schedule`.",
+        "operationId": "update_release_source",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Source ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReleaseSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Source updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSourceDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid update payload"
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          },
+          "404": {
+            "description": "Source not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/release-sources/{source_id}/poll-now": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Trigger a manual poll for a source.",
+        "description": "Enqueues a `PollReleaseSource` task immediately. The task runs\nasynchronously via the worker pool; the response confirms the enqueue,\nnot the poll outcome.",
+        "operationId": "poll_release_source_now",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Source ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Poll task enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollNowResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          },
+          "404": {
+            "description": "Source not found"
+          },
+          "409": {
+            "description": "Source disabled"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/release-sources/{source_id}/reset": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Reset a release source to a clean slate.",
+        "description": "Deletes every `release_ledger` row owned by the source and clears the\nsource's transient poll state (`etag`, `last_polled_at`, `last_error`,\n`last_error_at`, `last_summary`). User-managed fields (`enabled`,\n`cron_schedule`, `display_name`, `config`) are preserved.\n\nIntended for testing/troubleshooting: after a reset, the next poll\nfetches the upstream feed without an `If-None-Match` header (so no 304\nshort-circuit) and re-records every release as `announced`. Does NOT\nauto-enqueue a poll — call `POST /release-sources/{id}/poll-now` after\nresetting if you want immediate re-fetch.",
+        "operationId": "reset_release_source",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Source ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetReleaseSourceResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          },
+          "404": {
+            "description": "Source not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Cross-series inbox: announced (or filtered) ledger entries, paginated.",
+        "operationId": "list_release_inbox",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Filter by state. Defaults to `announced`. Pass `all` to disable\nstate filtering entirely (returns rows in every state).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sourceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Restrict to series belonging to this library.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated inbox entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/bulk": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Apply an action to a batch of ledger rows.",
+        "description": "`dismiss`, `mark-acquired`, `ignore`, and `reset` all set state\nin-place. `delete` removes the rows and clears the affected sources'\netags so the next poll re-fetches without `If-None-Match`. All run\nas bulk SQL (no per-row round trips), so this scales to thousands of\nrows in one call.",
+        "operationId": "bulk_release_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkReleaseActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk action applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkReleaseActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty ID list or invalid action"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/facets": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Distinct values present in the inbox under the given filters.",
+        "description": "Returns the languages, libraries, and series that have at least one\nmatching ledger row. The frontend uses this to populate cascading\nSelect dropdowns so users never have to type a UUID and never see\ndropdown options that would yield zero results.",
+        "operationId": "list_release_facets",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "seriesId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sourceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Facets for the inbox view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFacetsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state filter"
+          },
+          "403": {
+            "description": "SeriesRead permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}": {
+      "delete": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Hard-delete a single ledger row.",
+        "description": "Also clears the source's `etag` so the next poll bypasses\n`If-None-Match` and re-records the deleted row in `announced` state\n(assuming the upstream still lists it). This is the lever users want\nwhen they marked something incorrectly and need to \"get it back\".",
+        "operationId": "delete_release",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteReleaseResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "PATCH a ledger entry's state (general-purpose state transition).",
+        "operationId": "update_release_entry",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReleaseLedgerEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated ledger entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}/dismiss": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Convenience POST: dismiss a release.",
+        "operationId": "dismiss_release",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}/mark-acquired": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Convenience POST: mark a release acquired.",
+        "operationId": "mark_release_acquired",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "description": "Ledger entry ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release marked acquired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Ledger entry not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/scans/active": {
       "get": {
         "tags": [
@@ -7798,6 +8494,52 @@
         ]
       }
     },
+    "/api/v1/series/bulk/track-for-releases": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk-enable release tracking for multiple series.",
+        "description": "For each `series_id` in the request, flips `series_tracking.tracked` to\n`true` and runs the seed pass (auto-derives aliases, `latest_known_*`,\n`track_chapters` / `track_volumes` from existing data). Series that don't\nexist are reported as `outcome: skipped`. Series already tracked are\nreported as `outcome: skipped, detail: \"already tracked\"` and the seed is\nnot re-run (idempotent — a re-run would simply re-derive identical\nvalues, but we skip the work).\n\nMirrors the per-series PATCH `false -> true` transition: same seed\nfunction, same idempotency guarantees.",
+        "operationId": "bulk_track_series_for_releases",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk-tracked series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTrackForReleasesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/bulk/unread": {
       "post": {
         "tags": [
@@ -7823,6 +8565,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MarkReadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/bulk/untrack-for-releases": {
+      "post": {
+        "tags": [
+          "Bulk Operations"
+        ],
+        "summary": "Bulk-disable release tracking for multiple series.",
+        "description": "Flips `series_tracking.tracked` to `false`. Does not delete aliases,\n`latest_known_*`, or other tracking config — the user can re-track\nwithout losing customizations, and the seed will re-derive any\nauto-derived fields on the next track-on transition.",
+        "operationId": "bulk_untrack_series_for_releases",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSeriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk-untracked series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkTrackForReleasesResponse"
                 }
               }
             }
@@ -8777,6 +9565,172 @@
           },
           "404": {
             "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/aliases": {
+      "get": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "List release-matching aliases for a series.",
+        "operationId": "list_series_aliases",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of aliases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesAliasListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Create a release-matching alias for a series.",
+        "description": "Idempotent: if `(series_id, alias)` already exists, returns the existing\nrow with HTTP 200 instead of inserting a duplicate.",
+        "operationId": "create_series_alias",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSeriesAliasRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Alias already existed (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesAliasDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Alias created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesAliasDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid alias (empty after normalization)"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/aliases/{alias_id}": {
+      "delete": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Delete a release-matching alias.",
+        "operationId": "delete_series_alias",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "alias_id",
+            "in": "path",
+            "description": "Alias ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Alias deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series or alias not found"
           }
         },
         "security": [
@@ -10842,6 +11796,87 @@
         ]
       }
     },
+    "/api/v1/series/{series_id}/releases": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "List release-ledger entries for a series.",
+        "operationId": "list_series_releases",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Filter by state. Defaults to all states (no filter) so the per-series\nview shows the full history.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-indexed page number.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (max 500, default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated ledger entries for the series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_ReleaseLedgerEntryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/series/{series_id}/renumber": {
       "post": {
         "tags": [
@@ -11452,6 +12487,110 @@
         "security": [
           {
             "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/series/{series_id}/tracking": {
+      "get": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Get release-tracking config for a series.",
+        "description": "Returns a virtual untracked row when no `series_tracking` row exists, so the\nfrontend can render the panel uniformly without special-casing absent rows.",
+        "operationId": "get_series_tracking",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracking config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesTrackingDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Update release-tracking config for a series.",
+        "description": "Upserts: creates the row on first write, applies the patch otherwise.\nAll fields are optional — omit to leave alone, send `null` on a nullable\nfield to clear it.",
+        "operationId": "update_series_tracking",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Series ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSeriesTrackingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tracking config updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesTrackingDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Series not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
           },
           {
             "api_key": []
@@ -16907,6 +18046,27 @@
           }
         }
       },
+      "ApplicabilityResponse": {
+        "type": "object",
+        "description": "Response shape for `GET /api/v1/release-sources/applicability`.",
+        "required": [
+          "applicable",
+          "pluginDisplayNames"
+        ],
+        "properties": {
+          "applicable": {
+            "type": "boolean",
+            "description": "`true` when at least one enabled `release_source` plugin applies to\nthe requested library (or, if no `libraryId` was supplied, to *any*\nlibrary). The frontend uses this to decide whether to render the\nper-series Tracking panel and Releases tab, or to show the\nbulk-track menu entry."
+          },
+          "pluginDisplayNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Plugin display names (or fallback to `name` when no manifest cached\nyet) of the enabled release-source plugins covering this library.\nEmpty when `applicable` is `false`. Useful for surfacing \"Powered by\nMangaUpdates, Nyaa\" hints in the UI."
+          }
+        }
+      },
       "AuthorContextDto": {
         "type": "object",
         "description": "Author context for template evaluation.",
@@ -20487,6 +21647,57 @@
           }
         }
       },
+      "BulkReleaseAction": {
+        "type": "string",
+        "description": "Action requested by `POST /api/v1/releases/bulk`.",
+        "enum": [
+          "dismiss",
+          "mark-acquired",
+          "ignore",
+          "reset",
+          "delete"
+        ]
+      },
+      "BulkReleaseActionRequest": {
+        "type": "object",
+        "description": "Request body for `POST /api/v1/releases/bulk`.",
+        "required": [
+          "ids",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BulkReleaseAction"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "BulkReleaseActionResponse": {
+        "type": "object",
+        "description": "Response from `POST /api/v1/releases/bulk`.",
+        "required": [
+          "affected",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BulkReleaseAction",
+            "description": "Action that ran (echoed back for client-side confirmation toasts)."
+          },
+          "affected": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of ledger rows actually affected. Less than `ids.len()` when\nsome IDs were already deleted concurrently.",
+            "minimum": 0
+          }
+        }
+      },
       "BulkRenumberSeriesRequest": {
         "type": "object",
         "description": "Request for bulk renumber operations on multiple series",
@@ -20609,6 +21820,65 @@
             "format": "uuid",
             "description": "ID of the fan-out task that was created",
             "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "BulkTrackForReleasesItem": {
+        "type": "object",
+        "description": "Per-series outcome of a bulk track / untrack operation.\n\nReturned in `BulkTrackForReleasesResponse.results` so the UI can show a\nper-row status (e.g. \"tracked\", \"skipped: not found\", \"errored: …\") without\nre-querying the tracking config endpoint per series.",
+        "required": [
+          "seriesId",
+          "outcome"
+        ],
+        "properties": {
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free-form detail (error message for `errored`, reason for `skipped`).\n`None` for the success cases."
+          },
+          "outcome": {
+            "type": "string",
+            "description": "`tracked` | `untracked` | `skipped` | `errored`."
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BulkTrackForReleasesResponse": {
+        "type": "object",
+        "description": "Aggregate result of `POST /series/bulk/track-for-releases` and its untrack\ncounterpart. Counts and per-series outcomes for client-side display.",
+        "required": [
+          "changed",
+          "alreadyInState",
+          "errored",
+          "results"
+        ],
+        "properties": {
+          "alreadyInState": {
+            "type": "integer",
+            "description": "Series whose `tracked` flag was already in the target state. No-ops.",
+            "minimum": 0
+          },
+          "changed": {
+            "type": "integer",
+            "description": "Series successfully flipped to `tracked = true` (or `false` for the\nuntrack endpoint).",
+            "minimum": 0
+          },
+          "errored": {
+            "type": "integer",
+            "description": "Series that could not be processed (missing, error, etc.).",
+            "minimum": 0
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkTrackForReleasesItem"
+            },
+            "description": "Per-series outcomes in input order."
           }
         }
       },
@@ -20800,7 +22070,7 @@
           },
           "type": {
             "type": "string",
-            "description": "Field type: \"number\", \"string\", or \"boolean\""
+            "description": "Field type — free-form documentation hint. Common values: \"number\",\n\"string\", \"boolean\", \"string-array\", \"object\". The host never validates\nstored config against this; it forwards the raw JSON to the plugin."
           }
         }
       },
@@ -21386,6 +22656,26 @@
           }
         }
       },
+      "CreateSeriesAliasRequest": {
+        "type": "object",
+        "required": [
+          "alias"
+        ],
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Alias text. Will be trimmed; must normalize to non-empty.",
+            "example": "Boku no Hero Academia"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional explicit source. Defaults to `manual` when called from the API.\nPlugin-internal flows write `metadata`; we don't expose that to HTTP."
+          }
+        }
+      },
       "CreateSeriesExportRequest": {
         "type": "object",
         "description": "Request body for creating a new series export",
@@ -21630,6 +22920,19 @@
             "type": "string",
             "description": "Message describing the result",
             "example": "Preference 'ui.theme' was reset to default"
+          }
+        }
+      },
+      "DeleteReleaseResponse": {
+        "type": "object",
+        "description": "Response from `DELETE /api/v1/releases/{id}`.\n\nSingle-row delete returns a small confirmation rather than 204 so the\nfrontend can surface a toast that mentions the etag clear (\"the next\npoll will re-fetch this release\"). Mirrors the bulk-delete shape with\n`affected = 1`.",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "description": "`true` if the row was deleted, `false` if it didn't exist."
           }
         }
       },
@@ -22502,6 +23805,92 @@
                 "type": "string",
                 "enum": [
                   "plugin_deleted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new release was recorded in the ledger.\n\nEmitted once per accepted, non-deduped ledger insert by the polling\ntask and the `releases/record` reverse-RPC handler. The frontend uses\nthis to bump the Releases nav badge, surface a toast on the inbox\npage, and refresh the per-series Releases tab.",
+            "required": [
+              "ledgerId",
+              "seriesId",
+              "sourceId",
+              "pluginId",
+              "language",
+              "type"
+            ],
+            "properties": {
+              "chapter": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double",
+                "description": "Chapter announced (if the source emits chapters)."
+              },
+              "language": {
+                "type": "string",
+                "description": "Language code (e.g. `\"en\"`); used by client-side notification\npreference filters."
+              },
+              "ledgerId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "pluginId": {
+                "type": "string",
+                "description": "Plugin name that owns the source (`release_sources.plugin_id`).\nHelps the frontend filter without an extra lookup."
+              },
+              "seriesId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "sourceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "release_announced"
+                ]
+              },
+              "volume": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "description": "Volume announced (if the source emits volumes)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A release source's poll task completed.\n\nEmitted at the end of every `poll_release_source` task run, after\n`release_sources.last_summary` / `last_polled_at` / `etag` have been\npersisted. The frontend uses this to refresh the Release tracking\nsettings page in real time so users don't have to reload to see a\n\"Poll now\" finish. Carries no diff details — receivers should\ninvalidate the source query and re-read the row.",
+            "required": [
+              "sourceId",
+              "pluginId",
+              "hadError",
+              "type"
+            ],
+            "properties": {
+              "hadError": {
+                "type": "boolean",
+                "description": "`true` if the poll wrote a `last_error`. Cheap \"did it fail\"\nhint without forcing the client to refetch."
+              },
+              "pluginId": {
+                "type": "string",
+                "description": "Plugin that owns the source (`release_sources.plugin_id`).\nCheap filter for clients only watching certain plugins."
+              },
+              "sourceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "release_source_polled"
                 ]
               }
             }
@@ -23776,6 +25165,32 @@
             "format": "date-time",
             "description": "When the series was last updated",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "upstreamChapterGap": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Upstream-vs-local chapter delta. See `SeriesDto::upstream_chapter_gap`.",
+            "example": 3.0
+          },
+          "upstreamGapProvider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider that supplied the upstream counts. See\n`SeriesDto::upstream_gap_provider`.",
+            "example": "MangaBaka"
+          },
+          "upstreamVolumeGap": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Upstream-vs-local volume delta. See `SeriesDto::upstream_volume_gap`.",
+            "example": 1
           },
           "volumesOwned": {
             "type": [
@@ -28332,6 +29747,174 @@
           }
         }
       },
+      "PaginatedResponse_ReleaseLedgerEntryDto": {
+        "type": "object",
+        "description": "Generic paginated response wrapper with HATEOAS links",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages",
+          "links"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "A single release announcement. Sources write these; the inbox reads them.",
+              "required": [
+                "id",
+                "seriesId",
+                "seriesTitle",
+                "sourceId",
+                "externalReleaseId",
+                "payloadUrl",
+                "confidence",
+                "state",
+                "observedAt",
+                "createdAt"
+              ],
+              "properties": {
+                "chapter": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Decimal supports `12.5` etc."
+                },
+                "confidence": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "externalReleaseId": {
+                  "type": "string",
+                  "description": "Plugin-stable identity for the release (used for dedup).",
+                  "example": "nyaa:1234567"
+                },
+                "formatHints": {
+                  "description": "Sparse `{ \"jxl\": true, \"container\": \"cbz\", ... }`."
+                },
+                "groupOrUploader": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Group/scanlator/uploader attribution."
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "550e8400-e29b-41d4-a716-446655440a00"
+                },
+                "infoHash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Torrent info_hash, if applicable."
+                },
+                "language": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "mediaUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL\nlink). Travels paired with [`Self::media_url_kind`]."
+                },
+                "mediaUrlKind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Classifies what `media_url` points at: `torrent` | `magnet` |\n`direct` | `other`. The frontend uses this to pick a kind-specific\nicon next to the standard external-link icon."
+                },
+                "metadata": {
+                  "description": "Source-specific extras (free-form)."
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "payloadUrl": {
+                  "type": "string",
+                  "description": "Where to acquire the release. Conventionally a human-readable\nlanding page (Nyaa view page, MangaUpdates release page)."
+                },
+                "seriesId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "550e8400-e29b-41d4-a716-446655440002"
+                },
+                "seriesTitle": {
+                  "type": "string",
+                  "description": "Series title at the time of the response. Joined from the `series`\ntable so the inbox UI can render a human-readable label without a\nfollow-up fetch. Falls back to the empty string only if the series\nrow was hard-deleted between the join and the read.",
+                  "example": "Chainsaw Man"
+                },
+                "sourceId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "550e8400-e29b-41d4-a716-446655440b00"
+                },
+                "state": {
+                  "type": "string",
+                  "description": "`announced` | `dismissed` | `marked_acquired` | `hidden`."
+                },
+                "volume": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32"
+                }
+              }
+            },
+            "description": "The data items for this page"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks",
+            "description": "HATEOAS navigation links"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current page number (1-indexed)",
+            "example": 1,
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of items per page",
+            "example": 50,
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of items across all pages",
+            "example": 150,
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of pages",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
       "PaginatedResponse_SeriesDto": {
         "type": "object",
         "description": "Generic paginated response wrapper with HATEOAS links",
@@ -28473,6 +30056,32 @@
                   "format": "date-time",
                   "description": "When the series was last updated",
                   "example": "2024-01-15T10:30:00Z"
+                },
+                "upstreamChapterGap": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float",
+                  "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement** — Phase 6's MangaUpdates plugin owns the\ntranslation-release feed.",
+                  "example": 3.0
+                },
+                "upstreamGapProvider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe Phase 7 badge tooltip.",
+                  "example": "MangaBaka"
+                },
+                "upstreamVolumeGap": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "Difference between the upstream original-language volume count\n(`series_metadata.total_volume_count`) and the highest locally-owned\nvolume (`local_max_volume`). Same suppression rules as\n`upstream_chapter_gap`, gated on `track_volumes`.",
+                  "example": 1
                 },
                 "volumesOwned": {
                   "type": [
@@ -29624,6 +31233,10 @@
             },
             "description": "Content types this plugin can provide metadata for (e.g., [\"series\", \"book\"])"
           },
+          "releaseSource": {
+            "type": "boolean",
+            "description": "Whether the plugin declares the `release_source` capability (announces\nnew chapter / volume releases for tracked series)."
+          },
           "userReadSync": {
             "type": "boolean",
             "description": "Can sync user reading progress"
@@ -30705,6 +32318,24 @@
           }
         }
       },
+      "PollNowResponse": {
+        "type": "object",
+        "description": "Response shape from the `poll-now` endpoint.\n\n`status` is `enqueued` after a successful enqueue. The `message` carries\nthe task ID for follow-up (`tasks.id`); the task runs asynchronously, so\nthis response does not reflect poll outcome.",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable message; includes the enqueued task ID."
+          },
+          "status": {
+            "type": "string",
+            "description": "`enqueued` on success."
+          }
+        }
+      },
       "PreviewScanRequest": {
         "type": "object",
         "description": "Preview scan request",
@@ -31501,6 +33132,353 @@
           }
         }
       },
+      "ReleaseFacetsResponse": {
+        "type": "object",
+        "description": "Response shape for `GET /api/v1/releases/facets`.\n\nEach list reflects the distinct values present in the ledger under the\n**other** active filters (Solr-style facet exclusion), so dropdowns\nnever offer combinations that would yield zero results. The frontend\nuses these to populate cascading filter Select inputs without forcing\nthe user to type UUIDs.",
+        "required": [
+          "languages",
+          "libraries",
+          "series"
+        ],
+        "properties": {
+          "languages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseLanguageFacetDto"
+            }
+          },
+          "libraries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseLibraryFacetDto"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseSeriesFacetDto"
+            }
+          }
+        }
+      },
+      "ReleaseLanguageFacetDto": {
+        "type": "object",
+        "description": "One language option in the inbox facets response.",
+        "required": [
+          "language",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "language": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseLedgerEntryDto": {
+        "type": "object",
+        "description": "A single release announcement. Sources write these; the inbox reads them.",
+        "required": [
+          "id",
+          "seriesId",
+          "seriesTitle",
+          "sourceId",
+          "externalReleaseId",
+          "payloadUrl",
+          "confidence",
+          "state",
+          "observedAt",
+          "createdAt"
+        ],
+        "properties": {
+          "chapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Decimal supports `12.5` etc."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "externalReleaseId": {
+            "type": "string",
+            "description": "Plugin-stable identity for the release (used for dedup).",
+            "example": "nyaa:1234567"
+          },
+          "formatHints": {
+            "description": "Sparse `{ \"jxl\": true, \"container\": \"cbz\", ... }`."
+          },
+          "groupOrUploader": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Group/scanlator/uploader attribution."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440a00"
+          },
+          "infoHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Torrent info_hash, if applicable."
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mediaUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL\nlink). Travels paired with [`Self::media_url_kind`]."
+          },
+          "mediaUrlKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Classifies what `media_url` points at: `torrent` | `magnet` |\n`direct` | `other`. The frontend uses this to pick a kind-specific\nicon next to the standard external-link icon."
+          },
+          "metadata": {
+            "description": "Source-specific extras (free-form)."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payloadUrl": {
+            "type": "string",
+            "description": "Where to acquire the release. Conventionally a human-readable\nlanding page (Nyaa view page, MangaUpdates release page)."
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "seriesTitle": {
+            "type": "string",
+            "description": "Series title at the time of the response. Joined from the `series`\ntable so the inbox UI can render a human-readable label without a\nfollow-up fetch. Falls back to the empty string only if the series\nrow was hard-deleted between the join and the read.",
+            "example": "Chainsaw Man"
+          },
+          "sourceId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440b00"
+          },
+          "state": {
+            "type": "string",
+            "description": "`announced` | `dismissed` | `marked_acquired` | `hidden`."
+          },
+          "volume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReleaseLedgerListResponse": {
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseLedgerEntryDto"
+            }
+          }
+        }
+      },
+      "ReleaseLibraryFacetDto": {
+        "type": "object",
+        "description": "One library option in the inbox facets response.",
+        "required": [
+          "libraryId",
+          "libraryName",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "libraryName": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseSeriesFacetDto": {
+        "type": "object",
+        "description": "One series option in the inbox facets response. Carries the joined\n`library_id` and `library_name` so the frontend can group the dropdown\nby library without a follow-up call.",
+        "required": [
+          "seriesId",
+          "seriesTitle",
+          "libraryId",
+          "libraryName",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of ledger rows matching the active filter for this series.",
+            "minimum": 0
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "libraryName": {
+            "type": "string"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seriesTitle": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseSourceDto": {
+        "type": "object",
+        "description": "A configured release source (one row per logical feed).",
+        "required": [
+          "id",
+          "pluginId",
+          "sourceKey",
+          "displayName",
+          "kind",
+          "enabled",
+          "effectiveCronSchedule",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "config": {
+            "description": "Source-specific configuration (free-form)."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Per-source cron override (5-field POSIX cron). `null` when the row\ninherits the server-wide `release_tracking.default_cron_schedule`.\nAlways present in the response (not omitted on null) so clients can\ndistinguish \"inheriting\" from \"field missing.\""
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "effectiveCronSchedule": {
+            "type": "string",
+            "description": "The cron expression actually used by the scheduler for this source:\nthe row's `cron_schedule` if set, otherwise the resolved server-wide\ndefault. Lets the UI display \"Daily (Default)\" without needing to\nfetch the global setting separately."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque etag/cursor used for conditional fetches."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440b00"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`rss-uploader` | `rss-series` | `api-feed` | `metadata-feed` | `metadata-piggyback`."
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastErrorAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastPolledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastSummary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "One-line summary of the most recent successful poll. Surfaced under\nthe row's status badge so users can see *why* a poll returned no\nannouncements without grepping logs. NULL until the first successful\npoll on the source."
+          },
+          "pluginId": {
+            "type": "string",
+            "description": "Owning plugin id, or `core` for in-core synthetic sources.",
+            "example": "release-nyaa"
+          },
+          "sourceKey": {
+            "type": "string",
+            "description": "Plugin-defined unique key.",
+            "example": "nyaa:user:tsuna69"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReleaseSourceListResponse": {
+        "type": "object",
+        "required": [
+          "sources"
+        ],
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseSourceDto"
+            }
+          }
+        }
+      },
       "ReplaceBookMetadataRequest": {
         "type": "object",
         "description": "PUT request for full replacement of book metadata\n\nAll metadata fields will be replaced with the values in this request.\nOmitting a field (or setting it to null) will clear that field.",
@@ -32114,6 +34092,21 @@
           }
         }
       },
+      "ResetReleaseSourceResponse": {
+        "type": "object",
+        "description": "Response shape from the `reset` endpoint.\n\nReturns the number of ledger rows removed so callers can show a\nconfirmation toast. The source's transient poll state (etag,\nlast_polled_at, last_error, last_summary) is also cleared, but those\nare not counted here.",
+        "required": [
+          "deletedLedgerEntries"
+        ],
+        "properties": {
+          "deletedLedgerEntries": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of `release_ledger` rows deleted for this source.",
+            "minimum": 0
+          }
+        }
+      },
       "RetryAllErrorsRequest": {
         "type": "object",
         "description": "Request body for bulk retrying all book errors",
@@ -32432,6 +34425,64 @@
           "source": {
             "type": "string",
             "description": "Cover source: \"default\" (first book cover) or \"custom\" (uploaded cover)"
+          }
+        }
+      },
+      "SeriesAliasDto": {
+        "type": "object",
+        "description": "Title alias used by release-source plugins to match incoming releases by\ntitle (Nyaa, MangaUpdates without an external ID, etc.).",
+        "required": [
+          "id",
+          "seriesId",
+          "alias",
+          "normalized",
+          "source",
+          "createdAt"
+        ],
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Alias as entered (preserves casing/punctuation).",
+            "example": "My Hero Academia"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Alias row ID.",
+            "example": "550e8400-e29b-41d4-a716-446655440100"
+          },
+          "normalized": {
+            "type": "string",
+            "description": "Lowercased + punctuation-stripped form used for matching.",
+            "example": "my hero academia"
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "source": {
+            "type": "string",
+            "description": "`metadata` (auto-derived) | `manual` (user-entered).",
+            "example": "manual"
+          }
+        }
+      },
+      "SeriesAliasListResponse": {
+        "type": "object",
+        "required": [
+          "aliases"
+        ],
+        "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesAliasDto"
+            }
           }
         }
       },
@@ -32923,6 +34974,32 @@
             "format": "date-time",
             "description": "When the series was last updated",
             "example": "2024-01-15T10:30:00Z"
+          },
+          "upstreamChapterGap": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement** — Phase 6's MangaUpdates plugin owns the\ntranslation-release feed.",
+            "example": 3.0
+          },
+          "upstreamGapProvider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe Phase 7 badge tooltip.",
+            "example": "MangaBaka"
+          },
+          "upstreamVolumeGap": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Difference between the upstream original-language volume count\n(`series_metadata.total_volume_count`) and the highest locally-owned\nvolume (`local_max_volume`). Same suppression rules as\n`upstream_chapter_gap`, gated on `track_volumes`.",
+            "example": 1
           },
           "volumesOwned": {
             "type": [
@@ -33503,6 +35580,93 @@
           "calibre",
           "custom"
         ]
+      },
+      "SeriesTrackingDto": {
+        "type": "object",
+        "description": "Per-series release-tracking configuration.\n\nReturned even for untracked series — the row defaults to `tracked: false`\nwith conservative defaults so the frontend can render the panel without\nspecial-casing missing rows.",
+        "required": [
+          "seriesId",
+          "tracked",
+          "trackChapters",
+          "trackVolumes",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "confidenceThresholdOverride": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Per-series override of the server's confidence threshold (0.0 - 1.0)."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the row was created (epoch when virtual)."
+          },
+          "languages": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Per-series language preference (ISO 639-1 codes, e.g. `[\"en\", \"es\"]`).\n`null` means \"fall back to the server-wide default (`release_tracking.default_languages`).\"\nUsed by aggregation feeds (e.g. MangaUpdates) that emit candidates in many languages."
+          },
+          "latestKnownChapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Latest known external chapter (supports decimals like 12.5)."
+          },
+          "latestKnownVolume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Latest known external volume."
+          },
+          "pollIntervalOverrideS": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Per-series override of the source poll interval (seconds)."
+          },
+          "seriesId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series ID this config belongs to.",
+            "example": "550e8400-e29b-41d4-a716-446655440002"
+          },
+          "trackChapters": {
+            "type": "boolean",
+            "description": "Whether to announce new chapters."
+          },
+          "trackVolumes": {
+            "type": "boolean",
+            "description": "Whether to announce new volumes."
+          },
+          "tracked": {
+            "type": "boolean",
+            "description": "Whether release tracking is enabled."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the row was last updated (epoch when virtual)."
+          },
+          "volumeChapterMap": {
+            "description": "Sparse map of `{ \"<volume>\": { \"first\": ch, \"last\": ch } }`."
+          }
+        }
       },
       "SeriesUpdateResponse": {
         "type": "object",
@@ -35362,6 +37526,60 @@
                 "format": "uuid"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Backfill release-tracking aliases from existing series metadata.\n\nWalks series in scope, harvests the canonical title plus alternate titles\nfrom `series_metadata` and `series_alternate_titles`, and seeds them as\n`metadata`-source aliases in `series_aliases`. Idempotent — re-runs do\nnot create duplicates. Does NOT enable tracking; that stays explicit.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "libraryId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid",
+                "description": "If set, scope to this library; otherwise all series."
+              },
+              "seriesIds": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "If set, scope to these specific series (takes precedence over library_id)."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "backfill_tracking_from_metadata"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Poll a single `release_sources` row for new releases.\n\nResolves the source's owning plugin, calls `releases/poll` over the\nexisting plugin host, runs returned candidates through the matcher +\nthreshold, and writes accepted candidates to the ledger. On success\nupdates `last_polled_at` (and optionally `etag`); on failure records\n`last_error`. Idempotent: ledger writes dedup on\n`(source_id, external_release_id)` and `info_hash`.",
+            "required": [
+              "sourceId",
+              "type"
+            ],
+            "properties": {
+              "sourceId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "poll_release_source"
+                ]
+              }
+            }
           }
         ],
         "description": "Task types supported by the distributed task queue"
@@ -36454,6 +38672,108 @@
           }
         }
       },
+      "UpdateReleaseLedgerEntryRequest": {
+        "type": "object",
+        "description": "PATCH payload for ledger row state transitions.\n\nOnly `state` is patchable from the API today; the rest of the row is\nsource-controlled. `state` is validated against the canonical set:\n`announced` | `dismissed` | `marked_acquired` | `hidden`.",
+        "properties": {
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New state. See [`ReleaseLedgerEntryDto::state`] for allowed values."
+          }
+        }
+      },
+      "UpdateReleaseSourceRequest": {
+        "type": "object",
+        "description": "PATCH payload for a release source. All fields optional; omit to leave alone.\n\n`cron_schedule` uses double-Option semantics:\n- field absent (`None`): leave the row's cron_schedule unchanged\n- explicit `null` (`Some(None)`) / `\"\"` / `\"   \"`: clear the override\n  (revert to inheriting the server-wide\n  `release_tracking.default_cron_schedule`)\n- `Some(Some(\"0 */6 * * *\"))`: set a per-source override",
+        "properties": {
+          "cronSchedule": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "5-field POSIX cron expression. Use `null` (or empty string) to\nclear the override and inherit the server-wide default."
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "UpdateSeriesTrackingRequest": {
+        "type": "object",
+        "description": "PATCH payload for tracking config. All fields are optional:\nomit a field to leave it untouched. Use a JSON `null` on a nullable field\nto clear it explicitly.",
+        "properties": {
+          "confidenceThresholdOverride": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "languages": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "ISO 639-1 codes; `null` clears (falls back to server-wide default)."
+          },
+          "latestKnownChapter": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Use `Some(null)` to clear, `Some(<value>)` to set, omit to leave alone."
+          },
+          "latestKnownVolume": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pollIntervalOverrideS": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "trackChapters": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "trackVolumes": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "tracked": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "volumeChapterMap": {}
+        }
+      },
       "UpdateSettingRequest": {
         "type": "object",
         "description": "Update setting request",
@@ -37339,6 +39659,14 @@
       "description": "Series browsing and search endpoints"
     },
     {
+      "name": "Tracking",
+      "description": "Release-tracking config and matcher aliases"
+    },
+    {
+      "name": "Releases",
+      "description": "Release ledger (announcements) and source admin"
+    },
+    {
       "name": "Books",
       "description": "Book details and metadata endpoints"
     },
@@ -37463,6 +39791,8 @@
       "tags": [
         "Libraries",
         "Series",
+        "Tracking",
+        "Releases",
         "Books",
         "Pages"
       ]

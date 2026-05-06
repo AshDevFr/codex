@@ -1749,6 +1749,8 @@ describe("PluginsSettings - Official Plugins section", () => {
       expect(screen.getByText("Recommendations")).toBeInTheDocument();
       // "Metadata" appears for Echo, Mangabaka, and Open Library plugins
       expect(screen.getAllByText("Metadata").length).toBeGreaterThanOrEqual(3);
+      // "Releases" appears for MangaUpdates and Nyaa plugins
+      expect(screen.getAllByText("Releases").length).toBeGreaterThanOrEqual(2);
     });
   });
 

@@ -2067,6 +2067,62 @@ impl SeriesRepository {
         Ok(map)
     }
 
+    /// Fetch the set of owned `(volume, chapter)` keys for a series, used
+    /// by the release-tracking auto-ignore predicate.
+    ///
+    /// Skips books with both `volume` and `chapter` null (no signal).
+    /// `has_any_volume_metadata` reflects whether any non-deleted book in
+    /// the series carries a non-null `volume`; the count fallback in
+    /// [`crate::services::release::auto_ignore`] only fires when this is
+    /// false.
+    pub async fn get_owned_release_keys_for_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+    ) -> Result<crate::services::release::auto_ignore::OwnedReleaseKeys> {
+        use crate::services::release::auto_ignore::OwnedReleaseKeys;
+
+        #[derive(Debug, FromQueryResult)]
+        struct KeyRow {
+            volume: Option<i32>,
+            chapter: Option<f32>,
+        }
+
+        let rows: Vec<KeyRow> = books::Entity::find()
+            .select_only()
+            .column_as(book_metadata::Column::Volume, "volume")
+            .column_as(book_metadata::Column::Chapter, "chapter")
+            .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+            .filter(books::Column::SeriesId.eq(series_id))
+            .filter(books::Column::Deleted.eq(false))
+            .into_model::<KeyRow>()
+            .all(db)
+            .await
+            .context("Failed to load owned release keys")?;
+
+        let mut keys: Vec<(Option<i32>, Option<f64>)> = Vec::with_capacity(rows.len());
+        let mut has_any_volume_metadata = false;
+        let mut volumes_owned_count: i64 = 0;
+        for r in rows {
+            if r.volume.is_some() {
+                has_any_volume_metadata = true;
+            }
+            if r.volume.is_some() && r.chapter.is_none() {
+                volumes_owned_count += 1;
+            }
+            // Skip rows with no signal at all.
+            if r.volume.is_none() && r.chapter.is_none() {
+                continue;
+            }
+            keys.push((r.volume, r.chapter.map(f64::from)));
+        }
+
+        Ok(OwnedReleaseKeys {
+            keys,
+            has_any_volume_metadata,
+            volumes_owned_count,
+        })
+    }
+
     /// Delete a series
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         Series::delete_by_id(id)
@@ -3602,5 +3658,130 @@ mod tests {
         let none = map.get(&empty.id).copied().unwrap();
         assert_eq!(none.local_max_volume, None);
         assert_eq!(none.volumes_owned, None);
+    }
+
+    #[tokio::test]
+    async fn test_owned_release_keys_with_metadata() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(
+            conn,
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(conn, library.id, "Mixed", None)
+            .await
+            .unwrap();
+
+        // Whole vol 1, whole vol 3, ch 12 of vol 2, pure ch 99.5, untyped book.
+        insert_book_with_classification(conn, series.id, library.id, "/v1.cbz", Some(1), None)
+            .await;
+        insert_book_with_classification(conn, series.id, library.id, "/v3.cbz", Some(3), None)
+            .await;
+        insert_book_with_classification(
+            conn,
+            series.id,
+            library.id,
+            "/v2c12.cbz",
+            Some(2),
+            Some(12.0),
+        )
+        .await;
+        insert_book_with_classification(
+            conn,
+            series.id,
+            library.id,
+            "/c99-5.cbz",
+            None,
+            Some(99.5),
+        )
+        .await;
+        insert_book_with_classification(conn, series.id, library.id, "/untyped.cbz", None, None)
+            .await;
+
+        let owned = SeriesRepository::get_owned_release_keys_for_series(conn, series.id)
+            .await
+            .unwrap();
+
+        assert!(owned.has_any_volume_metadata);
+        assert_eq!(owned.volumes_owned_count, 2);
+        // Untyped book is filtered out; the other four contribute keys.
+        assert_eq!(owned.keys.len(), 4);
+        assert!(owned.keys.contains(&(Some(1), None)));
+        assert!(owned.keys.contains(&(Some(3), None)));
+        assert!(owned.keys.contains(&(Some(2), Some(12.0))));
+        assert!(owned.keys.contains(&(None, Some(99.5))));
+    }
+
+    #[tokio::test]
+    async fn test_owned_release_keys_pure_count_world() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(
+            conn,
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let series = SeriesRepository::create(conn, library.id, "NoMeta", None)
+            .await
+            .unwrap();
+
+        // Three untyped books — count world.
+        for i in 1..=3 {
+            insert_book_with_classification(
+                conn,
+                series.id,
+                library.id,
+                &format!("/u{}.cbz", i),
+                None,
+                None,
+            )
+            .await;
+        }
+
+        let owned = SeriesRepository::get_owned_release_keys_for_series(conn, series.id)
+            .await
+            .unwrap();
+
+        assert!(!owned.has_any_volume_metadata);
+        assert_eq!(owned.volumes_owned_count, 0);
+        assert!(owned.keys.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_owned_release_keys_empty_series() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let library = LibraryRepository::create(
+            conn,
+            "Test Library",
+            "/test/path",
+            ScanningStrategy::Default,
+        )
+        .await
+        .unwrap();
+
+        let empty = SeriesRepository::create(conn, library.id, "Empty", None)
+            .await
+            .unwrap();
+
+        let owned = SeriesRepository::get_owned_release_keys_for_series(conn, empty.id)
+            .await
+            .unwrap();
+
+        assert!(!owned.has_any_volume_metadata);
+        assert_eq!(owned.volumes_owned_count, 0);
+        assert!(owned.keys.is_empty());
     }
 }

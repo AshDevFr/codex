@@ -15,6 +15,40 @@ export function isSyncProvider(plugin: PluginDto): boolean {
   return plugin.manifest?.capabilities?.userReadSync === true;
 }
 
+export function isReleaseSource(plugin: PluginDto): boolean {
+  return plugin.manifest?.capabilities?.releaseSource === true;
+}
+
+export function isRecommendationProvider(plugin: PluginDto): boolean {
+  return plugin.manifest?.capabilities?.userRecommendationProvider === true;
+}
+
+/**
+ * Returns true if the plugin has any capability for which permissions,
+ * scopes, or the library filter actually do something.
+ *
+ * Only metadata providers go through these row-level controls:
+ *   - `permissions` are checked on the metadata-apply path
+ *     (`src/services/metadata/apply.rs`, `book_apply.rs`).
+ *   - `scopes` + `library_ids` are checked when the UI lists plugin actions
+ *     for a series/book/library context
+ *     (`src/services/plugin/manager.rs::plugins_by_scope_and_library`).
+ *
+ * Release-source, recommendation, and sync plugins are gated only by
+ * manifest capability (checked at reverse-RPC dispatch in
+ * `src/services/plugin/permissions.rs`); they don't write metadata, don't
+ * expose scoped UI actions, and aren't library-filtered. Showing those
+ * fields when they have no effect is misleading — an empty state suggests
+ * "you forgot to configure something" when there's nothing to configure.
+ *
+ * Plugins without a manifest are considered permissionable so the existing
+ * "test this plugin to discover its capabilities" warning still triggers.
+ */
+export function hasPermissionableSurface(plugin: PluginDto): boolean {
+  if (!hasManifest(plugin)) return true;
+  return isMetadataProvider(plugin);
+}
+
 export function isOAuthPlugin(plugin: PluginDto): boolean {
   return plugin.manifest?.oauth != null;
 }
@@ -65,7 +99,6 @@ const LIBRARY_PERMISSION_VALUES = new Set(
 
 export function getPermissionData(plugin: PluginDto) {
   const isMeta = isMetadataProvider(plugin);
-  const isSync = isSyncProvider(plugin);
   const noManifest = !hasManifest(plugin);
 
   if (noManifest) {
@@ -98,9 +131,6 @@ export function getPermissionData(plugin: PluginDto) {
         METADATA_PERMISSION_VALUES.has(p.value),
       ).map((p) => ({ value: p.value, label: p.label })),
     });
-  }
-
-  if (isSync || isMeta) {
     groups.push({
       group: "Library",
       items: AVAILABLE_PERMISSIONS.filter((p) =>
@@ -132,13 +162,6 @@ const BOOK_SCOPES = new Set([
   "library:scan",
 ]);
 
-// Sync providers operate at series/library level
-const SYNC_SCOPES = new Set([
-  "series:detail",
-  "library:detail",
-  "library:scan",
-]);
-
 export function getScopeData(plugin: PluginDto) {
   const noManifest = !hasManifest(plugin);
 
@@ -149,12 +172,10 @@ export function getScopeData(plugin: PluginDto) {
   const metadataTargets = plugin.manifest?.capabilities?.metadataProvider ?? [];
   const canSeries = metadataTargets.includes("series");
   const canBook = metadataTargets.includes("book");
-  const isSync = isSyncProvider(plugin);
 
   const allowed = new Set<string>();
   if (canSeries) for (const s of SERIES_SCOPES) allowed.add(s);
   if (canBook) for (const s of BOOK_SCOPES) allowed.add(s);
-  if (isSync) for (const s of SYNC_SCOPES) allowed.add(s);
 
   return AVAILABLE_SCOPES.filter((s) => allowed.has(s.value)).map((s) => ({
     value: s.value,

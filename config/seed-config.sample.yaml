@@ -88,28 +88,72 @@ plugins:
     credential_delivery: env
 
   # AniList Recommendations - Personalized manga recommendations
+  # Recommendation plugins are gated by manifest capability + per-user enable;
+  # they don't write metadata, so no `permissions` or `scopes` are needed.
   - name: recommendations-anilist
     display_name: AniList Recommendations
     description: Personalized manga recommendations from AniList based on reading history
     plugin_type: user
     command: node
     args: ["/opt/codex/plugins/recommendations-anilist/dist/index.js"]
-    permissions:
-      - "metadata:read"
+    permissions: []
     scopes: []
     credential_delivery: env
 
   # AniList Sync - Reading progress sync
+  # Sync plugins are gated by manifest capability + per-user enable; they don't
+  # write series/book metadata, so no `permissions` or `scopes` are needed.
   - name: sync-anilist
     display_name: AniList Sync
     description: Sync manga reading progress between Codex and AniList
     plugin_type: user
     command: node
     args: ["/opt/codex/plugins/sync-anilist/dist/index.js"]
-    permissions:
-      - "metadata:read"
+    permissions: []
     scopes: []
     credential_delivery: env
+
+  # MangaUpdates Releases - Translation/scanlation release feed (no credentials needed)
+  # Release-source plugins are gated by manifest capability at reverse-RPC
+  # dispatch; they don't write metadata, so no `permissions` or `scopes` are needed.
+  #
+  # On first start the plugin auto-registers a single source row visible at
+  # Settings → Release tracking. Optional `config.blockedGroups` (CSV) filters
+  # noisy scanlators server-wide.
+  - name: release-mangaupdates
+    display_name: MangaUpdates Releases
+    description: Announces new chapter releases for tracked series via MangaUpdates per-series RSS feeds
+    command: node
+    args: ["/opt/codex/plugins/release-mangaupdates/dist/index.js"]
+    permissions: []
+    scopes: []
+    credential_delivery: env
+    # config:
+    #   blockedGroups: "LowQualityScans,MTL Group"
+
+  # Nyaa Releases - Acquisition-pointer source for trusted uploaders (no credentials needed)
+  #
+  # The `uploaders` config below drives one source row per entry at
+  # Settings → Release tracking. Each entry is one of:
+  #   `username`        -> Nyaa user feed (https://nyaa.si/?page=rss&u=<username>)
+  #   `q:<text>`        -> plain site-wide search
+  #   `q:?<key=value>`  -> URL-style search with allowlisted keys (q, c, f, u),
+  #                        e.g. `q:?c=3_1&q=Berserk` for English-translated
+  #                        Literature category. See plugin docs for details.
+  #
+  # Removing an entry and re-saving prunes its source row (and its
+  # release_ledger history). Per-source poll interval / enable / "Poll now"
+  # live in the Release tracking UI.
+  - name: release-nyaa
+    display_name: Nyaa Releases
+    description: Announces new chapter / volume torrents for tracked series via Nyaa.si uploader RSS feeds
+    command: node
+    args: ["/opt/codex/plugins/release-nyaa/dist/index.js"]
+    permissions: []
+    scopes: []
+    credential_delivery: env
+    # config:
+    #   uploaders: "tsuna69,TankobonBlur,q:?c=3_1&q=Berserk"
 
 # =============================================================================
 # Libraries

@@ -2424,6 +2424,246 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/release-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all configured release sources (admin-only). */
+        get: operations["list_release_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/release-sources/applicability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether release tracking is available for a given library.
+         * @description Read-only, requires only `SeriesRead`: the response carries no
+         *     admin-sensitive data (no plugin IDs, no configs, no library
+         *     allowlists), just the boolean and friendly display names. Used by the
+         *     frontend to:
+         *
+         *     - hide the per-series Tracking panel + Releases tab on libraries with
+         *       no applicable plugin (cleaner UX);
+         *     - decide whether to show the "Track for releases" / "Don't track for
+         *       releases" entries in the bulk-selection menu.
+         */
+        get: operations["get_release_tracking_applicability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/release-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * PATCH a release source (admin-only).
+         * @description Toggle `enabled`, override `cronSchedule`, or rename `displayName`.
+         *     Sending `cronSchedule: null` clears the override and reverts the row to
+         *     inheriting the server-wide `release_tracking.default_cron_schedule`.
+         */
+        patch: operations["update_release_source"];
+        trace?: never;
+    };
+    "/api/v1/release-sources/{source_id}/poll-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a manual poll for a source.
+         * @description Enqueues a `PollReleaseSource` task immediately. The task runs
+         *     asynchronously via the worker pool; the response confirms the enqueue,
+         *     not the poll outcome.
+         */
+        post: operations["poll_release_source_now"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/release-sources/{source_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a release source to a clean slate.
+         * @description Deletes every `release_ledger` row owned by the source and clears the
+         *     source's transient poll state (`etag`, `last_polled_at`, `last_error`,
+         *     `last_error_at`, `last_summary`). User-managed fields (`enabled`,
+         *     `cron_schedule`, `display_name`, `config`) are preserved.
+         *
+         *     Intended for testing/troubleshooting: after a reset, the next poll
+         *     fetches the upstream feed without an `If-None-Match` header (so no 304
+         *     short-circuit) and re-records every release as `announced`. Does NOT
+         *     auto-enqueue a poll — call `POST /release-sources/{id}/poll-now` after
+         *     resetting if you want immediate re-fetch.
+         */
+        post: operations["reset_release_source"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cross-series inbox: announced (or filtered) ledger entries, paginated. */
+        get: operations["list_release_inbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply an action to a batch of ledger rows.
+         * @description `dismiss`, `mark-acquired`, `ignore`, and `reset` all set state
+         *     in-place. `delete` removes the rows and clears the affected sources'
+         *     etags so the next poll re-fetches without `If-None-Match`. All run
+         *     as bulk SQL (no per-row round trips), so this scales to thousands of
+         *     rows in one call.
+         */
+        post: operations["bulk_release_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Distinct values present in the inbox under the given filters.
+         * @description Returns the languages, libraries, and series that have at least one
+         *     matching ledger row. The frontend uses this to populate cascading
+         *     Select dropdowns so users never have to type a UUID and never see
+         *     dropdown options that would yield zero results.
+         */
+        get: operations["list_release_facets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Hard-delete a single ledger row.
+         * @description Also clears the source's `etag` so the next poll bypasses
+         *     `If-None-Match` and re-records the deleted row in `announced` state
+         *     (assuming the upstream still lists it). This is the lever users want
+         *     when they marked something incorrectly and need to "get it back".
+         */
+        delete: operations["delete_release"];
+        options?: never;
+        head?: never;
+        /** PATCH a ledger entry's state (general-purpose state transition). */
+        patch: operations["update_release_entry"];
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Convenience POST: dismiss a release. */
+        post: operations["dismiss_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/mark-acquired": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Convenience POST: mark a release acquired. */
+        post: operations["mark_release_acquired"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scans/active": {
         parameters: {
             query?: never;
@@ -2713,6 +2953,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/bulk/track-for-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-enable release tracking for multiple series.
+         * @description For each `series_id` in the request, flips `series_tracking.tracked` to
+         *     `true` and runs the seed pass (auto-derives aliases, `latest_known_*`,
+         *     `track_chapters` / `track_volumes` from existing data). Series that don't
+         *     exist are reported as `outcome: skipped`. Series already tracked are
+         *     reported as `outcome: skipped, detail: "already tracked"` and the seed is
+         *     not re-run (idempotent — a re-run would simply re-derive identical
+         *     values, but we skip the work).
+         *
+         *     Mirrors the per-series PATCH `false -> true` transition: same seed
+         *     function, same idempotency guarantees.
+         */
+        post: operations["bulk_track_series_for_releases"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/bulk/unread": {
         parameters: {
             query?: never;
@@ -2728,6 +2997,29 @@ export interface paths {
          *     Series that don't exist are silently skipped.
          */
         post: operations["bulk_mark_series_as_unread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/bulk/untrack-for-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-disable release tracking for multiple series.
+         * @description Flips `series_tracking.tracked` to `false`. Does not delete aliases,
+         *     `latest_known_*`, or other tracking config — the user can re-track
+         *     without losing customizations, and the seed will re-derive any
+         *     auto-derived fields on the next track-on transition.
+         */
+        post: operations["bulk_untrack_series_for_releases"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3062,6 +3354,45 @@ export interface paths {
          *     Absent fields are unchanged. When name is set to a non-null value, it is automatically locked.
          */
         patch: operations["patch_series"];
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/aliases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List release-matching aliases for a series. */
+        get: operations["list_series_aliases"];
+        put?: never;
+        /**
+         * Create a release-matching alias for a series.
+         * @description Idempotent: if `(series_id, alias)` already exists, returns the existing
+         *     row with HTTP 200 instead of inserting a duplicate.
+         */
+        post: operations["create_series_alias"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/aliases/{alias_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a release-matching alias. */
+        delete: operations["delete_series_alias"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/series/{series_id}/alternate-titles": {
@@ -3598,6 +3929,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/series/{series_id}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List release-ledger entries for a series. */
+        get: operations["list_series_releases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/series/{series_id}/renumber": {
         parameters: {
             query?: never;
@@ -3770,6 +4118,33 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/series/{series_id}/tracking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get release-tracking config for a series.
+         * @description Returns a virtual untracked row when no `series_tracking` row exists, so the
+         *     frontend can render the panel uniformly without special-casing absent rows.
+         */
+        get: operations["get_series_tracking"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update release-tracking config for a series.
+         * @description Upserts: creates the row on first write, applies the patch otherwise.
+         *     All fields are optional — omit to leave alone, send `null` on a nullable
+         *     field to clear it.
+         */
+        patch: operations["update_series_tracking"];
         trace?: never;
     };
     "/api/v1/series/{series_id}/unread": {
@@ -6223,6 +6598,24 @@ export interface components {
              */
             version: string;
         };
+        /** @description Response shape for `GET /api/v1/release-sources/applicability`. */
+        ApplicabilityResponse: {
+            /**
+             * @description `true` when at least one enabled `release_source` plugin applies to
+             *     the requested library (or, if no `libraryId` was supplied, to *any*
+             *     library). The frontend uses this to decide whether to render the
+             *     per-series Tracking panel and Releases tab, or to show the
+             *     bulk-track menu entry.
+             */
+            applicable: boolean;
+            /**
+             * @description Plugin display names (or fallback to `name` when no manifest cached
+             *     yet) of the enabled release-source plugins covering this library.
+             *     Empty when `applicable` is `false`. Useful for surfacing "Powered by
+             *     MangaUpdates, Nyaa" hints in the UI.
+             */
+            pluginDisplayNames: string[];
+        };
         /** @description Author context for template evaluation. */
         AuthorContextDto: {
             /**
@@ -8320,6 +8713,27 @@ export interface components {
              */
             year?: number | null;
         };
+        /**
+         * @description Action requested by `POST /api/v1/releases/bulk`.
+         * @enum {string}
+         */
+        BulkReleaseAction: "dismiss" | "mark-acquired" | "ignore" | "reset" | "delete";
+        /** @description Request body for `POST /api/v1/releases/bulk`. */
+        BulkReleaseActionRequest: {
+            action: components["schemas"]["BulkReleaseAction"];
+            ids: string[];
+        };
+        /** @description Response from `POST /api/v1/releases/bulk`. */
+        BulkReleaseActionResponse: {
+            /** @description Action that ran (echoed back for client-side confirmation toasts). */
+            action: components["schemas"]["BulkReleaseAction"];
+            /**
+             * Format: int64
+             * @description Number of ledger rows actually affected. Less than `ids.len()` when
+             *     some IDs were already deleted concurrently.
+             */
+            affected: number;
+        };
         /** @description Request for bulk renumber operations on multiple series */
         BulkRenumberSeriesRequest: {
             /**
@@ -8392,6 +8806,41 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             taskId: string;
+        };
+        /**
+         * @description Per-series outcome of a bulk track / untrack operation.
+         *
+         *     Returned in `BulkTrackForReleasesResponse.results` so the UI can show a
+         *     per-row status (e.g. "tracked", "skipped: not found", "errored: …") without
+         *     re-querying the tracking config endpoint per series.
+         */
+        BulkTrackForReleasesItem: {
+            /**
+             * @description Free-form detail (error message for `errored`, reason for `skipped`).
+             *     `None` for the success cases.
+             */
+            detail?: string | null;
+            /** @description `tracked` | `untracked` | `skipped` | `errored`. */
+            outcome: string;
+            /** Format: uuid */
+            seriesId: string;
+        };
+        /**
+         * @description Aggregate result of `POST /series/bulk/track-for-releases` and its untrack
+         *     counterpart. Counts and per-series outcomes for client-side display.
+         */
+        BulkTrackForReleasesResponse: {
+            /** @description Series whose `tracked` flag was already in the target state. No-ops. */
+            alreadyInState: number;
+            /**
+             * @description Series successfully flipped to `tracked = true` (or `false` for the
+             *     untrack endpoint).
+             */
+            changed: number;
+            /** @description Series that could not be processed (missing, error, etc.). */
+            errored: number;
+            /** @description Per-series outcomes in input order. */
+            results: components["schemas"]["BulkTrackForReleasesItem"][];
         };
         /** @description Request to update metadata locks for multiple books */
         BulkUpdateBookLocksRequest: components["schemas"]["UpdateBookMetadataLocksRequest"] & {
@@ -8472,7 +8921,11 @@ export interface components {
             label: string;
             /** @description Whether this field is required */
             required?: boolean;
-            /** @description Field type: "number", "string", or "boolean" */
+            /**
+             * @description Field type — free-form documentation hint. Common values: "number",
+             *     "string", "boolean", "string-array", "object". The host never validates
+             *     stored config against this; it forwards the raw JSON to the plugin.
+             */
             type: string;
         };
         /** @description Plugin configuration schema - documents available config options */
@@ -8798,6 +9251,18 @@ export interface components {
             /** @description Working directory for the plugin process */
             workingDirectory?: string | null;
         };
+        CreateSeriesAliasRequest: {
+            /**
+             * @description Alias text. Will be trimmed; must normalize to non-empty.
+             * @example Boku no Hero Academia
+             */
+            alias: string;
+            /**
+             * @description Optional explicit source. Defaults to `manual` when called from the API.
+             *     Plugin-internal flows write `metadata`; we don't expose that to HTTP.
+             */
+            source?: string | null;
+        };
         /** @description Request body for creating a new series export */
         CreateSeriesExportRequest: {
             /** @description Book field keys to include (for "books" or "both" export types) */
@@ -8931,6 +9396,18 @@ export interface components {
              * @example Preference 'ui.theme' was reset to default
              */
             message: string;
+        };
+        /**
+         * @description Response from `DELETE /api/v1/releases/{id}`.
+         *
+         *     Single-row delete returns a small confirmation rather than 204 so the
+         *     frontend can surface a toast that mentions the etag clear ("the next
+         *     poll will re-fetch this release"). Mirrors the bulk-delete shape with
+         *     `affected = 1`.
+         */
+        DeleteReleaseResponse: {
+            /** @description `true` if the row was deleted, `false` if it didn't exist. */
+            deleted: boolean;
         };
         /** @description Detected series information for preview */
         DetectedSeriesDto: {
@@ -9248,6 +9725,50 @@ export interface components {
             pluginId: string;
             /** @enum {string} */
             type: "plugin_deleted";
+        } | {
+            /**
+             * Format: double
+             * @description Chapter announced (if the source emits chapters).
+             */
+            chapter?: number | null;
+            /**
+             * @description Language code (e.g. `"en"`); used by client-side notification
+             *     preference filters.
+             */
+            language: string;
+            /** Format: uuid */
+            ledgerId: string;
+            /**
+             * @description Plugin name that owns the source (`release_sources.plugin_id`).
+             *     Helps the frontend filter without an extra lookup.
+             */
+            pluginId: string;
+            /** Format: uuid */
+            seriesId: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @enum {string} */
+            type: "release_announced";
+            /**
+             * Format: int32
+             * @description Volume announced (if the source emits volumes).
+             */
+            volume?: number | null;
+        } | {
+            /**
+             * @description `true` if the poll wrote a `last_error`. Cheap "did it fail"
+             *     hint without forcing the client to refetch.
+             */
+            hadError: boolean;
+            /**
+             * @description Plugin that owns the source (`release_sources.plugin_id`).
+             *     Cheap filter for clients only watching certain plugins.
+             */
+            pluginId: string;
+            /** Format: uuid */
+            sourceId: string;
+            /** @enum {string} */
+            type: "release_source_polled";
         };
         /**
          * @description Type of entity that was changed
@@ -9910,6 +10431,24 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+            /**
+             * Format: float
+             * @description Upstream-vs-local chapter delta. See `SeriesDto::upstream_chapter_gap`.
+             * @example 3
+             */
+            upstreamChapterGap?: number | null;
+            /**
+             * @description Provider that supplied the upstream counts. See
+             *     `SeriesDto::upstream_gap_provider`.
+             * @example MangaBaka
+             */
+            upstreamGapProvider?: string | null;
+            /**
+             * Format: int32
+             * @description Upstream-vs-local volume delta. See `SeriesDto::upstream_volume_gap`.
+             * @example 1
+             */
+            upstreamVolumeGap?: number | null;
             /**
              * Format: int64
              * @description Number of books classified as a complete volume (volume set, chapter null).
@@ -12362,6 +12901,106 @@ export interface components {
             totalPages: number;
         };
         /** @description Generic paginated response wrapper with HATEOAS links */
+        PaginatedResponse_ReleaseLedgerEntryDto: {
+            /** @description The data items for this page */
+            data: {
+                /**
+                 * Format: double
+                 * @description Decimal supports `12.5` etc.
+                 */
+                chapter?: number | null;
+                /** Format: double */
+                confidence: number;
+                /** Format: date-time */
+                createdAt: string;
+                /**
+                 * @description Plugin-stable identity for the release (used for dedup).
+                 * @example nyaa:1234567
+                 */
+                externalReleaseId: string;
+                /** @description Sparse `{ "jxl": true, "container": "cbz", ... }`. */
+                formatHints?: unknown;
+                /** @description Group/scanlator/uploader attribution. */
+                groupOrUploader?: string | null;
+                /**
+                 * Format: uuid
+                 * @example 550e8400-e29b-41d4-a716-446655440a00
+                 */
+                id: string;
+                /** @description Torrent info_hash, if applicable. */
+                infoHash?: string | null;
+                language?: string | null;
+                /**
+                 * @description Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL
+                 *     link). Travels paired with [`Self::media_url_kind`].
+                 */
+                mediaUrl?: string | null;
+                /**
+                 * @description Classifies what `media_url` points at: `torrent` | `magnet` |
+                 *     `direct` | `other`. The frontend uses this to pick a kind-specific
+                 *     icon next to the standard external-link icon.
+                 */
+                mediaUrlKind?: string | null;
+                /** @description Source-specific extras (free-form). */
+                metadata?: unknown;
+                /** Format: date-time */
+                observedAt: string;
+                /**
+                 * @description Where to acquire the release. Conventionally a human-readable
+                 *     landing page (Nyaa view page, MangaUpdates release page).
+                 */
+                payloadUrl: string;
+                /**
+                 * Format: uuid
+                 * @example 550e8400-e29b-41d4-a716-446655440002
+                 */
+                seriesId: string;
+                /**
+                 * @description Series title at the time of the response. Joined from the `series`
+                 *     table so the inbox UI can render a human-readable label without a
+                 *     follow-up fetch. Falls back to the empty string only if the series
+                 *     row was hard-deleted between the join and the read.
+                 * @example Chainsaw Man
+                 */
+                seriesTitle: string;
+                /**
+                 * Format: uuid
+                 * @example 550e8400-e29b-41d4-a716-446655440b00
+                 */
+                sourceId: string;
+                /** @description `announced` | `dismissed` | `marked_acquired` | `hidden`. */
+                state: string;
+                /** Format: int32 */
+                volume?: number | null;
+            }[];
+            /** @description HATEOAS navigation links */
+            links: components["schemas"]["PaginationLinks"];
+            /**
+             * Format: int64
+             * @description Current page number (1-indexed)
+             * @example 1
+             */
+            page: number;
+            /**
+             * Format: int64
+             * @description Number of items per page
+             * @example 50
+             */
+            pageSize: number;
+            /**
+             * Format: int64
+             * @description Total number of items across all pages
+             * @example 150
+             */
+            total: number;
+            /**
+             * Format: int64
+             * @description Total number of pages
+             * @example 3
+             */
+            totalPages: number;
+        };
+        /** @description Generic paginated response wrapper with HATEOAS links */
         PaginatedResponse_SeriesDto: {
             /** @description The data items for this page */
             data: {
@@ -12462,6 +13101,38 @@ export interface components {
                  * @example 2024-01-15T10:30:00Z
                  */
                 updatedAt: string;
+                /**
+                 * Format: float
+                 * @description Difference between the upstream original-language chapter count
+                 *     (`series_metadata.total_chapter_count`, supplied by metadata
+                 *     providers like MangaBaka or AniList) and the highest locally-owned
+                 *     chapter (`local_max_chapter`).
+                 *
+                 *     Always `None` unless the series is tracked AND `track_chapters` is
+                 *     enabled AND the provider count is populated AND the rounded-to-1-
+                 *     decimal gap is positive. **This is an informational signal, not a
+                 *     release announcement** — Phase 6's MangaUpdates plugin owns the
+                 *     translation-release feed.
+                 * @example 3
+                 */
+                upstreamChapterGap?: number | null;
+                /**
+                 * @description Display name of the metadata provider that supplied the upstream
+                 *     counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
+                 *     `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
+                 *     the Phase 7 badge tooltip.
+                 * @example MangaBaka
+                 */
+                upstreamGapProvider?: string | null;
+                /**
+                 * Format: int32
+                 * @description Difference between the upstream original-language volume count
+                 *     (`series_metadata.total_volume_count`) and the highest locally-owned
+                 *     volume (`local_max_volume`). Same suppression rules as
+                 *     `upstream_chapter_gap`, gated on `track_volumes`.
+                 * @example 1
+                 */
+                upstreamVolumeGap?: number | null;
                 /**
                  * Format: int64
                  * @description Number of books in this series classified as a complete volume
@@ -13135,6 +13806,11 @@ export interface components {
             externalIdSource?: string | null;
             /** @description Content types this plugin can provide metadata for (e.g., ["series", "book"]) */
             metadataProvider?: string[];
+            /**
+             * @description Whether the plugin declares the `release_source` capability (announces
+             *     new chapter / volume releases for tracked series).
+             */
+            releaseSource?: boolean;
             /** @description Can sync user reading progress */
             userReadSync?: boolean;
             /** @description Can provide personalized recommendations */
@@ -13724,6 +14400,19 @@ export interface components {
             /** @description Total count */
             total: number;
         };
+        /**
+         * @description Response shape from the `poll-now` endpoint.
+         *
+         *     `status` is `enqueued` after a successful enqueue. The `message` carries
+         *     the task ID for follow-up (`tasks.id`); the task runs asynchronously, so
+         *     this response does not reflect poll outcome.
+         */
+        PollNowResponse: {
+            /** @description Human-readable message; includes the enqueued task ID. */
+            message: string;
+            /** @description `enqueued` on success. */
+            status: string;
+        };
         /** @description Preview scan request */
         PreviewScanRequest: {
             /**
@@ -14133,6 +14822,185 @@ export interface components {
             user: components["schemas"]["UserInfo"];
         };
         /**
+         * @description Response shape for `GET /api/v1/releases/facets`.
+         *
+         *     Each list reflects the distinct values present in the ledger under the
+         *     **other** active filters (Solr-style facet exclusion), so dropdowns
+         *     never offer combinations that would yield zero results. The frontend
+         *     uses these to populate cascading filter Select inputs without forcing
+         *     the user to type UUIDs.
+         */
+        ReleaseFacetsResponse: {
+            languages: components["schemas"]["ReleaseLanguageFacetDto"][];
+            libraries: components["schemas"]["ReleaseLibraryFacetDto"][];
+            series: components["schemas"]["ReleaseSeriesFacetDto"][];
+        };
+        /** @description One language option in the inbox facets response. */
+        ReleaseLanguageFacetDto: {
+            /** Format: int64 */
+            count: number;
+            language: string;
+        };
+        /** @description A single release announcement. Sources write these; the inbox reads them. */
+        ReleaseLedgerEntryDto: {
+            /**
+             * Format: double
+             * @description Decimal supports `12.5` etc.
+             */
+            chapter?: number | null;
+            /** Format: double */
+            confidence: number;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description Plugin-stable identity for the release (used for dedup).
+             * @example nyaa:1234567
+             */
+            externalReleaseId: string;
+            /** @description Sparse `{ "jxl": true, "container": "cbz", ... }`. */
+            formatHints?: unknown;
+            /** @description Group/scanlator/uploader attribution. */
+            groupOrUploader?: string | null;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440a00
+             */
+            id: string;
+            /** @description Torrent info_hash, if applicable. */
+            infoHash?: string | null;
+            language?: string | null;
+            /**
+             * @description Optional second URL for direct fetch (`.torrent`, `magnet:`, DDL
+             *     link). Travels paired with [`Self::media_url_kind`].
+             */
+            mediaUrl?: string | null;
+            /**
+             * @description Classifies what `media_url` points at: `torrent` | `magnet` |
+             *     `direct` | `other`. The frontend uses this to pick a kind-specific
+             *     icon next to the standard external-link icon.
+             */
+            mediaUrlKind?: string | null;
+            /** @description Source-specific extras (free-form). */
+            metadata?: unknown;
+            /** Format: date-time */
+            observedAt: string;
+            /**
+             * @description Where to acquire the release. Conventionally a human-readable
+             *     landing page (Nyaa view page, MangaUpdates release page).
+             */
+            payloadUrl: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description Series title at the time of the response. Joined from the `series`
+             *     table so the inbox UI can render a human-readable label without a
+             *     follow-up fetch. Falls back to the empty string only if the series
+             *     row was hard-deleted between the join and the read.
+             * @example Chainsaw Man
+             */
+            seriesTitle: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440b00
+             */
+            sourceId: string;
+            /** @description `announced` | `dismissed` | `marked_acquired` | `hidden`. */
+            state: string;
+            /** Format: int32 */
+            volume?: number | null;
+        };
+        ReleaseLedgerListResponse: {
+            entries: components["schemas"]["ReleaseLedgerEntryDto"][];
+        };
+        /** @description One library option in the inbox facets response. */
+        ReleaseLibraryFacetDto: {
+            /** Format: int64 */
+            count: number;
+            /** Format: uuid */
+            libraryId: string;
+            libraryName: string;
+        };
+        /**
+         * @description One series option in the inbox facets response. Carries the joined
+         *     `library_id` and `library_name` so the frontend can group the dropdown
+         *     by library without a follow-up call.
+         */
+        ReleaseSeriesFacetDto: {
+            /**
+             * Format: int64
+             * @description Number of ledger rows matching the active filter for this series.
+             */
+            count: number;
+            /** Format: uuid */
+            libraryId: string;
+            libraryName: string;
+            /** Format: uuid */
+            seriesId: string;
+            seriesTitle: string;
+        };
+        /** @description A configured release source (one row per logical feed). */
+        ReleaseSourceDto: {
+            /** @description Source-specific configuration (free-form). */
+            config?: unknown;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description Per-source cron override (5-field POSIX cron). `null` when the row
+             *     inherits the server-wide `release_tracking.default_cron_schedule`.
+             *     Always present in the response (not omitted on null) so clients can
+             *     distinguish "inheriting" from "field missing."
+             */
+            cronSchedule?: string | null;
+            displayName: string;
+            /**
+             * @description The cron expression actually used by the scheduler for this source:
+             *     the row's `cron_schedule` if set, otherwise the resolved server-wide
+             *     default. Lets the UI display "Daily (Default)" without needing to
+             *     fetch the global setting separately.
+             */
+            effectiveCronSchedule: string;
+            enabled: boolean;
+            /** @description Opaque etag/cursor used for conditional fetches. */
+            etag?: string | null;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440b00
+             */
+            id: string;
+            /** @description `rss-uploader` | `rss-series` | `api-feed` | `metadata-feed` | `metadata-piggyback`. */
+            kind: string;
+            lastError?: string | null;
+            /** Format: date-time */
+            lastErrorAt?: string | null;
+            /** Format: date-time */
+            lastPolledAt?: string | null;
+            /**
+             * @description One-line summary of the most recent successful poll. Surfaced under
+             *     the row's status badge so users can see *why* a poll returned no
+             *     announcements without grepping logs. NULL until the first successful
+             *     poll on the source.
+             */
+            lastSummary?: string | null;
+            /**
+             * @description Owning plugin id, or `core` for in-core synthetic sources.
+             * @example release-nyaa
+             */
+            pluginId: string;
+            /**
+             * @description Plugin-defined unique key.
+             * @example nyaa:user:tsuna69
+             */
+            sourceKey: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ReleaseSourceListResponse: {
+            sources: components["schemas"]["ReleaseSourceDto"][];
+        };
+        /**
          * @description PUT request for full replacement of book metadata
          *
          *     All metadata fields will be replaced with the values in this request.
@@ -14516,6 +15384,21 @@ export interface components {
              */
             message: string;
         };
+        /**
+         * @description Response shape from the `reset` endpoint.
+         *
+         *     Returns the number of ledger rows removed so callers can show a
+         *     confirmation toast. The source's transient poll state (etag,
+         *     last_polled_at, last_error, last_summary) is also cleared, but those
+         *     are not counted here.
+         */
+        ResetReleaseSourceResponse: {
+            /**
+             * Format: int64
+             * @description Number of `release_ledger` rows deleted for this source.
+             */
+            deletedLedgerEntries: number;
+        };
         /** @description Request body for bulk retrying all book errors */
         RetryAllErrorsRequest: {
             errorType?: null | components["schemas"]["BookErrorTypeDto"];
@@ -14699,6 +15582,43 @@ export interface components {
         SelectCoverSourceRequest: {
             /** @description Cover source: "default" (first book cover) or "custom" (uploaded cover) */
             source: string;
+        };
+        /**
+         * @description Title alias used by release-source plugins to match incoming releases by
+         *     title (Nyaa, MangaUpdates without an external ID, etc.).
+         */
+        SeriesAliasDto: {
+            /**
+             * @description Alias as entered (preserves casing/punctuation).
+             * @example My Hero Academia
+             */
+            alias: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Alias row ID.
+             * @example 550e8400-e29b-41d4-a716-446655440100
+             */
+            id: string;
+            /**
+             * @description Lowercased + punctuation-stripped form used for matching.
+             * @example my hero academia
+             */
+            normalized: string;
+            /**
+             * Format: uuid
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /**
+             * @description `metadata` (auto-derived) | `manual` (user-entered).
+             * @example manual
+             */
+            source: string;
+        };
+        SeriesAliasListResponse: {
+            aliases: components["schemas"]["SeriesAliasDto"][];
         };
         /** @description Response containing the average community rating for a series */
         SeriesAverageRatingResponse: {
@@ -14985,6 +15905,38 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+            /**
+             * Format: float
+             * @description Difference between the upstream original-language chapter count
+             *     (`series_metadata.total_chapter_count`, supplied by metadata
+             *     providers like MangaBaka or AniList) and the highest locally-owned
+             *     chapter (`local_max_chapter`).
+             *
+             *     Always `None` unless the series is tracked AND `track_chapters` is
+             *     enabled AND the provider count is populated AND the rounded-to-1-
+             *     decimal gap is positive. **This is an informational signal, not a
+             *     release announcement** — Phase 6's MangaUpdates plugin owns the
+             *     translation-release feed.
+             * @example 3
+             */
+            upstreamChapterGap?: number | null;
+            /**
+             * @description Display name of the metadata provider that supplied the upstream
+             *     counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
+             *     `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
+             *     the Phase 7 badge tooltip.
+             * @example MangaBaka
+             */
+            upstreamGapProvider?: string | null;
+            /**
+             * Format: int32
+             * @description Difference between the upstream original-language volume count
+             *     (`series_metadata.total_volume_count`) and the highest locally-owned
+             *     volume (`local_max_volume`). Same suppression rules as
+             *     `upstream_chapter_gap`, gated on `track_volumes`.
+             * @example 1
+             */
+            upstreamVolumeGap?: number | null;
             /**
              * Format: int64
              * @description Number of books in this series classified as a complete volume
@@ -15301,6 +16253,65 @@ export interface components {
          * @enum {string}
          */
         SeriesStrategy: "series_volume" | "series_volume_chapter" | "flat" | "publisher_hierarchy" | "calibre" | "custom";
+        /**
+         * @description Per-series release-tracking configuration.
+         *
+         *     Returned even for untracked series — the row defaults to `tracked: false`
+         *     with conservative defaults so the frontend can render the panel without
+         *     special-casing missing rows.
+         */
+        SeriesTrackingDto: {
+            /**
+             * Format: double
+             * @description Per-series override of the server's confidence threshold (0.0 - 1.0).
+             */
+            confidenceThresholdOverride?: number | null;
+            /**
+             * Format: date-time
+             * @description When the row was created (epoch when virtual).
+             */
+            createdAt: string;
+            /**
+             * @description Per-series language preference (ISO 639-1 codes, e.g. `["en", "es"]`).
+             *     `null` means "fall back to the server-wide default (`release_tracking.default_languages`)."
+             *     Used by aggregation feeds (e.g. MangaUpdates) that emit candidates in many languages.
+             */
+            languages?: string[] | null;
+            /**
+             * Format: double
+             * @description Latest known external chapter (supports decimals like 12.5).
+             */
+            latestKnownChapter?: number | null;
+            /**
+             * Format: int32
+             * @description Latest known external volume.
+             */
+            latestKnownVolume?: number | null;
+            /**
+             * Format: int32
+             * @description Per-series override of the source poll interval (seconds).
+             */
+            pollIntervalOverrideS?: number | null;
+            /**
+             * Format: uuid
+             * @description Series ID this config belongs to.
+             * @example 550e8400-e29b-41d4-a716-446655440002
+             */
+            seriesId: string;
+            /** @description Whether to announce new chapters. */
+            trackChapters: boolean;
+            /** @description Whether to announce new volumes. */
+            trackVolumes: boolean;
+            /** @description Whether release tracking is enabled. */
+            tracked: boolean;
+            /**
+             * Format: date-time
+             * @description When the row was last updated (epoch when virtual).
+             */
+            updatedAt: string;
+            /** @description Sparse map of `{ "<volume>": { "first": ch, "last": ch } }`. */
+            volumeChapterMap?: unknown;
+        };
         /** @description Response for series update */
         SeriesUpdateResponse: {
             /**
@@ -16200,6 +17211,21 @@ export interface components {
             type: "user_plugin_recommendation_dismiss";
             /** Format: uuid */
             userId: string;
+        } | {
+            /**
+             * Format: uuid
+             * @description If set, scope to this library; otherwise all series.
+             */
+            libraryId?: string | null;
+            /** @description If set, scope to these specific series (takes precedence over library_id). */
+            seriesIds?: string[] | null;
+            /** @enum {string} */
+            type: "backfill_tracking_from_metadata";
+        } | {
+            /** Format: uuid */
+            sourceId: string;
+            /** @enum {string} */
+            type: "poll_release_source";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {
@@ -16763,6 +17789,60 @@ export interface components {
              * @example 0.45
              */
             progressPercentage?: number | null;
+        };
+        /**
+         * @description PATCH payload for ledger row state transitions.
+         *
+         *     Only `state` is patchable from the API today; the rest of the row is
+         *     source-controlled. `state` is validated against the canonical set:
+         *     `announced` | `dismissed` | `marked_acquired` | `hidden`.
+         */
+        UpdateReleaseLedgerEntryRequest: {
+            /** @description New state. See [`ReleaseLedgerEntryDto::state`] for allowed values. */
+            state?: string | null;
+        };
+        /**
+         * @description PATCH payload for a release source. All fields optional; omit to leave alone.
+         *
+         *     `cron_schedule` uses double-Option semantics:
+         *     - field absent (`None`): leave the row's cron_schedule unchanged
+         *     - explicit `null` (`Some(None)`) / `""` / `"   "`: clear the override
+         *       (revert to inheriting the server-wide
+         *       `release_tracking.default_cron_schedule`)
+         *     - `Some(Some("0 *\/6 * * *"))`: set a per-source override
+         */
+        UpdateReleaseSourceRequest: {
+            /**
+             * @description 5-field POSIX cron expression. Use `null` (or empty string) to
+             *     clear the override and inherit the server-wide default.
+             */
+            cronSchedule?: string | null;
+            displayName?: string | null;
+            enabled?: boolean | null;
+        };
+        /**
+         * @description PATCH payload for tracking config. All fields are optional:
+         *     omit a field to leave it untouched. Use a JSON `null` on a nullable field
+         *     to clear it explicitly.
+         */
+        UpdateSeriesTrackingRequest: {
+            /** Format: double */
+            confidenceThresholdOverride?: number | null;
+            /** @description ISO 639-1 codes; `null` clears (falls back to server-wide default). */
+            languages?: string[] | null;
+            /**
+             * Format: double
+             * @description Use `Some(null)` to clear, `Some(<value>)` to set, omit to leave alone.
+             */
+            latestKnownChapter?: number | null;
+            /** Format: int32 */
+            latestKnownVolume?: number | null;
+            /** Format: int32 */
+            pollIntervalOverrideS?: number | null;
+            trackChapters?: boolean | null;
+            trackVolumes?: boolean | null;
+            tracked?: boolean | null;
+            volumeChapterMap?: unknown;
         };
         /** @description Update setting request */
         UpdateSettingRequest: {
@@ -22514,6 +23594,473 @@ export interface operations {
             };
         };
     };
+    list_release_sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseSourceListResponse"];
+                };
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_release_tracking_applicability: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Optional library scope. When provided, only plugins that apply to
+                 *     this library are considered (a plugin's `library_ids` field is
+                 *     either empty = all, or contains this UUID).
+                 */
+                libraryId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applicability info */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicabilityResponse"];
+                };
+            };
+            /** @description SeriesRead permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_release_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source ID */
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReleaseSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description Source updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseSourceDto"];
+                };
+            };
+            /** @description Invalid update payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    poll_release_source_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source ID */
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Poll task enqueued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollNowResponse"];
+                };
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source disabled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_release_source: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source ID */
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source reset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetReleaseSourceResponse"];
+                };
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_release_inbox: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Filter by state. Defaults to `announced`. Pass `all` to disable
+                 *     state filtering entirely (returns rows in every state).
+                 */
+                state?: string | null;
+                seriesId?: string | null;
+                sourceId?: string | null;
+                language?: string | null;
+                /** @description Restrict to series belonging to this library. */
+                libraryId?: string | null;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated inbox entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_release_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkReleaseActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk action applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkReleaseActionResponse"];
+                };
+            };
+            /** @description Empty ID list or invalid action */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_release_facets: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                seriesId?: string | null;
+                sourceId?: string | null;
+                language?: string | null;
+                libraryId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Facets for the inbox view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseFacetsResponse"];
+                };
+            };
+            /** @description Invalid state filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description SeriesRead permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteReleaseResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_release_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReleaseLedgerEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated ledger entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Invalid state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mark_release_acquired: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ledger entry ID */
+                release_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release marked acquired */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ledger entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_active_scans: {
         parameters: {
             query?: never;
@@ -23057,6 +24604,44 @@ export interface operations {
             };
         };
     };
+    bulk_track_series_for_releases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk-tracked series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTrackForReleasesResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bulk_mark_series_as_unread: {
         parameters: {
             query?: never;
@@ -23077,6 +24662,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarkReadResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_untrack_series_for_releases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk-untracked series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkTrackForReleasesResponse"];
                 };
             };
             /** @description Unauthorized */
@@ -23747,6 +25370,137 @@ export interface operations {
                 content?: never;
             };
             /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_series_aliases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of aliases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAliasListResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_series_alias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSeriesAliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Alias already existed (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAliasDto"];
+                };
+            };
+            /** @description Alias created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAliasDto"];
+                };
+            };
+            /** @description Invalid alias (empty after normalization) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_series_alias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+                /** @description Alias ID */
+                alias_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alias deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series or alias not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -25328,6 +27082,53 @@ export interface operations {
             };
         };
     };
+    list_series_releases: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Filter by state. Defaults to all states (no filter) so the per-series
+                 *     view shows the full history.
+                 */
+                state?: string | null;
+                /** @description 1-indexed page number. */
+                page?: number;
+                /** @description Items per page (max 500, default 50). */
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated ledger entries for the series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_ReleaseLedgerEntryDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     renumber_series: {
         parameters: {
             query?: never;
@@ -25769,6 +27570,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnqueueReprocessTitleResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_series_tracking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tracking config */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesTrackingDto"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_series_tracking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series ID */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSeriesTrackingRequest"];
+            };
+        };
+        responses: {
+            /** @description Tracking config updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesTrackingDto"];
                 };
             };
             /** @description Forbidden */

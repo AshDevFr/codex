@@ -92,6 +92,10 @@ impl EventBroadcaster {
     /// retrieval via `take_recorded_events()`.
     ///
     /// Returns the number of receivers that received the event.
+    // The SendError carries the original event back to the caller; that is
+    // tokio's contract, not something we control. The event payload is
+    // by-value already and doesn't justify boxing the error variant.
+    #[allow(clippy::result_large_err)]
     pub fn emit(
         &self,
         event: EntityChangeEvent,

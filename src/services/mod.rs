@@ -15,6 +15,7 @@ pub mod plugin_file_storage;
 pub mod plugin_metrics;
 pub mod rate_limiter;
 pub mod read_progress;
+pub mod release;
 pub mod series_export_collector;
 pub mod series_export_writer;
 pub mod settings;

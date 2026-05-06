@@ -1,3 +1,5 @@
+pub mod release_sources;
+
 use anyhow::{Context, Result};
 use chrono_tz::Tz;
 use sea_orm::DatabaseConnection;
@@ -19,6 +21,8 @@ pub struct Scheduler {
     db: DatabaseConnection,
     /// Server-level default timezone for all cron schedules
     default_tz: Tz,
+    /// Reconcile state for the per-source release-polling jobs.
+    release_sources: release_sources::ReleaseSourceSchedule,
 }
 
 impl Scheduler {
@@ -49,7 +53,23 @@ impl Scheduler {
             scheduler,
             db,
             default_tz,
+            release_sources: release_sources::ReleaseSourceSchedule::new(),
         })
+    }
+
+    /// Trigger a release-source reconcile. Call after writes to the
+    /// `release_sources` table so the scheduler picks up enable/disable
+    /// changes without a full restart.
+    pub async fn reconcile_release_sources(&mut self) -> Result<()> {
+        let settings = SettingsService::new(self.db.clone()).await?;
+        let server_default = release_sources::read_server_default_cron(&settings).await;
+        release_sources::reconcile(
+            &mut self.scheduler,
+            &mut self.release_sources,
+            &self.db,
+            server_default,
+        )
+        .await
     }
 
     /// Start the scheduler and load all scheduled jobs
@@ -77,6 +97,11 @@ impl Scheduler {
         // Load thumbnail generation schedules
         self.load_book_thumbnail_schedule().await?;
         self.load_series_thumbnail_schedule().await?;
+
+        // Load release-source polling schedules.
+        if let Err(e) = self.reconcile_release_sources().await {
+            warn!("Failed to load release-source schedules: {}", e);
+        }
 
         // Start the scheduler
         self.scheduler
