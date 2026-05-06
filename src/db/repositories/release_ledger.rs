@@ -10,8 +10,8 @@
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Order, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, Set, sea_query::NullOrdering,
 };
 use uuid::Uuid;
 
@@ -163,8 +163,9 @@ impl ReleaseLedgerRepository {
         })
     }
 
-    /// Per-series ledger view: ordered by `observed_at` desc, with optional
-    /// state filter.
+    /// Per-series ledger view: highest volume/chapter first, then most recent
+    /// observation as a tie-breaker. Matches the inbox ordering so the series
+    /// detail panel reads the same way as the cross-series list.
     pub async fn list_for_series(
         db: &DatabaseConnection,
         series_id: Uuid,
@@ -174,7 +175,18 @@ impl ReleaseLedgerRepository {
     ) -> Result<Vec<ReleaseLedgerRow>> {
         let mut query = ReleaseLedger::find()
             .filter(release_ledger::Column::SeriesId.eq(series_id))
-            .order_by_desc(release_ledger::Column::ObservedAt);
+            .order_by_with_nulls(
+                release_ledger::Column::Volume,
+                Order::Desc,
+                NullOrdering::Last,
+            )
+            .order_by_with_nulls(
+                release_ledger::Column::Chapter,
+                Order::Desc,
+                NullOrdering::Last,
+            )
+            .order_by_desc(release_ledger::Column::ObservedAt)
+            .order_by_asc(release_ledger::Column::Id);
         if let Some(s) = state_filter {
             query = query.filter(release_ledger::Column::State.eq(s));
         }
@@ -188,14 +200,41 @@ impl ReleaseLedgerRepository {
     }
 
     /// Inbox view across all series, with filters.
+    ///
+    /// Sort order: group all rows of a series together (highest volume/chapter
+    /// on top), then break ties between series by the most recent observation.
+    /// Grouping by series first matches how users read the inbox: they want
+    /// every chapter of a series listed contiguously and descending, even when
+    /// rows come from multiple poll batches with different `observed_at`s.
+    ///
+    /// Inner-joins `series` so the cross-series order is by `series.name`
+    /// (alphabetical) rather than by `series_id` (a meaningless UUID order).
     pub async fn list_inbox(
         db: &DatabaseConnection,
         filter: LedgerInboxFilter,
         limit: u64,
         offset: u64,
     ) -> Result<Vec<ReleaseLedgerRow>> {
-        let mut query = ReleaseLedger::find().order_by_desc(release_ledger::Column::ObservedAt);
-        query = apply_inbox_filter(query, &filter, false);
+        use sea_orm::{JoinType, RelationTrait};
+        let mut query = ReleaseLedger::find()
+            .join(JoinType::InnerJoin, release_ledger::Relation::Series.def())
+            .order_by_asc(crate::db::entities::series::Column::Name)
+            .order_by_asc(release_ledger::Column::SeriesId)
+            .order_by_with_nulls(
+                release_ledger::Column::Volume,
+                Order::Desc,
+                NullOrdering::Last,
+            )
+            .order_by_with_nulls(
+                release_ledger::Column::Chapter,
+                Order::Desc,
+                NullOrdering::Last,
+            )
+            .order_by_desc(release_ledger::Column::ObservedAt)
+            .order_by_asc(release_ledger::Column::Id);
+        // `series_already_joined: true` so apply_inbox_filter doesn't add
+        // a duplicate join when `library_id` is present in the filter.
+        query = apply_inbox_filter(query, &filter, true);
         if limit > 0 {
             query = query.limit(limit);
         }
@@ -630,6 +669,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_for_series_sorts_chapter_desc_over_observed_at() {
+        // The series detail panel must mirror the inbox's per-series order:
+        // highest chapter wins, even if a lower chapter was observed later.
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup_world(conn).await;
+
+        let now = Utc::now();
+        let mut high_old = entry(series_id, source_id, "rel-high");
+        high_old.chapter = Some(200.0);
+        high_old.observed_at = now - chrono::Duration::hours(6);
+        let mut low_new = entry(series_id, source_id, "rel-low");
+        low_new.chapter = Some(150.0);
+        low_new.observed_at = now;
+        ReleaseLedgerRepository::record(conn, high_old)
+            .await
+            .unwrap();
+        ReleaseLedgerRepository::record(conn, low_new)
+            .await
+            .unwrap();
+
+        let rows = ReleaseLedgerRepository::list_for_series(conn, series_id, None, 10, 0)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].chapter, Some(200.0));
+        assert_eq!(rows[1].chapter, Some(150.0));
+    }
+
+    #[tokio::test]
     async fn list_for_series_orders_by_observed_at_desc() {
         let (db, _temp) = create_test_db().await;
         let conn = db.sea_orm_connection();
@@ -689,6 +758,188 @@ mod tests {
         .unwrap();
         assert_eq!(dismissed.len(), 1);
         assert_eq!(dismissed[0].external_release_id, "rel-1");
+    }
+
+    #[tokio::test]
+    async fn list_inbox_orders_series_alphabetically_by_name() {
+        // Cross-series ordering used to be by `series_id` (UUID), which is
+        // deterministic but meaningless to users. Now the inbox joins `series`
+        // and orders by `name ASC`, so "A series" appears before "Z series".
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let library = LibraryRepository::create(conn, "Lib", "/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let source = ReleaseSourceRepository::create(
+            conn,
+            NewReleaseSource {
+                plugin_id: "release-nyaa".to_string(),
+                source_key: "nyaa:user:tsuna69".to_string(),
+                display_name: "Nyaa - tsuna69".to_string(),
+                kind: kind::RSS_UPLOADER.to_string(),
+                poll_interval_s: 3600,
+                enabled: None,
+                config: None,
+            },
+        )
+        .await
+        .unwrap();
+        // Create series in reverse alphabetical order to prove the sort isn't
+        // just preserving insertion order.
+        let zebra = SeriesRepository::create(conn, library.id, "Zebra", None)
+            .await
+            .unwrap();
+        let middle = SeriesRepository::create(conn, library.id, "Middle", None)
+            .await
+            .unwrap();
+        let alpha = SeriesRepository::create(conn, library.id, "Alpha", None)
+            .await
+            .unwrap();
+
+        for sid in [zebra.id, middle.id, alpha.id] {
+            ReleaseLedgerRepository::record(conn, entry(sid, source.id, &format!("rel-{}", sid)))
+                .await
+                .unwrap();
+        }
+
+        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
+            .await
+            .unwrap();
+        let series_order: Vec<Uuid> = rows.iter().map(|r| r.series_id).collect();
+        assert_eq!(
+            series_order,
+            vec![alpha.id, middle.id, zebra.id],
+            "inbox should list series alphabetically by series.name"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_inbox_groups_series_across_observation_batches() {
+        // Bug repro: when a series has rows from two separate poll batches
+        // (different `observed_at`s), the inbox must still list every chapter
+        // contiguously and descending — not split into two desc clusters by
+        // batch. A user reading the inbox doesn't care which poll surfaced a
+        // chapter; they want the series' chapter list, in order.
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup_world(conn).await;
+
+        let now = Utc::now();
+        let earlier = now - chrono::Duration::hours(6);
+        // Earlier batch: lower chapters. Later batch: higher chapters.
+        for ch in [122.0_f64, 123.0, 124.0, 125.0] {
+            let mut e = entry(series_id, source_id, &format!("rel-{}", ch));
+            e.chapter = Some(ch);
+            e.observed_at = earlier;
+            ReleaseLedgerRepository::record(conn, e).await.unwrap();
+        }
+        for ch in [150.0_f64, 151.0, 156.0] {
+            let mut e = entry(series_id, source_id, &format!("rel-{}", ch));
+            e.chapter = Some(ch);
+            e.observed_at = now;
+            ReleaseLedgerRepository::record(conn, e).await.unwrap();
+        }
+
+        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
+            .await
+            .unwrap();
+        let chapters: Vec<f64> = rows.iter().filter_map(|r| r.chapter).collect();
+        assert_eq!(
+            chapters,
+            vec![156.0, 151.0, 150.0, 125.0, 124.0, 123.0, 122.0],
+            "chapters of one series must be one contiguous desc list, regardless of observed_at batch"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_inbox_orders_chapters_desc_within_series() {
+        // A poll batch records every release with the same `observed_at`. The
+        // inbox must still present the highest chapter first per series, not
+        // the arbitrary order rows happened to be inserted in.
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup_world(conn).await;
+
+        let now = Utc::now();
+        // Insert in shuffled chapter order to prove the DB is doing the sort.
+        for ch in [129.0_f64, 145.0, 122.0, 150.5, 137.0, 156.0, 138.0] {
+            let mut e = entry(series_id, source_id, &format!("rel-{}", ch));
+            e.chapter = Some(ch);
+            e.observed_at = now;
+            ReleaseLedgerRepository::record(conn, e).await.unwrap();
+        }
+
+        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
+            .await
+            .unwrap();
+        let chapters: Vec<f64> = rows.iter().filter_map(|r| r.chapter).collect();
+        assert_eq!(
+            chapters,
+            vec![156.0, 150.5, 145.0, 138.0, 137.0, 129.0, 122.0],
+            "rows of the same series must be sorted by chapter desc"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_inbox_groups_series_with_chapters_desc_inside() {
+        // Two series in the same poll batch: the inbox must keep each series'
+        // rows contiguous and sort their chapters descending. The cross-series
+        // order is by series_id ASC (deterministic, but not user-meaningful).
+        let (db, _temp) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_a, src) = setup_world(conn).await;
+        let library = LibraryRepository::create(conn, "Lib2", "/lib2", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series_b = SeriesRepository::create(conn, library.id, "Series B", None)
+            .await
+            .unwrap();
+
+        let now = Utc::now();
+        let mut a1 = entry(series_a, src, "a-1");
+        a1.chapter = Some(10.0);
+        a1.observed_at = now;
+        let mut a2 = entry(series_a, src, "a-2");
+        a2.chapter = Some(20.0);
+        a2.observed_at = now;
+        let mut b1 = entry(series_b.id, src, "b-1");
+        b1.chapter = Some(5.0);
+        b1.observed_at = now;
+        let mut b2 = entry(series_b.id, src, "b-2");
+        b2.chapter = Some(7.0);
+        b2.observed_at = now;
+        // Insert interleaved to prove ordering doesn't leak from insertion order.
+        ReleaseLedgerRepository::record(conn, a1).await.unwrap();
+        ReleaseLedgerRepository::record(conn, b1).await.unwrap();
+        ReleaseLedgerRepository::record(conn, a2).await.unwrap();
+        ReleaseLedgerRepository::record(conn, b2).await.unwrap();
+
+        let rows = ReleaseLedgerRepository::list_inbox(conn, LedgerInboxFilter::default(), 100, 0)
+            .await
+            .unwrap();
+        // Each series' rows must be contiguous and chapter-desc internally.
+        let series_groups: Vec<Vec<(Uuid, f64)>> = rows
+            .iter()
+            .map(|r| (r.series_id, r.chapter.unwrap()))
+            .fold(Vec::new(), |mut acc, (sid, ch)| {
+                if acc.last().is_some_and(|g: &Vec<_>| g[0].0 == sid) {
+                    acc.last_mut().unwrap().push((sid, ch));
+                } else {
+                    acc.push(vec![(sid, ch)]);
+                }
+                acc
+            });
+        assert_eq!(
+            series_groups.len(),
+            2,
+            "rows of each series must be contiguous"
+        );
+        for group in &series_groups {
+            let chs: Vec<f64> = group.iter().map(|(_, c)| *c).collect();
+            let mut sorted = chs.clone();
+            sorted.sort_by(|a, b| b.partial_cmp(a).unwrap());
+            assert_eq!(chs, sorted, "chapters within a series must be desc");
+        }
     }
 
     #[tokio::test]

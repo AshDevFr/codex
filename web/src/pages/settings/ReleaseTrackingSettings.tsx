@@ -27,7 +27,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { useMemo, useState } from "react";
+import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
 import { pluginsApi } from "@/api/plugins";
 import type { ReleaseSource } from "@/api/releases";
 import { settingsApi } from "@/api/settings";
@@ -76,6 +76,30 @@ export function ReleaseTrackingSettings() {
   const update = useUpdateReleaseSource();
   const pollNow = usePollReleaseSourceNow();
   const reset = useResetReleaseSource();
+
+  // The mutation hooks expose a single shared `isPending` flag, which would
+  // light up the spinner on every row whenever any one row's request was in
+  // flight. Track in-flight `sourceId`s explicitly so each row's spinner
+  // reflects only that row's own request, even when multiple are pending
+  // concurrently.
+  const [pollingIds, setPollingIds] = useState<ReadonlySet<string>>(new Set());
+  const [resettingIds, setResettingIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+
+  const addId = (
+    setter: Dispatch<SetStateAction<ReadonlySet<string>>>,
+    id: string,
+  ) => setter((prev) => new Set(prev).add(id));
+  const removeId = (
+    setter: Dispatch<SetStateAction<ReadonlySet<string>>>,
+    id: string,
+  ) =>
+    setter((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
 
   return (
     <Box p="md">
@@ -146,18 +170,26 @@ export function ReleaseTrackingSettings() {
                         update: { pollIntervalS: seconds },
                       })
                     }
-                    onPollNow={() => pollNow.mutate(source.id)}
-                    pollNowPending={pollNow.isPending}
+                    onPollNow={() => {
+                      addId(setPollingIds, source.id);
+                      pollNow.mutate(source.id, {
+                        onSettled: () => removeId(setPollingIds, source.id),
+                      });
+                    }}
+                    pollNowPending={pollingIds.has(source.id)}
                     onReset={() => {
                       if (
                         window.confirm(
                           `Reset "${source.displayName}"?\n\nThis deletes every release ledger row for this source and clears its poll state (etag, last poll time). User-managed settings (enabled, interval, name) are preserved. The next poll will re-record everything as new.\n\nThis cannot be undone.`,
                         )
                       ) {
-                        reset.mutate(source.id);
+                        addId(setResettingIds, source.id);
+                        reset.mutate(source.id, {
+                          onSettled: () => removeId(setResettingIds, source.id),
+                        });
                       }
                     }}
-                    resetPending={reset.isPending}
+                    resetPending={resettingIds.has(source.id)}
                   />
                 ))}
               </Table.Tbody>

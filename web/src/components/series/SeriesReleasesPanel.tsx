@@ -2,29 +2,34 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Box,
   Card,
+  Collapse,
   Group,
   Loader,
   Stack,
-  Table,
   Text,
   Tooltip,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import {
   IconBellOff,
   IconBellRinging,
-  IconCheck,
-  IconExternalLink,
+  IconChevronDown,
+  IconChevronRight,
   IconRss,
-  IconX,
 } from "@tabler/icons-react";
-import { format } from "date-fns";
-import { useMemo, useState } from "react";
-import type { ReleaseLedgerEntry } from "@/api/releases";
-import { MediaUrlIcon } from "@/components/releases/MediaUrlIcon";
+import { useEffect, useMemo, useState } from "react";
+import type { BulkReleaseAction, ReleaseSource } from "@/api/releases";
+import { ReleasesBulkActionBar } from "@/components/releases/ReleasesBulkActionBar";
+import { ReleasesBulkDeleteModal } from "@/components/releases/ReleasesBulkDeleteModal";
+import { ReleasesTable } from "@/components/releases/ReleasesTable";
 import {
+  useBulkReleaseAction,
+  useDeleteRelease,
   useDismissRelease,
   useMarkReleaseAcquired,
+  useReleaseSources,
   useSeriesReleases,
 } from "@/hooks/useReleases";
 import { useUserPreference } from "@/hooks/useUserPreference";
@@ -33,24 +38,11 @@ interface SeriesReleasesPanelProps {
   seriesId: string;
 }
 
-const STATE_BADGE: Record<string, { color: string; label: string }> = {
-  announced: { color: "blue", label: "New" },
-  marked_acquired: { color: "green", label: "Acquired" },
-  dismissed: { color: "gray", label: "Dismissed" },
-  hidden: { color: "gray", label: "Hidden" },
-};
-
-interface GroupedKey {
-  chapter: number | null | undefined;
-  volume: number | null | undefined;
-}
-
-function groupKey(entry: ReleaseLedgerEntry): string {
-  return `${entry.chapter ?? "_"}::${entry.volume ?? "_"}`;
-}
-
 export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
   const [showDismissed, setShowDismissed] = useState(false);
+  // Releases panel collapses by default — series detail is the user's main
+  // landing point and the panel can grow long. They open it deliberately.
+  const [opened, { toggle }] = useDisclosure(false);
   const stateFilter = showDismissed ? undefined : "announced";
 
   // Per-user mute. Persisted via the user_preferences store with localStorage
@@ -71,29 +63,56 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
     state: stateFilter,
     pageSize: 100,
   });
+  const { data: sources } = useReleaseSources();
   const dismiss = useDismissRelease();
   const markAcquired = useMarkReleaseAcquired();
+  const deleteRelease = useDeleteRelease();
+  const bulk = useBulkReleaseAction();
 
-  const groups = useMemo(() => {
-    const entries = data?.data ?? [];
-    const map = new Map<
-      string,
-      { key: GroupedKey; entries: ReleaseLedgerEntry[] }
-    >();
-    for (const entry of entries) {
-      const k = groupKey(entry);
-      const existing = map.get(k);
-      if (existing) {
-        existing.entries.push(entry);
+  const entries = data?.data ?? [];
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulkDelete, { open: openBulkDelete, close: closeBulkDelete }] =
+    useDisclosure(false);
+  // Drop selections when the visible set changes — IDs that fell off screen
+  // shouldn't quietly remain selected for the next bulk action.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps are change-triggers
+  useEffect(() => {
+    setSelected(new Set());
+  }, [showDismissed, seriesId]);
+  const toggleAll = () => {
+    setSelected((prev) => {
+      const allSelected =
+        entries.length > 0 && entries.every((e) => prev.has(e.id));
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const e of entries) next.delete(e.id);
       } else {
-        map.set(k, {
-          key: { chapter: entry.chapter, volume: entry.volume },
-          entries: [entry],
-        });
+        for (const e of entries) next.add(e.id);
       }
-    }
-    return Array.from(map.values());
-  }, [data?.data]);
+      return next;
+    });
+  };
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const runBulk = (action: BulkReleaseAction) => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    bulk.mutate({ ids, action }, { onSuccess: () => setSelected(new Set()) });
+  };
+
+  // Same client-side join the inbox uses: keep the ledger DTO lean while
+  // showing a human label instead of a UUID prefix.
+  const sourceById = useMemo(() => {
+    const map = new Map<string, ReleaseSource>();
+    for (const s of sources ?? []) map.set(s.id, s);
+    return map;
+  }, [sources]);
 
   if (isLoading) {
     return (
@@ -107,182 +126,114 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
   }
 
   return (
-    <Card withBorder padding="md" radius="md">
-      <Stack gap="sm">
-        <Group justify="space-between" wrap="nowrap" id="releases">
-          <Group gap="xs">
-            <IconRss size={18} />
-            <Text fw={600}>Releases</Text>
-            <Badge color="gray" variant="light" size="sm">
-              {data?.total ?? 0}
-            </Badge>
-            {isMuted && (
-              <Badge color="orange" variant="light" size="sm">
-                Muted
-              </Badge>
-            )}
-          </Group>
-          <Group gap="xs">
-            <Tooltip
-              label={
-                isMuted
-                  ? "Re-enable announcement toasts and badge for this series"
-                  : "Stop announcement toasts and badge for this series (your account only)"
-              }
+    <>
+      <Card withBorder padding="md" radius="md">
+        <Stack gap="sm">
+          <Group justify="space-between" wrap="nowrap" id="releases">
+            <Group
+              gap="xs"
+              onClick={toggle}
+              style={{ cursor: "pointer", flex: 1, minWidth: 0 }}
+              role="button"
+              aria-expanded={opened}
+              aria-label={opened ? "Collapse releases" : "Expand releases"}
             >
-              <ActionIcon
-                variant="subtle"
-                color={isMuted ? "orange" : "gray"}
-                onClick={toggleMute}
-                aria-label={isMuted ? "Unmute releases" : "Mute releases"}
-              >
-                {isMuted ? (
-                  <IconBellOff size={16} />
-                ) : (
-                  <IconBellRinging size={16} />
-                )}
-              </ActionIcon>
-            </Tooltip>
-            <Anchor
-              component="button"
-              type="button"
-              size="sm"
-              onClick={() => setShowDismissed((prev) => !prev)}
-            >
-              {showDismissed ? "Hide dismissed" : "Show all states"}
-            </Anchor>
-          </Group>
-        </Group>
-
-        {groups.length === 0 ? (
-          <Text size="sm" c="dimmed">
-            No releases yet. Once a release source picks this series up, new
-            chapters/volumes will land here.
-          </Text>
-        ) : (
-          <Table verticalSpacing="xs" highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Ch / Vol</Table.Th>
-                <Table.Th>Source / Group</Table.Th>
-                <Table.Th>Lang</Table.Th>
-                <Table.Th>State</Table.Th>
-                <Table.Th>Observed</Table.Th>
-                <Table.Th aria-label="Actions" />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {groups.map(({ key, entries }) =>
-                entries.map((entry, idx) => {
-                  const stateInfo = STATE_BADGE[entry.state] ?? {
-                    color: "gray",
-                    label: entry.state,
-                  };
-                  const isFirst = idx === 0;
-                  return (
-                    <Table.Tr key={entry.id}>
-                      <Table.Td>
-                        {isFirst ? (
-                          <Text size="sm" fw={500}>
-                            {key.chapter !== null && key.chapter !== undefined
-                              ? `Ch ${key.chapter}`
-                              : ""}
-                            {key.volume !== null && key.volume !== undefined
-                              ? key.chapter !== null &&
-                                key.chapter !== undefined
-                                ? ` · Vol ${key.volume}`
-                                : `Vol ${key.volume}`
-                              : ""}
-                            {!key.chapter && !key.volume ? "—" : ""}
-                          </Text>
-                        ) : null}
-                      </Table.Td>
-                      <Table.Td>
-                        <Stack gap={2}>
-                          {entry.groupOrUploader && (
-                            <Text size="sm">{entry.groupOrUploader}</Text>
-                          )}
-                          <Text size="xs" c="dimmed">
-                            source: {entry.sourceId.slice(0, 8)}…
-                          </Text>
-                        </Stack>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="sm">{entry.language ?? "—"}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge
-                          color={stateInfo.color}
-                          variant="light"
-                          size="sm"
-                        >
-                          {stateInfo.label}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs" c="dimmed">
-                          {format(new Date(entry.observedAt), "yyyy-MM-dd")}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap={4} justify="flex-end" wrap="nowrap">
-                          <Tooltip label="Open payload URL">
-                            <ActionIcon
-                              component="a"
-                              href={entry.payloadUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              variant="subtle"
-                              size="sm"
-                              aria-label="Open payload URL"
-                            >
-                              <IconExternalLink size={16} />
-                            </ActionIcon>
-                          </Tooltip>
-                          {entry.mediaUrl && (
-                            <MediaUrlIcon
-                              url={entry.mediaUrl}
-                              kind={entry.mediaUrlKind}
-                            />
-                          )}
-                          {entry.state === "announced" && (
-                            <>
-                              <Tooltip label="Mark acquired">
-                                <ActionIcon
-                                  variant="subtle"
-                                  size="sm"
-                                  color="green"
-                                  loading={markAcquired.isPending}
-                                  onClick={() => markAcquired.mutate(entry.id)}
-                                  aria-label="Mark acquired"
-                                >
-                                  <IconCheck size={16} />
-                                </ActionIcon>
-                              </Tooltip>
-                              <Tooltip label="Dismiss">
-                                <ActionIcon
-                                  variant="subtle"
-                                  size="sm"
-                                  color="red"
-                                  loading={dismiss.isPending}
-                                  onClick={() => dismiss.mutate(entry.id)}
-                                  aria-label="Dismiss"
-                                >
-                                  <IconX size={16} />
-                                </ActionIcon>
-                              </Tooltip>
-                            </>
-                          )}
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                }),
+              {opened ? (
+                <IconChevronDown size={16} />
+              ) : (
+                <IconChevronRight size={16} />
               )}
-            </Table.Tbody>
-          </Table>
-        )}
-      </Stack>
-    </Card>
+              <IconRss size={18} />
+              <Text fw={600}>Releases</Text>
+              <Badge color="gray" variant="light" size="sm">
+                {data?.total ?? 0}
+              </Badge>
+              {isMuted && (
+                <Badge color="orange" variant="light" size="sm">
+                  Muted
+                </Badge>
+              )}
+            </Group>
+            <Group gap="xs">
+              <Tooltip
+                label={
+                  isMuted
+                    ? "Re-enable announcement toasts and badge for this series"
+                    : "Stop announcement toasts and badge for this series (your account only)"
+                }
+              >
+                <ActionIcon
+                  variant="subtle"
+                  color={isMuted ? "orange" : "gray"}
+                  onClick={toggleMute}
+                  aria-label={isMuted ? "Unmute releases" : "Mute releases"}
+                >
+                  {isMuted ? (
+                    <IconBellOff size={16} />
+                  ) : (
+                    <IconBellRinging size={16} />
+                  )}
+                </ActionIcon>
+              </Tooltip>
+              {opened && (
+                <Anchor
+                  component="button"
+                  type="button"
+                  size="sm"
+                  onClick={() => setShowDismissed((prev) => !prev)}
+                >
+                  {showDismissed ? "Hide dismissed" : "Show all states"}
+                </Anchor>
+              )}
+            </Group>
+          </Group>
+
+          <Collapse in={opened}>
+            {selected.size > 0 && (
+              <Box mb="xs">
+                <ReleasesBulkActionBar
+                  count={selected.size}
+                  isPending={bulk.isPending}
+                  onAction={runBulk}
+                  onClear={() => setSelected(new Set())}
+                  onDeleteClick={openBulkDelete}
+                />
+              </Box>
+            )}
+            {entries.length === 0 ? (
+              <Text size="sm" c="dimmed">
+                No releases yet. Once a release source picks this series up, new
+                chapters/volumes will land here.
+              </Text>
+            ) : (
+              <ReleasesTable
+                entries={entries}
+                sourceById={sourceById}
+                selected={selected}
+                onToggleOne={toggleOne}
+                onToggleAll={toggleAll}
+                onDismiss={(id) => dismiss.mutate(id)}
+                onMarkAcquired={(id) => markAcquired.mutate(id)}
+                onDelete={(id) => deleteRelease.mutate(id)}
+                isDismissPending={dismiss.isPending}
+                isMarkAcquiredPending={markAcquired.isPending}
+                isDeletePending={deleteRelease.isPending}
+                verticalSpacing="xs"
+              />
+            )}
+          </Collapse>
+        </Stack>
+      </Card>
+      <ReleasesBulkDeleteModal
+        opened={confirmBulkDelete}
+        onClose={closeBulkDelete}
+        onConfirm={() => {
+          runBulk("delete");
+          closeBulkDelete();
+        }}
+        count={selected.size}
+        isPending={bulk.isPending}
+      />
+    </>
   );
 }

@@ -131,6 +131,58 @@ describe("ReleaseTrackingSettings", () => {
     });
   });
 
+  it("Poll now spinner is per-row, not shared across rows", async () => {
+    // Two sources: the first poll is held in flight while we click the
+    // second. Only the first row should show a loading spinner.
+    list.mockResolvedValue([
+      source({
+        id: "11111111-1111-1111-1111-111111111111",
+        displayName: "Source A",
+      }),
+      source({
+        id: "22222222-2222-2222-2222-222222222222",
+        displayName: "Source B",
+        sourceKey: "mu:other",
+      }),
+    ]);
+
+    let resolveFirst:
+      | ((v: { status: string; message: string }) => void)
+      | null = null;
+    pollNow.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+
+    const user = userEvent.setup();
+    renderWithProviders(<ReleaseTrackingSettings />);
+    await waitFor(() => {
+      expect(screen.getByText("Source A")).toBeInTheDocument();
+      expect(screen.getByText("Source B")).toBeInTheDocument();
+    });
+
+    const pollButtons = screen.getAllByLabelText("Poll now");
+    expect(pollButtons).toHaveLength(2);
+
+    await user.click(pollButtons[0]);
+
+    await waitFor(() => {
+      expect(pollButtons[0]).toHaveAttribute("data-loading", "true");
+    });
+    // Crucially, the other row's button must NOT be in a loading state while
+    // row A's poll is in flight.
+    expect(pollButtons[1]).not.toHaveAttribute("data-loading", "true");
+    expect(pollButtons[1]).not.toBeDisabled();
+
+    // Resolve the first request and verify the spinner clears.
+    resolveFirst?.({ status: "enqueued", message: "ok" });
+    await waitFor(() => {
+      expect(pollButtons[0]).not.toHaveAttribute("data-loading", "true");
+    });
+  });
+
   it("plugin-sources dropdown lists release-source plugins by display name", async () => {
     list.mockResolvedValue([]);
     // One release-source plugin + one metadata plugin to confirm filtering.

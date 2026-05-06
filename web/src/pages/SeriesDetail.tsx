@@ -1029,20 +1029,6 @@ export function SeriesDetail() {
             </Group>
           )}
 
-          {/* Release tracking (admin/editor surface; query stays cheap when collapsed).
-              Hidden on libraries with no covering release-source plugin. */}
-          {canEditSeries && releaseTrackingAvailable && (
-            <TrackingPanel seriesId={series.id} canEdit={canEditSeries} />
-          )}
-
-          {/* Releases panel: ledger entries grouped by chapter/volume. Shows
-              whenever the series has tracking enabled and a plugin can
-              actually deliver releases — otherwise the panel would render
-              an empty inbox with no path to ever populate. */}
-          {tracking?.tracked && releaseTrackingAvailable && (
-            <SeriesReleasesPanel seriesId={series.id} />
-          )}
-
           {/* External Links */}
           {series.externalLinks && series.externalLinks.length > 0 && (
             <Group gap="md" align="flex-start">
@@ -1078,6 +1064,22 @@ export function SeriesDetail() {
                 publicSettings?.["display.custom_metadata_template"]?.value
               }
             />
+          )}
+
+          {/* Release tracking (admin/editor surface; query stays cheap when collapsed).
+              Hidden on libraries with no covering release-source plugin.
+              Sits below the metadata panels: it's an action surface, not
+              identifying data. */}
+          {canEditSeries && releaseTrackingAvailable && (
+            <TrackingPanel seriesId={series.id} canEdit={canEditSeries} />
+          )}
+
+          {/* Releases panel: ledger entries grouped by chapter/volume. Shows
+              whenever the series has tracking enabled and a plugin can
+              actually deliver releases — otherwise the panel would render
+              an empty inbox with no path to ever populate. */}
+          {tracking?.tracked && releaseTrackingAvailable && (
+            <SeriesReleasesPanel seriesId={series.id} />
           )}
         </Stack>
 
