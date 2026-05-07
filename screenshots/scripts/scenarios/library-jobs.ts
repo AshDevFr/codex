@@ -66,19 +66,28 @@ export async function run(page: Page, _context: BrowserContext): Promise<void> {
     await page.waitForTimeout(200);
   }
 
-  // Pick a provider. The Select label reads "Provider" or "Plugin" —
-  // Mantine wraps the input in `.mantine-Select-input`.
-  const providerSelect = page.locator(
-    'label:has-text("Provider"), label:has-text("Plugin")',
-  ).locator('..').locator('.mantine-Select-input').first();
+  // Pick a provider. The Select label reads "Provider", and Mantine wraps
+  // the input in `.mantine-Select-input`.
+  //
+  // Mantine 8 keeps Combobox options mounted in the DOM (with `data-hidden`
+  // and `display: none`) when the dropdown is closed. A bare `[role="option"]`
+  // locator therefore matches stale hidden options from earlier selects on
+  // the page (e.g. the Cadence preset list above), so we must scope the
+  // option lookup to a visible listbox.
+  const providerSelect = page.locator('label:has-text("Provider")')
+    .locator('..').locator('.mantine-Select-input').first();
   if ((await providerSelect.count()) > 0) {
     await providerSelect.click();
-    await page.waitForTimeout(300);
-    const firstOption = page.locator('[role="option"]').first();
-    if ((await firstOption.count()) > 0) {
-      await firstOption.click();
+    // Wait for the Provider dropdown to actually render visible options.
+    const visibleOption = page
+      .locator('[role="listbox"]:visible [role="option"]')
+      .first();
+    try {
+      await visibleOption.waitFor({ state: "visible", timeout: 2000 });
+      await visibleOption.click();
       await page.waitForTimeout(400);
-    } else {
+    } catch {
+      console.log("    ⚠️  No metadata provider plugins available, skipping provider pick");
       await page.keyboard.press("Escape");
     }
   }

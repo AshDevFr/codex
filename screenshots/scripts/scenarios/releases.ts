@@ -110,29 +110,122 @@ async function enableTrackingOnMangaSeries(page: Page): Promise<string | null> {
     }
   }
 
-  // Add an alias the MangaUpdates feed will match against.
-  // The fixture is "Give My Regards to Black Jack" — its MU listing
-  // matches that exact title; no external ID is required.
-  const aliasInput = page.locator('input[placeholder*="alias" i], input[aria-label*="alias" i]').first();
-  if ((await aliasInput.count()) === 0) {
-    // Fall back to the only TextInput inside the matcher-aliases section.
-    const fallback = page.locator(
-      'div:has(> div:has-text("Matcher aliases")) input[type="text"], div:has-text("Matcher aliases") + * input[type="text"]',
-    ).first();
-    if ((await fallback.count()) > 0) {
-      await fallback.fill("Give My Regards to Black Jack");
-      await page.keyboard.press("Enter");
-    }
-  } else {
-    await aliasInput.fill("Give My Regards to Black Jack");
-    await page.keyboard.press("Enter");
-  }
-  await page.waitForTimeout(800);
+  // Add a matcher alias. "Say Hello to Black Jack" is the canonical
+  // MangaUpdates title for the fixture series, so the feed matches even
+  // before the external ID is wired up.
+  await ensureAlias(page, "Say Hello to Black Jack");
+
+  // Add the MangaUpdates external source ID so polls match by ID rather
+  // than relying on title fuzz. `hly6oqa` is the MU series slug for
+  // "Say Hello to Black Jack".
+  await ensureExternalId(page, "api:mangaupdates", "hly6oqa");
 
   // Capture the panel expanded with tracking enabled.
   await captureScreenshot(page, "releases/series-tracking-enabled");
 
   return seriesUrl;
+}
+
+/**
+ * Add a matcher alias to the series tracking panel if it's not already
+ * present. The alias input is inside the "Release tracking" card,
+ * placeholder "Add an alias…", paired with an "Add" submit button.
+ */
+async function ensureAlias(page: Page, alias: string): Promise<void> {
+  const existing = page.locator(`[aria-label="Remove alias ${alias}"]`).first();
+  if ((await existing.count()) > 0) {
+    console.log(`      ✓ Alias already present: ${alias}`);
+    return;
+  }
+  const aliasInput = page.locator('input[placeholder="Add an alias…"]').first();
+  if ((await aliasInput.count()) === 0) {
+    console.log("      ⚠️  Alias input not found, skipping");
+    return;
+  }
+  await aliasInput.fill(alias);
+  // The input is wrapped in a <form onSubmit>; the visible submit is the
+  // "Add" button next to it. Click it explicitly to avoid relying on
+  // Enter-to-submit behaviour.
+  const addAliasButton = page
+    .locator('form:has(input[placeholder="Add an alias…"]) button[type="submit"]')
+    .first();
+  await addAliasButton.click();
+  // Wait for the chip to render (mutation is optimistic/short).
+  await page
+    .locator(`[aria-label="Remove alias ${alias}"]`)
+    .first()
+    .waitFor({ state: "visible", timeout: 5000 })
+    .catch(() => console.log(`      ⚠️  Alias chip for "${alias}" never appeared`));
+}
+
+/**
+ * Open the "Edit External Source IDs" modal from the series header and
+ * add a (source, externalId) pair if it's not already configured. The
+ * modal is opened by the small pencil ActionIcon rendered alongside the
+ * external-id badges (Tooltip label "Edit external IDs").
+ */
+async function ensureExternalId(
+  page: Page,
+  source: string,
+  externalId: string,
+): Promise<void> {
+  // Open the modal via the pencil icon. Mantine renders the Tooltip's
+  // accessible name on the wrapped ActionIcon as aria-label, but here
+  // it falls back to clicking the icon button by its tooltip text.
+  const editButton = page
+    .locator('button[aria-label="Edit external IDs"], [data-testid="edit-external-ids"]')
+    .first();
+  if ((await editButton.count()) === 0) {
+    // Fall back: the ActionIcon sits next to the external-id badges and
+    // wraps an IconEdit svg. Find it by the icon class.
+    const iconButton = page.locator('button:has(svg.tabler-icon-edit)').first();
+    if ((await iconButton.count()) === 0) {
+      console.log("      ⚠️  External IDs edit button not found, skipping");
+      return;
+    }
+    await iconButton.click();
+  } else {
+    await editButton.click();
+  }
+
+  // Wait for the modal.
+  const modal = page.locator('.mantine-Modal-content:has-text("Edit External Source IDs")').first();
+  try {
+    await modal.waitFor({ state: "visible", timeout: 5000 });
+  } catch {
+    console.log("      ⚠️  External IDs modal did not open");
+    return;
+  }
+
+  // If the (source, id) pair already exists, just close.
+  const existingSource = modal.locator(`input[value="${source}"]`).first();
+  if ((await existingSource.count()) > 0) {
+    console.log(`      ✓ External ID already present: ${source} = ${existingSource}`);
+    const cancel = modal.locator('button:has-text("Cancel")').first();
+    await cancel.click();
+    return;
+  }
+
+  // Click "Add" inside the modal to create a new entry row, then fill
+  // the source + externalId inputs by their placeholders.
+  const addEntry = modal.locator('button:has-text("Add")').first();
+  await addEntry.click();
+  await page.waitForTimeout(200);
+
+  const sourceInput = modal.locator('input[placeholder="e.g. plugin:anilist"]').last();
+  const idInput = modal.locator('input[placeholder="e.g. 12345"]').last();
+  await sourceInput.fill(source);
+  await idInput.fill(externalId);
+
+  // Save.
+  const saveButton = modal.locator('button:has-text("Save Changes")').first();
+  await saveButton.click();
+
+  // Modal closes on success.
+  await modal.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {
+    console.log("      ⚠️  External IDs modal did not close after save");
+  });
+  await page.waitForTimeout(400);
 }
 
 /**
@@ -168,15 +261,40 @@ async function pollMangaUpdatesSource(page: Page): Promise<void> {
   await pollNowButton.click();
   await page.waitForTimeout(500);
 
-  // The button shows a loading spinner while the poll is in flight.
-  // Wait for it to clear (max 60s — MangaUpdates RSS is usually fast
-  // but can stall on rate limits).
+  // Wait for the poll task to finish. We watch for two signals on the
+  // MangaUpdates row:
+  //   1. The Mantine Loader on the Poll Now button disappears
+  //      (`pollNowPending` flips back to false, driven by the SSE
+  //      release_source_polled event or the 5s task-progress refetch).
+  //   2. The status badge transitions away from "Never polled" — either
+  //      to "OK" (success, lastPolledAt populated) or "Errored" (fail).
+  //
+  // The MU RSS feed is normally fast (<5s), but rate limits or network
+  // hiccups can stretch it; cap at 120s so a stalled run fails loud
+  // instead of silently capturing a still-spinning row.
   const start = Date.now();
-  const maxWait = 60_000;
+  const maxWait = 120_000;
+  let pollSettled = false;
   while (Date.now() - start < maxWait) {
-    const stillLoading = await row.locator('.mantine-Loader-root').count();
-    if (stillLoading === 0) break;
+    const spinnerCount = await row.locator('.mantine-Loader-root').count();
+    const hasTerminalBadge =
+      (await row.locator('.mantine-Badge-root:has-text("OK")').count()) > 0 ||
+      (await row.locator('.mantine-Badge-root:has-text("Errored")').count()) > 0;
+    if (spinnerCount === 0 && hasTerminalBadge) {
+      pollSettled = true;
+      break;
+    }
     await page.waitForTimeout(1000);
+  }
+  if (!pollSettled) {
+    console.log("      ⚠️  Poll did not settle within 120s — capturing current state anyway");
+  } else {
+    const errored = await row.locator('.mantine-Badge-root:has-text("Errored")').count();
+    if (errored > 0) {
+      console.log("      ⚠️  Poll completed with errors (Errored badge present)");
+    } else {
+      console.log("      ✓ Poll completed (OK badge visible)");
+    }
   }
 
   // Re-fetch the page to surface the updated last-poll timestamp.
