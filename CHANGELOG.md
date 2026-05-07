@@ -2,6 +2,52 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.19.0] - 2026-05-07
+
+### 🚀 Features
+
+- *(release-tracking)* Add series_tracking sidecar and series_aliases schema
+- *(release-tracking)* Add backfill task, tracking API, and UI surface
+- *(release-tracking)* Add release ledger schema, repos, and HTTP API
+- *(release-tracking)* Add release_source plugin capability with capability-gated reverse-RPC
+- *(release-tracking)* Add poll task, scheduler, and per-host backoff
+- *(release-tracking)* Expose upstream-publication gap on series DTO
+- *(release-tracking)* Add MangaUpdates RSS plugin and language preference plumbing
+- *(release-tracking)* Add ReleaseAnnounced event and Releases UI
+- *(release-tracking)* Add Nyaa uploader-feed release-source plugin
+- *(release-tracking)* Persist notification preferences and clean up plugin config UI
+- *(release-tracking)* Add releases/register_sources reverse-RPC
+- *(release-tracking)* Seed tracking on toggle, bulk track menu, last-poll summary
+- *(release-nyaa)* Tokenize bundle releases and split alias-form titles
+- *(release-tracking)* Add mediaUrl + mediaUrlKind for direct fetch URLs
+- *(release-tracking)* Add inbox facets, bulk actions, and per-row delete
+- *(release-tracking)* Unify inbox + series releases UI and fix bulk-poll dedup
+- *(release-tracking)* Replace dismissed toggle with New/All segmented filter on series panel
+- *(release-tracking)* Expose default cron schedule on settings page
+- *(release-tracking)* Auto-ignore releases for already-owned volumes/chapters
+- *(plugins)* Allow array config fields and broaden type hint
+
+### 🐛 Bug Fixes
+
+- *(release-tracking)* Match api: external IDs, dedup polls, emit polled SSE event
+- *(release-mangaupdates)* Decode base36 slugs to numeric IDs before API calls
+- *(release-mangaupdates)* Default item language to "en" so items survive the filter
+- *(release-tracking)* Poll source list while poll task is in flight
+- *(plugins)* Replay reverse-RPC events through task-local broadcaster
+- *(web)* Resolve TypeScript build errors in releases UI
+
+### 🚜 Refactor
+
+- *(release-tracking)* Replace per-source poll seconds with cron schedules
+
+### 🧪 Testing
+
+- *(release-tracking)* Cover seed-on-track, bulk track menu, applicability endpoint
+
+### ⚙️ Miscellaneous Tasks
+
+- *(screenshots)* Cover release tracking + bulk metadata, fix PDF worker, build SDK first
+
 ## [1.18.1] - 2026-05-06
 
 ### 🚀 Features

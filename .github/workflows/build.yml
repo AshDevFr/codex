@@ -524,6 +524,9 @@ jobs:
       - host
     if: ${{ always() && needs.host.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -533,6 +536,12 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+      # npm Trusted Publishing requires npm >= 11.5.1 (Node 22 ships 10.9.7).
+      # Pinned to 11.5.1 to (a) avoid the Node 22.22.2 self-upgrade regression
+      # that breaks `npm install -g npm@latest` with a missing promise-retry
+      # module (nodejs/node#62425), and (b) keep the publish step reproducible.
+      - name: Install npm 11.5.1 (minimum for Trusted Publishing)
+        run: npm install -g npm@11.5.1
       # Note: We remove package-lock.json and use npm install instead of npm ci
       # because Biome updates frequently and we want to use the latest compatible version
       - name: Install dependencies and build
@@ -541,11 +550,11 @@ jobs:
           rm -rf node_modules package-lock.json
           npm install
           npm run build
+      # Auth via npm Trusted Publishing (OIDC). NODE_AUTH_TOKEN is intentionally
+      # absent: its presence would force npm into token auth and bypass OIDC.
       - name: Publish to npm
         working-directory: plugins/sdk-typescript
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
   # Publish plugins to npm (only for releases, after SDK is published)
   publish-plugins:
@@ -555,6 +564,9 @@ jobs:
       - publish-sdk
     if: ${{ always() && needs.publish-sdk.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -575,6 +587,12 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+      # npm Trusted Publishing requires npm >= 11.5.1 (Node 22 ships 10.9.7).
+      # Pinned to 11.5.1 to (a) avoid the Node 22.22.2 self-upgrade regression
+      # that breaks `npm install -g npm@latest` with a missing promise-retry
+      # module (nodejs/node#62425), and (b) keep the publish step reproducible.
+      - name: Install npm 11.5.1 (minimum for Trusted Publishing)
+        run: npm install -g npm@11.5.1
       # Update SDK dependency from file: to published npm version before install
       - name: Update SDK dependency for publish
         working-directory: plugins/${{ matrix.plugin }}
@@ -592,11 +610,11 @@ jobs:
       - name: Build plugin
         working-directory: plugins/${{ matrix.plugin }}
         run: npm run build
+      # Auth via npm Trusted Publishing (OIDC). NODE_AUTH_TOKEN is intentionally
+      # absent: its presence would force npm into token auth and bypass OIDC.
       - name: Publish to npm
         working-directory: plugins/${{ matrix.plugin }}
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
   announce:
     needs:
