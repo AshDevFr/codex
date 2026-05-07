@@ -385,6 +385,29 @@ async function configureEchoPlugin(page: Page): Promise<void> {
       await page.waitForTimeout(200);
     }
 
+    // Click again to add bulk scopes (drives the per-library scheduled
+    // jobs editor's provider dropdown).
+    await scopesSelect.click();
+    await page.waitForTimeout(300);
+
+    // Select "Series Bulk Actions"
+    const seriesBulkOption = page.locator('[role="option"]:has-text("Series Bulk Actions")').first();
+    if ((await seriesBulkOption.count()) > 0) {
+      await seriesBulkOption.click();
+      await page.waitForTimeout(200);
+    }
+
+    // Click again
+    await scopesSelect.click();
+    await page.waitForTimeout(300);
+
+    // Select "Book Bulk Actions"
+    const bookBulkOption = page.locator('[role="option"]:has-text("Book Bulk Actions")').first();
+    if ((await bookBulkOption.count()) > 0) {
+      await bookBulkOption.click();
+      await page.waitForTimeout(200);
+    }
+
     // Close dropdown
     await page.keyboard.press("Escape");
     await page.waitForTimeout(200);

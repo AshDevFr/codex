@@ -33,6 +33,24 @@ const config = {
   maxResults: DEFAULT_MAX_RESULTS,
 };
 
+// Encode the original query into the externalId so that get() can recover it
+// later. The protocol only passes externalId to get(), so this is how the
+// echo plugin preserves the user-facing title across calls.
+function encodeExternalId(baseId: string, query: string): string {
+  return `${baseId}::${encodeURIComponent(query)}`;
+}
+
+function decodeExternalId(externalId: string): { baseId: string; query: string | null } {
+  const sep = externalId.indexOf("::");
+  if (sep === -1) {
+    return { baseId: externalId, query: null };
+  }
+  return {
+    baseId: externalId.slice(0, sep),
+    query: decodeURIComponent(externalId.slice(sep + 2)),
+  };
+}
+
 // Generate echo results based on config
 function generateEchoResults(query: string, maxResults: number) {
   const results = [];
@@ -40,7 +58,7 @@ function generateEchoResults(query: string, maxResults: number) {
 
   for (let i = 1; i <= count; i++) {
     results.push({
-      externalId: `echo-${i}`,
+      externalId: encodeExternalId(`echo-${i}`, query),
       title: i === 1 ? `Echo: ${query}` : `Echo Result ${i} for: ${query}`,
       alternateTitles: i === 1 ? [`Echoed Query: ${query}`] : [],
       year: new Date().getFullYear(),
@@ -69,17 +87,22 @@ const provider: MetadataProvider = {
   },
 
   async get(params: MetadataGetParams): Promise<PluginSeriesMetadata> {
+    // Recover the original search query (if encoded by search()) so we can
+    // echo the user-facing title instead of the opaque external ID.
+    const { baseId, query } = decodeExternalId(params.externalId);
+    const title = query ?? `Echo Series: ${baseId}`;
+
     // Return metadata based on the external ID with all fields populated for testing
     return {
       externalId: params.externalId,
-      externalUrl: `https://echo.example.com/series/${params.externalId}`,
-      title: `Echo Series: ${params.externalId}`,
+      externalUrl: `https://echo.example.com/series/${baseId}`,
+      title,
       alternateTitles: [
-        { title: `Echo Series: ${params.externalId}`, language: "en", titleType: "english" },
-        { title: `エコーシリーズ: ${params.externalId}`, language: "ja", titleType: "native" },
-        { title: `Echo Romanized: ${params.externalId}`, language: "ja-Latn", titleType: "romaji" },
+        { title, language: "en", titleType: "english" },
+        { title: `${title} (native)`, language: "ja", titleType: "native" },
+        { title: `${title} (romaji)`, language: "ja-Latn", titleType: "romaji" },
       ],
-      summary: `This is the full metadata for external ID: ${params.externalId}. It includes a detailed description to test summary handling.`,
+      summary: `This is the full metadata for "${title}" (id: ${baseId}). It includes a detailed description to test summary handling.`,
       status: "ended",
       year: 2024,
 
@@ -134,7 +157,7 @@ const provider: MetadataProvider = {
       // External links
       externalLinks: [
         {
-          url: `https://echo.example.com/series/${params.externalId}`,
+          url: `https://echo.example.com/series/${baseId}`,
           label: "Echo Provider",
           linkType: "provider",
         },
@@ -199,7 +222,7 @@ function generateBookEchoResults(params: BookSearchParams, maxResults: number) {
   for (let i = 1; i <= count; i++) {
     const isIsbnSearch = !!params.isbn;
     results.push({
-      externalId: `echo-book-${i}`,
+      externalId: encodeExternalId(`echo-book-${i}`, searchTerm),
       title: i === 1 ? `Echo Book: ${searchTerm}` : `Echo Book Result ${i} for: ${searchTerm}`,
       alternateTitles: i === 1 ? [`Book Query: ${searchTerm}`] : [],
       year: params.year || new Date().getFullYear(),
@@ -228,17 +251,22 @@ const bookProvider: BookMetadataProvider = {
   },
 
   async get(params: MetadataGetParams): Promise<PluginBookMetadata> {
+    // Recover the original search term encoded in the externalId so the title
+    // matches what the user saw in search results.
+    const { baseId, query } = decodeExternalId(params.externalId);
+    const title = query ?? `Echo Book: ${baseId}`;
+
     // Return book metadata based on the external ID with all fields populated for testing
     return {
       externalId: params.externalId,
-      externalUrl: `https://echo.example.com/book/${params.externalId}`,
-      title: `Echo Book: ${params.externalId}`,
+      externalUrl: `https://echo.example.com/book/${baseId}`,
+      title,
       subtitle: "A Test Subtitle",
       alternateTitles: [
-        { title: `Echo Book: ${params.externalId}`, language: "en", titleType: "english" },
-        { title: `エコーブック: ${params.externalId}`, language: "ja", titleType: "native" },
+        { title, language: "en", titleType: "english" },
+        { title: `${title} (native)`, language: "ja", titleType: "native" },
       ],
-      summary: `This is the full book metadata for external ID: ${params.externalId}. It includes a detailed description to test book metadata handling.`,
+      summary: `This is the full book metadata for "${title}" (id: ${baseId}). It includes a detailed description to test book metadata handling.`,
       bookType: "novel",
 
       // Book-specific fields
@@ -304,7 +332,7 @@ const bookProvider: BookMetadataProvider = {
       // External links
       externalLinks: [
         {
-          url: `https://echo.example.com/book/${params.externalId}`,
+          url: `https://echo.example.com/book/${baseId}`,
           label: "Echo Provider",
           linkType: "provider",
         },
