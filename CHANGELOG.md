@@ -2,6 +2,16 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.19.2] - 2026-05-08
+
+### 🐛 Bug Fixes
+
+- *(web)* Hide Releases nav entry when no release-source plugin is enabled
+
+### 📚 Documentation
+
+- Document release tracking, library jobs, exports, and missing plugin pages
+
 ## [1.19.1] - 2026-05-08
 
 ### 🐛 Bug Fixes
