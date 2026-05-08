@@ -13,6 +13,7 @@ This guide covers deploying Codex in various environments, from simple homelab s
 | [Docker Compose](./docker) | PostgreSQL | Production, Multi-user | Single host |
 | [Kubernetes](./kubernetes) | PostgreSQL | Enterprise, High Availability | Horizontal |
 | [Systemd Service](./systemd) | Either | Dedicated server | None |
+| Binary + SQLite | SQLite | Homelab, Single-user | None |
 
 ## Understanding Limitations
 
@@ -64,6 +65,19 @@ docker pull ghcr.io/ashdevfr/codex:latest
 docker compose --profile prod up -d
 docker compose exec codex codex seed --config /app/config/config.docker.yaml
 ```
+
+### Binary
+
+```bash
+# Install the latest release for Linux/macOS
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/AshDevFr/codex/releases/latest/download/codex-installer.sh | sh
+
+# Configure and run
+cp codex.example.yaml codex.yaml
+codex serve --config codex.yaml
+```
+
+For Windows, see the PowerShell installer in the [Getting Started guide](../getting-started#quick-start-with-binary).
 
 ## In This Section
 

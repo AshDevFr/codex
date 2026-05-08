@@ -1,15 +1,40 @@
+### Linux & macOS
+
 ```bash
-./codex serve
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/AshDevFr/codex/releases/latest/download/codex-installer.sh | sh
 ```
 
-On first run, Codex will create a default `codex.yaml` configuration file with SQLite database settings.
+### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/AshDevFr/codex/releases/latest/download/codex-installer.ps1 | iex"
+```
+
+The installer downloads the right binary for your platform and places it in `$CARGO_HOME/bin` (defaulting to `~/.cargo/bin`). It also updates your shell `PATH` so the `codex` command works in new terminals.
+
+:::tip Pinning a version
+To install a specific release, replace `latest` with the version tag, for example:
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/AshDevFr/codex/releases/download/v1.19.3/codex-installer.sh | sh
+```
+:::
+
+### Run Codex
+
+Once installed, start the server:
+
+```bash
+codex serve
+```
+
+On first run, Codex creates a default `codex.yaml` configuration file with SQLite database settings.
 
 Access Codex at `http://localhost:8080`. On first launch, you'll be guided through a setup wizard to create your admin account.
 
 :::tip Custom Configuration
 To customize your configuration, edit the generated `codex.yaml` file or specify a custom path:
 ```bash
-./codex serve --config /path/to/codex.yaml
+codex serve --config /path/to/codex.yaml
 ```
 See the [Configuration guide](/docs/configuration) for all available options.
 :::

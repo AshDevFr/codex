@@ -6,21 +6,37 @@ sidebar_position: 4
 
 For traditional Linux server deployments without containers.
 
-:::note
-Pre-built binaries are not yet available. You will need to [build Codex from source](../../dev/contributing/development) to use this deployment method.
-:::
-
 ## Prerequisites
 
 - Linux server with systemd
-- Codex binary (built from source)
+- Codex binary (downloaded or built from source)
 - PostgreSQL or SQLite configured
 
 ## Installation
 
-### Build from Source
+### Install the Binary
 
-Follow the [Development Setup guide](../../dev/contributing/development) to build the binary:
+Use the installer to download the latest release for your platform:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/AshDevFr/codex/releases/latest/download/codex-installer.sh | sh
+```
+
+By default, the installer places the binary in `~/.cargo/bin/codex`. For a system-wide install (recommended for systemd), move it to `/usr/local/bin/`:
+
+```bash
+sudo mv ~/.cargo/bin/codex /usr/local/bin/
+sudo chmod +x /usr/local/bin/codex
+```
+
+:::tip Pinning a version
+Replace `latest` with a specific tag (e.g. `v1.19.3`) to install a fixed version:
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/AshDevFr/codex/releases/download/v1.19.3/codex-installer.sh | sh
+```
+:::
+
+Alternatively, you can [build Codex from source](../../dev/contributing/development):
 
 ```bash
 cargo build --release
@@ -130,10 +146,13 @@ sudo systemctl reload codex
 # Stop service
 sudo systemctl stop codex
 
-# Build new version from source
-git pull
-cargo build --release
-sudo mv target/release/codex /usr/local/bin/
+# Re-run the installer to get the latest release
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/AshDevFr/codex/releases/latest/download/codex-installer.sh | sh
+sudo mv ~/.cargo/bin/codex /usr/local/bin/
+
+# Or, if building from source
+# git pull && cargo build --release
+# sudo mv target/release/codex /usr/local/bin/
 
 # Start service (migrations run automatically)
 sudo systemctl start codex
