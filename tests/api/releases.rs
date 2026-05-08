@@ -92,8 +92,11 @@ async fn record_announced(
             source_id,
             external_release_id: external_id.to_string(),
             info_hash: None,
-            chapter: Some(143.0),
-            volume: None,
+            chapters: Some(vec![codex::services::release::candidate::NumericSpan {
+                start: 143.0,
+                end: 143.0,
+            }]),
+            volumes: None,
             language: Some("en".to_string()),
             format_hints: None,
             group_or_uploader: Some("uploader".to_string()),

@@ -39,8 +39,8 @@ impl AcceptedCandidate {
             source_id,
             external_release_id: c.external_release_id,
             info_hash: c.info_hash,
-            chapter: c.chapter,
-            volume: c.volume,
+            chapters: c.chapters,
+            volumes: c.volumes,
             language: Some(c.language),
             format_hints: c.format_hints,
             group_or_uploader: c.group_or_uploader,
@@ -85,10 +85,19 @@ pub fn evaluate(
     if candidate.language.trim().is_empty() {
         return Err(CandidateReject::EmptyLanguage);
     }
-    if let Some(ch) = candidate.chapter
-        && !ch.is_finite()
-    {
-        return Err(CandidateReject::InvalidChapter);
+    // Reject any non-finite span endpoint on either axis. We treat
+    // disjoint and reversed spans elsewhere (the repo normalizes), but
+    // NaN / infinity in the wire payload is a hard error: the host has
+    // no sane way to derive the primary scalar or compare ownership.
+    let span_iter = candidate
+        .chapters
+        .iter()
+        .flatten()
+        .chain(candidate.volumes.iter().flatten());
+    for s in span_iter {
+        if !s.start.is_finite() || !s.end.is_finite() {
+            return Err(CandidateReject::InvalidChapter);
+        }
     }
 
     let now = Utc::now();
@@ -123,7 +132,7 @@ pub fn resolve_threshold(per_series_override: Option<f64>) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::release::candidate::SeriesMatch;
+    use crate::services::release::candidate::{NumericSpan, SeriesMatch};
     use chrono::Duration;
 
     fn make_candidate(confidence: f64) -> ReleaseCandidate {
@@ -134,8 +143,11 @@ mod tests {
                 reason: "test".to_string(),
             },
             external_release_id: "rel-1".to_string(),
-            chapter: Some(143.0),
-            volume: None,
+            chapters: Some(vec![NumericSpan {
+                start: 143.0,
+                end: 143.0,
+            }]),
+            volumes: None,
             language: "en".to_string(),
             format_hints: None,
             group_or_uploader: None,
@@ -203,7 +215,10 @@ mod tests {
     #[test]
     fn rejects_invalid_chapter() {
         let mut cand = make_candidate(0.95);
-        cand.chapter = Some(f64::INFINITY);
+        cand.chapters = Some(vec![NumericSpan {
+            start: f64::INFINITY,
+            end: f64::INFINITY,
+        }]);
         let err = evaluate(cand, DEFAULT_CONFIDENCE_THRESHOLD).unwrap_err();
         assert_eq!(err, CandidateReject::InvalidChapter);
     }

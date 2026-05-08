@@ -203,7 +203,8 @@ describe("pollSubscription", () => {
       candidate: {
         infoHash: string | null;
         formatHints: Record<string, unknown>;
-        volume: number | null;
+        volumes: { start: number; end: number }[] | null;
+        chapters: { start: number; end: number }[] | null;
         payloadUrl: string;
         mediaUrl?: string | null;
         mediaUrlKind?: string | null;
@@ -212,7 +213,8 @@ describe("pollSubscription", () => {
     expect(params.candidate.infoHash).toBe("aaa");
     expect(params.candidate.formatHints.digital).toBe(true);
     expect(params.candidate.formatHints.subscription).toBe("user:1r0n");
-    expect(params.candidate.volume).toBe(2);
+    expect(params.candidate.volumes).toEqual([{ start: 2, end: 2 }]);
+    expect(params.candidate.chapters).toBeNull();
     // Page url -> payloadUrl, .torrent -> mediaUrl with kind=torrent.
     expect(params.candidate.payloadUrl).toBe("https://nyaa.si/view/1");
     expect(params.candidate.mediaUrl).toBe("https://nyaa.si/download/1.torrent");

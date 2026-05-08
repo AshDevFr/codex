@@ -27,6 +27,15 @@
  * downstream from the alias matcher rather than failing here.
  */
 
+/**
+ * Numeric inclusive range. Single values are encoded as `start === end`
+ * (`{ start: 5, end: 5 }`).
+ */
+export interface NumericSpan {
+  start: number;
+  end: number;
+}
+
 /** Parsed item, pre-`ReleaseCandidate`. */
 export interface ParsedRssItem {
   /** Stable per-source ID. Derived from the link or guid. */
@@ -43,14 +52,18 @@ export interface ParsedRssItem {
    * array equal to `[seriesGuess]`.
    */
   seriesGuessAliases: string[];
-  /** Chapter number (decimals supported). Null if untyped. */
-  chapter: number | null;
-  /** Trailing chapter of a chapter range (e.g. `c126-142` → 126..142). */
-  chapterRangeEnd: number | null;
-  /** Volume number. Null if untyped. */
-  volume: number | null;
-  /** Trailing volume of a volume range (e.g. `v01-14` → 1..14). */
-  volumeRangeEnd: number | null;
+  /**
+   * Volume coverage as a normalized span list. Sorted ascending by `start`,
+   * with overlapping spans merged. Disjoint spans (`v01-04 + v06-09`) are
+   * preserved as two entries. `null` when the title carried no volume
+   * information at all.
+   */
+  volumes: NumericSpan[] | null;
+  /**
+   * Chapter coverage as a normalized span list. Same conventions as
+   * [`volumes`]; decimals are preserved (`c12.5` → `[{12.5, 12.5}]`).
+   */
+  chapters: NumericSpan[] | null;
   /** Leading `[Group]` token, if any. */
   group: string | null;
   /** Format hints as a small dictionary (digital, jxl, ...). */
@@ -277,44 +290,67 @@ function tokenizeReleaseInfo(s: string): SpreadToken[] {
 }
 
 /**
- * Aggregate spread tokens into volume + chapter axes by taking min/max across
- * each kind. Downstream matching just needs to know the span a release covers
- * ("does this release include chapter X?") — a min..max window answers that
- * question conservatively without picking a single canonical token.
+ * Project the spread-token list onto two axes of normalized [`NumericSpan`]s.
+ *
+ * Single-value tokens (`v05`, `c143`) become `{ start: N, end: N }`. Range
+ * tokens (`v01-09`, `001-050`, `c126-142`) become `{ start, end }` with the
+ * lower number on `start`. We do *not* min/max aggregate across an axis any
+ * more — disjoint ranges (`v01-04 + v06-09`) must survive intact so the host
+ * can ask "does the user own everything in here?" honestly.
  */
-function aggregateTokens(tokens: SpreadToken[]): {
-  volume: number | null;
-  volumeRangeEnd: number | null;
-  chapter: number | null;
-  chapterRangeEnd: number | null;
+function tokensToSpans(tokens: SpreadToken[]): {
+  volumes: NumericSpan[] | null;
+  chapters: NumericSpan[] | null;
 } {
-  let vMin: number | null = null;
-  let vMax: number | null = null;
-  let cMin: number | null = null;
-  let cMax: number | null = null;
+  const vol: NumericSpan[] = [];
+  const chap: NumericSpan[] = [];
   for (const t of tokens) {
-    if (t.kind === "volume") {
-      vMin = vMin === null || t.value < vMin ? t.value : vMin;
-      vMax = vMax === null || t.value > vMax ? t.value : vMax;
-    } else if (t.kind === "volRange") {
-      vMin = vMin === null || t.start < vMin ? t.start : vMin;
-      vMax = vMax === null || t.end > vMax ? t.end : vMax;
-    } else if (t.kind === "chapter") {
-      cMin = cMin === null || t.value < cMin ? t.value : cMin;
-      cMax = cMax === null || t.value > cMax ? t.value : cMax;
-    } else {
-      cMin = cMin === null || t.start < cMin ? t.start : cMin;
-      cMax = cMax === null || t.end > cMax ? t.end : cMax;
+    switch (t.kind) {
+      case "volume":
+        vol.push({ start: t.value, end: t.value });
+        break;
+      case "volRange":
+        vol.push({ start: t.start, end: t.end });
+        break;
+      case "chapter":
+        chap.push({ start: t.value, end: t.value });
+        break;
+      case "chapRange":
+        chap.push({ start: t.start, end: t.end });
+        break;
     }
   }
   return {
-    volume: vMin,
-    // Only emit a range-end when it actually differs from the start: a single
-    // volume is `volume=N, volumeRangeEnd=null`, matching the prior contract.
-    volumeRangeEnd: vMin !== null && vMax !== null && vMax !== vMin ? vMax : null,
-    chapter: cMin,
-    chapterRangeEnd: cMin !== null && cMax !== null && cMax !== cMin ? cMax : null,
+    volumes: vol.length === 0 ? null : normalizeSpans(vol),
+    chapters: chap.length === 0 ? null : normalizeSpans(chap),
   };
+}
+
+/**
+ * Sort a span list ascending and merge overlapping entries. We deliberately
+ * do *not* merge purely adjacent spans (`[1, 4]` and `[5, 9]` stay separate);
+ * the uploader chose to write them disjointly and we preserve that intent.
+ * Bad inputs where `start > end` get swapped before sorting so downstream
+ * iteration always sees `start <= end`.
+ */
+function normalizeSpans(spans: NumericSpan[]): NumericSpan[] {
+  if (spans.length === 0) return spans;
+  const fixed = spans.map((s) =>
+    s.start <= s.end ? { start: s.start, end: s.end } : { start: s.end, end: s.start },
+  );
+  fixed.sort((a, b) => a.start - b.start || a.end - b.end);
+  const out: NumericSpan[] = [];
+  for (const s of fixed) {
+    const last = out[out.length - 1];
+    if (last !== undefined && s.start <= last.end) {
+      // Overlap — extend the existing span. Equality of endpoints
+      // (`[1, 4]` + `[4, 9]`) counts as overlap too.
+      if (s.end > last.end) last.end = s.end;
+    } else {
+      out.push(s);
+    }
+  }
+  return out;
 }
 
 /**
@@ -400,10 +436,8 @@ function extractSeriesAliases(nameRegion: string): {
 export function parseTitle(title: string): {
   seriesGuess: string;
   seriesGuessAliases: string[];
-  chapter: number | null;
-  chapterRangeEnd: number | null;
-  volume: number | null;
-  volumeRangeEnd: number | null;
+  volumes: NumericSpan[] | null;
+  chapters: NumericSpan[] | null;
   group: string | null;
   formatHints: Record<string, boolean>;
 } | null {
@@ -422,16 +456,14 @@ export function parseTitle(title: string): {
   const infoRegion = anchor === -1 ? "" : flattened.slice(anchor);
 
   const tokens = tokenizeReleaseInfo(infoRegion);
-  const { volume, volumeRangeEnd, chapter, chapterRangeEnd } = aggregateTokens(tokens);
+  const { volumes, chapters } = tokensToSpans(tokens);
   const { primary, aliases } = extractSeriesAliases(nameRegion);
 
   return {
     seriesGuess: primary,
     seriesGuessAliases: aliases.length > 0 ? aliases : [primary],
-    chapter,
-    chapterRangeEnd,
-    volume,
-    volumeRangeEnd,
+    volumes,
+    chapters,
     group,
     formatHints,
   };
@@ -504,10 +536,8 @@ export function parseItem(itemXml: string): ParsedRssItem | null {
     title,
     seriesGuess: parsedTitle.seriesGuess,
     seriesGuessAliases: parsedTitle.seriesGuessAliases,
-    chapter: parsedTitle.chapter,
-    chapterRangeEnd: parsedTitle.chapterRangeEnd,
-    volume: parsedTitle.volume,
-    volumeRangeEnd: parsedTitle.volumeRangeEnd,
+    volumes: parsedTitle.volumes,
+    chapters: parsedTitle.chapters,
     group: parsedTitle.group,
     formatHints: parsedTitle.formatHints,
     link: link ?? "",

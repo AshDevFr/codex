@@ -163,6 +163,8 @@ mod m20260505_000077_add_release_sources_last_summary;
 mod m20260505_000078_add_release_ledger_media_url;
 // Release tracking: server-wide default cron schedule for release-source polling
 mod m20260505_000079_seed_release_tracking_default_cron;
+// Release tracking: per-row span lists (chapters/volumes) for compilation bundles
+mod m20260508_000080_add_release_ledger_span_columns;
 
 pub struct Migrator;
 
@@ -296,6 +298,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260505_000078_add_release_ledger_media_url::Migration),
             // Release tracking: server-wide default cron schedule
             Box::new(m20260505_000079_seed_release_tracking_default_cron::Migration),
+            // Release tracking: per-row span lists for compilation bundles
+            Box::new(m20260508_000080_add_release_ledger_span_columns::Migration),
         ]
     }
 }

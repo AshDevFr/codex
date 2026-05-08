@@ -62,15 +62,28 @@ export interface SeriesMatch {
 }
 
 /**
+ * Inclusive numeric span. Single values are encoded as `start === end`
+ * (`{ start: 5, end: 5 }`). Used on the volume and chapter axes of a
+ * release candidate to express compilation/bundle coverage honestly,
+ * including disjoint coverage (`v01-04 + v06-09` → two spans).
+ */
+export interface NumericSpan {
+  start: number;
+  end: number;
+}
+
+/**
  * Release candidate emitted by a plugin.
  *
  * **Field semantics:**
  * - `externalReleaseId`: Stable per-source ID. The first dedup key.
  *   `(sourceId, externalReleaseId)` is `UNIQUE` in `release_ledger`.
- * - `chapter` / `volume`: At least one should be set; both is fine for a
- *   "vol 15 covers ch 126-142" case (the volume axis advances; the chapter
- *   axis advances to the volume's last chapter only if the candidate
- *   carries it). Decimals supported on `chapter` (e.g. 47.5).
+ * - `volumes` / `chapters`: At least one should be non-null. Each is a
+ *   normalized [`NumericSpan`] list (sorted ascending, overlapping spans
+ *   merged) describing every volume / chapter the release covers. Single
+ *   values are one-element lists with `start === end`; ranges are
+ *   one-element lists with `end > start`; disjoint coverage produces
+ *   multiple spans. Decimals supported on chapter spans.
  * - `language`: ISO 639-1 code, lowercase. Must be non-empty. The host's
  *   `latest_known_*` advance gate uses this against the per-series
  *   effective language list.
@@ -93,8 +106,10 @@ export interface SeriesMatch {
 export interface ReleaseCandidate {
   seriesMatch: SeriesMatch;
   externalReleaseId: string;
-  chapter?: number | null;
-  volume?: number | null;
+  /** Volume coverage. Integer span list. `null` when no volume info. */
+  volumes?: NumericSpan[] | null;
+  /** Chapter coverage. Decimal-capable span list. `null` when no chapter info. */
+  chapters?: NumericSpan[] | null;
   language: string;
   formatHints?: Record<string, unknown> | null;
   groupOrUploader?: string | null;

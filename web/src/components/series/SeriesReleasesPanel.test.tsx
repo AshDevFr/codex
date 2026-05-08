@@ -35,7 +35,35 @@ vi.mock("@/api/releases", () => ({
 
 const SERIES_ID = "00000000-0000-0000-0000-000000000001";
 
-function entry(over: Partial<ReleaseLedgerEntry> = {}): ReleaseLedgerEntry {
+interface EntryOverrides extends Partial<ReleaseLedgerEntry> {
+  /** Convenience: caller passes a single chapter number; we wrap into a
+   *  one-element span list. Set `chapters` directly to override the shape
+   *  (e.g. for ranges or disjoint compilations). */
+  chapter?: number | null;
+  /** Same convenience for the volume axis. */
+  volume?: number | null;
+}
+
+function entry(over: EntryOverrides = {}): ReleaseLedgerEntry {
+  const {
+    chapter,
+    volume,
+    chapters: chaptersOverride,
+    volumes: volumesOverride,
+    ...rest
+  } = over;
+  const chapters =
+    chaptersOverride !== undefined
+      ? chaptersOverride
+      : chapter !== undefined && chapter !== null
+        ? [{ start: chapter, end: chapter }]
+        : null;
+  const volumes =
+    volumesOverride !== undefined
+      ? volumesOverride
+      : volume !== undefined && volume !== null
+        ? [{ start: volume, end: volume }]
+        : null;
   return {
     id: "ent-1",
     seriesId: SERIES_ID,
@@ -47,11 +75,11 @@ function entry(over: Partial<ReleaseLedgerEntry> = {}): ReleaseLedgerEntry {
     state: "announced",
     observedAt: "2026-05-01T00:00:00Z",
     createdAt: "2026-05-01T00:00:00Z",
-    chapter: 143,
-    volume: null,
+    chapters: chapters ?? [{ start: 143, end: 143 }],
+    volumes,
     language: "en",
     groupOrUploader: "GroupA",
-    ...over,
+    ...rest,
   };
 }
 

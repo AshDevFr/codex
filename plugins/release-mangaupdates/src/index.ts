@@ -184,8 +184,11 @@ function toCandidate(entry: TrackedSeriesEntry, item: ParsedRssItem): ReleaseCan
       reason: `mangaupdates_id:${entry.externalIds?.[EXTERNAL_ID_SOURCE_MANGAUPDATES] ?? ""}`,
     },
     externalReleaseId: item.externalReleaseId,
-    chapter: item.chapter,
-    volume: item.volume,
+    // MangaUpdates always reports a single chapter / volume per release.
+    // Wrap as one-element span lists for the new SDK shape; `null` when
+    // the parser didn't see a value at all.
+    volumes: item.volume === null ? null : [{ start: item.volume, end: item.volume }],
+    chapters: item.chapter === null ? null : [{ start: item.chapter, end: item.chapter }],
     language: item.language,
     groupOrUploader: item.group,
     payloadUrl: item.link.length > 0 ? item.link : `urn:mu:${item.externalReleaseId}`,

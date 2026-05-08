@@ -203,13 +203,11 @@ function toCandidate(
   item: ParsedRssItem,
   subscription: UploaderSubscription,
 ): ReleaseCandidate {
+  // Format hints carry just the recognized parser tags (`digital`, `jxl`, …)
+  // plus the originating subscription. Volume / chapter coverage now travels
+  // as first-class span lists on the candidate itself rather than smuggled
+  // through `format_hints.*RangeEnd` keys.
   const formatHints: Record<string, unknown> = { ...item.formatHints };
-  if (item.chapterRangeEnd !== null) {
-    formatHints.chapterRangeEnd = item.chapterRangeEnd;
-  }
-  if (item.volumeRangeEnd !== null) {
-    formatHints.volumeRangeEnd = item.volumeRangeEnd;
-  }
   formatHints.subscription = `${subscription.kind}:${subscription.identifier}`;
 
   // Nyaa RSS carries two URLs per item:
@@ -231,8 +229,8 @@ function toCandidate(
       reason: match.reason,
     },
     externalReleaseId: item.externalReleaseId,
-    chapter: item.chapter,
-    volume: item.volume,
+    volumes: item.volumes,
+    chapters: item.chapters,
     language: "en",
     groupOrUploader: item.group ?? (subscription.kind === "user" ? subscription.identifier : null),
     payloadUrl,

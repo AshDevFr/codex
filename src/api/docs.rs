@@ -710,6 +710,7 @@ The following paths are exempt from rate limiting:
             v1::dto::tracking::CreateSeriesAliasRequest,
 
             // Release-ledger + source DTOs (Phase 2)
+            v1::dto::release::ReleaseSpanDto,
             v1::dto::release::ReleaseLedgerEntryDto,
             v1::dto::release::ReleaseLedgerListResponse,
             v1::dto::release::UpdateReleaseLedgerEntryRequest,

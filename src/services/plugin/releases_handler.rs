@@ -285,18 +285,32 @@ impl ReleasesRequestHandler {
         };
 
         // Snapshot the candidate fields needed for the latest_known_* gate
-        // before the move into the ledger entry.
-        let candidate_chapter = accepted.candidate.chapter;
-        let candidate_volume = accepted.candidate.volume;
+        // before the move into the ledger entry. We use the primary scalar
+        // (max span end) for the high-water mark — a release covering "up
+        // to chapter N" advances `latest_known_chapter` to N.
+        let candidate_volumes = accepted.candidate.volumes.clone();
+        let candidate_chapters = accepted.candidate.chapters.clone();
+        let candidate_volume_primary =
+            crate::services::release::candidate::primary_value(candidate_volumes.as_ref())
+                .map(|v| v as i32);
+        let candidate_chapter_primary =
+            crate::services::release::candidate::primary_value(candidate_chapters.as_ref());
         let candidate_language = accepted.candidate.language.clone();
 
-        // Auto-ignore: if the user already owns this volume/chapter, insert
+        // Auto-ignore: if the user already owns the *full* coverage of this
+        // release (every value in every span on at least one axis), insert
         // the row directly as `ignored` so it skips the inbox + notify path.
         // Best-effort; on failure we fall back to the default state.
-        let initial_state = if candidate_volume.is_some() || candidate_chapter.is_some() {
+        let has_axis_info = candidate_volumes.as_ref().is_some_and(|s| !s.is_empty())
+            || candidate_chapters.as_ref().is_some_and(|s| !s.is_empty());
+        let initial_state = if has_axis_info {
             match SeriesRepository::get_owned_release_keys_for_series(&self.db, series_id).await {
                 Ok(owned) => {
-                    if should_auto_ignore(candidate_volume, candidate_chapter, &owned) {
+                    if should_auto_ignore(
+                        candidate_volumes.as_deref(),
+                        candidate_chapters.as_deref(),
+                        &owned,
+                    ) {
                         Some(ledger_state::IGNORED.to_string())
                     } else {
                         None
@@ -339,8 +353,8 @@ impl ReleasesRequestHandler {
                 .advance_latest_known(
                     series_id,
                     tracking_row.as_ref(),
-                    candidate_chapter,
-                    candidate_volume,
+                    candidate_chapter_primary,
+                    candidate_volume_primary,
                     &candidate_language,
                 )
                 .await
@@ -948,7 +962,7 @@ mod tests {
     };
     use crate::db::test_helpers::create_test_db;
     use crate::services::plugin::protocol::ReleaseSourceKind;
-    use crate::services::release::candidate::SeriesMatch;
+    use crate::services::release::candidate::{NumericSpan, SeriesMatch};
     use serde_json::json;
 
     fn make_capability(
@@ -1012,8 +1026,11 @@ mod tests {
                 reason: "alias-exact".to_string(),
             },
             external_release_id: "rel-1".to_string(),
-            chapter: Some(143.0),
-            volume: None,
+            chapters: Some(vec![NumericSpan {
+                start: 143.0,
+                end: 143.0,
+            }]),
+            volumes: None,
             language: "en".to_string(),
             format_hints: None,
             group_or_uploader: Some("tsuna69".to_string()),
@@ -1524,8 +1541,13 @@ mod tests {
                 reason: "test".to_string(),
             },
             external_release_id: external_release_id.to_string(),
-            chapter,
-            volume,
+            chapters: chapter.map(|c| vec![NumericSpan { start: c, end: c }]),
+            volumes: volume.map(|v| {
+                vec![NumericSpan {
+                    start: v as f64,
+                    end: v as f64,
+                }]
+            }),
             language: language.to_string(),
             format_hints: None,
             group_or_uploader: Some("group-x".to_string()),

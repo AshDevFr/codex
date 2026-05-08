@@ -22,9 +22,21 @@ pub struct Model {
     pub external_release_id: String,
     /// Optional. Torrent sources have it; HTTP sources don't.
     pub info_hash: Option<String>,
-    /// Decimal handles 12.5, 110.1, etc.
+    /// Primary chapter index. Used by SQL `ORDER BY` and as a cheap
+    /// "highest covered chapter" sort key. Derived from
+    /// [`Self::chapters`] as `max(span.end)` on insert; `None` when
+    /// [`Self::chapters`] is `None`. Decimal handles 12.5, 110.1, etc.
     pub chapter: Option<f64>,
+    /// Primary volume index. Mirrors [`Self::chapter`].
     pub volume: Option<i32>,
+    /// Full chapter coverage as a JSON span array
+    /// (`[{"start": N, "end": M}, ...]`). Source of truth for display and
+    /// auto-ignore — disjoint coverage from compilation torrents survives
+    /// here even though [`Self::chapter`] only carries the primary value.
+    /// `None` when the upstream title carried no chapter info.
+    pub chapters: Option<serde_json::Value>,
+    /// Full volume coverage. Mirrors [`Self::chapters`] semantics.
+    pub volumes: Option<serde_json::Value>,
     pub language: Option<String>,
     /// `{ "jxl": true, "container": "cbz", ... }`.
     pub format_hints: Option<serde_json::Value>,

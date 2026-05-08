@@ -29777,13 +29777,15 @@
                 "createdAt"
               ],
               "properties": {
-                "chapter": {
+                "chapters": {
                   "type": [
-                    "number",
+                    "array",
                     "null"
                   ],
-                  "format": "double",
-                  "description": "Decimal supports `12.5` etc."
+                  "items": {
+                    "$ref": "#/components/schemas/ReleaseSpanDto"
+                  },
+                  "description": "Full chapter coverage as a normalized span list. Decimals supported\n(`c12.5` → `[{start: 12.5, end: 12.5}]`). `null` when the upstream\ntitle carried no chapter info."
                 },
                 "confidence": {
                   "type": "number",
@@ -29870,12 +29872,15 @@
                   "type": "string",
                   "description": "`announced` | `dismissed` | `marked_acquired` | `hidden`."
                 },
-                "volume": {
+                "volumes": {
                   "type": [
-                    "integer",
+                    "array",
                     "null"
                   ],
-                  "format": "int32"
+                  "items": {
+                    "$ref": "#/components/schemas/ReleaseSpanDto"
+                  },
+                  "description": "Full volume coverage as a normalized span list. `null` semantics\nmirror [`Self::chapters`]."
                 }
               }
             },
@@ -33195,13 +33200,15 @@
           "createdAt"
         ],
         "properties": {
-          "chapter": {
+          "chapters": {
             "type": [
-              "number",
+              "array",
               "null"
             ],
-            "format": "double",
-            "description": "Decimal supports `12.5` etc."
+            "items": {
+              "$ref": "#/components/schemas/ReleaseSpanDto"
+            },
+            "description": "Full chapter coverage as a normalized span list. Decimals supported\n(`c12.5` → `[{start: 12.5, end: 12.5}]`). `null` when the upstream\ntitle carried no chapter info."
           },
           "confidence": {
             "type": "number",
@@ -33288,12 +33295,15 @@
             "type": "string",
             "description": "`announced` | `dismissed` | `marked_acquired` | `hidden`."
           },
-          "volume": {
+          "volumes": {
             "type": [
-              "integer",
+              "array",
               "null"
             ],
-            "format": "int32"
+            "items": {
+              "$ref": "#/components/schemas/ReleaseSpanDto"
+            },
+            "description": "Full volume coverage as a normalized span list. `null` semantics\nmirror [`Self::chapters`]."
           }
         }
       },
@@ -33476,6 +33486,26 @@
             "items": {
               "$ref": "#/components/schemas/ReleaseSourceDto"
             }
+          }
+        }
+      },
+      "ReleaseSpanDto": {
+        "type": "object",
+        "description": "Inclusive numeric span. Single values are encoded as `start == end`\n(`{ start: 5, end: 5 }`). The release ledger surfaces volume / chapter\ncoverage as a list of these so disjoint compilations (`v01-04 + v06-09`)\nsurvive end-to-end.",
+        "required": [
+          "start",
+          "end"
+        ],
+        "properties": {
+          "end": {
+            "type": "number",
+            "format": "double",
+            "example": 9.0
+          },
+          "start": {
+            "type": "number",
+            "format": "double",
+            "example": 1.0
           }
         }
       },
