@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.19.1] - 2026-05-08
+
+### 🐛 Bug Fixes
+
+- *(screenshots)* Harden release-tracking and library-jobs scenarios
+- *(metadata-echo)* Preserve search title in get() responses
+
+### 📚 Documentation
+
+- *(plugins)* Add READMEs for release-mangaupdates and release-nyaa
+
 ## [1.19.0] - 2026-05-07
 
 ### 🚀 Features
