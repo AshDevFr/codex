@@ -48,17 +48,32 @@ interface ReleasesTableProps {
   verticalSpacing?: "xs" | "sm";
 }
 
+interface NumericSpan {
+  start: number;
+  end: number;
+}
+
+/**
+ * Render one normalized span list (e.g. `[{1,4},{6,9}]`) as a compact
+ * human-readable string ("1-4, 6-9"). Single-point spans collapse to the
+ * value; range spans render as `start-end`. Disjoint compilations (the
+ * `v01-04 + v06-09` case) keep their gap so the user sees the truth.
+ */
+function formatSpans(spans: NumericSpan[] | null | undefined): string | null {
+  if (!spans || spans.length === 0) return null;
+  return spans
+    .map((s) => (s.start === s.end ? `${s.start}` : `${s.start}-${s.end}`))
+    .join(", ");
+}
+
 function formatChapterVolume(entry: ReleaseLedgerEntry): string {
-  const hasChapter = entry.chapter !== null && entry.chapter !== undefined;
-  const hasVolume = entry.volume !== null && entry.volume !== undefined;
-  if (!hasChapter && !hasVolume) return "—";
-  const chapter = hasChapter ? `Ch ${entry.chapter}` : "";
-  const volume = hasVolume
-    ? hasChapter
-      ? ` · Vol ${entry.volume}`
-      : `Vol ${entry.volume}`
-    : "";
-  return `${chapter}${volume}`;
+  const chapterStr = formatSpans(entry.chapters);
+  const volumeStr = formatSpans(entry.volumes);
+  if (chapterStr === null && volumeStr === null) return "—";
+  const parts: string[] = [];
+  if (chapterStr !== null) parts.push(`Ch ${chapterStr}`);
+  if (volumeStr !== null) parts.push(`Vol ${volumeStr}`);
+  return parts.join(" · ");
 }
 
 export function ReleasesTable({

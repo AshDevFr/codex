@@ -4,6 +4,11 @@ import { parseFeed, parseItem, parseTitle } from "./parser.js";
 // -----------------------------------------------------------------------------
 // parseTitle — corpus mirroring real-world Nyaa titles, including the user's
 // 1r0n / mixed-format examples that motivated this phase.
+//
+// Every release exposes its volume / chapter coverage as a normalized
+// `NumericSpan[]` per axis. Single values are encoded as one span with
+// `start === end`; ranges as one span with the lower number on `start`;
+// disjoint ranges (e.g. `v01-04 + v06-09`) as multiple spans.
 // -----------------------------------------------------------------------------
 
 describe("parseTitle", () => {
@@ -12,8 +17,8 @@ describe("parseTitle", () => {
     expect(t).not.toBeNull();
     if (t === null) return;
     expect(t.group).toBe("1r0n");
-    expect(t.volume).toBe(2);
-    expect(t.chapter).toBeNull();
+    expect(t.volumes).toEqual([{ start: 2, end: 2 }]);
+    expect(t.chapters).toBeNull();
     expect(t.formatHints.digital).toBe(true);
     // Series guess strips group, volume token, and parenthesized tags.
     expect(t.seriesGuess).toBe("Boruto Two Blue Vortex");
@@ -23,8 +28,8 @@ describe("parseTitle", () => {
     const t = parseTitle("[1r0n] One Piece v107 (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(107);
-    expect(t.chapter).toBeNull();
+    expect(t.volumes).toEqual([{ start: 107, end: 107 }]);
+    expect(t.chapters).toBeNull();
     expect(t.formatHints.digital).toBe(true);
     expect(t.seriesGuess).toBe("One Piece");
   });
@@ -33,8 +38,8 @@ describe("parseTitle", () => {
     const t = parseTitle("[1r0n] Chainsaw Man - Chapter 142 (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.chapter).toBe(142);
-    expect(t.volume).toBeNull();
+    expect(t.chapters).toEqual([{ start: 142, end: 142 }]);
+    expect(t.volumes).toBeNull();
     expect(t.seriesGuess).toBe("Chainsaw Man");
   });
 
@@ -42,9 +47,8 @@ describe("parseTitle", () => {
     const t = parseTitle("[Group] Dandadan c126-142 (2024) (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.chapter).toBe(126);
-    expect(t.chapterRangeEnd).toBe(142);
-    expect(t.volume).toBeNull();
+    expect(t.chapters).toEqual([{ start: 126, end: 142 }]);
+    expect(t.volumes).toBeNull();
     expect(t.formatHints.digital).toBe(true);
     expect(t.seriesGuess).toBe("Dandadan");
   });
@@ -53,8 +57,8 @@ describe("parseTitle", () => {
     const t = parseTitle("[1r0n] Boruto v01-14 (Digital) (1r0n)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(14);
+    expect(t.volumes).toEqual([{ start: 1, end: 14 }]);
+    expect(t.chapters).toBeNull();
     expect(t.seriesGuess).toBe("Boruto");
   });
 
@@ -63,7 +67,7 @@ describe("parseTitle", () => {
     expect(t).not.toBeNull();
     if (t === null) return;
     expect(t.group).toBe("Tankobon Blur");
-    expect(t.volume).toBe(13);
+    expect(t.volumes).toEqual([{ start: 13, end: 13 }]);
     expect(t.formatHints.digital).toBe(true);
     expect(t.seriesGuess).toBe("Solo Leveling");
   });
@@ -73,7 +77,7 @@ describe("parseTitle", () => {
     expect(t).not.toBeNull();
     if (t === null) return;
     expect(t.group).toBeNull();
-    expect(t.volume).toBe(42);
+    expect(t.volumes).toEqual([{ start: 42, end: 42 }]);
     expect(t.formatHints.digital).toBe(true);
     expect(t.seriesGuess).toBe("Berserk");
   });
@@ -82,7 +86,7 @@ describe("parseTitle", () => {
     const t = parseTitle("[Group] Some Series c47.5 (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.chapter).toBe(47.5);
+    expect(t.chapters).toEqual([{ start: 47.5, end: 47.5 }]);
     expect(t.seriesGuess).toBe("Some Series");
   });
 
@@ -103,8 +107,8 @@ describe("parseTitle", () => {
     const t = parseTitle("Just Some Manga Tanks (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.chapter).toBeNull();
-    expect(t.volume).toBeNull();
+    expect(t.chapters).toBeNull();
+    expect(t.volumes).toBeNull();
     expect(t.seriesGuess).toBe("Just Some Manga Tanks");
     expect(t.formatHints.digital).toBe(true);
   });
@@ -113,7 +117,7 @@ describe("parseTitle", () => {
     const t = parseTitle("[Group] My Series ch.143 (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.chapter).toBe(143);
+    expect(t.chapters).toEqual([{ start: 143, end: 143 }]);
     expect(t.seriesGuess).toBe("My Series");
   });
 
@@ -141,6 +145,8 @@ describe("parseTitle", () => {
 //   v01-16 + 70               → vol range + single bare chapter
 //   001-069 as v01-16 + 70    → bare chapter range followed by vol info
 //   031-037                   → bare chapter range as primary identifier
+//   001-005 as v01 + 006-009  → mixed bundle: one volume + loose chapters
+//   v01-04 + v06-09           → disjoint volume ranges (gap)
 //
 // Bare numeric ranges are zero-padded to 3 digits in the corpus, which we use
 // to distinguish chapter tokens from incidental numbers in series names.
@@ -153,10 +159,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     const t = parseTitle("After God v01-09 (2024-2026) (Digital) (1r0n)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(9);
-    expect(t.chapter).toBeNull();
-    expect(t.chapterRangeEnd).toBeNull();
+    expect(t.volumes).toEqual([{ start: 1, end: 9 }]);
+    expect(t.chapters).toBeNull();
     expect(t.seriesGuess).toBe("After God");
     expect(t.formatHints.digital).toBe(true);
   });
@@ -165,10 +169,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     const t = parseTitle("One Piece v001-111 + 1134-1176 (2003-2026) (Digital) (1r0n)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(111);
-    expect(t.chapter).toBe(1134);
-    expect(t.chapterRangeEnd).toBe(1176);
+    expect(t.volumes).toEqual([{ start: 1, end: 111 }]);
+    expect(t.chapters).toEqual([{ start: 1134, end: 1176 }]);
     expect(t.seriesGuess).toBe("One Piece");
   });
 
@@ -178,10 +180,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     );
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(28);
-    expect(t.chapter).toBe(125);
-    expect(t.chapterRangeEnd).toBe(137);
+    expect(t.volumes).toEqual([{ start: 1, end: 28 }]);
+    expect(t.chapters).toEqual([{ start: 125, end: 137 }]);
     // Primary guess is the first alias.
     expect(t.seriesGuess).toBe("Tensei Shitara Slime Datta Ken");
     // Both halves of `A / B` are exposed for matching.
@@ -197,11 +197,14 @@ describe("parseTitle — aggregated bundle releases", () => {
     );
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(16);
-    // Aggregated min/max across all chapter tokens in the release header.
-    expect(t.chapter).toBe(1);
-    expect(t.chapterRangeEnd).toBe(70);
+    expect(t.volumes).toEqual([{ start: 1, end: 16 }]);
+    // Bare chapter range 001-069 plus extra single chapter 70: adjacent but
+    // not overlapping, so kept as two spans (the uploader signaled them as
+    // distinct content groups via the `+`).
+    expect(t.chapters).toEqual([
+      { start: 1, end: 69 },
+      { start: 70, end: 70 },
+    ]);
     expect(t.seriesGuess).toBe("Chillin' in My 30s after Getting Fired from the Demon King's Army");
   });
 
@@ -211,9 +214,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     );
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBeNull();
-    expect(t.chapter).toBe(31);
-    expect(t.chapterRangeEnd).toBe(37);
+    expect(t.volumes).toBeNull();
+    expect(t.chapters).toEqual([{ start: 31, end: 37 }]);
     expect(t.seriesGuess).toBe("Never Say Ugly");
   });
 
@@ -223,10 +225,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     );
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(31);
-    expect(t.chapter).toBe(276);
-    expect(t.chapterRangeEnd).toBe(293);
+    expect(t.volumes).toEqual([{ start: 1, end: 31 }]);
+    expect(t.chapters).toEqual([{ start: 276, end: 293 }]);
     expect(t.seriesGuess).toBe("Edens Zero");
   });
 
@@ -234,10 +234,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     const t = parseTitle("Ultimate Exorcist Kiyoshi v01,009-090 (2024-2026) (Digital) (LuCaZ)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBeNull();
-    expect(t.chapter).toBe(9);
-    expect(t.chapterRangeEnd).toBe(90);
+    expect(t.volumes).toEqual([{ start: 1, end: 1 }]);
+    expect(t.chapters).toEqual([{ start: 9, end: 90 }]);
     expect(t.seriesGuess).toBe("Ultimate Exorcist Kiyoshi");
   });
 
@@ -245,10 +243,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     const t = parseTitle("Boruto - Two Blue Vortex v01-05,021-033 (2025-2026) (Digital) (LuCaZ)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(5);
-    expect(t.chapter).toBe(21);
-    expect(t.chapterRangeEnd).toBe(33);
+    expect(t.volumes).toEqual([{ start: 1, end: 5 }]);
+    expect(t.chapters).toEqual([{ start: 21, end: 33 }]);
     expect(t.seriesGuess).toBe("Boruto Two Blue Vortex");
   });
 
@@ -256,10 +252,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     const t = parseTitle("Ao no Hako / Blue Box v01-20,181-240 (2022-2026) (Digital) (LuCaZ)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(20);
-    expect(t.chapter).toBe(181);
-    expect(t.chapterRangeEnd).toBe(240);
+    expect(t.volumes).toEqual([{ start: 1, end: 20 }]);
+    expect(t.chapters).toEqual([{ start: 181, end: 240 }]);
     expect(t.seriesGuess).toBe("Ao no Hako");
     expect(t.seriesGuessAliases).toEqual(["Ao no Hako", "Blue Box"]);
   });
@@ -270,8 +264,7 @@ describe("parseTitle — aggregated bundle releases", () => {
     );
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(2);
+    expect(t.volumes).toEqual([{ start: 1, end: 2 }]);
     expect(t.formatHints.digital).toBe(true);
     expect(t.formatHints.omnibus).toBe(true);
     expect(t.seriesGuess).toBe("Ashita no Joe Fighting for Tomorrow");
@@ -281,10 +274,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     const t = parseTitle("Dragon Ball Super v01-23,101-104 (2017-2025) (Digital) (LuCaZ)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(23);
-    expect(t.chapter).toBe(101);
-    expect(t.chapterRangeEnd).toBe(104);
+    expect(t.volumes).toEqual([{ start: 1, end: 23 }]);
+    expect(t.chapters).toEqual([{ start: 101, end: 104 }]);
     expect(t.seriesGuess).toBe("Dragon Ball Super");
   });
 
@@ -294,9 +285,8 @@ describe("parseTitle — aggregated bundle releases", () => {
     );
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(4);
-    expect(t.chapter).toBeNull();
+    expect(t.volumes).toEqual([{ start: 1, end: 4 }]);
+    expect(t.chapters).toBeNull();
     expect(t.seriesGuess).toBe("Becoming a Princess Knight and Working at a Yuri Brothel");
   });
 
@@ -306,15 +296,93 @@ describe("parseTitle — aggregated bundle releases", () => {
     );
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(17);
-    expect(t.chapter).toBe(150);
-    expect(t.chapterRangeEnd).toBe(172);
+    expect(t.volumes).toEqual([{ start: 1, end: 17 }]);
+    expect(t.chapters).toEqual([{ start: 150, end: 172 }]);
     expect(t.seriesGuess).toBe("Amagami-san Chi no Enmusubi");
     expect(t.seriesGuessAliases).toEqual([
       "Amagami-san Chi no Enmusubi",
       "Tying the Knot with an Amagami Sister",
     ]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// parseTitle — disjoint and mixed-bundle releases (the case where two scalar
+// fields couldn't tell the truth). These exercise the span list normalizer.
+// -----------------------------------------------------------------------------
+
+describe("parseTitle — disjoint and mixed-bundle releases", () => {
+  it("Re-Reincarnated 001-050 as v01-10 — bare chapter range presented as volume range", () => {
+    const t = parseTitle(
+      "The Re-Reincarnated Boy Lives Peacefully as an S-Rank Adventurer 001-050 as v01-10 (Digital-Compilation) (Square Enix) (DigitalMangaFan)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volumes).toEqual([{ start: 1, end: 10 }]);
+    expect(t.chapters).toEqual([{ start: 1, end: 50 }]);
+    expect(t.seriesGuess).toBe("The Re-Reincarnated Boy Lives Peacefully as an S-Rank Adventurer");
+  });
+
+  it("A Late-Start Tamer v01-09 — pure volume range", () => {
+    const t = parseTitle("A Late-Start Tamer's Laid-Back Life v01-09 (2024-2026) (Digital) (Ushi)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volumes).toEqual([{ start: 1, end: 9 }]);
+    expect(t.chapters).toBeNull();
+    expect(t.seriesGuess).toBe("A Late-Start Tamer's Laid-Back Life");
+  });
+
+  it("Charlotte 001-005 as v01 + 006-009 — single volume + loose chapters (mixed bundle)", () => {
+    const t = parseTitle(
+      "Charlotte - The Tale of a Castle Maid 001-005 as v01 + 006-009 (Digital-Compilations) (Oak)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    // Only one volume token (`v01`) — single span on the volume axis.
+    expect(t.volumes).toEqual([{ start: 1, end: 1 }]);
+    // Two chapter token groups (001-005 and 006-009): adjacent integers but
+    // distinct authorial intent, kept as two spans rather than merged.
+    expect(t.chapters).toEqual([
+      { start: 1, end: 5 },
+      { start: 6, end: 9 },
+    ]);
+    expect(t.seriesGuess).toBe("Charlotte The Tale of a Castle Maid");
+  });
+
+  it("My Faceless Classmate 001-011 as v01 + 012-022 — second mixed-bundle case", () => {
+    const t = parseTitle(
+      "My Faceless Classmate, Wakao 001-011 as v01 + 012-022 (Digital-Compilation) (Oak)",
+    );
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volumes).toEqual([{ start: 1, end: 1 }]);
+    expect(t.chapters).toEqual([
+      { start: 1, end: 11 },
+      { start: 12, end: 22 },
+    ]);
+    expect(t.seriesGuess).toBe("My Faceless Classmate, Wakao");
+  });
+
+  it("hypothetical disjoint volume bundle v01-04 + v06-09 — gap preserved (vol 5 missing)", () => {
+    const t = parseTitle("Series 123 v01-04 + v06-09 (Digital)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    // Two disjoint volume spans; auto-ignore must not treat this as 1..=9.
+    expect(t.volumes).toEqual([
+      { start: 1, end: 4 },
+      { start: 6, end: 9 },
+    ]);
+    expect(t.chapters).toBeNull();
+  });
+
+  it("overlapping volume tokens get merged (v01-05 + v04-09 → v01-09)", () => {
+    // Synthetic — uploader noise where the bundle's two halves overlap. We
+    // merge so callers see a single contiguous coverage span rather than two
+    // overlapping ones (which would mislead any per-value ownership check).
+    const t = parseTitle("Some Series v01-05 + v04-09 (Digital)");
+    expect(t).not.toBeNull();
+    if (t === null) return;
+    expect(t.volumes).toEqual([{ start: 1, end: 9 }]);
   });
 });
 
@@ -328,10 +396,8 @@ describe("parseTitle — bare-number safety net", () => {
     const t = parseTitle("Some Series v01-05 (2018-2025) (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.chapter).toBeNull();
-    expect(t.chapterRangeEnd).toBeNull();
-    expect(t.volume).toBe(1);
-    expect(t.volumeRangeEnd).toBe(5);
+    expect(t.chapters).toBeNull();
+    expect(t.volumes).toEqual([{ start: 1, end: 5 }]);
   });
 
   it("ignores bare 1-2 digit numbers in the series name (avoids false positives)", () => {
@@ -340,8 +406,8 @@ describe("parseTitle — bare-number safety net", () => {
     const t = parseTitle("My 30s Adventure v01 (Digital)");
     expect(t).not.toBeNull();
     if (t === null) return;
-    expect(t.chapter).toBeNull();
-    expect(t.volume).toBe(1);
+    expect(t.chapters).toBeNull();
+    expect(t.volumes).toEqual([{ start: 1, end: 1 }]);
     expect(t.seriesGuess).toBe("My 30s Adventure");
   });
 
@@ -386,7 +452,7 @@ describe("parseItem", () => {
     expect(item.pageUrl).toBe("https://nyaa.si/view/12345");
     expect(item.externalReleaseId).toBe("https://nyaa.si/view/12345"); // guid wins
     expect(item.infoHash).toBe("abc123def456"); // lowercased
-    expect(item.chapter).toBe(142);
+    expect(item.chapters).toEqual([{ start: 142, end: 142 }]);
     expect(item.seriesGuess).toBe("Chainsaw Man");
     expect(new Date(item.observedAt).toISOString()).toBe("2026-05-04T02:31:00.000Z");
   });
@@ -474,8 +540,8 @@ describe("parseFeed", () => {
       "Boruto",
       "Dandadan",
     ]);
-    expect(items[0]?.volume).toBe(2);
-    expect(items[1]?.volumeRangeEnd).toBe(14);
-    expect(items[2]?.chapterRangeEnd).toBe(142);
+    expect(items[0]?.volumes).toEqual([{ start: 2, end: 2 }]);
+    expect(items[1]?.volumes).toEqual([{ start: 1, end: 14 }]);
+    expect(items[2]?.chapters).toEqual([{ start: 126, end: 142 }]);
   });
 });

@@ -21,6 +21,19 @@ use crate::db::entities::{release_ledger, release_sources};
 // Release ledger DTOs
 // =============================================================================
 
+/// Inclusive numeric span. Single values are encoded as `start == end`
+/// (`{ start: 5, end: 5 }`). The release ledger surfaces volume / chapter
+/// coverage as a list of these so disjoint compilations (`v01-04 + v06-09`)
+/// survive end-to-end.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseSpanDto {
+    #[schema(example = 1.0)]
+    pub start: f64,
+    #[schema(example = 9.0)]
+    pub end: f64,
+}
+
 /// A single release announcement. Sources write these; the inbox reads them.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -43,11 +56,15 @@ pub struct ReleaseLedgerEntryDto {
     /// Torrent info_hash, if applicable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub info_hash: Option<String>,
-    /// Decimal supports `12.5` etc.
+    /// Full chapter coverage as a normalized span list. Decimals supported
+    /// (`c12.5` → `[{start: 12.5, end: 12.5}]`). `null` when the upstream
+    /// title carried no chapter info.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub chapter: Option<f64>,
+    pub chapters: Option<Vec<ReleaseSpanDto>>,
+    /// Full volume coverage as a normalized span list. `null` semantics
+    /// mirror [`Self::chapters`].
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub volume: Option<i32>,
+    pub volumes: Option<Vec<ReleaseSpanDto>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     /// Sparse `{ "jxl": true, "container": "cbz", ... }`.
@@ -90,8 +107,8 @@ impl ReleaseLedgerEntryDto {
             source_id: m.source_id,
             external_release_id: m.external_release_id,
             info_hash: m.info_hash,
-            chapter: m.chapter,
-            volume: m.volume,
+            chapters: spans_from_json(m.chapters.as_ref()),
+            volumes: spans_from_json(m.volumes.as_ref()),
             language: m.language,
             format_hints: m.format_hints,
             group_or_uploader: m.group_or_uploader,
@@ -105,6 +122,20 @@ impl ReleaseLedgerEntryDto {
             created_at: m.created_at,
         }
     }
+}
+
+/// Decode the stored JSON span list (`[{start, end}, ...]`) back into a
+/// typed `Vec<ReleaseSpanDto>`. Bad JSON (corrupted row, future schema
+/// drift) collapses to `None` rather than failing the inbox query —
+/// callers see "no span info" and the UI falls back to a dash. We
+/// preserve the row in case a future migration can reinterpret it.
+fn spans_from_json(value: Option<&serde_json::Value>) -> Option<Vec<ReleaseSpanDto>> {
+    let v = value?;
+    let parsed: Vec<ReleaseSpanDto> = serde_json::from_value(v.clone()).ok()?;
+    if parsed.is_empty() {
+        return None;
+    }
+    Some(parsed)
 }
 
 /// PATCH payload for ledger row state transitions.

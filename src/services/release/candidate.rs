@@ -8,6 +8,83 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Inclusive numeric span. Single values are encoded as `start == end`
+/// (e.g. `NumericSpan { start: 5.0, end: 5.0 }`).
+///
+/// A release candidate carries one [`Vec<NumericSpan>`] per axis (volumes
+/// and chapters). Disjoint coverage (`v01-04 + v06-09`) is preserved as
+/// multiple spans; the host's auto-ignore walks every value in every span
+/// before deciding the user owns the release.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NumericSpan {
+    pub start: f64,
+    pub end: f64,
+}
+
+/// Normalize a span list:
+///   1. Swap any span where `start > end` (defensive against buggy plugins).
+///   2. Sort ascending by `start`, then `end`.
+///   3. Merge overlapping spans (touching counts as overlap).
+///
+/// Mirrors the parser-side `normalizeSpans` in [`plugins/release-nyaa`] so
+/// host and plugin agree on the canonical shape stored in the ledger.
+/// Returns `None` when the input is `Some(empty)` so callers can collapse
+/// "I parsed an empty list" into "no info" before persistence.
+pub fn normalize_spans(spans: Option<Vec<NumericSpan>>) -> Option<Vec<NumericSpan>> {
+    let raw = spans?;
+    if raw.is_empty() {
+        return None;
+    }
+    let mut fixed: Vec<NumericSpan> = raw
+        .into_iter()
+        .map(|s| {
+            if s.start <= s.end {
+                s
+            } else {
+                NumericSpan {
+                    start: s.end,
+                    end: s.start,
+                }
+            }
+        })
+        .collect();
+    fixed.sort_by(|a, b| {
+        a.start
+            .partial_cmp(&b.start)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                a.end
+                    .partial_cmp(&b.end)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
+    let mut out: Vec<NumericSpan> = Vec::with_capacity(fixed.len());
+    for s in fixed {
+        match out.last_mut() {
+            Some(last) if s.start <= last.end => {
+                if s.end > last.end {
+                    last.end = s.end;
+                }
+            }
+            _ => out.push(s),
+        }
+    }
+    Some(out)
+}
+
+/// Highest end-value across every span. `None` for an empty / missing list.
+/// Used to derive the primary scalar (`chapter` / `volume`) the SQL ORDER BY
+/// clauses still rely on.
+pub fn primary_value(spans: Option<&Vec<NumericSpan>>) -> Option<f64> {
+    let list = spans?;
+    list.iter().map(|s| s.end).fold(None, |acc, v| match acc {
+        None => Some(v),
+        Some(cur) if v > cur => Some(v),
+        other => other,
+    })
+}
+
 /// A release candidate emitted by a `release_source` plugin.
 ///
 /// The series match is split out into its own struct so the plugin can
@@ -20,12 +97,16 @@ pub struct ReleaseCandidate {
     pub series_match: SeriesMatch,
     /// Stable per-source release identifier (e.g. Nyaa view ID, MU release ID).
     pub external_release_id: String,
-    /// Optional chapter number; supports decimals for fractional chapters.
+    /// Volume coverage as a normalized span list. `None` when the upstream
+    /// title carried no volume information at all. Plugins are expected to
+    /// emit a sorted, overlap-merged list; the host re-normalizes
+    /// defensively before persisting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chapter: Option<f64>,
-    /// Optional volume number.
+    pub volumes: Option<Vec<NumericSpan>>,
+    /// Chapter coverage as a normalized span list. Decimals are preserved
+    /// (`c12.5` → `[{12.5, 12.5}]`). `None` semantics match [`Self::volumes`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub volume: Option<i32>,
+    pub chapters: Option<Vec<NumericSpan>>,
     /// ISO 639-1 language code (`"en"`, `"es"`, etc.).
     pub language: String,
     /// Free-form per-source format hints (e.g. `{"jxl": true}`).
@@ -172,8 +253,11 @@ mod tests {
                 reason: "alias-exact".to_string(),
             },
             external_release_id: "rel-123".to_string(),
-            chapter: Some(143.0),
-            volume: None,
+            chapters: Some(vec![NumericSpan {
+                start: 143.0,
+                end: 143.0,
+            }]),
+            volumes: None,
             language: "en".to_string(),
             format_hints: Some(json!({"jxl": true})),
             group_or_uploader: Some("tsuna69".to_string()),
@@ -206,8 +290,8 @@ mod tests {
     #[test]
     fn optional_fields_are_skipped_when_none() {
         let mut cand = good_candidate();
-        cand.chapter = None;
-        cand.volume = None;
+        cand.chapters = None;
+        cand.volumes = None;
         cand.format_hints = None;
         cand.info_hash = None;
         cand.metadata = None;
@@ -217,8 +301,8 @@ mod tests {
         let json = serde_json::to_value(&cand).unwrap();
         let obj = json.as_object().unwrap();
         for key in [
-            "chapter",
-            "volume",
+            "chapters",
+            "volumes",
             "formatHints",
             "infoHash",
             "metadata",

@@ -370,15 +370,15 @@ impl TaskHandler for PollReleaseSourceHandler {
                 };
                 match evaluate(cand, threshold) {
                     Ok(accepted) => {
-                        let cand_volume = accepted.candidate.volume;
-                        let cand_chapter = accepted.candidate.chapter;
+                        let cand_volumes = accepted.candidate.volumes.clone();
+                        let cand_chapters = accepted.candidate.chapters.clone();
 
                         let initial_state = match resolve_initial_state(
                             db,
                             &mut owned_cache,
                             series_id,
-                            cand_volume,
-                            cand_chapter,
+                            cand_volumes.as_deref(),
+                            cand_chapters.as_deref(),
                         )
                         .await
                         {
@@ -617,11 +617,13 @@ async fn resolve_initial_state(
     db: &DatabaseConnection,
     owned_cache: &mut std::collections::HashMap<Uuid, OwnedReleaseKeys>,
     series_id: Uuid,
-    volume: Option<i32>,
-    chapter: Option<f64>,
+    volumes: Option<&[crate::services::release::candidate::NumericSpan]>,
+    chapters: Option<&[crate::services::release::candidate::NumericSpan]>,
 ) -> Result<Option<String>> {
+    let has_v = volumes.is_some_and(|s| !s.is_empty());
+    let has_c = chapters.is_some_and(|s| !s.is_empty());
     // Skip the lookup entirely when the candidate has nothing to match against.
-    if volume.is_none() && chapter.is_none() {
+    if !has_v && !has_c {
         return Ok(None);
     }
     if let std::collections::hash_map::Entry::Vacant(e) = owned_cache.entry(series_id) {
@@ -629,7 +631,7 @@ async fn resolve_initial_state(
         e.insert(owned);
     }
     let owned = &owned_cache[&series_id];
-    if should_auto_ignore(volume, chapter, owned) {
+    if should_auto_ignore(volumes, chapters, owned) {
         Ok(Some(ledger_state::IGNORED.to_string()))
     } else {
         Ok(None)
@@ -708,6 +710,8 @@ mod tests {
             info_hash: None,
             chapter: Some(143.0),
             volume: Some(15),
+            chapters: Some(serde_json::json!([{"start": 143.0, "end": 143.0}])),
+            volumes: Some(serde_json::json!([{"start": 15, "end": 15}])),
             language: Some("en".to_string()),
             format_hints: None,
             group_or_uploader: None,
@@ -759,6 +763,8 @@ mod tests {
             info_hash: None,
             chapter: None,
             volume: None,
+            chapters: None,
+            volumes: None,
             language: None,
             format_hints: None,
             group_or_uploader: None,

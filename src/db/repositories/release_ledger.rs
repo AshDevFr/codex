@@ -18,16 +18,24 @@ use uuid::Uuid;
 use crate::db::entities::release_ledger::{
     self, Entity as ReleaseLedger, Model as ReleaseLedgerRow, state,
 };
+use crate::services::release::candidate::{NumericSpan, normalize_spans, primary_value};
 
 /// New-row payload. Keys plus payload fields.
+///
+/// Volume / chapter coverage is supplied as [`NumericSpan`] lists; the
+/// repository normalizes them, derives the primary scalar columns
+/// (`chapter` / `volume` = `max(span.end)`) for SQL ORDER BY, and stores
+/// the full span list as JSON for display and auto-ignore.
 #[derive(Debug, Clone)]
 pub struct NewReleaseEntry {
     pub series_id: Uuid,
     pub source_id: Uuid,
     pub external_release_id: String,
     pub info_hash: Option<String>,
-    pub chapter: Option<f64>,
-    pub volume: Option<i32>,
+    /// Full chapter coverage. `None` when no chapter info.
+    pub chapters: Option<Vec<NumericSpan>>,
+    /// Full volume coverage. `None` when no volume info.
+    pub volumes: Option<Vec<NumericSpan>>,
     pub language: Option<String>,
     pub format_hints: Option<serde_json::Value>,
     pub group_or_uploader: Option<String>,
@@ -145,14 +153,33 @@ impl ReleaseLedgerRepository {
             Some(invalid) => anyhow::bail!("invalid initial_state: {}", invalid),
             None => state::ANNOUNCED.to_string(),
         };
+        // Normalize spans, then derive the primary scalar columns from
+        // them. The scalars stay in the schema so SeaORM-typed `ORDER BY`
+        // queries (the inbox / per-series sort) keep working without
+        // DB-specific JSON path expressions.
+        let chapter_spans = normalize_spans(entry.chapters);
+        let volume_spans = normalize_spans(entry.volumes);
+        let chapter_scalar = primary_value(chapter_spans.as_ref());
+        let volume_scalar = primary_value(volume_spans.as_ref()).map(|v| v as i32);
+        let chapters_json = chapter_spans
+            .as_ref()
+            .map(serde_json::to_value)
+            .transpose()?;
+        let volumes_json = volume_spans
+            .as_ref()
+            .map(serde_json::to_value)
+            .transpose()?;
+
         let active = release_ledger::ActiveModel {
             id: Set(Uuid::new_v4()),
             series_id: Set(entry.series_id),
             source_id: Set(entry.source_id),
             external_release_id: Set(entry.external_release_id),
             info_hash: Set(entry.info_hash),
-            chapter: Set(entry.chapter),
-            volume: Set(entry.volume),
+            chapter: Set(chapter_scalar),
+            volume: Set(volume_scalar),
+            chapters: Set(chapters_json),
+            volumes: Set(volumes_json),
             language: Set(entry.language),
             format_hints: Set(entry.format_hints),
             group_or_uploader: Set(entry.group_or_uploader),
@@ -552,8 +579,11 @@ mod tests {
             source_id,
             external_release_id: ext_id.to_string(),
             info_hash: None,
-            chapter: Some(143.0),
-            volume: None,
+            chapters: Some(vec![NumericSpan {
+                start: 143.0,
+                end: 143.0,
+            }]),
+            volumes: None,
             language: Some("en".to_string()),
             format_hints: None,
             group_or_uploader: Some("tsuna69".to_string()),
@@ -710,10 +740,16 @@ mod tests {
 
         let now = Utc::now();
         let mut high_old = entry(series_id, source_id, "rel-high");
-        high_old.chapter = Some(200.0);
+        high_old.chapters = Some(vec![NumericSpan {
+            start: 200.0,
+            end: 200.0,
+        }]);
         high_old.observed_at = now - chrono::Duration::hours(6);
         let mut low_new = entry(series_id, source_id, "rel-low");
-        low_new.chapter = Some(150.0);
+        low_new.chapters = Some(vec![NumericSpan {
+            start: 150.0,
+            end: 150.0,
+        }]);
         low_new.observed_at = now;
         ReleaseLedgerRepository::record(conn, high_old)
             .await
@@ -860,13 +896,13 @@ mod tests {
         // Earlier batch: lower chapters. Later batch: higher chapters.
         for ch in [122.0_f64, 123.0, 124.0, 125.0] {
             let mut e = entry(series_id, source_id, &format!("rel-{}", ch));
-            e.chapter = Some(ch);
+            e.chapters = Some(vec![NumericSpan { start: ch, end: ch }]);
             e.observed_at = earlier;
             ReleaseLedgerRepository::record(conn, e).await.unwrap();
         }
         for ch in [150.0_f64, 151.0, 156.0] {
             let mut e = entry(series_id, source_id, &format!("rel-{}", ch));
-            e.chapter = Some(ch);
+            e.chapters = Some(vec![NumericSpan { start: ch, end: ch }]);
             e.observed_at = now;
             ReleaseLedgerRepository::record(conn, e).await.unwrap();
         }
@@ -895,7 +931,7 @@ mod tests {
         // Insert in shuffled chapter order to prove the DB is doing the sort.
         for ch in [129.0_f64, 145.0, 122.0, 150.5, 137.0, 156.0, 138.0] {
             let mut e = entry(series_id, source_id, &format!("rel-{}", ch));
-            e.chapter = Some(ch);
+            e.chapters = Some(vec![NumericSpan { start: ch, end: ch }]);
             e.observed_at = now;
             ReleaseLedgerRepository::record(conn, e).await.unwrap();
         }
@@ -928,16 +964,28 @@ mod tests {
 
         let now = Utc::now();
         let mut a1 = entry(series_a, src, "a-1");
-        a1.chapter = Some(10.0);
+        a1.chapters = Some(vec![NumericSpan {
+            start: 10.0,
+            end: 10.0,
+        }]);
         a1.observed_at = now;
         let mut a2 = entry(series_a, src, "a-2");
-        a2.chapter = Some(20.0);
+        a2.chapters = Some(vec![NumericSpan {
+            start: 20.0,
+            end: 20.0,
+        }]);
         a2.observed_at = now;
         let mut b1 = entry(series_b.id, src, "b-1");
-        b1.chapter = Some(5.0);
+        b1.chapters = Some(vec![NumericSpan {
+            start: 5.0,
+            end: 5.0,
+        }]);
         b1.observed_at = now;
         let mut b2 = entry(series_b.id, src, "b-2");
-        b2.chapter = Some(7.0);
+        b2.chapters = Some(vec![NumericSpan {
+            start: 7.0,
+            end: 7.0,
+        }]);
         b2.observed_at = now;
         // Insert interleaved to prove ordering doesn't leak from insertion order.
         ReleaseLedgerRepository::record(conn, a1).await.unwrap();

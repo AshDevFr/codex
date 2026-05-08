@@ -12905,10 +12905,11 @@ export interface components {
             /** @description The data items for this page */
             data: {
                 /**
-                 * Format: double
-                 * @description Decimal supports `12.5` etc.
+                 * @description Full chapter coverage as a normalized span list. Decimals supported
+                 *     (`c12.5` → `[{start: 12.5, end: 12.5}]`). `null` when the upstream
+                 *     title carried no chapter info.
                  */
-                chapter?: number | null;
+                chapters?: components["schemas"]["ReleaseSpanDto"][] | null;
                 /** Format: double */
                 confidence: number;
                 /** Format: date-time */
@@ -12970,8 +12971,11 @@ export interface components {
                 sourceId: string;
                 /** @description `announced` | `dismissed` | `marked_acquired` | `hidden`. */
                 state: string;
-                /** Format: int32 */
-                volume?: number | null;
+                /**
+                 * @description Full volume coverage as a normalized span list. `null` semantics
+                 *     mirror [`Self::chapters`].
+                 */
+                volumes?: components["schemas"]["ReleaseSpanDto"][] | null;
             }[];
             /** @description HATEOAS navigation links */
             links: components["schemas"]["PaginationLinks"];
@@ -14844,10 +14848,11 @@ export interface components {
         /** @description A single release announcement. Sources write these; the inbox reads them. */
         ReleaseLedgerEntryDto: {
             /**
-             * Format: double
-             * @description Decimal supports `12.5` etc.
+             * @description Full chapter coverage as a normalized span list. Decimals supported
+             *     (`c12.5` → `[{start: 12.5, end: 12.5}]`). `null` when the upstream
+             *     title carried no chapter info.
              */
-            chapter?: number | null;
+            chapters?: components["schemas"]["ReleaseSpanDto"][] | null;
             /** Format: double */
             confidence: number;
             /** Format: date-time */
@@ -14909,8 +14914,11 @@ export interface components {
             sourceId: string;
             /** @description `announced` | `dismissed` | `marked_acquired` | `hidden`. */
             state: string;
-            /** Format: int32 */
-            volume?: number | null;
+            /**
+             * @description Full volume coverage as a normalized span list. `null` semantics
+             *     mirror [`Self::chapters`].
+             */
+            volumes?: components["schemas"]["ReleaseSpanDto"][] | null;
         };
         ReleaseLedgerListResponse: {
             entries: components["schemas"]["ReleaseLedgerEntryDto"][];
@@ -14999,6 +15007,24 @@ export interface components {
         };
         ReleaseSourceListResponse: {
             sources: components["schemas"]["ReleaseSourceDto"][];
+        };
+        /**
+         * @description Inclusive numeric span. Single values are encoded as `start == end`
+         *     (`{ start: 5, end: 5 }`). The release ledger surfaces volume / chapter
+         *     coverage as a list of these so disjoint compilations (`v01-04 + v06-09`)
+         *     survive end-to-end.
+         */
+        ReleaseSpanDto: {
+            /**
+             * Format: double
+             * @example 9
+             */
+            end: number;
+            /**
+             * Format: double
+             * @example 1
+             */
+            start: number;
         };
         /**
          * @description PUT request for full replacement of book metadata
