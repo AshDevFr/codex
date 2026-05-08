@@ -190,6 +190,8 @@ lto = "thin"
 cargo-dist-version = "0.30.3"
 # CI backends to support
 ci = "github"
+# Features to pass to cargo build
+features = ["embed-frontend"]
 # The installers to generate for each app
 installers = ["shell", "powershell"]
 # Target platforms to build apps for (Rust target-triple syntax)
