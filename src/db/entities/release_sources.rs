@@ -18,7 +18,20 @@ pub struct Model {
     pub id: Uuid,
     /// Owning plugin id (string). The literal `"core"` is reserved for in-core
     /// synthetic sources (e.g., metadata-piggyback in Phase 5).
+    ///
+    /// This is the plugin's manifest *name* — the identifier plugins use to
+    /// self-reference over RPC. It is *not* the canonical lifecycle anchor;
+    /// see [`Self::plugin_uuid`] for the FK that drives cascade-on-delete.
     pub plugin_id: String,
+    /// Foreign key to [`crate::db::entities::plugins::Model::id`] with
+    /// `ON DELETE CASCADE`. Populated by the repository on insert via a
+    /// `plugins.find_by_name(plugin_id)` lookup. `None` for synthetic
+    /// `plugin_id = "core"` rows that don't correspond to a real plugin.
+    /// When a plugin row is deleted, every `release_sources` row pointing
+    /// at it is removed automatically (and the existing
+    /// `fk_release_ledger_source_id` cascade then takes the ledger rows
+    /// with them).
+    pub plugin_uuid: Option<Uuid>,
     /// Plugin-defined unique key (e.g., `nyaa:user:tsuna69`).
     pub source_key: String,
     pub display_name: String,
@@ -50,11 +63,25 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::release_ledger::Entity")]
     ReleaseLedger,
+    #[sea_orm(
+        belongs_to = "super::plugins::Entity",
+        from = "Column::PluginUuid",
+        to = "super::plugins::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Plugin,
 }
 
 impl Related<super::release_ledger::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ReleaseLedger.def()
+    }
+}
+
+impl Related<super::plugins::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Plugin.def()
     }
 }
 

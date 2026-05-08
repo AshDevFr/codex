@@ -56,6 +56,14 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             patch(handlers::releases::update_release_source),
         )
         .route(
+            "/release-sources/poll-now-all",
+            post(handlers::releases::poll_release_sources_now_all),
+        )
+        .route(
+            "/release-sources/reset-all",
+            post(handlers::releases::reset_all_release_sources),
+        )
+        .route(
             "/release-sources/{source_id}/poll-now",
             post(handlers::releases::poll_release_source_now),
         )

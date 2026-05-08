@@ -7187,6 +7187,72 @@
         ]
       }
     },
+    "/api/v1/release-sources/poll-now-all": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Trigger a manual poll for *every* enabled release source.",
+        "description": "Walks the enabled sources and enqueues one `PollReleaseSource` task per\nsource. Disabled sources are skipped silently. Per-source enqueue\nfailures don't fail the request — they're logged and reported in the\nresponse counts so the admin can spot a partial failure without\nre-checking each row.",
+        "operationId": "poll_release_sources_now_all",
+        "responses": {
+          "202": {
+            "description": "Poll tasks enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollAllNowResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/release-sources/reset-all": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "summary": "Reset *every* release source to a clean slate.",
+        "description": "Loops over all sources (enabled and disabled — when you're nuking the\nledger, skipping disabled rows would leave a confusing partial state)\nand applies the per-source reset: delete every owned `release_ledger`\nrow + clear the transient poll state (`etag`, `last_polled_at`,\n`last_error`, `last_error_at`, `last_summary`). User-managed fields\n(`enabled`, `cron_schedule`, `display_name`, `config`) are preserved.\n\nPer-source failures don't fail the whole request — they're counted in\n`failed` and logged. Does *not* auto-enqueue any polls; the admin can\nfollow up with `poll-now-all` if they want immediate re-fetch.\n\n**Destructive and not undoable** — the UI confirms before calling.",
+        "operationId": "reset_all_release_sources",
+        "responses": {
+          "200": {
+            "description": "Sources reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetAllReleaseSourcesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PluginsManage permission required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/release-sources/{source_id}": {
       "patch": {
         "tags": [
@@ -32323,6 +32389,38 @@
           }
         }
       },
+      "PollAllNowResponse": {
+        "type": "object",
+        "description": "Response shape from the `poll-now-all` endpoint.\n\nReports how many enabled sources had a poll task enqueued in this call.\nDisabled sources are skipped silently. `coalesced` counts sources whose\nexisting in-flight task absorbed the request (no new task was created).\n`failed` counts sources where the enqueue itself errored — those are\nlogged server-side; the response stays 202 to avoid having one bad\nsource block the rest.",
+        "required": [
+          "considered",
+          "enqueued",
+          "coalesced",
+          "failed"
+        ],
+        "properties": {
+          "coalesced": {
+            "type": "integer",
+            "description": "Sources whose pending/running poll absorbed the request.",
+            "minimum": 0
+          },
+          "considered": {
+            "type": "integer",
+            "description": "Total enabled sources considered.",
+            "minimum": 0
+          },
+          "enqueued": {
+            "type": "integer",
+            "description": "Sources for which a fresh poll task was enqueued.",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "description": "Sources whose enqueue failed (see server logs).",
+            "minimum": 0
+          }
+        }
+      },
       "PollNowResponse": {
         "type": "object",
         "description": "Response shape from the `poll-now` endpoint.\n\n`status` is `enqueued` after a successful enqueue. The `message` carries\nthe task ID for follow-up (`tasks.id`); the task runs asynchronously, so\nthis response does not reflect poll outcome.",
@@ -34119,6 +34217,39 @@
             "type": "string",
             "description": "Success message",
             "example": "Verification email sent"
+          }
+        }
+      },
+      "ResetAllReleaseSourcesResponse": {
+        "type": "object",
+        "description": "Response shape from the `reset-all` endpoint.\n\nReports how many sources were reset across the whole table. Unlike\n`poll-now-all`, this *includes* disabled sources — if you're nuking\nthe ledger, partial coverage would be misleading. Per-source failures\ndon't fail the request; they're counted in `failed` and logged.",
+        "required": [
+          "considered",
+          "reset",
+          "deletedLedgerEntries",
+          "failed"
+        ],
+        "properties": {
+          "considered": {
+            "type": "integer",
+            "description": "Total sources considered (enabled + disabled).",
+            "minimum": 0
+          },
+          "deletedLedgerEntries": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Aggregate count of `release_ledger` rows deleted across every\nsource that was successfully reset.",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "description": "Sources where reset failed (see server logs).",
+            "minimum": 0
+          },
+          "reset": {
+            "type": "integer",
+            "description": "Sources reset (ledger wiped + transient state cleared).",
+            "minimum": 0
           }
         }
       },

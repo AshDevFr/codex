@@ -433,3 +433,44 @@ pub struct PollNowResponse {
     /// Human-readable message; includes the enqueued task ID.
     pub message: String,
 }
+
+/// Response shape from the `poll-now-all` endpoint.
+///
+/// Reports how many enabled sources had a poll task enqueued in this call.
+/// Disabled sources are skipped silently. `coalesced` counts sources whose
+/// existing in-flight task absorbed the request (no new task was created).
+/// `failed` counts sources where the enqueue itself errored — those are
+/// logged server-side; the response stays 202 to avoid having one bad
+/// source block the rest.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PollAllNowResponse {
+    /// Total enabled sources considered.
+    pub considered: usize,
+    /// Sources for which a fresh poll task was enqueued.
+    pub enqueued: usize,
+    /// Sources whose pending/running poll absorbed the request.
+    pub coalesced: usize,
+    /// Sources whose enqueue failed (see server logs).
+    pub failed: usize,
+}
+
+/// Response shape from the `reset-all` endpoint.
+///
+/// Reports how many sources were reset across the whole table. Unlike
+/// `poll-now-all`, this *includes* disabled sources — if you're nuking
+/// the ledger, partial coverage would be misleading. Per-source failures
+/// don't fail the request; they're counted in `failed` and logged.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetAllReleaseSourcesResponse {
+    /// Total sources considered (enabled + disabled).
+    pub considered: usize,
+    /// Sources reset (ledger wiped + transient state cleared).
+    pub reset: usize,
+    /// Aggregate count of `release_ledger` rows deleted across every
+    /// source that was successfully reset.
+    pub deleted_ledger_entries: u64,
+    /// Sources where reset failed (see server logs).
+    pub failed: usize,
+}

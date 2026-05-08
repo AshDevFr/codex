@@ -26,6 +26,9 @@ export type BulkReleaseActionResponse =
   components["schemas"]["BulkReleaseActionResponse"];
 export type DeleteReleaseResponse =
   components["schemas"]["DeleteReleaseResponse"];
+export type PollAllNowResponse = components["schemas"]["PollAllNowResponse"];
+export type ResetAllReleaseSourcesResponse =
+  components["schemas"]["ResetAllReleaseSourcesResponse"];
 
 export interface ReleaseInboxParams {
   /** State filter. Use `"all"` for no state restriction; defaults to `"announced"` server-side. */
@@ -178,6 +181,19 @@ export const releaseSourcesApi = {
   },
 
   /**
+   * Trigger a manual poll for every enabled release source. Disabled
+   * sources are skipped server-side. Per-source enqueue failures don't
+   * fail the request — they're counted in `failed` so the admin can
+   * spot a partial failure without re-checking each row.
+   */
+  pollNowAll: async (): Promise<PollAllNowResponse> => {
+    const response = await api.post<PollAllNowResponse>(
+      `/release-sources/poll-now-all`,
+    );
+    return response.data;
+  },
+
+  /**
    * Drop every ledger row for this source and clear its transient poll
    * state (etag, last_polled_at, last_error, last_summary). User-managed
    * fields (enabled, cronSchedule, displayName, config) are preserved.
@@ -189,6 +205,19 @@ export const releaseSourcesApi = {
   reset: async (sourceId: string): Promise<ResetReleaseSourceResponse> => {
     const response = await api.post<ResetReleaseSourceResponse>(
       `/release-sources/${sourceId}/reset`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Reset every release source — wipes the ledger across the whole
+   * instance and clears each source's transient poll state. Includes
+   * disabled sources (a partial reset would be misleading). Destructive
+   * and not undoable; the UI must confirm before calling.
+   */
+  resetAll: async (): Promise<ResetAllReleaseSourcesResponse> => {
+    const response = await api.post<ResetAllReleaseSourcesResponse>(
+      `/release-sources/reset-all`,
     );
     return response.data;
   },

@@ -2469,6 +2469,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/release-sources/poll-now-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a manual poll for *every* enabled release source.
+         * @description Walks the enabled sources and enqueues one `PollReleaseSource` task per
+         *     source. Disabled sources are skipped silently. Per-source enqueue
+         *     failures don't fail the request — they're logged and reported in the
+         *     response counts so the admin can spot a partial failure without
+         *     re-checking each row.
+         */
+        post: operations["poll_release_sources_now_all"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/release-sources/reset-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset *every* release source to a clean slate.
+         * @description Loops over all sources (enabled and disabled — when you're nuking the
+         *     ledger, skipping disabled rows would leave a confusing partial state)
+         *     and applies the per-source reset: delete every owned `release_ledger`
+         *     row + clear the transient poll state (`etag`, `last_polled_at`,
+         *     `last_error`, `last_error_at`, `last_summary`). User-managed fields
+         *     (`enabled`, `cron_schedule`, `display_name`, `config`) are preserved.
+         *
+         *     Per-source failures don't fail the whole request — they're counted in
+         *     `failed` and logged. Does *not* auto-enqueue any polls; the admin can
+         *     follow up with `poll-now-all` if they want immediate re-fetch.
+         *
+         *     **Destructive and not undoable** — the UI confirms before calling.
+         */
+        post: operations["reset_all_release_sources"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/release-sources/{source_id}": {
         parameters: {
             query?: never;
@@ -14405,6 +14460,26 @@ export interface components {
             total: number;
         };
         /**
+         * @description Response shape from the `poll-now-all` endpoint.
+         *
+         *     Reports how many enabled sources had a poll task enqueued in this call.
+         *     Disabled sources are skipped silently. `coalesced` counts sources whose
+         *     existing in-flight task absorbed the request (no new task was created).
+         *     `failed` counts sources where the enqueue itself errored — those are
+         *     logged server-side; the response stays 202 to avoid having one bad
+         *     source block the rest.
+         */
+        PollAllNowResponse: {
+            /** @description Sources whose pending/running poll absorbed the request. */
+            coalesced: number;
+            /** @description Total enabled sources considered. */
+            considered: number;
+            /** @description Sources for which a fresh poll task was enqueued. */
+            enqueued: number;
+            /** @description Sources whose enqueue failed (see server logs). */
+            failed: number;
+        };
+        /**
          * @description Response shape from the `poll-now` endpoint.
          *
          *     `status` is `enqueued` after a successful enqueue. The `message` carries
@@ -15409,6 +15484,28 @@ export interface components {
              * @example Verification email sent
              */
             message: string;
+        };
+        /**
+         * @description Response shape from the `reset-all` endpoint.
+         *
+         *     Reports how many sources were reset across the whole table. Unlike
+         *     `poll-now-all`, this *includes* disabled sources — if you're nuking
+         *     the ledger, partial coverage would be misleading. Per-source failures
+         *     don't fail the request; they're counted in `failed` and logged.
+         */
+        ResetAllReleaseSourcesResponse: {
+            /** @description Total sources considered (enabled + disabled). */
+            considered: number;
+            /**
+             * Format: int64
+             * @description Aggregate count of `release_ledger` rows deleted across every
+             *     source that was successfully reset.
+             */
+            deletedLedgerEntries: number;
+            /** @description Sources where reset failed (see server logs). */
+            failed: number;
+            /** @description Sources reset (ledger wiped + transient state cleared). */
+            reset: number;
         };
         /**
          * @description Response shape from the `reset` endpoint.
@@ -23688,6 +23785,60 @@ export interface operations {
                 };
             };
             /** @description SeriesRead permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    poll_release_sources_now_all: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Poll tasks enqueued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollAllNowResponse"];
+                };
+            };
+            /** @description PluginsManage permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_all_release_sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sources reset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetAllReleaseSourcesResponse"];
+                };
+            };
+            /** @description PluginsManage permission required */
             403: {
                 headers: {
                     [name: string]: unknown;

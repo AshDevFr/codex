@@ -221,9 +221,17 @@ describe("ReleaseTrackingSettings", () => {
     await waitFor(() => {
       expect(getAllPlugins).toHaveBeenCalled();
     });
+    // The notification preferences card defaults to collapsed; expand it so
+    // the MultiSelect is mounted in the DOM.
+    const expandPrefs = await screen.findByRole("button", {
+      name: /Expand notification preferences/i,
+    });
+    await user.click(expandPrefs);
     // Mantine MultiSelect renders an input with role=textbox associated with
     // the label; clicking it opens the dropdown and shows the options.
-    const select = screen.getByRole("textbox", { name: "Plugin sources" });
+    const select = await screen.findByRole("textbox", {
+      name: "Plugin sources",
+    });
     await user.click(select);
     await waitFor(() => {
       expect(screen.getByText("MangaUpdates Releases")).toBeInTheDocument();

@@ -4,8 +4,10 @@ import {
   Box,
   Button,
   Code,
+  Collapse,
   Divider,
   Group,
+  JsonInput,
   NumberInput,
   Select,
   Stack,
@@ -15,10 +17,16 @@ import {
   Text,
   Textarea,
   TextInput,
+  UnstyledButton,
 } from "@mantine/core";
 import type { useForm } from "@mantine/form";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconAlertCircle } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconChevronDown,
+  IconChevronRight,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { CREDENTIAL_DELIVERY_OPTIONS, type PluginDto } from "@/api/plugins";
 
@@ -91,61 +99,74 @@ export function safeJsonParse(
 // Config schema help component - displays available configuration options
 export function ConfigSchemaHelp({
   schema,
+  defaultExpanded = false,
 }: {
   schema: NonNullable<PluginDto["manifest"]>["configSchema"];
+  defaultExpanded?: boolean;
 }) {
+  const [opened, { toggle }] = useDisclosure(defaultExpanded);
+
   if (!schema || !schema.fields || schema.fields.length === 0) {
     return null;
   }
 
   return (
-    <Alert variant="light" color="blue" title="Available Configuration Options">
-      {schema.description && (
-        <Text size="sm" mb="xs">
-          {schema.description}
-        </Text>
-      )}
-      <Table withTableBorder={false} fz="sm">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Option</Table.Th>
-            <Table.Th>Type</Table.Th>
-            <Table.Th>Default</Table.Th>
-            <Table.Th>Description</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {schema.fields.map((field) => (
-            <Table.Tr key={field.key}>
-              <Table.Td>
-                <Code>{field.key}</Code>
-                {field.required && (
-                  <Text component="span" c="red" size="xs" ml={4}>
-                    *
-                  </Text>
-                )}
-              </Table.Td>
-              <Table.Td>
-                <Badge size="xs" variant="light">
-                  {field.type}
-                </Badge>
-              </Table.Td>
-              <Table.Td>
-                {field.default !== undefined && field.default !== null ? (
-                  <Code>{JSON.stringify(field.default)}</Code>
-                ) : (
-                  <Text size="xs" c="dimmed">
-                    -
-                  </Text>
-                )}
-              </Table.Td>
-              <Table.Td>
-                <Text size="xs">{field.description || "-"}</Text>
-              </Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
+    <Alert variant="light" color="blue" p="sm">
+      <UnstyledButton onClick={toggle} w="100%">
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm" fw={600} c="blue.7">
+            Available Configuration Options ({schema.fields.length})
+          </Text>
+          {opened ? (
+            <IconChevronDown size={16} />
+          ) : (
+            <IconChevronRight size={16} />
+          )}
+        </Group>
+      </UnstyledButton>
+      <Collapse in={opened}>
+        <Stack gap="xs" mt="sm">
+          {schema.description && <Text size="sm">{schema.description}</Text>}
+          <Table withTableBorder={false} fz="sm" verticalSpacing={6}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th style={{ width: "30%" }}>Option</Table.Th>
+                <Table.Th>Description</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {schema.fields.map((field) => (
+                <Table.Tr key={field.key}>
+                  <Table.Td style={{ verticalAlign: "top" }}>
+                    <Stack gap={4}>
+                      <Group gap={4} wrap="nowrap">
+                        <Code>{field.key}</Code>
+                        {field.required && (
+                          <Text component="span" c="red" size="xs">
+                            *
+                          </Text>
+                        )}
+                      </Group>
+                      <Group gap={4} wrap="wrap">
+                        <Badge size="xs" variant="light">
+                          {field.type}
+                        </Badge>
+                        {field.default !== undefined &&
+                          field.default !== null && (
+                            <Code fz={10}>{JSON.stringify(field.default)}</Code>
+                          )}
+                      </Group>
+                    </Stack>
+                  </Table.Td>
+                  <Table.Td style={{ verticalAlign: "top" }}>
+                    <Text size="xs">{field.description || "-"}</Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Stack>
+      </Collapse>
     </Alert>
   );
 }
@@ -285,11 +306,16 @@ export function PluginForm({
                 description="Optional working directory for the plugin process"
                 {...form.getInputProps("workingDirectory")}
               />
-              <Textarea
+              <JsonInput
                 label="Configuration"
                 placeholder='{"timeout": 30}'
                 description="Optional JSON configuration passed to the plugin"
-                rows={3}
+                validationError="Invalid JSON"
+                formatOnBlur
+                autosize
+                minRows={6}
+                maxRows={20}
+                styles={{ input: { fontFamily: "monospace" } }}
                 {...form.getInputProps("config")}
               />
               {manifest?.configSchema && (

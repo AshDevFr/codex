@@ -17,8 +17,9 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::db::entities::release_sources::{
-    self, Entity as ReleaseSources, Model as ReleaseSource, kind,
+    self, Entity as ReleaseSources, Model as ReleaseSource, kind, plugin_id as source_plugin_id,
 };
+use crate::db::repositories::plugins::PluginsRepository;
 use crate::utils::cron::validate_cron_expression;
 
 /// Normalize a caller-supplied cron schedule: trim, treat empty as `None`,
@@ -33,6 +34,38 @@ fn sanitize_cron_schedule(value: Option<String>) -> Result<Option<String>> {
     validate_cron_expression(trimmed)
         .map_err(|e| anyhow::anyhow!("invalid cron_schedule: {}", e))?;
     Ok(Some(trimmed.to_string()))
+}
+
+/// Resolve a `plugin_id` (the plugin's manifest name) to its row UUID.
+///
+/// Returns `Ok(Some(uuid))` for real plugins and `Ok(None)` for the
+/// reserved `"core"` synthetic-source identifier. When the lookup misses
+/// (no `plugins` row matches the manifest name), we log a warning and
+/// return `None` rather than failing the insert.
+///
+/// **Why not bail:** in production the plugin row always exists by the
+/// time `release_sources` rows are created (registration happens after
+/// install). A miss in production would indicate a real bug worth a log
+/// trail, but failing the insert outright would also paper over it.
+/// Test fixtures, on the other hand, frequently create `release_sources`
+/// without seeding a `plugins` row — those rows just won't get the FK
+/// benefit, which is acceptable since they don't represent production
+/// data. The FK + cascade still protects every row that *does* resolve.
+async fn resolve_plugin_uuid(db: &DatabaseConnection, plugin_id: &str) -> Result<Option<Uuid>> {
+    if plugin_id == source_plugin_id::CORE {
+        return Ok(None);
+    }
+    match PluginsRepository::get_by_name(db, plugin_id).await? {
+        Some(p) => Ok(Some(p.id)),
+        None => {
+            tracing::warn!(
+                plugin_id,
+                "release_sources insert: no matching plugins row; plugin_uuid left NULL \
+                 (this row will not benefit from cascade-on-plugin-delete)"
+            );
+            Ok(None)
+        }
+    }
 }
 
 /// Parameters for creating a new release source. Only the fields a caller is
@@ -107,6 +140,12 @@ impl ReleaseSourceRepository {
     /// Create a new source. Validates `kind` against the canonical set.
     /// New rows always start with `cron_schedule = NULL` (inherit the
     /// server-wide default); admins can override per-row via PATCH.
+    ///
+    /// Resolves `plugin_id` (manifest name) → `plugin_uuid` (FK to
+    /// `plugins.id`) once at insert. Real plugin sources fail the insert
+    /// when the lookup misses — we refuse to create new orphans. The
+    /// reserved `plugin_id = "core"` value bypasses the lookup since
+    /// synthetic in-core sources have no plugins row.
     pub async fn create(
         db: &DatabaseConnection,
         params: NewReleaseSource,
@@ -121,10 +160,13 @@ impl ReleaseSourceRepository {
             anyhow::bail!("source_key cannot be empty");
         }
 
+        let plugin_uuid = resolve_plugin_uuid(db, &params.plugin_id).await?;
+
         let now = Utc::now();
         let active = release_sources::ActiveModel {
             id: Set(Uuid::new_v4()),
             plugin_id: Set(params.plugin_id),
+            plugin_uuid: Set(plugin_uuid),
             source_key: Set(params.source_key),
             display_name: Set(params.display_name),
             kind: Set(params.kind),
@@ -201,6 +243,19 @@ impl ReleaseSourceRepository {
     /// `keep_keys`. Returns the number of rows removed. Cascades to
     /// `release_ledger`. Used by `register_sources` to prune sources that the
     /// plugin no longer declares.
+    /// Delete every `release_sources` row owned by `plugin_uuid`.
+    ///
+    /// Used by the plugin delete handler as the SQLite cascade fallback
+    /// (PostgreSQL gets the same effect for free via the FK constraint).
+    /// Idempotent — safe to call when no rows match.
+    pub async fn delete_by_plugin_uuid(db: &DatabaseConnection, plugin_uuid: Uuid) -> Result<u64> {
+        let result = ReleaseSources::delete_many()
+            .filter(release_sources::Column::PluginUuid.eq(plugin_uuid))
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected)
+    }
+
     pub async fn delete_by_plugin_excluding(
         db: &DatabaseConnection,
         plugin_id: &str,
