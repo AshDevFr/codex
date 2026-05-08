@@ -1,6 +1,6 @@
 {
   "name": "@ashdev/codex-plugin-release-mangaupdates",
-  "version": "1.19.2",
+  "version": "1.19.3",
   "description": "MangaUpdates RSS release-source plugin for Codex - announces new chapter releases for tracked series in user-configured languages",
   "main": "dist/index.js",
   "bin": "dist/index.js",

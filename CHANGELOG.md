@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.19.3] - 2026-05-08
+
+### 🐛 Bug Fixes
+
+- *(dist)* Embed frontend in installer-built binaries
+
 ## [1.19.2] - 2026-05-08
 
 ### 🐛 Bug Fixes
