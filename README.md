@@ -83,6 +83,30 @@ For more details, see the [UnRAR license](https://www.rarlab.com/license.htm).
 - [Troubleshooting](https://codex.4sh.dev/docs/troubleshooting)
 - [Changelog](CHANGELOG.md)
 
+## Project Status & Support
+
+Codex is a solo side project. I built it for my own use and continue to develop it because I enjoy it. A few things that follow from that:
+
+- **No SLA.** I read everything but respond when I have time.
+- **Bug reports are welcome.** Use the issue template and include version, deployment method, and relevant logs.
+- **Feature requests are welcome, but I will close ones that fall outside the scope below.**
+- **PRs are welcome** for bugs and small features. For larger changes, please open an issue first so we can agree on direction before you write code.
+- **I don't provide installation support.** The [docs](https://codex.4sh.dev/) cover deployment. If you can't get past the docs, this project may not be a good fit yet.
+
+### Scope
+
+What Codex is and isn't, so you can decide if it fits:
+
+- **Manga is the polished path.** The reader, scanner defaults, and release tracking are tuned for manga first. Books and EPUB work but are less battle-tested.
+- **Metadata is plugin-driven by design.** There are no built-in scrapers. Use one of the existing plugins (Open Library, MangaBaka) or write your own with the TypeScript SDK.
+- **PostgreSQL is a first-class target.** Production deployment to Kubernetes is a primary use case, not an afterthought.
+- **Komga API compatibility exists specifically so Komic keeps working.** Other Komga-compatible apps may work, but they are not actively tested.
+- **No i18n yet.** English only.
+
+### Sponsoring
+
+If Codex is useful to you and you want to support its development, you can [buy me a coffee](https://buymeacoffee.com/4shdev). Optional, and never expected. Sponsorship is a thank-you, not a service contract: the same scope and support rules apply to everyone.
+
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
