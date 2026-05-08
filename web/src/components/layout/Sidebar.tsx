@@ -51,6 +51,7 @@ import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
 import { useAppInfo } from "@/hooks/useAppInfo";
 import { useAppName } from "@/hooks/useAppName";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
 import { useAuthStore } from "@/store/authStore";
 import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types";
@@ -100,6 +101,8 @@ export function Sidebar() {
   const hasRecommendationPlugin = pluginData?.enabled?.some(
     (p) => p.connected && p.capabilities?.userRecommendationProvider === true,
   );
+  const { data: releaseApplicability } = useReleaseTrackingApplicability();
+  const hasReleasePlugin = releaseApplicability?.applicable === true;
 
   // Mutations for "All Libraries" actions
   const scanAllMutation = useMutation({
@@ -342,14 +345,16 @@ export function Sidebar() {
                 active={currentPath === "/recommendations"}
               />
             )}
-            <NavLink
-              component={Link}
-              to="/releases"
-              label="Releases"
-              leftSection={<IconRss size={20} />}
-              active={currentPath.startsWith("/releases")}
-              rightSection={<ReleasesNavBadge />}
-            />
+            {hasReleasePlugin && (
+              <NavLink
+                component={Link}
+                to="/releases"
+                label="Releases"
+                leftSection={<IconRss size={20} />}
+                active={currentPath.startsWith("/releases")}
+                rightSection={<ReleasesNavBadge />}
+              />
+            )}
             <NavLink
               component={Link}
               to={`/libraries/all/${getLastTab("all") || "series"}`}
