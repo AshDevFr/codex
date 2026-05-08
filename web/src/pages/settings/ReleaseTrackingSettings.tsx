@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Card,
+  Collapse,
   Group,
   Loader,
   MultiSelect,
@@ -16,10 +17,13 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertCircle,
   IconBellRinging,
+  IconChevronDown,
+  IconChevronRight,
   IconClockHour4,
   IconRefresh,
   IconRestore,
@@ -35,8 +39,10 @@ import type { ReleaseSource } from "@/api/releases";
 import { settingsApi } from "@/api/settings";
 import { CronInput } from "@/components/forms/CronInput";
 import {
+  usePollAllReleaseSourcesNow,
   usePollReleaseSourceNow,
   useReleaseSources,
+  useResetAllReleaseSources,
   useResetReleaseSource,
   useUpdateReleaseSource,
 } from "@/hooks/useReleases";
@@ -88,7 +94,42 @@ export function ReleaseTrackingSettings() {
   const sourcesQuery = useReleaseSources();
   const update = useUpdateReleaseSource();
   const pollNow = usePollReleaseSourceNow();
+  const pollAll = usePollAllReleaseSourcesNow();
   const reset = useResetReleaseSource();
+  const resetAll = useResetAllReleaseSources();
+
+  const sources = sourcesQuery.data ?? [];
+
+  // The "Poll all" button is disabled when no enabled source exists:
+  // sending the request would just no-op server-side and waste a round
+  // trip. It also goes disabled while a fan-out is already in flight.
+  const enabledCount = sources.filter((s) => s.enabled).length;
+  const pollAllDisabled = enabledCount === 0 || pollAll.isPending;
+  // "Reset all" includes disabled sources by design (see backend handler
+  // doc), so the disable rule is just "no rows at all."
+  const resetAllDisabled = sources.length === 0 || resetAll.isPending;
+
+  /**
+   * Confirm and fire the global reset. Destructive — wipes the ledger
+   * across every source, including disabled ones. The confirm string
+   * mirrors the per-source reset prompt's structure but emphasizes the
+   * blast radius up front and includes the row count so the user knows
+   * exactly what they're about to nuke.
+   */
+  const handleResetAll = () => {
+    const sourceCount = sources.length;
+    const message =
+      `Reset ALL ${sourceCount} release source(s)?\n\n` +
+      `This deletes every release ledger row across every source ` +
+      `(including disabled ones) and clears each source's poll state ` +
+      `(etag, last poll time). User-managed settings (enabled, interval, ` +
+      `name) are preserved. The next poll for each enabled source will ` +
+      `re-record everything as new.\n\n` +
+      `This cannot be undone.`;
+    if (window.confirm(message)) {
+      resetAll.mutate();
+    }
+  };
 
   // The mutation hooks expose a single shared `isPending` flag, which would
   // light up the spinner on every row whenever any one row's request was in
@@ -117,16 +158,48 @@ export function ReleaseTrackingSettings() {
   return (
     <Box p="md">
       <Stack gap="md">
-        <Group gap="sm">
-          <IconClockHour4 size={26} />
-          <Title order={2}>Release tracking</Title>
+        <Group gap="sm" justify="space-between" wrap="nowrap">
+          <Group gap="sm">
+            <IconClockHour4 size={26} />
+            <Title order={2}>Release tracking</Title>
+          </Group>
+          <Group gap="xs" wrap="nowrap">
+            <Button
+              leftSection={<IconRefresh size={16} />}
+              variant="default"
+              size="sm"
+              onClick={() => pollAll.mutate()}
+              disabled={pollAllDisabled}
+              loading={pollAll.isPending}
+              aria-label="Poll all enabled release sources now"
+            >
+              Poll all now
+            </Button>
+            {/* "Reset all" sits next to "Poll all" but uses a `light`
+                + red palette so the destructive action is visually
+                distinct from the safe one. Confirm dialog gates the
+                actual call. */}
+            <Button
+              leftSection={<IconRestore size={16} />}
+              variant="light"
+              color="red"
+              size="sm"
+              onClick={handleResetAll}
+              disabled={resetAllDisabled}
+              loading={resetAll.isPending}
+              aria-label="Reset every release source"
+            >
+              Reset all
+            </Button>
+          </Group>
         </Group>
 
         <Text size="sm" c="dimmed">
           Manage release sources. Each row is one logical feed exposed by a
           plugin (e.g. one Nyaa uploader or one MangaUpdates batch). Disabling a
           source pauses its scheduled polls; "Poll now" enqueues an immediate
-          fetch.
+          fetch. "Poll all now" fans the request out across every enabled
+          source.
         </Text>
 
         <DefaultScheduleCard />
@@ -225,6 +298,7 @@ export function ReleaseTrackingSettings() {
  * itself is missing.
  */
 function DefaultScheduleCard() {
+  const [opened, { toggle }] = useDisclosure(false);
   const queryClient = useQueryClient();
   const settingQuery = useQuery({
     queryKey: ["admin-setting", SETTING_DEFAULT_CRON_SCHEDULE],
@@ -278,31 +352,55 @@ function DefaultScheduleCard() {
   return (
     <Card withBorder padding="md" radius="md">
       <Stack gap="sm">
-        <Group gap="xs">
+        <Group
+          gap="xs"
+          onClick={toggle}
+          style={{ cursor: "pointer" }}
+          role="button"
+          aria-expanded={opened}
+          aria-label={
+            opened ? "Collapse default schedule" : "Expand default schedule"
+          }
+        >
+          {opened ? (
+            <IconChevronDown size={16} />
+          ) : (
+            <IconChevronRight size={16} />
+          )}
           <IconClockHour4 size={18} />
           <Text fw={600}>Default schedule</Text>
+          {!opened && draft && (
+            <Text size="xs" c="dimmed">
+              {draft}
+            </Text>
+          )}
         </Group>
-        <Text size="xs" c="dimmed">
-          Server-wide default cron used by every release source that doesn't
-          have its own per-row override. Changing this propagates immediately to
-          inheriting rows.
-        </Text>
-        <CronInput
-          label="Cron expression"
-          description="5-field POSIX cron (minute hour day-of-month month day-of-week)"
-          placeholder="0 0 * * *"
-          value={draft}
-          onChange={setDraft}
-          onBlur={commit}
-          disabled={settingQuery.isLoading || updateMutation.isPending}
-          required
-        />
+        <Collapse in={opened}>
+          <Stack gap="sm">
+            <Text size="xs" c="dimmed">
+              Server-wide default cron used by every release source that doesn't
+              have its own per-row override. Changing this propagates
+              immediately to inheriting rows.
+            </Text>
+            <CronInput
+              label="Cron expression"
+              description="5-field POSIX cron (minute hour day-of-month month day-of-week)"
+              placeholder="0 0 * * *"
+              value={draft}
+              onChange={setDraft}
+              onBlur={commit}
+              disabled={settingQuery.isLoading || updateMutation.isPending}
+              required
+            />
+          </Stack>
+        </Collapse>
       </Stack>
     </Card>
   );
 }
 
 function NotificationPreferencesCard() {
+  const [opened, { toggle }] = useDisclosure(false);
   const queryClient = useQueryClient();
 
   // Server-wide notify allowlists (admin-managed, persisted in `settings`).
@@ -400,69 +498,112 @@ function NotificationPreferencesCard() {
       values,
     });
 
+  const summaryParts: string[] = [];
+  if (allowedLanguages.length > 0) {
+    summaryParts.push(
+      `${allowedLanguages.length} ${allowedLanguages.length === 1 ? "language" : "languages"}`,
+    );
+  }
+  if (allowedPlugins.length > 0) {
+    summaryParts.push(
+      `${allowedPlugins.length} ${allowedPlugins.length === 1 ? "source" : "sources"}`,
+    );
+  }
+  if (mutedSeriesIds.length > 0) {
+    summaryParts.push(
+      `${mutedSeriesIds.length} muted ${mutedSeriesIds.length === 1 ? "series" : "series"}`,
+    );
+  }
+  const summary = summaryParts.length > 0 ? summaryParts.join(" · ") : null;
+
   return (
     <Card withBorder padding="md" radius="md">
       <Stack gap="sm">
-        <Group gap="xs">
+        <Group
+          gap="xs"
+          onClick={toggle}
+          style={{ cursor: "pointer" }}
+          role="button"
+          aria-expanded={opened}
+          aria-label={
+            opened
+              ? "Collapse notification preferences"
+              : "Expand notification preferences"
+          }
+        >
+          {opened ? (
+            <IconChevronDown size={16} />
+          ) : (
+            <IconChevronRight size={16} />
+          )}
           <IconBellRinging size={18} />
           <Text fw={600}>Notification preferences</Text>
-        </Group>
-        <Text size="xs" c="dimmed">
-          Filter announcement toasts and the Releases nav badge. Empty means "no
-          filter — let everything through." Server-wide for languages and plugin
-          sources; per-series mute is per-user (toggle on each series detail
-          page).
-        </Text>
-        <TagsInput
-          label="Languages"
-          description="ISO 639-1 codes (e.g. en, es). Lower-cased automatically. Server-wide."
-          placeholder="Add language code…"
-          value={allowedLanguages}
-          onChange={setAllowedLanguages}
-          disabled={notifyLanguagesQuery.isLoading}
-        />
-        <MultiSelect
-          label="Plugin sources"
-          description="Pick the release-source plugins to receive notifications from. Empty = all installed sources are allowed. Server-wide."
-          placeholder={
-            allowedPlugins.length === 0
-              ? "All release-source plugins"
-              : undefined
-          }
-          data={pluginOptions}
-          value={allowedPlugins}
-          onChange={setAllowedPlugins}
-          searchable
-          clearable
-          nothingFoundMessage={
-            pluginsQuery.isLoading
-              ? "Loading plugins…"
-              : "No release-source plugins installed"
-          }
-          disabled={notifyPluginsQuery.isLoading}
-        />
-        <Group justify="space-between" mt="xs" wrap="nowrap">
-          <Box>
-            <Text size="sm" fw={500}>
-              Muted series
-            </Text>
+          {!opened && summary && (
             <Text size="xs" c="dimmed">
-              {mutedSeriesIds.length === 0
-                ? "No series muted for your account."
-                : `${mutedSeriesIds.length} series muted for your account.`}
+              {summary}
             </Text>
-          </Box>
-          <Button
-            size="xs"
-            variant="light"
-            color="red"
-            leftSection={<IconTrash size={14} />}
-            onClick={clearMutes}
-            disabled={mutedSeriesIds.length === 0}
-          >
-            Clear all mutes
-          </Button>
+          )}
         </Group>
+        <Collapse in={opened}>
+          <Stack gap="sm">
+            <Text size="xs" c="dimmed">
+              Filter announcement toasts and the Releases nav badge. Empty means
+              "no filter — let everything through." Server-wide for languages
+              and plugin sources; per-series mute is per-user (toggle on each
+              series detail page).
+            </Text>
+            <TagsInput
+              label="Languages"
+              description="ISO 639-1 codes (e.g. en, es). Lower-cased automatically. Server-wide."
+              placeholder="Add language code…"
+              value={allowedLanguages}
+              onChange={setAllowedLanguages}
+              disabled={notifyLanguagesQuery.isLoading}
+            />
+            <MultiSelect
+              label="Plugin sources"
+              description="Pick the release-source plugins to receive notifications from. Empty = all installed sources are allowed. Server-wide."
+              placeholder={
+                allowedPlugins.length === 0
+                  ? "All release-source plugins"
+                  : undefined
+              }
+              data={pluginOptions}
+              value={allowedPlugins}
+              onChange={setAllowedPlugins}
+              searchable
+              clearable
+              nothingFoundMessage={
+                pluginsQuery.isLoading
+                  ? "Loading plugins…"
+                  : "No release-source plugins installed"
+              }
+              disabled={notifyPluginsQuery.isLoading}
+            />
+            <Group justify="space-between" mt="xs" wrap="nowrap">
+              <Box>
+                <Text size="sm" fw={500}>
+                  Muted series
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {mutedSeriesIds.length === 0
+                    ? "No series muted for your account."
+                    : `${mutedSeriesIds.length} series muted for your account.`}
+                </Text>
+              </Box>
+              <Button
+                size="xs"
+                variant="light"
+                color="red"
+                leftSection={<IconTrash size={14} />}
+                onClick={clearMutes}
+                disabled={mutedSeriesIds.length === 0}
+              >
+                Clear all mutes
+              </Button>
+            </Group>
+          </Stack>
+        </Collapse>
       </Stack>
     </Card>
   );

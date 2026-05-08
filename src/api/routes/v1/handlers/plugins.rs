@@ -673,6 +673,34 @@ pub async fn delete_plugin(
         tracing::warn!("Failed to stop plugin before delete: {}", e);
     }
 
+    // Sweep `release_sources` rows that point at this plugin. PostgreSQL
+    // would also do this via `fk_release_sources_plugin_uuid` ON DELETE
+    // CASCADE, but SQLite skips that FK at migration time (see
+    // `m20260508_000081_add_release_sources_plugin_uuid_fk`), so the
+    // app sweeps explicitly to keep the two backends behavior-identical.
+    // Done before the plugin row is dropped to avoid the brief window
+    // where the orphan would be visible. Cascade on
+    // `fk_release_ledger_source_id` carries any associated ledger rows.
+    match crate::db::repositories::ReleaseSourceRepository::delete_by_plugin_uuid(&state.db, id)
+        .await
+    {
+        Ok(0) => {}
+        Ok(n) => {
+            tracing::info!(
+                plugin_id = %id,
+                removed_sources = n,
+                "release_sources rows removed before plugin delete"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                plugin_id = %id,
+                error = %e,
+                "release_sources cleanup failed; continuing with plugin delete"
+            );
+        }
+    }
+
     let deleted = PluginsRepository::delete(&state.db, id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete plugin: {}", e)))?;

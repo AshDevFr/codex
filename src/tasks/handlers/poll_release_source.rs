@@ -804,6 +804,7 @@ mod tests {
         crate::db::entities::release_sources::Model {
             id: Uuid::new_v4(),
             plugin_id: "release-nyaa".to_string(),
+            plugin_uuid: None,
             source_key: "k".to_string(),
             display_name: "n".to_string(),
             kind: kind::RSS_UPLOADER.to_string(),

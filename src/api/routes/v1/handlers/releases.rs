@@ -28,9 +28,10 @@ use super::super::dto::common::{
 };
 use super::super::dto::release::{
     BulkReleaseAction, BulkReleaseActionRequest, BulkReleaseActionResponse, DeleteReleaseResponse,
-    PollNowResponse, ReleaseFacetsResponse, ReleaseLanguageFacetDto, ReleaseLedgerEntryDto,
-    ReleaseLedgerListResponse, ReleaseLibraryFacetDto, ReleaseSeriesFacetDto, ReleaseSourceDto,
-    ReleaseSourceListResponse, ResetReleaseSourceResponse, UpdateReleaseLedgerEntryRequest,
+    PollAllNowResponse, PollNowResponse, ReleaseFacetsResponse, ReleaseLanguageFacetDto,
+    ReleaseLedgerEntryDto, ReleaseLedgerListResponse, ReleaseLibraryFacetDto,
+    ReleaseSeriesFacetDto, ReleaseSourceDto, ReleaseSourceListResponse,
+    ResetAllReleaseSourcesResponse, ResetReleaseSourceResponse, UpdateReleaseLedgerEntryRequest,
     UpdateReleaseSourceRequest,
 };
 use super::paginated_response;
@@ -1040,6 +1041,73 @@ pub async fn poll_release_source_now(
     ))
 }
 
+/// Trigger a manual poll for *every* enabled release source.
+///
+/// Walks the enabled sources and enqueues one `PollReleaseSource` task per
+/// source. Disabled sources are skipped silently. Per-source enqueue
+/// failures don't fail the request — they're logged and reported in the
+/// response counts so the admin can spot a partial failure without
+/// re-checking each row.
+#[utoipa::path(
+    post,
+    path = "/api/v1/release-sources/poll-now-all",
+    responses(
+        (status = 202, description = "Poll tasks enqueued", body = PollAllNowResponse),
+        (status = 403, description = "PluginsManage permission required"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Releases"
+)]
+pub async fn poll_release_sources_now_all(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<(StatusCode, Json<PollAllNowResponse>), ApiError> {
+    auth.require_permission(&Permission::PluginsManage)?;
+
+    let sources = ReleaseSourceRepository::list_enabled(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to list enabled sources: {}", e)))?;
+
+    let considered = sources.len();
+    let mut enqueued = 0usize;
+    let mut coalesced = 0usize;
+    let mut failed = 0usize;
+    for source in sources {
+        match crate::scheduler::release_sources::enqueue_poll_now(&state.db, source.id).await {
+            Ok(outcome) => {
+                if outcome.coalesced {
+                    coalesced += 1;
+                } else {
+                    enqueued += 1;
+                }
+            }
+            Err(e) => {
+                failed += 1;
+                tracing::warn!(
+                    source_id = %source.id,
+                    plugin_id = %source.plugin_id,
+                    source_key = %source.source_key,
+                    error = %e,
+                    "poll-now-all: per-source enqueue failed; continuing with the rest"
+                );
+            }
+        }
+    }
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(PollAllNowResponse {
+            considered,
+            enqueued,
+            coalesced,
+            failed,
+        }),
+    ))
+}
+
 /// Reset a release source to a clean slate.
 ///
 /// Deletes every `release_ledger` row owned by the source and clears the
@@ -1092,6 +1160,85 @@ pub async fn reset_release_source(
 
     Ok(Json(ResetReleaseSourceResponse {
         deleted_ledger_entries: deleted,
+    }))
+}
+
+/// Reset *every* release source to a clean slate.
+///
+/// Loops over all sources (enabled and disabled — when you're nuking the
+/// ledger, skipping disabled rows would leave a confusing partial state)
+/// and applies the per-source reset: delete every owned `release_ledger`
+/// row + clear the transient poll state (`etag`, `last_polled_at`,
+/// `last_error`, `last_error_at`, `last_summary`). User-managed fields
+/// (`enabled`, `cron_schedule`, `display_name`, `config`) are preserved.
+///
+/// Per-source failures don't fail the whole request — they're counted in
+/// `failed` and logged. Does *not* auto-enqueue any polls; the admin can
+/// follow up with `poll-now-all` if they want immediate re-fetch.
+///
+/// **Destructive and not undoable** — the UI confirms before calling.
+#[utoipa::path(
+    post,
+    path = "/api/v1/release-sources/reset-all",
+    responses(
+        (status = 200, description = "Sources reset", body = ResetAllReleaseSourcesResponse),
+        (status = 403, description = "PluginsManage permission required"),
+    ),
+    security(
+        ("jwt_bearer" = []),
+        ("api_key" = [])
+    ),
+    tag = "Releases"
+)]
+pub async fn reset_all_release_sources(
+    State(state): State<Arc<AuthState>>,
+    auth: AuthContext,
+) -> Result<Json<ResetAllReleaseSourcesResponse>, ApiError> {
+    auth.require_permission(&Permission::PluginsManage)?;
+
+    let sources = ReleaseSourceRepository::list_all(&state.db)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to list sources: {}", e)))?;
+
+    let considered = sources.len();
+    let mut reset = 0usize;
+    let mut total_deleted: u64 = 0;
+    let mut failed = 0usize;
+
+    for source in sources {
+        // Two writes per source. We don't want a half-reset where the
+        // ledger is wiped but the etag is left behind, so any per-call
+        // error counts the source as failed and we move on. Logging
+        // surfaces which source needs manual attention.
+        let outcome: anyhow::Result<u64> = async {
+            let deleted = ReleaseLedgerRepository::delete_by_source(&state.db, source.id).await?;
+            ReleaseSourceRepository::clear_poll_state(&state.db, source.id).await?;
+            Ok(deleted)
+        }
+        .await;
+        match outcome {
+            Ok(deleted) => {
+                reset += 1;
+                total_deleted += deleted;
+            }
+            Err(e) => {
+                failed += 1;
+                tracing::warn!(
+                    source_id = %source.id,
+                    plugin_id = %source.plugin_id,
+                    source_key = %source.source_key,
+                    error = %e,
+                    "reset-all: per-source reset failed; continuing with the rest"
+                );
+            }
+        }
+    }
+
+    Ok(Json(ResetAllReleaseSourcesResponse {
+        considered,
+        reset,
+        deleted_ledger_entries: total_deleted,
+        failed,
     }))
 }
 

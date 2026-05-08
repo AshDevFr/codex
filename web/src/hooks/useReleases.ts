@@ -6,11 +6,13 @@ import {
   type BulkReleaseActionResponse,
   type DeleteReleaseResponse,
   type PaginatedReleases,
+  type PollAllNowResponse,
   type ReleaseFacets,
   type ReleaseFacetsParams,
   type ReleaseInboxParams,
   type ReleaseLedgerEntry,
   type ReleaseSource,
+  type ResetAllReleaseSourcesResponse,
   type ResetReleaseSourceResponse,
   releaseSourcesApi,
   releasesApi,
@@ -247,6 +249,34 @@ export function usePollReleaseSourceNow() {
   });
 }
 
+/**
+ * Fan out a poll request across every enabled release source. Reports a
+ * single summary toast once the server has finished enqueueing — this
+ * does *not* wait for the polls themselves to run.
+ */
+export function usePollAllReleaseSourcesNow() {
+  const queryClient = useQueryClient();
+  return useMutation<PollAllNowResponse, Error, void>({
+    mutationFn: () => releaseSourcesApi.pollNowAll(),
+    onSuccess: (data) => {
+      const skipped = data.considered - data.enqueued - data.coalesced;
+      const parts = [
+        `${data.enqueued} enqueued`,
+        data.coalesced > 0 ? `${data.coalesced} already running` : null,
+        data.failed > 0 ? `${data.failed} failed (see logs)` : null,
+        skipped > 0 ? `${skipped} skipped` : null,
+      ].filter(Boolean);
+      notifications.show({
+        title: "Polling all sources",
+        message: parts.join(" · "),
+        color: data.failed > 0 ? "yellow" : "blue",
+      });
+      queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
+    },
+    onError: notifyError("Failed to enqueue polls"),
+  });
+}
+
 export function useResetReleaseSource() {
   const queryClient = useQueryClient();
   return useMutation<ResetReleaseSourceResponse, Error, string>({
@@ -265,5 +295,36 @@ export function useResetReleaseSource() {
       queryClient.invalidateQueries({ queryKey: ["series"] });
     },
     onError: notifyError("Failed to reset source"),
+  });
+}
+
+/**
+ * Reset every release source. Destructive — caller is responsible for
+ * confirming with the user before invoking the mutation.
+ */
+export function useResetAllReleaseSources() {
+  const queryClient = useQueryClient();
+  return useMutation<ResetAllReleaseSourcesResponse, Error, void>({
+    mutationFn: () => releaseSourcesApi.resetAll(),
+    onSuccess: (data) => {
+      const parts = [
+        `${data.reset} of ${data.considered} sources reset`,
+        `${data.deletedLedgerEntries} ledger ${
+          data.deletedLedgerEntries === 1 ? "entry" : "entries"
+        } removed`,
+        data.failed > 0 ? `${data.failed} failed (see logs)` : null,
+      ].filter(Boolean);
+      notifications.show({
+        title: "All sources reset",
+        message: parts.join(" · "),
+        color: data.failed > 0 ? "yellow" : "blue",
+      });
+      // Same invalidations as the per-source reset; the blast radius
+      // covers everything that reads ledger rows.
+      queryClient.invalidateQueries({ queryKey: releasesKeys.sourcesRoot });
+      queryClient.invalidateQueries({ queryKey: releasesKeys.inboxRoot });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
+    },
+    onError: notifyError("Failed to reset sources"),
   });
 }
