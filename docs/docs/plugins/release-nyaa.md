@@ -68,6 +68,10 @@ Empty tokens are dropped; case-insensitive duplicates are silently deduplicated.
 
 After saving, head to **Settings → Release tracking** to see the per-source rows the plugin registered. Each row has its own enable toggle, poll-interval input, and "Poll now" button. Disabling a row pauses its scheduled polls; deleting an entry from the `uploaders` CSV (and saving) removes the row entirely.
 
+![Release Tracking Settings](../../screenshots/settings/release-tracking.png)
+
+See the [Release Tracking guide](../release-tracking.md) for the inbox UX and the per-series tracking toggle. Once a row is registered here, the rest of the flow (enabling tracking on a series, polling on demand, the inbox) is identical for Nyaa and MangaUpdates.
+
 ### 2. Make sure tracked series have aliases
 
 Nyaa releases identify a series only by name in the title. The plugin matches titles to series via the `series_aliases` table:

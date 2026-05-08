@@ -1,7 +1,7 @@
 ---
 ---
 
-# Open Library Plugin
+# Open Library Metadata Plugin
 
 The Open Library metadata plugin fetches book metadata from [Open Library](https://openlibrary.org/), a free and open source library catalog. It provides automatic metadata enrichment for your ebooks and comics using ISBN-based lookup and title search.
 
@@ -107,6 +107,20 @@ For books without ISBNs, you can search manually:
 3. Enter a search query (title, author, or ISBN)
 4. Select the correct match from the results
 5. Apply the metadata
+
+The plugin's actions surface from the series detail dropdown:
+
+![Series Detail - Plugin Dropdown](../../screenshots/plugins/series-detail-plugin-dropdown.png)
+
+Search results show ranked candidates:
+
+![Plugin Search Results](../../screenshots/plugins/search-results.png)
+
+After picking one, the metadata diff preview shows what will change before you apply:
+
+![Metadata Preview](../../screenshots/plugins/metadata-preview.png)
+
+![Apply Success](../../screenshots/plugins/apply-success.png)
 
 ### Re-fetching Metadata
 

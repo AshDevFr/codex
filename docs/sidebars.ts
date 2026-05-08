@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         "libraries",
+        "library-jobs",
         {
           type: "category",
           label: "Scanning Strategies",
@@ -37,12 +38,22 @@ const sidebars: SidebarsConfig = {
         "filtering",
         "book-metadata",
         "series-metadata",
+        "series-management",
         "custom-metadata",
+        "release-tracking",
+        "exports",
         {
           type: "category",
           label: "Plugins",
           link: { type: "doc", id: "plugins/index" },
-          items: ["plugins/open-library", "plugins/anilist-sync"],
+          items: [
+            "plugins/open-library",
+            "plugins/mangabaka",
+            "plugins/anilist-sync",
+            "plugins/anilist-recommendations",
+            "plugins/release-mangaupdates",
+            "plugins/release-nyaa",
+          ],
         },
         {
           type: "category",

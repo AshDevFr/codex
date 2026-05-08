@@ -72,6 +72,94 @@ View detailed information about a specific book.
 
 ![Book Details Page](../screenshots/libraries/book-detail.png)
 
+### Series Actions Menu
+
+Per-series actions live behind the kebab menu in the series header. See the [Managing Series guide](./series-management.md) for details.
+
+![Series Actions Menu](../screenshots/series-detail/actions-menu.png)
+
+### Series Info Modal
+
+Read-only details: UUIDs, file path, timestamps, resolved external IDs.
+
+![Series Info Modal](../screenshots/series-detail/info-modal.png)
+
+### Edit Metadata Modal
+
+The metadata editor opens from the actions menu or any field's edit icon.
+
+![Edit Metadata Modal](../screenshots/series-detail/edit-metadata-modal.png)
+
+### Reset Metadata
+
+Wipe manual edits and revert to scanner / provider values. Confirmation required.
+
+![Reset Metadata Confirmation](../screenshots/series-detail/reset-metadata-confirm.png)
+
+## Bulk Operations
+
+### Bulk Selection Toolbar
+
+Multi-select series cards from the library grid; the toolbar surfaces bulk actions.
+
+![Bulk Selection Toolbar](../screenshots/series-detail/bulk-selection-toolbar.png)
+
+### Bulk Metadata Edit
+
+Patch fields across the entire selection. Tabs cover General, Tags, and Custom metadata.
+
+![Bulk Metadata - General](../screenshots/series-detail/bulk-metadata-general.png)
+
+![Bulk Metadata - Tags](../screenshots/series-detail/bulk-metadata-tags.png)
+
+![Bulk Metadata - Custom](../screenshots/series-detail/bulk-metadata-custom.png)
+
+## Scheduled Library Jobs
+
+Each library can run periodic metadata refresh jobs against a provider plugin. See the [Library Jobs guide](./library-jobs.md).
+
+![Scheduled Jobs - Empty](../screenshots/library-jobs/empty.png)
+
+![Job Editor - Empty](../screenshots/library-jobs/editor-empty.png)
+
+![Job Editor - Filled](../screenshots/library-jobs/editor-filled.png)
+
+## Release Tracking
+
+Codex polls external sources and surfaces new chapter / volume announcements in a dedicated inbox. See the [Release Tracking guide](./release-tracking.md).
+
+### Settings Overview
+
+![Release Tracking Overview](../screenshots/releases/settings-overview.png)
+
+### Polling a Source
+
+Trigger an immediate poll on a source row in **Settings → Release tracking**.
+
+![Settings Before Poll](../screenshots/releases/settings-before-poll.png)
+
+![Settings After Poll](../screenshots/releases/settings-after-poll.png)
+
+### Series Tracking Toggle
+
+Enable tracking on a series; add aliases or external IDs for matching.
+
+![Series Tracking Enabled](../screenshots/releases/series-tracking-enabled.png)
+
+### Releases Inbox
+
+The inbox lists every accepted release. Default view shows new entries; the state filter switches to All / Acquired / Dismissed.
+
+![Releases Inbox - New](../screenshots/releases/inbox-new.png)
+
+![Releases Inbox - All](../screenshots/releases/inbox-all.png)
+
+### Series Releases Panel
+
+Each tracked series exposes a per-series view of the same ledger.
+
+![Series Releases Panel](../screenshots/releases/series-releases-panel.png)
+
 ## Readers
 
 ### Comic Reader
@@ -180,6 +268,12 @@ View and manage books with parsing or processing errors.
 
 ![Book Errors](../screenshots/settings/book-errors.png)
 
+#### Release Tracking
+
+Configure external sources that announce new chapter and volume releases for tracked series. See the [Release tracking guide](./release-tracking.md) for the full walkthrough.
+
+![Release Tracking Settings](../screenshots/settings/release-tracking.png)
+
 ### Storage
 
 #### Thumbnails
@@ -193,6 +287,18 @@ Clean up orphaned thumbnail files and database entries.
 Manage the PDF rendering cache.
 
 ![PDF Cache](../screenshots/settings/pdf-cache.png)
+
+#### Plugin Storage
+
+Inspect and reclaim disk space used by plugin file storage.
+
+![Plugin Storage](../screenshots/settings/plugin-storage.png)
+
+#### Data Exports
+
+Export your library catalog as JSON, CSV, or Markdown. See the [Data Exports guide](./exports.md) for details.
+
+![Data Exports](../screenshots/settings/exports.png)
 
 ### Account
 
@@ -212,7 +318,11 @@ Generate and manage API keys for integrations.
 
 #### Integrations
 
-See the [User Integrations](#user-integrations) section under Plugins below.
+Users connect plugin integrations (sync, recommendations) from this page.
+
+![User Integrations](../screenshots/settings/integrations.png)
+
+See the [User Integrations](#user-integrations) section under Plugins below for the full flow.
 
 ## Plugins
 
@@ -249,6 +359,12 @@ Clicking "Add" on a plugin opens a pre-filled creation form with the plugin's re
 ![Add Recommendations Plugin - General](../screenshots/plugins/store-add-recommendations-general.png)
 
 ![Add Recommendations Plugin - Execution](../screenshots/plugins/store-add-recommendations-execution.png)
+
+**MangaUpdates Releases Plugin:**
+
+![Add MangaUpdates Plugin - General](../screenshots/plugins/store-add-mangaupdates-general.png)
+
+![Add MangaUpdates Plugin - Execution](../screenshots/plugins/store-add-mangaupdates-execution.png)
 
 ### Installed Plugins
 

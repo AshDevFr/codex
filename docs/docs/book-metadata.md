@@ -202,6 +202,6 @@ DELETE /api/v1/books/{id}/covers/{cover_id}
 ## Next Steps
 
 - [Filtering & Search](./filtering) - Filter by book type
-- [Open Library Plugin](./plugins/open-library) - Automatic metadata fetching
+- [Open Library Metadata Plugin](./plugins/open-library) - Automatic metadata fetching
 - [Custom Metadata](./custom-metadata) - Custom metadata templates
 - [Libraries](./libraries) - Library management

@@ -24,6 +24,8 @@ The AniList sync plugin synchronizes manga reading progress between Codex and [A
 3. Authorize Codex on AniList
 4. You're connected!
 
+![User Integrations - AniList Sync enabled](../../screenshots/plugins/user-integrations-enabled-sync.png)
+
 **With Personal Access Token:**
 
 1. Go to [AniList Developer Settings](https://anilist.co/settings/developer)
@@ -32,6 +34,14 @@ The AniList sync plugin synchronizes manga reading progress between Codex and [A
 4. In Codex, go to **Settings** > **Integrations** and paste the token
 
 ### For Admins
+
+The plugin ships in the official plugin store. Open **Settings → Plugins**, find **AniList Sync** in the carousel, and click **Add**. The pre-filled form has the recommended command and execution settings.
+
+![Add AniList Sync - General](../../screenshots/plugins/store-add-sync-general.png)
+
+![Add AniList Sync - Execution](../../screenshots/plugins/store-add-sync-execution.png)
+
+To add it manually:
 
 1. Go to **Settings** > **Plugins** > **Add Plugin**
 2. Set command to `npx` with arguments `-y @ashdev/codex-plugin-sync-anilist`

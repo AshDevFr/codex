@@ -18,6 +18,8 @@ The MangaUpdates Releases plugin announces new chapter and volume releases for t
 
 The plugin auto-registers a single source row (`MangaUpdates Releases`) on first start. Unlike Nyaa (one row per uploader), MangaUpdates polls every tracked series with a `mangaupdates` external ID under one logical feed, so a single row is the right model. You'll find the row in **Settings → Release tracking** along with its enable toggle, poll-interval input, and "Poll now" button.
 
+![Release Tracking Settings](../../screenshots/settings/release-tracking.png)
+
 1. Codex schedules a poll for the source row (default: once per 24 hours).
 2. The plugin asks the host for tracked series scoped to those with a `mangaupdates` external ID.
 3. For each series, the plugin GETs `https://api.mangaupdates.com/v1/series/{id}/rss`.
@@ -31,6 +33,16 @@ The plugin **never** downloads release files. The "Open" link on the inbox row s
 ## Setup
 
 The plugin works out of the box once installed and enabled — no required config. The single source row is materialized on first start. The two things you'll typically configure are: which **languages** announcements should pass through (see below), and optionally a **scanlation group blocklist** for noisy groups.
+
+### Installing from the store
+
+The plugin ships in the official plugin store. From **Settings → Plugins**, find it in the carousel and click **Add**.
+
+![Add MangaUpdates - General](../../screenshots/plugins/store-add-mangaupdates-general.png)
+
+![Add MangaUpdates - Execution](../../screenshots/plugins/store-add-mangaupdates-execution.png)
+
+The pre-filled form carries the recommended command and execution settings; you can usually save without changes.
 
 ### Populating MangaUpdates IDs
 

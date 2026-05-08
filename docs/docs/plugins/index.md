@@ -12,6 +12,7 @@ Codex supports metadata plugins that can automatically fetch and enrich your lib
 | Plugin | Description | Source |
 |--------|-------------|--------|
 | [Open Library](./open-library) | Fetch book metadata from Open Library using ISBN or title search | Free, no API key required |
+| [MangaBaka Metadata](./mangabaka) | Aggregate manga metadata from MangaBaka (cross-references AniList, MAL, MangaDex, MangaUpdates) | Free, requires API key |
 | Echo (built-in) | Development/testing plugin that echoes back sample metadata | Included with Codex |
 
 ### Sync Plugins
@@ -19,6 +20,21 @@ Codex supports metadata plugins that can automatically fetch and enrich your lib
 | Plugin | Description | Source |
 |--------|-------------|--------|
 | [AniList Sync](./anilist-sync) | Sync manga reading progress between Codex and AniList | Free, requires AniList account |
+
+### Recommendation Plugins
+
+| Plugin | Description | Source |
+|--------|-------------|--------|
+| [AniList Recommendations](./anilist-recommendations) | Personalized manga recommendations seeded by your highest-rated library entries | Free, requires AniList account |
+
+### Release Tracking Plugins
+
+| Plugin | Description | Source |
+|--------|-------------|--------|
+| [MangaUpdates Releases](./release-mangaupdates) | Announce new chapter / volume releases for tracked manga, by language | Free, no API key required |
+| [Nyaa Releases](./release-nyaa) | Announce new torrent releases from a trusted uploader allowlist | Free, no API key required |
+
+See the [Release Tracking guide](../release-tracking) for the user-facing flow (enabling tracking on a series, the releases inbox, polling).
 
 ## Plugin Capabilities
 
