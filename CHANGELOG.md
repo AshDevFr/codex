@@ -2,6 +2,13 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.21.0] - 2026-05-09
+
+### 🚀 Features
+
+- *(filter)* Add tri-state isTracked filter for release-tracking series
+- *(release-tracking)* Plugin progress reporting + aggregated release toasts
+
 ## [1.20.0] - 2026-05-09
 
 ### 🚀 Features
