@@ -182,12 +182,47 @@ impl UserPluginRecommendationsHandler {
     }
 }
 
+/// Phase labels used for progress emits. Five distinct phases give the UI
+/// enough granularity to show "what's happening" without spamming events on
+/// every tiny step. The numeric `current` advances by phase so the bar moves
+/// monotonically; `total` stays at `TOTAL_PHASES`.
+const TOTAL_PHASES: usize = 5;
+const PHASE_INIT: (usize, &str) = (1, "Starting recommendation plugin");
+const PHASE_BUILD_LIBRARY: (usize, &str) = (2, "Building user library");
+const PHASE_CURATE_SEEDS: (usize, &str) = (3, "Curating seeds");
+const PHASE_CALL_PLUGIN: (usize, &str) = (4, "Generating recommendations");
+const PHASE_PERSIST: (usize, &str) = (5, "Persisting recommendations");
+
+fn emit_phase(
+    broadcaster: Option<&Arc<EventBroadcaster>>,
+    task: &tasks::Model,
+    phase: (usize, &str),
+    detail: Option<String>,
+) {
+    if let Some(b) = broadcaster {
+        let message = match detail {
+            Some(d) => format!("{}: {}", phase.1, d),
+            None => phase.1.to_string(),
+        };
+        let _ = b.emit_task(crate::events::TaskProgressEvent::progress(
+            task.id,
+            "user_plugin_recommendations",
+            phase.0,
+            TOTAL_PHASES,
+            Some(message),
+            task.library_id,
+            task.series_id,
+            task.book_id,
+        ));
+    }
+}
+
 impl TaskHandler for UserPluginRecommendationsHandler {
     fn handle<'a>(
         &'a self,
         task: &'a tasks::Model,
         db: &'a DatabaseConnection,
-        _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>> {
         Box::pin(async move {
             // Extract task parameters
@@ -211,6 +246,8 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 "Task {}: Refreshing recommendations for plugin {} / user {}",
                 task.id, plugin_id, user_id
             );
+
+            emit_phase(event_broadcaster, task, PHASE_INIT, None);
 
             // Read configured task timeout from settings
             let request_timeout = self.task_request_timeout().await;
@@ -260,6 +297,8 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 rec_settings.max_seeds,
                 rec_settings.drop_threshold
             );
+
+            emit_phase(event_broadcaster, task, PHASE_BUILD_LIBRARY, None);
 
             // Build user library data
             let library = build_user_library(db, user_id).await.unwrap_or_else(|e| {
@@ -313,6 +352,13 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 exclude_ids.len()
             );
 
+            emit_phase(
+                event_broadcaster,
+                task,
+                PHASE_CURATE_SEEDS,
+                Some(format!("from {} library entries", library.len())),
+            );
+
             // Curate seeds from library: rated entries first, then recent reads
             let seeds = curate_seeds(&library, &rec_settings);
 
@@ -331,6 +377,13 @@ impl TaskHandler for UserPluginRecommendationsHandler {
                 limit: Some(rec_settings.max_recommendations),
                 exclude_ids,
             };
+
+            emit_phase(
+                event_broadcaster,
+                task,
+                PHASE_CALL_PLUGIN,
+                Some(format!("limit={}", rec_settings.max_recommendations)),
+            );
 
             let result = handle
                 .call_method::<RecommendationRequest, RecommendationResponse>(
@@ -353,6 +406,13 @@ impl TaskHandler for UserPluginRecommendationsHandler {
             })?;
 
             let count = response.recommendations.len();
+
+            emit_phase(
+                event_broadcaster,
+                task,
+                PHASE_PERSIST,
+                Some(format!("{} recommendations", count)),
+            );
 
             // Stamp generation time and persist to user_plugin_data for the GET endpoint
             response.generated_at = Some(Utc::now().to_rfc3339());

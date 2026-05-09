@@ -179,6 +179,11 @@ pub enum EntityEvent {
         ledger_id: Uuid,
         #[serde(rename = "seriesId")]
         series_id: Uuid,
+        /// Series display title (`series_metadata.title`, falling back to the
+        /// series directory name). Carried in the event so notifications can
+        /// render a clickable series link without a second round-trip.
+        #[serde(rename = "seriesTitle")]
+        series_title: String,
         #[serde(rename = "sourceId")]
         source_id: Uuid,
         /// Plugin name that owns the source (`release_sources.plugin_id`).
@@ -287,14 +292,19 @@ impl EntityChangeEvent {
     ///
     /// Wraps the variant construction so callers in the polling task and the
     /// reverse-RPC handler share one source of truth for the event shape.
+    /// `series_title` should be the canonical display title for the series
+    /// (typically `series_metadata.title`, falling back to the series
+    /// directory name); the frontend renders it as a clickable link.
     pub fn release_announced(
         row: &crate::db::entities::release_ledger::Model,
         plugin_id: &str,
+        series_title: String,
     ) -> Self {
         Self::new(
             EntityEvent::ReleaseAnnounced {
                 ledger_id: row.id,
                 series_id: row.series_id,
+                series_title,
                 source_id: row.source_id,
                 plugin_id: plugin_id.to_string(),
                 chapter: row.chapter,

@@ -12,7 +12,10 @@ mod task_context;
 mod types;
 
 pub use broadcaster::{EventBroadcaster, RecordedEvent};
-pub use task_context::{current_recording_broadcaster, with_recording_broadcaster};
+pub use task_context::{
+    TaskIdentity, current_recording_broadcaster, current_task_identity, with_recording_broadcaster,
+    with_task_identity,
+};
 // TaskProgress is part of the public API for task progress reporting
 #[allow(unused_imports)]
 pub use types::{

@@ -265,6 +265,15 @@ pub mod methods {
     // Release-source reverse-RPC methods (plugin -> host)
     /// List tracked series scoped to what the source needs.
     pub const RELEASES_LIST_TRACKED: &str = "releases/list_tracked";
+    /// Count tracked series scoped to what the source needs. Plugins call
+    /// this once at the start of a poll to learn the total denominator
+    /// before iterating, so progress emits can carry a stable
+    /// `current/total` ratio.
+    pub const RELEASES_COUNT_TRACKED: &str = "releases/count_tracked";
+    /// Report intra-poll progress. Translates to a `TaskProgressEvent`
+    /// emitted on the active task's broadcaster. Best-effort — plugins
+    /// MAY ignore this if they don't have a meaningful denominator.
+    pub const RELEASES_REPORT_PROGRESS: &str = "releases/report_progress";
     /// Record a release candidate in the ledger.
     pub const RELEASES_RECORD: &str = "releases/record";
     /// Get the persisted state for a release source (etag, cursor, etc.).

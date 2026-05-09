@@ -3,12 +3,16 @@
  *
  * Per-series feed: `https://api.mangaupdates.com/v1/series/{series_id}/rss`
  *
- * Each `<item>` is one scanlation release. The plugin extracts:
- *   - chapter / volume from the title
- *   - scanlation group from the title
- *   - language tag (parenthesized two-letter code) from the title
- *   - link (the MangaUpdates release page) used as `payloadUrl`
- *   - pubDate as `observedAt`
+ * The v1 RSS feed is intentionally sparse:
+ *   - `<title>` carries `{Series Name} {v.N}? {c.N}` — chapter and/or volume
+ *     suffixed with optional letter (`c.113a`, `c.113b` for split chapters)
+ *   - `<description>` carries the scanlation group name
+ *   - per-item `<link>`, `<guid>`, `<pubDate>` are NOT present; only the
+ *     channel-level `<link>` (the series page on mangaupdates.com) exists
+ *
+ * Items that carry neither chapter nor volume info are dropped — they're
+ * usually announcements ("oneshot release", series-name-only entries) and
+ * have no place in an inbox.
  *
  * Implementation note: we do NOT pull in a heavy XML parser. The MangaUpdates
  * RSS format is simple, well-formed, and stable. A small targeted regex
@@ -112,23 +116,34 @@ export function parseTitle(title: string): {
 } {
   const trimmed = title.trim();
 
-  // Chapter: c.N or ch.N (allow decimals).
+  // Chapter: c.N or ch.N. Decimals (`47.5`) and letter suffixes (`113a`,
+  // `113b` for split chapters) are both supported; the letter suffix is
+  // stripped so `c.113a` and `c.113b` map to chapter 113. Letter-suffix
+  // variants get distinct externalReleaseIds via the group, so they remain
+  // separate ledger rows even though they share an integer. The lookahead
+  // (`(?![0-9])`) replaces the older `\b` so the trailing letter doesn't
+  // block the match the way `\b` does between two word characters.
   let chapter: number | null = null;
-  const chMatch = trimmed.match(/\bc(?:h)?\.?\s*([0-9]+(?:\.[0-9]+)?)\b/i);
+  const chMatch = trimmed.match(/\bc(?:h)?\.?\s*([0-9]+(?:\.[0-9]+)?)[a-z]?(?![0-9])/i);
   if (chMatch?.[1]) {
     const n = Number.parseFloat(chMatch[1]);
     if (Number.isFinite(n)) chapter = n;
   }
 
-  // Volume: v.N or vol.N.
+  // Volume: v.N or vol.N. Letter suffixes accepted and discarded for the
+  // same reason as chapters.
   let volume: number | null = null;
-  const volMatch = trimmed.match(/\bv(?:ol)?\.?\s*([0-9]+)\b/i);
+  const volMatch = trimmed.match(/\bv(?:ol)?\.?\s*([0-9]+)[a-z]?(?![0-9])/i);
   if (volMatch?.[1]) {
     const n = Number.parseInt(volMatch[1], 10);
     if (Number.isFinite(n)) volume = n;
   }
 
-  // Group: "by <Group>" up to "(" or end.
+  // Group: legacy "by <Group>" pattern. The current MangaUpdates v1 RSS
+  // feed places the scanlation group in `<description>`, not the title;
+  // this branch is kept as a fallback so older / legacy feed shapes still
+  // surface a group. Captured up to `(` or end-of-string so a trailing
+  // `(en)` language tag doesn't bleed into the group name.
   let group: string | null = null;
   const groupMatch = trimmed.match(/\bby\s+(.+?)(?:\s*\([a-z]{2,3}\)\s*)?$/i);
   if (groupMatch?.[1]) {
@@ -174,23 +189,29 @@ function pubDateToIso(raw: string | null): string {
 }
 
 /**
- * Derive a stable external_release_id. Prefer `<guid>`, then the link URL,
- * otherwise fall back to a deterministic hash of `(title + pubDate)`.
+ * Derive a stable external_release_id.
  *
- * Stability is what matters: re-polling the same item must produce the same
- * ID so the host's `(source_id, external_release_id)` dedup catches it.
+ * Priority:
+ *   1. `<guid>` if present (richest legacy format).
+ *   2. `<link>` if present (legacy format with per-item links).
+ *   3. Deterministic hash of `(title + group + pubDate)` for the current
+ *      v1 RSS shape, which carries none of the above per-item fields.
+ *      Including the group in the hash is what lets multiple groups
+ *      releasing the same chapter ("c.200" by Asura, by FLAME-SCANS,
+ *      by LeviatanScans) hash to distinct IDs and become distinct
+ *      ledger rows. Same-group same-chapter re-polls collide on the
+ *      hash and dedupe, which is what the host expects.
  */
 function deriveExternalReleaseId(
   guid: string | null,
   link: string | null,
   title: string,
+  group: string | null,
   pubDate: string | null,
 ): string {
   if (guid && guid.trim().length > 0) return guid.trim();
   if (link && link.trim().length > 0) return link.trim();
-  // Deterministic fallback for feeds that omit both. djb2-ish hash keeps the
-  // ID short while staying stable across polls.
-  const fallback = `${title}|${pubDate ?? ""}`;
+  const fallback = `${title}|${group ?? ""}|${pubDate ?? ""}`;
   let h = 5381;
   for (let i = 0; i < fallback.length; i++) {
     h = ((h << 5) + h + fallback.charCodeAt(i)) | 0;
@@ -200,7 +221,10 @@ function deriveExternalReleaseId(
 
 /**
  * Parse a single MangaUpdates `<item>` block into a `ParsedRssItem`. Returns
- * null if the title is missing entirely (truly malformed item).
+ * null when the item is unusable:
+ *   - missing `<title>` (truly malformed), or
+ *   - title carries neither chapter nor volume (announcements, oneshot
+ *     stubs, series-name-only entries — pure inbox noise).
  */
 export function parseItem(itemXml: string): ParsedRssItem | null {
   const title = extractTagText(itemXml, "title");
@@ -209,11 +233,18 @@ export function parseItem(itemXml: string): ParsedRssItem | null {
   const link = extractTagText(itemXml, "link");
   const guid = extractTagText(itemXml, "guid");
   const pubDate = extractTagText(itemXml, "pubDate");
+  const description = extractTagText(itemXml, "description");
 
-  const { chapter, volume, group, language } = parseTitle(title);
+  const { chapter, volume, group: groupFromTitle, language } = parseTitle(title);
+  if (chapter === null && volume === null) return null;
+
+  // The v1 RSS feed places the scanlation group in `<description>`. Prefer
+  // it; fall back to the legacy "by <Group>" title pattern.
+  const descTrimmed = description?.trim();
+  const group = descTrimmed && descTrimmed.length > 0 ? descTrimmed : groupFromTitle;
 
   return {
-    externalReleaseId: deriveExternalReleaseId(guid, link, title, pubDate),
+    externalReleaseId: deriveExternalReleaseId(guid, link, title, group, pubDate),
     title,
     chapter,
     volume,
@@ -224,13 +255,42 @@ export function parseItem(itemXml: string): ParsedRssItem | null {
   };
 }
 
+/** Parsed feed: items plus the channel-level link (if any). */
+export interface ParsedFeed {
+  /** Channel-level `<link>` — the series page on mangaupdates.com. Used as
+   *  the `payloadUrl` for releases when no per-item link exists (the v1
+   *  RSS shape). `null` when the channel block is missing or malformed. */
+  channelLink: string | null;
+  items: ParsedRssItem[];
+}
+
 /**
- * Parse a full MangaUpdates per-series RSS feed body into items. Bad items
- * (missing title) are dropped silently — the feed should be best-effort
- * tolerant.
+ * Parse a full MangaUpdates per-series RSS feed body. Items that fail
+ * `parseItem` (missing title, or no chapter/volume) are dropped silently —
+ * the feed parser is best-effort tolerant.
  */
-export function parseFeed(xml: string): ParsedRssItem[] {
-  return splitItems(xml)
-    .map(parseItem)
-    .filter((i): i is ParsedRssItem => i !== null);
+export function parseFeed(xml: string): ParsedFeed {
+  return {
+    channelLink: extractChannelLink(xml),
+    items: splitItems(xml)
+      .map(parseItem)
+      .filter((i): i is ParsedRssItem => i !== null),
+  };
+}
+
+/**
+ * Extract the channel-level `<link>` from a feed. The v1 RSS feed uses
+ * `<channel><link>https://...</link></channel>` and that URL is the series
+ * page on mangaupdates.com. We prefer the first `<link>` *outside* any
+ * `<item>` block so per-item legacy links (which we don't expect at the
+ * channel level anyway) can never bleed in.
+ */
+function extractChannelLink(xml: string): string | null {
+  // Strip every <item>...</item> block before searching — cheap way to
+  // scope to the channel header.
+  const stripped = xml.replace(/<item\b[^>]*>[\s\S]*?<\/item>/gi, "");
+  const link = extractTagText(stripped, "link");
+  if (!link) return null;
+  const trimmed = link.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }

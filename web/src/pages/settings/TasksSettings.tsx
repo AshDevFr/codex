@@ -184,6 +184,52 @@ export function TasksSettings() {
     refetchInterval: 5000,
   });
 
+  // Seed `activeProgress` from currently-processing tasks so the "Active
+  // Tasks" panel reflects them immediately on page load, even before any
+  // SSE progress event arrives. Without this, opening the page mid-poll
+  // shows an empty panel until the running task fires its next progress
+  // emit (which can be many seconds for slow polls or never for handlers
+  // that don't emit progress at all).
+  //
+  // Existing entries (already populated by SSE) win — we never overwrite
+  // a richer, more recent event with a bare polling snapshot.
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+    setActiveProgress((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      const processingIds = new Set<string>();
+      for (const t of tasks) {
+        if (t.status !== "processing") continue;
+        processingIds.add(t.id);
+        if (next.has(t.id)) continue;
+        next.set(t.id, {
+          taskId: t.id,
+          taskType: t.taskType,
+          status: "running",
+          progress: undefined,
+          error: undefined,
+          startedAt: t.startedAt ?? new Date().toISOString(),
+          completedAt: undefined,
+          libraryId: t.libraryId ?? undefined,
+          seriesId: t.seriesId ?? undefined,
+          bookId: t.bookId ?? undefined,
+        });
+        changed = true;
+      }
+      // Drop running entries that are no longer in the processing list —
+      // they completed/failed without an SSE delete reaching us (e.g. SSE
+      // dropped the event, or the page just opened post-completion).
+      for (const [id, ev] of prev) {
+        if (ev.status === "running" && !processingIds.has(id)) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [tasks]);
+
   // Subscribe to real-time task progress
   useEffect(() => {
     const unsubscribe = subscribeToTaskProgress(

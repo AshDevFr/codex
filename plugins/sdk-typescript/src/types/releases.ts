@@ -21,6 +21,25 @@
 export const RELEASES_METHODS = {
   /** List tracked series, scoped to what the plugin's manifest declared. */
   LIST_TRACKED: "releases/list_tracked",
+  /**
+   * Count tracked series scoped to the plugin's `requiresExternalIds`.
+   *
+   * Plugins call this once at the start of a poll to learn the total
+   * denominator before iterating, so subsequent `REPORT_PROGRESS` calls
+   * carry a stable `current/total` ratio. Cheap (one batched DB lookup);
+   * safe to call from `poll`.
+   */
+  COUNT_TRACKED: "releases/count_tracked",
+  /**
+   * Report intra-poll progress to the host. The host translates this into
+   * a `TaskProgressEvent` on the active task's broadcaster; the inbox
+   * progress bar updates live. Best-effort — calls outside an active
+   * task scope are silently dropped, and rapid back-to-back calls are
+   * rate-limited (~10/sec) by the host. Plugins SHOULD call this after
+   * each unit of work (e.g. after each polled series) with `current` set
+   * to the count of completed units and `total` from `COUNT_TRACKED`.
+   */
+  REPORT_PROGRESS: "releases/report_progress",
   /** Submit a candidate to the host's release ledger. */
   RECORD: "releases/record",
   /** Get persisted per-source state (etag, last_polled_at, last_error). */

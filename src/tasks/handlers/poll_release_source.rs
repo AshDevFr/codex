@@ -353,6 +353,11 @@ impl TaskHandler for PollReleaseSourceHandler {
             // the same series, so we don't want N+1 queries here.
             let mut owned_cache: std::collections::HashMap<Uuid, OwnedReleaseKeys> =
                 std::collections::HashMap::new();
+            // Cache series-title lookups for the same reason: each emit
+            // needs the title for the toast, but a poll often produces many
+            // events for one series.
+            let mut series_title_cache: std::collections::HashMap<Uuid, String> =
+                std::collections::HashMap::new();
 
             for cand in response.candidates {
                 let series_id = cand.series_match.codex_series_id;
@@ -409,10 +414,23 @@ impl TaskHandler for PollReleaseSourceHandler {
                                         outcome.row.state == ledger_state::ANNOUNCED;
                                     if landed_announced && let Some(broadcaster) = event_broadcaster
                                     {
+                                        let title = if let Some(cached) =
+                                            series_title_cache.get(&outcome.row.series_id)
+                                        {
+                                            cached.clone()
+                                        } else {
+                                            let resolved =
+                                                lookup_series_title(db, outcome.row.series_id)
+                                                    .await;
+                                            series_title_cache
+                                                .insert(outcome.row.series_id, resolved.clone());
+                                            resolved
+                                        };
                                         emit_release_announced(
                                             broadcaster,
                                             &outcome.row,
                                             &source.plugin_id,
+                                            title,
                                         );
                                     }
                                 }
@@ -597,14 +615,41 @@ pub(crate) fn build_poll_summary(
 
 /// Emit a `ReleaseAnnounced` event for a freshly-inserted ledger row.
 ///
+/// `series_title` is the human-readable label rendered by frontend
+/// notifications (typically `series_metadata.title`, falling back to the
+/// series directory name; see [`lookup_series_title`]).
+///
 /// Failure to broadcast (no subscribers, channel closed) is a benign noop —
 /// the ledger row is the source of truth, the SSE event is a UX nicety.
 pub(crate) fn emit_release_announced(
     broadcaster: &EventBroadcaster,
     row: &crate::db::entities::release_ledger::Model,
     plugin_id: &str,
+    series_title: String,
 ) {
-    let _ = broadcaster.emit(EntityChangeEvent::release_announced(row, plugin_id));
+    let _ = broadcaster.emit(EntityChangeEvent::release_announced(
+        row,
+        plugin_id,
+        series_title,
+    ));
+}
+
+/// Resolve the display title for a series, preferring `series_metadata.title`
+/// and falling back to the directory-derived `series.name`. Returns an empty
+/// string if the series row is missing (shouldn't happen for a valid ledger
+/// insert, but we don't want a notification failure to surface as a panic).
+pub(crate) async fn lookup_series_title(db: &DatabaseConnection, series_id: Uuid) -> String {
+    match SeriesRepository::get_with_metadata(db, series_id).await {
+        Ok(Some((series, metadata))) => metadata.map(|m| m.title).unwrap_or(series.name),
+        Ok(None) => String::new(),
+        Err(e) => {
+            warn!(
+                "Failed to look up title for series {} (release notification): {}",
+                series_id, e
+            );
+            String::new()
+        }
+    }
 }
 
 /// Compute the initial ledger state for a candidate. Returns
@@ -725,13 +770,19 @@ mod tests {
             created_at: Utc::now(),
         };
 
-        emit_release_announced(&broadcaster, &row, "release-mangaupdates");
+        emit_release_announced(
+            &broadcaster,
+            &row,
+            "release-mangaupdates",
+            "Test Series".to_string(),
+        );
 
         let event = rx.try_recv().expect("expected one event");
         match event.event {
             EntityEvent::ReleaseAnnounced {
                 ledger_id,
                 series_id,
+                series_title,
                 source_id,
                 plugin_id,
                 chapter,
@@ -740,6 +791,7 @@ mod tests {
             } => {
                 assert_eq!(ledger_id, row.id);
                 assert_eq!(series_id, row.series_id);
+                assert_eq!(series_title, "Test Series");
                 assert_eq!(source_id, row.source_id);
                 assert_eq!(plugin_id, "release-mangaupdates");
                 assert_eq!(chapter, Some(143.0));
@@ -777,7 +829,7 @@ mod tests {
             observed_at: Utc::now(),
             created_at: Utc::now(),
         };
-        emit_release_announced(&broadcaster, &row, "release-nyaa");
+        emit_release_announced(&broadcaster, &row, "release-nyaa", "Whatever".to_string());
     }
 
     #[test]

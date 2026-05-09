@@ -9800,6 +9800,12 @@ export interface components {
             pluginId: string;
             /** Format: uuid */
             seriesId: string;
+            /**
+             * @description Series display title (`series_metadata.title`, falling back to the
+             *     series directory name). Carried in the event so notifications can
+             *     render a clickable series link without a second round-trip.
+             */
+            seriesTitle: string;
             /** Format: uuid */
             sourceId: string;
             /** @enum {string} */
