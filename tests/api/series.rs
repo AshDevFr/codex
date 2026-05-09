@@ -5495,6 +5495,97 @@ async fn test_list_series_filtered_by_has_external_source_id() {
 }
 
 // ============================================================================
+// IsTracked Filter Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_series_filtered_by_is_tracked() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    use codex::db::repositories::{SeriesTrackingRepository, TrackingUpdate};
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // A series with tracking explicitly enabled.
+    let tracked_series = SeriesRepository::create(&db, library.id, "Tracked Series", None)
+        .await
+        .unwrap();
+    SeriesTrackingRepository::upsert(
+        &db,
+        tracked_series.id,
+        TrackingUpdate {
+            tracked: Some(true),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    // A series with a tracking row that has tracked=false (rare but possible
+    // after a user un-tracks something).
+    let untracked_row_series =
+        SeriesRepository::create(&db, library.id, "Untracked With Row", None)
+            .await
+            .unwrap();
+    SeriesTrackingRepository::upsert(
+        &db,
+        untracked_row_series.id,
+        TrackingUpdate {
+            tracked: Some(false),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    // A series with no tracking row at all (the common case for a fresh DB).
+    let _no_row_series = SeriesRepository::create(&db, library.id, "No Tracking Row", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // isTracked = true returns only series with tracking explicitly enabled.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::IsTracked {
+            is_tracked: BoolOperator::IsTrue,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app.clone(), request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].title, "Tracked Series");
+
+    // isTracked = false returns the inverse: tracked=false rows AND series
+    // with no tracking row at all.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::IsTracked {
+            is_tracked: BoolOperator::IsFalse,
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 2);
+    let titles: Vec<&str> = series_list.data.iter().map(|s| s.title.as_str()).collect();
+    assert!(titles.contains(&"Untracked With Row"));
+    assert!(titles.contains(&"No Tracking Row"));
+}
+
+// ============================================================================
 // Has User Rating Filter Tests
 // ============================================================================
 

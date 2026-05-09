@@ -24,6 +24,7 @@ export function ActiveFilters() {
     setSharingTagState,
     setCompletionState,
     setHasExternalSourceIdState,
+    setIsTrackedState,
     clearAll,
   } = useSeriesFilterState();
 
@@ -152,6 +153,33 @@ export function ActiveFilters() {
         }
       >
         {isExclude ? "NOT " : ""}Has External ID
+      </Badge>,
+    );
+  }
+
+  // Add isTracked chip if active
+  if (filters.isTracked !== "neutral") {
+    const isExclude = filters.isTracked === "exclude";
+    allChips.push(
+      <Badge
+        key="isTracked"
+        variant="filled"
+        color={isExclude ? "red" : "blue"}
+        size="md"
+        className={styles.chip}
+        rightSection={
+          <ActionIcon
+            size="xs"
+            variant="transparent"
+            color="white"
+            onClick={() => setIsTrackedState("neutral")}
+            aria-label="Remove tracking filter"
+          >
+            <IconX size={12} />
+          </ActionIcon>
+        }
+      >
+        {isExclude ? "NOT " : ""}Tracked
       </Badge>,
     );
   }

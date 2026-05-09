@@ -107,6 +107,15 @@ pub enum SeriesCondition {
         #[serde(rename = "hasUserRating")]
         has_user_rating: BoolOperator,
     },
+    /// Filter by whether release tracking is enabled for the series.
+    ///
+    /// `IsTrue` returns only series whose `series_tracking.tracked` flag is
+    /// `true`. `IsFalse` returns everything else, including series with no
+    /// `series_tracking` row at all (the common case for a fresh library).
+    IsTracked {
+        #[serde(rename = "isTracked")]
+        is_tracked: BoolOperator,
+    },
 }
 
 /// Book-level search conditions
@@ -629,6 +638,41 @@ mod tests {
                 has_user_rating: BoolOperator::IsTrue,
             } => {}
             _ => panic!("Expected HasUserRating condition with IsTrue operator"),
+        }
+    }
+
+    #[test]
+    fn test_is_tracked_condition_is_true() {
+        let condition = SeriesCondition::IsTracked {
+            is_tracked: BoolOperator::IsTrue,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""isTracked""#));
+        assert!(json.contains(r#""operator":"isTrue""#));
+    }
+
+    #[test]
+    fn test_is_tracked_condition_is_false() {
+        let condition = SeriesCondition::IsTracked {
+            is_tracked: BoolOperator::IsFalse,
+        };
+
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""isTracked""#));
+        assert!(json.contains(r#""operator":"isFalse""#));
+    }
+
+    #[test]
+    fn test_is_tracked_condition_deserialization() {
+        let json = r#"{"isTracked":{"operator":"isTrue"}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+
+        match condition {
+            SeriesCondition::IsTracked {
+                is_tracked: BoolOperator::IsTrue,
+            } => {}
+            _ => panic!("Expected IsTracked condition with IsTrue operator"),
         }
     }
 }

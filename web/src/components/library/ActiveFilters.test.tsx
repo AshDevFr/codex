@@ -226,4 +226,38 @@ describe("ActiveFilters", () => {
     });
     expect(removeButton).toBeInTheDocument();
   });
+
+  it("should render isTracked include filter chip", () => {
+    render(
+      <TestWrapper initialRoute="/?trf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText("Filters:")).toBeInTheDocument();
+    expect(screen.getByText("Tracked")).toBeInTheDocument();
+  });
+
+  it("should render isTracked exclude filter chip with NOT prefix", () => {
+    render(
+      <TestWrapper initialRoute="/?trf=exclude">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/NOT Tracked/)).toBeInTheDocument();
+  });
+
+  it("should have remove button on isTracked chip", () => {
+    render(
+      <TestWrapper initialRoute="/?trf=include">
+        <ActiveFilters />
+      </TestWrapper>,
+    );
+
+    const removeButton = screen.getByRole("button", {
+      name: /Remove tracking filter/i,
+    });
+    expect(removeButton).toBeInTheDocument();
+  });
 });
