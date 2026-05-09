@@ -15794,6 +15794,8 @@ export interface components {
             hasExternalSourceId: components["schemas"]["BoolOperator"];
         } | {
             hasUserRating: components["schemas"]["BoolOperator"];
+        } | {
+            isTracked: components["schemas"]["BoolOperator"];
         };
         /**
          * @description Series context for template and condition evaluation.

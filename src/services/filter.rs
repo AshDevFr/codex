@@ -146,6 +146,10 @@ impl FilterService {
                     Self::filter_by_has_user_rating(db, has_user_rating, candidate_ids, user_id)
                         .await
                 }
+
+                SeriesCondition::IsTracked { is_tracked } => {
+                    Self::filter_by_is_tracked(db, is_tracked, candidate_ids).await
+                }
             }
         })
     }
@@ -900,6 +904,64 @@ impl FilterService {
                     Ok(all_series
                         .into_iter()
                         .filter(|id| !rated_series.contains(id))
+                        .collect())
+                }
+            }
+        }
+    }
+
+    /// Filter series by whether release tracking is enabled.
+    ///
+    /// - `IsTrue`: return series whose `series_tracking.tracked` flag is `true`.
+    /// - `IsFalse`: return everything else, *including* series that have no
+    ///   `series_tracking` row at all (the common case for a fresh library).
+    async fn filter_by_is_tracked(
+        db: &DatabaseConnection,
+        operator: &BoolOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::{series, series_tracking};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        // Series with tracking explicitly enabled.
+        let tracked_series: HashSet<Uuid> = series_tracking::Entity::find()
+            .select_only()
+            .column(series_tracking::Column::SeriesId)
+            .filter(series_tracking::Column::Tracked.eq(true))
+            .into_tuple()
+            .all(db)
+            .await?
+            .into_iter()
+            .collect();
+
+        match operator {
+            BoolOperator::IsTrue => {
+                if let Some(candidates) = candidate_ids {
+                    Ok(tracked_series.intersection(candidates).cloned().collect())
+                } else {
+                    Ok(tracked_series)
+                }
+            }
+            BoolOperator::IsFalse => {
+                if let Some(candidates) = candidate_ids {
+                    Ok(candidates
+                        .iter()
+                        .filter(|id| !tracked_series.contains(id))
+                        .cloned()
+                        .collect())
+                } else {
+                    let all_series: HashSet<Uuid> = series::Entity::find()
+                        .select_only()
+                        .column(series::Column::Id)
+                        .into_tuple()
+                        .all(db)
+                        .await?
+                        .into_iter()
+                        .collect();
+
+                    Ok(all_series
+                        .into_iter()
+                        .filter(|id| !tracked_series.contains(id))
                         .collect())
                 }
             }
@@ -2436,6 +2498,34 @@ mod tests {
                 assert!(matches!(has_external_source_id, BoolOperator::IsFalse));
             }
             _ => panic!("Expected HasExternalSourceId condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_is_tracked_is_true() {
+        let condition = SeriesCondition::IsTracked {
+            is_tracked: BoolOperator::IsTrue,
+        };
+
+        match condition {
+            SeriesCondition::IsTracked { is_tracked } => {
+                assert!(matches!(is_tracked, BoolOperator::IsTrue));
+            }
+            _ => panic!("Expected IsTracked condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_condition_is_tracked_is_false() {
+        let condition = SeriesCondition::IsTracked {
+            is_tracked: BoolOperator::IsFalse,
+        };
+
+        match condition {
+            SeriesCondition::IsTracked { is_tracked } => {
+                assert!(matches!(is_tracked, BoolOperator::IsFalse));
+            }
+            _ => panic!("Expected IsTracked condition"),
         }
     }
 }

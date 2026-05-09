@@ -64,7 +64,8 @@ export type SeriesCondition =
   | { sharingTag: FieldOperator }
   | { completion: BoolOperator }
   | { hasExternalSourceId: BoolOperator }
-  | { hasUserRating: BoolOperator };
+  | { hasUserRating: BoolOperator }
+  | { isTracked: BoolOperator };
 
 // =============================================================================
 // Book conditions (matches backend BookCondition)
@@ -136,6 +137,7 @@ export interface SeriesFilterState {
   completion: TriState;
   hasExternalSourceId: TriState;
   hasUserRating: TriState;
+  isTracked: TriState;
 }
 
 /**
@@ -178,6 +180,7 @@ export function createEmptySeriesFilterState(): SeriesFilterState {
     completion: "neutral",
     hasExternalSourceId: "neutral",
     hasUserRating: "neutral",
+    isTracked: "neutral",
   };
 }
 
@@ -342,6 +345,13 @@ export function seriesFilterStateToCondition(
     allConditions.push({ hasUserRating: { operator: "isTrue" } });
   } else if (state.hasUserRating === "exclude") {
     allConditions.push({ hasUserRating: { operator: "isFalse" } });
+  }
+
+  // Add isTracked condition
+  if (state.isTracked === "include") {
+    allConditions.push({ isTracked: { operator: "isTrue" } });
+  } else if (state.isTracked === "exclude") {
+    allConditions.push({ isTracked: { operator: "isFalse" } });
   }
 
   // Return combined condition
@@ -538,6 +548,7 @@ export const FILTER_PARAM_KEYS = {
   completion: "cf",
   hasExternalSourceId: "esf",
   hasUserRating: "urf",
+  isTracked: "trf",
 } as const;
 
 /**
@@ -586,6 +597,10 @@ export function serializeSeriesFilters(
     params.set(FILTER_PARAM_KEYS.hasUserRating, state.hasUserRating);
   }
 
+  if (state.isTracked !== "neutral") {
+    params.set(FILTER_PARAM_KEYS.isTracked, state.isTracked);
+  }
+
   return params;
 }
 
@@ -598,6 +613,7 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
     FILTER_PARAM_KEYS.hasExternalSourceId,
   );
   const hasUserRatingParam = params.get(FILTER_PARAM_KEYS.hasUserRating);
+  const isTrackedParam = params.get(FILTER_PARAM_KEYS.isTracked);
   return {
     genres: parseFilterGroup(params.get(FILTER_PARAM_KEYS.genres)),
     tags: parseFilterGroup(params.get(FILTER_PARAM_KEYS.tags)),
@@ -618,6 +634,10 @@ export function parseSeriesFilters(params: URLSearchParams): SeriesFilterState {
     hasUserRating:
       hasUserRatingParam === "include" || hasUserRatingParam === "exclude"
         ? hasUserRatingParam
+        : "neutral",
+    isTracked:
+      isTrackedParam === "include" || isTrackedParam === "exclude"
+        ? isTrackedParam
         : "neutral",
   };
 }

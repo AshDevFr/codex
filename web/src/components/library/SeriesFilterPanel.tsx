@@ -278,6 +278,26 @@ export function SeriesFilterPanel() {
                   showModeToggle={false}
                 />
 
+                {/* Release Tracking Filter */}
+                <FilterGroup
+                  title="Release Tracking"
+                  options={[{ value: "tracked", label: "Tracked" }]}
+                  state={{
+                    mode: "allOf",
+                    values:
+                      draftState.draftFilters.isTracked !== "neutral"
+                        ? new Map([
+                            ["tracked", draftState.draftFilters.isTracked],
+                          ])
+                        : new Map(),
+                  }}
+                  onValueChange={(_value, state) =>
+                    draftState.setIsTrackedState(state)
+                  }
+                  onModeChange={() => {}}
+                  showModeToggle={false}
+                />
+
                 {/* Metadata Section - Only show if there's data */}
                 {hasMetadataFilters && (
                   <>

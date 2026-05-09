@@ -34859,6 +34859,18 @@
                 "$ref": "#/components/schemas/BoolOperator"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Filter by whether release tracking is enabled for the series.\n\n`IsTrue` returns only series whose `series_tracking.tracked` flag is\n`true`. `IsFalse` returns everything else, including series with no\n`series_tracking` row at all (the common case for a fresh library).",
+            "required": [
+              "isTracked"
+            ],
+            "properties": {
+              "isTracked": {
+                "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
           }
         ],
         "description": "Series-level search conditions\n\nConditions can be composed using `allOf` (AND) and `anyOf` (OR).\nUses untagged enum for cleaner JSON without explicit type field."
