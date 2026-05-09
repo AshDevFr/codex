@@ -1,7 +1,9 @@
+import { Anchor } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { eventsApi } from "@/api/events";
+import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { useReleaseAnnouncementsStore } from "@/store/releaseAnnouncementsStore";
@@ -12,6 +14,44 @@ import { createDevLog } from "@/utils/devLog";
 type ConnectionState = "connecting" | "connected" | "disconnected" | "failed";
 
 const log = createDevLog("[SSE]");
+
+/** Per-series state for the aggregated release toast. Lives at module scope
+ * so a burst of `release_announced` events for the same series collapses
+ * into a single toast that updates in place rather than spawning N toasts.
+ *
+ * The set of chapters/volumes accumulates while the toast is visible; the
+ * `onClose` handler clears the entry, so the next event after dismissal
+ * starts a fresh toast. Exported for testability. */
+type ReleaseToastState = {
+  chapters: Set<number>;
+  volumes: Set<number>;
+  pluginId: string;
+};
+export const releaseToastState = new Map<string, ReleaseToastState>();
+
+/** Cap on the rendered chapter/volume label so a series with dozens of
+ * announced releases doesn't blow the toast width out. */
+const RELEASE_LABEL_MAX_CHARS = 70;
+
+/** Build the message body for the aggregated release toast. Lists volumes
+ * first (typically fewer entries), then chapters; truncates with `…` once
+ * the joined string exceeds `RELEASE_LABEL_MAX_CHARS`. Pure helper —
+ * exported for testing. */
+export function formatReleaseLabel(state: ReleaseToastState): string {
+  const sortAsc = (s: Set<number>) => [...s].sort((a, b) => a - b);
+  const parts: string[] = [];
+  if (state.volumes.size > 0) {
+    parts.push(`Vol ${sortAsc(state.volumes).join(", ")}`);
+  }
+  if (state.chapters.size > 0) {
+    parts.push(`Ch ${sortAsc(state.chapters).join(", ")}`);
+  }
+  let label = parts.length > 0 ? parts.join(" / ") : "New release";
+  if (label.length > RELEASE_LABEL_MAX_CHARS) {
+    label = `${label.slice(0, RELEASE_LABEL_MAX_CHARS - 1).trimEnd()}…`;
+  }
+  return label;
+}
 
 /** Best-effort decode of a JSON-array string (settings + user_preferences
  * values are stored as JSON-encoded strings). Non-string entries and parse
@@ -335,20 +375,67 @@ function handleEntityEvent(
         queryKey: ["series", event.seriesId, "full"],
       });
 
-      // Surface a low-priority toast. Toast text uses chapter or volume
-      // when the source provided one; falls back to a neutral message.
-      const label =
-        event.chapter !== null && event.chapter !== undefined
-          ? `Ch ${event.chapter}`
-          : event.volume !== null && event.volume !== undefined
-            ? `Vol ${event.volume}`
-            : "New release";
-      notifications.show({
-        id: `release-${event.ledgerId}`,
-        title: "New release",
-        message: `${label} from ${event.pluginId}`,
-        color: "orange",
-      });
+      // Surface a low-priority toast. To avoid spamming the user when a
+      // single poll lands a dozen releases for one series, we aggregate by
+      // `seriesId`: one toast per series, updated in place as more events
+      // arrive. The title is the series name (clickable); the body lists
+      // every volume/chapter announced while the toast is visible.
+      const seriesTitle =
+        event.seriesTitle.length > 0 ? event.seriesTitle : "New release";
+      const toastId = `release-series-${event.seriesId}`;
+      const seriesPath = `/series/${event.seriesId}#releases`;
+
+      const existing = releaseToastState.get(event.seriesId);
+      const state: ReleaseToastState = existing ?? {
+        chapters: new Set(),
+        volumes: new Set(),
+        pluginId: event.pluginId,
+      };
+      if (event.chapter !== null && event.chapter !== undefined) {
+        state.chapters.add(event.chapter);
+      }
+      if (event.volume !== null && event.volume !== undefined) {
+        state.volumes.add(event.volume);
+      }
+      state.pluginId = event.pluginId;
+
+      const message = `${formatReleaseLabel(state)} from ${event.pluginId}`;
+      // Mantine renders the toast inside its own portal, which sits above
+      // <BrowserRouter> in the tree, so a `<Link>` here would crash with
+      // "Cannot destructure property 'basename' of useContext(...)".
+      // Use the global navigationService (already wired to react-router's
+      // navigate) so SPA navigation still works from inside the toast.
+      const titleNode = (
+        <Anchor
+          href={seriesPath}
+          onClick={(e) => {
+            e.preventDefault();
+            notifications.hide(toastId);
+            navigationService.navigateTo(seriesPath);
+          }}
+          inherit
+        >
+          {seriesTitle}
+        </Anchor>
+      );
+
+      if (existing) {
+        notifications.update({
+          id: toastId,
+          title: titleNode,
+          message,
+          color: "orange",
+        });
+      } else {
+        releaseToastState.set(event.seriesId, state);
+        notifications.show({
+          id: toastId,
+          title: titleNode,
+          message,
+          color: "orange",
+          onClose: () => releaseToastState.delete(event.seriesId),
+        });
+      }
       break;
     }
 

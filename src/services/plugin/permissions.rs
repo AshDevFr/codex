@@ -73,6 +73,8 @@ pub fn required_capability(method: &str) -> Option<RequiredCapability> {
 
         // Releases — gated on the `release_source` capability.
         methods::RELEASES_LIST_TRACKED
+        | methods::RELEASES_COUNT_TRACKED
+        | methods::RELEASES_REPORT_PROGRESS
         | methods::RELEASES_RECORD
         | methods::RELEASES_SOURCE_STATE_GET
         | methods::RELEASES_SOURCE_STATE_SET
@@ -162,6 +164,8 @@ mod tests {
     fn releases_methods_require_release_source_capability() {
         for m in [
             methods::RELEASES_LIST_TRACKED,
+            methods::RELEASES_COUNT_TRACKED,
+            methods::RELEASES_REPORT_PROGRESS,
             methods::RELEASES_RECORD,
             methods::RELEASES_SOURCE_STATE_GET,
             methods::RELEASES_SOURCE_STATE_SET,
@@ -208,6 +212,14 @@ mod tests {
     fn required_capability_returns_some_for_known_methods() {
         assert_eq!(
             required_capability(methods::RELEASES_RECORD),
+            Some(RequiredCapability::ReleaseSource)
+        );
+        assert_eq!(
+            required_capability(methods::RELEASES_COUNT_TRACKED),
+            Some(RequiredCapability::ReleaseSource)
+        );
+        assert_eq!(
+            required_capability(methods::RELEASES_REPORT_PROGRESS),
             Some(RequiredCapability::ReleaseSource)
         );
         assert_eq!(

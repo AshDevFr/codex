@@ -9,7 +9,7 @@ export function ReleasesNavBadge() {
   const unseen = useReleaseAnnouncementsStore((s) => s.unseenCount);
   if (unseen <= 0) return null;
   return (
-    <Badge color="orange" variant="filled" size="sm" circle>
+    <Badge color="orange" variant="filled" size="sm">
       {unseen > 99 ? "99+" : unseen}
     </Badge>
   );

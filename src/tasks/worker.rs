@@ -151,6 +151,15 @@ impl TaskWorker {
         self
     }
 
+    /// Register or replace a task handler. Test-only: real callers register
+    /// handlers via the `with_*_service` builders, which set up the full
+    /// dependency graph each handler requires.
+    #[cfg(test)]
+    pub fn with_handler(mut self, task_type: &str, handler: Arc<dyn TaskHandler>) -> Self {
+        self.handlers.insert(task_type.to_string(), handler);
+        self
+    }
+
     /// Set the event broadcaster for task progress events
     pub fn with_event_broadcaster(mut self, broadcaster: Arc<EventBroadcaster>) -> Self {
         self.event_broadcaster = Some(broadcaster);
@@ -594,6 +603,18 @@ impl TaskWorker {
             anyhow::anyhow!("No handler registered for task type: {}", task.task_type)
         })?;
 
+        // Build the task identity exposed to reverse-RPC handlers via the
+        // task-local context. Used by `releases/report_progress` to
+        // construct a `TaskProgressEvent` (which needs the task id/type)
+        // and to rate-limit emits.
+        let task_identity = Arc::new(crate::events::TaskIdentity::new(
+            task.id,
+            task.task_type.clone(),
+            task.library_id,
+            task.series_id,
+            task.book_id,
+        ));
+
         // In distributed mode, create a recording broadcaster to capture events
         // that need to be replayed by the TaskListener on the web server
         let (task_broadcaster, recorded_events): (
@@ -604,18 +625,21 @@ impl TaskWorker {
             let recording_broadcaster = Arc::new(EventBroadcaster::new_with_recording(1000, true));
             let broadcaster_clone = recording_broadcaster.clone();
 
-            // Execute the handler inside a task-local scope that exposes the
-            // recording broadcaster to any code on this task's await chain —
-            // including reverse-RPC handlers (e.g. `releases/record`), which
+            // Execute the handler inside task-local scopes that expose the
+            // recording broadcaster and the task identity to any code on
+            // this task's await chain — including reverse-RPC handlers
+            // (e.g. `releases/record`, `releases/report_progress`), which
             // are dispatched on this task by `RpcClient::call_with_timeout`
             // when the plugin tags reverse-RPCs with the parent forward
-            // request id. Without this, plugins that emit events via
-            // reverse-RPC (rather than synchronously through the handler's
-            // broadcaster argument) would have no recording context and
-            // their events would never replay.
-            let result = crate::events::with_recording_broadcaster(
-                recording_broadcaster.clone(),
-                handler.handle(&task, &self.db, Some(&recording_broadcaster)),
+            // request id. Without these scopes, plugins that emit events
+            // via reverse-RPC would have no recording context and their
+            // events would never replay.
+            let result = crate::events::with_task_identity(
+                task_identity.clone(),
+                crate::events::with_recording_broadcaster(
+                    recording_broadcaster.clone(),
+                    handler.handle(&task, &self.db, Some(&recording_broadcaster)),
+                ),
             )
             .await;
 
@@ -627,11 +651,23 @@ impl TaskWorker {
                 Some(events)
             };
 
-            // Return result info for later processing
+            // Return result info for later processing. A handler that
+            // returns `Ok(TaskResult { success: false, .. })` is signalling
+            // a logical failure (e.g. plugin RPC timeout, missing source) —
+            // route it to `fail_task` so the task row reflects reality
+            // instead of recording a green "completed" status.
             match result {
-                Ok(task_result) => {
+                Ok(task_result) if task_result.success => {
                     self.complete_task(&task, task_result, started_at, events)
                         .await?;
+                }
+                Ok(task_result) => {
+                    let err = anyhow::anyhow!(
+                        task_result
+                            .message
+                            .unwrap_or_else(|| "task reported failure".to_string())
+                    );
+                    self.fail_task(&task, err, started_at).await?;
                 }
                 Err(e) => {
                     self.fail_task(&task, e, started_at).await?;
@@ -645,27 +681,43 @@ impl TaskWorker {
         };
 
         // Execute task with shared broadcaster (single-process mode).
-        // Set the task-local to the shared broadcaster too, so reverse-RPC
-        // handlers see *the same* broadcaster the rest of the task uses.
+        // Set the task-locals to the shared broadcaster + task identity so
+        // reverse-RPC handlers see *the same* broadcaster the rest of the
+        // task uses, and can synthesize `TaskProgressEvent`s for the task.
         // The shared broadcaster has recording disabled here (web/single-
         // process mode), so emits flow straight to live SSE subscribers.
         let result = if let Some(ref shared) = task_broadcaster {
-            crate::events::with_recording_broadcaster(
-                shared.clone(),
-                handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+            crate::events::with_task_identity(
+                task_identity.clone(),
+                crate::events::with_recording_broadcaster(
+                    shared.clone(),
+                    handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+                ),
             )
             .await
         } else {
-            handler
-                .handle(&task, &self.db, task_broadcaster.as_ref())
-                .await
+            crate::events::with_task_identity(
+                task_identity.clone(),
+                handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+            )
+            .await
         };
 
-        // Update task status based on result
+        // Update task status based on result. See the matching block in
+        // distributed mode above for the rationale on the `success: false`
+        // branch.
         match result {
-            Ok(task_result) => {
+            Ok(task_result) if task_result.success => {
                 self.complete_task(&task, task_result, started_at, recorded_events)
                     .await?;
+            }
+            Ok(task_result) => {
+                let err = anyhow::anyhow!(
+                    task_result
+                        .message
+                        .unwrap_or_else(|| "task reported failure".to_string())
+                );
+                self.fail_task(&task, err, started_at).await?;
             }
             Err(e) => {
                 self.fail_task(&task, e, started_at).await?;
@@ -886,7 +938,99 @@ impl TaskWorker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::repositories::TaskRepository;
+    use crate::db::test_helpers::create_test_db;
     use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
+    use crate::tasks::handlers::TaskHandler;
+    use crate::tasks::types::{TaskResult, TaskType};
+
+    /// Stub handler that returns whatever `TaskResult` it was constructed with.
+    /// Used to drive the worker through specific result branches without
+    /// dragging in the real handlers' dependency graphs.
+    struct StubHandler {
+        result: TaskResult,
+    }
+
+    impl TaskHandler for StubHandler {
+        fn handle<'a>(
+            &'a self,
+            _task: &'a crate::db::entities::tasks::Model,
+            _db: &'a sea_orm::DatabaseConnection,
+            _event_broadcaster: Option<&'a Arc<EventBroadcaster>>,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<TaskResult>> + Send + 'a>>
+        {
+            let r = self.result.clone();
+            Box::pin(async move { Ok(r) })
+        }
+    }
+
+    /// Regression: a handler returning `Ok(TaskResult::failure(...))` must
+    /// land the task in the `failed` state. Before this fix, the worker
+    /// dispatched both `Ok` arms to `complete_task`, silently writing
+    /// `status = "completed"` over the handler's failure signal.
+    #[tokio::test]
+    async fn handler_failure_result_marks_task_failed() {
+        let (test_db, _temp) = create_test_db().await;
+        let db = test_db.sea_orm_connection().clone();
+        let task_id = TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
+            .await
+            .expect("enqueue");
+
+        let stub = Arc::new(StubHandler {
+            result: TaskResult::failure("synthetic failure"),
+        });
+        let worker = TaskWorker::new(db.clone())
+            .with_handler("find_duplicates", stub)
+            .with_poll_interval(Duration::from_millis(10));
+
+        let processed = worker.process_once().await.expect("process_once");
+        assert!(processed, "worker should have claimed the task");
+
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .expect("get_by_id")
+            .expect("task row");
+        // FindDuplicates has retries enabled, so on the first failure the
+        // task is bounced back to `pending` for retry; the load-bearing
+        // assertion is "not completed". `last_error` must reflect the
+        // handler's message regardless of retry state.
+        assert_ne!(
+            task.status, "completed",
+            "Ok(TaskResult::failure) must not be recorded as completed"
+        );
+        assert_eq!(
+            task.last_error.as_deref(),
+            Some("synthetic failure"),
+            "the handler's failure message must surface on the task row"
+        );
+    }
+
+    /// Symmetric positive-case: a `Ok(TaskResult::success(..))` still flows
+    /// to `complete_task` after the routing change.
+    #[tokio::test]
+    async fn handler_success_result_marks_task_completed() {
+        let (test_db, _temp) = create_test_db().await;
+        let db = test_db.sea_orm_connection().clone();
+        let task_id = TaskRepository::enqueue(&db, TaskType::FindDuplicates, None)
+            .await
+            .expect("enqueue");
+
+        let stub = Arc::new(StubHandler {
+            result: TaskResult::success("done"),
+        });
+        let worker = TaskWorker::new(db.clone())
+            .with_handler("find_duplicates", stub)
+            .with_poll_interval(Duration::from_millis(10));
+
+        worker.process_once().await.expect("process_once");
+
+        let task = TaskRepository::get_by_id(&db, task_id)
+            .await
+            .expect("get_by_id")
+            .expect("task row");
+        assert_eq!(task.status, "completed");
+        assert!(task.last_error.is_none());
+    }
 
     #[test]
     fn test_worker_creation() {

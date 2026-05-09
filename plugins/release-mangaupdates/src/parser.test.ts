@@ -82,6 +82,41 @@ describe("parseTitle", () => {
     const t = parseTitle("c.143 by Group (en)   ");
     expect(t.language).toBe("en");
   });
+
+  it("parses chapter from a current-format title (series prefix, no group)", () => {
+    // The MU v1 RSS feed ships titles like 'Series Name v.13 c.116' with
+    // the group living in <description>. Chapter and volume must still
+    // come out cleanly; group is null because the title doesn't carry it.
+    const t = parseTitle("Solo Leveling v.13 c.116");
+    expect(t.chapter).toBe(116);
+    expect(t.volume).toBe(13);
+    expect(t.group).toBeNull();
+    expect(t.language).toBe("en");
+  });
+
+  it("strips letter suffix from chapter (c.113a -> 113)", () => {
+    // MangaUpdates uses 'a'/'b' suffixes for split chapter releases. The
+    // older `\b` regex required a word boundary the digit-letter join
+    // can't satisfy, so these dropped to chapter=null. Capture the integer
+    // and let the group-keyed externalReleaseId keep the halves distinct.
+    const a = parseTitle("Series v.13 c.113a");
+    expect(a.chapter).toBe(113);
+    expect(a.volume).toBe(13);
+    const b = parseTitle("Series v.13 c.113b");
+    expect(b.chapter).toBe(113);
+    expect(b.volume).toBe(13);
+  });
+
+  it("preserves decimal chapters when an `a/b` suffix is absent", () => {
+    const t = parseTitle("Series c.113.5");
+    expect(t.chapter).toBe(113.5);
+  });
+
+  it("returns null chapter and volume for a series-name-only title", () => {
+    const t = parseTitle("Solo Leveling");
+    expect(t.chapter).toBeNull();
+    expect(t.volume).toBeNull();
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -130,6 +165,52 @@ describe("parseItem", () => {
     expect(a?.externalReleaseId).toBeTruthy();
     expect(a?.externalReleaseId).toBe(b?.externalReleaseId);
     expect(a?.externalReleaseId.startsWith("t:")).toBe(true);
+  });
+
+  it("includes the group in the deterministic id so different groups don't collide", () => {
+    // The current MU v1 RSS feed has no <link>/<guid>/<pubDate> per item,
+    // so all 3 fall to the deterministic-hash branch. If the hash didn't
+    // include the group, three groups posting the same chapter would all
+    // hash to the same externalReleaseId and dedupe down to one row.
+    const a = parseItem(`
+      <title>Series c.200</title>
+      <description>Asura</description>
+    `);
+    const b = parseItem(`
+      <title>Series c.200</title>
+      <description>FLAME-SCANS</description>
+    `);
+    const c = parseItem(`
+      <title>Series c.200</title>
+      <description>Asura</description>
+    `);
+    expect(a?.externalReleaseId).not.toBe(b?.externalReleaseId);
+    // Same group + same title hashes to the same id (idempotent re-poll).
+    expect(a?.externalReleaseId).toBe(c?.externalReleaseId);
+  });
+
+  it("reads the scanlation group from <description> on the v1 RSS feed", () => {
+    const xml = `
+      <title>Solo Leveling v.13 c.116</title>
+      <description>Galaxy Degen Scans</description>
+    `;
+    const item = parseItem(xml);
+    expect(item).not.toBeNull();
+    if (!item) return;
+    expect(item.group).toBe("Galaxy Degen Scans");
+    expect(item.chapter).toBe(116);
+    expect(item.volume).toBe(13);
+  });
+
+  it("skips items that carry neither chapter nor volume", () => {
+    // Series-name-only entries / oneshot announcements / series headers
+    // are inbox noise — the host has no useful sort key for them and they
+    // surface as empty `Ch / Vol` rows in the UI.
+    const xml = `
+      <title>Solo Leveling</title>
+      <description>Some Group</description>
+    `;
+    expect(parseItem(xml)).toBeNull();
   });
 
   it("returns null for a malformed item missing title", () => {
@@ -203,7 +284,8 @@ const multilingualFeed = `<?xml version="1.0"?>
 
 describe("parseFeed", () => {
   it("parses all items in a multi-language fixture", () => {
-    const items = parseFeed(multilingualFeed);
+    const { items, channelLink } = parseFeed(multilingualFeed);
+    expect(channelLink).toBeNull();
     expect(items).toHaveLength(5);
     expect(items[0]?.language).toBe("en");
     expect(items[1]?.language).toBe("es");
@@ -216,12 +298,52 @@ describe("parseFeed", () => {
     expect(items[4]?.language).toBe("en");
   });
 
-  it("returns an empty array for an empty channel", () => {
-    expect(parseFeed("<rss><channel></channel></rss>")).toEqual([]);
+  it("returns an empty result for an empty channel", () => {
+    expect(parseFeed("<rss><channel></channel></rss>")).toEqual({
+      channelLink: null,
+      items: [],
+    });
   });
 
-  it("returns an empty array for malformed XML", () => {
+  it("returns an empty result for malformed XML", () => {
     // Non-fatal: parseFeed should never throw, just return whatever it can.
-    expect(parseFeed("<<<not xml>>>")).toEqual([]);
+    expect(parseFeed("<<<not xml>>>")).toEqual({ channelLink: null, items: [] });
+  });
+
+  it("extracts the channel-level link from the v1 RSS shape", () => {
+    // Mirror of the real `https://api.mangaupdates.com/v1/series/{id}/rss`
+    // shape: chapters in the title, group in <description>, no per-item
+    // links, channel-level link points at the series page.
+    const v1Feed = `<?xml version="1.0"?>
+      <rss version="2.0">
+        <channel>
+          <title>Series Title - Releases on MangaUpdates</title>
+          <link>https://www.mangaupdates.com/series/uu4rl66/series-slug</link>
+          <description>...</description>
+          <item>
+            <title>Series Title v.13 c.116</title>
+            <description>Galaxy Degen Scans</description>
+          </item>
+          <item>
+            <title>Series Title c.113a</title>
+            <description>Comikey</description>
+          </item>
+          <item>
+            <title>Series Title</title>
+            <description>OneshotGroup</description>
+          </item>
+        </channel>
+      </rss>`;
+    const { items, channelLink } = parseFeed(v1Feed);
+    expect(channelLink).toBe("https://www.mangaupdates.com/series/uu4rl66/series-slug");
+    // Third item drops out: no chapter, no volume.
+    expect(items).toHaveLength(2);
+    expect(items[0]?.chapter).toBe(116);
+    expect(items[0]?.volume).toBe(13);
+    expect(items[0]?.group).toBe("Galaxy Degen Scans");
+    // c.113a -> chapter 113, suffix discarded.
+    expect(items[1]?.chapter).toBe(113);
+    expect(items[1]?.volume).toBeNull();
+    expect(items[1]?.group).toBe("Comikey");
   });
 });

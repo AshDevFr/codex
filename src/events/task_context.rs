@@ -19,6 +19,9 @@
 //! call), so the task-local set up by [`crate::tasks::worker`] is in scope.
 
 use std::sync::Arc;
+use std::sync::Mutex;
+
+use uuid::Uuid;
 
 use super::EventBroadcaster;
 
@@ -27,6 +30,49 @@ tokio::task_local! {
     /// worker around `handler.handle(...)`. Read by reverse-RPC handlers via
     /// [`current_recording_broadcaster`].
     static CURRENT_RECORDING_BROADCASTER: Arc<EventBroadcaster>;
+    /// Identity + progress-throttle state for the currently-executing task.
+    /// Set by the worker around `handler.handle(...)`. Read by reverse-RPC
+    /// handlers via [`current_task_identity`] when they need to construct a
+    /// `TaskProgressEvent` (which requires the task's id and type) or
+    /// rate-limit progress emits.
+    static CURRENT_TASK_IDENTITY: Arc<TaskIdentity>;
+}
+
+/// Task identity exposed to reverse-RPC handlers via the
+/// [`CURRENT_TASK_IDENTITY`] task-local. Carries the fields needed to build
+/// a [`super::TaskProgressEvent`] plus a tiny throttle-state cell so
+/// `releases/report_progress` can drop emits arriving faster than the
+/// configured cadence.
+#[derive(Debug)]
+pub struct TaskIdentity {
+    pub task_id: Uuid,
+    pub task_type: String,
+    pub library_id: Option<Uuid>,
+    pub series_id: Option<Uuid>,
+    pub book_id: Option<Uuid>,
+    /// Last time a progress emit went through. `None` until the first emit.
+    /// Wrapped in a `Mutex` so reverse-RPC handlers (which see the identity
+    /// behind an `Arc`) can update it without a `&mut`.
+    pub last_progress_emit: Mutex<Option<std::time::Instant>>,
+}
+
+impl TaskIdentity {
+    pub fn new(
+        task_id: Uuid,
+        task_type: impl Into<String>,
+        library_id: Option<Uuid>,
+        series_id: Option<Uuid>,
+        book_id: Option<Uuid>,
+    ) -> Self {
+        Self {
+            task_id,
+            task_type: task_type.into(),
+            library_id,
+            series_id,
+            book_id,
+            last_progress_emit: Mutex::new(None),
+        }
+    }
 }
 
 /// Run `fut` with `broadcaster` as the current task's recording broadcaster.
@@ -49,6 +95,21 @@ where
 /// through the long-lived broadcaster directly).
 pub fn current_recording_broadcaster() -> Option<Arc<EventBroadcaster>> {
     CURRENT_RECORDING_BROADCASTER.try_with(|b| b.clone()).ok()
+}
+
+/// Run `fut` with `identity` as the current task's identity.
+pub async fn with_task_identity<F, T>(identity: Arc<TaskIdentity>, fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    CURRENT_TASK_IDENTITY.scope(identity, fut).await
+}
+
+/// Snapshot the current task's identity, if any.
+///
+/// Returns `None` when called outside of a `with_task_identity` scope.
+pub fn current_task_identity() -> Option<Arc<TaskIdentity>> {
+    CURRENT_TASK_IDENTITY.try_with(|i| i.clone()).ok()
 }
 
 #[cfg(test)]

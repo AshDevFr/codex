@@ -42,6 +42,11 @@ use crate::services::release::matcher::{evaluate, resolve_threshold};
 const DEFAULT_TRACKED_PAGE_SIZE: u64 = 200;
 /// Hard cap on `limit` to keep a single page bounded.
 const MAX_TRACKED_PAGE_SIZE: u64 = 1_000;
+/// Minimum interval between successive `releases/report_progress` emits
+/// for a given task (~10 emits/second). Plugins polling 500+ series at
+/// network speed would otherwise flood the SSE pipeline; the final emit
+/// (current >= total) is exempt so the progress bar always lands.
+const MIN_PROGRESS_EMIT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Reverse-RPC handler for the `releases/*` namespace.
 ///
@@ -97,6 +102,8 @@ impl ReleasesRequestHandler {
 
         match method {
             methods::RELEASES_LIST_TRACKED => self.handle_list_tracked(request).await,
+            methods::RELEASES_COUNT_TRACKED => self.handle_count_tracked(request).await,
+            methods::RELEASES_REPORT_PROGRESS => self.handle_report_progress(request).await,
             methods::RELEASES_RECORD => self.handle_record(request).await,
             methods::RELEASES_SOURCE_STATE_GET => self.handle_state_get(request).await,
             methods::RELEASES_SOURCE_STATE_SET => self.handle_state_set(request).await,
@@ -235,6 +242,183 @@ impl ReleasesRequestHandler {
             next_offset,
         };
         JsonRpcResponse::success(id, serde_json::to_value(response).unwrap())
+    }
+
+    /// Count tracked series scoped to what the plugin's manifest declared.
+    ///
+    /// Mirrors the scoping rules of `handle_list_tracked`: when the plugin
+    /// declares `requires_external_ids`, the returned count is restricted
+    /// to tracked series that have at least one matching `series_external_ids`
+    /// row. When the plugin declares no required external IDs, the count
+    /// equals the total number of tracked series.
+    ///
+    /// Plugins call this once at the start of a poll to learn the total
+    /// denominator before iterating, so subsequent `report_progress` calls
+    /// can carry a stable `current/total` ratio.
+    async fn handle_count_tracked(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
+        let id = request.id.clone();
+        let params: CountTrackedRequest = match parse_params(&request.params) {
+            Ok(p) => p,
+            Err(resp) => return resp.with_id(id),
+        };
+
+        if let Err(resp) = self.assert_source_belongs(&params.source_id, &id).await {
+            return resp;
+        }
+
+        // Fast path: no external-id scoping declared, count_tracked is enough.
+        if self.capability.requires_external_ids.is_empty() {
+            return match SeriesTrackingRepository::count_tracked(&self.db).await {
+                Ok(total) => {
+                    let resp = CountTrackedResponse { total };
+                    JsonRpcResponse::success(id, serde_json::to_value(resp).unwrap())
+                }
+                Err(e) => {
+                    error!(error = %e, "tracked-series count failed");
+                    JsonRpcResponse::error(
+                        Some(id),
+                        JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                    )
+                }
+            };
+        }
+
+        // Scoped path: count tracked series that have at least one
+        // `series_external_ids` row whose source matches the plugin's
+        // requirements (with both `api:` and `plugin:` prefix conventions
+        // accepted, mirroring `handle_list_tracked`).
+        let tracked_ids = match SeriesTrackingRepository::list_tracked_ids(&self.db, 0, 0).await {
+            Ok(ids) => ids,
+            Err(e) => {
+                error!(error = %e, "tracked-series listing failed during count");
+                return JsonRpcResponse::error(
+                    Some(id),
+                    JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                );
+            }
+        };
+        if tracked_ids.is_empty() {
+            let resp = CountTrackedResponse { total: 0 };
+            return JsonRpcResponse::success(id, serde_json::to_value(resp).unwrap());
+        }
+
+        let by_series =
+            match SeriesExternalIdRepository::get_for_series_ids(&self.db, &tracked_ids).await {
+                Ok(map) => map,
+                Err(e) => {
+                    error!(error = %e, "external_id batched lookup failed during count");
+                    return JsonRpcResponse::error(
+                        Some(id),
+                        JsonRpcError::new(error_codes::INTERNAL_ERROR, format!("db error: {}", e)),
+                    );
+                }
+            };
+
+        let total = tracked_ids
+            .iter()
+            .filter(|sid| {
+                by_series.get(sid).is_some_and(|rows| {
+                    rows.iter().any(|row| {
+                        let normalized = strip_external_id_namespace(&row.source);
+                        self.capability
+                            .requires_external_ids
+                            .iter()
+                            .any(|req| req == normalized)
+                    })
+                })
+            })
+            .count() as u64;
+
+        let resp = CountTrackedResponse { total };
+        JsonRpcResponse::success(id, serde_json::to_value(resp).unwrap())
+    }
+
+    /// Report intra-poll progress for the active task.
+    ///
+    /// Looks up the task identity + recording broadcaster from the worker's
+    /// task-locals (set by [`crate::tasks::worker`] around the handler
+    /// call). Synthesizes a [`TaskProgressEvent::progress`] and emits it.
+    /// Calls arriving more frequently than `MIN_PROGRESS_EMIT_INTERVAL`
+    /// are dropped — except the final emit (`current >= total`), which
+    /// always passes so the bar lands at 100%.
+    async fn handle_report_progress(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
+        let id = request.id.clone();
+        let params: ReportProgressRequest = match parse_params(&request.params) {
+            Ok(p) => p,
+            Err(resp) => return resp.with_id(id),
+        };
+
+        // The reverse-RPC dispatcher runs on the same tokio task as the
+        // forward call (the worker's `handler.handle(...)`), so the
+        // task-locals set up by the worker are in scope here. Outside a
+        // task (e.g. plugins poking the host on their own initiative),
+        // both calls return None and we silently no-op — there's no task
+        // to attach progress to.
+        let identity = match crate::events::current_task_identity() {
+            Some(id_arc) => id_arc,
+            None => {
+                debug!(
+                    "releases/report_progress called outside a task scope; dropping (current={} total={})",
+                    params.current, params.total
+                );
+                return JsonRpcResponse::success(
+                    id,
+                    serde_json::to_value(ReportProgressResponse { emitted: false }).unwrap(),
+                );
+            }
+        };
+        let broadcaster = match crate::events::current_recording_broadcaster() {
+            Some(b) => b,
+            None => {
+                debug!("releases/report_progress: no broadcaster in scope, dropping");
+                return JsonRpcResponse::success(
+                    id,
+                    serde_json::to_value(ReportProgressResponse { emitted: false }).unwrap(),
+                );
+            }
+        };
+
+        // Rate-limit: drop emits arriving within MIN_PROGRESS_EMIT_INTERVAL
+        // of the previous one, EXCEPT the final emit (current >= total) so
+        // the UI lands at 100% even when the last few series flushed back
+        // to back. `now()` is taken inside the lock so concurrent emits
+        // race deterministically against the single timestamp slot.
+        let is_final = params.total > 0 && params.current >= params.total;
+        if !is_final {
+            let now = std::time::Instant::now();
+            let mut last = identity.last_progress_emit.lock().expect("poisoned");
+            if let Some(prev) = *last
+                && now.duration_since(prev) < MIN_PROGRESS_EMIT_INTERVAL
+            {
+                return JsonRpcResponse::success(
+                    id.clone(),
+                    serde_json::to_value(ReportProgressResponse { emitted: false }).unwrap(),
+                );
+            }
+            *last = Some(now);
+        } else {
+            // Always update the timestamp for the final emit too, so
+            // any post-final stragglers stay rate-limited.
+            *identity.last_progress_emit.lock().expect("poisoned") =
+                Some(std::time::Instant::now());
+        }
+
+        let event = crate::events::TaskProgressEvent::progress(
+            identity.task_id,
+            identity.task_type.clone(),
+            params.current,
+            params.total,
+            params.message.clone(),
+            identity.library_id,
+            identity.series_id,
+            identity.book_id,
+        );
+        let _ = broadcaster.emit_task(event);
+
+        JsonRpcResponse::success(
+            id,
+            serde_json::to_value(ReportProgressResponse { emitted: true }).unwrap(),
+        )
     }
 
     async fn handle_record(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
@@ -388,9 +572,16 @@ impl ReleasesRequestHandler {
                     "Skipping release_announced emit for non-announced state"
                 );
             } else if let Some(broadcaster) = crate::events::current_recording_broadcaster() {
+                let series_title =
+                    crate::tasks::handlers::poll_release_source::lookup_series_title(
+                        &self.db,
+                        outcome.row.series_id,
+                    )
+                    .await;
                 let _ = broadcaster.emit(crate::events::EntityChangeEvent::release_announced(
                     &outcome.row,
                     &self.plugin_name,
+                    series_title,
                 ));
             } else {
                 debug!(
@@ -773,6 +964,48 @@ impl ReleasesRequestHandler {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CountTrackedRequest {
+    /// Source the count is being requested for. Authorization-checked the
+    /// same way as `list_tracked` — the source must belong to this plugin.
+    source_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CountTrackedResponse {
+    /// Total tracked series visible to this plugin. Filtered by the
+    /// plugin's `requires_external_ids` so the denominator matches what
+    /// the plugin will actually iterate.
+    total: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportProgressRequest {
+    /// Items processed so far (1-indexed semantically: pass `current=1`
+    /// after the first unit of work, not before).
+    current: usize,
+    /// Total items expected. When `current >= total`, the emit is
+    /// considered final and bypasses the rate-limit so the bar lands
+    /// at 100%.
+    total: usize,
+    /// Optional human-readable detail (e.g. "Polling Series Name"); shown
+    /// alongside the progress bar.
+    #[serde(default)]
+    message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportProgressResponse {
+    /// `true` if a `TaskProgressEvent` was emitted, `false` if the call
+    /// was no-op'd (rate-limited or no task scope in context). Plugins
+    /// can ignore this; the field is exposed for tests / observability.
+    emitted: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ListTrackedRequest {
     source_id: Uuid,
     #[serde(default)]
@@ -943,6 +1176,8 @@ pub fn is_releases_method(method: &str) -> bool {
     matches!(
         method,
         "releases/list_tracked"
+            | "releases/count_tracked"
+            | "releases/report_progress"
             | "releases/record"
             | "releases/source_state/get"
             | "releases/source_state/set"
@@ -1245,6 +1480,7 @@ mod tests {
         match event.event {
             EntityEvent::ReleaseAnnounced {
                 series_id: ev_series,
+                series_title,
                 source_id: ev_source,
                 plugin_id,
                 chapter,
@@ -1252,6 +1488,13 @@ mod tests {
                 ..
             } => {
                 assert_eq!(ev_series, series_id);
+                // `setup` inserts the series with directory name "Series".
+                // The handler resolves the title via series_metadata if
+                // present, otherwise falls back to `series.name`.
+                assert!(
+                    !series_title.is_empty(),
+                    "expected non-empty series_title in event"
+                );
                 assert_eq!(ev_source, source_id);
                 assert_eq!(plugin_id, "release-nyaa");
                 assert_eq!(chapter, Some(143.0));
@@ -1501,12 +1744,262 @@ mod tests {
     #[test]
     fn is_releases_method_detects_namespace() {
         assert!(is_releases_method(methods::RELEASES_LIST_TRACKED));
+        assert!(is_releases_method(methods::RELEASES_COUNT_TRACKED));
+        assert!(is_releases_method(methods::RELEASES_REPORT_PROGRESS));
         assert!(is_releases_method(methods::RELEASES_RECORD));
         assert!(is_releases_method(methods::RELEASES_SOURCE_STATE_GET));
         assert!(is_releases_method(methods::RELEASES_SOURCE_STATE_SET));
         assert!(is_releases_method(methods::RELEASES_REGISTER_SOURCES));
         assert!(!is_releases_method("releases/poll"));
         assert!(!is_releases_method("storage/get"));
+    }
+
+    // -------------------------------------------------------------------------
+    // count_tracked tests
+    // -------------------------------------------------------------------------
+
+    /// Helper: track an additional series in the same test world used by
+    /// `setup`. Returns the new series id.
+    async fn add_tracked_series(db: &DatabaseConnection, name: &str) -> Uuid {
+        // `setup` already created a library; reuse the first one.
+        let libs = LibraryRepository::list_all(db).await.unwrap();
+        let lib = libs.first().expect("setup library");
+        let series = SeriesRepository::create(db, lib.id, name, None)
+            .await
+            .unwrap();
+        SeriesTrackingRepository::upsert(
+            db,
+            series.id,
+            TrackingUpdate {
+                tracked: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        series.id
+    }
+
+    #[tokio::test]
+    async fn count_tracked_unscoped_returns_total_tracked() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (_series, source_id) = setup(conn, "release-nyaa").await;
+        // Add two more tracked series; total = 3.
+        let _ = add_tracked_series(conn, "Series 2").await;
+        let _ = add_tracked_series(conn, "Series 3").await;
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]), // no requires_external_ids
+        );
+        let req = make_request(
+            methods::RELEASES_COUNT_TRACKED,
+            json!({"sourceId": source_id}),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error(), "{:?}", resp.error);
+        let body: CountTrackedResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
+        assert_eq!(body.total, 3);
+    }
+
+    #[tokio::test]
+    async fn count_tracked_scoped_only_counts_series_with_required_external_id() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (s1, source_id) = setup(conn, "release-mangaupdates").await;
+        let s2 = add_tracked_series(conn, "Series 2").await;
+        let _s3_no_ext_id = add_tracked_series(conn, "Series 3").await;
+
+        // s1 has the required external ID (`api:mangaupdates`), s2 has it
+        // under the `plugin:` prefix. Both should count. s3 has none.
+        SeriesExternalIdRepository::upsert(conn, s1, "api:mangaupdates", "abc1", None, None)
+            .await
+            .unwrap();
+        SeriesExternalIdRepository::upsert(conn, s2, "plugin:mangaupdates", "abc2", None, None)
+            .await
+            .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mangaupdates".to_string(),
+            make_capability(false, vec!["mangaupdates"]),
+        );
+        let req = make_request(
+            methods::RELEASES_COUNT_TRACKED,
+            json!({"sourceId": source_id}),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error(), "{:?}", resp.error);
+        let body: CountTrackedResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
+        assert_eq!(
+            body.total, 2,
+            "scoped count must filter out series without a matching external ID"
+        );
+    }
+
+    #[tokio::test]
+    async fn count_tracked_rejects_source_belonging_to_other_plugin() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (_series, source_id) = setup(conn, "release-nyaa").await;
+        // Handler is for a *different* plugin name, so the source-belongs
+        // check should reject the call.
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mangaupdates".to_string(),
+            make_capability(false, vec![]),
+        );
+        let req = make_request(
+            methods::RELEASES_COUNT_TRACKED,
+            json!({"sourceId": source_id}),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(resp.is_error());
+    }
+
+    // -------------------------------------------------------------------------
+    // report_progress tests
+    // -------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn report_progress_outside_task_scope_no_ops_cleanly() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+        let req = make_request(
+            methods::RELEASES_REPORT_PROGRESS,
+            json!({"current": 1, "total": 10}),
+        );
+        let resp = handler.handle_request(&req).await;
+        assert!(!resp.is_error());
+        let body: ReportProgressResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
+        assert!(
+            !body.emitted,
+            "no task scope -> no emit, but the call must succeed (don't break the plugin's poll)"
+        );
+    }
+
+    #[tokio::test]
+    async fn report_progress_inside_task_scope_emits_progress_event() {
+        use crate::events::EventBroadcaster;
+
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let broadcaster = Arc::new(EventBroadcaster::new(8));
+        let mut rx = broadcaster.subscribe_tasks();
+        let identity = Arc::new(crate::events::TaskIdentity::new(
+            Uuid::new_v4(),
+            "poll_release_source",
+            None,
+            None,
+            None,
+        ));
+
+        let req = make_request(
+            methods::RELEASES_REPORT_PROGRESS,
+            json!({"current": 3, "total": 10, "message": "Polled 3/10 series"}),
+        );
+        let resp = crate::events::with_task_identity(
+            identity.clone(),
+            crate::events::with_recording_broadcaster(broadcaster.clone(), async {
+                handler.handle_request(&req).await
+            }),
+        )
+        .await;
+        assert!(!resp.is_error(), "{:?}", resp.error);
+        let body: ReportProgressResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
+        assert!(body.emitted);
+
+        // The broadcaster should have one progress event with the values
+        // we passed in.
+        let event = rx.try_recv().expect("progress event was emitted");
+        assert_eq!(event.task_id, identity.task_id);
+        assert_eq!(event.task_type, "poll_release_source");
+        let p = event.progress.expect("progress payload");
+        assert_eq!(p.current, 3);
+        assert_eq!(p.total, 10);
+        assert_eq!(p.message.as_deref(), Some("Polled 3/10 series"));
+    }
+
+    #[tokio::test]
+    async fn report_progress_rate_limits_back_to_back_emits_but_lets_final_through() {
+        use crate::events::EventBroadcaster;
+
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-nyaa".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let broadcaster = Arc::new(EventBroadcaster::new(16));
+        let mut rx = broadcaster.subscribe_tasks();
+        let identity = Arc::new(crate::events::TaskIdentity::new(
+            Uuid::new_v4(),
+            "poll_release_source",
+            None,
+            None,
+            None,
+        ));
+
+        crate::events::with_task_identity(
+            identity.clone(),
+            crate::events::with_recording_broadcaster(broadcaster.clone(), async {
+                // First emit goes through (last_progress_emit was None).
+                let r1 = handler
+                    .handle_request(&make_request(
+                        methods::RELEASES_REPORT_PROGRESS,
+                        json!({"current": 1, "total": 10}),
+                    ))
+                    .await;
+                let b1: ReportProgressResponse =
+                    serde_json::from_value(r1.result.unwrap()).unwrap();
+                assert!(b1.emitted);
+
+                // Second emit, immediate, dropped by the rate-limit.
+                let r2 = handler
+                    .handle_request(&make_request(
+                        methods::RELEASES_REPORT_PROGRESS,
+                        json!({"current": 2, "total": 10}),
+                    ))
+                    .await;
+                let b2: ReportProgressResponse =
+                    serde_json::from_value(r2.result.unwrap()).unwrap();
+                assert!(!b2.emitted, "back-to-back emit must be rate-limited");
+
+                // Final emit (current >= total) bypasses the rate-limit.
+                let r3 = handler
+                    .handle_request(&make_request(
+                        methods::RELEASES_REPORT_PROGRESS,
+                        json!({"current": 10, "total": 10, "message": "done"}),
+                    ))
+                    .await;
+                let b3: ReportProgressResponse =
+                    serde_json::from_value(r3.result.unwrap()).unwrap();
+                assert!(b3.emitted, "final emit must always pass through");
+            }),
+        )
+        .await;
+
+        // Drain the broadcaster: we expect exactly two emits.
+        let e1 = rx.try_recv().expect("first emit");
+        assert_eq!(e1.progress.unwrap().current, 1);
+        let e2 = rx.try_recv().expect("final emit");
+        assert_eq!(e2.progress.unwrap().current, 10);
+        assert!(rx.try_recv().is_err(), "no more events");
     }
 
     // -------------------------------------------------------------------------

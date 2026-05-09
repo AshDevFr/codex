@@ -82,6 +82,10 @@ interface RecordResponse {
   deduped: boolean;
 }
 
+interface CountTrackedResponse {
+  total: number;
+}
+
 async function listTracked(
   rpc: HostRpcClient,
   sourceId: string,
@@ -93,6 +97,54 @@ async function listTracked(
     offset,
     limit,
   });
+}
+
+/**
+ * Total tracked-series denominator for this source, scoped by the
+ * plugin's `requires_external_ids` manifest declaration. Returns `null`
+ * when the host doesn't know the method (older host build) — callers
+ * fall back to progressive denominator emits in that case.
+ */
+async function countTracked(rpc: HostRpcClient, sourceId: string): Promise<number | null> {
+  try {
+    const r = await rpc.call<CountTrackedResponse>(RELEASES_METHODS.COUNT_TRACKED, {
+      sourceId,
+    });
+    return r.total;
+  } catch (err) {
+    if (err instanceof HostRpcError && err.code === -32601) {
+      // Host doesn't know `count_tracked` — older build. Degrade silently.
+      return null;
+    }
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn(`count_tracked failed for ${sourceId}: ${reason}`);
+    return null;
+  }
+}
+
+/**
+ * Best-effort progress emit. Failures are swallowed — progress is a
+ * UX nice-to-have, never a reason to abort a poll.
+ */
+async function reportProgress(
+  rpc: HostRpcClient,
+  current: number,
+  total: number,
+  message?: string,
+): Promise<void> {
+  try {
+    await rpc.call(
+      RELEASES_METHODS.REPORT_PROGRESS,
+      message !== undefined ? { current, total, message } : { current, total },
+    );
+  } catch (err) {
+    if (err instanceof HostRpcError && err.code === -32601) {
+      // Older host without progress support — silently drop.
+      return;
+    }
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.debug(`report_progress dropped: ${reason}`);
+  }
 }
 
 async function recordCandidate(
@@ -175,8 +227,24 @@ function effectiveLanguagesForSeries(_entry: TrackedSeriesEntry): string[] {
 /**
  * Map a `ParsedRssItem` to a `ReleaseCandidate`. Confidence is 1.0 because
  * the match is keyed by external ID — there's no fuzzy matching.
+ *
+ * `payloadUrl` priority: per-item link (legacy feed shape) → channel-level
+ * series page link (current v1 RSS shape) → last-resort `urn:mu:` URN. The
+ * URN fallback should never fire in practice; it exists so a malformed
+ * feed without even a channel link doesn't break the host's non-empty
+ * `payload_url` invariant.
  */
-function toCandidate(entry: TrackedSeriesEntry, item: ParsedRssItem): ReleaseCandidate {
+function toCandidate(
+  entry: TrackedSeriesEntry,
+  item: ParsedRssItem,
+  channelLink: string | null,
+): ReleaseCandidate {
+  const payloadUrl =
+    item.link.length > 0
+      ? item.link
+      : channelLink && channelLink.length > 0
+        ? channelLink
+        : `urn:mu:${item.externalReleaseId}`;
   const candidate: ReleaseCandidate = {
     seriesMatch: {
       codexSeriesId: entry.seriesId,
@@ -191,7 +259,7 @@ function toCandidate(entry: TrackedSeriesEntry, item: ParsedRssItem): ReleaseCan
     chapters: item.chapter === null ? null : [{ start: item.chapter, end: item.chapter }],
     language: item.language,
     groupOrUploader: item.group,
-    payloadUrl: item.link.length > 0 ? item.link : `urn:mu:${item.externalReleaseId}`,
+    payloadUrl,
     observedAt: item.observedAt,
   };
   return candidate;
@@ -294,7 +362,7 @@ export async function pollSeries(
   }
 
   // result.kind === "ok"
-  const items = parseFeed(result.body);
+  const { items, channelLink } = parseFeed(result.body);
   const filters = resolveFilters({
     languages: effectiveLanguagesForSeries(entry),
     blockedGroups: options.blockedGroups,
@@ -305,7 +373,7 @@ export async function pollSeries(
   for (const item of items) {
     if (!passesFilters(item, filters)) continue;
     matched++;
-    const candidate = toCandidate(entry, item);
+    const candidate = toCandidate(entry, item, channelLink);
     const outcome = await recordCandidate(rpc, sourceId, candidate);
     if (!outcome) continue;
     if (outcome.deduped) {
@@ -332,9 +400,23 @@ export async function pollSeries(
 // Top-level poll handler
 // =============================================================================
 
-async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<ReleasePollResponse> {
+/**
+ * Top-level poll handler. Exported for tests (no underscore prefix because
+ * it's actually a load-bearing function that just happens to live behind
+ * the SDK plugin wrapper at module scope; `_resetState` is the
+ * pattern for state-only test seams).
+ */
+export async function poll(
+  params: ReleasePollRequest,
+  rpc: HostRpcClient,
+): Promise<ReleasePollResponse> {
   const sourceId = params.sourceId;
   const blockedGroups = parseCommaList(state.blockedGroupsCsv);
+
+  // Pre-count so progress emits can carry a stable denominator. Falls
+  // back to progressive ('N polled' with no total) when the host doesn't
+  // implement count_tracked, keeping us forward-compatible.
+  const total = await countTracked(rpc, sourceId);
 
   let parsed = 0;
   let matched = 0;
@@ -369,6 +451,16 @@ async function poll(params: ReleasePollRequest, rpc: HostRpcClient): Promise<Rel
     } else if (outcome.error) {
       logger.warn(`series ${entry.seriesId}: ${outcome.error} (status ${outcome.upstreamStatus})`);
     }
+
+    // Progress: rate-limited host-side, so it's OK to fire every iteration.
+    // When `total` is unknown, send seenSeries as both current and total
+    // so the host emits the message without a useful percentage.
+    await reportProgress(
+      rpc,
+      seenSeries,
+      total ?? seenSeries,
+      `Polled ${seenSeries}${total !== null ? `/${total}` : ""} series`,
+    );
   }
 
   if (skippedNoMuId > 0) {

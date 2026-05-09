@@ -7,7 +7,11 @@ import * as eventsApi from "@/api/events";
 import { useAuthStore } from "@/store/authStore";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import type { EntityChangeEvent } from "@/types";
-import { shouldNotifyRelease, useEntityEvents } from "./useEntityEvents";
+import {
+  formatReleaseLabel,
+  shouldNotifyRelease,
+  useEntityEvents,
+} from "./useEntityEvents";
 
 // Mock the events API
 vi.mock("@/api/events");
@@ -578,5 +582,65 @@ describe("shouldNotifyRelease", () => {
         notifyPluginsValue: "also broken",
       }),
     ).toBe(true);
+  });
+});
+
+// =============================================================================
+// formatReleaseLabel — aggregated chapter/volume label for the release toast
+// =============================================================================
+
+describe("formatReleaseLabel", () => {
+  it("falls back to 'New release' when nothing was announced", () => {
+    expect(
+      formatReleaseLabel({
+        chapters: new Set(),
+        volumes: new Set(),
+        pluginId: "release-nyaa",
+      }),
+    ).toBe("New release");
+  });
+
+  it("formats a single chapter", () => {
+    expect(
+      formatReleaseLabel({
+        chapters: new Set([42]),
+        volumes: new Set(),
+        pluginId: "release-nyaa",
+      }),
+    ).toBe("Ch 42");
+  });
+
+  it("formats a single volume", () => {
+    expect(
+      formatReleaseLabel({
+        chapters: new Set(),
+        volumes: new Set([3]),
+        pluginId: "release-nyaa",
+      }),
+    ).toBe("Vol 3");
+  });
+
+  it("sorts numerically and lists volumes before chapters", () => {
+    expect(
+      formatReleaseLabel({
+        chapters: new Set([12, 11, 13]),
+        volumes: new Set([2, 1]),
+        pluginId: "release-nyaa",
+      }),
+    ).toBe("Vol 1, 2 / Ch 11, 12, 13");
+  });
+
+  it("truncates with an ellipsis once the label gets too long", () => {
+    const chapters = new Set<number>();
+    for (let i = 1; i <= 80; i++) chapters.add(i);
+    const out = formatReleaseLabel({
+      chapters,
+      volumes: new Set(),
+      pluginId: "release-nyaa",
+    });
+    // Capped at 70 chars: 69 chars + the ellipsis.
+    expect(out.length).toBe(70);
+    expect(out.endsWith("…")).toBe(true);
+    expect(out.startsWith("Ch ")).toBe(true);
   });
 });

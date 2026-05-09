@@ -23881,6 +23881,7 @@
             "required": [
               "ledgerId",
               "seriesId",
+              "seriesTitle",
               "sourceId",
               "pluginId",
               "language",
@@ -23910,6 +23911,10 @@
               "seriesId": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "seriesTitle": {
+                "type": "string",
+                "description": "Series display title (`series_metadata.title`, falling back to the\nseries directory name). Carried in the event so notifications can\nrender a clickable series link without a second round-trip."
               },
               "sourceId": {
                 "type": "string",
