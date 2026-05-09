@@ -2,6 +2,21 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.20.0] - 2026-05-09
+
+### 🚀 Features
+
+- *(release-tracking)* Poll-all + reset-all admin actions, plugin FK cascade
+
+### 🚜 Refactor
+
+- *(release-tracking)* Represent compilation coverage as span lists
+
+### 📚 Documentation
+
+- Restore binary install instructions using cargo-dist installer
+- Add project status, scope, and sponsorship section
+
 ## [1.19.3] - 2026-05-08
 
 ### 🐛 Bug Fixes
