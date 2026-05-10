@@ -32,7 +32,7 @@ use crate::db::repositories::{
     SeriesExternalIdRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
 };
 use crate::scheduler::Scheduler;
-use crate::services::release::auto_ignore::should_auto_ignore;
+use crate::services::release::auto_ignore::{is_outside_tracking_scope, should_auto_ignore};
 use crate::services::release::candidate::ReleaseCandidate;
 use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
@@ -481,13 +481,33 @@ impl ReleasesRequestHandler {
             crate::services::release::candidate::primary_value(candidate_chapters.as_ref());
         let candidate_language = accepted.candidate.language.clone();
 
-        // Auto-ignore: if the user already owns the *full* coverage of this
-        // release (every value in every span on at least one axis), insert
-        // the row directly as `ignored` so it skips the inbox + notify path.
-        // Best-effort; on failure we fall back to the default state.
+        // Auto-ignore decision. Two independent reasons can mark an
+        // incoming release as `ignored` instead of `announced`:
+        //
+        //   1. The release touches no axis the user is tracking for this
+        //      series (e.g. a chapter-only release for a volume-only
+        //      collector). Cheap in-memory check against tracking flags.
+        //   2. The user already owns the *full* coverage of this release
+        //      (every value in every span on at least one axis). Requires
+        //      a DB lookup of owned `(volume, chapter)` keys; best-effort.
+        //
+        // The scope check runs first because it avoids the DB lookup when
+        // it already decides the outcome. Both reasons converge on the
+        // same `IGNORED` initial state; the row still lands on the ledger
+        // for audit/recovery and gets surfaced under the "All" filter.
+        let outside_scope = tracking_row.as_ref().is_some_and(|t| {
+            is_outside_tracking_scope(
+                candidate_volumes.as_deref(),
+                candidate_chapters.as_deref(),
+                t.track_volumes,
+                t.track_chapters,
+            )
+        });
         let has_axis_info = candidate_volumes.as_ref().is_some_and(|s| !s.is_empty())
             || candidate_chapters.as_ref().is_some_and(|s| !s.is_empty());
-        let initial_state = if has_axis_info {
+        let initial_state = if outside_scope {
+            Some(ledger_state::IGNORED.to_string())
+        } else if has_axis_info {
             match SeriesRepository::get_owned_release_keys_for_series(&self.db, series_id).await {
                 Ok(owned) => {
                     if should_auto_ignore(
@@ -2666,5 +2686,187 @@ mod tests {
             ])))
             .await;
         assert!(resp2.is_error());
+    }
+
+    // -------------------------------------------------------------------------
+    // Axis-disabled auto-ignore tests
+    //
+    // Asserts that a candidate whose axes don't match the series's
+    // track_chapters / track_volumes preferences is recorded as IGNORED
+    // instead of ANNOUNCED, so the "Releases" inbox stays quiet for series
+    // the user has narrowed via the per-axis toggles.
+    // -------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn record_ignores_chapter_release_when_track_chapters_false() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                track_chapters: Some(false),
+                track_volumes: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let resp = record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-ch-93", Some(93.0), None, "en"),
+        )
+        .await;
+
+        let row = ReleaseLedgerRepository::get_by_id(conn, resp.ledger_id)
+            .await
+            .unwrap()
+            .expect("ledger row");
+        assert_eq!(
+            row.state,
+            ledger_state::IGNORED,
+            "chapter-only release for volume-only-tracked series must auto-ignore"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_ignores_volume_release_when_track_volumes_false() {
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                track_chapters: Some(true),
+                track_volumes: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let resp = record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-vol-15", None, Some(15), "en"),
+        )
+        .await;
+
+        let row = ReleaseLedgerRepository::get_by_id(conn, resp.ledger_id)
+            .await
+            .unwrap()
+            .expect("ledger row");
+        assert_eq!(
+            row.state,
+            ledger_state::IGNORED,
+            "volume-only release for chapter-only-tracked series must auto-ignore"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_announces_mixed_release_when_at_least_one_axis_tracked() {
+        // A volume bundle (`v15` covering `ch126-142`) on a volume-only
+        // tracked series still announces — it touches the tracked axis.
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                track_chapters: Some(false),
+                track_volumes: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let mut cand = candidate_with(series_id, "rel-vol-15-mixed", None, Some(15), "en");
+        cand.chapters = Some(vec![NumericSpan {
+            start: 126.0,
+            end: 142.0,
+        }]);
+
+        let resp = record_candidate(&handler, source_id, cand).await;
+
+        let row = ReleaseLedgerRepository::get_by_id(conn, resp.ledger_id)
+            .await
+            .unwrap()
+            .expect("ledger row");
+        assert_eq!(
+            row.state,
+            ledger_state::ANNOUNCED,
+            "mixed-axis release must announce when any tracked axis matches"
+        );
+    }
+
+    #[tokio::test]
+    async fn record_announces_chapter_release_when_both_axes_tracked() {
+        // Sanity: defaults (both axes tracked) still produce an announced
+        // chapter release.
+        let (db, _t) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let (series_id, source_id) = setup(conn, "release-mu").await;
+
+        SeriesTrackingRepository::upsert(
+            conn,
+            series_id,
+            TrackingUpdate {
+                tracked: Some(true),
+                track_chapters: Some(true),
+                track_volumes: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let handler = ReleasesRequestHandler::new(
+            conn.clone(),
+            "release-mu".to_string(),
+            make_capability(false, vec![]),
+        );
+
+        let resp = record_candidate(
+            &handler,
+            source_id,
+            candidate_with(series_id, "rel-ch-93-both", Some(93.0), None, "en"),
+        )
+        .await;
+
+        let row = ReleaseLedgerRepository::get_by_id(conn, resp.ledger_id)
+            .await
+            .unwrap()
+            .expect("ledger row");
+        assert_eq!(row.state, ledger_state::ANNOUNCED);
     }
 }

@@ -112,6 +112,38 @@ pub fn should_auto_ignore(
     }
 }
 
+/// True when the release touches no axis the user is tracking for the
+/// series, so ingestion should mark it `ignored` instead of `announced`.
+///
+/// The `track_chapters` / `track_volumes` flags express which axes the user
+/// wants surfaced. A volume-only collector (`track_chapters: false`)
+/// doesn't want chapter releases announced; a chapter-only collector
+/// (`track_volumes: false`) doesn't want volume releases announced. A
+/// release that has info on *both* axes stays in scope as long as at least
+/// one of those axes is enabled - the volume-bundle case (`v15` covering
+/// `ch126-142`) for a volume-only collector remains an announcement.
+///
+/// Returns:
+/// - `true` when the release has axis info but every populated axis is
+///   disabled for this series (auto-ignore).
+/// - `false` when the release touches at least one tracked axis, OR when
+///   it has no axis info at all (nothing to filter on).
+pub fn is_outside_tracking_scope(
+    release_volumes: Option<&[NumericSpan]>,
+    release_chapters: Option<&[NumericSpan]>,
+    track_volumes: bool,
+    track_chapters: bool,
+) -> bool {
+    let has_volume = release_volumes.is_some_and(|s| !s.is_empty());
+    let has_chapter = release_chapters.is_some_and(|s| !s.is_empty());
+    if !has_volume && !has_chapter {
+        return false;
+    }
+    let volume_in_scope = has_volume && track_volumes;
+    let chapter_in_scope = has_chapter && track_chapters;
+    !(volume_in_scope || chapter_in_scope)
+}
+
 /// Enumerate the integer values an integer-bounded volume span covers.
 /// Volume spans are always integer in the schema; we cast through `i32`.
 fn span_integer_iter(span: &NumericSpan) -> std::ops::RangeInclusive<i32> {
@@ -459,5 +491,100 @@ mod tests {
         assert!(ignore(Some(&vol_range(1, 5)), None, &o));
         // Release v01-06 → vol 6 not covered by count → not ignored.
         assert!(!ignore(Some(&vol_range(1, 6)), None, &o));
+    }
+
+    // ---------------------------------------------------------------------
+    // is_outside_tracking_scope tests
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn scope_chapter_only_release_with_chapters_disabled_is_out_of_scope() {
+        let chs = chap(93.0);
+        assert!(is_outside_tracking_scope(
+            None,
+            Some(&chs),
+            /* track_volumes */ true,
+            /* track_chapters */ false,
+        ));
+    }
+
+    #[test]
+    fn scope_volume_only_release_with_volumes_disabled_is_out_of_scope() {
+        let vs = vol(15);
+        assert!(is_outside_tracking_scope(
+            Some(&vs),
+            None,
+            /* track_volumes */ false,
+            /* track_chapters */ true,
+        ));
+    }
+
+    #[test]
+    fn scope_chapter_only_release_with_chapters_enabled_is_in_scope() {
+        let chs = chap(93.0);
+        assert!(!is_outside_tracking_scope(
+            None,
+            Some(&chs),
+            /* track_volumes */ false,
+            /* track_chapters */ true,
+        ));
+    }
+
+    #[test]
+    fn scope_volume_only_release_with_volumes_enabled_is_in_scope() {
+        let vs = vol(15);
+        assert!(!is_outside_tracking_scope(
+            Some(&vs),
+            None,
+            /* track_volumes */ true,
+            /* track_chapters */ false,
+        ));
+    }
+
+    #[test]
+    fn scope_mixed_release_in_scope_when_either_axis_enabled() {
+        let vs = vol(15);
+        let chs = chap(126.0);
+        assert!(!is_outside_tracking_scope(
+            Some(&vs),
+            Some(&chs),
+            /* track_volumes */ true,
+            /* track_chapters */ false,
+        ));
+        assert!(!is_outside_tracking_scope(
+            Some(&vs),
+            Some(&chs),
+            /* track_volumes */ false,
+            /* track_chapters */ true,
+        ));
+        assert!(!is_outside_tracking_scope(
+            Some(&vs),
+            Some(&chs),
+            /* track_volumes */ true,
+            /* track_chapters */ true,
+        ));
+    }
+
+    #[test]
+    fn scope_release_with_no_axis_info_is_in_scope() {
+        assert!(!is_outside_tracking_scope(None, None, false, false));
+        assert!(!is_outside_tracking_scope(
+            Some(&[]),
+            Some(&[]),
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn scope_mixed_release_with_both_axes_disabled_is_out_of_scope() {
+        let vs = vol(15);
+        let chs = chap(126.0);
+        assert!(is_outside_tracking_scope(
+            Some(&vs),
+            Some(&chs),
+            /* track_volumes */ false,
+            /* track_chapters */ false,
+        ));
     }
 }
