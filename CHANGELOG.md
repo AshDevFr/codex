@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.21.1] - 2026-05-11
+
+### 🐛 Bug Fixes
+
+- *(release-tracking)* Auto-ignore releases on disabled axes
+
 ## [1.21.0] - 2026-05-09
 
 ### 🚀 Features
