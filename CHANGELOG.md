@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.21.2] - 2026-05-12
+
+### 🚀 Features
+
+- *(plugins)* Configurable RPC request timeout per call and per plugin
+
 ## [1.21.1] - 2026-05-11
 
 ### 🐛 Bug Fixes
