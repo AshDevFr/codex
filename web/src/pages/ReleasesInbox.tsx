@@ -32,6 +32,7 @@ import {
   useReleaseInbox,
   useReleaseSources,
 } from "@/hooks/useReleases";
+import { useTableShiftSelection } from "@/hooks/useTableShiftSelection";
 import { useReleaseAnnouncementsStore } from "@/store/releaseAnnouncementsStore";
 
 const STATE_OPTIONS = [
@@ -118,7 +119,6 @@ export function ReleasesInbox() {
   const [seriesId, setSeriesId] = useState<string>(ALL_VALUE);
   const [libraryId, setLibraryId] = useState<string>(ALL_VALUE);
   const [page, setPage] = useState<number>(1);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, { open: openBulkDelete, close: closeBulkDelete }] =
     useDisclosure(false);
 
@@ -151,13 +151,16 @@ export function ReleasesInbox() {
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
 
+  const { selected, toggleOne, toggleAll, clear } =
+    useTableShiftSelection(entries);
+
   // Reset bulk selection when the visible page or any filter changes —
   // selection IDs don't apply across different pages or filtered views.
   // The deps are *triggers*, not values used in the body, so biome's
   // exhaustive-deps rule flags them as extra; that's intentional here.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps are change-triggers, not consumed values
   useEffect(() => {
-    setSelected(new Set());
+    clear();
   }, [page, state, language, seriesId, libraryId]);
 
   const seriesOptions = useMemo(() => buildSeriesOptions(facets), [facets]);
@@ -171,41 +174,13 @@ export function ReleasesInbox() {
     return map;
   }, [sources]);
 
-  const allOnPageSelected =
-    entries.length > 0 && entries.every((e) => selected.has(e.id));
-
-  const toggleAllOnPage = () => {
-    setSelected((prev) => {
-      if (allOnPageSelected) {
-        const next = new Set(prev);
-        for (const e of entries) next.delete(e.id);
-        return next;
-      }
-      const next = new Set(prev);
-      for (const e of entries) next.add(e.id);
-      return next;
-    });
-  };
-
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
   const runBulk = (action: BulkReleaseAction) => {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
     bulk.mutate(
       { ids, action },
       {
-        onSuccess: () => setSelected(new Set()),
+        onSuccess: () => clear(),
       },
     );
   };
@@ -284,7 +259,7 @@ export function ReleasesInbox() {
           count={selected.size}
           isPending={bulk.isPending}
           onAction={runBulk}
-          onClear={() => setSelected(new Set())}
+          onClear={clear}
           onDeleteClick={openBulkDelete}
           sticky
         />
@@ -317,7 +292,7 @@ export function ReleasesInbox() {
             sourceById={sourceById}
             selected={selected}
             onToggleOne={toggleOne}
-            onToggleAll={toggleAllOnPage}
+            onToggleAll={toggleAll}
             onDismiss={(id) => dismiss.mutate(id)}
             onMarkAcquired={(id) => markAcquired.mutate(id)}
             onDelete={(id) => deleteRelease.mutate(id)}

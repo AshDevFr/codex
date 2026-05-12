@@ -32,6 +32,7 @@ import {
   useReleaseSources,
   useSeriesReleases,
 } from "@/hooks/useReleases";
+import { useTableShiftSelection } from "@/hooks/useTableShiftSelection";
 import { useUserPreference } from "@/hooks/useUserPreference";
 
 interface SeriesReleasesPanelProps {
@@ -70,40 +71,20 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
   const bulk = useBulkReleaseAction();
 
   const entries = data?.data ?? [];
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { selected, toggleOne, toggleAll, clear } =
+    useTableShiftSelection(entries);
   const [confirmBulkDelete, { open: openBulkDelete, close: closeBulkDelete }] =
     useDisclosure(false);
   // Drop selections when the visible set changes — IDs that fell off screen
   // shouldn't quietly remain selected for the next bulk action.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps are change-triggers
   useEffect(() => {
-    setSelected(new Set());
+    clear();
   }, [stateView, seriesId]);
-  const toggleAll = () => {
-    setSelected((prev) => {
-      const allSelected =
-        entries.length > 0 && entries.every((e) => prev.has(e.id));
-      const next = new Set(prev);
-      if (allSelected) {
-        for (const e of entries) next.delete(e.id);
-      } else {
-        for (const e of entries) next.add(e.id);
-      }
-      return next;
-    });
-  };
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
   const runBulk = (action: BulkReleaseAction) => {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
-    bulk.mutate({ ids, action }, { onSuccess: () => setSelected(new Set()) });
+    bulk.mutate({ ids, action }, { onSuccess: () => clear() });
   };
 
   // Same client-side join the inbox uses: keep the ledger DTO lean while
@@ -197,7 +178,7 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
                   count={selected.size}
                   isPending={bulk.isPending}
                   onAction={runBulk}
-                  onClear={() => setSelected(new Set())}
+                  onClear={clear}
                   onDeleteClick={openBulkDelete}
                 />
               </Box>

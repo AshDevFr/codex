@@ -31,7 +31,8 @@ interface ReleasesTableProps {
   entries: ReleaseLedgerEntry[];
   sourceById: Map<string, ReleaseSource>;
   selected: Set<string>;
-  onToggleOne: (id: string) => void;
+  /** `shiftKey` is true when the user shift-clicks for range selection. */
+  onToggleOne: (id: string, shiftKey: boolean) => void;
   onToggleAll: () => void;
   onDismiss: (id: string) => void;
   onMarkAcquired: (id: string) => void;
@@ -131,11 +132,26 @@ export function ReleasesTable({
               key={entry.id}
               bg={isSelected ? "var(--mantine-color-blue-light)" : undefined}
             >
-              <Table.Td>
+              <Table.Td
+                // Suppress the browser's shift-click text selection so the
+                // checkbox range gesture doesn't leave a ghost highlight
+                // across rows.
+                onMouseDown={(e) => {
+                  if (e.shiftKey) e.preventDefault();
+                }}
+              >
                 <Checkbox
                   aria-label={`Select release ${entry.id}`}
                   checked={isSelected}
-                  onChange={() => onToggleOne(entry.id)}
+                  onChange={(event) => {
+                    // `nativeEvent` is typed as `Event`; the click path
+                    // delivers a MouseEvent whose `shiftKey` is the gesture
+                    // we want. Keyboard toggling won't have it set.
+                    const shiftKey =
+                      event.nativeEvent instanceof MouseEvent &&
+                      event.nativeEvent.shiftKey;
+                    onToggleOne(entry.id, shiftKey);
+                  }}
                 />
               </Table.Td>
               {showSeriesColumn && (
