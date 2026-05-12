@@ -90,6 +90,7 @@ async fn create_recommendation_plugin(
         true,
         None,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -136,6 +137,7 @@ async fn create_non_recommendation_plugin(
         "none",
         None,
         true,
+        None,
         None,
         None,
     )
@@ -811,6 +813,7 @@ async fn create_recommendation_plugin_with_external_source(
         "none",
         None,
         true,
+        None,
         None,
         None,
     )

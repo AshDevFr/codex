@@ -119,6 +119,12 @@ pub struct PluginDto {
     #[schema(example = 60)]
     pub rate_limit_requests_per_minute: Option<i32>,
 
+    /// Per-plugin override for the host → plugin RPC deadline, in seconds.
+    /// None means "use the server default" (typically 30s).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 300)]
+    pub request_timeout_seconds: Option<i32>,
+
     /// When the plugin was created
     pub created_at: DateTime<Utc>,
 
@@ -200,6 +206,7 @@ impl From<plugins::Model> for PluginDto {
             last_success_at: model.last_success_at,
             disabled_reason: model.disabled_reason,
             rate_limit_requests_per_minute: model.rate_limit_requests_per_minute,
+            request_timeout_seconds: model.request_timeout_seconds,
             created_at: model.created_at,
             updated_at: model.updated_at,
             search_query_template: model.search_query_template,
@@ -561,6 +568,12 @@ pub struct CreatePluginRequest {
     #[schema(example = 60)]
     pub rate_limit_requests_per_minute: Option<i32>,
 
+    /// Per-plugin override for the host → plugin RPC deadline, in seconds.
+    /// None = use server default.
+    #[serde(default)]
+    #[schema(example = 300)]
+    pub request_timeout_seconds: Option<i32>,
+
     /// Handlebars template for customizing search queries
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_query_template: Option<String>,
@@ -665,6 +678,12 @@ pub struct UpdatePluginRequest {
     #[serde(default)]
     #[schema(example = 60)]
     pub rate_limit_requests_per_minute: Option<Option<i32>>,
+
+    /// Updated per-plugin RPC deadline in seconds (Some(None) = remove override
+    /// and fall back to server default).
+    #[serde(default)]
+    #[schema(example = 300)]
+    pub request_timeout_seconds: Option<Option<i32>>,
 
     /// Handlebars template for customizing search queries (null = clear template)
     #[serde(

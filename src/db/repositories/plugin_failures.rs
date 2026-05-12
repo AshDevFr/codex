@@ -331,6 +331,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();

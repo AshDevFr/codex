@@ -22687,6 +22687,15 @@
             "description": "Rate limit in requests per minute (default: 60, None = no limit)",
             "example": 60
           },
+          "requestTimeoutSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Per-plugin override for the host → plugin RPC deadline, in seconds.\nNone = use server default.",
+            "example": 300
+          },
           "scopes": {
             "type": "array",
             "items": {
@@ -31559,6 +31568,15 @@
             "description": "Rate limit in requests per minute (None = no limit)",
             "example": 60
           },
+          "requestTimeoutSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Per-plugin override for the host → plugin RPC deadline, in seconds.\nNone means \"use the server default\" (typically 30s).",
+            "example": 300
+          },
           "scopes": {
             "type": "array",
             "items": {
@@ -38806,6 +38824,15 @@
             "format": "int32",
             "description": "Updated rate limit in requests per minute (Some(None) = remove limit)",
             "example": 60
+          },
+          "requestTimeoutSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Updated per-plugin RPC deadline in seconds (Some(None) = remove override\nand fall back to server default).",
+            "example": 300
           },
           "scopes": {
             "type": [

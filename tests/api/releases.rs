@@ -870,6 +870,7 @@ async fn make_release_source_plugin(
         true, // enabled
         None,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -919,6 +920,7 @@ async fn make_metadata_only_plugin(db: &DatabaseConnection, name: &str) -> Uuid 
         "none",
         None,
         true,
+        None,
         None,
         None,
     )

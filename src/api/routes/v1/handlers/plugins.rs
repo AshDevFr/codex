@@ -241,6 +241,7 @@ pub async fn create_plugin(
         is_enabled,
         Some(auth.user_id),
         request.rate_limit_requests_per_minute,
+        request.request_timeout_seconds,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create plugin: {}", e)))?;
@@ -512,6 +513,7 @@ pub async fn update_plugin(
         request.config,
         Some(auth.user_id),
         request.rate_limit_requests_per_minute,
+        request.request_timeout_seconds,
     )
     .await
     .map_err(|e| {

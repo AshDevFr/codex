@@ -9287,6 +9287,13 @@ export interface components {
              */
             rateLimitRequestsPerMinute?: number | null;
             /**
+             * Format: int32
+             * @description Per-plugin override for the host → plugin RPC deadline, in seconds.
+             *     None = use server default.
+             * @example 300
+             */
+            requestTimeoutSeconds?: number | null;
+            /**
              * @description Scopes where plugin can be invoked
              * @example [
              *       "series:detail",
@@ -14024,6 +14031,13 @@ export interface components {
              */
             rateLimitRequestsPerMinute?: number | null;
             /**
+             * Format: int32
+             * @description Per-plugin override for the host → plugin RPC deadline, in seconds.
+             *     None means "use the server default" (typically 30s).
+             * @example 300
+             */
+            requestTimeoutSeconds?: number | null;
+            /**
              * @description Scopes where plugin can be invoked
              * @example [
              *       "series:detail",
@@ -17905,6 +17919,13 @@ export interface components {
              * @example 60
              */
             rateLimitRequestsPerMinute?: number | null;
+            /**
+             * Format: int32
+             * @description Updated per-plugin RPC deadline in seconds (Some(None) = remove override
+             *     and fall back to server default).
+             * @example 300
+             */
+            requestTimeoutSeconds?: number | null;
             /** @description Updated scopes */
             scopes?: string[] | null;
             /** @description Preprocessing rules for search queries (JSON array of regex rules) */

@@ -1150,6 +1150,50 @@ mod tests {
         );
     }
 
+    /// `call_with_timeout` must honor the *caller-supplied* deadline, not the
+    /// client's configured default. Regression guard for the release-poll
+    /// timeout bug where the per-handle 30s default fired before the
+    /// task-level 5min wrapper could take effect — the fix is to plumb the
+    /// caller's deadline straight through to this primitive.
+    #[tokio::test]
+    async fn call_with_timeout_uses_caller_deadline_not_default() {
+        // `sleep` doesn't read stdin (writes go to the kernel pipe buffer)
+        // and writes nothing to stdout, so the reader never observes a
+        // response and the call must terminate on the caller's deadline.
+        // Using `cat` here would echo the request back and the reader
+        // would mis-interpret the echo as a response frame.
+        let config = PluginProcessConfig::new("sleep").arg("60");
+        let process = PluginProcess::spawn_unchecked(&config).await.unwrap();
+
+        // Configure the client with a long default; we want to prove the
+        // shorter caller-supplied timeout wins.
+        let client = RpcClient::new(process, Duration::from_secs(30));
+
+        let start = std::time::Instant::now();
+        let result: Result<serde_json::Value, _> = client
+            .call_with_timeout(
+                "anything",
+                serde_json::json!({}),
+                Duration::from_millis(150),
+            )
+            .await;
+        let elapsed = start.elapsed();
+
+        match result {
+            Err(RpcError::Timeout(d)) => {
+                assert_eq!(d, Duration::from_millis(150));
+            }
+            other => panic!("expected RpcError::Timeout(150ms), got {:?}", other),
+        }
+        // Generous upper bound — we just need to prove the 30s default
+        // didn't fire. CI sometimes adds noise so we allow 5s of headroom.
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "timeout should fire near 150ms, took {:?}",
+            elapsed
+        );
+    }
+
     // Integration test with actual process would look like:
     // #[tokio::test]
     // async fn test_rpc_client_integration() {

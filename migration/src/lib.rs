@@ -167,6 +167,8 @@ mod m20260505_000079_seed_release_tracking_default_cron;
 mod m20260508_000080_add_release_ledger_span_columns;
 // Release tracking: parallel plugin_uuid FK column for cascade-on-plugin-delete
 mod m20260508_000081_add_release_sources_plugin_uuid_fk;
+// Per-plugin RPC request timeout override
+mod m20260511_000082_add_plugin_request_timeout;
 
 pub struct Migrator;
 
@@ -304,6 +306,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260508_000080_add_release_ledger_span_columns::Migration),
             // Release tracking: parallel plugin_uuid FK with cascade-on-plugin-delete
             Box::new(m20260508_000081_add_release_sources_plugin_uuid_fk::Migration),
+            // Per-plugin RPC request timeout override
+            Box::new(m20260511_000082_add_plugin_request_timeout::Migration),
         ]
     }
 }

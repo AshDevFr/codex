@@ -602,6 +602,37 @@ impl PluginHandle {
         }
     }
 
+    /// Call an arbitrary method on the plugin with a caller-supplied
+    /// per-request timeout. Use this for long-running methods (e.g.
+    /// `releases/poll`) where the handle's configured `request_timeout`
+    /// (a conservative default sized for fast RPCs like `ping`) is too
+    /// tight.
+    pub async fn call_method_with_timeout<P, R>(
+        &self,
+        method: &str,
+        params: P,
+        timeout: Duration,
+    ) -> Result<R, PluginError>
+    where
+        P: Serialize,
+        R: DeserializeOwned,
+    {
+        self.ensure_running().await?;
+        let client_guard = self.client.read().await;
+        let client = client_guard.as_ref().ok_or(PluginError::NotInitialized)?;
+        match client.call_with_timeout(method, params, timeout).await {
+            Ok(response) => {
+                self.health.record_success().await;
+                Ok(response)
+            }
+            Err(e) => {
+                self.health.record_failure().await;
+                self.check_and_disable().await;
+                Err(PluginError::Rpc(e))
+            }
+        }
+    }
+
     /// Ensure the plugin is in a running state
     async fn ensure_running(&self) -> Result<(), PluginError> {
         let state = self.state.read().await.clone();

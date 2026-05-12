@@ -142,6 +142,9 @@ export function PluginsSettings() {
         rateLimitRequestsPerMinute: values.rateLimitEnabled
           ? values.rateLimitRequestsPerMinute
           : null,
+        requestTimeoutSeconds: values.requestTimeoutOverrideEnabled
+          ? values.requestTimeoutSeconds
+          : null,
       };
       return pluginsApi.create(request);
     },
@@ -192,6 +195,9 @@ export function PluginsSettings() {
           : undefined,
         rateLimitRequestsPerMinute: values.rateLimitEnabled
           ? values.rateLimitRequestsPerMinute
+          : null,
+        requestTimeoutSeconds: values.requestTimeoutOverrideEnabled
+          ? values.requestTimeoutSeconds
           : null,
       });
     },
@@ -363,6 +369,8 @@ export function PluginsSettings() {
       enabled: plugin.enabled,
       rateLimitEnabled: plugin.rateLimitRequestsPerMinute != null,
       rateLimitRequestsPerMinute: plugin.rateLimitRequestsPerMinute ?? 60,
+      requestTimeoutOverrideEnabled: plugin.requestTimeoutSeconds != null,
+      requestTimeoutSeconds: plugin.requestTimeoutSeconds ?? 30,
     });
     openEditModal();
   };

@@ -1498,7 +1498,10 @@ describe("PluginsSettings - search template", () => {
       expect(screen.getByText("Search Template")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Default")).toBeInTheDocument();
+    // "Default" now appears in two sections (search template + request
+    // timeout) when both are unset; this test only cares that the search
+    // template's badge renders it.
+    expect(screen.getAllByText("Default").length).toBeGreaterThanOrEqual(1);
   });
 });
 

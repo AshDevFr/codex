@@ -104,6 +104,7 @@ async fn create_user_type_plugin(
         true, // enabled
         None,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -133,6 +134,7 @@ async fn create_sync_plugin(
         "none",
         None,
         true,
+        None,
         None,
         None,
     )
@@ -177,6 +179,7 @@ async fn create_system_type_plugin(db: &sea_orm::DatabaseConnection, name: &str)
         "none",
         None,
         true,
+        None,
         None,
         None,
     )

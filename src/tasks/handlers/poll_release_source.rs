@@ -252,23 +252,33 @@ impl TaskHandler for PollReleaseSourceHandler {
                 config: source.config.clone(),
                 etag: source.etag.clone(),
             };
+            // Use the task-level timeout (default 5min, configurable via
+            // `plugin.task_request_timeout_seconds`) as the *per-RPC*
+            // deadline. The plugin's default `request_timeout` is sized for
+            // fast calls (ping, health) and is too tight for a poll that
+            // fans out to many series; passing the larger deadline through
+            // to the RPC layer is what actually takes effect — wrapping in
+            // an outer `tokio::time::timeout` would be redundant because
+            // the inner per-RPC timeout fires first.
             let timeout = self.task_request_timeout().await;
-            let response_fut = handle.call_method::<ReleasePollRequest, ReleasePollResponse>(
-                methods::RELEASES_POLL,
-                req,
-            );
-            let response_result = if let Some(t) = timeout {
-                match tokio::time::timeout(t, response_fut).await {
-                    Ok(r) => r,
-                    Err(_) => {
-                        let msg = format!("poll timed out after {:?}", t);
-                        warn!("Task {}: {}", task.id, msg);
-                        record_error(db, &source, event_broadcaster, &msg).await;
-                        return Ok(TaskResult::failure(msg));
-                    }
+            let response_result = match timeout {
+                Some(t) => {
+                    handle
+                        .call_method_with_timeout::<ReleasePollRequest, ReleasePollResponse>(
+                            methods::RELEASES_POLL,
+                            req,
+                            t,
+                        )
+                        .await
                 }
-            } else {
-                response_fut.await
+                None => {
+                    handle
+                        .call_method::<ReleasePollRequest, ReleasePollResponse>(
+                            methods::RELEASES_POLL,
+                            req,
+                        )
+                        .await
+                }
             };
 
             let response = match response_result {

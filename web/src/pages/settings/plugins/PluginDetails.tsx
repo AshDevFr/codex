@@ -235,6 +235,16 @@ export function PluginDetails({
                   : "No limit"}
               </Text>
             </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+                Request Timeout
+              </Text>
+              <Text size="sm">
+                {plugin.requestTimeoutSeconds != null
+                  ? `${plugin.requestTimeoutSeconds}s`
+                  : "Default"}
+              </Text>
+            </div>
             {plugin.userCount != null && (
               <div>
                 <Text size="xs" c="dimmed" tt="uppercase" fw={600}>

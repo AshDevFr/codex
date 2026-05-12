@@ -300,6 +300,7 @@ mod tests {
             enabled,
             None,
             None,
+            None,
         )
         .await
         .unwrap()

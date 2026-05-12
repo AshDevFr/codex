@@ -96,6 +96,17 @@ pub struct Model {
     /// task can be rescheduled for later execution.
     pub rate_limit_requests_per_minute: Option<i32>,
 
+    /// Per-plugin override for the host → plugin RPC request deadline, in seconds.
+    ///
+    /// - `None`: use the `PluginManager`'s default (`default_request_timeout`).
+    /// - `Some(n)`: override the per-RPC timeout for this plugin only.
+    ///
+    /// Handlers that pass their own deadline (e.g. `poll_release_source` uses
+    /// the `plugin.task_request_timeout_seconds` setting) still take precedence
+    /// over this column — it just shifts the baseline used when no caller
+    /// override is supplied.
+    pub request_timeout_seconds: Option<i32>,
+
     // Search configuration
     /// Handlebars template for customizing search queries
     #[sea_orm(column_type = "Text")]
@@ -1012,6 +1023,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1192,6 +1204,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1241,6 +1254,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1301,6 +1315,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1344,6 +1359,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60),
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,

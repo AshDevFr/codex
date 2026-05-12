@@ -905,7 +905,10 @@ impl PluginManager {
 
         Ok(PluginConfig {
             process: process_config,
-            request_timeout: self.config.default_request_timeout,
+            request_timeout: resolve_request_timeout(
+                plugin.request_timeout_seconds,
+                self.config.default_request_timeout,
+            ),
             shutdown_timeout: self.config.default_shutdown_timeout,
             max_failures: self.config.failure_threshold,
             admin_config,
@@ -1734,7 +1737,10 @@ impl PluginManager {
 
         Ok(PluginConfig {
             process: process_config,
-            request_timeout: self.config.default_request_timeout,
+            request_timeout: resolve_request_timeout(
+                plugin.request_timeout_seconds,
+                self.config.default_request_timeout,
+            ),
             shutdown_timeout: self.config.default_shutdown_timeout,
             max_failures: self.config.failure_threshold,
             admin_config: Some(plugin.config.clone()),
@@ -1756,9 +1762,45 @@ impl PluginManager {
     }
 }
 
+/// Resolve the per-RPC request timeout for a plugin. The DB column wins
+/// when set to a positive value; otherwise the manager's default applies.
+/// Zero or negative values are treated as "unset" so an admin entering 0
+/// in the UI doesn't accidentally disable all RPC deadlines.
+fn resolve_request_timeout(override_secs: Option<i32>, default: Duration) -> Duration {
+    match override_secs {
+        Some(n) if n > 0 => Duration::from_secs(n as u64),
+        _ => default,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolve_request_timeout_picks_db_override_when_positive() {
+        let default = Duration::from_secs(30);
+        assert_eq!(
+            resolve_request_timeout(Some(300), default),
+            Duration::from_secs(300),
+            "positive override should win"
+        );
+        assert_eq!(
+            resolve_request_timeout(None, default),
+            default,
+            "None falls back to manager default"
+        );
+        assert_eq!(
+            resolve_request_timeout(Some(0), default),
+            default,
+            "0 is treated as unset, not 'no deadline'"
+        );
+        assert_eq!(
+            resolve_request_timeout(Some(-5), default),
+            default,
+            "negative values are treated as unset"
+        );
+    }
 
     #[test]
     fn test_plugin_manager_config_default() {
@@ -1916,6 +1958,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(0), // 0 = disabled
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -1964,6 +2007,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: None, // None = disabled
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -2012,6 +2056,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: Some(60), // 60 = enabled
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,
@@ -2062,6 +2107,7 @@ mod tests {
             last_success_at: None,
             disabled_reason: None,
             rate_limit_requests_per_minute: None,
+            request_timeout_seconds: None,
             search_query_template: None,
             search_preprocessing_rules: None,
             auto_match_conditions: None,

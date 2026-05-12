@@ -45,6 +45,8 @@ export interface PluginFormValues {
   enabled: boolean;
   rateLimitEnabled: boolean;
   rateLimitRequestsPerMinute: number;
+  requestTimeoutOverrideEnabled: boolean;
+  requestTimeoutSeconds: number;
 }
 
 export const defaultFormValues: PluginFormValues = {
@@ -61,6 +63,8 @@ export const defaultFormValues: PluginFormValues = {
   enabled: false,
   rateLimitEnabled: true,
   rateLimitRequestsPerMinute: 60,
+  requestTimeoutOverrideEnabled: false,
+  requestTimeoutSeconds: 30,
 };
 
 // Normalize plugin name to slug format (lowercase alphanumeric with hyphens)
@@ -337,6 +341,24 @@ export function PluginForm({
                   min={1}
                   max={1000}
                   {...form.getInputProps("rateLimitRequestsPerMinute")}
+                />
+              )}
+              <Divider label="RPC Timeout" labelPosition="center" />
+              <Switch
+                label="Override default request timeout"
+                description="Increase if the plugin runs long operations (e.g. polling many series). Off uses the server default."
+                {...form.getInputProps("requestTimeoutOverrideEnabled", {
+                  type: "checkbox",
+                })}
+              />
+              {form.values.requestTimeoutOverrideEnabled && (
+                <NumberInput
+                  label="Request Timeout (seconds)"
+                  description="Per-call deadline for host → plugin RPCs. Long-running handlers (e.g. release polls) may pass their own larger deadline that overrides this."
+                  placeholder="30"
+                  min={1}
+                  max={3600}
+                  {...form.getInputProps("requestTimeoutSeconds")}
                 />
               )}
             </Stack>

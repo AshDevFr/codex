@@ -236,6 +236,7 @@ impl PluginsRepository {
         enabled: bool,
         created_by: Option<Uuid>,
         rate_limit_requests_per_minute: Option<i32>,
+        request_timeout_seconds: Option<i32>,
     ) -> Result<plugins::Model> {
         let now = Utc::now();
 
@@ -285,6 +286,7 @@ impl PluginsRepository {
             last_success_at: Set(None),
             disabled_reason: Set(None),
             rate_limit_requests_per_minute: Set(rate_limit_requests_per_minute),
+            request_timeout_seconds: Set(request_timeout_seconds),
             search_query_template: Set(None),
             search_preprocessing_rules: Set(None),
             auto_match_conditions: Set(None),
@@ -323,6 +325,7 @@ impl PluginsRepository {
         config: Option<serde_json::Value>,
         updated_by: Option<Uuid>,
         rate_limit_requests_per_minute: Option<Option<i32>>,
+        request_timeout_seconds: Option<Option<i32>>,
     ) -> Result<plugins::Model> {
         let existing = Self::get_by_id(db, id)
             .await?
@@ -387,6 +390,10 @@ impl PluginsRepository {
 
         if let Some(rate_limit) = rate_limit_requests_per_minute {
             active_model.rate_limit_requests_per_minute = Set(rate_limit);
+        }
+
+        if let Some(timeout) = request_timeout_seconds {
+            active_model.request_timeout_seconds = Set(timeout);
         }
 
         let result = active_model.update(db).await?;
@@ -802,6 +809,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -845,6 +853,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -885,6 +894,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -925,6 +935,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -970,6 +981,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1021,6 +1033,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1070,6 +1083,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1121,6 +1135,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1172,6 +1187,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1217,6 +1233,7 @@ mod tests {
             false,
             None,
             Some(60),
+            None,
         )
         .await
         .unwrap();
@@ -1266,6 +1283,7 @@ mod tests {
             false,
             None,
             Some(60),
+            None,
         )
         .await
         .unwrap();
@@ -1314,6 +1332,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1349,6 +1368,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1372,6 +1392,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1405,6 +1426,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1428,6 +1450,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1479,6 +1502,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1527,6 +1551,7 @@ mod tests {
             false,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1570,6 +1595,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1594,6 +1620,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1618,6 +1645,7 @@ mod tests {
             true,
             None,
             Some(60), // rate_limit_requests_per_minute
+            None,     // request_timeout_seconds
         )
         .await
         .unwrap();
@@ -1685,6 +1713,7 @@ mod tests {
                 i < 3, // First 3 enabled
                 None,
                 Some(60),
+                None,
             )
             .await
             .unwrap();
@@ -1748,6 +1777,7 @@ mod tests {
                 i < 3, // First 3 enabled
                 None,
                 Some(60),
+                None,
             )
             .await
             .unwrap();
