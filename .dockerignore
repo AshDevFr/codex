@@ -93,4 +93,4 @@ docs/
 .DS_Store
 *.orig
 *.rej
-
+.playwright-mcp

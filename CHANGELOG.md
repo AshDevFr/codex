@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.21.3] - 2026-05-13
+
+### 🐛 Bug Fixes
+
+- *(release-tracking)* Support shift+click range selection in release tracker
+
 ## [1.21.2] - 2026-05-12
 
 ### 🚀 Features
