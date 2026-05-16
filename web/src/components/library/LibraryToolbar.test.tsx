@@ -1,6 +1,45 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { LibraryToolbar, type SortOption } from "./LibraryToolbar";
+
+/**
+ * Force the phone breakpoint by reporting `matches: true` for any max-width
+ * media query. The shared test setup mocks matchMedia to always return
+ * `matches: false`, which is the desktop default.
+ */
+function forceMobileViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("max-width"),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function resetViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 // Series sort options with new interface
 const seriesSortOptions: SortOption[] = [
@@ -382,5 +421,92 @@ describe("LibraryToolbar - Series Sort Options", () => {
 
     // Should toggle from desc to asc
     expect(onSortChange).toHaveBeenCalledWith("book_count,asc");
+  });
+});
+
+describe("LibraryToolbar - mobile layout", () => {
+  const defaultProps = {
+    currentTab: "series",
+    onTabChange: vi.fn(),
+  };
+
+  const sortOptions: SortOption[] = [
+    { field: "name", label: "Name", defaultDirection: "asc" },
+  ];
+
+  beforeEach(() => {
+    forceMobileViewport();
+  });
+
+  afterEach(() => {
+    resetViewport();
+  });
+
+  it("renders tabs and controls without dropping any tab or button below xs", () => {
+    renderWithProviders(
+      <LibraryToolbar
+        {...defaultProps}
+        showRecommended
+        sortOptions={sortOptions}
+      />,
+    );
+
+    expect(screen.getByText("Recommended")).toBeInTheDocument();
+    expect(screen.getByText("Series")).toBeInTheDocument();
+    expect(screen.getByText("Books")).toBeInTheDocument();
+    expect(screen.getByLabelText("Page size options")).toBeInTheDocument();
+    expect(screen.getByLabelText("Sort options")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter options")).toBeInTheDocument();
+  });
+
+  it("stacks controls below the tabs when on phones", () => {
+    renderWithProviders(
+      <LibraryToolbar {...defaultProps} sortOptions={sortOptions} />,
+    );
+
+    const tabsList = screen.getByText("Series").closest('[role="tablist"]');
+    const controlsGroup = screen
+      .getByLabelText("Page size options")
+      .closest("div");
+
+    // Tabs and controls live in separate flex containers (Stack > [tabs] / [controls])
+    // rather than the shared <Group justify="space-between"> used on desktop.
+    expect(tabsList).not.toBeNull();
+    expect(controlsGroup).not.toBeNull();
+    expect(controlsGroup?.contains(tabsList as Node)).toBe(false);
+  });
+
+  it("right-aligns the controls row on phones", () => {
+    renderWithProviders(
+      <LibraryToolbar {...defaultProps} sortOptions={sortOptions} />,
+    );
+
+    // Mantine 8 Group applies justify via the `--group-justify` CSS variable
+    // on its root element rather than an inline `justify-content` declaration.
+    const controlsGroup = screen
+      .getByLabelText("Page size options")
+      .closest(".mantine-Group-root") as HTMLElement | null;
+
+    expect(controlsGroup).not.toBeNull();
+    expect(controlsGroup?.style.getPropertyValue("--group-justify")).toBe(
+      "flex-end",
+    );
+  });
+
+  it("does not render controls on recommended tab even on mobile", () => {
+    renderWithProviders(
+      <LibraryToolbar
+        {...defaultProps}
+        currentTab="recommended"
+        showRecommended
+        sortOptions={sortOptions}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Sort options")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Page size options"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Recommended")).toBeInTheDocument();
   });
 });

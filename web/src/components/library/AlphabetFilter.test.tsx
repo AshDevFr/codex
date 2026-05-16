@@ -1,6 +1,40 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { type AlphabetCounts, AlphabetFilter } from "./AlphabetFilter";
+
+function forceMobileViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("max-width"),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function resetViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 describe("AlphabetFilter", () => {
   it("renders all letters including ALL and #", () => {
@@ -114,5 +148,134 @@ describe("AlphabetFilter", () => {
     // # button should be enabled (sum of numeric counts = 5)
     const hashButton = screen.getByRole("button", { name: "#" });
     expect(hashButton).not.toBeDisabled();
+  });
+});
+
+describe("AlphabetFilter - mobile", () => {
+  beforeEach(() => {
+    forceMobileViewport();
+  });
+
+  afterEach(() => {
+    resetViewport();
+  });
+
+  it("renders a Select picker instead of the letter strip", () => {
+    renderWithProviders(<AlphabetFilter selected={null} onSelect={vi.fn()} />);
+
+    expect(
+      screen.getByRole("textbox", { name: "Jump to letter" }),
+    ).toBeInTheDocument();
+    // No A-Z buttons should be present below xs
+    expect(screen.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Z" })).not.toBeInTheDocument();
+  });
+
+  it("shows the selected letter in the picker value", () => {
+    renderWithProviders(<AlphabetFilter selected="M" onSelect={vi.fn()} />);
+
+    const input = screen.getByRole("textbox", {
+      name: "Jump to letter",
+    }) as HTMLInputElement;
+    expect(input.value).toBe("M");
+  });
+
+  it("shows All series when no letter is selected", () => {
+    renderWithProviders(<AlphabetFilter selected={null} onSelect={vi.fn()} />);
+
+    const input = screen.getByRole("textbox", {
+      name: "Jump to letter",
+    }) as HTMLInputElement;
+    expect(input.value).toBe("All series");
+  });
+
+  it("calls onSelect with the chosen letter when picking from the dropdown", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderWithProviders(<AlphabetFilter selected={null} onSelect={onSelect} />);
+
+    const input = screen.getByRole("textbox", { name: "Jump to letter" });
+    await user.click(input);
+    // Mantine 8 Combobox renders the dropdown into a portal whose container
+    // keeps `display: none` until the open transition fires; testing-library's
+    // default queries filter that out. Querying with `hidden: true` finds
+    // options regardless of the portal's display state.
+    const gOption = await screen.findByRole("option", {
+      name: "G",
+      hidden: true,
+    });
+    await user.click(gOption);
+
+    expect(onSelect).toHaveBeenCalledWith("G");
+  });
+
+  it("calls onSelect with null when picking All series", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderWithProviders(<AlphabetFilter selected="C" onSelect={onSelect} />);
+
+    const input = screen.getByRole("textbox", { name: "Jump to letter" });
+    await user.click(input);
+    const allOption = await screen.findByRole("option", {
+      name: "All series",
+      hidden: true,
+    });
+    await user.click(allOption);
+
+    expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it("shows counts in option labels when provided", async () => {
+    const user = userEvent.setup();
+    const counts: AlphabetCounts = new Map([
+      ["a", 5],
+      ["b", 10],
+    ]);
+    renderWithProviders(
+      <AlphabetFilter
+        selected={null}
+        onSelect={vi.fn()}
+        counts={counts}
+        totalCount={15}
+      />,
+    );
+
+    const input = screen.getByRole("textbox", { name: "Jump to letter" });
+    await user.click(input);
+
+    expect(
+      await screen.findByRole("option", {
+        name: "All series (15)",
+        hidden: true,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "A (5)", hidden: true }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "B (10)", hidden: true }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables letters with no count in the dropdown", async () => {
+    const user = userEvent.setup();
+    const counts: AlphabetCounts = new Map([["a", 5]]);
+    renderWithProviders(
+      <AlphabetFilter
+        selected={null}
+        onSelect={vi.fn()}
+        counts={counts}
+        totalCount={5}
+      />,
+    );
+
+    const input = screen.getByRole("textbox", { name: "Jump to letter" });
+    await user.click(input);
+
+    const cOption = await screen.findByRole("option", {
+      name: "C",
+      hidden: true,
+    });
+    expect(cOption).toHaveAttribute("data-combobox-disabled", "true");
   });
 });

@@ -1,4 +1,6 @@
-import { Button, Group, Tooltip } from "@mantine/core";
+import { Button, Group, Select, Tooltip } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
+import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import styles from "./AlphabetFilter.module.css";
 
 const LETTERS = [
@@ -60,6 +62,10 @@ export function AlphabetFilter({
   counts,
   totalCount,
 }: AlphabetFilterProps) {
+  // The full 28-button strip is clipped at 390px viewport (audit finding L2).
+  // Below the `xs` breakpoint we swap it out for a `<Select>` picker.
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
+
   const handleClick = (letter: AlphabetLetter) => {
     if (letter === "ALL") {
       onSelect(null);
@@ -95,6 +101,46 @@ export function AlphabetFilter({
 
   const allCount = getCount("ALL");
   const hasFilter = selected !== null;
+
+  if (isMobile) {
+    const options: { value: string; label: string; disabled?: boolean }[] = [
+      {
+        value: "ALL",
+        label:
+          allCount !== undefined ? `All series (${allCount})` : "All series",
+      },
+      ...LETTERS.map((letter) => {
+        const count = getCount(letter);
+        const hasCount = count !== undefined && count > 0;
+        const isEmpty = counts !== undefined && !hasCount;
+        return {
+          value: letter,
+          label: hasCount ? `${letter} (${count})` : letter,
+          disabled: isEmpty,
+        };
+      }),
+    ];
+
+    return (
+      <Select
+        aria-label="Jump to letter"
+        placeholder="Jump to letter…"
+        value={selected ?? "ALL"}
+        onChange={(value) => {
+          if (!value || value === "ALL") {
+            onSelect(null);
+          } else {
+            onSelect(value as AlphabetLetter);
+          }
+        }}
+        data={options}
+        allowDeselect={false}
+        searchable={false}
+        comboboxProps={{ withinPortal: true }}
+        size="sm"
+      />
+    );
+  }
 
   return (
     <Group gap={4} wrap="nowrap" justify="center" className={styles.container}>
