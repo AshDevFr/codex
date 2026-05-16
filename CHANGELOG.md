@@ -2,6 +2,15 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.21.4] - 2026-05-16
+
+### 🚀 Features
+
+- *(release-tracking)* Add async BulkTrackForReleases task type and handler
+- *(release-tracking)* Wire bulk track/untrack endpoints to async task
+- *(release-tracking)* Switch bulk track/untrack toolbar to queue-then-await pattern
+- *(tasks)* Label active analyze_book tasks with the book file name
+
 ## [1.21.3] - 2026-05-13
 
 ### 🐛 Bug Fixes
