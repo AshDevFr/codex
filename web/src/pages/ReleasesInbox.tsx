@@ -48,13 +48,13 @@ const PAGE_SIZE = 50;
 const ALL_VALUE = "__all__";
 
 /** Build the grouped, alphabetised series options for the Mantine Select. */
-function buildSeriesOptions(facets: ReleaseFacets | undefined) {
+export function buildSeriesOptions(facets: ReleaseFacets | undefined) {
   if (!facets) return [];
   const byLibrary = new Map<
     string,
     { libraryName: string; items: { value: string; label: string }[] }
   >();
-  for (const s of facets.series) {
+  for (const s of facets.series ?? []) {
     // Fall back to the id when title/library are missing so the option
     // still renders something searchable instead of an empty string.
     const libraryName = s.libraryName || "Unknown library";
@@ -82,9 +82,9 @@ function buildSeriesOptions(facets: ReleaseFacets | undefined) {
   ];
 }
 
-function buildLibraryOptions(facets: ReleaseFacets | undefined) {
+export function buildLibraryOptions(facets: ReleaseFacets | undefined) {
   if (!facets) return [{ value: ALL_VALUE, label: "All libraries" }];
-  const opts = facets.libraries
+  const opts = (facets.libraries ?? [])
     .map((l) => ({
       value: l.libraryId,
       label: `${l.libraryName || "Unknown"} (${l.count})`,
@@ -93,9 +93,9 @@ function buildLibraryOptions(facets: ReleaseFacets | undefined) {
   return [{ value: ALL_VALUE, label: "All libraries" }, ...opts];
 }
 
-function buildLanguageOptions(facets: ReleaseFacets | undefined) {
+export function buildLanguageOptions(facets: ReleaseFacets | undefined) {
   if (!facets) return [{ value: ALL_VALUE, label: "All languages" }];
-  const opts = facets.languages
+  const opts = (facets.languages ?? [])
     .map((l) => ({
       value: l.language,
       label: `${l.language} (${l.count})`,

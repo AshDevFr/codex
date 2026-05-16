@@ -19,6 +19,7 @@ import { pdfCacheHandlers } from "./pdfCache";
 import { pluginStorageHandlers } from "./pluginStorage";
 import { pluginsHandlers } from "./plugins";
 import { recommendationsHandlers } from "./recommendations";
+import { releasesHandlers } from "./releases";
 import { seriesHandlers } from "./series";
 import { seriesExportsHandlers } from "./seriesExports";
 import { settingsHandlers } from "./settings";
@@ -128,6 +129,7 @@ export const handlers = [
   ...pluginsHandlers,
   ...pluginStorageHandlers,
   ...recommendationsHandlers,
+  ...releasesHandlers,
   ...userPluginsHandlers,
   ...seriesExportsHandlers,
   ...utilityHandlers,
@@ -148,6 +150,7 @@ export { pdfCacheHandlers } from "./pdfCache";
 export { pluginStorageHandlers } from "./pluginStorage";
 export { pluginsHandlers } from "./plugins";
 export { recommendationsHandlers } from "./recommendations";
+export { releasesHandlers } from "./releases";
 export { seriesHandlers } from "./series";
 export { seriesExportsHandlers } from "./seriesExports";
 export { settingsHandlers } from "./settings";

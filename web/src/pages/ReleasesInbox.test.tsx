@@ -9,7 +9,12 @@ import {
 } from "@/api/releases";
 import { useReleaseAnnouncementsStore } from "@/store/releaseAnnouncementsStore";
 import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
-import { ReleasesInbox } from "./ReleasesInbox";
+import {
+  buildLanguageOptions,
+  buildLibraryOptions,
+  buildSeriesOptions,
+  ReleasesInbox,
+} from "./ReleasesInbox";
 
 vi.mock("@/api/releases", () => ({
   releasesApi: {
@@ -286,5 +291,42 @@ describe("ReleasesInbox", () => {
     await waitFor(() => {
       expect(remove).toHaveBeenCalledWith("a");
     });
+  });
+});
+
+describe("ReleasesInbox option builders", () => {
+  // Mock-mode and partial-response defenses: facets may arrive with one or
+  // more dimensions missing. The builders must return a valid (possibly
+  // empty) option array rather than throwing on iteration.
+  it("buildSeriesOptions returns the All-series sentinel when facets.series is undefined", () => {
+    const partial = {
+      libraries: [],
+      languages: [],
+    } as unknown as ReleaseFacets;
+    expect(buildSeriesOptions(partial)).toEqual([
+      { value: "__all__", label: "All series" },
+    ]);
+  });
+
+  it("buildLibraryOptions returns the All-libraries sentinel when facets.libraries is undefined", () => {
+    const partial = { series: [], languages: [] } as unknown as ReleaseFacets;
+    const result = buildLibraryOptions(partial);
+    expect(result).toEqual([{ value: "__all__", label: "All libraries" }]);
+  });
+
+  it("buildLanguageOptions returns the All-languages sentinel when facets.languages is undefined", () => {
+    const partial = { series: [], libraries: [] } as unknown as ReleaseFacets;
+    const result = buildLanguageOptions(partial);
+    expect(result).toEqual([{ value: "__all__", label: "All languages" }]);
+  });
+
+  it("all builders return their empty-but-valid form when facets itself is undefined", () => {
+    expect(buildSeriesOptions(undefined)).toEqual([]);
+    expect(buildLibraryOptions(undefined)).toEqual([
+      { value: "__all__", label: "All libraries" },
+    ]);
+    expect(buildLanguageOptions(undefined)).toEqual([
+      { value: "__all__", label: "All languages" },
+    ]);
   });
 });
