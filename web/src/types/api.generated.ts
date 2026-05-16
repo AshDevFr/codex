@@ -3018,17 +3018,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Bulk-enable release tracking for multiple series.
-         * @description For each `series_id` in the request, flips `series_tracking.tracked` to
-         *     `true` and runs the seed pass (auto-derives aliases, `latest_known_*`,
-         *     `track_chapters` / `track_volumes` from existing data). Series that don't
-         *     exist are reported as `outcome: skipped`. Series already tracked are
-         *     reported as `outcome: skipped, detail: "already tracked"` and the seed is
-         *     not re-run (idempotent — a re-run would simply re-derive identical
-         *     values, but we skip the work).
+         * Bulk-enable release tracking for multiple series (async).
+         * @description Enqueues a `BulkTrackForReleases { tracked: true }` task and returns its
+         *     `task_id` immediately. The worker runs the per-series track sequence
+         *     (lookup -> idempotency check -> seed -> flip `tracked` -> emit
+         *     `SeriesUpdated`) off the request thread. Final counts
+         *     (`changed` / `already_in_state` / `errored`) land in the task's
+         *     `result_data`; the frontend reads them when the task completes via the
+         *     existing task SSE stream.
          *
-         *     Mirrors the per-series PATCH `false -> true` transition: same seed
-         *     function, same idempotency guarantees.
+         *     Why async: synchronous iteration over hundreds of series previously
+         *     triggered reverse-proxy timeouts. The single-series PATCH stays sync.
          */
         post: operations["bulk_track_series_for_releases"];
         delete?: never;
@@ -3068,11 +3068,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Bulk-disable release tracking for multiple series.
-         * @description Flips `series_tracking.tracked` to `false`. Does not delete aliases,
-         *     `latest_known_*`, or other tracking config — the user can re-track
-         *     without losing customizations, and the seed will re-derive any
-         *     auto-derived fields on the next track-on transition.
+         * Bulk-disable release tracking for multiple series (async).
+         * @description Enqueues a `BulkTrackForReleases { tracked: false }` task. Does not
+         *     delete aliases, `latest_known_*`, or other tracking config — the user
+         *     can re-track without losing customizations, and the seed will re-derive
+         *     any auto-derived fields on the next track-on transition. Returns the
+         *     `task_id` immediately; the worker emits per-series `SeriesUpdated`
+         *     events so the UI updates live.
          */
         post: operations["bulk_untrack_series_for_releases"];
         delete?: never;
@@ -8861,41 +8863,6 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             taskId: string;
-        };
-        /**
-         * @description Per-series outcome of a bulk track / untrack operation.
-         *
-         *     Returned in `BulkTrackForReleasesResponse.results` so the UI can show a
-         *     per-row status (e.g. "tracked", "skipped: not found", "errored: …") without
-         *     re-querying the tracking config endpoint per series.
-         */
-        BulkTrackForReleasesItem: {
-            /**
-             * @description Free-form detail (error message for `errored`, reason for `skipped`).
-             *     `None` for the success cases.
-             */
-            detail?: string | null;
-            /** @description `tracked` | `untracked` | `skipped` | `errored`. */
-            outcome: string;
-            /** Format: uuid */
-            seriesId: string;
-        };
-        /**
-         * @description Aggregate result of `POST /series/bulk/track-for-releases` and its untrack
-         *     counterpart. Counts and per-series outcomes for client-side display.
-         */
-        BulkTrackForReleasesResponse: {
-            /** @description Series whose `tracked` flag was already in the target state. No-ops. */
-            alreadyInState: number;
-            /**
-             * @description Series successfully flipped to `tracked = true` (or `false` for the
-             *     untrack endpoint).
-             */
-            changed: number;
-            /** @description Series that could not be processed (missing, error, etc.). */
-            errored: number;
-            /** @description Per-series outcomes in input order. */
-            results: components["schemas"]["BulkTrackForReleasesItem"][];
         };
         /** @description Request to update metadata locks for multiple books */
         BulkUpdateBookLocksRequest: components["schemas"]["UpdateBookMetadataLocksRequest"] & {
@@ -24843,14 +24810,21 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Bulk-tracked series */
+            /** @description Bulk track-for-releases task queued */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BulkTrackForReleasesResponse"];
+                    "application/json": components["schemas"]["BulkTaskResponse"];
                 };
+            };
+            /** @description Empty or too-large request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {
@@ -24919,14 +24893,21 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Bulk-untracked series */
+            /** @description Bulk untrack-for-releases task queued */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BulkTrackForReleasesResponse"];
+                    "application/json": components["schemas"]["BulkTaskResponse"];
                 };
+            };
+            /** @description Empty or too-large request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

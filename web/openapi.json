@@ -8565,8 +8565,8 @@
         "tags": [
           "Bulk Operations"
         ],
-        "summary": "Bulk-enable release tracking for multiple series.",
-        "description": "For each `series_id` in the request, flips `series_tracking.tracked` to\n`true` and runs the seed pass (auto-derives aliases, `latest_known_*`,\n`track_chapters` / `track_volumes` from existing data). Series that don't\nexist are reported as `outcome: skipped`. Series already tracked are\nreported as `outcome: skipped, detail: \"already tracked\"` and the seed is\nnot re-run (idempotent — a re-run would simply re-derive identical\nvalues, but we skip the work).\n\nMirrors the per-series PATCH `false -> true` transition: same seed\nfunction, same idempotency guarantees.",
+        "summary": "Bulk-enable release tracking for multiple series (async).",
+        "description": "Enqueues a `BulkTrackForReleases { tracked: true }` task and returns its\n`task_id` immediately. The worker runs the per-series track sequence\n(lookup -> idempotency check -> seed -> flip `tracked` -> emit\n`SeriesUpdated`) off the request thread. Final counts\n(`changed` / `already_in_state` / `errored`) land in the task's\n`result_data`; the frontend reads them when the task completes via the\nexisting task SSE stream.\n\nWhy async: synchronous iteration over hundreds of series previously\ntriggered reverse-proxy timeouts. The single-series PATCH stays sync.",
         "operationId": "bulk_track_series_for_releases",
         "requestBody": {
           "content": {
@@ -8580,14 +8580,17 @@
         },
         "responses": {
           "200": {
-            "description": "Bulk-tracked series",
+            "description": "Bulk track-for-releases task queued",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BulkTrackForReleasesResponse"
+                  "$ref": "#/components/schemas/BulkTaskResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Empty or too-large request"
           },
           "401": {
             "description": "Unauthorized"
@@ -8657,8 +8660,8 @@
         "tags": [
           "Bulk Operations"
         ],
-        "summary": "Bulk-disable release tracking for multiple series.",
-        "description": "Flips `series_tracking.tracked` to `false`. Does not delete aliases,\n`latest_known_*`, or other tracking config — the user can re-track\nwithout losing customizations, and the seed will re-derive any\nauto-derived fields on the next track-on transition.",
+        "summary": "Bulk-disable release tracking for multiple series (async).",
+        "description": "Enqueues a `BulkTrackForReleases { tracked: false }` task. Does not\ndelete aliases, `latest_known_*`, or other tracking config — the user\ncan re-track without losing customizations, and the seed will re-derive\nany auto-derived fields on the next track-on transition. Returns the\n`task_id` immediately; the worker emits per-series `SeriesUpdated`\nevents so the UI updates live.",
         "operationId": "bulk_untrack_series_for_releases",
         "requestBody": {
           "content": {
@@ -8672,14 +8675,17 @@
         },
         "responses": {
           "200": {
-            "description": "Bulk-untracked series",
+            "description": "Bulk untrack-for-releases task queued",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BulkTrackForReleasesResponse"
+                  "$ref": "#/components/schemas/BulkTaskResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Empty or too-large request"
           },
           "401": {
             "description": "Unauthorized"
@@ -21886,65 +21892,6 @@
             "format": "uuid",
             "description": "ID of the fan-out task that was created",
             "example": "550e8400-e29b-41d4-a716-446655440000"
-          }
-        }
-      },
-      "BulkTrackForReleasesItem": {
-        "type": "object",
-        "description": "Per-series outcome of a bulk track / untrack operation.\n\nReturned in `BulkTrackForReleasesResponse.results` so the UI can show a\nper-row status (e.g. \"tracked\", \"skipped: not found\", \"errored: …\") without\nre-querying the tracking config endpoint per series.",
-        "required": [
-          "seriesId",
-          "outcome"
-        ],
-        "properties": {
-          "detail": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Free-form detail (error message for `errored`, reason for `skipped`).\n`None` for the success cases."
-          },
-          "outcome": {
-            "type": "string",
-            "description": "`tracked` | `untracked` | `skipped` | `errored`."
-          },
-          "seriesId": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
-      "BulkTrackForReleasesResponse": {
-        "type": "object",
-        "description": "Aggregate result of `POST /series/bulk/track-for-releases` and its untrack\ncounterpart. Counts and per-series outcomes for client-side display.",
-        "required": [
-          "changed",
-          "alreadyInState",
-          "errored",
-          "results"
-        ],
-        "properties": {
-          "alreadyInState": {
-            "type": "integer",
-            "description": "Series whose `tracked` flag was already in the target state. No-ops.",
-            "minimum": 0
-          },
-          "changed": {
-            "type": "integer",
-            "description": "Series successfully flipped to `tracked = true` (or `false` for the\nuntrack endpoint).",
-            "minimum": 0
-          },
-          "errored": {
-            "type": "integer",
-            "description": "Series that could not be processed (missing, error, etc.).",
-            "minimum": 0
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BulkTrackForReleasesItem"
-            },
-            "description": "Per-series outcomes in input order."
           }
         }
       },

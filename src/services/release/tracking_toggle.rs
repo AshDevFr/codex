@@ -37,18 +37,6 @@ pub enum ToggleOutcome {
     Errored,
 }
 
-impl ToggleOutcome {
-    /// Lower-case wire string. Matches the legacy HTTP shape.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ToggleOutcome::Tracked => "tracked",
-            ToggleOutcome::Untracked => "untracked",
-            ToggleOutcome::Skipped => "skipped",
-            ToggleOutcome::Errored => "errored",
-        }
-    }
-}
-
 /// Per-series outcome row, mirroring the legacy `BulkTrackForReleasesItem`
 /// fields so consumers can render the same row markup off either source.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -333,13 +321,25 @@ mod tests {
     }
 
     #[test]
-    fn toggle_outcome_strings_match_legacy_wire_shape() {
-        assert_eq!(ToggleOutcome::Tracked.as_str(), "tracked");
-        assert_eq!(ToggleOutcome::Untracked.as_str(), "untracked");
-        assert_eq!(ToggleOutcome::Skipped.as_str(), "skipped");
-        assert_eq!(ToggleOutcome::Errored.as_str(), "errored");
-
-        let serialized = serde_json::to_string(&ToggleOutcome::Tracked).unwrap();
-        assert_eq!(serialized, "\"tracked\"");
+    fn toggle_outcome_serializes_as_lowercase_wire_strings() {
+        // The task `result_data` exposes these values to the frontend, which
+        // renders them verbatim. Lock the wire shape so a stray rename
+        // doesn't silently break the UI.
+        assert_eq!(
+            serde_json::to_string(&ToggleOutcome::Tracked).unwrap(),
+            "\"tracked\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ToggleOutcome::Untracked).unwrap(),
+            "\"untracked\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ToggleOutcome::Skipped).unwrap(),
+            "\"skipped\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ToggleOutcome::Errored).unwrap(),
+            "\"errored\""
+        );
     }
 }

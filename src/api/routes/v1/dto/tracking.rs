@@ -213,39 +213,8 @@ pub struct CreateSeriesAliasRequest {
     pub source: Option<String>,
 }
 
-// =============================================================================
-// Bulk track-for-releases DTOs
-// =============================================================================
-
-/// Per-series outcome of a bulk track / untrack operation.
-///
-/// Returned in `BulkTrackForReleasesResponse.results` so the UI can show a
-/// per-row status (e.g. "tracked", "skipped: not found", "errored: …") without
-/// re-querying the tracking config endpoint per series.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct BulkTrackForReleasesItem {
-    pub series_id: Uuid,
-    /// `tracked` | `untracked` | `skipped` | `errored`.
-    pub outcome: String,
-    /// Free-form detail (error message for `errored`, reason for `skipped`).
-    /// `None` for the success cases.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
-}
-
-/// Aggregate result of `POST /series/bulk/track-for-releases` and its untrack
-/// counterpart. Counts and per-series outcomes for client-side display.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct BulkTrackForReleasesResponse {
-    /// Series successfully flipped to `tracked = true` (or `false` for the
-    /// untrack endpoint).
-    pub changed: usize,
-    /// Series whose `tracked` flag was already in the target state. No-ops.
-    pub already_in_state: usize,
-    /// Series that could not be processed (missing, error, etc.).
-    pub errored: usize,
-    /// Per-series outcomes in input order.
-    pub results: Vec<BulkTrackForReleasesItem>,
-}
+// Bulk track-for-releases now flows through the async task system. The HTTP
+// endpoints return `BulkTaskResponse` (defined in `read_progress.rs` alongside
+// the other bulk-task response shapes) and the per-series outcome rows live in
+// the task's `result_data` JSON under the `results` key — see the
+// `BulkTrackForReleasesHandler` for the schema.

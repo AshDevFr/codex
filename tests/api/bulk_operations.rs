@@ -7,12 +7,14 @@ mod common;
 
 use codex::api::routes::v1::dto::{
     BulkAnalyzeBooksRequest, BulkAnalyzeResponse, BulkAnalyzeSeriesRequest, BulkBooksRequest,
-    BulkSeriesRequest, MarkReadResponse,
+    BulkSeriesRequest, BulkTaskResponse, MarkReadResponse,
 };
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
-    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
+    BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, TaskRepository,
+    UserRepository,
 };
+use codex::tasks::handlers::{BulkTrackForReleasesHandler, TaskHandler};
 use codex::utils::password;
 use common::*;
 use hyper::StatusCode;
@@ -640,13 +642,40 @@ async fn test_bulk_analyze_series_unauthorized() {
 }
 
 // ============================================================================
-// Bulk track / untrack for releases (round D)
+// Bulk track / untrack for releases
+//
+// The two endpoints enqueue a `BulkTrackForReleases` task and return its
+// `task_id` immediately. These tests assert the HTTP enqueue surface
+// (validation, permission, queued task row) and then drive the handler
+// in-process to verify the same end-state contract the legacy sync
+// handler used to provide. The full task-worker loop is exercised
+// separately in `tests/task_queue_e2e.rs`.
 // ============================================================================
 
-use codex::api::routes::v1::dto::tracking::BulkTrackForReleasesResponse;
+/// Pull the enqueued task by id and invoke `BulkTrackForReleasesHandler`
+/// directly. Mirrors the pattern in `tests/api/series.rs` for the
+/// reprocess title tests.
+async fn drive_bulk_track_task(
+    db: &sea_orm::DatabaseConnection,
+    task_id: uuid::Uuid,
+) -> serde_json::Value {
+    let task = TaskRepository::get_by_id(db, task_id)
+        .await
+        .unwrap()
+        .expect("enqueued task row should be present");
+    let handler = BulkTrackForReleasesHandler::new();
+    let result = handler
+        .handle(&task, db, None)
+        .await
+        .expect("handler should succeed");
+    assert!(result.success, "handler should report success");
+    result
+        .data
+        .expect("BulkTrackForReleases handler always populates result_data")
+}
 
 #[tokio::test]
-async fn bulk_track_for_releases_flips_tracked_and_seeds() {
+async fn bulk_track_for_releases_enqueues_task_and_flips_tracked_on_drain() {
     use codex::db::repositories::{SeriesAliasRepository, SeriesTrackingRepository};
 
     let (db, _temp_dir) = setup_test_db().await;
@@ -672,20 +701,36 @@ async fn bulk_track_for_releases_flips_tracked_and_seeds() {
         &request_body,
         &token,
     );
-    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+    let (status, body): (StatusCode, Option<BulkTaskResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
-    let body = body.unwrap();
-    assert_eq!(body.changed, 2);
-    assert_eq!(body.already_in_state, 0);
-    assert_eq!(body.errored, 0);
-    assert_eq!(body.results.len(), 2);
-    for r in &body.results {
-        assert_eq!(r.outcome, "tracked");
+    let body = body.expect("response body present");
+    assert!(!body.task_id.is_nil(), "task_id should not be nil");
+    assert!(
+        body.message.contains("Track update queued"),
+        "queued message should mention 'Track update queued': {}",
+        body.message
+    );
+
+    // The handler hasn't run yet — series should still be untracked.
+    for series_id in [s1.id, s2.id] {
+        let row = SeriesTrackingRepository::get(&db, series_id).await.unwrap();
+        assert!(
+            row.map(|r| !r.tracked).unwrap_or(true),
+            "series {} should still be untracked pre-drain",
+            series_id
+        );
     }
 
-    // Both series should now be tracked + have at least one seeded alias.
+    // Drain the task in-process.
+    let data = drive_bulk_track_task(&db, body.task_id).await;
+    assert_eq!(data["tracked"], true);
+    assert_eq!(data["changed"], 2);
+    assert_eq!(data["already_in_state"], 0);
+    assert_eq!(data["errored"], 0);
+    assert_eq!(data["results"].as_array().unwrap().len(), 2);
+
     for series_id in [s1.id, s2.id] {
         let row = SeriesTrackingRepository::get(&db, series_id)
             .await
@@ -705,7 +750,7 @@ async fn bulk_track_for_releases_flips_tracked_and_seeds() {
 }
 
 #[tokio::test]
-async fn bulk_track_for_releases_skips_already_tracked() {
+async fn bulk_track_for_releases_skips_already_tracked_on_drain() {
     use codex::db::repositories::{SeriesTrackingRepository, TrackingUpdate};
 
     let (db, _temp_dir) = setup_test_db().await;
@@ -719,7 +764,6 @@ async fn bulk_track_for_releases_skips_already_tracked() {
         .await
         .unwrap();
 
-    // Pre-track `already`.
     SeriesTrackingRepository::upsert(
         &db,
         already.id,
@@ -743,24 +787,33 @@ async fn bulk_track_for_releases_skips_already_tracked() {
         &request_body,
         &token,
     );
-    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+    let (status, body): (StatusCode, Option<BulkTaskResponse>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let body = body.unwrap();
-    assert_eq!(body.changed, 1, "only `fresh` should flip");
-    assert_eq!(body.already_in_state, 1, "`already` is a no-op");
-    assert_eq!(body.errored, 0);
+
+    let data = drive_bulk_track_task(&db, body.task_id).await;
+    assert_eq!(data["changed"], 1, "only `fresh` should flip");
+    assert_eq!(data["already_in_state"], 1, "`already` is a no-op");
+    assert_eq!(data["errored"], 0);
 
     // Per-series outcomes preserved in input order.
-    assert_eq!(body.results[0].series_id, already.id);
-    assert_eq!(body.results[0].outcome, "skipped");
-    assert_eq!(body.results[1].series_id, fresh.id);
-    assert_eq!(body.results[1].outcome, "tracked");
+    let results = data["results"].as_array().unwrap();
+    assert_eq!(
+        results[0]["series_id"].as_str().unwrap(),
+        already.id.to_string()
+    );
+    assert_eq!(results[0]["outcome"], "skipped");
+    assert_eq!(
+        results[1]["series_id"].as_str().unwrap(),
+        fresh.id.to_string()
+    );
+    assert_eq!(results[1]["outcome"], "tracked");
 }
 
 #[tokio::test]
-async fn bulk_track_for_releases_reports_missing_series() {
+async fn bulk_track_for_releases_treats_missing_series_as_skipped_on_drain() {
     let (db, _temp_dir) = setup_test_db().await;
     let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
         .await
@@ -782,23 +835,27 @@ async fn bulk_track_for_releases_reports_missing_series() {
         &request_body,
         &token,
     );
-    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+    let (status, body): (StatusCode, Option<BulkTaskResponse>) =
         make_json_request(app, request).await;
-
-    // The whole request still succeeds (200) — one bad series doesn't
-    // poison the others. The bogus row gets `outcome: skipped` with a
-    // detail string, by design (see bulk handler doc).
     assert_eq!(status, StatusCode::OK);
     let body = body.unwrap();
-    assert_eq!(body.changed, 1);
-    assert_eq!(body.already_in_state, 1);
-    assert_eq!(body.errored, 0);
-    assert_eq!(body.results[0].series_id, bogus);
-    assert_eq!(body.results[0].outcome, "skipped");
+
+    let data = drive_bulk_track_task(&db, body.task_id).await;
+    // One bad series doesn't poison the others. Missing counts as skipped,
+    // matching the legacy sync endpoint's `already_in_state` bookkeeping.
+    assert_eq!(data["changed"], 1);
+    assert_eq!(data["already_in_state"], 1);
+    assert_eq!(data["errored"], 0);
+
+    let results = data["results"].as_array().unwrap();
+    let bogus_row = results
+        .iter()
+        .find(|r| r["series_id"].as_str() == Some(&bogus.to_string()))
+        .expect("bogus row present");
+    assert_eq!(bogus_row["outcome"], "skipped");
     assert!(
-        body.results[0]
-            .detail
-            .as_deref()
+        bogus_row["detail"]
+            .as_str()
             .unwrap_or("")
             .contains("not found"),
         "missing series detail should mention 'not found'"
@@ -806,7 +863,7 @@ async fn bulk_track_for_releases_reports_missing_series() {
 }
 
 #[tokio::test]
-async fn bulk_untrack_for_releases_flips_tracked_off_preserves_aliases() {
+async fn bulk_untrack_for_releases_flips_tracked_off_and_preserves_aliases_on_drain() {
     use codex::db::repositories::{
         SeriesAliasRepository, SeriesTrackingRepository, TrackingUpdate,
     };
@@ -828,7 +885,6 @@ async fn bulk_untrack_for_releases_flips_tracked_off_preserves_aliases() {
     )
     .await
     .unwrap();
-    // Add a manual alias the user may want to keep.
     SeriesAliasRepository::create(&db, s.id, "User Alias", "manual")
         .await
         .unwrap();
@@ -845,13 +901,20 @@ async fn bulk_untrack_for_releases_flips_tracked_off_preserves_aliases() {
         &request_body,
         &token,
     );
-    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+    let (status, body): (StatusCode, Option<BulkTaskResponse>) =
         make_json_request(app, request).await;
-
     assert_eq!(status, StatusCode::OK);
     let body = body.unwrap();
-    assert_eq!(body.changed, 1);
-    assert_eq!(body.results[0].outcome, "untracked");
+    assert!(
+        body.message.contains("Untrack update queued"),
+        "queued message should mention 'Untrack update queued': {}",
+        body.message
+    );
+
+    let data = drive_bulk_track_task(&db, body.task_id).await;
+    assert_eq!(data["tracked"], false);
+    assert_eq!(data["changed"], 1);
+    assert_eq!(data["results"][0]["outcome"], "untracked");
 
     let row = SeriesTrackingRepository::get(&db, s.id)
         .await
@@ -867,7 +930,7 @@ async fn bulk_untrack_for_releases_flips_tracked_off_preserves_aliases() {
 }
 
 #[tokio::test]
-async fn bulk_untrack_for_releases_skips_already_untracked() {
+async fn bulk_untrack_for_releases_skips_already_untracked_on_drain() {
     let (db, _temp_dir) = setup_test_db().await;
     let library = LibraryRepository::create(&db, "Lib", "/lib", ScanningStrategy::Default)
         .await
@@ -888,14 +951,15 @@ async fn bulk_untrack_for_releases_skips_already_untracked() {
         &request_body,
         &token,
     );
-    let (status, body): (StatusCode, Option<BulkTrackForReleasesResponse>) =
+    let (status, body): (StatusCode, Option<BulkTaskResponse>) =
         make_json_request(app, request).await;
-
     assert_eq!(status, StatusCode::OK);
     let body = body.unwrap();
-    assert_eq!(body.changed, 0);
-    assert_eq!(body.already_in_state, 1);
-    assert_eq!(body.results[0].outcome, "skipped");
+
+    let data = drive_bulk_track_task(&db, body.task_id).await;
+    assert_eq!(data["changed"], 0);
+    assert_eq!(data["already_in_state"], 1);
+    assert_eq!(data["results"][0]["outcome"], "skipped");
 }
 
 #[tokio::test]
@@ -932,4 +996,78 @@ async fn bulk_track_for_releases_requires_series_write() {
     );
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Permission denial must short-circuit before enqueue.
+    let stats = TaskRepository::get_stats(&db).await.unwrap();
+    assert_eq!(
+        stats.total, 0,
+        "forbidden request must not enqueue a task, got stats: {stats:?}"
+    );
+}
+
+#[tokio::test]
+async fn bulk_track_for_releases_rejects_empty_request() {
+    use codex::api::error::ErrorResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BulkSeriesRequest { series_ids: vec![] };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/track-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn bulk_track_for_releases_rejects_over_max_request_size() {
+    use codex::api::error::ErrorResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // 101 random UUIDs — over the 100 cap. The IDs don't have to exist;
+    // the cap is enforced before any DB lookup.
+    let series_ids: Vec<uuid::Uuid> = (0..101).map(|_| uuid::Uuid::new_v4()).collect();
+    let request_body = BulkSeriesRequest { series_ids };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/track-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let stats = TaskRepository::get_stats(&db).await.unwrap();
+    assert_eq!(
+        stats.total, 0,
+        "oversize request must not enqueue a task, got stats: {stats:?}"
+    );
+}
+
+#[tokio::test]
+async fn bulk_untrack_for_releases_rejects_over_max_request_size() {
+    use codex::api::error::ErrorResponse;
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let state = create_test_auth_state(db.clone()).await;
+    let (_user_id, token) = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let series_ids: Vec<uuid::Uuid> = (0..101).map(|_| uuid::Uuid::new_v4()).collect();
+    let request_body = BulkSeriesRequest { series_ids };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/bulk/untrack-for-releases",
+        &request_body,
+        &token,
+    );
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }

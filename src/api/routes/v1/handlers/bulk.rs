@@ -7,8 +7,7 @@ use super::super::dto::{
     BulkAnalyzeBooksRequest, BulkAnalyzeResponse, BulkAnalyzeSeriesRequest, BulkBooksRequest,
     BulkGenerateBookThumbnailsRequest, BulkGenerateSeriesBookThumbnailsRequest,
     BulkGenerateSeriesThumbnailsRequest, BulkMetadataResetResponse, BulkRenumberSeriesRequest,
-    BulkReprocessSeriesTitlesRequest, BulkSeriesRequest, BulkTaskResponse,
-    BulkTrackForReleasesItem, BulkTrackForReleasesResponse, MarkReadResponse,
+    BulkReprocessSeriesTitlesRequest, BulkSeriesRequest, BulkTaskResponse, MarkReadResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::repositories::{
@@ -19,9 +18,6 @@ use crate::db::repositories::{
 };
 use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::require_permission;
-use crate::services::release::tracking_toggle::{
-    ToggleOutcome, ToggleResult, track_one_series, untrack_one_series,
-};
 use crate::tasks::types::TaskType;
 use axum::{Json, extract::State};
 use chrono::Utc;
@@ -435,24 +431,25 @@ pub async fn bulk_analyze_series(
 // Release-tracking Bulk Handlers
 // ============================================================================
 
-/// Bulk-enable release tracking for multiple series.
+/// Bulk-enable release tracking for multiple series (async).
 ///
-/// For each `series_id` in the request, flips `series_tracking.tracked` to
-/// `true` and runs the seed pass (auto-derives aliases, `latest_known_*`,
-/// `track_chapters` / `track_volumes` from existing data). Series that don't
-/// exist are reported as `outcome: skipped`. Series already tracked are
-/// reported as `outcome: skipped, detail: "already tracked"` and the seed is
-/// not re-run (idempotent — a re-run would simply re-derive identical
-/// values, but we skip the work).
+/// Enqueues a `BulkTrackForReleases { tracked: true }` task and returns its
+/// `task_id` immediately. The worker runs the per-series track sequence
+/// (lookup -> idempotency check -> seed -> flip `tracked` -> emit
+/// `SeriesUpdated`) off the request thread. Final counts
+/// (`changed` / `already_in_state` / `errored`) land in the task's
+/// `result_data`; the frontend reads them when the task completes via the
+/// existing task SSE stream.
 ///
-/// Mirrors the per-series PATCH `false -> true` transition: same seed
-/// function, same idempotency guarantees.
+/// Why async: synchronous iteration over hundreds of series previously
+/// triggered reverse-proxy timeouts. The single-series PATCH stays sync.
 #[utoipa::path(
     post,
     path = "/api/v1/series/bulk/track-for-releases",
     request_body = BulkSeriesRequest,
     responses(
-        (status = 200, description = "Bulk-tracked series", body = BulkTrackForReleasesResponse),
+        (status = 200, description = "Bulk track-for-releases task queued", body = BulkTaskResponse),
+        (status = 400, description = "Empty or too-large request"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -466,42 +463,25 @@ pub async fn bulk_track_series_for_releases(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
     Json(request): Json<BulkSeriesRequest>,
-) -> Result<Json<BulkTrackForReleasesResponse>, ApiError> {
-    require_permission!(auth, Permission::SeriesWrite)?;
-
-    let mut response = BulkTrackForReleasesResponse {
-        changed: 0,
-        already_in_state: 0,
-        errored: 0,
-        results: Vec::with_capacity(request.series_ids.len()),
-    };
-
-    for series_id in request.series_ids {
-        let result = track_one_series(
-            &state.db,
-            Some(&state.event_broadcaster),
-            Some(auth.user_id),
-            series_id,
-        )
-        .await;
-        accumulate(&mut response, result);
-    }
-
-    Ok(Json(response))
+) -> Result<Json<BulkTaskResponse>, ApiError> {
+    enqueue_bulk_tracking_task(state, auth, request, true).await
 }
 
-/// Bulk-disable release tracking for multiple series.
+/// Bulk-disable release tracking for multiple series (async).
 ///
-/// Flips `series_tracking.tracked` to `false`. Does not delete aliases,
-/// `latest_known_*`, or other tracking config — the user can re-track
-/// without losing customizations, and the seed will re-derive any
-/// auto-derived fields on the next track-on transition.
+/// Enqueues a `BulkTrackForReleases { tracked: false }` task. Does not
+/// delete aliases, `latest_known_*`, or other tracking config — the user
+/// can re-track without losing customizations, and the seed will re-derive
+/// any auto-derived fields on the next track-on transition. Returns the
+/// `task_id` immediately; the worker emits per-series `SeriesUpdated`
+/// events so the UI updates live.
 #[utoipa::path(
     post,
     path = "/api/v1/series/bulk/untrack-for-releases",
     request_body = BulkSeriesRequest,
     responses(
-        (status = 200, description = "Bulk-untracked series", body = BulkTrackForReleasesResponse),
+        (status = 200, description = "Bulk untrack-for-releases task queued", body = BulkTaskResponse),
+        (status = 400, description = "Empty or too-large request"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
     ),
@@ -515,43 +495,52 @@ pub async fn bulk_untrack_series_for_releases(
     State(state): State<Arc<AppState>>,
     auth: AuthContext,
     Json(request): Json<BulkSeriesRequest>,
-) -> Result<Json<BulkTrackForReleasesResponse>, ApiError> {
-    require_permission!(auth, Permission::SeriesWrite)?;
-
-    let mut response = BulkTrackForReleasesResponse {
-        changed: 0,
-        already_in_state: 0,
-        errored: 0,
-        results: Vec::with_capacity(request.series_ids.len()),
-    };
-
-    for series_id in request.series_ids {
-        let result = untrack_one_series(
-            &state.db,
-            Some(&state.event_broadcaster),
-            Some(auth.user_id),
-            series_id,
-        )
-        .await;
-        accumulate(&mut response, result);
-    }
-
-    Ok(Json(response))
+) -> Result<Json<BulkTaskResponse>, ApiError> {
+    enqueue_bulk_tracking_task(state, auth, request, false).await
 }
 
-/// Fold a single-series toggle outcome into the bulk response: bumps the
-/// matching counter and appends the per-series row in input order.
-fn accumulate(response: &mut BulkTrackForReleasesResponse, result: ToggleResult) {
-    match result.outcome {
-        ToggleOutcome::Tracked | ToggleOutcome::Untracked => response.changed += 1,
-        ToggleOutcome::Skipped => response.already_in_state += 1,
-        ToggleOutcome::Errored => response.errored += 1,
+/// Shared body for the two bulk track/untrack HTTP handlers. Validates the
+/// request, enqueues a single fan-in `BulkTrackForReleases` task, and
+/// builds the `BulkTaskResponse`. The only difference between the two
+/// endpoints is the `tracked` flag passed here.
+async fn enqueue_bulk_tracking_task(
+    state: Arc<AppState>,
+    auth: AuthContext,
+    request: BulkSeriesRequest,
+    tracked: bool,
+) -> Result<Json<BulkTaskResponse>, ApiError> {
+    require_permission!(auth, Permission::SeriesWrite)?;
+
+    if request.series_ids.is_empty() {
+        return Err(ApiError::BadRequest("No series specified".to_string()));
     }
-    response.results.push(BulkTrackForReleasesItem {
-        series_id: result.series_id,
-        outcome: result.outcome.as_str().to_string(),
-        detail: result.detail,
-    });
+    // Matches the cap used by `bulk_reprocess_series_titles` and the
+    // other task-backed bulk endpoints. Protects the `tasks.params` JSON
+    // column from unbounded growth.
+    const MAX_BULK_SERIES_COUNT: usize = 100;
+    if request.series_ids.len() > MAX_BULK_SERIES_COUNT {
+        return Err(ApiError::BadRequest(format!(
+            "Too many series in request. Maximum is {}, got {}. Please split into smaller batches.",
+            MAX_BULK_SERIES_COUNT,
+            request.series_ids.len()
+        )));
+    }
+
+    let count = request.series_ids.len();
+    let task_type = TaskType::BulkTrackForReleases {
+        series_ids: request.series_ids,
+        tracked,
+    };
+
+    let task_id = TaskRepository::enqueue(&state.db, task_type, None)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to queue bulk tracking task: {}", e)))?;
+
+    let verb = if tracked { "Track" } else { "Untrack" };
+    Ok(Json(BulkTaskResponse {
+        task_id,
+        message: format!("{verb} update queued for {count} series"),
+    }))
 }
 
 // ============================================================================

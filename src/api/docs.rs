@@ -850,8 +850,6 @@ The following paths are exempt from rate limiting:
             v1::dto::BulkSeriesRequest,
             v1::dto::BulkAnalyzeSeriesRequest,
             v1::dto::BulkAnalyzeResponse,
-            v1::dto::BulkTrackForReleasesItem,
-            v1::dto::BulkTrackForReleasesResponse,
             v1::dto::BulkRenumberSeriesRequest,
             v1::dto::BulkGenerateBookThumbnailsRequest,
             v1::dto::BulkGenerateSeriesBookThumbnailsRequest,
