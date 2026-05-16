@@ -1019,12 +1019,19 @@ export function BookDetail() {
           )}
 
           {/* File Path */}
-          <Group gap="md" align="center">
-            <Text size="sm" c="dimmed" w={100}>
+          <Group gap="md" align="flex-start" wrap="nowrap">
+            <Text size="sm" c="dimmed" w={100} style={{ flexShrink: 0 }}>
               FILE
             </Text>
             <Tooltip label={book.filePath} position="top" multiline maw={400}>
-              <Text size="sm" style={{ cursor: "help" }}>
+              <Text
+                size="sm"
+                style={{
+                  cursor: "help",
+                  overflowWrap: "anywhere",
+                  minWidth: 0,
+                }}
+              >
                 {book.filePath.split("/").pop() || book.filePath}
               </Text>
             </Tooltip>

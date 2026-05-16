@@ -1,10 +1,15 @@
-import { screen, waitFor } from "@testing-library/react";
+import { AppShell, MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { librariesApi } from "@/api/libraries";
 import { useAuthStore } from "@/store/authStore";
 import { renderWithProviders, userEvent } from "@/test/utils";
+import { theme } from "@/theme";
 import type { Library, User } from "@/types";
 import { AppLayout } from "./AppLayout";
+import { Sidebar } from "./Sidebar";
 
 vi.mock("@/api/libraries");
 vi.mock("@/api/tasks", () => ({
@@ -583,6 +588,103 @@ describe("Sidebar Component (via AppLayout)", () => {
           "lib-123",
         );
       });
+    });
+  });
+
+  describe("Mobile drawer auto-close (onNavigate)", () => {
+    function renderSidebar(onNavigate: () => void) {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      });
+      return render(
+        <MantineProvider theme={theme} defaultColorScheme="dark">
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter>
+              <AppShell navbar={{ width: 280, breakpoint: "sm" }}>
+                <Sidebar onNavigate={onNavigate} />
+              </AppShell>
+            </MemoryRouter>
+          </QueryClientProvider>
+        </MantineProvider>,
+      );
+    }
+
+    it("calls onNavigate when the Home link is clicked", async () => {
+      const user = userEvent.setup();
+      const onNavigate = vi.fn();
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      renderSidebar(onNavigate);
+
+      await user.click(screen.getByText("Home"));
+      expect(onNavigate).toHaveBeenCalled();
+    });
+
+    it("calls onNavigate when a settings submenu link is clicked", async () => {
+      const user = userEvent.setup();
+      const onNavigate = vi.fn();
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      renderSidebar(onNavigate);
+
+      // Profile is shown to all users inside Settings
+      await user.click(screen.getByText("Profile"));
+      expect(onNavigate).toHaveBeenCalled();
+    });
+
+    it("does NOT call onNavigate when only expanding the Settings submenu", async () => {
+      const user = userEvent.setup();
+      const onNavigate = vi.fn();
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      renderSidebar(onNavigate);
+
+      // Clicking the "Settings" parent toggle expands the submenu; it is not a
+      // navigation event and must not collapse the drawer.
+      await user.click(screen.getByText("Settings"));
+      expect(onNavigate).not.toHaveBeenCalled();
     });
   });
 });
