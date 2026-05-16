@@ -1,5 +1,19 @@
-import { ActionIcon, Box, Center, Group, Loader, Tooltip } from "@mantine/core";
-import { IconPlayerSkipBack, IconPlayerSkipForward } from "@tabler/icons-react";
+import {
+  ActionIcon,
+  Box,
+  Center,
+  Group,
+  Loader,
+  Menu,
+  Tooltip,
+} from "@mantine/core";
+import {
+  IconBookmark,
+  IconList,
+  IconPlayerSkipBack,
+  IconPlayerSkipForward,
+  IconSearch,
+} from "@tabler/icons-react";
 import type { Location, NavItem, Rendition } from "epubjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -284,6 +298,7 @@ export function EpubReader({
   // Reader store state
   const toolbarVisible = useReaderStore((state) => state.toolbarVisible);
   const isFullscreen = useReaderStore((state) => state.isFullscreen);
+  const adjacentBooks = useReaderStore((state) => state.adjacentBooks);
   const autoHideToolbar = useReaderStore(
     (state) => state.settings.autoHideToolbar,
   );
@@ -886,6 +901,10 @@ export function EpubReader({
         onClose={onClose}
         onOpenSettings={() => setSettingsOpened(true)}
         showPageNavigation={false}
+        prevBook={adjacentBooks?.prev}
+        nextBook={adjacentBooks?.next}
+        onPrevBook={canGoPrevBook ? goToPrevBook : undefined}
+        onNextBook={canGoNextBook ? goToNextBook : undefined}
         leftActions={
           <EpubTableOfContents
             toc={toc}
@@ -943,6 +962,30 @@ export function EpubReader({
               onNavigate={handleSearchNavigate}
             />
           </Group>
+        }
+        mobileMenuItems={
+          <>
+            <Menu.Divider />
+            <Menu.Label>EPUB</Menu.Label>
+            <Menu.Item
+              leftSection={<IconList size={18} />}
+              onClick={() => setTocOpened(true)}
+            >
+              Table of contents
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconBookmark size={18} />}
+              onClick={() => setBookmarksOpened(true)}
+            >
+              Bookmarks
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<IconSearch size={18} />}
+              onClick={() => setSearchOpened(true)}
+            >
+              Search
+            </Menu.Item>
+          </>
         }
       />
 

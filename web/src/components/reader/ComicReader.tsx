@@ -22,6 +22,7 @@ import {
   useSeriesReaderSettings,
   useTouchNav,
 } from "./hooks";
+import { MobileReaderBottomBar } from "./MobileReaderBottomBar";
 import { PageTransitionWrapper } from "./PageTransitionWrapper";
 import { ReaderSettings } from "./ReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
@@ -753,6 +754,24 @@ export function ComicReader({
         isContinuousScroll={isContinuousScroll}
       />
 
+      {/* Phone-only bottom navigation. Hidden in continuous/webtoon modes
+          where pages are scrolled rather than navigated. */}
+      {!isContinuousScroll && (
+        <MobileReaderBottomBar
+          visible={toolbarVisible}
+          onPrevPage={
+            pageLayout === "double"
+              ? handleSpreadPrevPage
+              : handlePrevPageWithDirection
+          }
+          onNextPage={
+            pageLayout === "double"
+              ? handleSpreadNextPage
+              : handleNextPageWithDirection
+          }
+        />
+      )}
+
       {/* Boundary notification */}
       <BoundaryNotification
         message={boundaryNotification}
@@ -781,7 +800,16 @@ export function ComicReader({
           style={{
             width: "100%",
             height: "100%",
-            touchAction: "none", // Prevent browser default touch handling
+            // Allow native pinch-zoom in `original` fit mode where users
+            // commonly want to zoom into detail. In other fit modes the
+            // image is scaled to the viewport, so we disable pinch-zoom
+            // to avoid awkward gestures fighting the fit logic.
+            // `useTouchNav` uses passive listeners so this never blocks
+            // the swipe/tap detector.
+            touchAction:
+              fitMode === "original"
+                ? "pan-x pan-y pinch-zoom"
+                : "manipulation",
           }}
         >
           <PageTransitionWrapper

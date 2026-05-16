@@ -21,6 +21,7 @@ import {
   useSeriesNavigation,
   useTouchNav,
 } from "./hooks";
+import { MobileReaderBottomBar } from "./MobileReaderBottomBar";
 import { PdfContinuousScrollReader } from "./PdfContinuousScrollReader";
 import { PdfReaderSettings } from "./PdfReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
@@ -703,6 +704,16 @@ export function PdfReader({
         onCycleFitMode={cyclePdfZoom}
       />
 
+      {/* Phone-only bottom navigation. Hidden in continuous scroll mode
+          where the page-counter / slider don't apply (user scrolls). */}
+      {!pdfContinuousScroll && (
+        <MobileReaderBottomBar
+          visible={toolbarVisible}
+          onPrevPage={handlePrevPage}
+          onNextPage={handleNextPage}
+        />
+      )}
+
       {/* Boundary notification */}
       <BoundaryNotification
         message={boundaryNotification}
@@ -740,7 +751,7 @@ export function PdfReader({
             }
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 300 }}
+            style={{ width: "min(300px, calc(100vw - 32px))" }}
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Escape") {
@@ -778,7 +789,13 @@ export function PdfReader({
         <Box
           ref={setPageContainerRef}
           onClick={handlePageClick}
-          style={{ ...pageContainerStyle, touchAction: "none" }}
+          style={{
+            ...pageContainerStyle,
+            // Allow native pinch-zoom for PDF pages — text is often small
+            // and users need to zoom to read. `useTouchNav` uses passive
+            // listeners, so this does not block swipe/tap detection.
+            touchAction: "pan-x pan-y pinch-zoom",
+          }}
         >
           {pageError ? (
             <Center style={{ width: "100%", height: "100%" }}>
