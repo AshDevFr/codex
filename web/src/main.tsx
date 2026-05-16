@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { InstallPrompt, PwaUpdatePrompt } from "./components/pwa";
 import { ThemeSync } from "./components/ThemeSync.tsx";
 import { cssVariablesResolver, theme } from "./theme";
 
@@ -62,6 +63,8 @@ enableMocking().then(() => {
         >
           <ThemeSync />
           <Notifications zIndex={10000} />
+          {import.meta.env.PROD && <PwaUpdatePrompt />}
+          {import.meta.env.PROD && <InstallPrompt />}
           <QueryClientProvider client={queryClient}>
             <App />
           </QueryClientProvider>

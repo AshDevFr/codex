@@ -61,6 +61,42 @@ button:focus-visible {
 }
 
 /* ============================================
+   PWA standalone-mode safe-area handling
+   ============================================
+   When installed to the home screen (iOS uses
+   apple-mobile-web-app-status-bar-style=black-translucent), the app draws
+   under the notch / status bar / home indicator. Pad the AppShell shell so
+   nav controls aren't tucked under those areas. The reader's own toolbar
+   and bottom bar already apply their own safe-area padding (see Phase 3),
+   so they remain immersive. */
+@media (display-mode: standalone) {
+  .mantine-AppShell-header {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    height: calc(64px + env(safe-area-inset-top, 0px));
+  }
+  .mantine-AppShell-navbar {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .mantine-AppShell-main {
+    padding-left: calc(
+      var(--app-shell-padding, 1rem) +
+      env(safe-area-inset-left, 0px)
+    );
+    padding-right: calc(
+      var(--app-shell-padding, 1rem) +
+      env(safe-area-inset-right, 0px)
+    );
+    padding-bottom: calc(
+      var(--app-shell-padding, 1rem) +
+      env(safe-area-inset-bottom, 0px)
+    );
+  }
+}
+
+/* ============================================
    Mobile responsive helpers
    ============================================ */
 
