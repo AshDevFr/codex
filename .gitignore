@@ -12,3 +12,4 @@
 plugins/**/openapi.json
 seed-config.yaml
 .playwright-mcp
+qa-*.png

@@ -97,10 +97,25 @@ describe("PdfReader", () => {
     onClose: vi.fn(),
   };
 
+  const setMatchMedia = (matches: boolean) => {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset store state
     useReaderStore.getState().resetSession();
+    // Default to non-mobile viewport; mobile-specific tests override.
+    setMatchMedia(false);
 
     // Setup ResizeObserver mock (class-based for vitest v4 compatibility)
     global.ResizeObserver = class MockResizeObserver {
@@ -206,6 +221,37 @@ describe("PdfReader", () => {
         expect(
           screen.queryByPlaceholderText("Search in PDF..."),
         ).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("mobile default zoom (R7-2)", () => {
+    it("defaults to fit-page on non-mobile viewports", async () => {
+      // Default beforeEach sets matchMedia matches=false (non-mobile)
+      renderWithProviders(<PdfReader {...defaultProps} />);
+
+      await waitFor(() => {
+        const page = screen.getByTestId("pdf-page");
+        const scale = Number(page.getAttribute("data-scale"));
+        // fit-page is height-constrained for a 612x792 page in an 800x600
+        // container (after toolbar + padding), producing scale ~0.63.
+        expect(scale).toBeGreaterThan(0);
+        expect(scale).toBeLessThan(1);
+      });
+    });
+
+    it("defaults to fit-width on mobile viewports", async () => {
+      setMatchMedia(true);
+
+      renderWithProviders(<PdfReader {...defaultProps} />);
+
+      await waitFor(() => {
+        const page = screen.getByTestId("pdf-page");
+        const scale = Number(page.getAttribute("data-scale"));
+        // fit-width uses the available width only (~1.24 for a 612-wide page
+        // in an 800-wide container after padding) — strictly larger than the
+        // fit-page result above, confirming the mobile default kicked in.
+        expect(scale).toBeGreaterThan(1);
       });
     });
   });

@@ -1,5 +1,5 @@
 import { Box, Center, Loader, Text, TextInput } from "@mantine/core";
-import { useDebouncedValue } from "@mantine/hooks";
+import { useDebouncedValue, useMediaQuery } from "@mantine/hooks";
 import { IconSearch, IconX } from "@tabler/icons-react";
 import {
   type CSSProperties,
@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { booksApi } from "@/api/books";
+import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import { useReaderStore } from "@/store/readerStore";
 import { BoundaryNotification } from "./BoundaryNotification";
 import {
@@ -105,8 +106,18 @@ export function PdfReader({
     height: number;
   } | null>(null);
 
-  // PDF zoom state (local, not in global store since it's PDF-specific)
-  const [zoomLevel, setZoomLevel] = useState<PdfZoomLevel>("fit-page");
+  // R7-2: on a phone-sized viewport, `fit-page` produces an unreadably small
+  // page (portrait PDF scaled to a portrait viewport — text near ~33% width).
+  // Default to `fit-width` on first render below `xs`; persisted per-book
+  // choices would still win once we surface them, but zoom is currently local.
+  // `getInitialValueInEffect: false` makes useMediaQuery match synchronously
+  // on first render so the useState initializer below sees the real viewport.
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY, false, {
+    getInitialValueInEffect: false,
+  });
+  const [zoomLevel, setZoomLevel] = useState<PdfZoomLevel>(() =>
+    isMobile ? "fit-width" : "fit-page",
+  );
 
   // Cycle through PDF zoom levels (for toolbar fit button)
   const cyclePdfZoom = useCallback(() => {
