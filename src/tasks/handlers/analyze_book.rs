@@ -2,10 +2,11 @@ use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use serde_json::json;
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::db::entities::tasks;
-use crate::events::EventBroadcaster;
+use crate::db::repositories::BookRepository;
+use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::scanner::analyze_book;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
@@ -48,6 +49,40 @@ impl TaskHandler for AnalyzeBookHandler {
                 "Task {}: Analyzing book {} (force={})",
                 task.id, book_id, force
             );
+
+            // Emit a progress event so the Active Tasks UI shows which book is
+            // being processed instead of a generic "Processing..." label.
+            // analyze_book has no inner loop to report from, so without this
+            // emit the only events for this task are `started` (no message)
+            // and `completed`, leaving the UI blank for the whole run.
+            if let Some(broadcaster) = event_broadcaster {
+                match BookRepository::get_by_id(db, book_id).await {
+                    Ok(Some(book)) => {
+                        let _ = broadcaster.emit_task(TaskProgressEvent::progress(
+                            task.id,
+                            &task.task_type,
+                            0,
+                            1,
+                            Some(format!("Analyzing {}", book.file_name)),
+                            task.library_id,
+                            task.series_id,
+                            task.book_id,
+                        ));
+                    }
+                    Ok(None) => {
+                        warn!(
+                            "Task {}: Book {} not found for progress label",
+                            task.id, book_id
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Task {}: Failed to load book {} for progress label: {}",
+                            task.id, book_id, e
+                        );
+                    }
+                }
+            }
 
             match analyze_book(db, book_id, force, event_broadcaster).await {
                 Ok(result) => {
