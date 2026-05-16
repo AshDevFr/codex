@@ -1,7 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
-import { fireEvent, renderWithProviders, screen } from "@/test/utils";
+import { fireEvent, renderWithProviders, screen, waitFor } from "@/test/utils";
 import { ReaderToolbar } from "./ReaderToolbar";
+
+function forceMobileViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes("max-width"),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+function forceDesktopViewport() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 describe("ReaderToolbar", () => {
   const defaultProps = {
@@ -13,6 +47,9 @@ describe("ReaderToolbar", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Most tests run in desktop mode; mobile tests opt in via
+    // forceMobileViewport().
+    forceDesktopViewport();
     // Reset store to default state
     useReaderStore.setState({
       settings: {
@@ -205,6 +242,120 @@ describe("ReaderToolbar", () => {
       expect(slider).toHaveAttribute("aria-valuenow", "5");
       expect(slider).toHaveAttribute("aria-valuemin", "1");
       expect(slider).toHaveAttribute("aria-valuemax", "10");
+    });
+  });
+
+  describe("mobile (phone) viewport", () => {
+    beforeEach(() => {
+      forceMobileViewport();
+    });
+
+    it("hides the inline slider on phones", () => {
+      // On phones the bottom slider row is dropped from the toolbar — the
+      // MobileReaderBottomBar takes over. The inline page-counter ("5 / 10")
+      // is also moved out of the top bar to keep it within 390px viewports.
+      renderWithProviders(<ReaderToolbar {...defaultProps} />);
+
+      expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+      expect(screen.queryByText("5 / 10")).not.toBeInTheDocument();
+    });
+
+    it("renders close, title, settings, and a single overflow trigger", () => {
+      renderWithProviders(<ReaderToolbar {...defaultProps} />);
+
+      expect(screen.getByLabelText("Close reader")).toBeInTheDocument();
+      expect(screen.getByText("Test Book")).toBeInTheDocument();
+      expect(screen.getByLabelText("Reader settings")).toBeInTheDocument();
+      expect(screen.getByLabelText("More reader options")).toBeInTheDocument();
+    });
+
+    it("opens the overflow menu and exposes fit-mode + fullscreen", async () => {
+      renderWithProviders(<ReaderToolbar {...defaultProps} />);
+
+      fireEvent.click(screen.getByLabelText("More reader options"));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Fit:/)).toBeInTheDocument();
+      });
+      expect(
+        screen.getByText(/Fullscreen|Exit fullscreen/),
+      ).toBeInTheDocument();
+    });
+
+    it("cycles the fit mode from the overflow menu", async () => {
+      renderWithProviders(<ReaderToolbar {...defaultProps} />);
+
+      fireEvent.click(screen.getByLabelText("More reader options"));
+      await waitFor(() => {
+        expect(screen.getByText(/Fit:/)).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText(/Fit:/));
+
+      expect(useReaderStore.getState().settings.fitMode).toBe("width");
+    });
+
+    it("toggles fullscreen from the overflow menu", async () => {
+      renderWithProviders(<ReaderToolbar {...defaultProps} />);
+
+      fireEvent.click(screen.getByLabelText("More reader options"));
+      await waitFor(() => {
+        expect(screen.getByText(/Fullscreen/)).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText(/Fullscreen/));
+
+      expect(useReaderStore.getState().isFullscreen).toBe(true);
+    });
+
+    it("calls onPrevBook from the overflow menu when provided", async () => {
+      const onPrevBook = vi.fn();
+      renderWithProviders(
+        <ReaderToolbar
+          {...defaultProps}
+          onPrevBook={onPrevBook}
+          prevBook={{ title: "Vol. 1" }}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText("More reader options"));
+      await waitFor(() => {
+        expect(screen.getByText(/Previous: Vol\. 1/)).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText(/Previous: Vol\. 1/));
+
+      expect(onPrevBook).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders custom mobileMenuItems in the overflow menu", async () => {
+      renderWithProviders(
+        <ReaderToolbar
+          {...defaultProps}
+          mobileMenuItems={
+            <button type="button" data-testid="custom-mobile-action">
+              EPUB action
+            </button>
+          }
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText("More reader options"));
+      await waitFor(() => {
+        expect(screen.getByTestId("custom-mobile-action")).toBeInTheDocument();
+      });
+    });
+
+    it("keeps leftActions mounted (display:none) so portaled drawers survive", () => {
+      const leftMarker = (
+        <div data-testid="left-actions-marker">left actions</div>
+      );
+      renderWithProviders(
+        <ReaderToolbar {...defaultProps} leftActions={leftMarker} />,
+      );
+
+      // The element is in the DOM tree but visually hidden by display:none on
+      // its wrapper. The important contract: it's NOT unmounted, so any
+      // portaled drawer body inside leftActions keeps responding to parent
+      // `opened` state when triggered from the mobile overflow menu.
+      expect(screen.getByTestId("left-actions-marker")).toBeInTheDocument();
     });
   });
 });

@@ -2,11 +2,13 @@ import {
   ActionIcon,
   Box,
   Group,
+  Menu,
   Slider,
   Text,
   Tooltip,
   Transition,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   IconArrowAutofitDown,
   IconArrowAutofitHeight,
@@ -17,6 +19,7 @@ import {
   IconBook,
   IconChevronLeft,
   IconChevronRight,
+  IconDotsVertical,
   IconFile,
   IconPhoto,
   IconPlayerSkipBack,
@@ -47,6 +50,12 @@ interface ReaderToolbarProps {
   leftActions?: React.ReactNode;
   /** Additional actions to render in the right section (before settings) */
   rightActions?: React.ReactNode;
+  /**
+   * Additional menu items to render in the mobile overflow menu.
+   * Used to surface format-specific actions (e.g. TOC / bookmarks / search
+   * for EPUB) that don't fit in the phone-sized top bar.
+   */
+  mobileMenuItems?: React.ReactNode;
   /** Series navigation: previous book info */
   prevBook?: { title: string } | null;
   /** Series navigation: next book info */
@@ -77,16 +86,31 @@ const FIT_MODE_LABELS: Record<FitMode, string> = {
   original: "Original Size",
 };
 
+function getFitModeIcon(fitMode: FitMode, size: number) {
+  switch (fitMode) {
+    case "screen":
+      return <IconAspectRatio size={size} />;
+    case "width":
+      return <IconArrowAutofitWidth size={size} />;
+    case "width-shrink":
+      return <IconArrowAutofitDown size={size} />;
+    case "height":
+      return <IconArrowAutofitHeight size={size} />;
+    case "original":
+      return <IconPhoto size={size} />;
+  }
+}
+
 /**
  * Toolbar component for the reader.
  *
- * Shows:
- * - Book title
- * - Page navigation controls
- * - Progress slider
- * - Fit mode indicator
- * - Fullscreen toggle
- * - Settings button
+ * Above the `xs` breakpoint: shows title, page nav, slider, fit-mode,
+ * page-layout, fullscreen, and settings inline.
+ *
+ * Below `xs` (phones): drops the inline slider row and collapses secondary
+ * actions (prev/next book, fit mode, page layout, fullscreen) into a single
+ * overflow `Menu`. Page navigation and the slider move to
+ * `MobileReaderBottomBar`, which is rendered separately by the parent reader.
  */
 export function ReaderToolbar({
   title,
@@ -96,6 +120,7 @@ export function ReaderToolbar({
   showPageNavigation = true,
   leftActions,
   rightActions,
+  mobileMenuItems,
   prevBook,
   nextBook,
   onPrevBook,
@@ -124,6 +149,10 @@ export function ReaderToolbar({
   const fitMode = fitModeProp ?? globalFitMode;
   const cycleFitMode = onCycleFitMode ?? globalCycleFitMode;
 
+  // Phone-only: drop the slider row from the top bar and collapse
+  // secondary actions into an overflow menu. xs breakpoint = 30.125em.
+  const isMobile = useMediaQuery("(max-width: 30.0625em)") ?? false;
+
   // Adjust navigation based on reading direction.
   // Only RTL reverses the chevrons; LTR, TTB, and webtoon all use
   // left=previous, right=next (matching the natural page order).
@@ -134,6 +163,16 @@ export function ReaderToolbar({
   const rightTooltip = isRtl ? "Previous page" : "Next page";
   const leftDisabled = isRtl ? currentPage >= totalPages : currentPage <= 1;
   const rightDisabled = isRtl ? currentPage <= 1 : currentPage >= totalPages;
+
+  const actionIconSize = isMobile ? "xl" : "lg";
+  const iconSize = isMobile ? 22 : 20;
+  const overrideColor = hasSeriesOverride ? "blue" : "gray";
+  const showLayoutToggle =
+    showPageNavigation &&
+    !!onTogglePageLayout &&
+    !!pageLayout &&
+    pageLayout !== "continuous" &&
+    !isContinuousScroll;
 
   return (
     <Transition mounted={visible} transition="slide-down" duration={200}>
@@ -149,31 +188,55 @@ export function ReaderToolbar({
             background:
               "linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 70%, rgba(0,0,0,0) 100%)",
             padding: "12px 16px",
+            // Respect iOS notch / status bar when installed as PWA in
+            // standalone mode. Falls back to 0 on browsers without the var.
+            paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
+            paddingLeft: "calc(16px + env(safe-area-inset-left, 0px))",
+            paddingRight: "calc(16px + env(safe-area-inset-right, 0px))",
           }}
         >
           {/* Top row: Title, controls, close */}
-          <Group justify="space-between" mb="xs">
+          <Group justify="space-between" mb={isMobile ? 0 : "xs"} wrap="nowrap">
             {/* Left: Close button, title, and custom actions */}
-            <Group gap="xs">
+            <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
               <Tooltip label="Close reader (Esc)">
                 <ActionIcon
                   variant="subtle"
                   color="gray"
                   onClick={onClose}
-                  size="lg"
+                  size={actionIconSize}
+                  aria-label="Close reader"
                 >
-                  <IconX size={20} />
+                  <IconX size={iconSize} />
                 </ActionIcon>
               </Tooltip>
-              <Text size="sm" fw={500} c="white" lineClamp={1} maw={300}>
+              <Text
+                size="sm"
+                fw={500}
+                c="white"
+                lineClamp={1}
+                style={{ minWidth: 0, flex: 1 }}
+                maw={isMobile ? undefined : 300}
+              >
                 {title}
               </Text>
-              {leftActions}
+              {/* leftActions stays mounted so portaled drawer bodies (EPUB
+                  TOC/bookmarks) can still respond to parent-controlled opened
+                  state on mobile. Only the trigger UI is visually hidden. */}
+              {leftActions && (
+                <Box
+                  style={{
+                    display: isMobile ? "none" : "contents",
+                  }}
+                >
+                  {leftActions}
+                </Box>
+              )}
             </Group>
 
-            {/* Center: Navigation controls */}
-            {showPageNavigation && (
-              <Group gap="xs">
+            {/* Center: Navigation controls (desktop only — mobile gets a bottom bar) */}
+            {!isMobile && showPageNavigation && (
+              <Group gap="xs" wrap="nowrap">
                 {/* Previous book button */}
                 {onPrevBook && (
                   <Tooltip
@@ -188,9 +251,10 @@ export function ReaderToolbar({
                       color="gray"
                       onClick={onPrevBook}
                       disabled={!prevBook}
-                      size="lg"
+                      size={actionIconSize}
+                      aria-label="Previous book"
                     >
-                      <IconPlayerSkipBack size={18} />
+                      <IconPlayerSkipBack size={iconSize - 2} />
                     </ActionIcon>
                   </Tooltip>
                 )}
@@ -201,9 +265,10 @@ export function ReaderToolbar({
                     color="gray"
                     onClick={onLeftClick}
                     disabled={leftDisabled}
-                    size="lg"
+                    size={actionIconSize}
+                    aria-label={leftTooltip}
                   >
-                    <IconChevronLeft size={20} />
+                    <IconChevronLeft size={iconSize} />
                   </ActionIcon>
                 </Tooltip>
 
@@ -221,9 +286,10 @@ export function ReaderToolbar({
                     color="gray"
                     onClick={onRightClick}
                     disabled={rightDisabled}
-                    size="lg"
+                    size={actionIconSize}
+                    aria-label={rightTooltip}
                   >
-                    <IconChevronRight size={20} />
+                    <IconChevronRight size={iconSize} />
                   </ActionIcon>
                 </Tooltip>
 
@@ -239,98 +305,207 @@ export function ReaderToolbar({
                       color="gray"
                       onClick={onNextBook}
                       disabled={!nextBook}
-                      size="lg"
+                      size={actionIconSize}
+                      aria-label="Next book"
                     >
-                      <IconPlayerSkipForward size={18} />
+                      <IconPlayerSkipForward size={iconSize - 2} />
                     </ActionIcon>
                   </Tooltip>
                 )}
               </Group>
             )}
 
-            {/* Right: Actions */}
-            <Group gap="xs">
-              {showPageNavigation && (
-                <Tooltip label={`Fit mode: ${FIT_MODE_LABELS[fitMode]} (M)`}>
-                  <ActionIcon
-                    variant="subtle"
-                    color={hasSeriesOverride ? "blue" : "gray"}
-                    onClick={cycleFitMode}
-                    size="lg"
-                  >
-                    {fitMode === "screen" && <IconAspectRatio size={20} />}
-                    {fitMode === "width" && <IconArrowAutofitWidth size={20} />}
-                    {fitMode === "width-shrink" && (
-                      <IconArrowAutofitDown size={20} />
-                    )}
-                    {fitMode === "height" && (
-                      <IconArrowAutofitHeight size={20} />
-                    )}
-                    {fitMode === "original" && <IconPhoto size={20} />}
-                  </ActionIcon>
-                </Tooltip>
+            {/* Right: Actions.
+                rightActions stays mounted in both layouts so portaled drawer
+                bodies (e.g. EPUB bookmarks/search) keep responding to
+                parent-controlled `opened` state when their trigger UI is
+                hidden on mobile. */}
+            <Group gap="xs" wrap="nowrap">
+              {rightActions && (
+                <Box
+                  style={{
+                    display: isMobile ? "none" : "contents",
+                  }}
+                >
+                  {rightActions}
+                </Box>
               )}
+              {isMobile ? (
+                /* Mobile: collapse secondary actions into an overflow menu.
+                   Settings stays as its own button because it's the highest-
+                   traffic non-navigation action. */
+                <>
+                  {onOpenSettings && (
+                    <Tooltip label="Settings">
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        onClick={onOpenSettings}
+                        size={actionIconSize}
+                        aria-label="Reader settings"
+                      >
+                        <IconSettings size={iconSize} />
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                  <Menu
+                    shadow="md"
+                    position="bottom-end"
+                    withinPortal
+                    keepMounted={false}
+                  >
+                    <Menu.Target>
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        size={actionIconSize}
+                        aria-label="More reader options"
+                      >
+                        <IconDotsVertical size={iconSize} />
+                      </ActionIcon>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      {showPageNavigation && (
+                        <Menu.Item
+                          leftSection={getFitModeIcon(fitMode, 18)}
+                          onClick={cycleFitMode}
+                        >
+                          Fit: {FIT_MODE_LABELS[fitMode]}
+                        </Menu.Item>
+                      )}
+                      {showLayoutToggle && (
+                        <Menu.Item
+                          leftSection={
+                            pageLayout === "single" ? (
+                              <IconFile size={18} />
+                            ) : (
+                              <IconBook size={18} />
+                            )
+                          }
+                          onClick={onTogglePageLayout}
+                        >
+                          Layout:{" "}
+                          {pageLayout === "single" ? "Single" : "Double"}
+                        </Menu.Item>
+                      )}
+                      <Menu.Item
+                        leftSection={
+                          isFullscreen ? (
+                            <IconArrowsMinimize size={18} />
+                          ) : (
+                            <IconArrowsMaximize size={18} />
+                          )
+                        }
+                        onClick={toggleFullscreen}
+                      >
+                        {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                      </Menu.Item>
+                      {onPrevBook && (
+                        <Menu.Item
+                          leftSection={<IconPlayerSkipBack size={18} />}
+                          onClick={onPrevBook}
+                          disabled={!prevBook}
+                        >
+                          {prevBook
+                            ? `Previous: ${prevBook.title}`
+                            : "No previous book"}
+                        </Menu.Item>
+                      )}
+                      {onNextBook && (
+                        <Menu.Item
+                          leftSection={<IconPlayerSkipForward size={18} />}
+                          onClick={onNextBook}
+                          disabled={!nextBook}
+                        >
+                          {nextBook
+                            ? `Next: ${nextBook.title}`
+                            : "No next book"}
+                        </Menu.Item>
+                      )}
+                      {mobileMenuItems}
+                    </Menu.Dropdown>
+                  </Menu>
+                </>
+              ) : (
+                <>
+                  {showPageNavigation && (
+                    <Tooltip
+                      label={`Fit mode: ${FIT_MODE_LABELS[fitMode]} (M)`}
+                    >
+                      <ActionIcon
+                        variant="subtle"
+                        color={overrideColor}
+                        onClick={cycleFitMode}
+                        size={actionIconSize}
+                        aria-label="Cycle fit mode"
+                      >
+                        {getFitModeIcon(fitMode, iconSize)}
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
 
-              {/* Page layout toggle - only show for paginated modes (not continuous/webtoon) */}
-              {showPageNavigation &&
-                onTogglePageLayout &&
-                pageLayout &&
-                pageLayout !== "continuous" &&
-                !isContinuousScroll && (
+                  {/* Page layout toggle - only show for paginated modes */}
+                  {showLayoutToggle && (
+                    <Tooltip
+                      label={`Page layout: ${pageLayout === "single" ? "Single" : "Double"}`}
+                    >
+                      <ActionIcon
+                        variant="subtle"
+                        color={overrideColor}
+                        onClick={onTogglePageLayout}
+                        size={actionIconSize}
+                        aria-label="Toggle page layout"
+                      >
+                        {pageLayout === "single" ? (
+                          <IconFile size={iconSize} />
+                        ) : (
+                          <IconBook size={iconSize} />
+                        )}
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+
                   <Tooltip
-                    label={`Page layout: ${pageLayout === "single" ? "Single" : "Double"}`}
+                    label={
+                      isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"
+                    }
                   >
                     <ActionIcon
                       variant="subtle"
-                      color={hasSeriesOverride ? "blue" : "gray"}
-                      onClick={onTogglePageLayout}
-                      size="lg"
+                      color="gray"
+                      onClick={toggleFullscreen}
+                      size={actionIconSize}
+                      aria-label="Toggle fullscreen"
                     >
-                      {pageLayout === "single" ? (
-                        <IconFile size={20} />
+                      {isFullscreen ? (
+                        <IconArrowsMinimize size={iconSize} />
                       ) : (
-                        <IconBook size={20} />
+                        <IconArrowsMaximize size={iconSize} />
                       )}
                     </ActionIcon>
                   </Tooltip>
-                )}
 
-              {rightActions}
-
-              <Tooltip
-                label={isFullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
-              >
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  onClick={toggleFullscreen}
-                  size="lg"
-                >
-                  {isFullscreen ? (
-                    <IconArrowsMinimize size={20} />
-                  ) : (
-                    <IconArrowsMaximize size={20} />
+                  {onOpenSettings && (
+                    <Tooltip label="Settings">
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        onClick={onOpenSettings}
+                        size={actionIconSize}
+                        aria-label="Reader settings"
+                      >
+                        <IconSettings size={iconSize} />
+                      </ActionIcon>
+                    </Tooltip>
                   )}
-                </ActionIcon>
-              </Tooltip>
-
-              {onOpenSettings && (
-                <Tooltip label="Settings">
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
-                    onClick={onOpenSettings}
-                    size="lg"
-                  >
-                    <IconSettings size={20} />
-                  </ActionIcon>
-                </Tooltip>
+                </>
               )}
             </Group>
           </Group>
 
-          {/* Bottom row: Progress slider (only for page-based readers) */}
-          {showPageNavigation && (
+          {/* Bottom row: Progress slider (desktop only — phones use
+              MobileReaderBottomBar so the top bar stays compact) */}
+          {!isMobile && showPageNavigation && (
             <Box px="md">
               <Group
                 gap="xs"

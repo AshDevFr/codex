@@ -9,6 +9,7 @@ export { EpubReaderSettings } from "./EpubReaderSettings";
 export { EpubSearch } from "./EpubSearch";
 export { EpubTableOfContents } from "./EpubTableOfContents";
 export * from "./hooks";
+export { MobileReaderBottomBar } from "./MobileReaderBottomBar";
 export {
   getSlideDirection,
   PageTransitionWrapper,
