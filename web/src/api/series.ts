@@ -10,8 +10,15 @@ import type {
 import type { components } from "@/types/api.generated";
 import { api } from "./client";
 
+/**
+ * Response shape for the bulk track/untrack-for-releases endpoints.
+ * Both endpoints now enqueue a `BulkTrackForReleases` task and return its
+ * `task_id` plus a "queued for N series" message; per-series outcomes and
+ * the `{ changed, alreadyInState, errored }` counts land in the task's
+ * `result_data` JSON once the worker finishes.
+ */
 export type BulkTrackForReleasesResponse =
-  components["schemas"]["BulkTrackForReleasesResponse"];
+  components["schemas"]["BulkTaskResponse"];
 
 export interface SeriesFilters {
   page?: number;
@@ -381,9 +388,10 @@ export const seriesApi = {
   },
 
   /**
-   * Bulk-enable release tracking. Flips `tracked: true` on each series and
-   * runs the seed pass (auto-derives aliases, latest_known_*, track_*).
-   * Series already tracked are reported as `outcome: skipped`.
+   * Enqueue a bulk track-for-releases task. Returns the `taskId`
+   * immediately; the worker runs the per-series seed + flip + emits live
+   * `SeriesUpdated` events. Final counts land in the task's `result_data`
+   * when it completes (see `fetchTaskById` / `subscribeToTaskProgress`).
    */
   bulkTrackForReleases: async (
     seriesIds: string[],
@@ -396,9 +404,9 @@ export const seriesApi = {
   },
 
   /**
-   * Bulk-disable release tracking. Flips `tracked: false` without deleting
-   * aliases or other tracking config — re-tracking later still re-seeds
-   * the auto-derived fields.
+   * Enqueue a bulk untrack-for-releases task. Soft-toggle: aliases and
+   * other tracking config are preserved so re-tracking later re-seeds the
+   * auto-derived fields. Returns the `taskId` immediately.
    */
   bulkUntrackForReleases: async (
     seriesIds: string[],

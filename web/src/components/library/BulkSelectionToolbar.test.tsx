@@ -36,18 +36,31 @@ vi.mock("@/api/series", () => ({
       message: "Enqueued 5 analysis tasks for 2 series",
     }),
     bulkTrackForReleases: vi.fn().mockResolvedValue({
-      changed: 2,
-      alreadyInState: 0,
-      errored: 0,
-      results: [],
+      taskId: "task-bulk-track-1",
+      message: "Track update queued for 2 series",
     }),
     bulkUntrackForReleases: vi.fn().mockResolvedValue({
-      changed: 1,
-      alreadyInState: 0,
-      errored: 0,
-      results: [],
+      taskId: "task-bulk-untrack-1",
+      message: "Untrack update queued for 1 series",
     }),
   },
+}));
+
+// Stub the task API helpers used by the bulk-tracking mutation. The unit
+// tests don't drive the SSE stream — they just need the call sites to be
+// reachable. `subscribeToTaskCompletion` returns a no-op cleanup so the
+// safety timeout never tries to use a real subscription.
+vi.mock("@/api/tasks", () => ({
+  subscribeToTaskCompletion: vi.fn(() => () => {}),
+  fetchTaskById: vi.fn().mockResolvedValue(null),
+}));
+
+// Spy on Mantine's notification helper so we can assert on the immediate
+// queued toast surfaced by the bulk-tracking mutation. Real notifications
+// require a `<Notifications />` portal that the test harness doesn't
+// mount.
+vi.mock("@mantine/notifications", () => ({
+  notifications: { show: vi.fn() },
 }));
 
 // Mock the usePermissions hook - default to admin (all permissions)
@@ -419,6 +432,71 @@ describe("BulkSelectionToolbar", () => {
         expect(seriesApi.bulkUntrackForReleases).toHaveBeenCalledWith([
           "series-1",
         ]);
+      });
+    });
+
+    it("shows a queued toast and subscribes for completion when Track for releases is clicked", async () => {
+      const { notifications } = await import("@mantine/notifications");
+      const { subscribeToTaskCompletion } = await import("@/api/tasks");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+      useBulkSelectionStore.getState().toggleSelection("series-2", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(screen.getByText("Track for releases")).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Track for releases"));
+
+      // Immediate "queued" toast carries the count and the queued title.
+      await waitFor(() => {
+        expect(notifications.show).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Tracking update queued",
+            message: expect.stringContaining("2 series"),
+            color: "blue",
+          }),
+        );
+      });
+
+      // Selection is cleared straight away so the user can move on.
+      expect(useBulkSelectionStore.getState().selectedIds.size).toBe(0);
+
+      // The completion subscription is wired up against the task_id the
+      // HTTP call returned — the follow-up toast fires when the worker
+      // signals completion.
+      expect(subscribeToTaskCompletion).toHaveBeenCalledWith(
+        "task-bulk-track-1",
+        expect.any(Function),
+      );
+    });
+
+    it("shows a queued toast when Don't track for releases is clicked", async () => {
+      const { notifications } = await import("@mantine/notifications");
+      const user = userEvent.setup();
+
+      useBulkSelectionStore.getState().toggleSelection("series-1", "series");
+
+      renderWithProviders(<BulkSelectionToolbar />);
+
+      await user.click(screen.getByRole("button", { name: /more actions/i }));
+      await waitFor(() => {
+        expect(
+          screen.getByText("Don't track for releases"),
+        ).toBeInTheDocument();
+      });
+      await user.click(screen.getByText("Don't track for releases"));
+
+      await waitFor(() => {
+        expect(notifications.show).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Untrack update queued",
+            color: "blue",
+          }),
+        );
       });
     });
   });

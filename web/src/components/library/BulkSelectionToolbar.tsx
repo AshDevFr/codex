@@ -29,6 +29,7 @@ import { useEffect, useMemo, useState } from "react";
 import { booksApi } from "@/api/books";
 import { pluginActionsApi, pluginsApi } from "@/api/plugins";
 import { seriesApi } from "@/api/series";
+import { fetchTaskById, subscribeToTaskCompletion } from "@/api/tasks";
 import { BulkMetadataEditModal } from "@/components/library/BulkMetadataEditModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
@@ -399,13 +400,16 @@ export function BulkSelectionToolbar() {
     },
   });
 
-  // Bulk set release-tracking flag. No dedicated bulk endpoint exists yet —
-  // fan out per-series PATCH calls. Acceptable scale for a hand-managed library
-  // (hundreds of series, low-frequency action).
-  // Single-call bulk track/untrack via the dedicated endpoints. The host
-  // runs the seed pass per series on track-on transitions (auto-derives
-  // aliases, latest_known_*, track_chapters/volumes) so users get
-  // notification-ready tracking without touching the per-series panel.
+  // Bulk track / untrack release-tracking flag.
+  //
+  // The HTTP endpoints enqueue a `BulkTrackForReleases` task and return
+  // its `taskId` immediately so we don't block the request thread on
+  // hundreds of series. We surface a queued toast right away, clear the
+  // selection so the user can move on, and subscribe to the task SSE
+  // stream for a follow-up toast carrying the final
+  // `{ changed, alreadyInState, errored }` counts when the worker
+  // finishes. Live `SeriesUpdated` events from the handler keep the grid
+  // ticking over in the meantime, no extra work needed here.
   const bulkSetTrackedMutation = useMutation({
     mutationFn: async ({
       seriesIds,
@@ -417,28 +421,29 @@ export function BulkSelectionToolbar() {
       const response = tracked
         ? await seriesApi.bulkTrackForReleases(seriesIds)
         : await seriesApi.bulkUntrackForReleases(seriesIds);
-      return { total: seriesIds.length, response };
+      return { total: seriesIds.length, taskId: response.taskId, tracked };
     },
-    onSuccess: ({ total, response }, { tracked }) => {
-      const errored = response.errored;
-      if (errored === 0) {
-        notifications.show({
-          title: tracked ? "Tracking enabled" : "Tracking disabled",
-          message:
-            response.alreadyInState > 0
-              ? `Updated ${response.changed} series (${response.alreadyInState} already in this state).`
-              : `Updated ${response.changed} of ${total} series.`,
-          color: tracked ? "green" : "blue",
-        });
-      } else {
-        notifications.show({
-          title: "Some updates failed",
-          message: `${response.changed} updated, ${response.alreadyInState} unchanged, ${errored} failed.`,
-          color: "yellow",
-        });
-      }
-      refetchAll();
+    onSuccess: ({ total, taskId, tracked }) => {
+      notifications.show({
+        title: tracked ? "Tracking update queued" : "Untrack update queued",
+        message: `Processing ${total} series in the background...`,
+        color: "blue",
+      });
       clearSelection();
+
+      // Wait for the worker to finish, then fetch the result payload and
+      // surface a follow-up toast. The subscription auto-cleans on the
+      // terminal event; the safety timeout guards against an SSE drop
+      // leaving us subscribed forever (5 minutes is well past the worst-
+      // case 100-series bulk).
+      const stopWaiting = subscribeToTaskCompletion(taskId, (status) => {
+        void surfaceBulkTrackResult(taskId, status, tracked, total);
+      });
+      const safetyTimer = window.setTimeout(stopWaiting, 5 * 60 * 1000);
+      // No explicit cleanup hookup needed: the subscription self-cancels
+      // on the terminal event, and the safetyTimer either fires after
+      // cleanup (harmless) or runs cleanup itself.
+      void safetyTimer;
     },
     onError: (error: Error) => {
       notifications.show({
@@ -448,6 +453,62 @@ export function BulkSelectionToolbar() {
       });
     },
   });
+
+  /**
+   * Fetch the completed task's `result` payload and show the final
+   * "updated N / skipped M / failed K" toast, then refresh the affected
+   * queries. Tolerates a missing or malformed payload by falling back to
+   * a generic completion / failure toast.
+   */
+  const surfaceBulkTrackResult = async (
+    taskId: string,
+    status: "completed" | "failed",
+    tracked: boolean,
+    total: number,
+  ) => {
+    if (status === "failed") {
+      const task = await fetchTaskById(taskId).catch(() => null);
+      notifications.show({
+        title: "Tracking update failed",
+        message:
+          task?.lastError ??
+          "Background task failed. See the task queue for details.",
+        color: "red",
+      });
+      return;
+    }
+
+    const task = await fetchTaskById(taskId).catch(() => null);
+    const data = task?.result as
+      | {
+          changed?: number;
+          already_in_state?: number;
+          errored?: number;
+        }
+      | null
+      | undefined;
+    const changed = data?.changed ?? 0;
+    const alreadyInState = data?.already_in_state ?? 0;
+    const errored = data?.errored ?? 0;
+
+    if (errored === 0) {
+      notifications.show({
+        title: tracked ? "Tracking enabled" : "Tracking disabled",
+        message:
+          alreadyInState > 0
+            ? `Updated ${changed} series (${alreadyInState} already in this state).`
+            : `Updated ${changed} of ${total} series.`,
+        color: tracked ? "green" : "blue",
+      });
+    } else {
+      notifications.show({
+        title: "Some updates failed",
+        message: `${changed} updated, ${alreadyInState} unchanged, ${errored} failed.`,
+        color: "yellow",
+      });
+    }
+    refetchAll();
+  };
 
   // Bulk reset series metadata
   const bulkResetMetadataMutation = useMutation({

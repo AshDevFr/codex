@@ -18,6 +18,37 @@ interface TaskProgressReconnectionManager {
 }
 
 /**
+ * Fetch a single task by its ID.
+ *
+ * Returns `null` for 404 (task already purged) and 401 (not authenticated)
+ * so callers can treat both as "no result available" without try/catch.
+ * Useful for picking up a task's final `result` payload right after the
+ * SSE stream announces completion.
+ */
+export const fetchTaskById = async (
+  taskId: string,
+): Promise<TaskResponse | null> => {
+  const token = localStorage.getItem("jwt_token");
+  if (!token) {
+    return null;
+  }
+
+  const response = await fetch(`/api/v1/tasks/${taskId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 404 || response.status === 401) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  return await response.json();
+};
+
+/**
  * Fetch tasks with a specific status
  *
  * @param status - Task status to filter by (pending, processing, completed, failed)
@@ -408,4 +439,39 @@ export const subscribeToTaskProgress = (
     onError,
     onConnectionStateChange,
   });
+};
+
+/**
+ * Wait for a specific task to reach a terminal state (`completed` or
+ * `failed`), then invoke `onTerminal` once and auto-unsubscribe. Useful
+ * for bulk endpoints that enqueue a task and want to surface a follow-up
+ * notification when the worker is done, without leaking the SSE
+ * subscription if the page is still mounted.
+ *
+ * Returns a cleanup function so the caller can also abort the wait
+ * proactively (e.g., on component unmount, or via a safety timeout).
+ */
+export const subscribeToTaskCompletion = (
+  taskId: string,
+  onTerminal: (status: "completed" | "failed") => void,
+): (() => void) => {
+  let done = false;
+  let unsubscribe = () => {};
+  unsubscribe = subscribeToTaskProgress((event) => {
+    if (done || event.taskId !== taskId) {
+      return;
+    }
+    if (event.status === "completed" || event.status === "failed") {
+      done = true;
+      try {
+        onTerminal(event.status);
+      } finally {
+        unsubscribe();
+      }
+    }
+  });
+  return () => {
+    done = true;
+    unsubscribe();
+  };
 };
