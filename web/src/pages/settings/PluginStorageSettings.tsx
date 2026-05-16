@@ -9,7 +9,6 @@ import {
   Modal,
   SimpleGrid,
   Stack,
-  Table,
   Text,
   Title,
 } from "@mantine/core";
@@ -30,6 +29,7 @@ import type {
   PluginStorageStatsDto,
 } from "@/api/pluginStorage";
 import { pluginStorageApi } from "@/api/pluginStorage";
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -123,6 +123,25 @@ export function PluginStorageSettings() {
 
   const hasPlugins = (stats?.plugins.length || 0) > 0;
 
+  const pluginStorageColumns: ResponsiveTableColumn<PluginStorageStatsDto>[] = [
+    {
+      key: "name",
+      header: "Plugin Name",
+      mobilePrimary: true,
+      accessor: (plugin) => <Text fw={500}>{plugin.pluginName}</Text>,
+    },
+    {
+      key: "fileCount",
+      header: "File Count",
+      accessor: (plugin) => plugin.fileCount.toLocaleString(),
+    },
+    {
+      key: "size",
+      header: "Size",
+      accessor: (plugin) => formatBytes(plugin.totalBytes),
+    },
+  ];
+
   if (isLoading) {
     return (
       <Box py="xl" px="md">
@@ -192,37 +211,22 @@ export function PluginStorageSettings() {
           <Stack gap="md">
             <Title order={4}>Per-Plugin Storage</Title>
             {hasPlugins ? (
-              <Table striped highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Plugin Name</Table.Th>
-                    <Table.Th>File Count</Table.Th>
-                    <Table.Th>Size</Table.Th>
-                    <Table.Th>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {stats?.plugins.map((plugin) => (
-                    <Table.Tr key={plugin.pluginName}>
-                      <Table.Td>
-                        <Text fw={500}>{plugin.pluginName}</Text>
-                      </Table.Td>
-                      <Table.Td>{plugin.fileCount.toLocaleString()}</Table.Td>
-                      <Table.Td>{formatBytes(plugin.totalBytes)}</Table.Td>
-                      <Table.Td>
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          onClick={() => setCleanupTarget(plugin)}
-                          aria-label={`Delete storage for ${plugin.pluginName}`}
-                        >
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
+              <ResponsiveTable
+                data={stats?.plugins ?? []}
+                columns={pluginStorageColumns}
+                getRowKey={(plugin) => plugin.pluginName}
+                tableProps={{ striped: true, highlightOnHover: true }}
+                rowActions={(plugin) => (
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    onClick={() => setCleanupTarget(plugin)}
+                    aria-label={`Delete storage for ${plugin.pluginName}`}
+                  >
+                    <IconTrash size={16} />
+                  </ActionIcon>
+                )}
+              />
             ) : (
               <Text c="dimmed">No plugins have stored any files yet.</Text>
             )}

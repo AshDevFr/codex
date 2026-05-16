@@ -2,6 +2,7 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Card,
   Checkbox,
   Group,
   Stack,
@@ -9,6 +10,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   IconCheck,
   IconExternalLink,
@@ -18,6 +20,7 @@ import {
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import type { ReleaseLedgerEntry, ReleaseSource } from "@/api/releases";
+import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import { MediaUrlIcon } from "./MediaUrlIcon";
 
 const STATE_BADGE: Record<string, { color: string; label: string }> = {
@@ -95,6 +98,163 @@ export function ReleasesTable({
   const allSelected =
     entries.length > 0 && entries.every((e) => selected.has(e.id));
   const someSelected = entries.some((e) => selected.has(e.id)) && !allSelected;
+
+  // Below xs the wide release table clips off the side. Render a stack of
+  // cards instead — each card carries the same controls and shows series /
+  // chapter / source on its own line. useMediaQuery (rather than CSS-only
+  // `visibleFrom`) keeps only one DOM tree mounted so tests that query the
+  // row checkboxes / actions don't see duplicate matches.
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
+
+  if (isMobile) {
+    return (
+      <Stack gap="sm" p="sm">
+        <Group gap="xs" px="xs">
+          <Checkbox
+            aria-label="Select all releases"
+            checked={allSelected}
+            indeterminate={someSelected}
+            onChange={onToggleAll}
+          />
+          <Text size="xs" c="dimmed">
+            {selected.size > 0 ? `${selected.size} selected` : "Select all"}
+          </Text>
+        </Group>
+        {entries.map((entry) => {
+          const stateInfo = STATE_BADGE[entry.state] ?? {
+            color: "gray",
+            label: entry.state,
+          };
+          const isSelected = selected.has(entry.id);
+          const source = sourceById.get(entry.sourceId);
+          const sourceLabel =
+            source?.displayName ?? `${entry.sourceId.slice(0, 8)}…`;
+          return (
+            <Card
+              key={entry.id}
+              withBorder
+              padding="md"
+              bg={isSelected ? "var(--mantine-color-blue-light)" : undefined}
+            >
+              <Group justify="space-between" gap="xs" wrap="nowrap">
+                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+                  <Checkbox
+                    aria-label={`Select release ${entry.id}`}
+                    checked={isSelected}
+                    onChange={(event) => {
+                      const shiftKey =
+                        event.nativeEvent instanceof MouseEvent &&
+                        event.nativeEvent.shiftKey;
+                      onToggleOne(entry.id, shiftKey);
+                    }}
+                  />
+                  {showSeriesColumn ? (
+                    <Anchor
+                      component={Link}
+                      to={`/series/${entry.seriesId}#releases`}
+                      size="sm"
+                      fw={500}
+                      style={{ minWidth: 0, wordBreak: "break-word" }}
+                    >
+                      {entry.seriesTitle.length > 0
+                        ? entry.seriesTitle
+                        : `${entry.seriesId.slice(0, 8)}…`}
+                    </Anchor>
+                  ) : (
+                    <Text
+                      size="sm"
+                      fw={500}
+                      style={{ minWidth: 0, wordBreak: "break-word" }}
+                    >
+                      {formatChapterVolume(entry)}
+                    </Text>
+                  )}
+                </Group>
+                <Badge color={stateInfo.color} variant="light" size="sm">
+                  {stateInfo.label}
+                </Badge>
+              </Group>
+              <Stack gap={2} mt="xs">
+                {showSeriesColumn && (
+                  <Text size="sm" fw={500}>
+                    {formatChapterVolume(entry)}
+                  </Text>
+                )}
+                <Text size="xs" c="dimmed">
+                  {sourceLabel}
+                  {entry.groupOrUploader &&
+                  entry.groupOrUploader !== sourceLabel
+                    ? ` · ${entry.groupOrUploader}`
+                    : ""}
+                  {entry.language ? ` · ${entry.language}` : ""}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  Observed {format(new Date(entry.observedAt), "yyyy-MM-dd")}
+                </Text>
+              </Stack>
+              <Group gap={4} justify="flex-end" wrap="nowrap" mt="sm">
+                <Tooltip label="Open payload URL">
+                  <ActionIcon
+                    component="a"
+                    href={entry.payloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="subtle"
+                    aria-label="Open payload URL"
+                  >
+                    <IconExternalLink size={16} />
+                  </ActionIcon>
+                </Tooltip>
+                {entry.mediaUrl && (
+                  <MediaUrlIcon
+                    url={entry.mediaUrl}
+                    kind={entry.mediaUrlKind}
+                  />
+                )}
+                {entry.state === "announced" && (
+                  <>
+                    <Tooltip label="Mark acquired">
+                      <ActionIcon
+                        variant="subtle"
+                        color="green"
+                        loading={isMarkAcquiredPending}
+                        onClick={() => onMarkAcquired(entry.id)}
+                        aria-label="Mark acquired"
+                      >
+                        <IconCheck size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                    <Tooltip label="Dismiss">
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        loading={isDismissPending}
+                        onClick={() => onDismiss(entry.id)}
+                        aria-label="Dismiss"
+                      >
+                        <IconX size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </>
+                )}
+                <Tooltip label="Delete (will reappear on next poll)">
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    loading={isDeletePending}
+                    onClick={() => onDelete(entry.id)}
+                    aria-label="Delete"
+                  >
+                    <IconTrash size={16} />
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+            </Card>
+          );
+        })}
+      </Stack>
+    );
+  }
 
   return (
     <Table verticalSpacing={verticalSpacing} highlightOnHover>

@@ -11,7 +11,6 @@ import {
   Radio,
   SegmentedControl,
   Stack,
-  Table,
   Text,
   Title,
   Tooltip,
@@ -27,7 +26,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { librariesApi } from "@/api/libraries";
-import type { ExportFieldDto } from "@/api/seriesExports";
+import type { ExportFieldDto, SeriesExportDto } from "@/api/seriesExports";
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
 import {
   useCreateSeriesExport,
   useDeleteSeriesExport,
@@ -602,6 +602,82 @@ export function SeriesExportsSettings() {
     deleteMutation.mutate(id);
   };
 
+  const exportColumns: ResponsiveTableColumn<SeriesExportDto>[] = [
+    {
+      key: "created",
+      header: "Created",
+      mobilePrimary: true,
+      accessor: (exp) => (
+        <Text size="sm" fw={500}>
+          {new Date(exp.createdAt).toLocaleString()}
+        </Text>
+      ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      accessor: (exp) => <ExportTypeBadge exportType={exp.exportType} />,
+    },
+    {
+      key: "format",
+      header: "Format",
+      accessor: (exp) => (
+        <Badge variant="outline" size="sm">
+          {exp.format.toUpperCase()}
+        </Badge>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      accessor: (exp) => (
+        <>
+          <StatusBadge status={exp.status} />
+          {exp.error && (
+            <Tooltip label={exp.error}>
+              <Text size="xs" c="red" lineClamp={1}>
+                {exp.error}
+              </Text>
+            </Tooltip>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "libraries",
+      header: "Libraries",
+      mobileFullWidth: true,
+      accessor: (exp) => (
+        <LibrariesCell
+          libraryNames={getLibraryNames(exp.libraryIds)}
+          totalCount={exp.libraryIds.length}
+          seriesFields={exp.fields}
+          bookFields={exp.bookFields}
+          exportType={exp.exportType}
+        />
+      ),
+    },
+    {
+      key: "rows",
+      header: "Rows",
+      accessor: (exp) => <Text size="sm">{exp.rowCount ?? "-"}</Text>,
+    },
+    {
+      key: "size",
+      header: "Size",
+      accessor: (exp) => (
+        <Text size="sm">{formatBytes(exp.fileSizeBytes ?? null)}</Text>
+      ),
+    },
+    {
+      key: "expires",
+      header: "Expires",
+      accessor: (exp) => (
+        <Text size="sm">{new Date(exp.expiresAt).toLocaleDateString()}</Text>
+      ),
+    },
+  ];
+
   return (
     <Stack gap="lg">
       <Group justify="space-between">
@@ -634,105 +710,47 @@ export function SeriesExportsSettings() {
           </Stack>
         </Card>
       ) : (
-        <Card withBorder padding={0}>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Created</Table.Th>
-                <Table.Th>Type</Table.Th>
-                <Table.Th>Format</Table.Th>
-                <Table.Th>Status</Table.Th>
-                <Table.Th>Libraries</Table.Th>
-                <Table.Th>Rows</Table.Th>
-                <Table.Th>Size</Table.Th>
-                <Table.Th>Expires</Table.Th>
-                <Table.Th style={{ width: 100 }}>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {exports.map((exp) => (
-                <Table.Tr key={exp.id}>
-                  <Table.Td>
-                    <Text size="sm">
-                      {new Date(exp.createdAt).toLocaleString()}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <ExportTypeBadge exportType={exp.exportType} />
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge variant="outline" size="sm">
-                      {exp.format.toUpperCase()}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <StatusBadge status={exp.status} />
-                    {exp.error && (
-                      <Tooltip label={exp.error}>
-                        <Text size="xs" c="red" lineClamp={1}>
-                          {exp.error}
-                        </Text>
-                      </Tooltip>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <LibrariesCell
-                      libraryNames={getLibraryNames(exp.libraryIds)}
-                      totalCount={exp.libraryIds.length}
-                      seriesFields={exp.fields}
-                      bookFields={exp.bookFields}
-                      exportType={exp.exportType}
-                    />
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{exp.rowCount ?? "-"}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">
-                      {formatBytes(exp.fileSizeBytes ?? null)}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">
-                      {new Date(exp.expiresAt).toLocaleDateString()}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap="xs" wrap="nowrap">
-                      {exp.status === "completed" && (
-                        <Tooltip label="Download">
-                          <ActionIcon
-                            variant="subtle"
-                            color="blue"
-                            loading={
-                              downloadMutation.isPending &&
-                              downloadMutation.variables?.id === exp.id
-                            }
-                            onClick={() => handleDownload(exp)}
-                          >
-                            <IconDownload size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                      <Tooltip label="Delete">
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          loading={
-                            deleteMutation.isPending &&
-                            deleteMutation.variables === exp.id
-                          }
-                          onClick={() => handleDelete(exp.id)}
-                        >
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+        <Card withBorder p={{ base: 0, xs: 0 }}>
+          <ResponsiveTable
+            data={exports}
+            columns={exportColumns}
+            getRowKey={(exp) => exp.id}
+            tableProps={{ striped: true, highlightOnHover: true }}
+            rowActions={(exp) => (
+              <>
+                {exp.status === "completed" && (
+                  <Tooltip label="Download">
+                    <ActionIcon
+                      variant="subtle"
+                      color="blue"
+                      loading={
+                        downloadMutation.isPending &&
+                        downloadMutation.variables?.id === exp.id
+                      }
+                      onClick={() => handleDownload(exp)}
+                      aria-label="Download export"
+                    >
+                      <IconDownload size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+                <Tooltip label="Delete">
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    loading={
+                      deleteMutation.isPending &&
+                      deleteMutation.variables === exp.id
+                    }
+                    onClick={() => handleDelete(exp.id)}
+                    aria-label="Delete export"
+                  >
+                    <IconTrash size={16} />
+                  </ActionIcon>
+                </Tooltip>
+              </>
+            )}
+          />
         </Card>
       )}
 

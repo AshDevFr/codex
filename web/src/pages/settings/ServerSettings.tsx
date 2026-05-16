@@ -19,7 +19,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertCircle,
@@ -41,6 +41,7 @@ import {
 } from "@/api/settings";
 import { TemplateEditor } from "@/components/forms/TemplateEditor";
 import { TemplateSelector } from "@/components/forms/TemplateSelector";
+import { MOBILE_MEDIA_QUERY, ResponsiveTable } from "@/components/ui";
 import { brandingQueryKey } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
@@ -197,6 +198,144 @@ function SettingRow({
   );
 }
 
+// Setting card for the mobile layout. Mirrors `SettingRow` but stacks the
+// key/value/actions vertically and lets the value editor occupy the full
+// card width below xs.
+function SettingMobileCard({
+  setting,
+  onUpdate,
+  onReset,
+  onViewHistory,
+}: {
+  setting: SettingDto;
+  onUpdate: (key: string, value: string) => void;
+  onReset: (key: string) => void;
+  onViewHistory: (key: string) => void;
+}) {
+  const [localValue, setLocalValue] = useState(setting.value);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const handleSave = () => {
+    if (localValue !== setting.value) {
+      onUpdate(setting.key, localValue);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setLocalValue(setting.value);
+    setIsEditing(false);
+  };
+
+  const renderInput = () => {
+    switch (setting.valueType) {
+      case "boolean":
+        return (
+          <Switch
+            checked={localValue === "true"}
+            onChange={(e) => {
+              const newValue = String(e.currentTarget.checked);
+              setLocalValue(newValue);
+              onUpdate(setting.key, newValue);
+            }}
+          />
+        );
+      case "integer":
+        return (
+          <NumberInput
+            value={Number.parseInt(localValue, 10) || 0}
+            onChange={(value) => setLocalValue(String(value))}
+            min={setting.minValue ?? undefined}
+            max={setting.maxValue ?? undefined}
+            onBlur={handleSave}
+            w="100%"
+          />
+        );
+      default:
+        return isEditing ? (
+          <Stack gap="xs">
+            <TextInput
+              value={localValue}
+              onChange={(e) => setLocalValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") handleCancel();
+              }}
+              autoFocus
+            />
+            <Group gap="xs">
+              <Button size="xs" onClick={handleSave}>
+                Save
+              </Button>
+              <Button size="xs" variant="subtle" onClick={handleCancel}>
+                Cancel
+              </Button>
+            </Group>
+          </Stack>
+        ) : (
+          <Group gap="xs" wrap="nowrap" align="center">
+            <Text
+              style={{ cursor: "pointer", flex: 1, wordBreak: "break-word" }}
+              onClick={() => setIsEditing(true)}
+            >
+              {setting.isSensitive ? "••••••••" : localValue || "(empty)"}
+            </Text>
+            <Button
+              size="xs"
+              variant="subtle"
+              onClick={() => setIsEditing(true)}
+            >
+              Edit
+            </Button>
+          </Group>
+        );
+    }
+  };
+
+  return (
+    <Card withBorder padding="md">
+      <Stack gap="xs">
+        <Group justify="space-between" wrap="nowrap" align="flex-start">
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            <Text fw={500} style={{ wordBreak: "break-word" }}>
+              {setting.key}
+            </Text>
+            <Text size="xs" c="dimmed">
+              {setting.description}
+            </Text>
+          </Stack>
+          <Badge variant="light" size="sm">
+            {setting.valueType}
+          </Badge>
+        </Group>
+        <Box>{renderInput()}</Box>
+        <Group gap="xs" justify="flex-end">
+          <Tooltip label="View History">
+            <ActionIcon
+              variant="subtle"
+              onClick={() => onViewHistory(setting.key)}
+              aria-label="View history"
+            >
+              <IconHistory size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Reset to Default">
+            <ActionIcon
+              variant="subtle"
+              color="orange"
+              onClick={() => onReset(setting.key)}
+              disabled={setting.value === setting.defaultValue}
+              aria-label="Reset to default"
+            >
+              <IconRefresh size={16} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+      </Stack>
+    </Card>
+  );
+}
+
 // Template setting key constant
 const CUSTOM_METADATA_TEMPLATE_KEY = "display.custom_metadata_template";
 
@@ -312,6 +451,10 @@ function SettingsCategorySection({
   onViewHistory: (key: string) => void;
 }) {
   const [opened, { toggle }] = useDisclosure(true);
+  // Below xs the four-column settings table clips on the right. Render a
+  // stack of `SettingMobileCard` instead — only one DOM tree is mounted so
+  // tests still address a single matching row per setting.
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
 
   return (
     <Card withBorder>
@@ -328,18 +471,10 @@ function SettingsCategorySection({
         )}
       </Group>
       <Collapse in={opened}>
-        <Table mt="md">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Setting</Table.Th>
-              <Table.Th>Value</Table.Th>
-              <Table.Th>Type</Table.Th>
-              <Table.Th>Actions</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+        {isMobile ? (
+          <Stack gap="sm" mt="md">
             {settings.map((setting) => (
-              <SettingRow
+              <SettingMobileCard
                 key={setting.key}
                 setting={setting}
                 onUpdate={onUpdate}
@@ -347,8 +482,30 @@ function SettingsCategorySection({
                 onViewHistory={onViewHistory}
               />
             ))}
-          </Table.Tbody>
-        </Table>
+          </Stack>
+        ) : (
+          <Table mt="md">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Setting</Table.Th>
+                <Table.Th>Value</Table.Th>
+                <Table.Th>Type</Table.Th>
+                <Table.Th>Actions</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {settings.map((setting) => (
+                <SettingRow
+                  key={setting.key}
+                  setting={setting}
+                  onUpdate={onUpdate}
+                  onReset={onReset}
+                  onViewHistory={onViewHistory}
+                />
+              ))}
+            </Table.Tbody>
+          </Table>
+        )}
       </Collapse>
     </Card>
   );
@@ -535,90 +692,98 @@ export function ServerSettings() {
             <Loader />
           </Group>
         ) : history && history.length > 0 ? (
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Previous Value</Table.Th>
-                <Table.Th>New Value</Table.Th>
-                <Table.Th>Changed At</Table.Th>
-                <Table.Th>Reason</Table.Th>
-                <Table.Th>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {history.map((entry: SettingHistoryDto, index: number) => {
-                // Get the current setting value to check if restore is needed
-                const currentValue = settings?.find(
-                  (s) => s.key === historyKey,
-                )?.value;
-                const canRestore =
-                  entry.oldValue !== null && entry.oldValue !== currentValue;
-
-                return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: History entries have no unique ID
-                  <Table.Tr key={index}>
-                    <Table.Td>
-                      <Text
-                        size="sm"
-                        style={{
-                          fontFamily: "monospace",
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          maxWidth: 200,
-                        }}
-                        lineClamp={3}
-                      >
-                        {entry.oldValue ?? "(empty)"}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text
-                        size="sm"
-                        style={{
-                          fontFamily: "monospace",
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          maxWidth: 200,
-                        }}
-                        lineClamp={3}
-                      >
-                        {entry.newValue}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      {new Date(entry.changedAt).toLocaleString()}
-                    </Table.Td>
-                    <Table.Td>{entry.changeReason || "-"}</Table.Td>
-                    <Table.Td>
-                      {canRestore ? (
-                        <Tooltip label="Restore to this value">
-                          <ActionIcon
-                            variant="subtle"
-                            color="blue"
-                            onClick={() => {
-                              if (historyKey) {
-                                updateSettingMutation.mutate({
-                                  key: historyKey,
-                                  value: entry.oldValue as string,
-                                });
-                              }
-                            }}
-                            loading={updateSettingMutation.isPending}
-                          >
-                            <IconRestore size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      ) : (
-                        <Text size="xs" c="dimmed">
-                          -
-                        </Text>
-                      )}
-                    </Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
+          <ResponsiveTable<
+            SettingHistoryDto & { __index: number; __canRestore: boolean }
+          >
+            data={history.map((entry, index) => {
+              const currentValue = settings?.find(
+                (s) => s.key === historyKey,
+              )?.value;
+              return {
+                ...entry,
+                __index: index,
+                __canRestore:
+                  entry.oldValue !== null && entry.oldValue !== currentValue,
+              };
+            })}
+            columns={[
+              {
+                key: "old",
+                header: "Previous Value",
+                mobileFullWidth: true,
+                accessor: (entry) => (
+                  <Text
+                    size="sm"
+                    style={{
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      maxWidth: 200,
+                    }}
+                    lineClamp={3}
+                  >
+                    {entry.oldValue ?? "(empty)"}
+                  </Text>
+                ),
+              },
+              {
+                key: "new",
+                header: "New Value",
+                mobileFullWidth: true,
+                accessor: (entry) => (
+                  <Text
+                    size="sm"
+                    style={{
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      maxWidth: 200,
+                    }}
+                    lineClamp={3}
+                  >
+                    {entry.newValue}
+                  </Text>
+                ),
+              },
+              {
+                key: "changedAt",
+                header: "Changed At",
+                accessor: (entry) => new Date(entry.changedAt).toLocaleString(),
+              },
+              {
+                key: "reason",
+                header: "Reason",
+                accessor: (entry) => entry.changeReason || "-",
+              },
+            ]}
+            getRowKey={(entry) => `${entry.__index}`}
+            rowActions={(entry) =>
+              entry.__canRestore ? (
+                <Tooltip label="Restore to this value">
+                  <ActionIcon
+                    variant="subtle"
+                    color="blue"
+                    onClick={() => {
+                      if (historyKey) {
+                        updateSettingMutation.mutate({
+                          key: historyKey,
+                          value: entry.oldValue as string,
+                        });
+                      }
+                    }}
+                    loading={updateSettingMutation.isPending}
+                    aria-label="Restore to this value"
+                  >
+                    <IconRestore size={16} />
+                  </ActionIcon>
+                </Tooltip>
+              ) : (
+                <Text size="xs" c="dimmed">
+                  -
+                </Text>
+              )
+            }
+          />
         ) : (
           <Text c="dimmed" ta="center" py="xl">
             No history available for this setting.

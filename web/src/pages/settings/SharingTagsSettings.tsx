@@ -10,7 +10,6 @@ import {
   Loader,
   Modal,
   Stack,
-  Table,
   Text,
   Textarea,
   TextInput,
@@ -30,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { type SharingTagDto, sharingTagsApi } from "@/api/sharingTags";
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
 
 export function SharingTagsSettings() {
   const queryClient = useQueryClient();
@@ -166,6 +166,65 @@ export function SharingTagsSettings() {
     setDeleteModalOpened(true);
   };
 
+  const sharingTagColumns: ResponsiveTableColumn<SharingTagDto>[] = [
+    {
+      key: "tag",
+      header: "Tag",
+      mobilePrimary: true,
+      accessor: (tag) => (
+        <Group gap="sm" wrap="nowrap">
+          <IconShare size={20} />
+          <Text fw={500}>{tag.name}</Text>
+        </Group>
+      ),
+    },
+    {
+      key: "description",
+      header: "Description",
+      mobileFullWidth: true,
+      accessor: (tag) => (
+        <Text size="sm" c={tag.description ? undefined : "dimmed"}>
+          {tag.description || "No description"}
+        </Text>
+      ),
+    },
+    {
+      key: "series",
+      header: "Series",
+      accessor: (tag) => (
+        <Anchor
+          component={Link}
+          to={`/libraries/all/series?stf=any:${encodeURIComponent(tag.name)}`}
+          underline="never"
+        >
+          <Badge variant="light" color="blue" style={{ cursor: "pointer" }}>
+            {tag.seriesCount} series
+          </Badge>
+        </Anchor>
+      ),
+    },
+    {
+      key: "users",
+      header: "Users",
+      accessor: (tag) => (
+        <Anchor
+          component={Link}
+          to={`/settings/users?sharingTag=${encodeURIComponent(tag.name)}`}
+          underline="never"
+        >
+          <Badge variant="light" color="green" style={{ cursor: "pointer" }}>
+            {tag.userCount} users
+          </Badge>
+        </Anchor>
+      ),
+    },
+    {
+      key: "created",
+      header: "Created",
+      accessor: (tag) => new Date(tag.createdAt).toLocaleDateString(),
+    },
+  ];
+
   return (
     <Box py="xl" px="md">
       <Stack gap="xl">
@@ -194,93 +253,35 @@ export function SharingTagsSettings() {
             Failed to load sharing tags. Please try again.
           </Alert>
         ) : sharingTags && sharingTags.length > 0 ? (
-          <Card withBorder>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Tag</Table.Th>
-                  <Table.Th>Description</Table.Th>
-                  <Table.Th>Series</Table.Th>
-                  <Table.Th>Users</Table.Th>
-                  <Table.Th>Created</Table.Th>
-                  <Table.Th>Actions</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {sharingTags.map((tag) => (
-                  <Table.Tr key={tag.id}>
-                    <Table.Td>
-                      <Group gap="sm">
-                        <IconShare size={20} />
-                        <Text fw={500}>{tag.name}</Text>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text
-                        size="sm"
-                        c={tag.description ? undefined : "dimmed"}
-                      >
-                        {tag.description || "No description"}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Anchor
-                        component={Link}
-                        to={`/libraries/all/series?stf=any:${encodeURIComponent(tag.name)}`}
-                        underline="never"
-                      >
-                        <Badge
-                          variant="light"
-                          color="blue"
-                          style={{ cursor: "pointer" }}
-                        >
-                          {tag.seriesCount} series
-                        </Badge>
-                      </Anchor>
-                    </Table.Td>
-                    <Table.Td>
-                      <Anchor
-                        component={Link}
-                        to={`/settings/users?sharingTag=${encodeURIComponent(tag.name)}`}
-                        underline="never"
-                      >
-                        <Badge
-                          variant="light"
-                          color="green"
-                          style={{ cursor: "pointer" }}
-                        >
-                          {tag.userCount} users
-                        </Badge>
-                      </Anchor>
-                    </Table.Td>
-                    <Table.Td>
-                      {new Date(tag.createdAt).toLocaleDateString()}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <Tooltip label="Edit Tag">
-                          <ActionIcon
-                            variant="subtle"
-                            onClick={() => handleEditTag(tag)}
-                          >
-                            <IconEdit size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="Delete Tag">
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            onClick={() => handleDeleteTag(tag)}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+          <Card withBorder p={{ base: 0, xs: "md" }}>
+            <ResponsiveTable
+              data={sharingTags}
+              columns={sharingTagColumns}
+              getRowKey={(tag) => tag.id}
+              rowActions={(tag) => (
+                <>
+                  <Tooltip label="Edit Tag">
+                    <ActionIcon
+                      variant="subtle"
+                      onClick={() => handleEditTag(tag)}
+                      aria-label={`Edit ${tag.name}`}
+                    >
+                      <IconEdit size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Delete Tag">
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      onClick={() => handleDeleteTag(tag)}
+                      aria-label={`Delete ${tag.name}`}
+                    >
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </>
+              )}
+            />
           </Card>
         ) : (
           <Alert icon={<IconShare size={16} />} color="gray" variant="light">

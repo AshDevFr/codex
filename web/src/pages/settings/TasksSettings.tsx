@@ -12,7 +12,6 @@ import {
   Select,
   SimpleGrid,
   Stack,
-  Table,
   Text,
   Title,
   Tooltip,
@@ -34,6 +33,7 @@ import {
   fetchTasksByStatus,
   subscribeToTaskProgress,
 } from "@/api/tasks";
+import { ResponsiveTable } from "@/components/ui";
 import type { TaskProgressEvent, TaskResponse } from "@/types";
 
 // Stat card component
@@ -65,8 +65,19 @@ function StatCard({
   );
 }
 
-// Task row component
-function TaskRow({
+function getTaskStatusColor(status: string): string {
+  return (
+    {
+      pending: "yellow",
+      processing: "blue",
+      completed: "green",
+      failed: "red",
+      cancelled: "gray",
+    }[status] || "gray"
+  );
+}
+
+function TaskActions({
   task,
   onCancel,
   onRetry,
@@ -77,75 +88,45 @@ function TaskRow({
   onRetry: () => void;
   onUnlock: () => void;
 }) {
-  const statusColor =
-    {
-      pending: "yellow",
-      processing: "blue",
-      completed: "green",
-      failed: "red",
-      cancelled: "gray",
-    }[task.status] || "gray";
-
   return (
-    <Table.Tr>
-      <Table.Td>
-        <Text size="sm" style={{ fontFamily: "monospace" }}>
-          {task.id.slice(0, 8)}...
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Badge variant="light">{task.taskType}</Badge>
-      </Table.Td>
-      <Table.Td>
-        <Badge color={statusColor}>{task.status}</Badge>
-      </Table.Td>
-      <Table.Td>
-        <Text size="sm">
-          {task.attempts}/{task.maxAttempts}
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Text size="sm">{new Date(task.createdAt).toLocaleString()}</Text>
-      </Table.Td>
-      <Table.Td>
-        {task.lastError ? (
-          <Tooltip label={task.lastError}>
-            <Text size="sm" c="red" lineClamp={1} style={{ maxWidth: 200 }}>
-              {task.lastError}
-            </Text>
-          </Tooltip>
-        ) : (
-          <Text size="sm" c="dimmed">
-            -
-          </Text>
-        )}
-      </Table.Td>
-      <Table.Td>
-        <Group gap="xs">
-          {task.status === "pending" && (
-            <Tooltip label="Cancel Task">
-              <ActionIcon variant="subtle" color="red" onClick={onCancel}>
-                <IconX size={16} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-          {task.status === "failed" && (
-            <Tooltip label="Retry Task">
-              <ActionIcon variant="subtle" color="blue" onClick={onRetry}>
-                <IconRefresh size={16} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-          {task.lockedBy && task.status === "processing" && (
-            <Tooltip label="Unlock Task (Force)">
-              <ActionIcon variant="subtle" color="orange" onClick={onUnlock}>
-                <IconPlayerPlay size={16} />
-              </ActionIcon>
-            </Tooltip>
-          )}
-        </Group>
-      </Table.Td>
-    </Table.Tr>
+    <>
+      {task.status === "pending" && (
+        <Tooltip label="Cancel Task">
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            onClick={onCancel}
+            aria-label="Cancel task"
+          >
+            <IconX size={16} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {task.status === "failed" && (
+        <Tooltip label="Retry Task">
+          <ActionIcon
+            variant="subtle"
+            color="blue"
+            onClick={onRetry}
+            aria-label="Retry task"
+          >
+            <IconRefresh size={16} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {task.lockedBy && task.status === "processing" && (
+        <Tooltip label="Unlock Task (Force)">
+          <ActionIcon
+            variant="subtle"
+            color="orange"
+            onClick={onUnlock}
+            aria-label="Unlock task"
+          >
+            <IconPlayerPlay size={16} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+    </>
   );
 }
 
@@ -509,30 +490,86 @@ export function TasksSettings() {
                 <Loader />
               </Group>
             ) : tasks && tasks.length > 0 ? (
-              <Table>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>ID</Table.Th>
-                    <Table.Th>Type</Table.Th>
-                    <Table.Th>Status</Table.Th>
-                    <Table.Th>Attempts</Table.Th>
-                    <Table.Th>Created</Table.Th>
-                    <Table.Th>Error</Table.Th>
-                    <Table.Th>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {tasks.map((task: TaskResponse) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      onCancel={() => cancelTaskMutation.mutate(task.id)}
-                      onRetry={() => retryTaskMutation.mutate(task.id)}
-                      onUnlock={() => unlockTaskMutation.mutate(task.id)}
-                    />
-                  ))}
-                </Table.Tbody>
-              </Table>
+              <ResponsiveTable<TaskResponse>
+                data={tasks}
+                columns={[
+                  {
+                    key: "id",
+                    header: "ID",
+                    accessor: (task) => (
+                      <Text size="sm" style={{ fontFamily: "monospace" }}>
+                        {task.id.slice(0, 8)}...
+                      </Text>
+                    ),
+                  },
+                  {
+                    key: "type",
+                    header: "Type",
+                    mobilePrimary: true,
+                    accessor: (task) => (
+                      <Badge variant="light">{task.taskType}</Badge>
+                    ),
+                  },
+                  {
+                    key: "status",
+                    header: "Status",
+                    accessor: (task) => (
+                      <Badge color={getTaskStatusColor(task.status)}>
+                        {task.status}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: "attempts",
+                    header: "Attempts",
+                    accessor: (task) => (
+                      <Text size="sm">
+                        {task.attempts}/{task.maxAttempts}
+                      </Text>
+                    ),
+                  },
+                  {
+                    key: "created",
+                    header: "Created",
+                    accessor: (task) => (
+                      <Text size="sm">
+                        {new Date(task.createdAt).toLocaleString()}
+                      </Text>
+                    ),
+                  },
+                  {
+                    key: "error",
+                    header: "Error",
+                    mobileFullWidth: true,
+                    accessor: (task) =>
+                      task.lastError ? (
+                        <Tooltip label={task.lastError}>
+                          <Text
+                            size="sm"
+                            c="red"
+                            lineClamp={1}
+                            style={{ maxWidth: 200 }}
+                          >
+                            {task.lastError}
+                          </Text>
+                        </Tooltip>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          -
+                        </Text>
+                      ),
+                  },
+                ]}
+                getRowKey={(task) => task.id}
+                rowActions={(task) => (
+                  <TaskActions
+                    task={task}
+                    onCancel={() => cancelTaskMutation.mutate(task.id)}
+                    onRetry={() => retryTaskMutation.mutate(task.id)}
+                    onUnlock={() => unlockTaskMutation.mutate(task.id)}
+                  />
+                )}
+              />
             ) : (
               <Text c="dimmed" ta="center" py="xl">
                 No tasks found.
@@ -546,34 +583,61 @@ export function TasksSettings() {
           <Card withBorder>
             <Stack gap="md">
               <Title order={3}>By Task Type</Title>
-              <Table>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Type</Table.Th>
-                    <Table.Th>Pending</Table.Th>
-                    <Table.Th>Processing</Table.Th>
-                    <Table.Th>Completed</Table.Th>
-                    <Table.Th>Failed</Table.Th>
-                    <Table.Th>Total</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {Object.entries(stats.byType)
-                    .sort(([typeA], [typeB]) => typeA.localeCompare(typeB))
-                    .map(([type, typeStats]) => (
-                      <Table.Tr key={type}>
-                        <Table.Td>
-                          <Badge variant="light">{type}</Badge>
-                        </Table.Td>
-                        <Table.Td>{typeStats.pending}</Table.Td>
-                        <Table.Td>{typeStats.processing}</Table.Td>
-                        <Table.Td>{typeStats.completed}</Table.Td>
-                        <Table.Td>{typeStats.failed}</Table.Td>
-                        <Table.Td>{typeStats.total}</Table.Td>
-                      </Table.Tr>
-                    ))}
-                </Table.Tbody>
-              </Table>
+              <ResponsiveTable<{
+                type: string;
+                pending: number;
+                processing: number;
+                completed: number;
+                failed: number;
+                total: number;
+              }>
+                data={Object.entries(stats.byType)
+                  .sort(([typeA], [typeB]) => typeA.localeCompare(typeB))
+                  .map(([type, typeStats]) => ({
+                    type,
+                    pending: typeStats.pending,
+                    processing: typeStats.processing,
+                    completed: typeStats.completed,
+                    failed: typeStats.failed,
+                    total: typeStats.total,
+                  }))}
+                columns={[
+                  {
+                    key: "type",
+                    header: "Type",
+                    mobilePrimary: true,
+                    accessor: (row) => (
+                      <Badge variant="light">{row.type}</Badge>
+                    ),
+                  },
+                  {
+                    key: "pending",
+                    header: "Pending",
+                    accessor: (row) => row.pending,
+                  },
+                  {
+                    key: "processing",
+                    header: "Processing",
+                    accessor: (row) => row.processing,
+                  },
+                  {
+                    key: "completed",
+                    header: "Completed",
+                    accessor: (row) => row.completed,
+                  },
+                  {
+                    key: "failed",
+                    header: "Failed",
+                    accessor: (row) => row.failed,
+                  },
+                  {
+                    key: "total",
+                    header: "Total",
+                    accessor: (row) => row.total,
+                  },
+                ]}
+                getRowKey={(row) => row.type}
+              />
             </Stack>
           </Card>
         )}
