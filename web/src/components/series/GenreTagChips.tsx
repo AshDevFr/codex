@@ -1,4 +1,4 @@
-import { Badge, Group, Text } from "@mantine/core";
+import { Badge, type BadgeVariant, Group, Text } from "@mantine/core";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Genre } from "@/api/genres";
@@ -12,6 +12,7 @@ interface BadgeItem {
 interface BadgeGroup {
   items: BadgeItem[];
   color: string;
+  variant?: BadgeVariant;
   getUrl?: (item: BadgeItem) => string;
 }
 
@@ -60,6 +61,9 @@ export function GenreTagChips({
           {
             items: tags,
             color: "gray",
+            // Outline variant keeps tags visible in dark mode (the "light + gray"
+            // pairing renders almost invisible against the dim Mantine surface).
+            variant: "outline" as BadgeVariant,
             getUrl: clickable ? getTagUrl : undefined,
           },
         ]
@@ -100,7 +104,7 @@ export function GenreTagChips({
               key={`${group.color}-${item.id}`}
               component={Link}
               to={group.getUrl(item)}
-              variant="light"
+              variant={group.variant ?? "light"}
               color={group.color}
               size="sm"
               style={{ cursor: "pointer", textDecoration: "none" }}
@@ -110,7 +114,7 @@ export function GenreTagChips({
           ) : (
             <Badge
               key={`${group.color}-${item.id}`}
-              variant="light"
+              variant={group.variant ?? "light"}
               color={group.color}
               size="sm"
             >

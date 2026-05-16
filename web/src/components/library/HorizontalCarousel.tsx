@@ -55,7 +55,7 @@ export function HorizontalCarousel({
             </Text>
           )}
         </Box>
-        <Group gap="xs">
+        <Group gap="xs" visibleFrom="xs">
           <ActionIcon
             variant="subtle"
             size="lg"

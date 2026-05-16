@@ -61,6 +61,27 @@ describe("GenreTagChips", () => {
     expect(screen.getByText("Completed")).toBeInTheDocument();
   });
 
+  it("renders tags with outline variant so they stay visible in dark mode", () => {
+    renderWithProviders(<GenreTagChips tags={mockTags} clickable={false} />);
+
+    // Mantine Badge sets `data-variant` on the root element. Tags must use
+    // `outline` (not the default `light`) so they don't disappear against the
+    // dark-mode surface — see Phase 9 / R9-2.
+    const favoriteBadge = screen
+      .getByText("Favorite")
+      .closest("[data-variant]");
+    expect(favoriteBadge).toHaveAttribute("data-variant", "outline");
+  });
+
+  it("renders genres with the default light variant", () => {
+    renderWithProviders(
+      <GenreTagChips genres={mockGenres} clickable={false} />,
+    );
+
+    const actionBadge = screen.getByText("Action").closest("[data-variant]");
+    expect(actionBadge).toHaveAttribute("data-variant", "light");
+  });
+
   it("should render both genres and tags together", () => {
     renderWithProviders(<GenreTagChips genres={mockGenres} tags={mockTags} />);
 

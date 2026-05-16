@@ -88,6 +88,7 @@ export function Header({
           <ActionIcon
             variant="subtle"
             onClick={toggleColorScheme}
+            aria-label="Toggle color scheme"
             title="Toggle color scheme"
           >
             {computedColorScheme === "dark" ? (
