@@ -37797,6 +37797,33 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Bulk-toggle `series_tracking.tracked` across many series.\n\nOn `tracked: true`, runs `seed_tracking_for_series` per series before\nflipping the flag (same order as the per-series PATCH and the legacy\nsync bulk endpoint). On `tracked: false`, only flips the flag —\naliases and other config are preserved so re-tracking is non-\ndestructive. Per-series `SeriesUpdated` events are emitted from the\nhandler so the UI updates live as the task processes each series.",
+            "required": [
+              "seriesIds",
+              "tracked",
+              "type"
+            ],
+            "properties": {
+              "seriesIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "tracked": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "bulk_track_for_releases"
+                ]
+              }
+            }
           }
         ],
         "description": "Task types supported by the distributed task queue"

@@ -17386,6 +17386,11 @@ export interface components {
             sourceId: string;
             /** @enum {string} */
             type: "poll_release_source";
+        } | {
+            seriesIds: string[];
+            tracked: boolean;
+            /** @enum {string} */
+            type: "bulk_track_for_releases";
         };
         /** @description Metrics for a specific task type */
         TaskTypeMetricsDto: {

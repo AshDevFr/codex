@@ -14,12 +14,14 @@ use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions
 use crate::db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalLinkRepository, ExternalRatingRepository,
     GenreRepository, ReadProgressRepository, SeriesCoversRepository, SeriesExternalIdRepository,
-    SeriesMetadataRepository, SeriesRepository, SeriesTrackingRepository, SharingTagRepository,
-    TagRepository, TaskRepository, TrackingUpdate,
+    SeriesMetadataRepository, SeriesRepository, SharingTagRepository, TagRepository,
+    TaskRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::require_permission;
-use crate::services::release::seed::seed_tracking_for_series;
+use crate::services::release::tracking_toggle::{
+    ToggleOutcome, ToggleResult, track_one_series, untrack_one_series,
+};
 use crate::tasks::types::TaskType;
 use axum::{Json, extract::State};
 use chrono::Utc;
@@ -475,13 +477,14 @@ pub async fn bulk_track_series_for_releases(
     };
 
     for series_id in request.series_ids {
-        let outcome = track_one_series(&state, series_id, &auth).await;
-        match outcome.outcome.as_str() {
-            "tracked" => response.changed += 1,
-            "skipped" => response.already_in_state += 1,
-            _ => response.errored += 1,
-        }
-        response.results.push(outcome);
+        let result = track_one_series(
+            &state.db,
+            Some(&state.event_broadcaster),
+            Some(auth.user_id),
+            series_id,
+        )
+        .await;
+        accumulate(&mut response, result);
     }
 
     Ok(Json(response))
@@ -523,166 +526,32 @@ pub async fn bulk_untrack_series_for_releases(
     };
 
     for series_id in request.series_ids {
-        let outcome = untrack_one_series(&state, series_id, &auth).await;
-        match outcome.outcome.as_str() {
-            "untracked" => response.changed += 1,
-            "skipped" => response.already_in_state += 1,
-            _ => response.errored += 1,
-        }
-        response.results.push(outcome);
+        let result = untrack_one_series(
+            &state.db,
+            Some(&state.event_broadcaster),
+            Some(auth.user_id),
+            series_id,
+        )
+        .await;
+        accumulate(&mut response, result);
     }
 
     Ok(Json(response))
 }
 
-/// Track a single series and seed defaults. Helper for `bulk_track_series_for_releases`.
-///
-/// Returns a structured per-series outcome rather than propagating errors so
-/// one bad series doesn't fail the whole bulk request.
-async fn track_one_series(
-    state: &AppState,
-    series_id: Uuid,
-    auth: &AuthContext,
-) -> BulkTrackForReleasesItem {
-    let series = match SeriesRepository::get_by_id(&state.db, series_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => {
-            return BulkTrackForReleasesItem {
-                series_id,
-                outcome: "skipped".to_string(),
-                detail: Some("series not found".to_string()),
-            };
-        }
-        Err(e) => {
-            return BulkTrackForReleasesItem {
-                series_id,
-                outcome: "errored".to_string(),
-                detail: Some(format!("lookup failed: {}", e)),
-            };
-        }
-    };
-
-    // Skip if already tracked — idempotent no-op.
-    let already_tracked = SeriesTrackingRepository::get(&state.db, series_id)
-        .await
-        .ok()
-        .flatten()
-        .map(|r| r.tracked)
-        .unwrap_or(false);
-    if already_tracked {
-        return BulkTrackForReleasesItem {
-            series_id,
-            outcome: "skipped".to_string(),
-            detail: Some("already tracked".to_string()),
-        };
+/// Fold a single-series toggle outcome into the bulk response: bumps the
+/// matching counter and appends the per-series row in input order.
+fn accumulate(response: &mut BulkTrackForReleasesResponse, result: ToggleResult) {
+    match result.outcome {
+        ToggleOutcome::Tracked | ToggleOutcome::Untracked => response.changed += 1,
+        ToggleOutcome::Skipped => response.already_in_state += 1,
+        ToggleOutcome::Errored => response.errored += 1,
     }
-
-    // Seed first so the auto-derived fields are populated, then flip the
-    // tracked flag in a second pass. Same order the per-series PATCH uses.
-    if let Err(e) = seed_tracking_for_series(&state.db, series_id).await {
-        return BulkTrackForReleasesItem {
-            series_id,
-            outcome: "errored".to_string(),
-            detail: Some(format!("seed failed: {}", e)),
-        };
-    }
-    let update = TrackingUpdate {
-        tracked: Some(true),
-        ..Default::default()
-    };
-    if let Err(e) = SeriesTrackingRepository::upsert(&state.db, series_id, update).await {
-        return BulkTrackForReleasesItem {
-            series_id,
-            outcome: "errored".to_string(),
-            detail: Some(format!("upsert failed: {}", e)),
-        };
-    }
-
-    let event = EntityChangeEvent {
-        event: EntityEvent::SeriesUpdated {
-            series_id,
-            library_id: series.library_id,
-            fields: Some(vec!["tracking".to_string()]),
-        },
-        timestamp: Utc::now(),
-        user_id: Some(auth.user_id),
-    };
-    let _ = state.event_broadcaster.emit(event);
-
-    BulkTrackForReleasesItem {
-        series_id,
-        outcome: "tracked".to_string(),
-        detail: None,
-    }
-}
-
-/// Untrack a single series. Helper for `bulk_untrack_series_for_releases`.
-async fn untrack_one_series(
-    state: &AppState,
-    series_id: Uuid,
-    auth: &AuthContext,
-) -> BulkTrackForReleasesItem {
-    let series = match SeriesRepository::get_by_id(&state.db, series_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => {
-            return BulkTrackForReleasesItem {
-                series_id,
-                outcome: "skipped".to_string(),
-                detail: Some("series not found".to_string()),
-            };
-        }
-        Err(e) => {
-            return BulkTrackForReleasesItem {
-                series_id,
-                outcome: "errored".to_string(),
-                detail: Some(format!("lookup failed: {}", e)),
-            };
-        }
-    };
-
-    // No tracking row at all -> nothing to do, treat as already in target state.
-    let already_untracked = SeriesTrackingRepository::get(&state.db, series_id)
-        .await
-        .ok()
-        .flatten()
-        .map(|r| !r.tracked)
-        .unwrap_or(true);
-    if already_untracked {
-        return BulkTrackForReleasesItem {
-            series_id,
-            outcome: "skipped".to_string(),
-            detail: Some("already untracked".to_string()),
-        };
-    }
-
-    let update = TrackingUpdate {
-        tracked: Some(false),
-        ..Default::default()
-    };
-    if let Err(e) = SeriesTrackingRepository::upsert(&state.db, series_id, update).await {
-        return BulkTrackForReleasesItem {
-            series_id,
-            outcome: "errored".to_string(),
-            detail: Some(format!("upsert failed: {}", e)),
-        };
-    }
-
-    let event = EntityChangeEvent {
-        event: EntityEvent::SeriesUpdated {
-            series_id,
-            library_id: series.library_id,
-            fields: Some(vec!["tracking".to_string()]),
-        },
-        timestamp: Utc::now(),
-        user_id: Some(auth.user_id),
-    };
-    let _ = state.event_broadcaster.emit(event);
-
-    BulkTrackForReleasesItem {
-        series_id,
-        outcome: "untracked".to_string(),
-        detail: None,
-    }
+    response.results.push(BulkTrackForReleasesItem {
+        series_id: result.series_id,
+        outcome: result.outcome.as_str().to_string(),
+        detail: result.detail,
+    });
 }
 
 // ============================================================================

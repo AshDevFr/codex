@@ -234,6 +234,20 @@ pub enum TaskType {
         #[serde(rename = "sourceId")]
         source_id: Uuid,
     },
+
+    /// Bulk-toggle `series_tracking.tracked` across many series.
+    ///
+    /// On `tracked: true`, runs `seed_tracking_for_series` per series before
+    /// flipping the flag (same order as the per-series PATCH and the legacy
+    /// sync bulk endpoint). On `tracked: false`, only flips the flag —
+    /// aliases and other config are preserved so re-tracking is non-
+    /// destructive. Per-series `SeriesUpdated` events are emitted from the
+    /// handler so the UI updates live as the task processes each series.
+    BulkTrackForReleases {
+        #[serde(rename = "seriesIds")]
+        series_ids: Vec<Uuid>,
+        tracked: bool,
+    },
 }
 
 fn default_mode() -> String {
@@ -281,6 +295,9 @@ impl TaskType {
             TaskType::UserPluginRecommendations { .. } => 180,
             // Release tracking maintenance
             TaskType::BackfillTrackingFromMetadata { .. } => 150,
+            // User-initiated bulk track/untrack: above the maintenance
+            // backfill but below scheduled release polling.
+            TaskType::BulkTrackForReleases { .. } => 155,
             // Release polling: scheduled background discovery
             TaskType::PollReleaseSource { .. } => 170,
             // Cleanup
@@ -326,6 +343,7 @@ impl TaskType {
             }
             TaskType::BackfillTrackingFromMetadata { .. } => "backfill_tracking_from_metadata",
             TaskType::PollReleaseSource { .. } => "poll_release_source",
+            TaskType::BulkTrackForReleases { .. } => "bulk_track_for_releases",
         }
     }
 
@@ -447,6 +465,12 @@ impl TaskType {
             }
             TaskType::PollReleaseSource { source_id } => {
                 serde_json::json!({ "source_id": source_id })
+            }
+            TaskType::BulkTrackForReleases {
+                series_ids,
+                tracked,
+            } => {
+                serde_json::json!({ "series_ids": series_ids, "tracked": tracked })
             }
             _ => serde_json::json!({}),
         }
@@ -1155,6 +1179,57 @@ mod tests {
         assert_eq!(book_id, None);
         let params = params.expect("expected source_id params");
         assert_eq!(params["source_id"], serde_json::json!(source_id));
+    }
+
+    #[test]
+    fn test_bulk_track_for_releases_extraction() {
+        let ids = vec![Uuid::new_v4(), Uuid::new_v4()];
+        let task = TaskType::BulkTrackForReleases {
+            series_ids: ids.clone(),
+            tracked: true,
+        };
+
+        assert_eq!(task.type_string(), "bulk_track_for_releases");
+        assert_eq!(task.library_id(), None);
+        assert_eq!(task.series_id(), None);
+        assert_eq!(task.book_id(), None);
+        assert_eq!(task.default_priority(), 155);
+
+        let (type_str, lib_id, series_id, book_id, params) = task.extract_fields();
+        assert_eq!(type_str, "bulk_track_for_releases");
+        assert_eq!(lib_id, None);
+        assert_eq!(series_id, None);
+        assert_eq!(book_id, None);
+        let params = params.expect("expected series_ids + tracked params");
+        assert_eq!(params["tracked"], true);
+        assert_eq!(params["series_ids"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_bulk_track_for_releases_serialization_roundtrip() {
+        let ids = vec![Uuid::new_v4()];
+        let task = TaskType::BulkTrackForReleases {
+            series_ids: ids.clone(),
+            tracked: false,
+        };
+
+        let json = serde_json::to_string(&task).unwrap();
+        assert!(json.contains("bulk_track_for_releases"));
+        // camelCase rename on the field, snake_case on the discriminator.
+        assert!(json.contains("seriesIds"));
+        assert!(json.contains("\"tracked\":false"));
+
+        let deserialized: TaskType = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            TaskType::BulkTrackForReleases {
+                series_ids,
+                tracked,
+            } => {
+                assert_eq!(series_ids, ids);
+                assert!(!tracked);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]

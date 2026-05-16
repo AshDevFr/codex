@@ -27,15 +27,15 @@ use crate::services::{SettingsService, TaskMetricsService, ThumbnailService};
 use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, BackfillTrackingFromMetadataHandler,
-    CleanupBookFilesHandler, CleanupOrphanedFilesHandler, CleanupPdfCacheHandler,
-    CleanupPluginDataHandler, CleanupSeriesExportsHandler, CleanupSeriesFilesHandler,
-    ExportSeriesHandler, FindDuplicatesHandler, GenerateSeriesThumbnailHandler,
-    GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler, GenerateThumbnailsHandler,
-    PluginAutoMatchHandler, PollReleaseSourceHandler, PurgeDeletedHandler,
-    RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler, RenumberSeriesHandler,
-    ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
-    UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
-    UserPluginSyncHandler,
+    BulkTrackForReleasesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
+    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesExportsHandler,
+    CleanupSeriesFilesHandler, ExportSeriesHandler, FindDuplicatesHandler,
+    GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
+    GenerateThumbnailsHandler, PluginAutoMatchHandler, PollReleaseSourceHandler,
+    PurgeDeletedHandler, RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler,
+    RenumberSeriesHandler, ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler,
+    ScanLibraryHandler, TaskHandler, UserPluginRecommendationDismissHandler,
+    UserPluginRecommendationsHandler, UserPluginSyncHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -110,6 +110,11 @@ impl TaskWorker {
         handlers.insert(
             "backfill_tracking_from_metadata".to_string(),
             Arc::new(BackfillTrackingFromMetadataHandler::new()),
+        );
+        // User-initiated bulk track / untrack for releases (async fan-in).
+        handlers.insert(
+            "bulk_track_for_releases".to_string(),
+            Arc::new(BulkTrackForReleasesHandler::new()),
         );
 
         // Generate worker ID from hostname or random UUID

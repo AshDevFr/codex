@@ -15,6 +15,9 @@
 //! - [`seed`] — derives tracking defaults (aliases, `latest_known_*`,
 //!   per-axis tracking flags) from existing series data so a user toggling
 //!   tracking on doesn't have to fill in a setup form.
+//! - [`tracking_toggle`] — single-series `tracked` flip helpers shared by
+//!   the per-series PATCH handler, the bulk-track-for-releases endpoint,
+//!   and the `BulkTrackForReleases` async task handler.
 //!
 //! Plugins emit candidates over the reverse-RPC channel; the matcher applies
 //! the threshold and hands the survivors to the ledger repository, which is
@@ -27,4 +30,5 @@ pub mod languages;
 pub mod matcher;
 pub mod schedule;
 pub mod seed;
+pub mod tracking_toggle;
 pub mod upstream_gap;
