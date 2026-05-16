@@ -45,6 +45,21 @@ export const theme = createTheme({
     xl: "2rem",
   },
 
+  // Breakpoints (em, matching Mantine's default scheme).
+  //
+  // We override `xs` to a phone-only line at ~482px (30.125em). This is below the
+  // common iPhone Pro Max portrait width (~430px) but above smaller phones, giving
+  // us a clean "phone vs tablet" cutoff. `sm` (768px) is kept at Mantine's default
+  // so existing `visibleFrom="sm"` / `hiddenFrom="sm"` sites are unaffected; new
+  // phone-tight behavior should use `xs` instead.
+  breakpoints: {
+    xs: "30.125em",
+    sm: "48em",
+    md: "62em",
+    lg: "75em",
+    xl: "88em",
+  },
+
   // Custom properties for layout
   other: {
     sidebarWidth: 240,

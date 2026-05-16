@@ -45,7 +45,8 @@ export function Header({
             opened={mobileOpened}
             onClick={toggleMobile}
             hiddenFrom="sm"
-            size="sm"
+            size="md"
+            aria-label={mobileOpened ? "Close navigation" : "Open navigation"}
           />
           <ActionIcon
             variant="subtle"

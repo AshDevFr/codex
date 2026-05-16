@@ -60,6 +60,54 @@ button:focus-visible {
   outline: none;
 }
 
+/* ============================================
+   Mobile responsive helpers
+   ============================================ */
+
+/* Prevent layout-breaking horizontal overflow from long unbreakable strings
+   (e.g., file names without spaces) in titles, breadcrumbs, and inline links.
+   Scoped to known long-string surfaces so we don't change URL/code rendering. */
+.mantine-Title-root,
+.mantine-Breadcrumbs-root,
+.mantine-Anchor-root {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Mantine sets `white-space: nowrap` on Breadcrumbs items, which prevents
+   long-but-unbreakable titles from wrapping and causes horizontal overflow on
+   phones. Allow wrapping inside items so the wrap-row layout works as intended. */
+.mantine-Breadcrumbs-breadcrumb {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Phone-only (≤480px): bump touch targets opted in via .touch-target class. */
+@media (max-width: 30.0625em) {
+  .touch-target,
+  .touch-target .mantine-ActionIcon-root {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Scale down Mantine Title sizes so page headings don't wrap to many lines
+     at 390px. Mantine's Title renders an h1–h6 tag and sets font size via the
+     `--title-fz` CSS variable; overriding the variable keeps all of Mantine's
+     other typography concerns (weight, line-height defaults) intact. */
+  .mantine-Title-root[data-order="1"] {
+    --title-fz: 1.5rem;
+    --title-lh: 1.3;
+  }
+  .mantine-Title-root[data-order="2"] {
+    --title-fz: 1.25rem;
+    --title-lh: 1.3;
+  }
+  .mantine-Title-root[data-order="3"] {
+    --title-fz: 1.125rem;
+    --title-lh: 1.3;
+  }
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

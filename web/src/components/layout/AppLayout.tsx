@@ -12,7 +12,8 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
+  const [mobileOpened, { toggle: toggleMobile, close: closeMobile }] =
+    useDisclosure();
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
   const searchInputRef = useRef<SearchInputHandle>(null);
 
@@ -35,7 +36,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         toggleDesktop={toggleDesktop}
         searchInputRef={searchInputRef}
       />
-      <Sidebar />
+      <Sidebar onNavigate={closeMobile} />
 
       <AppShell.Main>
         <PluginStatusBanner />

@@ -57,7 +57,12 @@ import { useLibraryPreferencesStore } from "@/store/libraryPreferencesStore";
 import type { Library } from "@/types";
 import { PERMISSIONS } from "@/types/permissions";
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Called when the user taps a navigation link, so the mobile drawer can auto-close. */
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const appName = useAppName();
   const { data: appInfo } = useAppInfo();
   const navigate = useNavigate();
@@ -322,6 +327,7 @@ export function Sidebar() {
   const handleLogout = () => {
     clearAuth();
     navigate("/login");
+    onNavigate?.();
   };
 
   return (
@@ -335,6 +341,7 @@ export function Sidebar() {
               label="Home"
               leftSection={<IconHome size={20} />}
               active={currentPath === "/"}
+              onClick={onNavigate}
             />
             {hasRecommendationPlugin && (
               <NavLink
@@ -343,6 +350,7 @@ export function Sidebar() {
                 label="Recommendations"
                 leftSection={<IconSparkles size={20} />}
                 active={currentPath === "/recommendations"}
+                onClick={onNavigate}
               />
             )}
             {hasReleasePlugin && (
@@ -353,6 +361,7 @@ export function Sidebar() {
                 leftSection={<IconRss size={20} />}
                 active={currentPath.startsWith("/releases")}
                 rightSection={<ReleasesNavBadge />}
+                onClick={onNavigate}
               />
             )}
             <NavLink
@@ -361,6 +370,7 @@ export function Sidebar() {
               label="Libraries"
               leftSection={<IconBooks size={20} />}
               active={currentPath.startsWith("/libraries/all")}
+              onClick={onNavigate}
               rightSection={
                 canEditLibrary && (
                   <Group gap={4}>
@@ -498,6 +508,7 @@ export function Sidebar() {
                   to={`/libraries/${library.id}/${getLastTab(library.id) || "recommended"}`}
                   label={library.name}
                   active={currentPath.startsWith(`/libraries/${library.id}/`)}
+                  onClick={onNavigate}
                   styles={{
                     root: { paddingLeft: 48 },
                     label: { textTransform: "capitalize" },
@@ -560,6 +571,7 @@ export function Sidebar() {
                     label="Server"
                     leftSection={<IconServer size={16} />}
                     active={currentPath.startsWith("/settings/server")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -567,6 +579,7 @@ export function Sidebar() {
                     label="Tasks"
                     leftSection={<IconClipboardList size={16} />}
                     active={currentPath.startsWith("/settings/tasks")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -574,6 +587,7 @@ export function Sidebar() {
                     label="Metrics"
                     leftSection={<IconChartBar size={16} />}
                     active={currentPath.startsWith("/settings/metrics")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -581,6 +595,7 @@ export function Sidebar() {
                     label="Plugins"
                     leftSection={<IconPlugConnected size={16} />}
                     active={currentPath.startsWith("/settings/plugins")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -590,6 +605,7 @@ export function Sidebar() {
                     active={currentPath.startsWith(
                       "/settings/release-tracking",
                     )}
+                    onClick={onNavigate}
                   />
 
                   {/* Access Section */}
@@ -605,6 +621,7 @@ export function Sidebar() {
                     label="Users"
                     leftSection={<IconUsers size={16} />}
                     active={currentPath.startsWith("/settings/users")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -612,6 +629,7 @@ export function Sidebar() {
                     label="Sharing Tags"
                     leftSection={<IconShare size={16} />}
                     active={currentPath.startsWith("/settings/sharing-tags")}
+                    onClick={onNavigate}
                   />
 
                   {/* Library Health Section */}
@@ -627,6 +645,7 @@ export function Sidebar() {
                     label="Duplicates"
                     leftSection={<IconCopy size={16} />}
                     active={currentPath.startsWith("/settings/duplicates")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -634,6 +653,7 @@ export function Sidebar() {
                     label="Book Errors"
                     leftSection={<IconAlertTriangle size={16} />}
                     active={currentPath.startsWith("/settings/book-errors")}
+                    onClick={onNavigate}
                   />
 
                   {/* Storage Section */}
@@ -649,6 +669,7 @@ export function Sidebar() {
                     label="Thumbnails"
                     leftSection={<IconBrush size={16} />}
                     active={currentPath.startsWith("/settings/cleanup")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -656,6 +677,7 @@ export function Sidebar() {
                     label="Page Cache"
                     leftSection={<IconFileTypePdf size={16} />}
                     active={currentPath.startsWith("/settings/pdf-cache")}
+                    onClick={onNavigate}
                   />
                   <NavLink
                     component={Link}
@@ -663,6 +685,7 @@ export function Sidebar() {
                     label="Plugin Storage"
                     leftSection={<IconDatabase size={16} />}
                     active={currentPath.startsWith("/settings/plugin-storage")}
+                    onClick={onNavigate}
                   />
 
                   {/* Data Export Section */}
@@ -678,6 +701,7 @@ export function Sidebar() {
                     label="Data Exports"
                     leftSection={<IconFileExport size={16} />}
                     active={currentPath.startsWith("/settings/exports")}
+                    onClick={onNavigate}
                   />
 
                   {/* Account Section */}
@@ -696,6 +720,7 @@ export function Sidebar() {
                 label="Integrations"
                 leftSection={<IconLink size={16} />}
                 active={currentPath.startsWith("/settings/integrations")}
+                onClick={onNavigate}
               />
               <NavLink
                 component={Link}
@@ -703,6 +728,7 @@ export function Sidebar() {
                 label="Profile"
                 leftSection={<IconUser size={16} />}
                 active={currentPath.startsWith("/settings/profile")}
+                onClick={onNavigate}
               />
             </NavLink>
           </Stack>
