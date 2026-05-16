@@ -6,9 +6,14 @@ import {
   Text,
   useComputedColorScheme,
 } from "@mantine/core";
-import { IconMenu2, IconMoon, IconSun } from "@tabler/icons-react";
+import { useDisclosure } from "@mantine/hooks";
+import { IconMenu2, IconMoon, IconSearch, IconSun } from "@tabler/icons-react";
 import type { RefObject } from "react";
-import { SearchInput, type SearchInputHandle } from "@/components/search";
+import {
+  MobileSearchSheet,
+  SearchInput,
+  type SearchInputHandle,
+} from "@/components/search";
 import { useAppName } from "@/hooks/useAppName";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
@@ -28,6 +33,10 @@ export function Header({
   const appName = useAppName();
   const computedColorScheme = useComputedColorScheme("dark");
   const setPreference = useUserPreferencesStore((state) => state.setPreference);
+  const [
+    searchSheetOpened,
+    { open: openSearchSheet, close: closeSearchSheet },
+  ] = useDisclosure(false);
 
   const toggleColorScheme = () => {
     // Toggle between light and dark (not system) for explicit user action
@@ -67,6 +76,17 @@ export function Header({
 
           <ActionIcon
             variant="subtle"
+            onClick={openSearchSheet}
+            hiddenFrom="xs"
+            size="lg"
+            aria-label="Open search"
+            title="Search"
+          >
+            <IconSearch size={20} />
+          </ActionIcon>
+
+          <ActionIcon
+            variant="subtle"
             onClick={toggleColorScheme}
             title="Toggle color scheme"
           >
@@ -78,6 +98,11 @@ export function Header({
           </ActionIcon>
         </Group>
       </Group>
+
+      <MobileSearchSheet
+        opened={searchSheetOpened}
+        onClose={closeSearchSheet}
+      />
     </AppShell.Header>
   );
 }

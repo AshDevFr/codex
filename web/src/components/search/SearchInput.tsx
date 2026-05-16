@@ -1,10 +1,8 @@
 import {
   Combobox,
   Group,
-  Image,
   Loader,
   ScrollArea,
-  Stack,
   Text,
   TextInput,
   useCombobox,
@@ -22,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 import { useSearch } from "@/hooks/useSearch";
 import type { Book, Series } from "@/types";
 import classes from "./SearchInput.module.css";
+import { BookResultContent, SeriesResultContent } from "./SearchResultItem";
 
 interface SearchInputProps {
   placeholder?: string;
@@ -128,25 +127,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         key={series.id}
         className={classes.option}
       >
-        <Group gap="sm" wrap="nowrap">
-          <Image
-            src={`/api/v1/series/${series.id}/thumbnail`}
-            alt={series.title}
-            w={40}
-            h={56}
-            fit="cover"
-            radius="sm"
-            fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='56'%3E%3Crect fill='%23333' width='40' height='56'/%3E%3C/svg%3E"
-          />
-          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-            <Text size="sm" fw={500} lineClamp={1}>
-              {series.title}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {series.bookCount} book{series.bookCount !== 1 ? "s" : ""}
-            </Text>
-          </Stack>
-        </Group>
+        <SeriesResultContent series={series} />
       </Combobox.Option>
     );
 
@@ -156,29 +137,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         key={book.id}
         className={classes.option}
       >
-        <Group gap="sm" wrap="nowrap">
-          <Image
-            src={`/api/v1/books/${book.id}/thumbnail`}
-            alt={book.title}
-            w={40}
-            h={56}
-            fit="cover"
-            radius="sm"
-            fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='56'%3E%3Crect fill='%23333' width='40' height='56'/%3E%3C/svg%3E"
-          />
-          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-            <Text size="sm" fw={500} lineClamp={1}>
-              {book.number !== undefined && book.number !== null
-                ? `${book.number} - ${book.title}`
-                : book.title}
-            </Text>
-            {book.seriesName && (
-              <Text size="xs" c="dimmed" lineClamp={1}>
-                {book.seriesName}
-              </Text>
-            )}
-          </Stack>
-        </Group>
+        <BookResultContent book={book} />
       </Combobox.Option>
     );
 
@@ -204,7 +163,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               }
             }}
             onBlur={() => combobox.closeDropdown()}
-            visibleFrom="sm"
+            visibleFrom="xs"
             w={width}
           />
         </Combobox.Target>
