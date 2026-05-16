@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.21.5] - 2026-05-16
+
+### 🚀 Features
+
+- *(release-tracking)* Show tracking badge and toggle on series cards
+
 ## [1.21.4] - 2026-05-16
 
 ### 🚀 Features
