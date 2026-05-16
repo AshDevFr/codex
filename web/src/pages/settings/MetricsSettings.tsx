@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Center,
+  Collapse,
   Grid,
   Group,
   Loader,
@@ -216,151 +217,251 @@ function TaskTypeRow({ metrics }: { metrics: TaskTypeMetricsDto }) {
       {opened && (
         <Table.Tr>
           <Table.Td colSpan={7} p={0}>
-            <Box bg="var(--mantine-color-gray-light)" p="md">
-              <SimpleGrid cols={{ base: 2, sm: 4, md: 6 }} spacing="md">
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Succeeded
-                  </Text>
-                  <Text size="sm" fw={500} c="green">
-                    {metrics.succeeded.toLocaleString()}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Failed
-                  </Text>
-                  <Text
-                    size="sm"
-                    fw={500}
-                    c={metrics.failed > 0 ? "red" : undefined}
-                  >
-                    {metrics.failed.toLocaleString()}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Retried
-                  </Text>
-                  <Text
-                    size="sm"
-                    fw={500}
-                    c={metrics.retried > 0 ? "yellow" : undefined}
-                  >
-                    {metrics.retried.toLocaleString()}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Error Rate
-                  </Text>
-                  <Text
-                    size="sm"
-                    fw={500}
-                    c={
-                      metrics.errorRatePct > 5
-                        ? "red"
-                        : metrics.errorRatePct > 1
-                          ? "yellow"
-                          : undefined
-                    }
-                  >
-                    {metrics.errorRatePct.toFixed(2)}%
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Min Duration
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {formatDuration(metrics.minDurationMs)}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Max Duration
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {formatDuration(metrics.maxDurationMs)}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    P50 Duration
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {formatDuration(metrics.p50DurationMs)}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    P95 Duration
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {formatDuration(metrics.p95DurationMs)}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Avg Queue Wait
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {formatDuration(metrics.avgQueueWaitMs)}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Bytes Processed
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {formatBytes(metrics.bytesProcessed)}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Throughput
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {metrics.throughputPerSec.toFixed(1)}/sec
-                  </Text>
-                </div>
-                {metrics.lastErrorAt && (
-                  <div>
-                    <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                      Last Error At
-                    </Text>
-                    <Text size="sm" fw={500} c="red">
-                      {new Date(metrics.lastErrorAt).toLocaleString()}
-                    </Text>
-                  </div>
-                )}
-              </SimpleGrid>
-              {metrics.lastError && (
-                <Box
-                  mt="md"
-                  p="sm"
-                  bg="var(--mantine-color-red-light)"
-                  style={{ borderRadius: 4 }}
-                >
-                  <Group gap="xs" mb={4}>
-                    <IconAlertCircle
-                      size={14}
-                      color="var(--mantine-color-red-filled)"
-                    />
-                    <Text size="xs" fw={600} c="red">
-                      Last Error
-                    </Text>
-                  </Group>
-                  <Text size="sm" style={{ fontFamily: "monospace" }}>
-                    {metrics.lastError}
-                  </Text>
-                </Box>
-              )}
-            </Box>
+            <TaskTypeDetails metrics={metrics} />
           </Table.Td>
         </Table.Tr>
       )}
     </>
+  );
+}
+
+function TaskTypeDetails({ metrics }: { metrics: TaskTypeMetricsDto }) {
+  return (
+    <Box bg="var(--mantine-color-gray-light)" p="md">
+      <SimpleGrid cols={{ base: 2, sm: 4, md: 6 }} spacing="md">
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Succeeded
+          </Text>
+          <Text size="sm" fw={500} c="green">
+            {metrics.succeeded.toLocaleString()}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Failed
+          </Text>
+          <Text size="sm" fw={500} c={metrics.failed > 0 ? "red" : undefined}>
+            {metrics.failed.toLocaleString()}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Retried
+          </Text>
+          <Text
+            size="sm"
+            fw={500}
+            c={metrics.retried > 0 ? "yellow" : undefined}
+          >
+            {metrics.retried.toLocaleString()}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Error Rate
+          </Text>
+          <Text
+            size="sm"
+            fw={500}
+            c={
+              metrics.errorRatePct > 5
+                ? "red"
+                : metrics.errorRatePct > 1
+                  ? "yellow"
+                  : undefined
+            }
+          >
+            {metrics.errorRatePct.toFixed(2)}%
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Min Duration
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.minDurationMs)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Max Duration
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.maxDurationMs)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            P50 Duration
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.p50DurationMs)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            P95 Duration
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.p95DurationMs)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Avg Queue Wait
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.avgQueueWaitMs)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Bytes Processed
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatBytes(metrics.bytesProcessed)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Throughput
+          </Text>
+          <Text size="sm" fw={500}>
+            {metrics.throughputPerSec.toFixed(1)}/sec
+          </Text>
+        </div>
+        {metrics.lastErrorAt && (
+          <div>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+              Last Error At
+            </Text>
+            <Text size="sm" fw={500} c="red">
+              {new Date(metrics.lastErrorAt).toLocaleString()}
+            </Text>
+          </div>
+        )}
+      </SimpleGrid>
+      {metrics.lastError && (
+        <Box
+          mt="md"
+          p="sm"
+          bg="var(--mantine-color-red-light)"
+          style={{ borderRadius: 4 }}
+        >
+          <Group gap="xs" mb={4}>
+            <IconAlertCircle
+              size={14}
+              color="var(--mantine-color-red-filled)"
+            />
+            <Text size="xs" fw={600} c="red">
+              Last Error
+            </Text>
+          </Group>
+          <Text size="sm" style={{ fontFamily: "monospace" }}>
+            {metrics.lastError}
+          </Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function TaskTypeMobileCard({ metrics }: { metrics: TaskTypeMetricsDto }) {
+  const [opened, { toggle }] = useDisclosure(false);
+  const successRate =
+    metrics.executed > 0
+      ? ((metrics.succeeded / metrics.executed) * 100).toFixed(1)
+      : "0";
+  const successColor =
+    Number.parseFloat(successRate) >= 95
+      ? "green"
+      : Number.parseFloat(successRate) >= 80
+        ? "yellow"
+        : "red";
+
+  return (
+    <Card withBorder padding="md">
+      <Group
+        justify="space-between"
+        wrap="nowrap"
+        onClick={toggle}
+        style={{ cursor: "pointer" }}
+        role="button"
+        aria-expanded={opened}
+      >
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+          {opened ? (
+            <IconChevronDown size={14} />
+          ) : (
+            <IconChevronRight size={14} />
+          )}
+          <Text fw={500} size="sm" style={{ wordBreak: "break-word" }}>
+            {metrics.taskType.replace(/_/g, " ")}
+          </Text>
+        </Group>
+        {metrics.lastError ? (
+          <Badge
+            color="red"
+            size="sm"
+            variant="light"
+            leftSection={<IconAlertCircle size={12} />}
+          >
+            {metrics.failed} errors
+          </Badge>
+        ) : (
+          <Badge color="green" size="sm" variant="light">
+            Healthy
+          </Badge>
+        )}
+      </Group>
+      <SimpleGrid cols={2} spacing="xs" mt="sm">
+        <div>
+          <Text size="xs" c="dimmed">
+            Executed
+          </Text>
+          <Text size="sm" fw={500}>
+            {metrics.executed.toLocaleString()}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            Success rate
+          </Text>
+          <Group gap={6} wrap="nowrap">
+            <Progress
+              value={Number.parseFloat(successRate)}
+              color={successColor}
+              size="sm"
+              style={{ flex: 1 }}
+            />
+            <Text size="sm">{successRate}%</Text>
+          </Group>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            Avg duration
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.avgDurationMs)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            P50 / P95
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.p50DurationMs)} /{" "}
+            {formatDuration(metrics.p95DurationMs)}
+          </Text>
+        </div>
+      </SimpleGrid>
+      <Collapse in={opened}>
+        <Box mt="sm">
+          <TaskTypeDetails metrics={metrics} />
+        </Box>
+      </Collapse>
+    </Card>
   );
 }
 
@@ -603,29 +704,41 @@ function TaskMetricsTab({ metrics }: { metrics: TaskMetricsResponse }) {
           <Title order={5} mb="md">
             Task Performance by Type
           </Title>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Task Type</Table.Th>
-                <Table.Th>Executed</Table.Th>
-                <Table.Th>Success Rate</Table.Th>
-                <Table.Th>Avg Duration</Table.Th>
-                <Table.Th>P50 / P95</Table.Th>
-                <Table.Th>Items Processed</Table.Th>
-                <Table.Th>Status</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {[...byType]
-                .sort((a, b) => a.taskType.localeCompare(b.taskType))
-                .map((taskMetrics) => (
-                  <TaskTypeRow
-                    key={taskMetrics.taskType}
-                    metrics={taskMetrics}
-                  />
-                ))}
-            </Table.Tbody>
-          </Table>
+          <Box visibleFrom="xs">
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Task Type</Table.Th>
+                  <Table.Th>Executed</Table.Th>
+                  <Table.Th>Success Rate</Table.Th>
+                  <Table.Th>Avg Duration</Table.Th>
+                  <Table.Th>P50 / P95</Table.Th>
+                  <Table.Th>Items Processed</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {[...byType]
+                  .sort((a, b) => a.taskType.localeCompare(b.taskType))
+                  .map((taskMetrics) => (
+                    <TaskTypeRow
+                      key={taskMetrics.taskType}
+                      metrics={taskMetrics}
+                    />
+                  ))}
+              </Table.Tbody>
+            </Table>
+          </Box>
+          <Stack gap="sm" hiddenFrom="xs">
+            {[...byType]
+              .sort((a, b) => a.taskType.localeCompare(b.taskType))
+              .map((taskMetrics) => (
+                <TaskTypeMobileCard
+                  key={taskMetrics.taskType}
+                  metrics={taskMetrics}
+                />
+              ))}
+          </Stack>
         </div>
       )}
     </Stack>
@@ -704,150 +817,240 @@ function PluginMetricsRow({ metrics }: { metrics: PluginMetricsDto }) {
       {opened && (
         <Table.Tr>
           <Table.Td colSpan={6} p={0}>
-            <Box bg="var(--mantine-color-gray-light)" p="md">
-              <SimpleGrid cols={{ base: 2, sm: 4, md: 6 }} spacing="md">
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Succeeded
-                  </Text>
-                  <Text size="sm" fw={500} c="green">
-                    {(metrics.requestsSuccess ?? 0).toLocaleString()}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Failed
-                  </Text>
-                  <Text
-                    size="sm"
-                    fw={500}
-                    c={(metrics.requestsFailed ?? 0) > 0 ? "red" : undefined}
-                  >
-                    {(metrics.requestsFailed ?? 0).toLocaleString()}
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Error Rate
-                  </Text>
-                  <Text
-                    size="sm"
-                    fw={500}
-                    c={
-                      (metrics.errorRatePct ?? 0) > 10
-                        ? "red"
-                        : (metrics.errorRatePct ?? 0) > 5
-                          ? "yellow"
-                          : undefined
-                    }
-                  >
-                    {(metrics.errorRatePct ?? 0).toFixed(2)}%
-                  </Text>
-                </div>
-                <div>
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                    Rate Limit Hits
-                  </Text>
-                  <Text
-                    size="sm"
-                    fw={500}
-                    c={
-                      (metrics.rateLimitRejections ?? 0) > 0
-                        ? "yellow"
-                        : undefined
-                    }
-                  >
-                    {(metrics.rateLimitRejections ?? 0).toLocaleString()}
-                  </Text>
-                </div>
-                {metrics.lastSuccess && (
-                  <div>
-                    <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                      Last Success
-                    </Text>
-                    <Text size="sm" fw={500}>
-                      {new Date(metrics.lastSuccess).toLocaleString()}
-                    </Text>
-                  </div>
-                )}
-                {metrics.lastFailure && (
-                  <div>
-                    <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                      Last Failure
-                    </Text>
-                    <Text size="sm" fw={500} c="red">
-                      {new Date(metrics.lastFailure).toLocaleString()}
-                    </Text>
-                  </div>
-                )}
-              </SimpleGrid>
-
-              {/* Method breakdown */}
-              {metrics.byMethod && Object.keys(metrics.byMethod).length > 0 && (
-                <Box mt="md">
-                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
-                    By Method
-                  </Text>
-                  <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
-                    {Object.entries(metrics.byMethod).map(
-                      ([method, methodMetrics]) => (
-                        <Paper key={method} p="xs" withBorder>
-                          <Group justify="space-between" mb={4}>
-                            <Text size="xs" fw={500}>
-                              {method}
-                            </Text>
-                            <Badge size="xs" variant="light">
-                              {methodMetrics.requestsTotal} calls
-                            </Badge>
-                          </Group>
-                          <Group gap="xs">
-                            <Text size="xs" c="dimmed">
-                              {methodMetrics.requestsSuccess} ok
-                            </Text>
-                            {(methodMetrics.requestsFailed ?? 0) > 0 && (
-                              <Text size="xs" c="red">
-                                {methodMetrics.requestsFailed} failed
-                              </Text>
-                            )}
-                            <Text size="xs" c="dimmed">
-                              avg {formatDuration(methodMetrics.avgDurationMs)}
-                            </Text>
-                          </Group>
-                        </Paper>
-                      ),
-                    )}
-                  </SimpleGrid>
-                </Box>
-              )}
-
-              {/* Failure breakdown */}
-              {metrics.failureCounts &&
-                Object.keys(metrics.failureCounts).length > 0 && (
-                  <Box mt="md">
-                    <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
-                      Failures by Type
-                    </Text>
-                    <Group gap="xs">
-                      {Object.entries(metrics.failureCounts).map(
-                        ([code, count]) => (
-                          <Badge
-                            key={code}
-                            color="red"
-                            variant="light"
-                            size="sm"
-                          >
-                            {code}: {count}
-                          </Badge>
-                        ),
-                      )}
-                    </Group>
-                  </Box>
-                )}
-            </Box>
+            <PluginMetricsDetails metrics={metrics} />
           </Table.Td>
         </Table.Tr>
       )}
     </>
+  );
+}
+
+function PluginMetricsDetails({ metrics }: { metrics: PluginMetricsDto }) {
+  return (
+    <Box bg="var(--mantine-color-gray-light)" p="md">
+      <SimpleGrid cols={{ base: 2, sm: 4, md: 6 }} spacing="md">
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Succeeded
+          </Text>
+          <Text size="sm" fw={500} c="green">
+            {(metrics.requestsSuccess ?? 0).toLocaleString()}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Failed
+          </Text>
+          <Text
+            size="sm"
+            fw={500}
+            c={(metrics.requestsFailed ?? 0) > 0 ? "red" : undefined}
+          >
+            {(metrics.requestsFailed ?? 0).toLocaleString()}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Error Rate
+          </Text>
+          <Text
+            size="sm"
+            fw={500}
+            c={
+              (metrics.errorRatePct ?? 0) > 10
+                ? "red"
+                : (metrics.errorRatePct ?? 0) > 5
+                  ? "yellow"
+                  : undefined
+            }
+          >
+            {(metrics.errorRatePct ?? 0).toFixed(2)}%
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Rate Limit Hits
+          </Text>
+          <Text
+            size="sm"
+            fw={500}
+            c={(metrics.rateLimitRejections ?? 0) > 0 ? "yellow" : undefined}
+          >
+            {(metrics.rateLimitRejections ?? 0).toLocaleString()}
+          </Text>
+        </div>
+        {metrics.lastSuccess && (
+          <div>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+              Last Success
+            </Text>
+            <Text size="sm" fw={500}>
+              {new Date(metrics.lastSuccess).toLocaleString()}
+            </Text>
+          </div>
+        )}
+        {metrics.lastFailure && (
+          <div>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+              Last Failure
+            </Text>
+            <Text size="sm" fw={500} c="red">
+              {new Date(metrics.lastFailure).toLocaleString()}
+            </Text>
+          </div>
+        )}
+      </SimpleGrid>
+
+      {/* Method breakdown */}
+      {metrics.byMethod && Object.keys(metrics.byMethod).length > 0 && (
+        <Box mt="md">
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
+            By Method
+          </Text>
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs">
+            {Object.entries(metrics.byMethod).map(([method, methodMetrics]) => (
+              <Paper key={method} p="xs" withBorder>
+                <Group justify="space-between" mb={4}>
+                  <Text size="xs" fw={500}>
+                    {method}
+                  </Text>
+                  <Badge size="xs" variant="light">
+                    {methodMetrics.requestsTotal} calls
+                  </Badge>
+                </Group>
+                <Group gap="xs">
+                  <Text size="xs" c="dimmed">
+                    {methodMetrics.requestsSuccess} ok
+                  </Text>
+                  {(methodMetrics.requestsFailed ?? 0) > 0 && (
+                    <Text size="xs" c="red">
+                      {methodMetrics.requestsFailed} failed
+                    </Text>
+                  )}
+                  <Text size="xs" c="dimmed">
+                    avg {formatDuration(methodMetrics.avgDurationMs)}
+                  </Text>
+                </Group>
+              </Paper>
+            ))}
+          </SimpleGrid>
+        </Box>
+      )}
+
+      {/* Failure breakdown */}
+      {metrics.failureCounts &&
+        Object.keys(metrics.failureCounts).length > 0 && (
+          <Box mt="md">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
+              Failures by Type
+            </Text>
+            <Group gap="xs">
+              {Object.entries(metrics.failureCounts).map(([code, count]) => (
+                <Badge key={code} color="red" variant="light" size="sm">
+                  {code}: {count}
+                </Badge>
+              ))}
+            </Group>
+          </Box>
+        )}
+    </Box>
+  );
+}
+
+function PluginMetricsMobileCard({ metrics }: { metrics: PluginMetricsDto }) {
+  const [opened, { toggle }] = useDisclosure(false);
+  const successRate =
+    metrics.requestsTotal > 0
+      ? (
+          ((metrics.requestsSuccess ?? 0) / metrics.requestsTotal) *
+          100
+        ).toFixed(1)
+      : "0";
+  const successColor =
+    Number.parseFloat(successRate) >= 95
+      ? "green"
+      : Number.parseFloat(successRate) >= 80
+        ? "yellow"
+        : "red";
+  const healthColor =
+    metrics.healthStatus === "healthy"
+      ? "green"
+      : metrics.healthStatus === "degraded"
+        ? "yellow"
+        : metrics.healthStatus === "unhealthy"
+          ? "red"
+          : "gray";
+
+  return (
+    <Card withBorder padding="md">
+      <Group
+        justify="space-between"
+        wrap="nowrap"
+        onClick={toggle}
+        style={{ cursor: "pointer" }}
+        role="button"
+        aria-expanded={opened}
+      >
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+          {opened ? (
+            <IconChevronDown size={14} />
+          ) : (
+            <IconChevronRight size={14} />
+          )}
+          <Text fw={500} size="sm" style={{ wordBreak: "break-word" }}>
+            {metrics.pluginName}
+          </Text>
+        </Group>
+        <Badge color={healthColor} size="sm" variant="light">
+          {metrics.healthStatus}
+        </Badge>
+      </Group>
+      <SimpleGrid cols={2} spacing="xs" mt="sm">
+        <div>
+          <Text size="xs" c="dimmed">
+            Requests
+          </Text>
+          <Text size="sm" fw={500}>
+            {metrics.requestsTotal.toLocaleString()}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            Success rate
+          </Text>
+          <Group gap={6} wrap="nowrap">
+            <Progress
+              value={Number.parseFloat(successRate)}
+              color={successColor}
+              size="sm"
+              style={{ flex: 1 }}
+            />
+            <Text size="sm">{successRate}%</Text>
+          </Group>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            Avg duration
+          </Text>
+          <Text size="sm" fw={500}>
+            {formatDuration(metrics.avgDurationMs ?? 0)}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            Rate limited
+          </Text>
+          <Text size="sm" fw={500}>
+            {(metrics.rateLimitRejections ?? 0).toLocaleString()}
+          </Text>
+        </div>
+      </SimpleGrid>
+      <Collapse in={opened}>
+        <Box mt="sm">
+          <PluginMetricsDetails metrics={metrics} />
+        </Box>
+      </Collapse>
+    </Card>
   );
 }
 
@@ -990,25 +1193,37 @@ function PluginMetricsTab({ metrics }: { metrics: PluginMetricsResponse }) {
           <Title order={5} mb="md">
             Plugin Performance
           </Title>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Plugin</Table.Th>
-                <Table.Th>Requests</Table.Th>
-                <Table.Th>Success Rate</Table.Th>
-                <Table.Th>Avg Duration</Table.Th>
-                <Table.Th>Rate Limited</Table.Th>
-                <Table.Th>Health</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {[...plugins]
-                .sort((a, b) => a.pluginName.localeCompare(b.pluginName))
-                .map((plugin) => (
-                  <PluginMetricsRow key={plugin.pluginId} metrics={plugin} />
-                ))}
-            </Table.Tbody>
-          </Table>
+          <Box visibleFrom="xs">
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Plugin</Table.Th>
+                  <Table.Th>Requests</Table.Th>
+                  <Table.Th>Success Rate</Table.Th>
+                  <Table.Th>Avg Duration</Table.Th>
+                  <Table.Th>Rate Limited</Table.Th>
+                  <Table.Th>Health</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {[...plugins]
+                  .sort((a, b) => a.pluginName.localeCompare(b.pluginName))
+                  .map((plugin) => (
+                    <PluginMetricsRow key={plugin.pluginId} metrics={plugin} />
+                  ))}
+              </Table.Tbody>
+            </Table>
+          </Box>
+          <Stack gap="sm" hiddenFrom="xs">
+            {[...plugins]
+              .sort((a, b) => a.pluginName.localeCompare(b.pluginName))
+              .map((plugin) => (
+                <PluginMetricsMobileCard
+                  key={plugin.pluginId}
+                  metrics={plugin}
+                />
+              ))}
+          </Stack>
         </div>
       ) : (
         <Paper p="xl" withBorder>

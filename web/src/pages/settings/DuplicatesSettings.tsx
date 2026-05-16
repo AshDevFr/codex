@@ -9,7 +9,6 @@ import {
   Group,
   Loader,
   Stack,
-  Table,
   Text,
   Title,
   Tooltip,
@@ -27,6 +26,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
 import { type DuplicateGroup, duplicatesApi } from "@/api/duplicates";
 import { AppLink } from "@/components/common/AppLink";
+import { ResponsiveTable } from "@/components/ui";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import type { Book } from "@/types";
 
@@ -87,77 +87,93 @@ function DuplicateGroupCard({
       </Group>
 
       {expanded && (
-        <Table layout="fixed">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={{ width: "20%" }}>Book</Table.Th>
-              <Table.Th style={{ width: "15%" }}>Library</Table.Th>
-              <Table.Th style={{ width: "15%" }}>Series</Table.Th>
-              <Table.Th style={{ width: "35%" }}>Path</Table.Th>
-              <Table.Th style={{ width: "15%" }}>Size</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {books.map((book, index) => (
-              <Table.Tr key={`${book.id}-${index}`}>
-                <Table.Td>
+        <ResponsiveTable<Book>
+          data={books}
+          columns={[
+            {
+              key: "book",
+              header: "Book",
+              mobilePrimary: true,
+              thProps: { style: { width: "20%" } },
+              accessor: (book) => (
+                <Anchor
+                  size="sm"
+                  fw={500}
+                  truncate="end"
+                  c="blue.4"
+                  component={AppLink}
+                  to={`/books/${book.id}`}
+                >
+                  {book.title}
+                </Anchor>
+              ),
+            },
+            {
+              key: "library",
+              header: "Library",
+              thProps: { style: { width: "15%" } },
+              accessor: (book) => (
+                <Anchor
+                  size="sm"
+                  truncate="end"
+                  c="blue.4"
+                  component={AppLink}
+                  to={`/libraries/${book.libraryId}`}
+                >
+                  {book.libraryName || "-"}
+                </Anchor>
+              ),
+            },
+            {
+              key: "series",
+              header: "Series",
+              thProps: { style: { width: "15%" } },
+              accessor: (book) =>
+                book.seriesId ? (
                   <Anchor
                     size="sm"
-                    fw={500}
                     truncate="end"
                     c="blue.4"
                     component={AppLink}
-                    to={`/books/${book.id}`}
+                    to={`/series/${book.seriesId}`}
                   >
-                    {book.title}
+                    {book.seriesName || "-"}
                   </Anchor>
-                </Table.Td>
-                <Table.Td>
-                  <Anchor
-                    size="sm"
-                    truncate="end"
-                    c="blue.4"
-                    component={AppLink}
-                    to={`/libraries/${book.libraryId}`}
-                  >
-                    {book.libraryName || "-"}
-                  </Anchor>
-                </Table.Td>
-                <Table.Td>
-                  {book.seriesId ? (
-                    <Anchor
-                      size="sm"
-                      truncate="end"
-                      c="blue.4"
-                      component={AppLink}
-                      to={`/series/${book.seriesId}`}
-                    >
-                      {book.seriesName || "-"}
-                    </Anchor>
-                  ) : (
-                    <Text size="sm" truncate>
-                      -
-                    </Text>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  <Tooltip label={book.filePath}>
-                    <Text size="sm" truncate>
-                      {book.filePath}
-                    </Text>
-                  </Tooltip>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm">
-                    {book.fileSize
-                      ? `${(book.fileSize / 1024 / 1024).toFixed(2)} MB`
-                      : "-"}
+                ) : (
+                  <Text size="sm" truncate>
+                    -
                   </Text>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+                ),
+            },
+            {
+              key: "path",
+              header: "Path",
+              thProps: { style: { width: "35%" } },
+              mobileFullWidth: true,
+              accessor: (book) => (
+                <Tooltip label={book.filePath}>
+                  <Text size="sm" truncate>
+                    {book.filePath}
+                  </Text>
+                </Tooltip>
+              ),
+            },
+            {
+              key: "size",
+              header: "Size",
+              thProps: { style: { width: "15%" } },
+              accessor: (book) => (
+                <Text size="sm">
+                  {book.fileSize
+                    ? `${(book.fileSize / 1024 / 1024).toFixed(2)} MB`
+                    : "-"}
+                </Text>
+              ),
+            },
+          ]}
+          getRowKey={(book, index) => `${book.id}-${index}`}
+          tableProps={{ layout: "fixed" }}
+        />
       )}
 
       <Text size="xs" c="dimmed" mt="sm">

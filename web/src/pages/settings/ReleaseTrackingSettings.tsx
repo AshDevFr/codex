@@ -11,7 +11,6 @@ import {
   MultiSelect,
   Stack,
   Switch,
-  Table,
   TagsInput,
   Text,
   Title,
@@ -38,6 +37,7 @@ import { pluginsApi } from "@/api/plugins";
 import type { ReleaseSource } from "@/api/releases";
 import { settingsApi } from "@/api/settings";
 import { CronInput } from "@/components/forms/CronInput";
+import { ResponsiveTable } from "@/components/ui";
 import {
   usePollAllReleaseSourcesNow,
   usePollReleaseSourceNow,
@@ -228,62 +228,116 @@ export function ReleaseTrackingSettings() {
             </Text>
           </Card>
         ) : (
-          <Card withBorder padding={0} radius="md">
-            <Table verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Source</Table.Th>
-                  <Table.Th>Plugin</Table.Th>
-                  <Table.Th>Interval</Table.Th>
-                  <Table.Th>Last poll</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th>Enabled</Table.Th>
-                  <Table.Th aria-label="Actions" />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {(sourcesQuery.data ?? []).map((source) => (
-                  <ReleaseSourceRow
-                    key={source.id}
-                    source={source}
-                    onToggle={(enabled) =>
-                      update.mutate({
-                        sourceId: source.id,
-                        update: { enabled },
-                      })
-                    }
-                    onCronScheduleChange={(cronSchedule) =>
-                      update.mutate({
-                        sourceId: source.id,
-                        // Send `null` to clear the override and revert to
-                        // inheriting the server-wide default.
-                        update: { cronSchedule },
-                      })
-                    }
-                    onPollNow={() => {
-                      addId(setPollingIds, source.id);
-                      pollNow.mutate(source.id, {
-                        onSettled: () => removeId(setPollingIds, source.id),
-                      });
-                    }}
-                    pollNowPending={pollingIds.has(source.id)}
-                    onReset={() => {
-                      if (
-                        window.confirm(
-                          `Reset "${source.displayName}"?\n\nThis deletes every release ledger row for this source and clears its poll state (etag, last poll time). User-managed settings (enabled, interval, name) are preserved. The next poll will re-record everything as new.\n\nThis cannot be undone.`,
-                        )
-                      ) {
-                        addId(setResettingIds, source.id);
-                        reset.mutate(source.id, {
-                          onSettled: () => removeId(setResettingIds, source.id),
-                        });
+          <Card withBorder p={{ base: 0, xs: 0 }} radius="md">
+            <ResponsiveTable<ReleaseSource>
+              data={sourcesQuery.data ?? []}
+              columns={[
+                {
+                  key: "source",
+                  header: "Source",
+                  mobilePrimary: true,
+                  accessor: (source) => <SourceCell source={source} />,
+                },
+                {
+                  key: "plugin",
+                  header: "Plugin",
+                  accessor: (source) => <PluginCell source={source} />,
+                },
+                {
+                  key: "interval",
+                  header: "Interval",
+                  mobileFullWidth: true,
+                  accessor: (source) => (
+                    <CronCell
+                      source={source}
+                      onCronScheduleChange={(cronSchedule) =>
+                        update.mutate({
+                          sourceId: source.id,
+                          update: { cronSchedule },
+                        })
                       }
-                    }}
-                    resetPending={resettingIds.has(source.id)}
-                  />
-                ))}
-              </Table.Tbody>
-            </Table>
+                    />
+                  ),
+                },
+                {
+                  key: "lastPoll",
+                  header: "Last poll",
+                  mobileFullWidth: true,
+                  accessor: (source) => <LastPollCell source={source} />,
+                },
+                {
+                  key: "status",
+                  header: "Status",
+                  accessor: (source) => <StatusCell source={source} />,
+                },
+                {
+                  key: "enabled",
+                  header: "Enabled",
+                  accessor: (source) => (
+                    <Switch
+                      checked={source.enabled}
+                      onChange={(event) =>
+                        update.mutate({
+                          sourceId: source.id,
+                          update: {
+                            enabled: event.currentTarget.checked,
+                          },
+                        })
+                      }
+                      aria-label="Enable source"
+                    />
+                  ),
+                },
+              ]}
+              getRowKey={(source) => source.id}
+              tableProps={{ verticalSpacing: "sm" }}
+              rowActions={(source) => (
+                <>
+                  <Tooltip
+                    label={source.enabled ? "Poll now" : "Enable to poll"}
+                  >
+                    <ActionIcon
+                      variant="subtle"
+                      onClick={() => {
+                        addId(setPollingIds, source.id);
+                        pollNow.mutate(source.id, {
+                          onSettled: () => removeId(setPollingIds, source.id),
+                        });
+                      }}
+                      disabled={!source.enabled || pollingIds.has(source.id)}
+                      loading={pollingIds.has(source.id)}
+                      aria-label="Poll now"
+                    >
+                      <IconRefresh size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Reset: drop ledger rows and clear poll state">
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Reset "${source.displayName}"?\n\nThis deletes every release ledger row for this source and clears its poll state (etag, last poll time). User-managed settings (enabled, interval, name) are preserved. The next poll will re-record everything as new.\n\nThis cannot be undone.`,
+                          )
+                        ) {
+                          addId(setResettingIds, source.id);
+                          reset.mutate(source.id, {
+                            onSettled: () =>
+                              removeId(setResettingIds, source.id),
+                          });
+                        }
+                      }}
+                      loading={resettingIds.has(source.id)}
+                      aria-label="Reset source"
+                    >
+                      <IconRestore size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </>
+              )}
+              rowActionsHeader=""
+            />
           </Card>
         )}
       </Stack>
@@ -609,26 +663,92 @@ function NotificationPreferencesCard() {
   );
 }
 
-interface RowProps {
-  source: ReleaseSource;
-  onToggle: (enabled: boolean) => void;
-  /** `null` clears the override and reverts to the server-wide default. */
-  onCronScheduleChange: (cronSchedule: string | null) => void;
-  onPollNow: () => void;
-  pollNowPending: boolean;
-  onReset: () => void;
-  resetPending: boolean;
+function SourceCell({ source }: { source: ReleaseSource }) {
+  return (
+    <Stack gap={2}>
+      <Text size="sm" fw={500}>
+        {source.displayName}
+      </Text>
+      <Text size="xs" c="dimmed">
+        {source.sourceKey}
+      </Text>
+    </Stack>
+  );
 }
 
-function ReleaseSourceRow({
+function PluginCell({ source }: { source: ReleaseSource }) {
+  return (
+    <Badge variant="light" color={source.pluginId === "core" ? "gray" : "blue"}>
+      {source.pluginId}
+    </Badge>
+  );
+}
+
+function LastPollCell({ source }: { source: ReleaseSource }) {
+  const lastPolled = source.lastPolledAt
+    ? formatDistanceToNow(new Date(source.lastPolledAt), { addSuffix: true })
+    : "—";
+  return (
+    <Stack gap={2}>
+      <Text size="xs">{lastPolled}</Text>
+      {source.lastSummary && (
+        <Text size="xs" c="dimmed" lineClamp={2}>
+          {source.lastSummary}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+function StatusCell({ source }: { source: ReleaseSource }) {
+  if (source.lastError) {
+    return (
+      <Tooltip
+        label={source.lastError}
+        multiline
+        w={300}
+        withArrow
+        position="top"
+      >
+        <Badge color="red" variant="light" size="sm">
+          Errored
+        </Badge>
+      </Tooltip>
+    );
+  }
+  if (source.lastPolledAt) {
+    // Wrap the OK badge in a tooltip carrying `lastSummary` so users can
+    // see *why* a poll returned nothing (no tracked series, 304, dropped
+    // below threshold, etc.) without grepping logs.
+    return (
+      <Tooltip
+        label={source.lastSummary ?? "Last poll completed successfully."}
+        multiline
+        w={300}
+        withArrow
+        position="top"
+      >
+        <Badge color="green" variant="light" size="sm">
+          OK
+        </Badge>
+      </Tooltip>
+    );
+  }
+  return (
+    <Badge color="gray" variant="light" size="sm">
+      Never polled
+    </Badge>
+  );
+}
+
+function CronCell({
   source,
-  onToggle,
   onCronScheduleChange,
-  onPollNow,
-  pollNowPending,
-  onReset,
-  resetPending,
-}: RowProps) {
+}: {
+  source: ReleaseSource;
+  /** `null` clears the override and reverts to the server-wide default. */
+  onCronScheduleChange: (cronSchedule: string | null) => void;
+}) {
   // Truthy `cronSchedule` means the row has a per-source override; render the
   // editor inline. The server omits the field entirely (rather than sending
   // `null`) when the row is inheriting, so accept both `null` and `undefined`
@@ -638,10 +758,6 @@ function ReleaseSourceRow({
   const [draft, setDraft] = useState<string>(
     source.cronSchedule || source.effectiveCronSchedule,
   );
-
-  const lastPolled = source.lastPolledAt
-    ? formatDistanceToNow(new Date(source.lastPolledAt), { addSuffix: true })
-    : "—";
 
   const commitDraft = () => {
     const trimmed = draft.trim();
@@ -663,145 +779,48 @@ function ReleaseSourceRow({
     setDraft(source.effectiveCronSchedule);
   };
 
-  return (
-    <Table.Tr>
-      <Table.Td>
-        <Stack gap={2}>
-          <Text size="sm" fw={500}>
-            {source.displayName}
-          </Text>
-          <Text size="xs" c="dimmed">
-            {source.sourceKey}
-          </Text>
-        </Stack>
-      </Table.Td>
-      <Table.Td>
-        <Badge
-          variant="light"
-          color={source.pluginId === "core" ? "gray" : "blue"}
-        >
-          {source.pluginId}
-        </Badge>
-      </Table.Td>
-      <Table.Td>
-        {isOverriding ? (
-          <Stack gap={4}>
-            <CronInput
-              value={draft}
-              onChange={setDraft}
-              onBlur={commitDraft}
-              showNextRun={false}
-              placeholder="0 0 * * *"
-              aria-label="Cron schedule override"
-            />
-            <Anchor
-              size="xs"
-              component="button"
-              type="button"
-              onClick={resetToDefault}
-            >
-              Reset to default
-            </Anchor>
-          </Stack>
-        ) : (
-          <Stack gap={2}>
-            <Text size="sm">
-              {describeCron(source.effectiveCronSchedule)}{" "}
-              <Text component="span" size="xs" c="dimmed">
-                (Default)
-              </Text>
-            </Text>
-            <Anchor
-              size="xs"
-              component="button"
-              type="button"
-              onClick={() => {
-                setIsOverriding(true);
-                setDraft(source.effectiveCronSchedule);
-              }}
-            >
-              Override
-            </Anchor>
-          </Stack>
-        )}
-      </Table.Td>
-      <Table.Td>
-        <Stack gap={2}>
-          <Text size="xs">{lastPolled}</Text>
-          {source.lastSummary && (
-            <Text size="xs" c="dimmed" lineClamp={2}>
-              {source.lastSummary}
-            </Text>
-          )}
-        </Stack>
-      </Table.Td>
-      <Table.Td>
-        {source.lastError ? (
-          <Tooltip
-            label={source.lastError}
-            multiline
-            w={300}
-            withArrow
-            position="top"
-          >
-            <Badge color="red" variant="light" size="sm">
-              Errored
-            </Badge>
-          </Tooltip>
-        ) : source.lastPolledAt ? (
-          // Wrap the OK badge in a tooltip carrying `lastSummary` so users
-          // can see *why* a poll returned nothing (no tracked series, 304,
-          // dropped below threshold, etc.) without grepping logs.
-          <Tooltip
-            label={source.lastSummary ?? "Last poll completed successfully."}
-            multiline
-            w={300}
-            withArrow
-            position="top"
-          >
-            <Badge color="green" variant="light" size="sm">
-              OK
-            </Badge>
-          </Tooltip>
-        ) : (
-          <Badge color="gray" variant="light" size="sm">
-            Never polled
-          </Badge>
-        )}
-      </Table.Td>
-      <Table.Td>
-        <Switch
-          checked={source.enabled}
-          onChange={(event) => onToggle(event.currentTarget.checked)}
-          aria-label="Enable source"
+  if (isOverriding) {
+    return (
+      <Stack gap={4}>
+        <CronInput
+          value={draft}
+          onChange={setDraft}
+          onBlur={commitDraft}
+          showNextRun={false}
+          placeholder="0 0 * * *"
+          aria-label="Cron schedule override"
         />
-      </Table.Td>
-      <Table.Td>
-        <Group gap={4} wrap="nowrap">
-          <Tooltip label={source.enabled ? "Poll now" : "Enable to poll"}>
-            <ActionIcon
-              variant="subtle"
-              onClick={onPollNow}
-              disabled={!source.enabled || pollNowPending}
-              loading={pollNowPending}
-              aria-label="Poll now"
-            >
-              <IconRefresh size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Reset: drop ledger rows and clear poll state">
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={onReset}
-              loading={resetPending}
-              aria-label="Reset source"
-            >
-              <IconRestore size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Table.Td>
-    </Table.Tr>
+        <Anchor
+          size="xs"
+          component="button"
+          type="button"
+          onClick={resetToDefault}
+        >
+          Reset to default
+        </Anchor>
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack gap={2}>
+      <Text size="sm">
+        {describeCron(source.effectiveCronSchedule)}{" "}
+        <Text component="span" size="xs" c="dimmed">
+          (Default)
+        </Text>
+      </Text>
+      <Anchor
+        size="xs"
+        component="button"
+        type="button"
+        onClick={() => {
+          setIsOverriding(true);
+          setDraft(source.effectiveCronSchedule);
+        }}
+      >
+        Override
+      </Anchor>
+    </Stack>
   );
 }

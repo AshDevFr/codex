@@ -19,7 +19,7 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { useDisclosure } from "@mantine/hooks";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertCircle,
@@ -43,6 +43,7 @@ import {
   pluginsApi,
 } from "@/api/plugins";
 import { PluginConfigModal } from "@/components/forms/PluginConfigModal";
+import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import {
   type OfficialPlugin,
   OfficialPlugins,
@@ -83,6 +84,12 @@ export function PluginsSettings() {
   });
 
   const plugins = pluginsResponse?.plugins ?? [];
+
+  // Below xs we render a card stack instead of the wide Table. Using
+  // useMediaQuery here (rather than `visibleFrom`/`hiddenFrom`) ensures only
+  // one DOM tree is rendered at a time so tests that query for plugin names
+  // don't see duplicate matches.
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
 
   // Fetch libraries for the library filter dropdown
   const { data: libraries = [] } = useQuery({
@@ -425,173 +432,359 @@ export function PluginsSettings() {
             Failed to load plugins. Please try again.
           </Alert>
         ) : plugins.length > 0 ? (
-          <Card withBorder p={0}>
-            <ScrollArea>
-              <Table>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th w={40} />
-                    <Table.Th>Plugin</Table.Th>
-                    <Table.Th>Command</Table.Th>
-                    <Table.Th>Status</Table.Th>
-                    <Table.Th>Health</Table.Th>
-                    <Table.Th>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {plugins.map((plugin) => (
-                    <Fragment key={plugin.id}>
+          <>
+            {!isMobile && (
+              <Card withBorder p={0}>
+                <ScrollArea>
+                  <Table>
+                    <Table.Thead>
                       <Table.Tr>
-                        <Table.Td>
-                          <ActionIcon
-                            variant="subtle"
-                            size="sm"
-                            onClick={() => toggleRowExpansion(plugin.id)}
-                          >
-                            {expandedRows.has(plugin.id) ? (
-                              <IconChevronDown size={16} />
-                            ) : (
-                              <IconChevronRight size={16} />
-                            )}
-                          </ActionIcon>
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap="sm">
-                            <IconPlugConnected size={20} />
-                            <div>
-                              <Text fw={500}>{plugin.displayName}</Text>
-                              <Text size="xs" c="dimmed">
-                                {plugin.name}
-                              </Text>
-                            </div>
-                          </Group>
-                        </Table.Td>
-                        <Table.Td>
-                          <Code>{plugin.command}</Code>
-                        </Table.Td>
-                        <Table.Td>
-                          <Switch
-                            checked={plugin.enabled}
-                            onChange={() =>
-                              plugin.enabled
-                                ? disableMutation.mutate(plugin.id)
-                                : enableMutation.mutate(plugin.id)
-                            }
-                            disabled={
-                              enableMutation.isPending ||
-                              disableMutation.isPending
-                            }
-                          />
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap="xs">
-                            <Badge
-                              color={
-                                healthStatusColors[
-                                  plugin.healthStatus as PluginHealthStatus
-                                ] || "gray"
-                              }
-                              variant="light"
-                            >
-                              {plugin.healthStatus}
-                            </Badge>
-                            {plugin.failureCount > 0 && (
-                              <Tooltip
-                                label={`${plugin.failureCount} failures${plugin.lastFailureAt ? ` (last: ${new Date(plugin.lastFailureAt).toLocaleString()})` : ""}`}
-                              >
-                                <Badge color="red" variant="outline" size="sm">
-                                  {plugin.failureCount}
-                                </Badge>
-                              </Tooltip>
-                            )}
-                          </Group>
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap="xs">
-                            <Tooltip label="Test Connection">
+                        <Table.Th w={40} />
+                        <Table.Th>Plugin</Table.Th>
+                        <Table.Th>Command</Table.Th>
+                        <Table.Th>Status</Table.Th>
+                        <Table.Th>Health</Table.Th>
+                        <Table.Th>Actions</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {plugins.map((plugin) => (
+                        <Fragment key={plugin.id}>
+                          <Table.Tr>
+                            <Table.Td>
                               <ActionIcon
                                 variant="subtle"
-                                onClick={() => testMutation.mutate(plugin.id)}
-                                loading={
-                                  testMutation.isPending &&
-                                  testMutation.variables === plugin.id
+                                size="sm"
+                                onClick={() => toggleRowExpansion(plugin.id)}
+                                aria-label={
+                                  expandedRows.has(plugin.id)
+                                    ? "Collapse details"
+                                    : "Expand details"
                                 }
                               >
-                                <IconPlayerPlay size={16} />
+                                {expandedRows.has(plugin.id) ? (
+                                  <IconChevronDown size={16} />
+                                ) : (
+                                  <IconChevronRight size={16} />
+                                )}
                               </ActionIcon>
-                            </Tooltip>
-                            {plugin.failureCount > 0 && (
-                              <Tooltip label="Reset Failures">
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="yellow"
-                                  onClick={() =>
-                                    resetFailuresMutation.mutate(plugin.id)
-                                  }
-                                  loading={
-                                    resetFailuresMutation.isPending &&
-                                    resetFailuresMutation.variables ===
-                                      plugin.id
-                                  }
-                                >
-                                  <IconRefresh size={16} />
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
-                            <Tooltip label="Configure Plugin">
-                              <ActionIcon
-                                variant="subtle"
-                                color="blue"
-                                onClick={() => setConfigPlugin(plugin)}
-                              >
-                                <IconSettings size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                            <Tooltip label="Edit Plugin">
-                              <ActionIcon
-                                variant="subtle"
-                                onClick={() => handleEditPlugin(plugin)}
-                              >
-                                <IconEdit size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                            <Tooltip label="Delete Plugin">
-                              <ActionIcon
-                                variant="subtle"
-                                color="red"
-                                onClick={() => handleDeletePlugin(plugin)}
-                              >
-                                <IconTrash size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                          </Group>
-                        </Table.Td>
-                      </Table.Tr>
-                      <Table.Tr key={`${plugin.id}-details`}>
-                        <Table.Td colSpan={6} p={0}>
-                          <Collapse in={expandedRows.has(plugin.id)}>
-                            <Box
-                              p="md"
-                              bg="var(--mantine-color-dark-6)"
-                              style={{
-                                borderTop:
-                                  "1px solid var(--mantine-color-dark-4)",
-                              }}
-                            >
-                              <PluginDetails
-                                plugin={plugin}
-                                libraries={libraries}
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap="sm">
+                                <IconPlugConnected size={20} />
+                                <div>
+                                  <Text fw={500}>{plugin.displayName}</Text>
+                                  <Text size="xs" c="dimmed">
+                                    {plugin.name}
+                                  </Text>
+                                </div>
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>
+                              <Code>{plugin.command}</Code>
+                            </Table.Td>
+                            <Table.Td>
+                              <Switch
+                                checked={plugin.enabled}
+                                onChange={() =>
+                                  plugin.enabled
+                                    ? disableMutation.mutate(plugin.id)
+                                    : enableMutation.mutate(plugin.id)
+                                }
+                                disabled={
+                                  enableMutation.isPending ||
+                                  disableMutation.isPending
+                                }
                               />
-                            </Box>
-                          </Collapse>
-                        </Table.Td>
-                      </Table.Tr>
-                    </Fragment>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
-          </Card>
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap="xs">
+                                <Badge
+                                  color={
+                                    healthStatusColors[
+                                      plugin.healthStatus as PluginHealthStatus
+                                    ] || "gray"
+                                  }
+                                  variant="light"
+                                >
+                                  {plugin.healthStatus}
+                                </Badge>
+                                {plugin.failureCount > 0 && (
+                                  <Tooltip
+                                    label={`${plugin.failureCount} failures${plugin.lastFailureAt ? ` (last: ${new Date(plugin.lastFailureAt).toLocaleString()})` : ""}`}
+                                  >
+                                    <Badge
+                                      color="red"
+                                      variant="outline"
+                                      size="sm"
+                                    >
+                                      {plugin.failureCount}
+                                    </Badge>
+                                  </Tooltip>
+                                )}
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap="xs">
+                                <Tooltip label="Test Connection">
+                                  <ActionIcon
+                                    variant="subtle"
+                                    onClick={() =>
+                                      testMutation.mutate(plugin.id)
+                                    }
+                                    loading={
+                                      testMutation.isPending &&
+                                      testMutation.variables === plugin.id
+                                    }
+                                    aria-label="Test connection"
+                                  >
+                                    <IconPlayerPlay size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                {plugin.failureCount > 0 && (
+                                  <Tooltip label="Reset Failures">
+                                    <ActionIcon
+                                      variant="subtle"
+                                      color="yellow"
+                                      onClick={() =>
+                                        resetFailuresMutation.mutate(plugin.id)
+                                      }
+                                      loading={
+                                        resetFailuresMutation.isPending &&
+                                        resetFailuresMutation.variables ===
+                                          plugin.id
+                                      }
+                                      aria-label="Reset failures"
+                                    >
+                                      <IconRefresh size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                )}
+                                <Tooltip label="Configure Plugin">
+                                  <ActionIcon
+                                    variant="subtle"
+                                    color="blue"
+                                    onClick={() => setConfigPlugin(plugin)}
+                                    aria-label="Configure plugin"
+                                  >
+                                    <IconSettings size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Edit Plugin">
+                                  <ActionIcon
+                                    variant="subtle"
+                                    onClick={() => handleEditPlugin(plugin)}
+                                    aria-label="Edit plugin"
+                                  >
+                                    <IconEdit size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Delete Plugin">
+                                  <ActionIcon
+                                    variant="subtle"
+                                    color="red"
+                                    onClick={() => handleDeletePlugin(plugin)}
+                                  >
+                                    <IconTrash size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              </Group>
+                            </Table.Td>
+                          </Table.Tr>
+                          <Table.Tr key={`${plugin.id}-details`}>
+                            <Table.Td colSpan={6} p={0}>
+                              <Collapse in={expandedRows.has(plugin.id)}>
+                                <Box
+                                  p="md"
+                                  bg="var(--mantine-color-dark-6)"
+                                  style={{
+                                    borderTop:
+                                      "1px solid var(--mantine-color-dark-4)",
+                                  }}
+                                >
+                                  <PluginDetails
+                                    plugin={plugin}
+                                    libraries={libraries}
+                                  />
+                                </Box>
+                              </Collapse>
+                            </Table.Td>
+                          </Table.Tr>
+                        </Fragment>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Card>
+            )}
+            {isMobile && (
+              <Stack gap="sm">
+                {plugins.map((plugin) => (
+                  <Card key={plugin.id} withBorder padding="md">
+                    <Group justify="space-between" gap="xs" wrap="nowrap">
+                      <Group
+                        gap="sm"
+                        wrap="nowrap"
+                        style={{ minWidth: 0, flex: 1 }}
+                      >
+                        <IconPlugConnected size={20} />
+                        <div style={{ minWidth: 0 }}>
+                          <Text fw={500} style={{ wordBreak: "break-word" }}>
+                            {plugin.displayName}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {plugin.name}
+                          </Text>
+                        </div>
+                      </Group>
+                      <Switch
+                        checked={plugin.enabled}
+                        onChange={() =>
+                          plugin.enabled
+                            ? disableMutation.mutate(plugin.id)
+                            : enableMutation.mutate(plugin.id)
+                        }
+                        disabled={
+                          enableMutation.isPending || disableMutation.isPending
+                        }
+                        aria-label={
+                          plugin.enabled ? "Disable plugin" : "Enable plugin"
+                        }
+                      />
+                    </Group>
+                    <Stack gap="xs" mt="sm">
+                      <Group gap="xs" wrap="nowrap">
+                        <Text size="xs" c="dimmed">
+                          Command:
+                        </Text>
+                        <Code
+                          block
+                          style={{
+                            flex: 1,
+                            wordBreak: "break-all",
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {plugin.command}
+                        </Code>
+                      </Group>
+                      <Group gap="xs">
+                        <Badge
+                          color={
+                            healthStatusColors[
+                              plugin.healthStatus as PluginHealthStatus
+                            ] || "gray"
+                          }
+                          variant="light"
+                        >
+                          {plugin.healthStatus}
+                        </Badge>
+                        {plugin.failureCount > 0 && (
+                          <Tooltip
+                            label={`${plugin.failureCount} failures${plugin.lastFailureAt ? ` (last: ${new Date(plugin.lastFailureAt).toLocaleString()})` : ""}`}
+                          >
+                            <Badge color="red" variant="outline" size="sm">
+                              {plugin.failureCount}
+                            </Badge>
+                          </Tooltip>
+                        )}
+                      </Group>
+                    </Stack>
+                    <Group justify="space-between" wrap="nowrap" mt="sm">
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        leftSection={
+                          expandedRows.has(plugin.id) ? (
+                            <IconChevronDown size={14} />
+                          ) : (
+                            <IconChevronRight size={14} />
+                          )
+                        }
+                        onClick={() => toggleRowExpansion(plugin.id)}
+                      >
+                        Details
+                      </Button>
+                      <Group gap={4} wrap="nowrap">
+                        <Tooltip label="Test Connection">
+                          <ActionIcon
+                            variant="subtle"
+                            onClick={() => testMutation.mutate(plugin.id)}
+                            loading={
+                              testMutation.isPending &&
+                              testMutation.variables === plugin.id
+                            }
+                            aria-label="Test connection"
+                          >
+                            <IconPlayerPlay size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                        {plugin.failureCount > 0 && (
+                          <Tooltip label="Reset Failures">
+                            <ActionIcon
+                              variant="subtle"
+                              color="yellow"
+                              onClick={() =>
+                                resetFailuresMutation.mutate(plugin.id)
+                              }
+                              loading={
+                                resetFailuresMutation.isPending &&
+                                resetFailuresMutation.variables === plugin.id
+                              }
+                              aria-label="Reset failures"
+                            >
+                              <IconRefresh size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        <Tooltip label="Configure Plugin">
+                          <ActionIcon
+                            variant="subtle"
+                            color="blue"
+                            onClick={() => setConfigPlugin(plugin)}
+                            aria-label="Configure plugin"
+                          >
+                            <IconSettings size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label="Edit Plugin">
+                          <ActionIcon
+                            variant="subtle"
+                            onClick={() => handleEditPlugin(plugin)}
+                            aria-label="Edit plugin"
+                          >
+                            <IconEdit size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label="Delete Plugin">
+                          <ActionIcon
+                            variant="subtle"
+                            color="red"
+                            onClick={() => handleDeletePlugin(plugin)}
+                            aria-label="Delete plugin"
+                          >
+                            <IconTrash size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    </Group>
+                    <Collapse in={expandedRows.has(plugin.id)}>
+                      <Box
+                        mt="sm"
+                        p="md"
+                        bg="var(--mantine-color-dark-6)"
+                        style={{
+                          borderRadius: 4,
+                        }}
+                      >
+                        <PluginDetails plugin={plugin} libraries={libraries} />
+                      </Box>
+                    </Collapse>
+                  </Card>
+                ))}
+              </Stack>
+            )}
+          </>
         ) : (
           <Alert
             icon={<IconPlugConnected size={16} />}

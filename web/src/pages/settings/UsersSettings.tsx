@@ -15,7 +15,6 @@ import {
   Select,
   Stack,
   Switch,
-  Table,
   Text,
   TextInput,
   Title,
@@ -41,6 +40,7 @@ import { useSearchParams } from "react-router-dom";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { type UserDto, type UserListParams, usersApi } from "@/api/users";
 import { PermissionPicker } from "@/components/common";
+import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
 import { UserSharingTagGrants } from "@/components/users";
 import { useAuthStore } from "@/store/authStore";
 import { type Permission, ROLE_PERMISSIONS } from "@/types/permissions";
@@ -310,6 +310,80 @@ export function UsersSettings() {
   const totalPages = usersResponse?.totalPages ?? 1;
   const showPagination = total > PAGE_SIZE;
 
+  const userColumns: ResponsiveTableColumn<UserDto>[] = [
+    {
+      key: "user",
+      header: "User",
+      mobileLabel: "User",
+      mobilePrimary: true,
+      accessor: (user) => (
+        <Group gap="sm" wrap="nowrap">
+          <IconUser size={20} />
+          <div>
+            <Text fw={500}>{user.username}</Text>
+            {user.id === currentUser?.id && (
+              <Text size="xs" c="dimmed">
+                (You)
+              </Text>
+            )}
+          </div>
+        </Group>
+      ),
+    },
+    {
+      key: "email",
+      header: "Email",
+      accessor: (user) => (
+        <Text size="sm" style={{ wordBreak: "break-all" }}>
+          {user.email}
+        </Text>
+      ),
+    },
+    {
+      key: "role",
+      header: "Role",
+      accessor: (user) => (
+        <Badge
+          color={
+            user.role === "admin"
+              ? "blue"
+              : user.role === "maintainer"
+                ? "cyan"
+                : "gray"
+          }
+        >
+          {user.role === "admin"
+            ? "Admin"
+            : user.role === "maintainer"
+              ? "Maintainer"
+              : "Reader"}
+        </Badge>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      accessor: (user) => (
+        <Badge color={user.isActive ? "green" : "red"}>
+          {user.isActive ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      key: "created",
+      header: "Created",
+      accessor: (user) => new Date(user.createdAt).toLocaleDateString(),
+    },
+    {
+      key: "lastLogin",
+      header: "Last Login",
+      accessor: (user) =>
+        user.lastLoginAt
+          ? new Date(user.lastLoginAt).toLocaleString()
+          : "Never",
+    },
+  ];
+
   return (
     <Box py="xl" px="md">
       <Stack gap="xl">
@@ -436,92 +510,36 @@ export function UsersSettings() {
               </Group>
             )}
 
-            <Card withBorder>
-              <Table>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>User</Table.Th>
-                    <Table.Th>Email</Table.Th>
-                    <Table.Th>Role</Table.Th>
-                    <Table.Th>Status</Table.Th>
-                    <Table.Th>Created</Table.Th>
-                    <Table.Th>Last Login</Table.Th>
-                    <Table.Th>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {users.map((user: UserDto) => (
-                    <Table.Tr key={user.id}>
-                      <Table.Td>
-                        <Group gap="sm">
-                          <IconUser size={20} />
-                          <div>
-                            <Text fw={500}>{user.username}</Text>
-                            {user.id === currentUser?.id && (
-                              <Text size="xs" c="dimmed">
-                                (You)
-                              </Text>
-                            )}
-                          </div>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>{user.email}</Table.Td>
-                      <Table.Td>
-                        <Badge
-                          color={
-                            user.role === "admin"
-                              ? "blue"
-                              : user.role === "maintainer"
-                                ? "cyan"
-                                : "gray"
-                          }
-                        >
-                          {user.role === "admin"
-                            ? "Admin"
-                            : user.role === "maintainer"
-                              ? "Maintainer"
-                              : "Reader"}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Badge color={user.isActive ? "green" : "red"}>
-                          {user.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </Table.Td>
-                      <Table.Td>
-                        {user.lastLoginAt
-                          ? new Date(user.lastLoginAt).toLocaleString()
-                          : "Never"}
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Tooltip label="Edit User">
-                            <ActionIcon
-                              variant="subtle"
-                              onClick={() => handleEditUser(user)}
-                            >
-                              <IconEdit size={16} />
-                            </ActionIcon>
-                          </Tooltip>
-                          <Tooltip label="Delete User">
-                            <ActionIcon
-                              variant="subtle"
-                              color="red"
-                              onClick={() => handleDeleteUser(user)}
-                              disabled={user.id === currentUser?.id}
-                            >
-                              <IconTrash size={16} />
-                            </ActionIcon>
-                          </Tooltip>
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
+            <Card withBorder p={{ base: 0, xs: "md" }}>
+              <ResponsiveTable
+                data={users}
+                columns={userColumns}
+                getRowKey={(user) => user.id}
+                rowActions={(user) => (
+                  <>
+                    <Tooltip label="Edit User">
+                      <ActionIcon
+                        variant="subtle"
+                        onClick={() => handleEditUser(user)}
+                        aria-label={`Edit ${user.username}`}
+                      >
+                        <IconEdit size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                    <Tooltip label="Delete User">
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        onClick={() => handleDeleteUser(user)}
+                        disabled={user.id === currentUser?.id}
+                        aria-label={`Delete ${user.username}`}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </>
+                )}
+              />
             </Card>
 
             {/* Bottom Pagination */}
