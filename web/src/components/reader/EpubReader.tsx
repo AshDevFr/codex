@@ -7,6 +7,7 @@ import {
   Menu,
   Tooltip,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import {
   IconBookmark,
   IconList,
@@ -23,6 +24,7 @@ import {
 } from "react-reader";
 
 import { booksApi } from "@/api/books";
+import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import { useReaderStore } from "@/store/readerStore";
 
 import { BoundaryNotification } from "./BoundaryNotification";
@@ -35,6 +37,7 @@ import { useBoundaryNotification } from "./hooks/useBoundaryNotification";
 import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
 import { useEpubProgress } from "./hooks/useEpubProgress";
 import { useSeriesNavigation } from "./hooks/useSeriesNavigation";
+import { useTouchNav } from "./hooks/useTouchNav";
 import { ReaderToolbar } from "./ReaderToolbar";
 
 // EPUB theme definitions
@@ -116,8 +119,16 @@ const EPUB_FONT_FAMILIES = {
 /**
  * Generate ReactReader container styles based on the current theme.
  * This ensures the reader container background matches the EPUB content theme.
+ *
+ * On mobile (`isMobile = true`), the side-overlay chevron arrows are hidden;
+ * touch users rely on the tap-to-toolbar (R7-1) and swipe gestures for nav.
+ * The arrow buttons are inline-styled in react-reader (no class names to
+ * target), so the only reliable hook is the `readerStyles.arrow` override.
  */
-function getReaderStyles(theme: EpubTheme): IReactReaderStyle {
+function getReaderStyles(
+  theme: EpubTheme,
+  isMobile: boolean,
+): IReactReaderStyle {
   const themeColors = EPUB_THEMES[theme] ?? EPUB_THEMES.light;
   const isDark = theme === "dark" || theme === "slate";
 
@@ -131,6 +142,7 @@ function getReaderStyles(theme: EpubTheme): IReactReaderStyle {
     arrow: {
       ...ReactReaderStyle.arrow,
       color: isDark ? "#e0e0e0" : "#333",
+      ...(isMobile ? { display: "none" } : {}),
     },
     arrowHover: {
       ...ReactReaderStyle.arrowHover,
@@ -292,8 +304,16 @@ export function EpubReader({
   epubLineHeightRef.current = epubLineHeight;
   epubMarginRef.current = epubMargin;
 
-  // Memoize reader styles based on theme
-  const readerStyles = useMemo(() => getReaderStyles(epubTheme), [epubTheme]);
+  // Detect mobile viewport for touch-friendly tweaks (R7-1/R7-3):
+  // hide the side-arrow chevrons that overlap text below `xs`, and wire
+  // tap-to-toggle on the outer container as a fallback for the iframe boundary.
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
+
+  // Memoize reader styles based on theme + viewport (mobile hides side arrows)
+  const readerStyles = useMemo(
+    () => getReaderStyles(epubTheme, isMobile),
+    [epubTheme, isMobile],
+  );
 
   // Reader store state
   const toolbarVisible = useReaderStore((state) => state.toolbarVisible);
@@ -310,6 +330,12 @@ export function EpubReader({
   const setToolbarVisible = useReaderStore((state) => state.setToolbarVisible);
   const setFullscreen = useReaderStore((state) => state.setFullscreen);
   const toggleToolbar = useReaderStore((state) => state.toggleToolbar);
+
+  // Stable ref for toggleToolbar so the rendition `click` handler installed
+  // inside the (stable) `handleGetRendition` callback always sees the latest
+  // action without re-creating the rendition setup.
+  const toggleToolbarRef = useRef(toggleToolbar);
+  toggleToolbarRef.current = toggleToolbar;
 
   // Generate EPUB file URL
   const epubUrl = `/api/v1/books/${bookId}/file`;
@@ -617,6 +643,20 @@ export function EpubReader({
         : location.start.href;
       saveLocationRef.current(cfi, percentage, fullHref);
     });
+
+    // R7-1: tap inside the iframe content toggles the toolbar.
+    // epub.js's `passEvents` re-emits DOM events from the iframe via the
+    // rendition, so this fires for taps that the outer-container
+    // `useTouchNav` listeners can't see across the iframe boundary.
+    // Skip when the click originates on a link or form control so internal
+    // navigation/interactions don't double-trigger the toolbar.
+    rendition.on("click", (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest("a, button, input, textarea, select, label")) {
+        return;
+      }
+      toggleToolbarRef.current();
+    });
   }, []);
 
   // Handle TOC navigation
@@ -744,6 +784,24 @@ export function EpubReader({
   const handleSearchNavigate = useCallback((cfi: string) => {
     renditionRef.current?.display(cfi);
   }, []);
+
+  // R7-1: tap-to-toggle toolbar on the outer container. Most touches happen
+  // inside the epub.js iframe and never reach these listeners (handled by
+  // the rendition `click` handler in `handleGetRendition`); this covers the
+  // margin areas above/below the iframe and lets swipes here drive page nav.
+  // Listeners are passive so they don't interfere with epub.js's own gestures.
+  const handleNextPage = useCallback(() => {
+    renditionRef.current?.next();
+  }, []);
+  const handlePrevPage = useCallback(() => {
+    renditionRef.current?.prev();
+  }, []);
+  const { touchRef } = useTouchNav({
+    enabled: !settingsOpened && !tocOpened && !bookmarksOpened && !searchOpened,
+    onNextPage: handleNextPage,
+    onPrevPage: handlePrevPage,
+    onTap: toggleToolbar,
+  });
 
   // Keyboard navigation
   // Note: Arrow key navigation is handled by ReactReader/epub.js internally via the iframe,
@@ -882,9 +940,20 @@ export function EpubReader({
     return theme.body.background;
   };
 
+  // Combined ref callback: keep `containerRef` for fullscreen handling and
+  // attach the useTouchNav listeners (R7-1) on the same outer container.
+  const setContainerRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current =
+        element;
+      touchRef(element);
+    },
+    [touchRef],
+  );
+
   return (
     <Box
-      ref={containerRef}
+      ref={setContainerRef}
       onMouseMove={handleMouseMove}
       style={{
         width: "100vw",

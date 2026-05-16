@@ -2,6 +2,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
 import { renderWithProviders, screen } from "@/test/utils";
 import { EpubReader } from "./EpubReader";
+import { useTouchNav } from "./hooks/useTouchNav";
+
+// Mock useTouchNav so we can drive its callbacks directly in tests (R7-1).
+// Returning a no-op ref keeps the production wiring code happy.
+vi.mock("./hooks/useTouchNav", () => ({
+  useTouchNav: vi.fn(() => ({ touchRef: vi.fn() })),
+}));
+
+// Captures the per-event handlers `EpubReader` registers on the rendition,
+// so tests can fire (e.g.) the "click" handler to verify R7-1 toolbar toggle.
+const renditionHandlers: Record<string, (...args: unknown[]) => void> = {};
+// Stash the latest readerStyles ReactReader received so R7-3 tests can assert
+// the side-arrow `display: none` override is applied on mobile viewports.
+let lastReaderStyles: Record<string, Record<string, unknown>> | null = null;
 
 // Mock react-reader since it's a complex library that requires actual EPUB files
 vi.mock("react-reader", () => ({
@@ -11,8 +25,10 @@ vi.mock("react-reader", () => ({
       location: _location,
       locationChanged: _locationChanged,
       getRendition,
+      readerStyles,
       showToc,
     }) => {
+      lastReaderStyles = readerStyles ?? null;
       // Simulate getting rendition on mount
       const mockRendition = {
         themes: {
@@ -35,8 +51,12 @@ vi.mock("react-reader", () => ({
             get: vi.fn(),
           },
         },
-        on: vi.fn(),
+        on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+          renditionHandlers[event] = handler;
+        }),
         display: vi.fn(),
+        next: vi.fn(),
+        prev: vi.fn(),
       };
 
       // Call getRendition callback if provided
@@ -144,6 +164,21 @@ const defaultProps = {
 describe("EpubReader", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    for (const k of Object.keys(renditionHandlers)) {
+      delete renditionHandlers[k];
+    }
+    lastReaderStyles = null;
+    // Default matchMedia: not mobile. Individual tests can override.
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
     useReaderStore.setState({
       settings: { ...defaultSettings },
       ...defaultSessionState,
@@ -336,6 +371,75 @@ describe("EpubReader", () => {
 
       // EpubSearch is rendered in toolbar
       expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
+    });
+  });
+
+  describe("mobile tap-to-toggle toolbar (R7-1)", () => {
+    it("wires useTouchNav with onTap that toggles the toolbar", () => {
+      renderWithProviders(<EpubReader {...defaultProps} />);
+
+      expect(useTouchNav).toHaveBeenCalled();
+      const opts = vi.mocked(useTouchNav).mock.calls.at(-1)?.[0];
+      expect(opts?.onTap).toBe(useReaderStore.getState().toggleToolbar);
+
+      // Drive the captured onTap to verify it flips toolbarVisible
+      useReaderStore.setState({ toolbarVisible: true });
+      opts?.onTap?.();
+      expect(useReaderStore.getState().toolbarVisible).toBe(false);
+      opts?.onTap?.();
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+    });
+
+    it("registers a rendition click handler that toggles the toolbar", async () => {
+      renderWithProviders(<EpubReader {...defaultProps} />);
+
+      // Rendition is wired asynchronously via setTimeout in the mock
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(renditionHandlers.click).toBeDefined();
+
+      useReaderStore.setState({ toolbarVisible: true });
+      renditionHandlers.click({ target: document.createElement("p") });
+      expect(useReaderStore.getState().toolbarVisible).toBe(false);
+    });
+
+    it("rendition click handler ignores taps on links and form controls", async () => {
+      renderWithProviders(<EpubReader {...defaultProps} />);
+      await new Promise((r) => setTimeout(r, 0));
+
+      useReaderStore.setState({ toolbarVisible: true });
+      const link = document.createElement("a");
+      renditionHandlers.click({ target: link });
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+
+      const input = document.createElement("input");
+      renditionHandlers.click({ target: input });
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+    });
+  });
+
+  describe("mobile reader styles (R7-3)", () => {
+    it("does not hide side arrows on non-mobile viewports", () => {
+      renderWithProviders(<EpubReader {...defaultProps} />);
+
+      expect(lastReaderStyles?.arrow?.display).toBeUndefined();
+    });
+
+    it("hides react-reader side arrows on mobile viewports", () => {
+      window.matchMedia = vi.fn().mockImplementation((query) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+
+      renderWithProviders(<EpubReader {...defaultProps} />);
+
+      expect(lastReaderStyles?.arrow?.display).toBe("none");
     });
   });
 
