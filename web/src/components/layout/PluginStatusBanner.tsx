@@ -1,9 +1,11 @@
-import { Alert, Anchor, Group, Text } from "@mantine/core";
+import { Alert, Anchor, Group, Stack, Text } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { IconPlugConnectedX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { pluginsApi } from "@/api/plugins";
+import { MOBILE_MEDIA_QUERY } from "@/components/ui/ResponsiveTable";
 import { useAuthStore } from "@/store/authStore";
 
 // Session storage key for dismissed plugins
@@ -40,6 +42,7 @@ function dismissPlugin(pluginId: string): void {
 export function PluginStatusBanner() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === "admin";
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(
     getDismissedPluginIds,
   );
@@ -108,16 +111,29 @@ export function PluginStatusBanner() {
       onClose={handleDismissAll}
       closeButtonLabel="Dismiss all"
     >
-      <Group justify="space-between" wrap="nowrap">
-        <Text size="sm">
-          {visiblePlugins.length === 1
-            ? `Plugin "${pluginNames}" is disabled due to failures.`
-            : `${visiblePlugins.length} plugins are having issues: ${pluginNames}${moreCount > 0 ? ` and ${moreCount} more` : ""}.`}
-        </Text>
-        <Anchor component={Link} to="/settings/plugins" size="sm">
-          View Plugins
-        </Anchor>
-      </Group>
+      {isMobile ? (
+        <Stack gap={4} align="flex-start">
+          <Text size="sm">
+            {visiblePlugins.length === 1
+              ? `Plugin "${pluginNames}" is disabled due to failures.`
+              : `${visiblePlugins.length} plugins are having issues: ${pluginNames}${moreCount > 0 ? ` and ${moreCount} more` : ""}.`}
+          </Text>
+          <Anchor component={Link} to="/settings/plugins" size="sm">
+            View Plugins
+          </Anchor>
+        </Stack>
+      ) : (
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm">
+            {visiblePlugins.length === 1
+              ? `Plugin "${pluginNames}" is disabled due to failures.`
+              : `${visiblePlugins.length} plugins are having issues: ${pluginNames}${moreCount > 0 ? ` and ${moreCount} more` : ""}.`}
+          </Text>
+          <Anchor component={Link} to="/settings/plugins" size="sm">
+            View Plugins
+          </Anchor>
+        </Group>
+      )}
     </Alert>
   );
 }
