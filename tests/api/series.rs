@@ -850,6 +850,77 @@ async fn test_get_series_upstream_gap_omitted_when_not_tracked() {
     assert_eq!(dto.upstream_chapter_gap, None);
     assert_eq!(dto.upstream_volume_gap, None);
     assert_eq!(dto.upstream_gap_provider, None);
+    assert!(
+        !dto.tracked,
+        "series with no tracking row should report tracked=false"
+    );
+}
+
+#[tokio::test]
+async fn test_get_series_dto_exposes_tracked_when_tracking_enabled() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let series_id = setup_tracked_series_with_gap(
+        &db,
+        TrackedSeriesGapSetup {
+            track_chapters: true,
+            track_volumes: true,
+            total_chapter_count: None,
+            total_volume_count: None,
+            local_max_chapter: None,
+            local_max_volume: None,
+            external_id_source: None,
+        },
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series_id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert!(dto.tracked, "tracked series should report tracked=true");
+}
+
+#[tokio::test]
+async fn test_get_series_dto_exposes_tracked_false_when_tracking_row_disabled() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Disabled", None)
+        .await
+        .unwrap();
+
+    SeriesTrackingRepository::upsert(
+        &db,
+        series.id,
+        TrackingUpdate {
+            tracked: Some(false),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request = get_request_with_auth(&format!("/api/v1/series/{}", series.id), &token);
+    let (status, response): (StatusCode, Option<SeriesDto>) = make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let dto = response.unwrap();
+    assert!(
+        !dto.tracked,
+        "series with tracked=false row should report tracked=false"
+    );
 }
 
 #[tokio::test]

@@ -10455,6 +10455,12 @@ export interface components {
             /** @description Tags assigned to this series */
             tags: components["schemas"]["TagDto"][];
             /**
+             * @description Whether release tracking is enabled for this series.
+             *     See `SeriesDto::tracked`.
+             * @example false
+             */
+            tracked: boolean;
+            /**
              * Format: int64
              * @description Number of unread books in this series (user-specific)
              * @example 2
@@ -13128,6 +13134,15 @@ export interface components {
                  * @example batman year one
                  */
                 titleSort?: string | null;
+                /**
+                 * @description Whether release tracking is enabled for this series.
+                 *
+                 *     Mirrors `series_tracking.tracked`. `false` when no tracking row exists.
+                 *     Exposed so list views can surface a tracking indicator without an extra
+                 *     per-card request.
+                 * @example false
+                 */
+                tracked: boolean;
                 /**
                  * Format: int64
                  * @description Number of unread books in this series (user-specific)
@@ -16005,6 +16020,15 @@ export interface components {
              * @example batman year one
              */
             titleSort?: string | null;
+            /**
+             * @description Whether release tracking is enabled for this series.
+             *
+             *     Mirrors `series_tracking.tracked`. `false` when no tracking row exists.
+             *     Exposed so list views can surface a tracking indicator without an extra
+             *     per-card request.
+             * @example false
+             */
+            tracked: boolean;
             /**
              * Format: int64
              * @description Number of unread books in this series (user-specific)

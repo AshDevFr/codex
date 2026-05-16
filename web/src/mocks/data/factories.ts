@@ -254,6 +254,7 @@ export const createSeries = (overrides: Partial<SeriesDto> = {}): SeriesDto => {
     selectedCoverSource: "first_book",
     hasCustomCover: false,
     unreadCount: faker.number.int({ min: 0, max: 10 }),
+    tracked: faker.datatype.boolean({ probability: 0.3 }),
     localMaxVolume,
     localMaxChapter,
     volumesOwned,

@@ -188,7 +188,8 @@ async fn series_to_dto(
     let tracking = SeriesTrackingRepository::get(db, series.id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series tracking: {:?}", e)))?;
-    let external_ids = if tracking.as_ref().map(|t| t.tracked).unwrap_or(false) {
+    let tracked = tracking.as_ref().map(|t| t.tracked).unwrap_or(false);
+    let external_ids = if tracked {
         SeriesExternalIdRepository::get_for_series(db, series.id)
             .await
             .map_err(|e| {
@@ -227,6 +228,7 @@ async fn series_to_dto(
         selected_cover_source: selected_cover.map(|c| c.source),
         has_custom_cover: Some(has_custom_cover),
         unread_count,
+        tracked,
         upstream_chapter_gap,
         upstream_volume_gap,
         upstream_gap_provider,
@@ -457,6 +459,10 @@ async fn series_to_full_dtos_batched(
             .get(&series_id)
             .map(|v| v.as_slice())
             .unwrap_or(&[]);
+        let tracked = tracking_map
+            .get(&series_id)
+            .map(|t| t.tracked)
+            .unwrap_or(false);
         let UpstreamGap {
             chapter_gap: upstream_chapter_gap,
             volume_gap: upstream_volume_gap,
@@ -482,6 +488,7 @@ async fn series_to_full_dtos_batched(
             upstream_volume_gap,
             upstream_gap_provider,
             unread_count,
+            tracked,
             path: Some(series.path),
             selected_cover_source: selected_cover.map(|c| c.source.clone()),
             has_custom_cover: Some(has_custom_cover),

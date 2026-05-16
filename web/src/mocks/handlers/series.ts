@@ -1559,6 +1559,7 @@ function toFullSeriesResponse(seriesItem: (typeof mockSeries)[number]) {
     libraryName: seriesItem.libraryName || "Unknown Library",
     bookCount: seriesItem.bookCount,
     unreadCount: seriesItem.unreadCount,
+    tracked: seriesItem.tracked,
     path: `/media/comics/${seriesItem.title.replace(/[^a-zA-Z0-9]/g, "-")}`,
     selectedCoverSource: "first_book",
     hasCustomCover: false,

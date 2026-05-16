@@ -14,6 +14,9 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
   IconAnalyze,
+  IconBell,
+  IconBellOff,
+  IconBellRinging,
   IconBook,
   IconBookOff,
   IconCheck,
@@ -25,6 +28,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
+import { trackingApi } from "@/api/tracking";
 import { AppLink } from "@/components/common";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
@@ -366,6 +370,43 @@ export const MediaCard = memo(function MediaCard({
     },
   });
 
+  // Tracking toggle for the series card. The SeriesDto carries `tracked`, so
+  // the card knows its own state and can render the indicator + dropdown
+  // label without a per-card fetch. On success we refresh series queries so
+  // the tracked indicator updates immediately, and prime the per-series
+  // tracking query cache so the detail page reads consistent state.
+  const seriesTrackToggleMutation = useMutation({
+    mutationFn: (next: boolean) => {
+      if (!series) throw new Error("Series not available");
+      return trackingApi.updateTracking(series.id, { tracked: next });
+    },
+    onSuccess: (data) => {
+      if (series) {
+        queryClient.setQueryData(["series", series.id, "tracking"], data);
+      }
+      queryClient.refetchQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0] as string;
+          return key === "series" || key === "series-detail";
+        },
+      });
+      notifications.show({
+        title: data.tracked ? "Tracking enabled" : "Tracking disabled",
+        message: data.tracked
+          ? "This series will now be tracked for releases."
+          : "Release tracking has been turned off.",
+        color: data.tracked ? "green" : "gray",
+      });
+    },
+    onError: (error: Error) => {
+      notifications.show({
+        title: "Failed to update tracking",
+        message: error.message || "Could not toggle release tracking",
+        color: "red",
+      });
+    },
+  });
+
   const title = book
     ? `${book.number !== undefined && book.number !== null ? `${book.number} - ` : ""}${book.title}`
     : series?.title || "";
@@ -497,6 +538,39 @@ export const MediaCard = memo(function MediaCard({
                 }}
               />
             </div>
+          )}
+          {/* Tracking indicator - bell glyph top-left, centered on the same
+              slot the selection checkbox occupies so the corner stays stable
+              when toggling in/out of selection mode. Hidden in selection
+              mode so the checkbox takes over. Drop shadow keeps it legible
+              on light covers. */}
+          {type === "series" && series?.tracked && !isSelectionMode && (
+            <Tooltip
+              label="Release tracking enabled"
+              openDelay={300}
+              withinPortal
+            >
+              <div
+                role="img"
+                aria-label="Release tracking enabled"
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: 12,
+                  width: 20,
+                  height: 20,
+                  color: "#ff6b35",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6))",
+                  zIndex: 2,
+                  pointerEvents: "auto",
+                }}
+              >
+                <IconBellRinging size={20} stroke={2.25} />
+              </div>
+            </Tooltip>
           )}
           {/* Unread indicator - Triangle for books, Square for series */}
           {type === "book" && book && !book.readProgress && (
@@ -645,6 +719,28 @@ export const MediaCard = memo(function MediaCard({
                             : "Mark as Unread"}
                         </Menu.Item>
                       )}
+                    {canWriteSeries && series && (
+                      <Menu.Item
+                        leftSection={
+                          series.tracked ? (
+                            <IconBellOff size={14} />
+                          ) : (
+                            <IconBell size={14} />
+                          )
+                        }
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          seriesTrackToggleMutation.mutate(!series.tracked);
+                        }}
+                        disabled={seriesTrackToggleMutation.isPending}
+                      >
+                        {seriesTrackToggleMutation.isPending
+                          ? "Updating..."
+                          : series.tracked
+                            ? "Stop Tracking"
+                            : "Start Tracking"}
+                      </Menu.Item>
+                    )}
                     {canWriteSeries && (
                       <>
                         <Menu.Item

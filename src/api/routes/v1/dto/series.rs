@@ -249,6 +249,14 @@ pub struct SeriesDto {
     #[schema(example = 2)]
     pub unread_count: Option<i64>,
 
+    /// Whether release tracking is enabled for this series.
+    ///
+    /// Mirrors `series_tracking.tracked`. `false` when no tracking row exists.
+    /// Exposed so list views can surface a tracking indicator without an extra
+    /// per-card request.
+    #[schema(example = false)]
+    pub tracked: bool,
+
     /// Difference between the upstream original-language chapter count
     /// (`series_metadata.total_chapter_count`, supplied by metadata
     /// providers like MangaBaka or AniList) and the highest locally-owned
@@ -1315,6 +1323,11 @@ pub struct FullSeriesResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 2)]
     pub unread_count: Option<i64>,
+
+    /// Whether release tracking is enabled for this series.
+    /// See `SeriesDto::tracked`.
+    #[schema(example = false)]
+    pub tracked: bool,
 
     /// Filesystem path to the series directory
     #[serde(skip_serializing_if = "Option::is_none")]

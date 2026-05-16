@@ -25050,6 +25050,7 @@
           "libraryId",
           "libraryName",
           "bookCount",
+          "tracked",
           "metadata",
           "genres",
           "tags",
@@ -25177,6 +25178,11 @@
               "$ref": "#/components/schemas/TagDto"
             },
             "description": "Tags assigned to this series"
+          },
+          "tracked": {
+            "type": "boolean",
+            "description": "Whether release tracking is enabled for this series.\nSee `SeriesDto::tracked`.",
+            "example": false
           },
           "unreadCount": {
             "type": [
@@ -29970,6 +29976,7 @@
                 "libraryName",
                 "title",
                 "bookCount",
+                "tracked",
                 "createdAt",
                 "updatedAt"
               ],
@@ -30073,6 +30080,11 @@
                   ],
                   "description": "Sort title from series_metadata (for ordering)",
                   "example": "batman year one"
+                },
+                "tracked": {
+                  "type": "boolean",
+                  "description": "Whether release tracking is enabled for this series.\n\nMirrors `series_tracking.tracked`. `false` when no tracking row exists.\nExposed so list views can surface a tracking indicator without an extra\nper-card request.",
+                  "example": false
                 },
                 "unreadCount": {
                   "type": [
@@ -34999,6 +35011,7 @@
           "libraryName",
           "title",
           "bookCount",
+          "tracked",
           "createdAt",
           "updatedAt"
         ],
@@ -35102,6 +35115,11 @@
             ],
             "description": "Sort title from series_metadata (for ordering)",
             "example": "batman year one"
+          },
+          "tracked": {
+            "type": "boolean",
+            "description": "Whether release tracking is enabled for this series.\n\nMirrors `series_tracking.tracked`. `false` when no tracking row exists.\nExposed so list views can surface a tracking indicator without an extra\nper-card request.",
+            "example": false
           },
           "unreadCount": {
             "type": [
