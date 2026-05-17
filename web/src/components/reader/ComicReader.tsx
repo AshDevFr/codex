@@ -415,32 +415,6 @@ export function ComicReader({
     handleStartBoundary(useReaderStore.getState().boundaryState);
   }, [handleStartBoundary]);
 
-  // Handle click zones for single-page navigation
-  const handleSinglePageClick = useCallback(
-    (zone: "left" | "center" | "right") => {
-      if (zone === "center") {
-        toggleToolbar();
-        return;
-      }
-
-      // Adjust for reading direction
-      // Uses wrapped handlers that set navigation direction for transitions
-      if (readingDirection === "ltr") {
-        if (zone === "left") handlePrevPageWithDirection();
-        if (zone === "right") handleNextPageWithDirection();
-      } else {
-        if (zone === "left") handleNextPageWithDirection();
-        if (zone === "right") handlePrevPageWithDirection();
-      }
-    },
-    [
-      readingDirection,
-      handleNextPageWithDirection,
-      handlePrevPageWithDirection,
-      toggleToolbar,
-    ],
-  );
-
   // Generate page URL
   const getPageUrl = useCallback(
     (pageNumber: number) => {
@@ -571,20 +545,6 @@ export function ComicReader({
     handlePrevPage,
     setLastNavigationDirection,
   ]);
-
-  // Handle click zones for double-page navigation (left/right halves only)
-  const handleDoublePageClick = useCallback(
-    (zone: "left" | "right") => {
-      // In double-page mode, left/right zones navigate spreads
-      // Reading direction is already handled in DoublePageSpread component
-      if (zone === "left") {
-        handleSpreadPrevPage();
-      } else {
-        handleSpreadNextPage();
-      }
-    },
-    [handleSpreadPrevPage, handleSpreadNextPage],
-  );
 
   // Keyboard navigation with series navigation support
   // In continuous/webtoon mode, scroll keys are left to the browser;
@@ -833,8 +793,6 @@ export function ComicReader({
                 pages={displayPages}
                 fitMode={fitMode}
                 backgroundColor={backgroundColor}
-                readingDirection={readingDirection}
-                onClick={handleDoublePageClick}
                 onPageOrientationDetected={handlePageOrientationDetected}
               />
             ) : (
@@ -843,7 +801,6 @@ export function ComicReader({
                 alt={`Page ${currentPage} of ${title}`}
                 fitMode={fitMode}
                 backgroundColor={backgroundColor}
-                onClick={handleSinglePageClick}
                 onError={handlePageError}
               />
             )}

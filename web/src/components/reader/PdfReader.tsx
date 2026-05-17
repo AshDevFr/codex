@@ -523,27 +523,6 @@ export function PdfReader({
     [pdfPageDimensions],
   );
 
-  // Page click handler
-  const handlePageClick = useCallback(
-    (e: React.MouseEvent) => {
-      const rect = pageContainerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const x = e.clientX - rect.left;
-      const width = rect.width;
-      const relativeX = x / width;
-
-      if (relativeX < 0.3) {
-        handlePrevPage();
-      } else if (relativeX > 0.7) {
-        handleNextPage();
-      } else {
-        toggleToolbar();
-      }
-    },
-    [handlePrevPage, handleNextPage, toggleToolbar],
-  );
-
   // Sync URL query parameter with current page
   useEffect(() => {
     if (currentPage > 0 && initializedBookIdRef.current !== null) {
@@ -804,7 +783,6 @@ export function PdfReader({
       ) : (
         <Box
           ref={setPageContainerRef}
-          onClick={handlePageClick}
           style={{
             ...pageContainerStyle,
             // Allow native pinch-zoom for PDF pages — text is often small

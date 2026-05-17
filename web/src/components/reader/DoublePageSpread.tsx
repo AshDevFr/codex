@@ -4,7 +4,6 @@ import type {
   BackgroundColor,
   FitMode,
   PageOrientation,
-  ReadingDirection,
 } from "@/store/readerStore";
 import { useReaderStore } from "@/store/readerStore";
 import { detectPageOrientation } from "./utils/spreadCalculation";
@@ -22,12 +21,8 @@ interface DoublePageSpreadProps {
   fitMode: FitMode;
   /** Background color */
   backgroundColor: BackgroundColor;
-  /** Reading direction (affects page order in display) */
-  readingDirection: ReadingDirection;
   /** Whether this spread is currently visible */
   isVisible?: boolean;
-  /** Click handler for navigation zones */
-  onClick?: (zone: "left" | "right") => void;
   /** Callback when a page's dimensions are detected */
   onPageOrientationDetected?: (
     pageNumber: number,
@@ -167,9 +162,7 @@ export function DoublePageSpread({
   pages,
   fitMode,
   backgroundColor,
-  readingDirection,
   isVisible = true,
-  onClick,
   onPageOrientationDetected,
 }: DoublePageSpreadProps) {
   // Subscribe to preloadedImages changes
@@ -239,26 +232,6 @@ export function DoublePageSpread({
     }
   }, []);
 
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!onClick) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const width = rect.width;
-
-    // For double-page mode, divide into halves: left half = prev, right half = next
-    // In RTL mode, this is reversed
-    const isLeftHalf = x < width / 2;
-
-    if (readingDirection === "rtl") {
-      // RTL: left half advances (next), right half goes back (prev)
-      onClick(isLeftHalf ? "right" : "left");
-    } else {
-      // LTR: left half goes back (prev), right half advances (next)
-      onClick(isLeftHalf ? "left" : "right");
-    }
-  };
-
   if (!isVisible) {
     return null;
   }
@@ -285,11 +258,9 @@ export function DoublePageSpread({
         alignItems: "center",
         justifyContent: "center",
         gap: 0,
-        cursor: onClick ? "pointer" : "default",
         userSelect: "none",
         position: "relative",
       }}
-      onClick={handleClick}
       data-testid="double-page-spread"
     >
       {displayPages.map((page, index) => {

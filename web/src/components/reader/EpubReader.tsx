@@ -35,7 +35,7 @@ import { EpubBookmarks } from "./EpubBookmarks";
 import { EpubReaderSettings } from "./EpubReaderSettings";
 import { EpubSearch, type SearchResult } from "./EpubSearch";
 import { EpubTableOfContents } from "./EpubTableOfContents";
-import { classifySwipe } from "./hooks/swipeGesture";
+import { classifySwipe, classifyTapZone } from "./hooks/swipeGesture";
 import { useAdjacentBooks } from "./hooks/useAdjacentBooks";
 import { useBoundaryNotification } from "./hooks/useBoundaryNotification";
 import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
@@ -716,9 +716,32 @@ export function EpubReader({
         });
 
         switch (gesture) {
-          case "tap":
-            toggleToolbarRef.current();
+          case "tap": {
+            // Classify by zone so a center tap reveals the toolbar while
+            // edge taps page forward/back, matching the outer-container
+            // useTouchNav behavior (left/center/right for horizontal flow,
+            // top/center/bottom for TTB). Use the iframe's viewport because
+            // pointer coords are relative to the iframe document.
+            const view = doc.defaultView;
+            const width = view?.innerWidth ?? doc.documentElement.clientWidth;
+            const height =
+              view?.innerHeight ?? doc.documentElement.clientHeight;
+            const zone = classifyTapZone(
+              event.clientX,
+              event.clientY,
+              width,
+              height,
+              { readingDirection },
+            );
+            if (zone === "center") {
+              toggleToolbarRef.current();
+            } else if (zone === "next") {
+              renditionRef.current?.next();
+            } else {
+              renditionRef.current?.prev();
+            }
             break;
+          }
           case "next":
             renditionRef.current?.next();
             break;

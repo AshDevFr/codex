@@ -418,6 +418,163 @@ describe("useTouchNav", () => {
     });
   });
 
+  describe("zone-aware tap dispatch", () => {
+    // jsdom doesn't compute layout, so we stub getBoundingClientRect to make
+    // the element 900x600 anchored at (0,0). Horizontal thirds: 0..300, 300..600,
+    // 600..900. Vertical thirds: 0..200, 200..400, 400..600.
+    const stubRect = (w = 900, h = 600) => {
+      vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        right: w,
+        bottom: h,
+        width: w,
+        height: h,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
+    };
+
+    it("calls onPrevPage for a tap in the left third (LTR)", async () => {
+      stubRect();
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await simulateSwipe(100, 300, 100, 300);
+
+      expect(mockPrevPage).toHaveBeenCalledTimes(1);
+      expect(mockTap).not.toHaveBeenCalled();
+      expect(mockNextPage).not.toHaveBeenCalled();
+    });
+
+    it("calls onTap for a tap in the middle third (LTR)", async () => {
+      stubRect();
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await simulateSwipe(450, 300, 450, 300);
+
+      expect(mockTap).toHaveBeenCalledTimes(1);
+      expect(mockPrevPage).not.toHaveBeenCalled();
+      expect(mockNextPage).not.toHaveBeenCalled();
+    });
+
+    it("calls onNextPage for a tap in the right third (LTR)", async () => {
+      stubRect();
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await simulateSwipe(800, 300, 800, 300);
+
+      expect(mockNextPage).toHaveBeenCalledTimes(1);
+      expect(mockTap).not.toHaveBeenCalled();
+      expect(mockPrevPage).not.toHaveBeenCalled();
+    });
+
+    it("flips left/right zones in RTL", async () => {
+      stubRect();
+      useReaderStore.setState({ readingDirectionOverride: "rtl" });
+
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await simulateSwipe(100, 300, 100, 300);
+      expect(mockNextPage).toHaveBeenCalledTimes(1);
+
+      await simulateSwipe(800, 300, 800, 300);
+      expect(mockPrevPage).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses vertical thirds in TTB mode", async () => {
+      stubRect();
+      useReaderStore.setState({ readingDirectionOverride: "ttb" });
+
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      // Top third → prev.
+      await simulateSwipe(450, 50, 450, 50);
+      expect(mockPrevPage).toHaveBeenCalledTimes(1);
+
+      // Middle third → toolbar toggle.
+      await simulateSwipe(450, 300, 450, 300);
+      expect(mockTap).toHaveBeenCalledTimes(1);
+
+      // Bottom third → next.
+      await simulateSwipe(450, 550, 450, 550);
+      expect(mockNextPage).toHaveBeenCalledTimes(1);
+    });
+
+    it("treats every tap as a center tap when tapZones is false", async () => {
+      stubRect();
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+          tapZones: false,
+        }),
+      );
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await simulateSwipe(100, 300, 100, 300);
+      await simulateSwipe(800, 300, 800, 300);
+
+      expect(mockTap).toHaveBeenCalledTimes(2);
+      expect(mockNextPage).not.toHaveBeenCalled();
+      expect(mockPrevPage).not.toHaveBeenCalled();
+    });
+  });
+
   describe("disabled state", () => {
     it("does not respond when disabled", async () => {
       const { result } = renderHook(() =>
