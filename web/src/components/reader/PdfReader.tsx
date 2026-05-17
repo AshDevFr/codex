@@ -785,10 +785,13 @@ export function PdfReader({
           ref={setPageContainerRef}
           style={{
             ...pageContainerStyle,
-            // Allow native pinch-zoom for PDF pages — text is often small
-            // and users need to zoom to read. `useTouchNav` uses passive
-            // listeners, so this does not block swipe/tap detection.
-            touchAction: "pan-x pan-y pinch-zoom",
+            // Allow vertical pan (long PDF pages need it in fit-width) and
+            // pinch-zoom for small text, but omit `pan-x` so iOS WebKit
+            // doesn't consume horizontal swipes for scroll/back-navigation.
+            // Otherwise the browser fires pointercancel mid-swipe and our
+            // gesture handler never resolves. `useTouchNav` listens
+            // passively, so this is the only gate on horizontal pans.
+            touchAction: "pan-y pinch-zoom",
           }}
         >
           {pageError ? (

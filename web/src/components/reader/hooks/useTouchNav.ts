@@ -169,11 +169,42 @@ export function useTouchNav({
     ],
   );
 
-  const handlePointerCancel = useCallback((e: PointerEvent) => {
-    if (gestureState.current.pointerId === e.pointerId) {
+  const handlePointerCancel = useCallback(
+    (e: PointerEvent) => {
+      const state = gestureState.current;
+      if (state.pointerId === null || state.pointerId !== e.pointerId) return;
+
+      const deltaX = e.clientX - state.startX;
+      const deltaY = e.clientY - state.startY;
+      const deltaTime = (e.timeStamp || Date.now()) - state.startTime;
       gestureState.current = { ...INITIAL_GESTURE };
-    }
-  }, []);
+
+      if (!enabled) return;
+
+      // iOS WebKit fires pointercancel mid-gesture when it claims a swipe for
+      // its own scroll/back-navigation logic. If the user moved far enough to
+      // count as a swipe, treat the cancel as the gesture's terminus so users
+      // don't have to fight the browser. Taps (negligible movement) are
+      // discarded because a canceled tap usually means the browser took the
+      // press for something else (text selection, context menu).
+      const gesture = classifySwipe(deltaX, deltaY, deltaTime, {
+        minSwipeDistance,
+        maxSwipeTime,
+        readingDirection,
+      });
+
+      if (gesture === "next") nextPage();
+      else if (gesture === "prev") prevPage();
+    },
+    [
+      enabled,
+      minSwipeDistance,
+      maxSwipeTime,
+      readingDirection,
+      nextPage,
+      prevPage,
+    ],
+  );
 
   // Set ref callback to attach/detach listeners
   const setRef = useCallback(

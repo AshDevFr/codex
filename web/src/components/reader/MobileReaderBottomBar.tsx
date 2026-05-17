@@ -162,9 +162,21 @@ export function MobileReaderBottomBar({
               paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
               paddingLeft: "calc(16px + env(safe-area-inset-left, 0px))",
               paddingRight: "calc(16px + env(safe-area-inset-right, 0px))",
+              // The gradient fades to transparent at the top, but the Box
+              // still grabs pointer events across its whole height. In PWA
+              // mode `safe-area-inset-bottom` (~34px for the home indicator)
+              // and the tall gradient gobble side taps the user intends for
+              // the page underneath. Pass touches through; controls below
+              // re-enable pointer events on themselves.
+              pointerEvents: "none",
             }}
           >
-            <Group gap="xs" wrap="nowrap" align="center">
+            <Group
+              gap="xs"
+              wrap="nowrap"
+              align="center"
+              style={{ pointerEvents: "auto" }}
+            >
               <ActionIcon
                 variant="subtle"
                 color="gray"
