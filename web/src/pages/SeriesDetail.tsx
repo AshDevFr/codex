@@ -885,16 +885,7 @@ export function SeriesDetail() {
                     {nextBook.readProgress ? "Continue" : "Read"}
                   </Button>
                 )}
-                <Button
-                  size="xs"
-                  variant={nextBook ? "light" : "filled"}
-                  component="a"
-                  href={`/api/v1/series/${series.id}/download`}
-                  leftSection={<IconDownload size={14} />}
-                >
-                  Download
-                </Button>
-                {seriesBooks && seriesBooks.length > 0 && (
+                {seriesBooks && seriesBooks.length > 0 ? (
                   <SeriesDownloadButton
                     seriesId={series.id}
                     books={seriesBooks.map((b) => ({
@@ -903,7 +894,18 @@ export function SeriesDetail() {
                       pageCount: b.pageCount,
                       fileSize: b.fileSize,
                     }))}
+                    archiveDownloadUrl={`/api/v1/series/${series.id}/download`}
                   />
+                ) : (
+                  <Button
+                    size="xs"
+                    variant={nextBook ? "light" : "filled"}
+                    component="a"
+                    href={`/api/v1/series/${series.id}/download`}
+                    leftSection={<IconDownload size={14} />}
+                  >
+                    Download
+                  </Button>
                 )}
                 <Tooltip label="Series Info">
                   <ActionIcon

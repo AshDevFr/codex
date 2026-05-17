@@ -11,6 +11,7 @@ import {
   IconAlertCircle,
   IconCloudCheck,
   IconCloudDownload,
+  IconDeviceFloppy,
   IconDotsVertical,
   IconRefresh,
   IconTrash,
@@ -73,6 +74,14 @@ export interface DownloadButtonProps {
   pageCount?: number;
   /** Tooltip / menu label, defaults to "Save for offline reading". */
   label?: string;
+  /**
+   * Optional direct file URL. When provided, the button menu also exposes a
+   * "Download file" action that links to this URL. Lets BookDetail collapse
+   * its old `<a href={downloadUrl}>` button into the same dropdown so users
+   * see one unambiguous Download surface instead of two adjacent buttons
+   * that both say "Download".
+   */
+  fileDownloadUrl?: string;
 }
 
 function isSingleFileFormat(format: string): format is SingleFileFormat {
@@ -94,6 +103,7 @@ export function DownloadButton({
   fileFormat,
   pageCount,
   label = "Save for offline reading",
+  fileDownloadUrl,
 }: DownloadButtonProps) {
   const [state, setState] = useState<ButtonState>({ kind: "loading" });
   const [nudgeOpen, setNudgeOpen] = useState(false);
@@ -189,7 +199,10 @@ export function DownloadButton({
     };
   }, [bookId]);
 
-  if (!supported) return null;
+  // When we have a fallback file URL, we always render *something* (the
+  // Menu with a "Download file" entry), even for formats that can't be
+  // cached for offline reading.
+  if (!supported && !fileDownloadUrl) return null;
 
   function maybeNudgeThenDownload() {
     // T10: On a fresh iOS Safari tab, show the install nudge before the
@@ -279,38 +292,15 @@ export function DownloadButton({
         variant="subtle"
         size="md"
         disabled
-        aria-label="Loading offline download status"
+        aria-label="Loading download options"
       >
         <IconCloudDownload size={18} />
       </ActionIcon>
     );
   }
 
-  if (state.kind === "not-downloaded") {
-    return (
-      <>
-        <Tooltip label={label}>
-          <ActionIcon
-            variant="subtle"
-            size="md"
-            onClick={maybeNudgeThenDownload}
-            aria-label={label}
-          >
-            <IconCloudDownload size={18} />
-          </ActionIcon>
-        </Tooltip>
-        <InstallNudgeModal
-          opened={nudgeOpen}
-          onContinue={() => {
-            setNudgeOpen(false);
-            void startDownload();
-          }}
-          onClose={() => setNudgeOpen(false)}
-        />
-      </>
-    );
-  }
-
+  // Downloading state stays compact (ring progress + cancel) so the user can
+  // see progress and bail mid-flight without opening a menu.
   if (state.kind === "downloading") {
     const pct = progressPercent(state);
     return (
@@ -344,63 +334,127 @@ export function DownloadButton({
     );
   }
 
-  if (state.kind === "error") {
-    return (
-      <Tooltip label={`Download failed: ${state.message}. Click to retry.`}>
-        <ActionIcon
-          variant="subtle"
-          size="md"
-          color="red"
-          onClick={maybeNudgeThenDownload}
-          aria-label="Retry download"
-        >
-          <IconAlertCircle size={18} />
-        </ActionIcon>
-      </Tooltip>
-    );
-  }
+  // All other states (not-downloaded / error / downloaded) render the same
+  // Menu shape so a single Download surface covers both the PWA offline cache
+  // and the file URL. Distinct icons + colors disambiguate state at a glance.
+  // We deliberately don't wrap the Menu.Target in a Tooltip — Mantine's Menu
+  // forwards its click handler via cloneElement, and a Tooltip in between
+  // intermittently swallows that click under test load. The aria-label below
+  // carries the same accessible name.
+  const targetIcon = (() => {
+    if (state.kind === "downloaded") return <IconCloudCheck size={18} />;
+    if (state.kind === "error") return <IconAlertCircle size={18} />;
+    return <IconCloudDownload size={18} />;
+  })();
+  const targetColor =
+    state.kind === "downloaded"
+      ? "green"
+      : state.kind === "error"
+        ? "red"
+        : undefined;
+  const targetAria =
+    state.kind === "downloaded"
+      ? "Offline download options"
+      : state.kind === "error"
+        ? "Download options (retry available)"
+        : "Download options";
 
-  // state.kind === "downloaded"
   return (
-    <Menu shadow="md" width={220} position="bottom-end">
-      <Menu.Target>
-        <Tooltip label="Available offline">
+    <>
+      <Menu shadow="md" width={240} position="bottom-end">
+        <Menu.Target>
           <ActionIcon
             variant="subtle"
             size="md"
-            color="green"
-            aria-label="Offline download options"
+            color={targetColor}
+            aria-label={targetAria}
           >
-            <IconCloudCheck size={18} />
+            {targetIcon}
           </ActionIcon>
-        </Tooltip>
-      </Menu.Target>
-      <Menu.Dropdown>
-        <Menu.Label>
-          <Text size="xs" c="dimmed">
-            Saved offline
-          </Text>
-        </Menu.Label>
-        <Menu.Item
-          leftSection={<IconRefresh size={14} />}
-          onClick={startDownload}
-        >
-          Re-download
-        </Menu.Item>
-        <Menu.Item
-          leftSection={<IconTrash size={14} />}
-          color="red"
-          onClick={removeDownload}
-        >
-          Remove offline copy
-        </Menu.Item>
-        <Menu.Divider />
-        <Menu.Item disabled leftSection={<IconDotsVertical size={14} />}>
-          <Text size="xs" c="dimmed">
-            More controls in Settings
-          </Text>
-        </Menu.Item>
-      </Menu.Dropdown>
-    </Menu>
+        </Menu.Target>
+        <Menu.Dropdown>
+          {state.kind === "downloaded" && (
+            <>
+              <Menu.Label>
+                <Text size="xs" c="dimmed">
+                  Saved offline
+                </Text>
+              </Menu.Label>
+              {supported && (
+                <Menu.Item
+                  leftSection={<IconRefresh size={14} />}
+                  onClick={startDownload}
+                >
+                  Re-download offline copy
+                </Menu.Item>
+              )}
+              <Menu.Item
+                leftSection={<IconTrash size={14} />}
+                color="red"
+                onClick={removeDownload}
+              >
+                Remove offline copy
+              </Menu.Item>
+            </>
+          )}
+          {state.kind === "not-downloaded" && supported && (
+            <Menu.Item
+              leftSection={<IconCloudDownload size={14} />}
+              onClick={maybeNudgeThenDownload}
+            >
+              {label}
+            </Menu.Item>
+          )}
+          {state.kind === "error" && supported && (
+            <Menu.Item
+              leftSection={<IconCloudDownload size={14} />}
+              onClick={maybeNudgeThenDownload}
+            >
+              Retry offline download
+            </Menu.Item>
+          )}
+          {fileDownloadUrl && (
+            <>
+              {state.kind !== "not-downloaded" && <Menu.Divider />}
+              <Menu.Item
+                leftSection={<IconDeviceFloppy size={14} />}
+                component="a"
+                href={fileDownloadUrl}
+              >
+                Download file
+              </Menu.Item>
+            </>
+          )}
+          {state.kind === "downloaded" && (
+            <>
+              <Menu.Divider />
+              <Menu.Item disabled leftSection={<IconDotsVertical size={14} />}>
+                <Text size="xs" c="dimmed">
+                  More controls in Settings
+                </Text>
+              </Menu.Item>
+            </>
+          )}
+          {state.kind === "error" && (
+            <>
+              <Menu.Divider />
+              <Menu.Label>
+                <Text size="xs" c="red.6">
+                  {state.message}
+                </Text>
+              </Menu.Label>
+            </>
+          )}
+        </Menu.Dropdown>
+      </Menu>
+      <InstallNudgeModal
+        opened={nudgeOpen}
+        onContinue={() => {
+          setNudgeOpen(false);
+          void startDownload();
+        }}
+        onClose={() => setNudgeOpen(false)}
+      />
+    </>
   );
 }

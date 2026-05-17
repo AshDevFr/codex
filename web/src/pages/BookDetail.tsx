@@ -30,7 +30,6 @@ import {
   IconChevronRight,
   IconChevronUp,
   IconDotsVertical,
-  IconDownload,
   IconEdit,
   IconEyeOff,
   IconInfoCircle,
@@ -683,19 +682,11 @@ export function BookDetail() {
                     Incognito
                   </Button>
                 </Tooltip>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  component="a"
-                  href={downloadUrl}
-                  leftSection={<IconDownload size={14} />}
-                >
-                  Download
-                </Button>
                 <DownloadButton
                   bookId={book.id}
                   fileFormat={book.fileFormat}
                   pageCount={book.pageCount}
+                  fileDownloadUrl={downloadUrl}
                 />
                 <Tooltip label="Book Info">
                   <ActionIcon
