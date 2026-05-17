@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { InstallPrompt, PwaUpdatePrompt } from "./components/pwa";
 import { ThemeSync } from "./components/ThemeSync.tsx";
+import { installOutboxDrainListeners } from "./lib/offline/outbox";
 import { cssVariablesResolver, theme } from "./theme";
 
 // Import Mantine styles
@@ -49,6 +50,11 @@ async function enableMocking() {
   const { startMockServiceWorker } = await import("./mocks/browser");
   return startMockServiceWorker();
 }
+
+// Drain the offline write outbox whenever the browser comes back online
+// or the tab regains focus. Safe to install before render: the listeners
+// no-op if there is nothing queued, and double-install is guarded.
+installOutboxDrainListeners();
 
 // Start the application after mocking is ready
 enableMocking().then(() => {

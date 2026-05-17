@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { type R2Progression, readProgressApi } from "@/api/readProgress";
+import { isOfflineQueuedError } from "@/lib/offline/outbox";
 
 const STORAGE_KEY_PREFIX = "epub-cfi-";
 const STORAGE_TIMESTAMP_PREFIX = "epub-cfi-ts-";
@@ -213,6 +214,10 @@ export function useEpubProgress({
           });
         })
         .catch((error) => {
+          // Both calls run via Promise.all; if either was queued for
+          // offline delivery, the rejection lands here. Skip the console
+          // error in that case so the offline path stays quiet.
+          if (isOfflineQueuedError(error)) return;
           console.error("Failed to save EPUB reading progress:", error);
         });
     },
