@@ -24,6 +24,7 @@ import {
 } from "./hooks";
 import { MobileReaderBottomBar } from "./MobileReaderBottomBar";
 import { PageTransitionWrapper } from "./PageTransitionWrapper";
+import { ReaderFirstRunHint } from "./ReaderFirstRunHint";
 import { ReaderSettings } from "./ReaderSettings";
 import { ReaderToolbar } from "./ReaderToolbar";
 import {
@@ -771,6 +772,10 @@ export function ComicReader({
           }
         />
       )}
+
+      {/* First-run hint teaches phone users that center-tap reveals the
+          toolbar (CBZ tap zones are left/center/right). Once per session. */}
+      <ReaderFirstRunHint />
 
       {/* Boundary notification */}
       <BoundaryNotification

@@ -229,6 +229,60 @@ describe("MobileReaderBottomBar", () => {
       expect(useReaderStore.getState().currentPage).toBe(12);
     });
 
+    describe("EPUB chapter variant (U2)", () => {
+      it("renders a chapter pill instead of the page-counter slider", () => {
+        // EPUB doesn't drive the reader store's currentPage/totalPages.
+        resetStore({ totalPages: 0, currentPage: 0 });
+        renderWithProviders(
+          <MobileReaderBottomBar
+            visible={true}
+            epubChapter={{ currentIndex: 3, total: 12, onTap: vi.fn() }}
+          />,
+        );
+
+        expect(screen.getByText("Ch 3 / 12")).toBeInTheDocument();
+        // No slider in EPUB layout (pagination is reflowable).
+        expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+        // No page-jump button either.
+        expect(screen.queryByLabelText("Jump to page")).not.toBeInTheDocument();
+      });
+
+      it("opens the TOC drawer when the chapter pill is tapped", () => {
+        resetStore({ totalPages: 0, currentPage: 0 });
+        const onTap = vi.fn();
+        renderWithProviders(
+          <MobileReaderBottomBar
+            visible={true}
+            epubChapter={{ currentIndex: 1, total: 10, onTap }}
+          />,
+        );
+
+        fireEvent.click(screen.getByLabelText("Open table of contents"));
+
+        expect(onTap).toHaveBeenCalledTimes(1);
+      });
+
+      it("still wires prev/next chevrons in EPUB layout", () => {
+        resetStore({ totalPages: 0, currentPage: 0 });
+        const onPrevPage = vi.fn();
+        const onNextPage = vi.fn();
+        renderWithProviders(
+          <MobileReaderBottomBar
+            visible={true}
+            onPrevPage={onPrevPage}
+            onNextPage={onNextPage}
+            epubChapter={{ currentIndex: 2, total: 5, onTap: vi.fn() }}
+          />,
+        );
+
+        fireEvent.click(screen.getByLabelText("Previous page"));
+        fireEvent.click(screen.getByLabelText("Next page"));
+
+        expect(onPrevPage).toHaveBeenCalledTimes(1);
+        expect(onNextPage).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it("clamps the jump value to the valid page range", async () => {
       renderWithProviders(<MobileReaderBottomBar visible={true} />);
 

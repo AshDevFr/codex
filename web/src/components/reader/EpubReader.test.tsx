@@ -557,6 +557,31 @@ describe("EpubReader", () => {
     });
   });
 
+  describe("mobile chapter pill (U2)", () => {
+    function forceMobileViewport() {
+      window.matchMedia = vi.fn().mockImplementation((query) => ({
+        matches: query.includes("max-width"),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+    }
+
+    it("does not render the chapter pill until the TOC and location are known", () => {
+      forceMobileViewport();
+      renderWithProviders(<EpubReader {...defaultProps} />);
+
+      // Initial mount: TOC is empty in the mock; chapter pill should not appear.
+      expect(
+        screen.queryByLabelText("Open table of contents"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   describe("mobile reader styles (R7-3)", () => {
     it("does not hide side arrows on non-mobile viewports", () => {
       renderWithProviders(<EpubReader {...defaultProps} />);

@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   AppShell,
+  Box,
   Button,
   Divider,
   Group,
@@ -10,6 +11,7 @@ import {
   Stack,
   Text,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertTriangle,
@@ -40,7 +42,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { librariesApi } from "@/api/libraries";
 import { userPluginsApi } from "@/api/userPlugins";
@@ -48,6 +50,7 @@ import { LibraryModal } from "@/components/forms/LibraryModal";
 import { ReleasesNavBadge } from "@/components/layout/ReleasesNavBadge";
 import { LibraryActionsMenu } from "@/components/library/LibraryActionsMenu";
 import { TaskNotificationBadge } from "@/components/TaskNotificationBadge";
+import { MOBILE_MEDIA_QUERY } from "@/components/ui";
 import { useAppInfo } from "@/hooks/useAppInfo";
 import { useAppName } from "@/hooks/useAppName";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -92,6 +95,47 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       setSettingsOpened(true);
     }
   }, [currentPath]);
+
+  // U4: Show a bottom fade cue on the mobile drawer when the nav overflows
+  // (e.g. Settings is expanded and Users/Sharing Tags sit below the fold).
+  // Driven by listening to scroll on the AppShell.Navbar element + a
+  // ResizeObserver to catch content height changes when Settings toggles.
+  const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
+  const navSectionRef = useRef<HTMLDivElement>(null);
+  const [showScrollCue, setShowScrollCue] = useState(false);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setShowScrollCue(false);
+      return;
+    }
+    // The scrollable element is the parent `.mantine-AppShell-navbar` (not
+    // our grow section). Look it up from the section ref so we don't depend
+    // on a global selector.
+    const section = navSectionRef.current;
+    const navbar = section?.closest<HTMLElement>(".mantine-AppShell-navbar");
+    if (!navbar) return;
+
+    const update = () => {
+      const overflowing = navbar.scrollHeight - navbar.clientHeight > 4;
+      const atBottom =
+        navbar.scrollTop + navbar.clientHeight >= navbar.scrollHeight - 4;
+      setShowScrollCue(overflowing && !atBottom);
+    };
+
+    update();
+    navbar.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(navbar);
+    // Observing the section catches Settings expand/collapse, which changes
+    // section height without changing the navbar's clientHeight.
+    if (section) ro.observe(section);
+
+    return () => {
+      navbar.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, [isMobile]);
 
   const { data: libraries } = useQuery({
     queryKey: ["libraries"],
@@ -333,7 +377,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   return (
     <>
       <AppShell.Navbar p="md">
-        <AppShell.Section grow>
+        <AppShell.Section grow ref={navSectionRef}>
           <Stack gap="xs">
             <NavLink
               component={Link}
@@ -733,6 +777,29 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
             </NavLink>
           </Stack>
         </AppShell.Section>
+
+        {/* U4: bottom fade cue indicating the nav scrolls (mobile only, when
+            overflowing and not at the bottom). Sits between the grow section
+            and the pinned footer so it visually trails the scrollable area. */}
+        {showScrollCue && (
+          <Box
+            aria-hidden="true"
+            data-testid="sidebar-scroll-cue"
+            style={{
+              position: "sticky",
+              bottom: 0,
+              height: 24,
+              marginTop: -24,
+              marginLeft: "calc(var(--mantine-spacing-md) * -1)",
+              marginRight: "calc(var(--mantine-spacing-md) * -1)",
+              background:
+                "linear-gradient(to top, var(--mantine-color-body), transparent)",
+              pointerEvents: "none",
+              flexShrink: 0,
+              zIndex: 1,
+            }}
+          />
+        )}
 
         <AppShell.Section>
           <Stack gap="xs">

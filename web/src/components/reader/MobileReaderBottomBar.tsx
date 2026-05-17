@@ -14,6 +14,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconKeyboardShow,
+  IconList,
 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import {
@@ -21,6 +22,26 @@ import {
   selectProgressPercent,
   useReaderStore,
 } from "@/store/readerStore";
+
+/**
+ * Optional chapter context for EPUB reflowable books. When provided, the
+ * bar renders an EPUB-specific layout (no slider; a tappable chapter pill
+ * in the center that opens the TOC drawer) instead of the default
+ * page-counter + slider layout used by CBZ and PDF.
+ *
+ * EPUB pagination is reflowable, so a 1..N page slider isn't meaningful;
+ * the TOC is the natural mobile navigation surface. The chapter index is
+ * computed by the parent reader from `rendition.location.start.href` matched
+ * against the top-level TOC array.
+ */
+export interface MobileBottomBarEpubChapter {
+  /** 1-based index of the current chapter in the top-level TOC. */
+  currentIndex: number;
+  /** Total number of top-level TOC entries. */
+  total: number;
+  /** Tap handler. Opens the TOC drawer. */
+  onTap: () => void;
+}
 
 interface MobileReaderBottomBarProps {
   /** Whether the bar is visible (mirrors the toolbar's visibility). */
@@ -32,6 +53,11 @@ interface MobileReaderBottomBarProps {
    */
   onPrevPage?: () => void;
   onNextPage?: () => void;
+  /**
+   * When set, the bar switches to its EPUB layout: chapter pill (instead of
+   * page counter) and no slider. See `MobileBottomBarEpubChapter`.
+   */
+  epubChapter?: MobileBottomBarEpubChapter;
 }
 
 /**
@@ -49,6 +75,7 @@ export function MobileReaderBottomBar({
   visible,
   onPrevPage,
   onNextPage,
+  epubChapter,
 }: MobileReaderBottomBarProps) {
   const currentPage = useReaderStore((state) => state.currentPage);
   const totalPages = useReaderStore((state) => state.totalPages);
@@ -61,13 +88,28 @@ export function MobileReaderBottomBar({
   const handleNext = onNextPage ?? storeNextPage;
   const handlePrev = onPrevPage ?? storePrevPage;
 
+  // EPUB layout uses page-style prev/next (epub.js viewports) and ignores
+  // the store's currentPage entirely (reflowable books don't have one).
+  const isEpub = epubChapter !== undefined;
+
   // Chevrons mirror the reading direction so the visual cue matches the
   // direction of progression (RTL keeps "next" on the left).
   const isRtl = readingDirection === "rtl";
   const onLeftClick = isRtl ? handleNext : handlePrev;
   const onRightClick = isRtl ? handlePrev : handleNext;
-  const leftDisabled = isRtl ? currentPage >= totalPages : currentPage <= 1;
-  const rightDisabled = isRtl ? currentPage <= 1 : currentPage >= totalPages;
+  // EPUB can't easily report "first/last viewport" without tracking it in
+  // the parent. Leave chevrons enabled and rely on epub.js to no-op at the
+  // boundaries.
+  const leftDisabled = isEpub
+    ? false
+    : isRtl
+      ? currentPage >= totalPages
+      : currentPage <= 1;
+  const rightDisabled = isEpub
+    ? false
+    : isRtl
+      ? currentPage <= 1
+      : currentPage >= totalPages;
 
   const [jumpOpened, jumpHandlers] = useDisclosure(false);
   const [jumpValue, setJumpValue] = useState<number>(currentPage);
@@ -90,7 +132,13 @@ export function MobileReaderBottomBar({
   // shows the slider, so this bar would be duplicative. xs = 30.125em.
   const isMobile = useMediaQuery("(max-width: 30.0625em)") ?? false;
 
-  if (totalPages <= 0 || !isMobile) {
+  // For CBZ/PDF, bail if there's no page data. EPUB doesn't drive the store,
+  // so totalPages will be 0; but if we have chapter context, we should still
+  // render the bar.
+  if (!isMobile) {
+    return null;
+  }
+  if (!isEpub && totalPages <= 0) {
     return null;
   }
 
@@ -129,61 +177,80 @@ export function MobileReaderBottomBar({
               </ActionIcon>
 
               <Box style={{ flex: 1, minWidth: 0 }}>
-                <Group gap="xs" align="center" wrap="nowrap">
-                  <Button
-                    variant="subtle"
-                    color="gray"
-                    size="xs"
-                    onClick={jumpHandlers.open}
-                    leftSection={<IconKeyboardShow size={14} />}
-                    aria-label="Jump to page"
-                    style={{ color: "white", flexShrink: 0 }}
-                  >
-                    {currentPage} / {totalPages}
-                  </Button>
-                  <Slider
-                    value={currentPage}
-                    min={1}
-                    max={totalPages}
-                    onChange={(val) =>
-                      setPage(isRtl ? totalPages + 1 - val : val)
-                    }
-                    onChangeEnd={() => {
-                      if (document.activeElement instanceof HTMLElement) {
-                        document.activeElement.blur();
+                {isEpub ? (
+                  // EPUB layout: centered chapter pill, tap → TOC drawer. No
+                  // slider because reflowable EPUB pages don't form a discrete
+                  // 1..N sequence; the TOC is the right nav surface.
+                  <Group gap="xs" justify="center" wrap="nowrap">
+                    <Button
+                      variant="subtle"
+                      color="gray"
+                      size="sm"
+                      onClick={epubChapter.onTap}
+                      leftSection={<IconList size={16} />}
+                      aria-label="Open table of contents"
+                      style={{ color: "white" }}
+                    >
+                      Ch {epubChapter.currentIndex} / {epubChapter.total}
+                    </Button>
+                  </Group>
+                ) : (
+                  <Group gap="xs" align="center" wrap="nowrap">
+                    <Button
+                      variant="subtle"
+                      color="gray"
+                      size="xs"
+                      onClick={jumpHandlers.open}
+                      leftSection={<IconKeyboardShow size={14} />}
+                      aria-label="Jump to page"
+                      style={{ color: "white", flexShrink: 0 }}
+                    >
+                      {currentPage} / {totalPages}
+                    </Button>
+                    <Slider
+                      value={currentPage}
+                      min={1}
+                      max={totalPages}
+                      onChange={(val) =>
+                        setPage(isRtl ? totalPages + 1 - val : val)
                       }
-                    }}
-                    size="md"
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      transform: isRtl ? "scaleX(-1)" : "none",
-                    }}
-                    label={(value) => `Page ${value}`}
-                    styles={{
-                      track: {
-                        backgroundColor: "var(--mantine-color-dark-4)",
-                      },
-                      bar: {
-                        backgroundColor: "var(--mantine-color-blue-6)",
-                      },
-                      thumb: {
-                        backgroundColor: "var(--mantine-color-blue-6)",
-                        borderColor: "var(--mantine-color-blue-6)",
-                      },
-                      label: {
+                      onChangeEnd={() => {
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
+                        }
+                      }}
+                      size="md"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
                         transform: isRtl ? "scaleX(-1)" : "none",
-                      },
-                    }}
-                  />
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                    style={{ width: 36, textAlign: "right", flexShrink: 0 }}
-                  >
-                    {progressPercent}%
-                  </Text>
-                </Group>
+                      }}
+                      label={(value) => `Page ${value}`}
+                      styles={{
+                        track: {
+                          backgroundColor: "var(--mantine-color-dark-4)",
+                        },
+                        bar: {
+                          backgroundColor: "var(--mantine-color-blue-6)",
+                        },
+                        thumb: {
+                          backgroundColor: "var(--mantine-color-blue-6)",
+                          borderColor: "var(--mantine-color-blue-6)",
+                        },
+                        label: {
+                          transform: isRtl ? "scaleX(-1)" : "none",
+                        },
+                      }}
+                    />
+                    <Text
+                      size="xs"
+                      c="dimmed"
+                      style={{ width: 36, textAlign: "right", flexShrink: 0 }}
+                    >
+                      {progressPercent}%
+                    </Text>
+                  </Group>
+                )}
               </Box>
 
               <ActionIcon
@@ -202,7 +269,10 @@ export function MobileReaderBottomBar({
       </Transition>
 
       <Modal
-        opened={jumpOpened}
+        // EPUB mode never exposes the page-jump button, so this modal can
+        // stay mounted; it just won't open. (Modal is conditionally rendered
+        // anyway to keep the EPUB DOM lean.)
+        opened={jumpOpened && !isEpub}
         onClose={jumpHandlers.close}
         title="Go to page"
         centered
