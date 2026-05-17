@@ -6,7 +6,13 @@ import {
   getDownload,
   setDbContext,
 } from "./db";
-import { downloadComicBook, downloadSingleFileBook } from "./downloadManager";
+import {
+  _resetPersistenceForTests,
+  downloadComicBook,
+  downloadSingleFileBook,
+  getStoragePersistence,
+  requestStoragePersistence,
+} from "./downloadManager";
 import { cacheNameForBook } from "./routeMatcher";
 
 beforeEach(() => {
@@ -16,6 +22,7 @@ beforeEach(() => {
 afterEach(() => {
   setDbContext(null);
   _resetForTests();
+  _resetPersistenceForTests();
 });
 
 // -- Fake CacheStorage ----------------------------------------------------
@@ -579,5 +586,105 @@ describe("downloadComicBook: cancellation", () => {
 
     expect(await getDownload("book-abort")).toBeUndefined();
     expect(getStore(cacheNameForBook("book-abort"))).toBeUndefined();
+  });
+});
+
+// -- Storage persistence (T9) --------------------------------------------
+
+describe("requestStoragePersistence", () => {
+  it("calls persist() once and caches the result for subsequent calls", async () => {
+    const persistSpy = vi.fn(async () => true);
+    const fakeStorage = { persist: persistSpy } as unknown as StorageManager;
+
+    const first = await requestStoragePersistence(fakeStorage);
+    const second = await requestStoragePersistence(fakeStorage);
+
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    expect(persistSpy).toHaveBeenCalledTimes(1);
+    expect(getStoragePersistence()).toBe(true);
+  });
+
+  it("returns null when the StorageManager API is unavailable", async () => {
+    const result = await requestStoragePersistence(
+      undefined as unknown as StorageManager,
+    );
+    expect(result).toBeNull();
+    expect(getStoragePersistence()).toBeNull();
+  });
+
+  it("returns false when persist() throws", async () => {
+    const fakeStorage = {
+      persist: vi.fn(async () => {
+        throw new Error("denied");
+      }),
+    } as unknown as StorageManager;
+
+    const result = await requestStoragePersistence(fakeStorage);
+    expect(result).toBe(false);
+    expect(getStoragePersistence()).toBe(false);
+  });
+
+  it("returns false when persist() resolves to false (denied)", async () => {
+    const fakeStorage = {
+      persist: vi.fn(async () => false),
+    } as unknown as StorageManager;
+
+    const result = await requestStoragePersistence(fakeStorage);
+    expect(result).toBe(false);
+    expect(getStoragePersistence()).toBe(false);
+  });
+
+  it("deduplicates concurrent in-flight calls", async () => {
+    let resolvePersist: ((granted: boolean) => void) | null = null;
+    const persistSpy = vi.fn(
+      () =>
+        new Promise<boolean>((res) => {
+          resolvePersist = res;
+        }),
+    );
+    const fakeStorage = { persist: persistSpy } as unknown as StorageManager;
+
+    const a = requestStoragePersistence(fakeStorage);
+    const b = requestStoragePersistence(fakeStorage);
+    expect(persistSpy).toHaveBeenCalledTimes(1);
+
+    resolvePersist?.(true);
+    expect(await a).toBe(true);
+    expect(await b).toBe(true);
+  });
+});
+
+describe("downloadSingleFileBook + persistence", () => {
+  it("requests storage persistence on first successful download", async () => {
+    const { caches: cachesImpl } = makeFakeCaches();
+    const persistSpy = vi.fn(async () => true);
+    Object.defineProperty(globalThis.navigator, "storage", {
+      configurable: true,
+      value: { persist: persistSpy } as unknown as StorageManager,
+    });
+
+    const fakeFetch = vi.fn(async () =>
+      makeStreamingResponse([new Uint8Array([1])], { contentLength: 1 }),
+    );
+
+    try {
+      await downloadSingleFileBook({
+        bookId: "book-persist",
+        format: "epub",
+        fetch: fakeFetch as typeof globalThis.fetch,
+        caches: cachesImpl,
+      });
+      // Allow the fire-and-forget persistence request to settle before
+      // asserting the spy was called.
+      await new Promise((r) => setTimeout(r, 0));
+      expect(persistSpy).toHaveBeenCalledTimes(1);
+      expect(getStoragePersistence()).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis.navigator, "storage", {
+        configurable: true,
+        value: undefined,
+      });
+    }
   });
 });
