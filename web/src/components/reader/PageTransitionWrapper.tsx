@@ -6,6 +6,21 @@ import type {
   ReadingDirection,
 } from "@/store/readerStore";
 
+/**
+ * Wait for an image element to be decoded and ready to paint.
+ * Falls back to load/error events on browsers without decode() support.
+ */
+function whenImageReady(img: HTMLImageElement): Promise<void> {
+  if (typeof img.decode === "function") {
+    return img.decode().catch(() => undefined);
+  }
+  if (img.complete) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    img.addEventListener("load", () => resolve(), { once: true });
+    img.addEventListener("error", () => resolve(), { once: true });
+  });
+}
+
 interface PageTransitionWrapperProps {
   /** Current page key (used to detect page changes) */
   pageKey: string;
@@ -100,9 +115,15 @@ export function PageTransitionWrapper({
   });
 
   const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const decodeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rafRef = useRef<number | null>(null);
   const previousKeyRef = useRef<string>(pageKey);
   const isInitialMountRef = useRef<boolean>(true);
+  const currentBoxRef = useRef<HTMLDivElement>(null);
+  // Cancellation token for the in-flight transition. Set to {cancelled: true}
+  // when a new page change arrives so any pending image-decode promise short
+  // circuits and we don't fire setState into a stale transition.
+  const pendingTransitionRef = useRef<{ cancelled: boolean } | null>(null);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -110,8 +131,14 @@ export function PageTransitionWrapper({
       if (transitionTimeoutRef.current) {
         clearTimeout(transitionTimeoutRef.current);
       }
+      if (decodeTimeoutRef.current) {
+        clearTimeout(decodeTimeoutRef.current);
+      }
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
+      }
+      if (pendingTransitionRef.current) {
+        pendingTransitionRef.current.cancelled = true;
       }
     };
   }, []);
@@ -136,14 +163,21 @@ export function PageTransitionWrapper({
     // Page changed - start transition
     previousKeyRef.current = pageKey;
 
-    // Clear any pending transitions
+    // Cancel any in-flight transition
     if (transitionTimeoutRef.current) {
       clearTimeout(transitionTimeoutRef.current);
       transitionTimeoutRef.current = null;
     }
+    if (decodeTimeoutRef.current) {
+      clearTimeout(decodeTimeoutRef.current);
+      decodeTimeoutRef.current = null;
+    }
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    }
+    if (pendingTransitionRef.current) {
+      pendingTransitionRef.current.cancelled = true;
     }
 
     // Skip transition on initial mount (when first loading the book or reloading the page)
@@ -178,7 +212,13 @@ export function PageTransitionWrapper({
       readingDirection,
     );
 
-    // Start transition: set entering phase (positions elements)
+    // Commit the entering phase. The next useEffect below watches for
+    // phase === "entering" and schedules the active phase once the new
+    // page's images are decoded. Splitting into two effects guarantees
+    // React fully commits and paints the off-screen starting position
+    // before we begin the slide; doing both in one effect risks React
+    // batching the state updates so the browser never sees the starting
+    // position (the cause of "Sometimes slide is not applied").
     setState((prev) => ({
       currentContent: children,
       previousContent: prev.currentContent,
@@ -186,68 +226,81 @@ export function PageTransitionWrapper({
       phase: "entering",
       slideDirection,
     }));
+  }, [pageKey, children, transition, navigationDirection, readingDirection]);
 
-    // Trigger animation after browser paints initial position
-    // Use double rAF to ensure layout is complete before animating
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = requestAnimationFrame(() => {
+  // Drive the entering -> active -> idle phase progression. This runs
+  // after React commits the entering state, so by the time we query the
+  // DOM for <img> elements they are already mounted with the new src
+  // and the browser has had a paint cycle to begin decoding.
+  useEffect(() => {
+    if (state.phase !== "entering") return;
+
+    const token = { cancelled: false };
+    pendingTransitionRef.current = token;
+
+    const startActivePhase = () => {
+      if (token.cancelled) return;
+      token.cancelled = true;
+      if (decodeTimeoutRef.current) {
+        clearTimeout(decodeTimeoutRef.current);
+        decodeTimeoutRef.current = null;
+      }
+      setState((prev) => ({ ...prev, phase: "active" }));
+
+      // End transition after duration (add buffer for paint cycles)
+      transitionTimeoutRef.current = setTimeout(() => {
         setState((prev) => ({
           ...prev,
-          phase: "active",
+          previousContent: null,
+          phase: "idle",
         }));
+        transitionTimeoutRef.current = null;
+      }, duration + 50);
+    };
+
+    // Wait for the new page's images to be decoded before starting the
+    // slide. Without this, an image that's cached-but-not-yet-painted
+    // shows as the page's background color (typically black) for the
+    // first 1-2 frames of the slide, producing the "black flicker on
+    // the side it's sliding from".
+    const imgs = currentBoxRef.current
+      ? Array.from(currentBoxRef.current.querySelectorAll("img"))
+      : [];
+
+    if (imgs.length === 0) {
+      // No images to wait for; just give the browser a frame to paint
+      // the entering position before we start the transition.
+      rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
+        startActivePhase();
       });
-    });
+    } else {
+      // Cap the wait so a slow/broken image doesn't stall the UI.
+      decodeTimeoutRef.current = setTimeout(startActivePhase, 250);
 
-    // End transition after duration (add buffer for rAF delays ~32ms for double rAF)
-    transitionTimeoutRef.current = setTimeout(() => {
-      setState((prev) => ({
-        ...prev,
-        previousContent: null,
-        phase: "idle",
-      }));
-      transitionTimeoutRef.current = null;
-    }, duration + 50);
-  }, [
-    pageKey,
-    children,
-    transition,
-    duration,
-    navigationDirection,
-    readingDirection,
-  ]);
+      Promise.all(imgs.map(whenImageReady)).then(() => {
+        if (token.cancelled) return;
+        // One rAF after decode so the decoded pixels make it to the
+        // screen before the transform transition begins.
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          startActivePhase();
+        });
+      });
+    }
 
-  // When idle or no transition, render content in a stable container
-  // Use same structure as during transitions to prevent layout shifts
-  if (transition === "none" || state.phase === "idle") {
-    return (
-      <Box
-        style={{
-          position: "relative",
-          width: "100%",
-          height: "100%",
-          overflow: "hidden",
-        }}
-      >
-        <Box
-          style={{
-            position: "absolute",
-            inset: 0,
-          }}
-        >
-          {state.currentContent}
-        </Box>
-      </Box>
-    );
-  }
+    return () => {
+      token.cancelled = true;
+    };
+  }, [state.phase, duration]);
 
   const isEntering = state.phase === "entering";
   const isActive = state.phase === "active";
+  const isTransitioning = state.phase !== "idle" && transition !== "none";
   const { slideDirection } = state;
 
   // Calculate transforms for slide transition
   const getEnterTransform = () => {
-    if (transition === "fade") return undefined;
     switch (slideDirection) {
       case "right":
         return "translateX(100%)";
@@ -261,7 +314,6 @@ export function PageTransitionWrapper({
   };
 
   const getExitTransform = () => {
-    if (transition === "fade") return undefined;
     switch (slideDirection) {
       case "right":
         return "translateX(-100%)";
@@ -274,13 +326,18 @@ export function PageTransitionWrapper({
     }
   };
 
-  const getNoTransform = () => {
-    // Return the appropriate neutral transform based on direction
-    return slideDirection === "up" || slideDirection === "down"
-      ? "translateY(0)"
-      : "translateX(0)";
-  };
-
+  // Render the SAME DOM structure regardless of phase so the current
+  // content's wrapper Box (and the page component inside it) is never
+  // remounted across the entering/active/idle transitions. Remounting
+  // would re-trigger the image's load-time opacity fade and produce a
+  // flicker at the end of the slide.
+  //
+  // For fade: keep the previous layer fully opaque underneath and only
+  // fade the new layer in over it. A true crossfade (both layers at 0.5
+  // opacity at the midpoint) darkens because the bottom is composited
+  // over the transparent container, yielding ~0.25 contribution from
+  // the previous page and a visibly dark midpoint when pages have dark
+  // backgrounds.
   return (
     <Box
       style={{
@@ -290,44 +347,47 @@ export function PageTransitionWrapper({
         overflow: "hidden",
       }}
     >
-      {/* Previous content (exits) */}
-      {state.previousContent && (
+      {/* Previous content - only rendered during a transition. Stays
+          fully opaque under the new layer for fade; slides out for slide. */}
+      {state.previousContent && transition !== "none" && (
         <Box
           style={{
             position: "absolute",
             inset: 0,
-            willChange: "transform, opacity",
+            zIndex: 1,
+            willChange: transition === "slide" ? "transform" : undefined,
             backfaceVisibility: "hidden",
-            transition: isActive
-              ? `transform ${duration}ms ease-out, opacity ${duration}ms ease-out`
-              : undefined,
-            opacity: transition === "fade" && isActive ? 0 : 1,
+            transition:
+              isActive && transition === "slide"
+                ? `transform ${duration}ms ease-out`
+                : undefined,
             transform:
               transition === "slide" && isActive
                 ? getExitTransform()
-                : getNoTransform(),
+                : undefined,
           }}
         >
           {state.previousContent}
         </Box>
       )}
 
-      {/* Current content (enters) */}
+      {/* Current content - ALWAYS rendered in the same DOM position so
+          React preserves the underlying page component across phases. */}
       <Box
+        ref={currentBoxRef}
         style={{
           position: "absolute",
           inset: 0,
-          willChange: "transform, opacity",
+          zIndex: 2,
+          willChange: isTransitioning ? "transform, opacity" : undefined,
           backfaceVisibility: "hidden",
           transition: isActive
             ? `transform ${duration}ms ease-out, opacity ${duration}ms ease-out`
             : undefined,
-          opacity: transition === "fade" ? (isEntering ? 0 : 1) : 1,
+          opacity: transition === "fade" && isEntering ? 0 : 1,
           transform:
-            transition === "slide"
-              ? isEntering
-                ? getEnterTransform()
-                : getNoTransform()
+            transition === "slide" && isEntering
+              ? getEnterTransform()
               : undefined,
         }}
       >
