@@ -493,9 +493,11 @@ describe("PageTransitionWrapper", () => {
       expect(screen.getByText("Page 2")).toBeInTheDocument();
       expect(screen.getByText("Page 3")).toBeInTheDocument();
 
-      // At 560ms (500ms duration + 50ms buffer + margin), transition should be complete
+      // At 580ms (500ms duration + 50ms buffer + ~16ms rAF + margin),
+      // transition should be complete. The rAF wait before the active
+      // phase exists so the new page's images can decode before sliding.
       await act(async () => {
-        vi.advanceTimersByTime(260);
+        vi.advanceTimersByTime(280);
       });
       expect(screen.queryByText("Page 2")).not.toBeInTheDocument();
       expect(screen.getByText("Page 3")).toBeInTheDocument();

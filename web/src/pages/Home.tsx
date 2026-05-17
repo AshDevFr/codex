@@ -8,7 +8,7 @@ export function Home() {
   useDocumentTitle("Home");
 
   return (
-    <Box pt="sm" pb="xl" px="md">
+    <Box pt={0} pb="xl" px="md">
       <Stack gap="lg">
         <Title order={1}>Home</Title>
         {/* Bulk Selection Toolbar - shows when items are selected */}
