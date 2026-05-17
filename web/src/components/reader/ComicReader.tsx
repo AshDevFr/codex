@@ -765,16 +765,14 @@ export function ComicReader({
           style={{
             width: "100%",
             height: "100%",
-            // Allow native pinch-zoom in `original` fit mode where users
-            // commonly want to zoom into detail. In other fit modes the
-            // image is scaled to the viewport, so we disable pinch-zoom
-            // to avoid awkward gestures fighting the fit logic.
-            // `useTouchNav` uses passive listeners so this never blocks
-            // the swipe/tap detector.
-            touchAction:
-              fitMode === "original"
-                ? "pan-x pan-y pinch-zoom"
-                : "manipulation",
+            // Allow vertical pan (tall pages in `width` / `width-shrink` need
+            // it) and pinch-zoom for detail, but explicitly omit `pan-x` so
+            // iOS WebKit doesn't claim horizontal swipes for its own
+            // scroll/back-navigation logic. Without this, mid-swipe the
+            // browser fires `pointercancel` and our swipe handler never sees
+            // the gesture end. `useTouchNav` listens passively so this
+            // touch-action value is the only gate.
+            touchAction: "pan-y pinch-zoom",
           }}
         >
           <PageTransitionWrapper

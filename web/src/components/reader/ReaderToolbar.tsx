@@ -193,10 +193,24 @@ export function ReaderToolbar({
             paddingTop: "calc(12px + env(safe-area-inset-top, 0px))",
             paddingLeft: "calc(16px + env(safe-area-inset-left, 0px))",
             paddingRight: "calc(16px + env(safe-area-inset-right, 0px))",
+            // The gradient fades to transparent at the bottom, but the Box
+            // still captures pointer events across its full height. In PWA
+            // standalone mode `safe-area-inset-top` (~47px) makes that area
+            // tall enough to swallow taps that the user intends for the
+            // page underneath. Pass pointer events through and re-enable
+            // them on the actual controls below.
+            pointerEvents: "none",
           }}
         >
-          {/* Top row: Title, controls, close */}
-          <Group justify="space-between" mb={isMobile ? 0 : "xs"} wrap="nowrap">
+          {/* Top row: Title, controls, close.
+              Re-enable pointer events here so the controls remain tappable
+              while the surrounding gradient area passes touches through. */}
+          <Group
+            justify="space-between"
+            mb={isMobile ? 0 : "xs"}
+            wrap="nowrap"
+            style={{ pointerEvents: "auto" }}
+          >
             {/* Left: Close button, title, and custom actions */}
             <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
               <Tooltip label="Close reader (Esc)">
@@ -504,9 +518,10 @@ export function ReaderToolbar({
           </Group>
 
           {/* Bottom row: Progress slider (desktop only — phones use
-              MobileReaderBottomBar so the top bar stays compact) */}
+              MobileReaderBottomBar so the top bar stays compact). The Box
+              re-enables pointer events so slider/label clicks register. */}
           {!isMobile && showPageNavigation && (
-            <Box px="md">
+            <Box px="md" style={{ pointerEvents: "auto" }}>
               <Group
                 gap="xs"
                 align="center"

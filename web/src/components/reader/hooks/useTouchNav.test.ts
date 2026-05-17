@@ -597,12 +597,16 @@ describe("useTouchNav", () => {
   });
 
   describe("pointer cancel", () => {
-    it("handles pointer cancel gracefully", async () => {
+    it("treats a horizontal cancel as a swipe (iOS edge-gesture fallback)", async () => {
+      // iOS WebKit fires pointercancel mid-swipe when it decides the gesture
+      // is a horizontal pan/back-swipe. We still want to classify and navigate
+      // based on the movement that did happen.
       const { result } = renderHook(() =>
         useTouchNav({
           enabled: true,
           onNextPage: mockNextPage,
           onPrevPage: mockPrevPage,
+          minSwipeDistance: 50,
         }),
       );
 
@@ -611,16 +615,85 @@ describe("useTouchNav", () => {
       });
 
       await act(async () => {
-        element.dispatchEvent(createPointerEvent("pointerdown", 200, 100));
+        element.dispatchEvent(
+          createPointerEvent("pointerdown", 250, 100, { timeStamp: 0 }),
+        );
       });
       await act(async () => {
-        element.dispatchEvent(createPointerEvent("pointercancel", 150, 100));
+        element.dispatchEvent(
+          createPointerEvent("pointercancel", 100, 100, { timeStamp: 100 }),
+        );
+      });
+
+      expect(mockNextPage).toHaveBeenCalledTimes(1);
+      expect(mockPrevPage).not.toHaveBeenCalled();
+    });
+
+    it("does not treat a tap cancel as navigation", async () => {
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+          minSwipeDistance: 50,
+        }),
+      );
+
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await act(async () => {
+        element.dispatchEvent(
+          createPointerEvent("pointerdown", 200, 100, { timeStamp: 0 }),
+        );
       });
       await act(async () => {
-        element.dispatchEvent(createPointerEvent("pointerup", 100, 100));
+        element.dispatchEvent(
+          createPointerEvent("pointercancel", 201, 100, { timeStamp: 50 }),
+        );
       });
 
       expect(mockNextPage).not.toHaveBeenCalled();
+      expect(mockPrevPage).not.toHaveBeenCalled();
+      expect(mockTap).not.toHaveBeenCalled();
+    });
+
+    it("does not double-fire when pointerup arrives after pointercancel", async () => {
+      // Some platforms emit a stray pointerup after pointercancel. Make sure
+      // we don't count both as gesture ends and navigate twice.
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          minSwipeDistance: 50,
+        }),
+      );
+
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await act(async () => {
+        element.dispatchEvent(
+          createPointerEvent("pointerdown", 250, 100, { timeStamp: 0 }),
+        );
+      });
+      await act(async () => {
+        element.dispatchEvent(
+          createPointerEvent("pointercancel", 100, 100, { timeStamp: 50 }),
+        );
+      });
+      await act(async () => {
+        element.dispatchEvent(
+          createPointerEvent("pointerup", 100, 100, { timeStamp: 100 }),
+        );
+      });
+
+      // Cancel-as-swipe fires once; the stray pointerup must be ignored.
+      expect(mockNextPage).toHaveBeenCalledTimes(1);
       expect(mockPrevPage).not.toHaveBeenCalled();
     });
   });
