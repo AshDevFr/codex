@@ -53,6 +53,7 @@ import { AuthorsList } from "@/components/book/AuthorsList";
 import { ExternalIdEditModal } from "@/components/common";
 import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MetadataApplyFlow } from "@/components/metadata";
+import { SeriesDownloadButton } from "@/components/offline/SeriesDownloadButton";
 import {
   AlternateTitles,
   BehindByBadge,
@@ -893,6 +894,17 @@ export function SeriesDetail() {
                 >
                   Download
                 </Button>
+                {seriesBooks && seriesBooks.length > 0 && (
+                  <SeriesDownloadButton
+                    seriesId={series.id}
+                    books={seriesBooks.map((b) => ({
+                      id: b.id,
+                      fileFormat: b.fileFormat,
+                      pageCount: b.pageCount,
+                      fileSize: b.fileSize,
+                    }))}
+                  />
+                )}
                 <Tooltip label="Series Info">
                   <ActionIcon
                     variant="subtle"

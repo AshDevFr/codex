@@ -31,7 +31,9 @@ import {
   type ProgressUpdate,
   type SingleFileFormat,
 } from "@/lib/offline/downloadManager";
+import { shouldShowInstallNudge } from "@/lib/offline/installNudge";
 import { cacheNameForBook } from "@/lib/offline/routeMatcher";
+import { InstallNudgeModal } from "./InstallNudgeModal";
 
 /**
  * Phase 12 T8: per-book download button.
@@ -94,6 +96,7 @@ export function DownloadButton({
   label = "Save for offline reading",
 }: DownloadButtonProps) {
   const [state, setState] = useState<ButtonState>({ kind: "loading" });
+  const [nudgeOpen, setNudgeOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const supported =
     isSingleFileFormat(fileFormat) ||
@@ -188,6 +191,18 @@ export function DownloadButton({
 
   if (!supported) return null;
 
+  function maybeNudgeThenDownload() {
+    // T10: On a fresh iOS Safari tab, show the install nudge before the
+    // first download instead of jumping straight in. After the user picks
+    // Continue (or dismisses), `startDownload` runs as usual; subsequent
+    // taps within the 30-day TTL skip the modal entirely.
+    if (shouldShowInstallNudge()) {
+      setNudgeOpen(true);
+      return;
+    }
+    void startDownload();
+  }
+
   async function startDownload() {
     const controller = new AbortController();
     abortRef.current = controller;
@@ -273,16 +288,26 @@ export function DownloadButton({
 
   if (state.kind === "not-downloaded") {
     return (
-      <Tooltip label={label}>
-        <ActionIcon
-          variant="subtle"
-          size="md"
-          onClick={startDownload}
-          aria-label={label}
-        >
-          <IconCloudDownload size={18} />
-        </ActionIcon>
-      </Tooltip>
+      <>
+        <Tooltip label={label}>
+          <ActionIcon
+            variant="subtle"
+            size="md"
+            onClick={maybeNudgeThenDownload}
+            aria-label={label}
+          >
+            <IconCloudDownload size={18} />
+          </ActionIcon>
+        </Tooltip>
+        <InstallNudgeModal
+          opened={nudgeOpen}
+          onContinue={() => {
+            setNudgeOpen(false);
+            void startDownload();
+          }}
+          onClose={() => setNudgeOpen(false)}
+        />
+      </>
     );
   }
 
@@ -326,7 +351,7 @@ export function DownloadButton({
           variant="subtle"
           size="md"
           color="red"
-          onClick={startDownload}
+          onClick={maybeNudgeThenDownload}
           aria-label="Retry download"
         >
           <IconAlertCircle size={18} />
