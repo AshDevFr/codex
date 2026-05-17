@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { IDBFactory } from "fake-indexeddb";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetForTests, getOutbox, setDbContext } from "@/lib/offline/db";
+import { isOfflineQueuedError, OfflineQueuedError } from "@/lib/offline/outbox";
 import { api } from "./client";
 import { readProgressApi } from "./readProgress";
 
@@ -13,6 +16,12 @@ vi.mock("./client", () => ({
 describe("readProgressApi", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setDbContext({ indexedDB: new IDBFactory() });
+  });
+
+  afterEach(() => {
+    setDbContext(null);
+    _resetForTests();
   });
 
   describe("get", () => {
@@ -117,6 +126,65 @@ describe("readProgressApi", () => {
       await readProgressApi.delete("book-123");
 
       expect(api.delete).toHaveBeenCalledWith("/books/book-123/progress");
+    });
+  });
+
+  describe("offline outbox integration", () => {
+    it("update throws OfflineQueuedError and enqueues on network failure", async () => {
+      vi.mocked(api.put).mockRejectedValueOnce({
+        error: "Network Error",
+        message: "offline",
+      });
+
+      const request = { currentPage: 42, completed: false };
+      await expect(
+        readProgressApi.update("book-123", request),
+      ).rejects.toSatisfy(isOfflineQueuedError);
+
+      const queued = await getOutbox();
+      expect(queued).toHaveLength(1);
+      expect(queued[0]?.request.url).toBe("/api/v1/books/book-123/progress");
+      expect(queued[0]?.request.method).toBe("PUT");
+      expect(queued[0]?.request.body).toBe(JSON.stringify(request));
+    });
+
+    it("update rethrows non-network errors without queueing", async () => {
+      vi.mocked(api.put).mockRejectedValueOnce({
+        error: "Internal Server Error",
+        message: "server died",
+      });
+
+      await expect(
+        readProgressApi.update("book-123", { currentPage: 1 }),
+      ).rejects.not.toSatisfy(isOfflineQueuedError);
+
+      expect(await getOutbox()).toEqual([]);
+    });
+
+    it("updateProgression enqueues on network failure", async () => {
+      vi.mocked(api.put).mockRejectedValueOnce({ error: "Network Error" });
+      await expect(
+        readProgressApi.updateProgression("book-123", {
+          device: { id: "d", name: "n" },
+          locator: {
+            href: "ch1",
+            locations: { totalProgression: 0.5 },
+            type: "application/xhtml+xml",
+          },
+          modified: "2024-01-01T00:00:00Z",
+        }),
+      ).rejects.toBeInstanceOf(OfflineQueuedError);
+      const queued = await getOutbox();
+      expect(queued[0]?.request.url).toBe("/api/v1/books/book-123/progression");
+    });
+
+    it("delete enqueues on network failure", async () => {
+      vi.mocked(api.delete).mockRejectedValueOnce({ error: "Network Error" });
+      await expect(readProgressApi.delete("book-123")).rejects.toBeInstanceOf(
+        OfflineQueuedError,
+      );
+      const queued = await getOutbox();
+      expect(queued[0]?.request.method).toBe("DELETE");
     });
   });
 });

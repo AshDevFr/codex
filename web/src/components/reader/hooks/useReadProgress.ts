@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { readProgressApi } from "@/api/readProgress";
+import { isOfflineQueuedError } from "@/lib/offline/outbox";
 import { useReaderStore } from "@/store/readerStore";
 
 interface UseReadProgressOptions {
@@ -90,6 +91,10 @@ export function useReadProgress({
           });
         })
         .catch((error) => {
+          // Queued for offline delivery is success-equivalent for our
+          // purposes: the outbox will replay the write when the network
+          // returns. Don't surface as an error.
+          if (isOfflineQueuedError(error)) return;
           console.error("Failed to save reading progress:", error);
         });
     },

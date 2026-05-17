@@ -1,3 +1,8 @@
+import {
+  enqueueOfflineWrite,
+  isOfflineError,
+  OfflineQueuedError,
+} from "@/lib/offline/outbox";
 import type { components } from "@/types";
 import { api } from "./client";
 
@@ -5,6 +10,26 @@ export type ReadProgressResponse =
   components["schemas"]["ReadProgressResponse"];
 export type UpdateProgressRequest =
   components["schemas"]["UpdateProgressRequest"];
+
+const API_BASE = "/api/v1";
+
+/**
+ * Build the auth + content-type headers the outbox needs to replay this
+ * request later. Captures the JWT at enqueue time; if the user logs out
+ * before the drain fires the replay will get a 401 (the drain marks the
+ * record as failed-retry; the user re-authenticates and tries again).
+ */
+function captureWriteHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const token =
+    typeof localStorage !== "undefined"
+      ? localStorage.getItem("jwt_token")
+      : null;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
 
 /** Readium R2Progression format for EPUB position sync */
 export interface R2Progression {
@@ -36,24 +61,52 @@ export const readProgressApi = {
   },
 
   /**
-   * Update reading progress for a book
+   * Update reading progress for a book.
+   *
+   * On network failure (offline / server unreachable) the request is
+   * serialised into the offline outbox and an {@link OfflineQueuedError}
+   * is thrown. Callers should treat that error as "saved locally, will
+   * sync when online" rather than a real failure.
    */
   update: async (
     bookId: string,
     request: UpdateProgressRequest,
   ): Promise<ReadProgressResponse> => {
-    const response = await api.put<ReadProgressResponse>(
-      `/books/${bookId}/progress`,
-      request,
-    );
-    return response.data;
+    try {
+      const response = await api.put<ReadProgressResponse>(
+        `/books/${bookId}/progress`,
+        request,
+      );
+      return response.data;
+    } catch (err) {
+      if (!isOfflineError(err)) throw err;
+      const descriptor = {
+        url: `${API_BASE}/books/${bookId}/progress`,
+        method: "PUT",
+        headers: captureWriteHeaders(),
+        body: request,
+      };
+      await enqueueOfflineWrite(descriptor);
+      throw new OfflineQueuedError(descriptor);
+    }
   },
 
   /**
-   * Delete reading progress for a book
+   * Delete reading progress for a book. Same offline semantics as `update`.
    */
   delete: async (bookId: string): Promise<void> => {
-    await api.delete(`/books/${bookId}/progress`);
+    try {
+      await api.delete(`/books/${bookId}/progress`);
+    } catch (err) {
+      if (!isOfflineError(err)) throw err;
+      const descriptor = {
+        url: `${API_BASE}/books/${bookId}/progress`,
+        method: "DELETE",
+        headers: captureWriteHeaders(),
+      };
+      await enqueueOfflineWrite(descriptor);
+      throw new OfflineQueuedError(descriptor);
+    }
   },
 
   /**
@@ -71,12 +124,25 @@ export const readProgressApi = {
   },
 
   /**
-   * Update R2Progression for a book (Readium standard)
+   * Update R2Progression for a book (Readium standard). Same offline
+   * semantics as `update`.
    */
   updateProgression: async (
     bookId: string,
     progression: R2Progression,
   ): Promise<void> => {
-    await api.put(`/books/${bookId}/progression`, progression);
+    try {
+      await api.put(`/books/${bookId}/progression`, progression);
+    } catch (err) {
+      if (!isOfflineError(err)) throw err;
+      const descriptor = {
+        url: `${API_BASE}/books/${bookId}/progression`,
+        method: "PUT",
+        headers: captureWriteHeaders(),
+        body: progression,
+      };
+      await enqueueOfflineWrite(descriptor);
+      throw new OfflineQueuedError(descriptor);
+    }
   },
 };
