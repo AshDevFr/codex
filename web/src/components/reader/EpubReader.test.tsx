@@ -2,13 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
 import { renderWithProviders, screen } from "@/test/utils";
 import { EpubReader } from "./EpubReader";
-import { useTouchNav } from "./hooks/useTouchNav";
-
-// Mock useTouchNav so we can drive its callbacks directly in tests (R7-1).
-// Returning a no-op ref keeps the production wiring code happy.
-vi.mock("./hooks/useTouchNav", () => ({
-  useTouchNav: vi.fn(() => ({ touchRef: vi.fn() })),
-}));
 
 // Captures the per-event handlers `EpubReader` registers on the rendition,
 // so tests can fire (e.g.) the "click" handler to verify R7-1 toolbar toggle.
@@ -389,20 +382,9 @@ describe("EpubReader", () => {
   });
 
   describe("mobile tap-to-toggle toolbar (R7-1)", () => {
-    it("wires useTouchNav with onTap that toggles the toolbar", () => {
-      renderWithProviders(<EpubReader {...defaultProps} />);
-
-      expect(useTouchNav).toHaveBeenCalled();
-      const opts = vi.mocked(useTouchNav).mock.calls.at(-1)?.[0];
-      expect(opts?.onTap).toBe(useReaderStore.getState().toggleToolbar);
-
-      // Drive the captured onTap to verify it flips toolbarVisible
-      useReaderStore.setState({ toolbarVisible: true });
-      opts?.onTap?.();
-      expect(useReaderStore.getState().toolbarVisible).toBe(false);
-      opts?.onTap?.();
-      expect(useReaderStore.getState().toolbarVisible).toBe(true);
-    });
+    // The EPUB reader no longer wires an outer-container useTouchNav —
+    // the iframe-internal pointer handler (R10-1) is the sole authority
+    // for taps to avoid double-classifying the same touch on iOS Safari.
 
     it("registers a content hook that wires pointer events on the iframe doc (R10-1)", async () => {
       renderWithProviders(<EpubReader {...defaultProps} />);
@@ -414,26 +396,48 @@ describe("EpubReader", () => {
     });
   });
 
-  describe("EPUB iframe click navigation (R10-1)", () => {
-    // The iframe hook now listens for `click` rather than pointer events:
-    // on iOS Safari (esp. PWA) pointerup inside an iframe occasionally
-    // fires with stale coordinates that push center taps into edge thirds.
-    // `click` is synthesized only after the browser confirms the gesture
-    // is a tap, with accurate viewport-relative coordinates.
-    const dispatchClick = (
+  describe("EPUB iframe pointer navigation (R10-1)", () => {
+    // The iframe hook listens for pointer events (not `click`). iOS
+    // Safari can suppress `click` inside sandboxed iframes — switching
+    // to it during this work lost navigation entirely on real devices
+    // — while pointer events fire reliably. Tap-zone width comes from
+    // `window.innerWidth` (the parent viewport) because in epub.js's
+    // paginated mode the iframe document is wider than the visible area
+    // due to CSS columns.
+    const dispatchPointerEvent = (
       doc: Document,
+      type: "pointerdown" | "pointerup" | "pointercancel",
       x: number,
       y: number,
-      init: { button?: number; target?: Element } = {},
+      init: {
+        pointerType?: "touch" | "mouse" | "pen";
+        pointerId?: number;
+        isPrimary?: boolean;
+        button?: number;
+        target?: Element;
+      } = {},
     ) => {
-      const { button = 0, target } = init;
-      const event = new MouseEvent("click", {
+      const {
+        pointerType = "touch",
+        pointerId = 1,
+        isPrimary = true,
+        button = 0,
+        target,
+      } = init;
+      const event = new MouseEvent(type, {
         clientX: x,
         clientY: y,
         button,
         bubbles: true,
         cancelable: true,
-      });
+      }) as MouseEvent & {
+        pointerId: number;
+        pointerType: string;
+        isPrimary: boolean;
+      };
+      Object.defineProperty(event, "pointerId", { value: pointerId });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      Object.defineProperty(event, "isPrimary", { value: isPrimary });
       const dispatchTarget = target ?? doc.body;
       dispatchTarget.dispatchEvent(event);
     };
@@ -462,39 +466,43 @@ describe("EpubReader", () => {
 
       const fakeIframeDoc = document.implementation.createHTMLDocument("epub");
       // Drive every registered content callback so the hook attaches its
-      // click listener to this fake document.
+      // pointer listeners to this fake document.
       for (const cb of contentHookCallbacks) {
         cb({ document: fakeIframeDoc });
       }
       return fakeIframeDoc;
     };
 
-    it("toggles the toolbar on a center-zone click inside the iframe", async () => {
+    it("toggles the toolbar on a center-zone tap inside the iframe", async () => {
       const doc = await mountAndGetIframeDoc();
 
       // mountAndGetIframeDoc pins window.innerWidth=900, innerHeight=600;
       // center third is x ∈ [300, 600], y ∈ [200, 400]. (450, 300) is dead-center.
       useReaderStore.setState({ toolbarVisible: true });
-      dispatchClick(doc, 450, 300);
+      dispatchPointerEvent(doc, "pointerdown", 450, 300);
+      dispatchPointerEvent(doc, "pointerup", 451, 300);
       expect(useReaderStore.getState().toolbarVisible).toBe(false);
 
-      dispatchClick(doc, 450, 300);
+      dispatchPointerEvent(doc, "pointerdown", 450, 300);
+      dispatchPointerEvent(doc, "pointerup", 450, 301);
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
     });
 
-    it("routes edge-zone clicks to prev/next without toggling the toolbar (LTR)", async () => {
+    it("routes edge-zone taps to prev/next without toggling the toolbar (LTR)", async () => {
       const doc = await mountAndGetIframeDoc();
 
       const visibleBefore = useReaderStore.getState().toolbarVisible;
 
       // window 900 wide → left third < 300, right third > 600.
-      dispatchClick(doc, 100, 300);
-      dispatchClick(doc, 800, 300);
+      dispatchPointerEvent(doc, "pointerdown", 100, 300);
+      dispatchPointerEvent(doc, "pointerup", 100, 300);
+      dispatchPointerEvent(doc, "pointerdown", 800, 300);
+      dispatchPointerEvent(doc, "pointerup", 800, 300);
 
       expect(useReaderStore.getState().toolbarVisible).toBe(visibleBefore);
     });
 
-    it("ignores clicks on links and form controls", async () => {
+    it("ignores pointer interactions starting on links and form controls", async () => {
       const doc = await mountAndGetIframeDoc();
 
       const link = doc.createElement("a");
@@ -503,19 +511,50 @@ describe("EpubReader", () => {
       doc.body.appendChild(input);
 
       useReaderStore.setState({ toolbarVisible: true });
-      dispatchClick(doc, 450, 300, { target: link });
+      dispatchPointerEvent(doc, "pointerdown", 450, 300, { target: link });
+      dispatchPointerEvent(doc, "pointerup", 451, 301, { target: link });
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
 
-      dispatchClick(doc, 450, 300, { target: input });
+      dispatchPointerEvent(doc, "pointerdown", 450, 300, { target: input });
+      dispatchPointerEvent(doc, "pointerup", 451, 301, { target: input });
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
     });
 
-    it("ignores non-primary mouse buttons", async () => {
+    it("ignores non-primary pointers (multi-touch)", async () => {
       const doc = await mountAndGetIframeDoc();
 
       useReaderStore.setState({ toolbarVisible: true });
-      // Right-click (button=2) should not flip the toolbar.
-      dispatchClick(doc, 450, 300, { button: 2 });
+      dispatchPointerEvent(doc, "pointerdown", 450, 300, {
+        isPrimary: false,
+        pointerId: 2,
+      });
+      dispatchPointerEvent(doc, "pointerup", 450, 300, {
+        isPrimary: false,
+        pointerId: 2,
+      });
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+    });
+
+    it("ignores drags above the tap tolerance", async () => {
+      const doc = await mountAndGetIframeDoc();
+
+      useReaderStore.setState({ toolbarVisible: true });
+      // A 200 px horizontal movement is well above the tap tolerance —
+      // the hook should leave the toolbar (and navigation) untouched so
+      // the browser keeps native pan / back-swipe behavior.
+      dispatchPointerEvent(doc, "pointerdown", 450, 300);
+      dispatchPointerEvent(doc, "pointerup", 250, 300);
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+    });
+
+    it("aborts when pointercancel fires before pointerup", async () => {
+      const doc = await mountAndGetIframeDoc();
+
+      useReaderStore.setState({ toolbarVisible: true });
+      dispatchPointerEvent(doc, "pointerdown", 450, 300);
+      dispatchPointerEvent(doc, "pointercancel", 450, 300);
+      dispatchPointerEvent(doc, "pointerup", 450, 300);
+      // Cancel cleared the gesture; pointerup should be a no-op.
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
     });
   });
