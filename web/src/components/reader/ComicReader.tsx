@@ -3,6 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { booksApi } from "@/api/books";
 import {
+  DOWNLOADS_BROADCAST_CHANNEL,
+  type DownloadsBroadcast,
+  getDownload,
+} from "@/lib/offline/db";
+import { getEffectivePreloadWindow } from "@/lib/offline/prefetchWindow";
+import {
   type FitMode,
   type PageOrientation,
   selectEffectiveReadingDirection,
@@ -180,6 +186,51 @@ export function ComicReader({
     (state) => state.setWebtoonFitMode,
   );
   const setGlobalPageLayout = useReaderStore((state) => state.setPageLayout);
+
+  // T11: track whether the current book has been saved for offline reading.
+  // When true, the prefetch window expands aggressively (every page is in
+  // the SW cache; preloading them just primes the browser's image decoder).
+  // The listener keeps the flag in sync if the user removes/re-downloads
+  // the book while the reader stays open.
+  const [isBookDownloaded, setIsBookDownloaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      try {
+        const record = await getDownload(bookId);
+        if (!cancelled) {
+          setIsBookDownloaded(record?.status === "complete");
+        }
+      } catch {
+        if (!cancelled) setIsBookDownloaded(false);
+      }
+    }
+    void hydrate();
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== "undefined") {
+      channel = new BroadcastChannel(DOWNLOADS_BROADCAST_CHANNEL);
+      channel.addEventListener("message", handleBroadcast);
+    }
+    function handleBroadcast(ev: MessageEvent<DownloadsBroadcast>) {
+      const payload = ev.data;
+      if (payload.kind === "delete" && payload.id === bookId) {
+        setIsBookDownloaded(false);
+      } else if (payload.kind === "clear") {
+        setIsBookDownloaded(false);
+      } else if (payload.kind === "put" && payload.record.id === bookId) {
+        setIsBookDownloaded(payload.record.status === "complete");
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      if (channel) {
+        channel.removeEventListener("message", handleBroadcast);
+        channel.close();
+      }
+    };
+  }, [bookId]);
 
   // Fetch adjacent books for series navigation
   useAdjacentBooks({ bookId, enabled: true });
@@ -592,9 +643,17 @@ export function ComicReader({
     // Build list of pages to preload (current page always included)
     const pagesToPreload = new Set<number>([currentPage]);
 
+    // T11: floor the prefetch window so cellular readers (and especially
+    // downloaded books where every page is a free cache hit) get a snappy
+    // next-page tap regardless of the user's preload-pages setting.
+    const widePreload = getEffectivePreloadWindow(
+      preloadPages,
+      isBookDownloaded,
+    );
+
     // Double-page mode doubles the preload count
     const effectivePreload =
-      pageLayout === "double" ? preloadPages * 2 : preloadPages;
+      pageLayout === "double" ? widePreload * 2 : widePreload;
 
     // Preload pages around current position
     for (let i = 1; i <= effectivePreload; i++) {
@@ -638,6 +697,7 @@ export function ComicReader({
     currentPage,
     totalPages,
     preloadPages,
+    isBookDownloaded,
     pageLayout,
     spreadConfig,
     getPageUrl,
