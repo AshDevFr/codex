@@ -1,11 +1,18 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  /* `100vh` on iOS Chrome reports the *large* viewport (the screen as it
+     would look with the URL bar and bottom nav hidden), so a body sized
+     to 100vh extends past the visible area while those chrome bars are on
+     screen. Fullscreen surfaces like the reader use `100dvh` (the dynamic
+     viewport that actually matches the visible area), so the body needs
+     to track that too — otherwise the body is taller than the reader and
+     a black band shows below it. */
+  min-height: 100dvh;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Hide focus outline for mouse clicks, show only for keyboard navigation */

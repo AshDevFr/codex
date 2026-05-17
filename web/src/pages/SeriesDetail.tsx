@@ -560,7 +560,7 @@ export function SeriesDetail() {
   });
 
   return (
-    <Box py="md" px="md">
+    <Box pt="xs" pb="md" px="md">
       <Stack gap="md">
         {/* Breadcrumbs */}
         <Breadcrumbs separator={<IconChevronRight size={14} />}>

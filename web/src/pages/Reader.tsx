@@ -50,7 +50,7 @@ export function Reader() {
   if (bookLoading) {
     return (
       <Center
-        style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
+        style={{ width: "100vw", height: "100dvh", backgroundColor: "#000" }}
       >
         <Loader size="lg" color="gray" />
       </Center>
@@ -61,7 +61,7 @@ export function Reader() {
   if (bookError || !bookDetail) {
     return (
       <Center
-        style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
+        style={{ width: "100vw", height: "100dvh", backgroundColor: "#000" }}
       >
         <Text c="red">
           {bookError instanceof Error

@@ -439,13 +439,19 @@ export function PdfReader({
     };
   }, [resetHideTimeout]);
 
-  // Show toolbar on mouse move
-  const handleMouseMove = useCallback(() => {
-    if (!toolbarVisible) {
-      setToolbarVisible(true);
-    }
-    resetHideTimeout();
-  }, [toolbarVisible, setToolbarVisible, resetHideTimeout]);
+  // Show toolbar on mouse / pen move. Skip touch — synthetic mouse events
+  // fire after every tap on touch devices, which would pop the toolbar open
+  // every time the user paged forward via a side-zone tap.
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      if (!toolbarVisible) {
+        setToolbarVisible(true);
+      }
+      resetHideTimeout();
+    },
+    [toolbarVisible, setToolbarVisible, resetHideTimeout],
+  );
 
   // Keyboard navigation
   useKeyboardNav({
@@ -647,20 +653,18 @@ export function PdfReader({
   );
 
   // Page container style.
-  // The toolbar is an overlay above the page, so the container always spans
-  // the full viewport — anchoring the top to the toolbar made short PDFs
-  // hug the title bar with a tall black gap below. The container itself
-  // honors safe-area insets so PDFs on notch displays don't slide under the
-  // iOS status bar in PWA standalone mode.
-  //
-  // `alignItems: center` would crop the top of pages taller than the
-  // viewport in some flex implementations; using `margin: auto` on the page
-  // wrapper centers when content is shorter than the container and pins to
-  // the top (allowing scroll past) when content overflows.
+  // The container shrinks to sit *below* the toolbar (and above the bottom
+  // bar) when they're visible, so a fit-width page taller than the viewport
+  // can scroll its top edge into view instead of staying hidden under the
+  // 64px toolbar. `margin: auto` on the page wrapper still centers short
+  // pages within whatever vertical space is available, and pins to the top
+  // (scrolling normally) when content overflows.
   const pageContainerStyle: CSSProperties = useMemo(
     () => ({
       position: "absolute",
-      top: "env(safe-area-inset-top, 0px)",
+      top: toolbarVisible
+        ? "calc(env(safe-area-inset-top, 0px) + 64px)"
+        : "env(safe-area-inset-top, 0px)",
       left: 0,
       right: 0,
       bottom: "env(safe-area-inset-bottom, 0px)",
@@ -669,8 +673,9 @@ export function PdfReader({
       justifyContent: "center",
       alignItems: "flex-start",
       padding: "20px",
+      transition: "top 0.2s ease-in-out",
     }),
-    [],
+    [toolbarVisible],
   );
 
   // Loading state
@@ -687,7 +692,7 @@ export function PdfReader({
   return (
     <Box
       ref={setContainerRef}
-      onMouseMove={handleMouseMove}
+      onPointerMove={handlePointerMove}
       style={containerStyle}
     >
       {/* Toolbar */}

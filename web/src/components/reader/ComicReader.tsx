@@ -394,13 +394,19 @@ export function ComicReader({
     };
   }, [resetHideTimeout]);
 
-  // Show toolbar on mouse move
-  const handleMouseMove = useCallback(() => {
-    if (!toolbarVisible) {
-      setToolbarVisible(true);
-    }
-    resetHideTimeout();
-  }, [toolbarVisible, setToolbarVisible, resetHideTimeout]);
+  // Show toolbar on mouse / pen move. Skip touch — synthetic mouse events
+  // fire after every tap on touch devices, which would pop the toolbar open
+  // every time the user paged forward via a side-zone tap.
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      if (!toolbarVisible) {
+        setToolbarVisible(true);
+      }
+      resetHideTimeout();
+    },
+    [toolbarVisible, setToolbarVisible, resetHideTimeout],
+  );
 
   // Wrapped handlers for single-page mode that set navigation direction
   const handleNextPageWithDirection = useCallback(() => {
@@ -748,7 +754,7 @@ export function ComicReader({
   return (
     <Box
       ref={containerRef}
-      onMouseMove={handleMouseMove}
+      onPointerMove={handlePointerMove}
       style={{
         width: "100vw",
         height: "100dvh",
