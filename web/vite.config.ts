@@ -13,60 +13,23 @@ export default defineConfig({
       registerType: "prompt",
       // Skip the SW entirely in dev so MSW's mockServiceWorker.js owns the page.
       // The hand-authored manifest at web/public/manifest.webmanifest is served
-      // as-is; vite-plugin-pwa only generates the service worker.
+      // as-is; vite-plugin-pwa only compiles the service worker source.
       injectRegister: null,
       manifest: false,
-      strategies: "generateSW",
-      workbox: {
+      // Phase 12 moved from generateSW to injectManifest so the SW can own a
+      // custom route for per-book offline caches and the downloads broadcast
+      // bus. App-shell precache + the previous NetworkFirst/CacheFirst rules
+      // are reimplemented inside src/sw.ts. See tmp/implementation/planned/
+      // mobile-support.md (Phase 12, T1).
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         // The main app bundle is currently ~2.9 MB. Allow precaching files up
         // to 4 MiB so the full app shell loads instantly in standalone mode.
         // Code-splitting would shrink this; revisit if the bundle grows further.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        navigateFallback: "/index.html",
-        // Don't try to handle backend routes from the SPA shell.
-        navigateFallbackDenylist: [
-          /^\/api\//,
-          /^\/opds\//,
-          /^\/komga\//,
-          /^\/docs\//,
-          /^\/health$/,
-        ],
-        cleanupOutdatedCaches: true,
-        clientsClaim: false,
-        skipWaiting: false,
-        runtimeCaching: [
-          {
-            // Backend API: always go to network so auth + freshness win,
-            // but fall back to cache when offline so a recently-viewed list
-            // remains visible. Short cache TTL prevents stale auth state.
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "codex-api",
-              networkTimeoutSeconds: 5,
-              expiration: {
-                maxEntries: 64,
-                maxAgeSeconds: 60 * 5,
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // Icons + fonts rarely change: cache aggressively.
-            urlPattern: ({ request }) =>
-              request.destination === "font" || request.destination === "image",
-            handler: "CacheFirst",
-            options: {
-              cacheName: "codex-assets",
-              expiration: {
-                maxEntries: 128,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
       },
       devOptions: {
         enabled: false,
