@@ -825,14 +825,10 @@ export function ComicReader({
           style={{
             width: "100%",
             height: "100%",
-            // Allow vertical pan (tall pages in `width` / `width-shrink` need
-            // it) and pinch-zoom for detail, but explicitly omit `pan-x` so
-            // iOS WebKit doesn't claim horizontal swipes for its own
-            // scroll/back-navigation logic. Without this, mid-swipe the
-            // browser fires `pointercancel` and our swipe handler never sees
-            // the gesture end. `useTouchNav` listens passively so this
-            // touch-action value is the only gate.
-            touchAction: "pan-y pinch-zoom",
+            // Click-only navigation: we no longer compete with the browser's
+            // native gestures. `manipulation` enables pan + pinch-zoom and
+            // disables double-tap zoom for snappier taps.
+            touchAction: "manipulation",
           }}
         >
           <PageTransitionWrapper

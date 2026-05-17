@@ -368,8 +368,8 @@ describe("EpubReader", () => {
     it("should render TOC drawer component", () => {
       renderWithProviders(<EpubReader {...defaultProps} />);
 
-      // EpubTableOfContents is rendered in toolbar
-      // It's toggled by a button
+      // EpubTableOfContentsDrawer is rendered at the reader level so it
+      // survives the toolbar's auto-hide; the trigger lives in the toolbar.
       expect(screen.getByTestId("react-reader-mock")).toBeInTheDocument();
     });
 
@@ -473,14 +473,15 @@ describe("EpubReader", () => {
       return fakeIframeDoc;
     };
 
-    it("calls rendition.next on a left swipe inside the iframe (LTR)", async () => {
+    it("ignores swipes / drags inside the iframe (click-only)", async () => {
       const doc = await mountAndGetIframeDoc();
 
       useReaderStore.setState({ toolbarVisible: false });
+      // A 200px horizontal drag is well above the tap tolerance, so the
+      // hook must do nothing — the browser keeps native pan/back behavior.
       dispatchPointerEvent(doc, "pointerdown", 300, 200, { timeStamp: 0 });
       dispatchPointerEvent(doc, "pointerup", 100, 200, { timeStamp: 100 });
 
-      // Toolbar should not toggle from a swipe
       expect(useReaderStore.getState().toolbarVisible).toBe(false);
     });
 

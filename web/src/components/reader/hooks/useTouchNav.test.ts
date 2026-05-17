@@ -41,8 +41,7 @@ describe("useTouchNav", () => {
   }
 
   // jsdom doesn't ship a PointerEvent constructor; build one from MouseEvent
-  // and add the pointer fields the hook reads. We assign timeStamp explicitly
-  // so each test can control gesture duration deterministically.
+  // and add the pointer fields the hook reads.
   const createPointerEvent = (
     type: "pointerdown" | "pointerup" | "pointercancel",
     x: number,
@@ -77,7 +76,7 @@ describe("useTouchNav", () => {
     return event as unknown as PointerEvent;
   };
 
-  const simulateSwipe = async (
+  const simulateGesture = async (
     startX: number,
     startY: number,
     endX: number,
@@ -103,121 +102,14 @@ describe("useTouchNav", () => {
     });
   };
 
-  describe("LTR mode (touch)", () => {
-    it("calls onNextPage when swiping left", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(200, 100, 100, 100);
-
-      expect(mockNextPage).toHaveBeenCalledTimes(1);
-      expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-
-    it("calls onPrevPage when swiping right", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(100, 100, 200, 100);
-
-      expect(mockPrevPage).toHaveBeenCalledTimes(1);
-      expect(mockNextPage).not.toHaveBeenCalled();
-    });
-
-    it("does not trigger navigation for small swipes", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(100, 100, 120, 100);
-
-      expect(mockNextPage).not.toHaveBeenCalled();
-      expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("LTR mode (mouse drag) — R10-4 desktop emulation support", () => {
-    it("treats a horizontal mouse drag the same as a touch swipe", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(300, 200, 150, 200, { pointerType: "mouse" });
-
-      expect(mockNextPage).toHaveBeenCalledTimes(1);
-      expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-
-    it("ignores non-primary mouse buttons (right-click drag)", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      // button = 2 → right-click; should be ignored entirely.
-      await simulateSwipe(300, 200, 150, 200, {
-        pointerType: "mouse",
-        button: 2,
-      });
-
-      expect(mockNextPage).not.toHaveBeenCalled();
-      expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-
-    it("treats a mouse click in place as a tap", async () => {
+  describe("click-only navigation (no swipe)", () => {
+    it("ignores horizontal drags / swipes", async () => {
       const { result } = renderHook(() =>
         useTouchNav({
           enabled: true,
           onNextPage: mockNextPage,
           onPrevPage: mockPrevPage,
           onTap: mockTap,
-          minSwipeDistance: 50,
         }),
       );
 
@@ -225,164 +117,21 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(200, 200, 201, 201, { pointerType: "mouse" });
-
-      expect(mockTap).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("RTL mode", () => {
-    beforeEach(() => {
-      useReaderStore.setState({
-        readingDirectionOverride: "rtl",
-      });
-    });
-
-    it("calls onPrevPage when swiping left (reversed)", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(200, 100, 100, 100);
-
-      expect(mockPrevPage).toHaveBeenCalledTimes(1);
-      expect(mockNextPage).not.toHaveBeenCalled();
-    });
-
-    it("calls onNextPage when swiping right (reversed)", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(100, 100, 200, 100);
-
-      expect(mockNextPage).toHaveBeenCalledTimes(1);
-      expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("TTB mode", () => {
-    beforeEach(() => {
-      useReaderStore.setState({
-        readingDirectionOverride: "ttb",
-      });
-    });
-
-    it("calls onNextPage when swiping up", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(100, 200, 100, 100);
-
-      expect(mockNextPage).toHaveBeenCalledTimes(1);
-      expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-
-    it("calls onPrevPage when swiping down", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(100, 100, 100, 200);
-
-      expect(mockPrevPage).toHaveBeenCalledTimes(1);
-      expect(mockNextPage).not.toHaveBeenCalled();
-    });
-
-    it("ignores horizontal swipes in TTB mode", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(200, 100, 100, 100);
+      await simulateGesture(200, 100, 100, 100);
+      await simulateGesture(100, 100, 200, 100);
 
       expect(mockNextPage).not.toHaveBeenCalled();
       expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("webtoon mode", () => {
-    beforeEach(() => {
-      useReaderStore.setState({
-        readingDirectionOverride: "webtoon",
-      });
+      expect(mockTap).not.toHaveBeenCalled();
     });
 
-    it("uses vertical navigation like TTB", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(100, 200, 100, 100);
-
-      expect(mockNextPage).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("tap detection", () => {
-    it("calls onTap for minimal movement", async () => {
+    it("ignores vertical drags / swipes", async () => {
       const { result } = renderHook(() =>
         useTouchNav({
           enabled: true,
           onNextPage: mockNextPage,
           onPrevPage: mockPrevPage,
           onTap: mockTap,
-          minSwipeDistance: 50,
         }),
       );
 
@@ -390,38 +139,17 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(100, 100, 102, 102);
+      await simulateGesture(100, 100, 100, 250);
 
-      expect(mockTap).toHaveBeenCalledTimes(1);
       expect(mockNextPage).not.toHaveBeenCalled();
       expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-
-    it("does not call onTap for swipes", async () => {
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          onTap: mockTap,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await simulateSwipe(200, 100, 100, 100);
-
       expect(mockTap).not.toHaveBeenCalled();
     });
   });
 
   describe("zone-aware tap dispatch", () => {
     // jsdom doesn't compute layout, so we stub getBoundingClientRect to make
-    // the element 900x600 anchored at (0,0). Horizontal thirds: 0..300, 300..600,
-    // 600..900. Vertical thirds: 0..200, 200..400, 400..600.
+    // the element 900x600 anchored at (0,0).
     const stubRect = (w = 900, h = 600) => {
       vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
         left: 0,
@@ -450,7 +178,7 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(100, 300, 100, 300);
+      await simulateGesture(100, 300, 100, 300);
 
       expect(mockPrevPage).toHaveBeenCalledTimes(1);
       expect(mockTap).not.toHaveBeenCalled();
@@ -471,7 +199,7 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(450, 300, 450, 300);
+      await simulateGesture(450, 300, 450, 300);
 
       expect(mockTap).toHaveBeenCalledTimes(1);
       expect(mockPrevPage).not.toHaveBeenCalled();
@@ -492,7 +220,7 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(800, 300, 800, 300);
+      await simulateGesture(800, 300, 800, 300);
 
       expect(mockNextPage).toHaveBeenCalledTimes(1);
       expect(mockTap).not.toHaveBeenCalled();
@@ -515,10 +243,10 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(100, 300, 100, 300);
+      await simulateGesture(100, 300, 100, 300);
       expect(mockNextPage).toHaveBeenCalledTimes(1);
 
-      await simulateSwipe(800, 300, 800, 300);
+      await simulateGesture(800, 300, 800, 300);
       expect(mockPrevPage).toHaveBeenCalledTimes(1);
     });
 
@@ -539,15 +267,15 @@ describe("useTouchNav", () => {
       });
 
       // Top third → prev.
-      await simulateSwipe(450, 50, 450, 50);
+      await simulateGesture(450, 50, 450, 50);
       expect(mockPrevPage).toHaveBeenCalledTimes(1);
 
       // Middle third → toolbar toggle.
-      await simulateSwipe(450, 300, 450, 300);
+      await simulateGesture(450, 300, 450, 300);
       expect(mockTap).toHaveBeenCalledTimes(1);
 
       // Bottom third → next.
-      await simulateSwipe(450, 550, 450, 550);
+      await simulateGesture(450, 550, 450, 550);
       expect(mockNextPage).toHaveBeenCalledTimes(1);
     });
 
@@ -566,10 +294,67 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(100, 300, 100, 300);
-      await simulateSwipe(800, 300, 800, 300);
+      await simulateGesture(100, 300, 100, 300);
+      await simulateGesture(800, 300, 800, 300);
 
       expect(mockTap).toHaveBeenCalledTimes(2);
+      expect(mockNextPage).not.toHaveBeenCalled();
+      expect(mockPrevPage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("mouse input", () => {
+    it("treats a mouse click as a tap", async () => {
+      vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        right: 900,
+        bottom: 600,
+        width: 900,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
+
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+        }),
+      );
+
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await simulateGesture(450, 300, 451, 301, { pointerType: "mouse" });
+
+      expect(mockTap).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores non-primary mouse buttons (right-click drag)", async () => {
+      const { result } = renderHook(() =>
+        useTouchNav({
+          enabled: true,
+          onNextPage: mockNextPage,
+          onPrevPage: mockPrevPage,
+          onTap: mockTap,
+        }),
+      );
+
+      act(() => {
+        result.current.touchRef(element);
+      });
+
+      await simulateGesture(300, 200, 300, 200, {
+        pointerType: "mouse",
+        button: 2,
+      });
+
+      expect(mockTap).not.toHaveBeenCalled();
       expect(mockNextPage).not.toHaveBeenCalled();
       expect(mockPrevPage).not.toHaveBeenCalled();
     });
@@ -582,6 +367,7 @@ describe("useTouchNav", () => {
           enabled: false,
           onNextPage: mockNextPage,
           onPrevPage: mockPrevPage,
+          onTap: mockTap,
         }),
       );
 
@@ -589,54 +375,22 @@ describe("useTouchNav", () => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(200, 100, 100, 100);
+      await simulateGesture(450, 300, 450, 300);
 
+      expect(mockTap).not.toHaveBeenCalled();
       expect(mockNextPage).not.toHaveBeenCalled();
       expect(mockPrevPage).not.toHaveBeenCalled();
     });
   });
 
   describe("pointer cancel", () => {
-    it("treats a horizontal cancel as a swipe (iOS edge-gesture fallback)", async () => {
-      // iOS WebKit fires pointercancel mid-swipe when it decides the gesture
-      // is a horizontal pan/back-swipe. We still want to classify and navigate
-      // based on the movement that did happen.
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await act(async () => {
-        element.dispatchEvent(
-          createPointerEvent("pointerdown", 250, 100, { timeStamp: 0 }),
-        );
-      });
-      await act(async () => {
-        element.dispatchEvent(
-          createPointerEvent("pointercancel", 100, 100, { timeStamp: 100 }),
-        );
-      });
-
-      expect(mockNextPage).toHaveBeenCalledTimes(1);
-      expect(mockPrevPage).not.toHaveBeenCalled();
-    });
-
-    it("does not treat a tap cancel as navigation", async () => {
+    it("clears gesture state so a follow-up pointerup is ignored", async () => {
       const { result } = renderHook(() =>
         useTouchNav({
           enabled: true,
           onNextPage: mockNextPage,
           onPrevPage: mockPrevPage,
           onTap: mockTap,
-          minSwipeDistance: 50,
         }),
       );
 
@@ -651,49 +405,17 @@ describe("useTouchNav", () => {
       });
       await act(async () => {
         element.dispatchEvent(
-          createPointerEvent("pointercancel", 201, 100, { timeStamp: 50 }),
+          createPointerEvent("pointercancel", 200, 100, { timeStamp: 50 }),
+        );
+      });
+      await act(async () => {
+        element.dispatchEvent(
+          createPointerEvent("pointerup", 200, 100, { timeStamp: 100 }),
         );
       });
 
-      expect(mockNextPage).not.toHaveBeenCalled();
-      expect(mockPrevPage).not.toHaveBeenCalled();
       expect(mockTap).not.toHaveBeenCalled();
-    });
-
-    it("does not double-fire when pointerup arrives after pointercancel", async () => {
-      // Some platforms emit a stray pointerup after pointercancel. Make sure
-      // we don't count both as gesture ends and navigate twice.
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          onNextPage: mockNextPage,
-          onPrevPage: mockPrevPage,
-          minSwipeDistance: 50,
-        }),
-      );
-
-      act(() => {
-        result.current.touchRef(element);
-      });
-
-      await act(async () => {
-        element.dispatchEvent(
-          createPointerEvent("pointerdown", 250, 100, { timeStamp: 0 }),
-        );
-      });
-      await act(async () => {
-        element.dispatchEvent(
-          createPointerEvent("pointercancel", 100, 100, { timeStamp: 50 }),
-        );
-      });
-      await act(async () => {
-        element.dispatchEvent(
-          createPointerEvent("pointerup", 100, 100, { timeStamp: 100 }),
-        );
-      });
-
-      // Cancel-as-swipe fires once; the stray pointerup must be ignored.
-      expect(mockNextPage).toHaveBeenCalledTimes(1);
+      expect(mockNextPage).not.toHaveBeenCalled();
       expect(mockPrevPage).not.toHaveBeenCalled();
     });
   });
@@ -703,7 +425,7 @@ describe("useTouchNav", () => {
       const { result } = renderHook(() =>
         useTouchNav({
           enabled: true,
-          onNextPage: mockNextPage,
+          onTap: mockTap,
         }),
       );
 
@@ -718,13 +440,13 @@ describe("useTouchNav", () => {
         result.current.touchRef(element2);
       });
 
-      // Old element should no longer have listeners; swipe on it must not fire.
+      // Old element should no longer have listeners; tap on it must not fire.
       act(() => {
-        element.dispatchEvent(createPointerEvent("pointerdown", 200, 100));
-        element.dispatchEvent(createPointerEvent("pointerup", 100, 100));
+        element.dispatchEvent(createPointerEvent("pointerdown", 200, 200));
+        element.dispatchEvent(createPointerEvent("pointerup", 200, 200));
       });
 
-      expect(mockNextPage).not.toHaveBeenCalled();
+      expect(mockTap).not.toHaveBeenCalled();
 
       document.body.removeChild(element2);
     });
@@ -733,7 +455,7 @@ describe("useTouchNav", () => {
       const { result } = renderHook(() =>
         useTouchNav({
           enabled: true,
-          onNextPage: mockNextPage,
+          onTap: mockTap,
         }),
       );
 
@@ -755,6 +477,18 @@ describe("useTouchNav", () => {
 
   describe("uses store actions when no custom handlers", () => {
     it("uses store nextPage when no onNextPage provided", async () => {
+      vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        right: 900,
+        bottom: 600,
+        width: 900,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
+
       const storeNextPage = vi.spyOn(useReaderStore.getState(), "nextPage");
 
       useReaderStore.setState({
@@ -762,18 +496,14 @@ describe("useTouchNav", () => {
         totalPages: 10,
       });
 
-      const { result } = renderHook(() =>
-        useTouchNav({
-          enabled: true,
-          minSwipeDistance: 50,
-        }),
-      );
+      const { result } = renderHook(() => useTouchNav({ enabled: true }));
 
       act(() => {
         result.current.touchRef(element);
       });
 
-      await simulateSwipe(200, 100, 100, 100);
+      // Tap in the right third → next page.
+      await simulateGesture(800, 300, 800, 300);
 
       expect(storeNextPage).toHaveBeenCalled();
     });
