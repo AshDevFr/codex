@@ -60,6 +60,7 @@ import {
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
 import { ExternalIdEditModal } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
+import { DownloadButton } from "@/components/offline/DownloadButton";
 import {
   CustomMetadataDisplay,
   ExternalLinks,
@@ -691,6 +692,7 @@ export function BookDetail() {
                 >
                   Download
                 </Button>
+                <DownloadButton bookId={book.id} fileFormat={book.fileFormat} />
                 <Tooltip label="Book Info">
                   <ActionIcon
                     variant="subtle"
