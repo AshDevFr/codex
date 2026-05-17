@@ -21,7 +21,7 @@ export const OUTBOX_STORE = "outbox";
 
 export const DOWNLOADS_BROADCAST_CHANNEL = "codex:downloads";
 
-export type DownloadFormat = "comic" | "epub" | "pdf";
+export type DownloadFormat = "cbr" | "cbz" | "epub" | "pdf";
 export type DownloadStatus = "queued" | "downloading" | "complete" | "error";
 
 export interface DownloadRecord {

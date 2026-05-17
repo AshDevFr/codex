@@ -50,7 +50,12 @@ async function seed(record: DownloadRecord) {
 }
 
 describe("DownloadButton: format support", () => {
-  it("renders nothing for comic / unsupported formats", () => {
+  it("renders nothing for unknown formats", () => {
+    renderWithProviders(<DownloadButton bookId="book-x" fileFormat="mobi" />);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("renders nothing for a comic format with no pageCount", () => {
     renderWithProviders(<DownloadButton bookId="book-cbz" fileFormat="cbz" />);
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -64,6 +69,15 @@ describe("DownloadButton: format support", () => {
 
   it("renders a download icon for pdf", async () => {
     renderWithProviders(<DownloadButton bookId="book-1" fileFormat="pdf" />);
+    expect(
+      await screen.findByRole("button", { name: /save for offline/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders a download icon for cbz when pageCount is provided", async () => {
+    renderWithProviders(
+      <DownloadButton bookId="book-cbz" fileFormat="cbz" pageCount={20} />,
+    );
     expect(
       await screen.findByRole("button", { name: /save for offline/i }),
     ).toBeInTheDocument();
@@ -163,6 +177,50 @@ describe("DownloadButton: download trigger and progress", () => {
         screen.getByRole("button", { name: /offline download options/i }),
       ).toBeInTheDocument();
     });
+  });
+
+  it("dispatches to downloadComicBook for cbz with pageCount", async () => {
+    const comicSpy = vi
+      .spyOn(downloadManagerModule, "downloadComicBook")
+      .mockImplementation(async (opts) => {
+        opts.onProgress?.({ loaded: opts.pageCount, total: opts.pageCount });
+        const complete: DownloadRecord = {
+          id: opts.bookId,
+          format: "cbz",
+          status: "complete",
+          bytes: opts.pageCount,
+          pageCount: opts.pageCount,
+          downloadedAt: 1,
+        };
+        await putDownload(complete);
+        broadcastDownloadsChange({ kind: "put", record: complete });
+        return { bookId: opts.bookId, bytes: opts.pageCount };
+      });
+
+    try {
+      renderWithProviders(
+        <DownloadButton bookId="book-cbz" fileFormat="cbz" pageCount={12} />,
+      );
+      const trigger = await screen.findByRole("button", {
+        name: /save for offline/i,
+      });
+      await userEvent.click(trigger);
+
+      expect(comicSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bookId: "book-cbz",
+          format: "cbz",
+          pageCount: 12,
+        }),
+      );
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /offline download options/i }),
+        ).toBeInTheDocument();
+      });
+    } finally {
+      comicSpy.mockRestore();
+    }
   });
 
   it("calls AbortController.abort when the user clicks cancel", async () => {

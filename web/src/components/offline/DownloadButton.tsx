@@ -25,6 +25,8 @@ import {
   getDownload,
 } from "@/lib/offline/db";
 import {
+  type ComicFormat,
+  downloadComicBook,
   downloadSingleFileBook,
   type ProgressUpdate,
   type SingleFileFormat,
@@ -36,13 +38,13 @@ import { cacheNameForBook } from "@/lib/offline/routeMatcher";
  *
  * Renders a single ActionIcon (or icon + ring) that hydrates from IDB on
  * mount, subscribes to the downloads BroadcastChannel for cross-tab updates,
- * and triggers `downloadSingleFileBook` via T3 when the user clicks. Three
- * primary states are visible (`not-downloaded`, `downloading`, `downloaded`)
- * plus an `error` state that lets the user retry.
+ * and dispatches to the right `downloadManager` entry point on click:
+ * `downloadSingleFileBook` for EPUB/PDF, `downloadComicBook` for CBZ/CBR.
+ * Five visible states cycle through `loading` -> `not-downloaded` ->
+ * `downloading` (RingProgress + cancel) -> `downloaded` (Menu) or `error`.
  *
- * Comic per-page downloads (T4) and series batch (T5) are not in this slice;
- * for unsupported formats the component renders `null` so it stays out of
- * the way until those tasks land.
+ * Series batch (T5) wraps this component in a queue; the series-level
+ * "Download series" button is intentionally not part of this slice.
  */
 
 type ButtonState =
@@ -52,18 +54,31 @@ type ButtonState =
   | { kind: "downloaded"; bytes: number }
   | { kind: "error"; message: string };
 
-export type DownloadButtonFormat = SingleFileFormat | "comic" | string;
+export type DownloadButtonFormat =
+  | SingleFileFormat
+  | ComicFormat
+  | (string & {});
 
 export interface DownloadButtonProps {
   bookId: string;
   /** Lowercase book file format from the API (e.g. "epub", "pdf", "cbz"). */
   fileFormat: DownloadButtonFormat;
+  /**
+   * Total page count. Required for comic formats so the per-page download
+   * knows how many pages to fetch; ignored for single-file formats but
+   * accepted for callers (BookDetail) that always have it on hand.
+   */
+  pageCount?: number;
   /** Tooltip / menu label, defaults to "Save for offline reading". */
   label?: string;
 }
 
 function isSingleFileFormat(format: string): format is SingleFileFormat {
   return format === "epub" || format === "pdf";
+}
+
+function isComicFormat(format: string): format is ComicFormat {
+  return format === "cbz" || format === "cbr";
 }
 
 function progressPercent(state: ButtonState): number {
@@ -75,11 +90,14 @@ function progressPercent(state: ButtonState): number {
 export function DownloadButton({
   bookId,
   fileFormat,
+  pageCount,
   label = "Save for offline reading",
 }: DownloadButtonProps) {
   const [state, setState] = useState<ButtonState>({ kind: "loading" });
   const abortRef = useRef<AbortController | null>(null);
-  const supported = isSingleFileFormat(fileFormat);
+  const supported =
+    isSingleFileFormat(fileFormat) ||
+    (isComicFormat(fileFormat) && (pageCount ?? 0) > 0);
 
   // Hydrate from IDB + subscribe to broadcast updates from other tabs.
   // Effect intentionally does not depend on `supported` so the listener
@@ -173,16 +191,32 @@ export function DownloadButton({
   async function startDownload() {
     const controller = new AbortController();
     abortRef.current = controller;
-    setState({ kind: "downloading", loaded: 0, total: null });
+    const initialTotal = isComicFormat(fileFormat) ? (pageCount ?? null) : null;
+    setState({ kind: "downloading", loaded: 0, total: initialTotal });
+    const onProgress = (p: ProgressUpdate) => {
+      setState({ kind: "downloading", loaded: p.loaded, total: p.total });
+    };
     try {
-      await downloadSingleFileBook({
-        bookId,
-        format: fileFormat as SingleFileFormat,
-        signal: controller.signal,
-        onProgress: (p: ProgressUpdate) => {
-          setState({ kind: "downloading", loaded: p.loaded, total: p.total });
-        },
-      });
+      if (isSingleFileFormat(fileFormat)) {
+        await downloadSingleFileBook({
+          bookId,
+          format: fileFormat,
+          signal: controller.signal,
+          onProgress,
+        });
+      } else if (isComicFormat(fileFormat) && (pageCount ?? 0) > 0) {
+        await downloadComicBook({
+          bookId,
+          format: fileFormat,
+          pageCount: pageCount as number,
+          signal: controller.signal,
+          onProgress,
+        });
+      } else {
+        throw new Error(
+          `Unsupported format for offline download: ${fileFormat}`,
+        );
+      }
       // Final "downloaded" state lands via the broadcast from the manager.
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {

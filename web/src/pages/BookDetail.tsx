@@ -692,7 +692,11 @@ export function BookDetail() {
                 >
                   Download
                 </Button>
-                <DownloadButton bookId={book.id} fileFormat={book.fileFormat} />
+                <DownloadButton
+                  bookId={book.id}
+                  fileFormat={book.fileFormat}
+                  pageCount={book.pageCount}
+                />
                 <Tooltip label="Book Info">
                   <ActionIcon
                     variant="subtle"
