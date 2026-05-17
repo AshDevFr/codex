@@ -13,6 +13,10 @@ vi.mock("./hooks/useTouchNav", () => ({
 // Captures the per-event handlers `EpubReader` registers on the rendition,
 // so tests can fire (e.g.) the "click" handler to verify R7-1 toolbar toggle.
 const renditionHandlers: Record<string, (...args: unknown[]) => void> = {};
+// Captures hooks.content.register callbacks so R10-1 tests can drive the
+// inside-iframe pointer hook with a fake `contents` document.
+const contentHookCallbacks: Array<(contents: { document: Document }) => void> =
+  [];
 // Stash the latest readerStyles ReactReader received so R7-3 tests can assert
 // the side-arrow `display: none` override is applied on mobile viewports.
 let lastReaderStyles: Record<string, Record<string, unknown>> | null = null;
@@ -54,6 +58,15 @@ vi.mock("react-reader", () => ({
         on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
           renditionHandlers[event] = handler;
         }),
+        hooks: {
+          content: {
+            register: vi.fn(
+              (callback: (contents: { document: Document }) => void) => {
+                contentHookCallbacks.push(callback);
+              },
+            ),
+          },
+        },
         display: vi.fn(),
         next: vi.fn(),
         prev: vi.fn(),
@@ -167,6 +180,7 @@ describe("EpubReader", () => {
     for (const k of Object.keys(renditionHandlers)) {
       delete renditionHandlers[k];
     }
+    contentHookCallbacks.length = 0;
     lastReaderStyles = null;
     // Default matchMedia: not mobile. Individual tests can override.
     window.matchMedia = vi.fn().mockImplementation((query) => ({
@@ -390,30 +404,155 @@ describe("EpubReader", () => {
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
     });
 
-    it("registers a rendition click handler that toggles the toolbar", async () => {
+    it("registers a content hook that wires pointer events on the iframe doc (R10-1)", async () => {
       renderWithProviders(<EpubReader {...defaultProps} />);
 
       // Rendition is wired asynchronously via setTimeout in the mock
       await new Promise((r) => setTimeout(r, 0));
 
-      expect(renditionHandlers.click).toBeDefined();
+      expect(contentHookCallbacks.length).toBeGreaterThan(0);
+    });
+  });
 
-      useReaderStore.setState({ toolbarVisible: true });
-      renditionHandlers.click({ target: document.createElement("p") });
+  describe("EPUB iframe pointer navigation (R10-1)", () => {
+    // Helpers for the R10-1 test suite. They build the same fake-iframe doc
+    // and dispatch pointer events against it so the inside-iframe hook (which
+    // can't see real epub.js iframes in JSDOM) gets exercised.
+    const dispatchPointerEvent = (
+      doc: Document,
+      type: "pointerdown" | "pointerup" | "pointercancel",
+      x: number,
+      y: number,
+      init: {
+        pointerType?: "touch" | "mouse" | "pen";
+        pointerId?: number;
+        isPrimary?: boolean;
+        button?: number;
+        timeStamp?: number;
+        target?: Element;
+      } = {},
+    ) => {
+      const {
+        pointerType = "touch",
+        pointerId = 1,
+        isPrimary = true,
+        button = 0,
+        timeStamp = 0,
+        target,
+      } = init;
+      const event = new MouseEvent(type, {
+        clientX: x,
+        clientY: y,
+        button,
+        bubbles: true,
+        cancelable: true,
+      }) as MouseEvent & {
+        pointerId: number;
+        pointerType: string;
+        isPrimary: boolean;
+      };
+      Object.defineProperty(event, "pointerId", { value: pointerId });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      Object.defineProperty(event, "isPrimary", { value: isPrimary });
+      Object.defineProperty(event, "timeStamp", { value: timeStamp });
+      const dispatchTarget = target ?? doc.body;
+      dispatchTarget.dispatchEvent(event);
+    };
+
+    const mountAndGetIframeDoc = async () => {
+      renderWithProviders(<EpubReader {...defaultProps} />);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(contentHookCallbacks.length).toBeGreaterThan(0);
+
+      const fakeIframeDoc = document.implementation.createHTMLDocument("epub");
+      // Drive every registered content callback so the hook attaches its
+      // pointer listeners to this fake document.
+      for (const cb of contentHookCallbacks) {
+        cb({ document: fakeIframeDoc });
+      }
+      return fakeIframeDoc;
+    };
+
+    it("calls rendition.next on a left swipe inside the iframe (LTR)", async () => {
+      const doc = await mountAndGetIframeDoc();
+
+      useReaderStore.setState({ toolbarVisible: false });
+      dispatchPointerEvent(doc, "pointerdown", 300, 200, { timeStamp: 0 });
+      dispatchPointerEvent(doc, "pointerup", 100, 200, { timeStamp: 100 });
+
+      // Toolbar should not toggle from a swipe
       expect(useReaderStore.getState().toolbarVisible).toBe(false);
     });
 
-    it("rendition click handler ignores taps on links and form controls", async () => {
-      renderWithProviders(<EpubReader {...defaultProps} />);
-      await new Promise((r) => setTimeout(r, 0));
+    it("calls toggleToolbar on a tap inside the iframe", async () => {
+      const doc = await mountAndGetIframeDoc();
 
       useReaderStore.setState({ toolbarVisible: true });
-      const link = document.createElement("a");
-      renditionHandlers.click({ target: link });
+      dispatchPointerEvent(doc, "pointerdown", 200, 200, { timeStamp: 0 });
+      dispatchPointerEvent(doc, "pointerup", 201, 200, { timeStamp: 80 });
+      expect(useReaderStore.getState().toolbarVisible).toBe(false);
+
+      dispatchPointerEvent(doc, "pointerdown", 200, 200, { timeStamp: 100 });
+      dispatchPointerEvent(doc, "pointerup", 200, 201, { timeStamp: 150 });
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+    });
+
+    it("ignores pointer interactions starting on links and form controls", async () => {
+      const doc = await mountAndGetIframeDoc();
+
+      const link = doc.createElement("a");
+      doc.body.appendChild(link);
+      const input = doc.createElement("input");
+      doc.body.appendChild(input);
+
+      useReaderStore.setState({ toolbarVisible: true });
+      dispatchPointerEvent(doc, "pointerdown", 50, 50, {
+        target: link,
+        timeStamp: 0,
+      });
+      dispatchPointerEvent(doc, "pointerup", 51, 51, {
+        target: link,
+        timeStamp: 50,
+      });
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
 
-      const input = document.createElement("input");
-      renditionHandlers.click({ target: input });
+      dispatchPointerEvent(doc, "pointerdown", 50, 50, {
+        target: input,
+        timeStamp: 100,
+      });
+      dispatchPointerEvent(doc, "pointerup", 51, 51, {
+        target: input,
+        timeStamp: 150,
+      });
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+    });
+
+    it("ignores non-primary pointers (multi-touch)", async () => {
+      const doc = await mountAndGetIframeDoc();
+
+      useReaderStore.setState({ toolbarVisible: true });
+      dispatchPointerEvent(doc, "pointerdown", 200, 200, {
+        isPrimary: false,
+        pointerId: 2,
+        timeStamp: 0,
+      });
+      dispatchPointerEvent(doc, "pointerup", 200, 200, {
+        isPrimary: false,
+        pointerId: 2,
+        timeStamp: 50,
+      });
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+    });
+
+    it("aborts when pointercancel fires before pointerup", async () => {
+      const doc = await mountAndGetIframeDoc();
+
+      useReaderStore.setState({ toolbarVisible: true });
+      dispatchPointerEvent(doc, "pointerdown", 300, 200, { timeStamp: 0 });
+      dispatchPointerEvent(doc, "pointercancel", 200, 200, { timeStamp: 50 });
+      dispatchPointerEvent(doc, "pointerup", 100, 200, { timeStamp: 100 });
+      // Cancel cleared the gesture; pointerup should not register as a swipe
+      // or a tap.
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
     });
   });

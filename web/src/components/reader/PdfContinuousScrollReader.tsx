@@ -336,7 +336,7 @@ export function PdfContinuousScrollReader({
 
   if (totalPages === 0) {
     return (
-      <Center style={{ width: "100%", height: "100vh" }}>
+      <Center style={{ width: "100%", height: "100dvh" }}>
         <Text c="dimmed">This PDF has no pages</Text>
       </Center>
     );
@@ -362,7 +362,7 @@ export function PdfContinuousScrollReader({
             style={{
               width: "100%",
               height: "100%",
-              minHeight: "calc(100vh - 128px)",
+              minHeight: "calc(100dvh - 128px)",
               backgroundColor: "transparent",
             }}
           >
@@ -376,7 +376,7 @@ export function PdfContinuousScrollReader({
             style={{
               width: "100%",
               height: "100%",
-              minHeight: "calc(100vh - 128px)",
+              minHeight: "calc(100dvh - 128px)",
               backgroundColor: "transparent",
             }}
           >

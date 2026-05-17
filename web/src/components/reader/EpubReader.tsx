@@ -25,13 +25,17 @@ import {
 
 import { booksApi } from "@/api/books";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui";
-import { useReaderStore } from "@/store/readerStore";
+import {
+  selectEffectiveReadingDirection,
+  useReaderStore,
+} from "@/store/readerStore";
 
 import { BoundaryNotification } from "./BoundaryNotification";
 import { EpubBookmarks } from "./EpubBookmarks";
 import { EpubReaderSettings } from "./EpubReaderSettings";
 import { EpubSearch, type SearchResult } from "./EpubSearch";
 import { EpubTableOfContents } from "./EpubTableOfContents";
+import { classifySwipe } from "./hooks/swipeGesture";
 import { useAdjacentBooks } from "./hooks/useAdjacentBooks";
 import { useBoundaryNotification } from "./hooks/useBoundaryNotification";
 import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
@@ -331,11 +335,20 @@ export function EpubReader({
   const setFullscreen = useReaderStore((state) => state.setFullscreen);
   const toggleToolbar = useReaderStore((state) => state.toggleToolbar);
 
-  // Stable ref for toggleToolbar so the rendition `click` handler installed
+  // Stable ref for toggleToolbar so the rendition pointer hook installed
   // inside the (stable) `handleGetRendition` callback always sees the latest
   // action without re-creating the rendition setup.
   const toggleToolbarRef = useRef(toggleToolbar);
   toggleToolbarRef.current = toggleToolbar;
+
+  // Reading direction needs to be read from inside the iframe pointer hook,
+  // which is installed once. Mirror the latest value into a ref so the hook
+  // always reads the user's current preference.
+  const effectiveReadingDirection = useReaderStore(
+    selectEffectiveReadingDirection,
+  );
+  const readingDirectionRef = useRef(effectiveReadingDirection);
+  readingDirectionRef.current = effectiveReadingDirection;
 
   // Generate EPUB file URL
   const epubUrl = `/api/v1/books/${bookId}/file`;
@@ -644,18 +657,84 @@ export function EpubReader({
       saveLocationRef.current(cfi, percentage, fullHref);
     });
 
-    // R7-1: tap inside the iframe content toggles the toolbar.
-    // epub.js's `passEvents` re-emits DOM events from the iframe via the
-    // rendition, so this fires for taps that the outer-container
-    // `useTouchNav` listeners can't see across the iframe boundary.
-    // Skip when the click originates on a link or form control so internal
-    // navigation/interactions don't double-trigger the toolbar.
-    rendition.on("click", (event: MouseEvent) => {
-      const target = event.target as Element | null;
-      if (target?.closest("a, button, input, textarea, select, label")) {
-        return;
-      }
-      toggleToolbarRef.current();
+    // R10-1: bind tap + swipe pointer events *inside* the iframe document.
+    // The outer-container `useTouchNav` listeners can't see touches that land
+    // inside the epub.js iframe — they don't bubble across the iframe
+    // boundary. Registering on `rendition.hooks.content` fires once per
+    // chapter document the renderer mounts, giving us a fresh
+    // `contents.document` each time. We share `classifySwipe` with the outer
+    // hook so tap/swipe semantics stay consistent.
+    rendition.hooks.content.register((contents: { document: Document }) => {
+      const doc = contents.document;
+      if (!doc) return;
+
+      let pointerId: number | null = null;
+      let startX = 0;
+      let startY = 0;
+      let startTime = 0;
+
+      const onPointerDown = (event: PointerEvent) => {
+        if (!event.isPrimary) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        const target = event.target as Element | null;
+        // Don't intercept clicks on interactive elements — epub.js's own link
+        // handler needs to see them, and form controls need their default
+        // behavior.
+        if (target?.closest("a, button, input, textarea, select, label")) {
+          pointerId = null;
+          return;
+        }
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        startTime = event.timeStamp || Date.now();
+      };
+
+      const onPointerUp = (event: PointerEvent) => {
+        if (pointerId === null || event.pointerId !== pointerId) return;
+        const deltaX = event.clientX - startX;
+        const deltaY = event.clientY - startY;
+        const deltaTime = (event.timeStamp || Date.now()) - startTime;
+        pointerId = null;
+
+        // Prefer the EPUB's metadata-declared direction (e.g. manga marked
+        // RTL by the publisher) and fall back to the user's reader setting.
+        // `direction` isn't in epub.js's type definitions but is present at
+        // runtime when the OPF declares `page-progression-direction`.
+        const metadataDirection = (
+          renditionRef.current?.book.packaging?.metadata as
+            | { direction?: string }
+            | undefined
+        )?.direction;
+        const readingDirection =
+          metadataDirection === "rtl" ? "rtl" : readingDirectionRef.current;
+
+        const gesture = classifySwipe(deltaX, deltaY, deltaTime, {
+          readingDirection,
+        });
+
+        switch (gesture) {
+          case "tap":
+            toggleToolbarRef.current();
+            break;
+          case "next":
+            renditionRef.current?.next();
+            break;
+          case "prev":
+            renditionRef.current?.prev();
+            break;
+          case "none":
+            break;
+        }
+      };
+
+      const onPointerCancel = (event: PointerEvent) => {
+        if (pointerId === event.pointerId) pointerId = null;
+      };
+
+      doc.addEventListener("pointerdown", onPointerDown);
+      doc.addEventListener("pointerup", onPointerUp);
+      doc.addEventListener("pointercancel", onPointerCancel);
     });
   }, []);
 
@@ -957,7 +1036,7 @@ export function EpubReader({
       onMouseMove={handleMouseMove}
       style={{
         width: "100vw",
-        height: "100vh",
+        height: "100dvh",
         position: "relative",
         overflow: "hidden",
         backgroundColor: getBackgroundColor(),

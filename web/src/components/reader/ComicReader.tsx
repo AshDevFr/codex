@@ -706,7 +706,7 @@ export function ComicReader({
   ) {
     return (
       <Center
-        style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
+        style={{ width: "100vw", height: "100dvh", backgroundColor: "#000" }}
       >
         <Loader size="lg" color="gray" />
       </Center>
@@ -717,7 +717,7 @@ export function ComicReader({
   if (totalPages === 0) {
     return (
       <Center
-        style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
+        style={{ width: "100vw", height: "100dvh", backgroundColor: "#000" }}
       >
         <Text c="dimmed">This book has no pages</Text>
       </Center>
@@ -730,7 +730,7 @@ export function ComicReader({
       onMouseMove={handleMouseMove}
       style={{
         width: "100vw",
-        height: "100vh",
+        height: "100dvh",
         position: "relative",
         overflow: "hidden",
         backgroundColor: "#000",

@@ -658,7 +658,7 @@ export function PdfReader({
   const containerStyle: CSSProperties = useMemo(
     () => ({
       width: "100vw",
-      height: "100vh",
+      height: "100dvh",
       position: "relative",
       overflow: "hidden",
       backgroundColor: bgColor,
@@ -688,7 +688,7 @@ export function PdfReader({
   if (progressLoading && numPages === 0) {
     return (
       <Center
-        style={{ width: "100vw", height: "100vh", backgroundColor: "#000" }}
+        style={{ width: "100vw", height: "100dvh", backgroundColor: "#000" }}
       >
         <Loader size="lg" color="gray" />
       </Center>
@@ -821,7 +821,7 @@ export function PdfReader({
                 <Center
                   style={{
                     width: "100%",
-                    height: "calc(100vh - 128px)",
+                    height: "calc(100dvh - 128px)",
                     backgroundColor: "transparent",
                   }}
                 >
@@ -834,7 +834,7 @@ export function PdfReader({
                 <Center
                   style={{
                     width: "100%",
-                    height: "calc(100vh - 128px)",
+                    height: "calc(100dvh - 128px)",
                     backgroundColor: "transparent",
                   }}
                 >

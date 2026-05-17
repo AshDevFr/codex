@@ -439,7 +439,7 @@ export function ContinuousScrollReader({
 
   if (totalPages === 0) {
     return (
-      <Center style={{ width: "100%", height: "100vh" }}>
+      <Center style={{ width: "100%", height: "100dvh" }}>
         <Text c="dimmed">This book has no pages</Text>
       </Center>
     );
@@ -451,7 +451,7 @@ export function ContinuousScrollReader({
       data-testid="continuous-scroll-container"
       style={{
         width: "100%",
-        height: "100vh",
+        height: "100dvh",
         overflow: "auto",
         backgroundColor: BACKGROUND_COLORS[backgroundColor],
       }}
