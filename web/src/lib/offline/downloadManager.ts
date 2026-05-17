@@ -1,22 +1,27 @@
 /**
- * Page-side download manager for the offline-reading feature (Phase 12, T3).
+ * Page-side download manager for the offline-reading feature (Phase 12).
  *
- * `downloadSingleFileBook` handles EPUB and PDF, which the backend serves as
- * a single response from `/api/v1/books/{id}/file`. The body is streamed via
- * `ReadableStream.getReader()` so progress can be reported against
- * `Content-Length`; the assembled blob is stashed in a per-book Cache Storage
- * entry that the service worker's downloaded-book route then serves
- * CacheFirst, transparent to the reader.
+ * Two entry points cover every book format Codex supports:
  *
- * The IDB metadata row is set to `downloading` immediately, then flipped to
- * `complete` (with the final byte count and timestamp) once the cache write
- * lands. On abort, both the IDB row and the per-book cache are cleaned up so
- * the user sees a fresh slate on retry. On other failures (network, non-2xx
- * response), the row is set to `error` with the message so the Downloads
- * page (T7) can surface what went wrong.
+ * - `downloadSingleFileBook` (T3) for EPUB and PDF, which the backend serves
+ *   as one response from `/api/v1/books/{id}/file`. The body is streamed via
+ *   `ReadableStream.getReader()` so progress reports against `Content-Length`
+ *   when present; the assembled response is stored in a per-book Cache.
  *
- * Comic per-page downloads (T4) and series batch (T5) build on this manager
- * but require their own entry points; they are not part of this slice.
+ * - `downloadComicBook` (T4) for CBZ/CBR, which the backend serves one page
+ *   at a time from `/api/v1/books/{id}/pages/{n}`. Pages are fetched with
+ *   bounded concurrency; progress is reported as pages-done/pages-total.
+ *
+ * Both flows write the IDB row as `downloading` immediately, then flip it to
+ * `complete` once everything lands. Abort cleans up the IDB row and the
+ * per-book cache so a retry starts from a clean slate. Any other failure
+ * (network throw, non-2xx response, mid-stream error, per-page 404) sets
+ * the IDB row to `error` with the message preserved for the T7 Downloads
+ * page to surface, and removes the partial cache so the reader never sees
+ * a half-downloaded book.
+ *
+ * Series batch (T5) is a queue around these functions; it is not in this
+ * module.
  */
 
 import {
@@ -28,11 +33,20 @@ import {
 import { cacheNameForBook } from "./routeMatcher";
 
 export type SingleFileFormat = "epub" | "pdf";
+export type ComicFormat = "cbz" | "cbr";
+export type DownloadableFormat = SingleFileFormat | ComicFormat;
 
 export interface ProgressUpdate {
-  /** Bytes received so far. */
+  /**
+   * Units depend on the download flow:
+   * - Single-file: bytes received so far.
+   * - Comic: pages fetched so far.
+   */
   loaded: number;
-  /** Total bytes from `Content-Length`; null when the header is missing. */
+  /**
+   * Single-file: total bytes from `Content-Length`; `null` if the header
+   * is missing. Comic: total page count.
+   */
   total: number | null;
 }
 
@@ -48,18 +62,25 @@ export interface SingleFileDownloadOptions {
   caches?: CacheStorage;
 }
 
-export interface SingleFileDownloadResult {
+export interface DownloadResult {
   bookId: string;
   bytes: number;
 }
+
+/** @deprecated Use `DownloadResult`. Kept for back-compat. */
+export type SingleFileDownloadResult = DownloadResult;
 
 function bookFileUrl(bookId: string): string {
   return `/api/v1/books/${bookId}/file`;
 }
 
+function bookPageUrl(bookId: string, pageNumber: number): string {
+  return `/api/v1/books/${bookId}/pages/${pageNumber}`;
+}
+
 export async function downloadSingleFileBook(
   options: SingleFileDownloadOptions,
-): Promise<SingleFileDownloadResult> {
+): Promise<DownloadResult> {
   const { bookId, format, signal, onProgress } = options;
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
   const cachesImpl = options.caches ?? globalThis.caches;
@@ -156,6 +177,147 @@ export async function downloadSingleFileBook(
   broadcastDownloadsChange({ kind: "put", record: completeRecord });
 
   return { bookId, bytes: loaded };
+}
+
+export interface ComicDownloadOptions {
+  bookId: string;
+  format: ComicFormat;
+  /** Total page count from book metadata; must be >= 1. */
+  pageCount: number;
+  signal?: AbortSignal;
+  /**
+   * Reports `{ loaded: pagesDone, total: pageCount }` after each page lands.
+   */
+  onProgress?: (progress: ProgressUpdate) => void;
+  /** Max concurrent page fetches. Defaults to 5. */
+  concurrency?: number;
+  fetch?: typeof globalThis.fetch;
+  caches?: CacheStorage;
+}
+
+/**
+ * Default concurrency for per-page comic downloads. Tuned to balance
+ * throughput against the backend's per-client connection budget and to
+ * stay below most browsers' default 6-connection-per-origin limit.
+ */
+const DEFAULT_COMIC_CONCURRENCY = 5;
+
+export async function downloadComicBook(
+  options: ComicDownloadOptions,
+): Promise<DownloadResult> {
+  const {
+    bookId,
+    format,
+    pageCount,
+    signal,
+    onProgress,
+    concurrency = DEFAULT_COMIC_CONCURRENCY,
+  } = options;
+  const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const cachesImpl = options.caches ?? globalThis.caches;
+  if (!cachesImpl) {
+    throw new Error("Cache Storage is not available in this environment");
+  }
+  if (!Number.isInteger(pageCount) || pageCount < 1) {
+    throw new Error(`Invalid pageCount: ${pageCount}`);
+  }
+
+  const startRecord: DownloadRecord = {
+    id: bookId,
+    format,
+    status: "downloading",
+    bytes: 0,
+    pageCount,
+  };
+  await putDownload(startRecord);
+  broadcastDownloadsChange({ kind: "put", record: startRecord });
+
+  // Compose external + internal abort signals so a per-page failure can
+  // cancel the in-flight siblings without affecting the caller's signal.
+  const internalController = new AbortController();
+  const externalAbortHandler = () => internalController.abort();
+  if (signal) {
+    if (signal.aborted) internalController.abort();
+    else signal.addEventListener("abort", externalAbortHandler);
+  }
+
+  const cache = await cachesImpl.open(cacheNameForBook(bookId));
+
+  let totalBytes = 0;
+  let pagesDone = 0;
+  let firstFailure: Error | null = null;
+  let nextIndex = 0;
+
+  async function worker() {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= pageCount) return;
+      if (internalController.signal.aborted) return;
+      const pageNumber = i + 1;
+      const url = bookPageUrl(bookId, pageNumber);
+      try {
+        const response = await fetchImpl(url, {
+          signal: internalController.signal,
+        });
+        if (!response.ok) {
+          throw new Error(
+            `HTTP ${response.status} fetching page ${pageNumber} of book ${bookId}`,
+          );
+        }
+        const buffer = await response.arrayBuffer();
+        const body = new Uint8Array(buffer);
+        const headers = new Headers(response.headers);
+        const cached = new Response(body, {
+          status: 200,
+          statusText: response.statusText || "OK",
+          headers,
+        });
+        await cache.put(url, cached);
+        totalBytes += body.byteLength;
+        pagesDone += 1;
+        onProgress?.({ loaded: pagesDone, total: pageCount });
+      } catch (err) {
+        if (firstFailure === null && !signal?.aborted) {
+          firstFailure = err instanceof Error ? err : new Error(String(err));
+        }
+        internalController.abort();
+        return;
+      }
+    }
+  }
+
+  try {
+    const workerCount = Math.min(Math.max(1, concurrency), pageCount);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  } finally {
+    if (signal) signal.removeEventListener("abort", externalAbortHandler);
+  }
+
+  if (signal?.aborted) {
+    await cleanupAfterAbort(bookId, cachesImpl);
+    throw abortError(undefined);
+  }
+  if (firstFailure) {
+    await recordError(startRecord, firstFailure);
+    // Partial caches are useless for reading (the reader needs every page),
+    // so evict the whole per-book cache. The IDB row stays at status=error
+    // so the Downloads page (T7) can show what went wrong.
+    await cachesImpl.delete(cacheNameForBook(bookId));
+    throw firstFailure;
+  }
+
+  const completeRecord: DownloadRecord = {
+    id: bookId,
+    format,
+    status: "complete",
+    bytes: totalBytes,
+    pageCount,
+    downloadedAt: Date.now(),
+  };
+  await putDownload(completeRecord);
+  broadcastDownloadsChange({ kind: "put", record: completeRecord });
+
+  return { bookId, bytes: totalBytes };
 }
 
 async function recordError(base: DownloadRecord, err: unknown): Promise<void> {

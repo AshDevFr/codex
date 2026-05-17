@@ -6,7 +6,7 @@ import {
   getDownload,
   setDbContext,
 } from "./db";
-import { downloadSingleFileBook } from "./downloadManager";
+import { downloadComicBook, downloadSingleFileBook } from "./downloadManager";
 import { cacheNameForBook } from "./routeMatcher";
 
 beforeEach(() => {
@@ -349,6 +349,228 @@ describe("downloadSingleFileBook: cancellation", () => {
       downloadSingleFileBook({
         bookId: "book-abort",
         format: "epub",
+        signal: controller.signal,
+        fetch: fakeFetch as typeof globalThis.fetch,
+        caches: cachesImpl,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(await getDownload("book-abort")).toBeUndefined();
+    expect(getStore(cacheNameForBook("book-abort"))).toBeUndefined();
+  });
+});
+
+// -- Comic per-page download (T4) ----------------------------------------
+
+function makePageResponse(
+  bytes: Uint8Array,
+  contentType = "image/jpeg",
+): Response {
+  return new Response(bytes, {
+    status: 200,
+    headers: { "content-type": contentType },
+  });
+}
+
+function parsePageNumber(url: string): number {
+  const match = url.match(/\/pages\/(\d+)$/);
+  if (!match) throw new Error(`Not a page URL: ${url}`);
+  return Number(match[1]);
+}
+
+describe("downloadComicBook: success path", () => {
+  it("fetches every page, stores each under the per-book cache, and writes a complete IDB row", async () => {
+    const { caches: cachesImpl, getStore } = makeFakeCaches();
+    const pageCount = 12;
+    const fakeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).toString();
+      const n = parsePageNumber(url);
+      // Page N body = a single byte equal to N (test-friendly).
+      return makePageResponse(new Uint8Array([n]));
+    });
+
+    const result = await downloadComicBook({
+      bookId: "book-1",
+      format: "cbz",
+      pageCount,
+      fetch: fakeFetch as typeof globalThis.fetch,
+      caches: cachesImpl,
+    });
+
+    expect(result).toEqual({ bookId: "book-1", bytes: pageCount });
+    expect(fakeFetch).toHaveBeenCalledTimes(pageCount);
+
+    const store = getStore(cacheNameForBook("book-1"));
+    expect(store?.size).toBe(pageCount);
+    for (let n = 1; n <= pageCount; n++) {
+      const entry = store?.get(`/api/v1/books/book-1/pages/${n}`);
+      expect(entry).toBeDefined();
+      expect(Array.from(entry?.body ?? [])).toEqual([n]);
+    }
+
+    const record = await getDownload("book-1");
+    expect(record?.status).toBe("complete");
+    expect(record?.format).toBe("cbz");
+    expect(record?.pageCount).toBe(pageCount);
+    expect(record?.bytes).toBe(pageCount);
+    expect(record?.downloadedAt).toBeGreaterThan(0);
+  });
+
+  it("respects the concurrency cap (no more than `concurrency` requests in flight)", async () => {
+    const { caches: cachesImpl } = makeFakeCaches();
+    let inFlight = 0;
+    let peak = 0;
+    const fakeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      // Give the event loop a microtask break so concurrency can actually
+      // ramp up (sync resolves would all run in one tick at peak=1).
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight--;
+      const n = parsePageNumber(
+        typeof input === "string" ? input : (input as URL).toString(),
+      );
+      return makePageResponse(new Uint8Array([n]));
+    });
+
+    await downloadComicBook({
+      bookId: "book-conc",
+      format: "cbz",
+      pageCount: 20,
+      concurrency: 4,
+      fetch: fakeFetch as typeof globalThis.fetch,
+      caches: cachesImpl,
+    });
+
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(peak).toBeGreaterThan(1);
+  });
+
+  it("reports progress as pages-done / pageCount, monotonically increasing", async () => {
+    const { caches: cachesImpl } = makeFakeCaches();
+    const fakeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const n = parsePageNumber(
+        typeof input === "string" ? input : (input as URL).toString(),
+      );
+      return makePageResponse(new Uint8Array([n]));
+    });
+    const progress: { loaded: number; total: number | null }[] = [];
+
+    await downloadComicBook({
+      bookId: "book-prog",
+      format: "cbz",
+      pageCount: 5,
+      concurrency: 1,
+      onProgress: (p) => progress.push({ ...p }),
+      fetch: fakeFetch as typeof globalThis.fetch,
+      caches: cachesImpl,
+    });
+
+    expect(progress.map((p) => p.loaded)).toEqual([1, 2, 3, 4, 5]);
+    expect(progress.every((p) => p.total === 5)).toBe(true);
+  });
+
+  it("rejects pageCount < 1 without touching IDB or cache", async () => {
+    const { caches: cachesImpl, getStore } = makeFakeCaches();
+    await expect(
+      downloadComicBook({
+        bookId: "bad",
+        format: "cbz",
+        pageCount: 0,
+        fetch: vi.fn() as unknown as typeof globalThis.fetch,
+        caches: cachesImpl,
+      }),
+    ).rejects.toThrow(/Invalid pageCount/);
+    expect(await getDownload("bad")).toBeUndefined();
+    expect(getStore(cacheNameForBook("bad"))).toBeUndefined();
+  });
+});
+
+describe("downloadComicBook: page failure", () => {
+  it("aborts on a 404 page, sets IDB to error with the page number, and evicts the partial cache", async () => {
+    const { caches: cachesImpl, getStore } = makeFakeCaches();
+    const fakeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).toString();
+      const n = parsePageNumber(url);
+      if (n === 3) return new Response("missing", { status: 404 });
+      // Pause briefly so siblings actually get a chance to start before
+      // the failure aborts them, otherwise the test trivially passes with
+      // page 3 being the only attempt.
+      await new Promise((r) => setTimeout(r, 1));
+      return makePageResponse(new Uint8Array([n]));
+    });
+
+    await expect(
+      downloadComicBook({
+        bookId: "book-fail",
+        format: "cbz",
+        pageCount: 5,
+        concurrency: 2,
+        fetch: fakeFetch as typeof globalThis.fetch,
+        caches: cachesImpl,
+      }),
+    ).rejects.toThrow(/HTTP 404.*page 3/);
+
+    const record = await getDownload("book-fail");
+    expect(record?.status).toBe("error");
+    expect(record?.error).toMatch(/page 3/);
+    // The per-book cache must be cleared so the reader never sees an
+    // incomplete download (partial caches are useless for comic reading).
+    expect(getStore(cacheNameForBook("book-fail"))).toBeUndefined();
+  });
+
+  it("does not start additional pages after the first failure (in-flight workers exit)", async () => {
+    const { caches: cachesImpl } = makeFakeCaches();
+    const fakeFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as URL).toString();
+      const n = parsePageNumber(url);
+      if (n === 2) return new Response("nope", { status: 500 });
+      return makePageResponse(new Uint8Array([n]));
+    });
+
+    await expect(
+      downloadComicBook({
+        bookId: "book-stop",
+        format: "cbz",
+        pageCount: 100,
+        concurrency: 2,
+        fetch: fakeFetch as typeof globalThis.fetch,
+        caches: cachesImpl,
+      }),
+    ).rejects.toThrow(/HTTP 500/);
+
+    // With concurrency=2 and an immediate failure on page 2, the worker
+    // pool should not have fanned out to anywhere near all 100 pages.
+    expect(fakeFetch.mock.calls.length).toBeLessThan(20);
+  });
+});
+
+describe("downloadComicBook: cancellation", () => {
+  it("aborting during the download deletes the IDB row and the per-book cache", async () => {
+    const { caches: cachesImpl, getStore } = makeFakeCaches();
+    const controller = new AbortController();
+
+    const fakeFetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string" ? input : (input as URL).toString();
+        const n = parsePageNumber(url);
+        // Abort once page 3 starts; pages already-finished stay in cache
+        // (the cleanup runs after Promise.all resolves).
+        if (n === 3) controller.abort();
+        if (init?.signal?.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
+        return makePageResponse(new Uint8Array([n]));
+      },
+    );
+
+    await expect(
+      downloadComicBook({
+        bookId: "book-abort",
+        format: "cbz",
+        pageCount: 10,
+        concurrency: 1,
         signal: controller.signal,
         fetch: fakeFetch as typeof globalThis.fetch,
         caches: cachesImpl,
