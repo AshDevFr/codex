@@ -3,7 +3,7 @@ import {
   selectEffectiveReadingDirection,
   useReaderStore,
 } from "@/store/readerStore";
-import { classifySwipe } from "./swipeGesture";
+import { classifySwipe, classifyTapZone } from "./swipeGesture";
 
 export interface UseTouchNavOptions {
   /** Whether pointer/touch navigation is enabled */
@@ -16,8 +16,13 @@ export interface UseTouchNavOptions {
   onNextPage?: () => void;
   /** Custom handler for previous page (overrides default store action) */
   onPrevPage?: () => void;
-  /** Callback when a tap is detected (for toolbar toggle) */
+  /** Callback when a center-zone tap is detected (for toolbar toggle). When
+   *  `tapZones` is false this fires for taps anywhere on the surface. */
   onTap?: () => void;
+  /** Whether taps on the outer thirds navigate (prev/next), with the middle
+   *  third reserved for `onTap`. Default true. Set false in continuous-scroll
+   *  modes where the whole surface should toggle the toolbar. */
+  tapZones?: boolean;
 }
 
 interface GestureState {
@@ -61,6 +66,7 @@ export function useTouchNav({
   onNextPage,
   onPrevPage,
   onTap,
+  tapZones = true,
 }: UseTouchNavOptions = {}) {
   const storeNextPage = useReaderStore((state) => state.nextPage);
   const storePrevPage = useReaderStore((state) => state.prevPage);
@@ -111,9 +117,36 @@ export function useTouchNav({
       });
 
       switch (gesture) {
-        case "tap":
-          onTap?.();
+        case "tap": {
+          if (!tapZones) {
+            onTap?.();
+            break;
+          }
+          // Map the tap location to a zone (prev/center/next) relative to the
+          // element. Without an attached element we can't know the geometry,
+          // so fall back to a plain toolbar toggle.
+          const element = elementRef.current;
+          if (!element) {
+            onTap?.();
+            break;
+          }
+          const rect = element.getBoundingClientRect();
+          const zone = classifyTapZone(
+            e.clientX - rect.left,
+            e.clientY - rect.top,
+            rect.width,
+            rect.height,
+            { readingDirection },
+          );
+          if (zone === "center") {
+            onTap?.();
+          } else if (zone === "next") {
+            nextPage();
+          } else {
+            prevPage();
+          }
           break;
+        }
         case "next":
           nextPage();
           break;
@@ -132,6 +165,7 @@ export function useTouchNav({
       nextPage,
       prevPage,
       onTap,
+      tapZones,
     ],
   );
 

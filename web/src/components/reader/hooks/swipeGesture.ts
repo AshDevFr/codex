@@ -8,6 +8,67 @@
 
 export type GestureKind = "tap" | "next" | "prev" | "none";
 
+/**
+ * Which zone of a reader surface a tap landed in.
+ *
+ * - `prev`: outer slice in the "go back" direction (left for LTR / right for
+ *   RTL / top for TTB / webtoon).
+ * - `center`: middle third of the surface; reserved for revealing the toolbar.
+ * - `next`: outer slice in the "go forward" direction.
+ */
+export type TapZone = "prev" | "center" | "next";
+
+export interface ClassifyTapZoneOptions {
+  /** Reading direction; determines the tap axis and prev/next polarity. */
+  readingDirection?: "ltr" | "rtl" | "ttb" | "webtoon";
+}
+
+/**
+ * Map a tap location inside a reader surface to a {@link TapZone}.
+ *
+ * Splits the active axis into thirds:
+ * - LTR/RTL: horizontal thirds (left | center | right).
+ * - TTB/webtoon: vertical thirds (top | center | bottom).
+ *
+ * The center third always returns `"center"` so center taps reveal the toolbar
+ * instead of navigating, regardless of reading direction. Edge thirds map to
+ * `prev` / `next` based on direction:
+ * - LTR: left → prev, right → next.
+ * - RTL: left → next, right → prev.
+ * - TTB / webtoon: top → prev, bottom → next.
+ */
+export function classifyTapZone(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  options: ClassifyTapZoneOptions = {},
+): TapZone {
+  const { readingDirection = "ltr" } = options;
+  const isVerticalMode =
+    readingDirection === "ttb" || readingDirection === "webtoon";
+
+  if (isVerticalMode) {
+    if (height <= 0) return "center";
+    const third = height / 3;
+    if (y < third) return "prev";
+    if (y > 2 * third) return "next";
+    return "center";
+  }
+
+  if (width <= 0) return "center";
+  const third = width / 3;
+  // Horizontal axis: which physical edge is "prev" depends on RTL.
+  if (readingDirection === "rtl") {
+    if (x < third) return "next";
+    if (x > 2 * third) return "prev";
+    return "center";
+  }
+  if (x < third) return "prev";
+  if (x > 2 * third) return "next";
+  return "center";
+}
+
 export interface ClassifySwipeOptions {
   /** Minimum swipe distance in pixels to register as a swipe (default: 50). */
   minSwipeDistance?: number;

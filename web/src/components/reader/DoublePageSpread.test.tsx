@@ -10,7 +10,6 @@ describe("DoublePageSpread", () => {
     ],
     fitMode: "screen" as const,
     backgroundColor: "black" as const,
-    readingDirection: "ltr" as const,
   };
 
   beforeEach(() => {
@@ -79,9 +78,7 @@ describe("DoublePageSpread", () => {
 
   describe("reading direction", () => {
     it("should display pages in the order provided (LTR)", () => {
-      renderWithProviders(
-        <DoublePageSpread {...defaultProps} readingDirection="ltr" />,
-      );
+      renderWithProviders(<DoublePageSpread {...defaultProps} />);
 
       const images = screen.getAllByRole("img", { hidden: true });
       // Pages are displayed in the order provided by parent
@@ -104,7 +101,6 @@ describe("DoublePageSpread", () => {
           { pageNumber: 3, src: "/api/v1/books/book-123/pages/3" },
           { pageNumber: 2, src: "/api/v1/books/book-123/pages/2" },
         ],
-        readingDirection: "rtl" as const,
       };
       renderWithProviders(<DoublePageSpread {...rtlProps} />);
 
@@ -124,7 +120,6 @@ describe("DoublePageSpread", () => {
       const singlePageProps = {
         ...defaultProps,
         pages: [{ pageNumber: 5, src: "/api/v1/books/book-123/pages/5" }],
-        readingDirection: "rtl" as const,
       };
       renderWithProviders(<DoublePageSpread {...singlePageProps} />);
 
@@ -137,129 +132,8 @@ describe("DoublePageSpread", () => {
     });
   });
 
-  // ==========================================================================
-  // Click zones
-  // ==========================================================================
-
-  describe("click zones", () => {
-    it("should call onClick with 'left' when clicking left half in LTR mode", () => {
-      const onClick = vi.fn();
-      renderWithProviders(
-        <DoublePageSpread
-          {...defaultProps}
-          readingDirection="ltr"
-          onClick={onClick}
-        />,
-      );
-
-      const container = screen.getByTestId("double-page-spread");
-      vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
-        left: 0,
-        width: 1000,
-        top: 0,
-        height: 600,
-        right: 1000,
-        bottom: 600,
-        x: 0,
-        y: 0,
-        toJSON: () => {},
-      });
-
-      fireEvent.click(container, { clientX: 200 }); // Left half (200 < 500)
-      expect(onClick).toHaveBeenCalledWith("left");
-    });
-
-    it("should call onClick with 'right' when clicking right half in LTR mode", () => {
-      const onClick = vi.fn();
-      renderWithProviders(
-        <DoublePageSpread
-          {...defaultProps}
-          readingDirection="ltr"
-          onClick={onClick}
-        />,
-      );
-
-      const container = screen.getByTestId("double-page-spread");
-      vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
-        left: 0,
-        width: 1000,
-        top: 0,
-        height: 600,
-        right: 1000,
-        bottom: 600,
-        x: 0,
-        y: 0,
-        toJSON: () => {},
-      });
-
-      fireEvent.click(container, { clientX: 800 }); // Right half (800 > 500)
-      expect(onClick).toHaveBeenCalledWith("right");
-    });
-
-    it("should swap click zones for RTL mode - left click advances (right)", () => {
-      const onClick = vi.fn();
-      renderWithProviders(
-        <DoublePageSpread
-          {...defaultProps}
-          readingDirection="rtl"
-          onClick={onClick}
-        />,
-      );
-
-      const container = screen.getByTestId("double-page-spread");
-      vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
-        left: 0,
-        width: 1000,
-        top: 0,
-        height: 600,
-        right: 1000,
-        bottom: 600,
-        x: 0,
-        y: 0,
-        toJSON: () => {},
-      });
-
-      // In RTL mode, clicking left half should trigger "right" (advance)
-      fireEvent.click(container, { clientX: 200 });
-      expect(onClick).toHaveBeenCalledWith("right");
-    });
-
-    it("should swap click zones for RTL mode - right click goes back (left)", () => {
-      const onClick = vi.fn();
-      renderWithProviders(
-        <DoublePageSpread
-          {...defaultProps}
-          readingDirection="rtl"
-          onClick={onClick}
-        />,
-      );
-
-      const container = screen.getByTestId("double-page-spread");
-      vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
-        left: 0,
-        width: 1000,
-        top: 0,
-        height: 600,
-        right: 1000,
-        bottom: 600,
-        x: 0,
-        y: 0,
-        toJSON: () => {},
-      });
-
-      // In RTL mode, clicking right half should trigger "left" (go back)
-      fireEvent.click(container, { clientX: 800 });
-      expect(onClick).toHaveBeenCalledWith("left");
-    });
-
-    it("should not call onClick when no handler provided", () => {
-      renderWithProviders(<DoublePageSpread {...defaultProps} />);
-
-      const container = screen.getByTestId("double-page-spread");
-      // Should not throw
-      fireEvent.click(container);
-    });
-  });
+  // Click-zone navigation moved out of DoublePageSpread into the shared
+  // `useTouchNav` hook (see useTouchNav.test.ts for zone-based tap coverage).
 
   // ==========================================================================
   // Background colors
@@ -449,9 +323,7 @@ describe("DoublePageSpread", () => {
     });
 
     it("should render page containers in correct order for RTL", () => {
-      renderWithProviders(
-        <DoublePageSpread {...defaultProps} readingDirection="rtl" />,
-      );
+      renderWithProviders(<DoublePageSpread {...defaultProps} />);
 
       const pageContainers = [
         screen.getByTestId("spread-page-3"),

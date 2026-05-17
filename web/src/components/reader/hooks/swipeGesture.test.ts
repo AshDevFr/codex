@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySwipe } from "./swipeGesture";
+import { classifySwipe, classifyTapZone } from "./swipeGesture";
 
 describe("classifySwipe", () => {
   describe("tap detection", () => {
@@ -94,5 +94,60 @@ describe("classifySwipe", () => {
       // tapTolerance=20 it should be.
       expect(classifySwipe(15, 0, 50, { tapTolerance: 20 })).toBe("tap");
     });
+  });
+});
+
+describe("classifyTapZone", () => {
+  // 900x600 surface; horizontal thirds at 300/600, vertical thirds at 200/400.
+  const W = 900;
+  const H = 600;
+
+  it("returns 'prev' for left third in LTR", () => {
+    expect(classifyTapZone(100, 300, W, H)).toBe("prev");
+  });
+
+  it("returns 'center' for middle third in LTR", () => {
+    expect(classifyTapZone(450, 300, W, H)).toBe("center");
+  });
+
+  it("returns 'next' for right third in LTR", () => {
+    expect(classifyTapZone(800, 300, W, H)).toBe("next");
+  });
+
+  it("flips left/right in RTL", () => {
+    expect(classifyTapZone(100, 300, W, H, { readingDirection: "rtl" })).toBe(
+      "next",
+    );
+    expect(classifyTapZone(450, 300, W, H, { readingDirection: "rtl" })).toBe(
+      "center",
+    );
+    expect(classifyTapZone(800, 300, W, H, { readingDirection: "rtl" })).toBe(
+      "prev",
+    );
+  });
+
+  it("uses vertical thirds in TTB", () => {
+    expect(classifyTapZone(450, 50, W, H, { readingDirection: "ttb" })).toBe(
+      "prev",
+    );
+    expect(classifyTapZone(450, 300, W, H, { readingDirection: "ttb" })).toBe(
+      "center",
+    );
+    expect(classifyTapZone(450, 550, W, H, { readingDirection: "ttb" })).toBe(
+      "next",
+    );
+  });
+
+  it("uses vertical thirds in webtoon mode", () => {
+    expect(
+      classifyTapZone(450, 50, W, H, { readingDirection: "webtoon" }),
+    ).toBe("prev");
+    expect(
+      classifyTapZone(450, 550, W, H, { readingDirection: "webtoon" }),
+    ).toBe("next");
+  });
+
+  it("falls back to 'center' on a zero-sized surface", () => {
+    expect(classifyTapZone(0, 0, 0, 0)).toBe("center");
   });
 });

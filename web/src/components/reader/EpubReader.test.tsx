@@ -497,6 +497,33 @@ describe("EpubReader", () => {
       expect(useReaderStore.getState().toolbarVisible).toBe(true);
     });
 
+    it("routes iframe taps through tap zones (LTR)", async () => {
+      const doc = await mountAndGetIframeDoc();
+      // The fake iframe doc is detached, so view-derived sizes are 0; stub
+      // documentElement.clientWidth/Height to give the hook a real geometry.
+      Object.defineProperty(doc.documentElement, "clientWidth", {
+        configurable: true,
+        value: 900,
+      });
+      Object.defineProperty(doc.documentElement, "clientHeight", {
+        configurable: true,
+        value: 600,
+      });
+
+      const visibleBefore = useReaderStore.getState().toolbarVisible;
+
+      // Left third tap → prev page (LTR).
+      dispatchPointerEvent(doc, "pointerdown", 100, 300, { timeStamp: 0 });
+      dispatchPointerEvent(doc, "pointerup", 100, 300, { timeStamp: 50 });
+
+      // Right third tap → next page.
+      dispatchPointerEvent(doc, "pointerdown", 800, 300, { timeStamp: 100 });
+      dispatchPointerEvent(doc, "pointerup", 800, 300, { timeStamp: 150 });
+
+      // Toolbar visibility is unchanged because both taps landed in nav zones.
+      expect(useReaderStore.getState().toolbarVisible).toBe(visibleBefore);
+    });
+
     it("ignores pointer interactions starting on links and form controls", async () => {
       const doc = await mountAndGetIframeDoc();
 

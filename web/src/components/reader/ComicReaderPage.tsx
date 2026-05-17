@@ -14,8 +14,6 @@ interface ComicReaderPageProps {
   backgroundColor: BackgroundColor;
   /** Whether this page is currently visible */
   isVisible?: boolean;
-  /** Click handler for navigation zones */
-  onClick?: (zone: "left" | "center" | "right") => void;
   /** Called when the page image fails to load */
   onError?: () => void;
 }
@@ -99,7 +97,6 @@ export function ComicReaderPage({
   fitMode,
   backgroundColor,
   isVisible = true,
-  onClick,
   onError,
 }: ComicReaderPageProps) {
   // Check if this image is already preloaded to avoid showing loader
@@ -124,24 +121,6 @@ export function ComicReaderPage({
     onError?.();
   };
 
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!onClick) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const width = rect.width;
-
-    // Divide into thirds: left, center, right
-    const third = width / 3;
-    if (x < third) {
-      onClick("left");
-    } else if (x > 2 * third) {
-      onClick("right");
-    } else {
-      onClick("center");
-    }
-  };
-
   if (!isVisible) {
     return null;
   }
@@ -161,11 +140,9 @@ export function ComicReaderPage({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        cursor: onClick ? "pointer" : "default",
         userSelect: "none",
         position: "relative",
       }}
-      onClick={handleClick}
     >
       {hasError ? (
         <Center style={{ color: "#666" }}>Failed to load page</Center>
