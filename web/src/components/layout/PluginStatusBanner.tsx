@@ -8,31 +8,45 @@ import { pluginsApi } from "@/api/plugins";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui/ResponsiveTable";
 import { useAuthStore } from "@/store/authStore";
 
-// Session storage key for dismissed plugins
+// Local storage key for dismissed plugins. We map plugin ID -> failureCount
+// at the moment of dismissal. The banner re-appears whenever the plugin's
+// current failureCount exceeds the stored value, which corresponds to a new
+// failure since the user last dismissed it. Persisting across reloads
+// (rather than sessionStorage) is intentional: on a phone the banner eats
+// ~75px of above-the-fold space, so reload-survival matters. (U5)
 const DISMISSED_KEY = "codex:dismissed-plugin-alerts";
 
+type DismissedMap = Record<string, number>;
+
 /**
- * Get the set of dismissed plugin IDs from session storage.
+ * Get the dismissed map (plugin id -> failureCount at dismissal time) from
+ * localStorage. Returns an empty map on parse / storage errors.
  */
-function getDismissedPluginIds(): Set<string> {
+function getDismissedMap(): DismissedMap {
   try {
-    const stored = sessionStorage.getItem(DISMISSED_KEY);
+    const stored = localStorage.getItem(DISMISSED_KEY);
     if (stored) {
-      return new Set(JSON.parse(stored));
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as DismissedMap;
+      }
     }
   } catch {
     // Ignore parsing errors
   }
-  return new Set();
+  return {};
 }
 
 /**
- * Add a plugin ID to the dismissed set in session storage.
+ * Persist the dismissal map back to localStorage. No-op on quota / private-
+ * mode failures.
  */
-function dismissPlugin(pluginId: string): void {
-  const dismissed = getDismissedPluginIds();
-  dismissed.add(pluginId);
-  sessionStorage.setItem(DISMISSED_KEY, JSON.stringify([...dismissed]));
+function saveDismissedMap(map: DismissedMap): void {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 /**
@@ -43,9 +57,8 @@ export function PluginStatusBanner() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === "admin";
   const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(
-    getDismissedPluginIds,
-  );
+  const [dismissedMap, setDismissedMap] =
+    useState<DismissedMap>(getDismissedMap);
 
   const { data: pluginsResponse } = useQuery({
     queryKey: ["plugins"],
@@ -64,12 +77,14 @@ export function PluginStatusBanner() {
         p.disabledReason ||
         (p.healthStatus === "unhealthy" && p.failureCount > 0),
     );
-    for (const plugin of failedPlugins) {
-      dismissPlugin(plugin.id);
-    }
-    setDismissedIds(
-      (prev) => new Set([...prev, ...failedPlugins.map((p) => p.id)]),
-    );
+    setDismissedMap((prev) => {
+      const next = { ...prev };
+      for (const plugin of failedPlugins) {
+        next[plugin.id] = plugin.failureCount;
+      }
+      saveDismissedMap(next);
+      return next;
+    });
   }, [pluginsResponse]);
 
   // Don't show for non-admins or if no data
@@ -87,8 +102,14 @@ export function PluginStatusBanner() {
       (p.healthStatus === "unhealthy" && p.failureCount > 0 && p.enabled),
   );
 
-  // Filter out dismissed plugins
-  const visiblePlugins = failedPlugins.filter((p) => !dismissedIds.has(p.id));
+  // Filter out plugins the user has dismissed at the current failureCount.
+  // If a *new* failure has happened since dismissal (current failureCount >
+  // stored), the banner returns; that's the desired behavior per U5.
+  const visiblePlugins = failedPlugins.filter((p) => {
+    const dismissedAt = dismissedMap[p.id];
+    if (dismissedAt === undefined) return true;
+    return p.failureCount > dismissedAt;
+  });
 
   if (visiblePlugins.length === 0) {
     return null;

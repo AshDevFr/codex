@@ -687,4 +687,126 @@ describe("Sidebar Component (via AppLayout)", () => {
       expect(onNavigate).not.toHaveBeenCalled();
     });
   });
+
+  describe("Mobile scroll cue (U4)", () => {
+    it("does not render the scroll cue on desktop viewports", () => {
+      // Default matchMedia mock returns matches:false for everything.
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      renderWithProviders(
+        <AppLayout>
+          <div>Content</div>
+        </AppLayout>,
+      );
+
+      expect(
+        screen.queryByTestId("sidebar-scroll-cue"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("renders the scroll cue when the mobile navbar overflows", async () => {
+      // Force-mobile matchMedia + stub navbar metrics to simulate overflow.
+      const originalMatchMedia = window.matchMedia;
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes("max-width"),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+
+      // ResizeObserver is invoked synchronously when we observe(), so we can
+      // assert via the initial update() call. Stub it as a noop instance so
+      // it doesn't run our update on resize (which we don't simulate).
+      class StubResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+      const originalRO = window.ResizeObserver;
+      // @ts-expect-error - test stub
+      window.ResizeObserver = StubResizeObserver;
+
+      // Stub scrollHeight/clientHeight on the navbar element so update()
+      // detects overflow on mount.
+      const originalScrollHeight = Object.getOwnPropertyDescriptor(
+        Element.prototype,
+        "scrollHeight",
+      );
+      const originalClientHeight = Object.getOwnPropertyDescriptor(
+        Element.prototype,
+        "clientHeight",
+      );
+      Object.defineProperty(Element.prototype, "scrollHeight", {
+        configurable: true,
+        get() {
+          return this.classList?.contains("mantine-AppShell-navbar") ? 2000 : 0;
+        },
+      });
+      Object.defineProperty(Element.prototype, "clientHeight", {
+        configurable: true,
+        get() {
+          return this.classList?.contains("mantine-AppShell-navbar") ? 600 : 0;
+        },
+      });
+
+      const mockUser: User = {
+        id: "1",
+        username: "testuser",
+        email: "test@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      };
+      useAuthStore.setState({
+        user: mockUser,
+        token: "token",
+        isAuthenticated: true,
+      });
+
+      try {
+        renderWithProviders(
+          <AppLayout>
+            <div>Content</div>
+          </AppLayout>,
+        );
+
+        await waitFor(() => {
+          expect(screen.getByTestId("sidebar-scroll-cue")).toBeInTheDocument();
+        });
+      } finally {
+        window.matchMedia = originalMatchMedia;
+        window.ResizeObserver = originalRO;
+        if (originalScrollHeight) {
+          Object.defineProperty(
+            Element.prototype,
+            "scrollHeight",
+            originalScrollHeight,
+          );
+        }
+        if (originalClientHeight) {
+          Object.defineProperty(
+            Element.prototype,
+            "clientHeight",
+            originalClientHeight,
+          );
+        }
+      }
+    });
+  });
 });

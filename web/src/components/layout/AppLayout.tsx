@@ -4,6 +4,7 @@ import { useRef } from "react";
 import type { SearchInputHandle } from "@/components/search";
 import { useSearchShortcut } from "@/hooks/useSearchShortcut";
 import { Header } from "./Header";
+import { OfflineBanner } from "./OfflineBanner";
 import { PluginStatusBanner } from "./PluginStatusBanner";
 import { Sidebar } from "./Sidebar";
 
@@ -40,6 +41,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       <AppShell.Main>
         <PluginStatusBanner />
+        <OfflineBanner />
         {children}
       </AppShell.Main>
     </AppShell>

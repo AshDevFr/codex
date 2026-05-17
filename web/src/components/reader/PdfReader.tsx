@@ -25,6 +25,7 @@ import {
 import { MobileReaderBottomBar } from "./MobileReaderBottomBar";
 import { PdfContinuousScrollReader } from "./PdfContinuousScrollReader";
 import { PdfReaderSettings } from "./PdfReaderSettings";
+import { ReaderFirstRunHint } from "./ReaderFirstRunHint";
 import { ReaderToolbar } from "./ReaderToolbar";
 
 // Import CSS for text layer and annotation layer
@@ -724,6 +725,10 @@ export function PdfReader({
           onNextPage={handleNextPage}
         />
       )}
+
+      {/* First-run hint: teaches phone users that center-tap reveals the
+          toolbar. Once per session across all reader formats. */}
+      <ReaderFirstRunHint />
 
       {/* Boundary notification */}
       <BoundaryNotification

@@ -42,6 +42,8 @@ import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
 import { useEpubProgress } from "./hooks/useEpubProgress";
 import { useSeriesNavigation } from "./hooks/useSeriesNavigation";
 import { useTouchNav } from "./hooks/useTouchNav";
+import { MobileReaderBottomBar } from "./MobileReaderBottomBar";
+import { ReaderFirstRunHint } from "./ReaderFirstRunHint";
 import { ReaderToolbar } from "./ReaderToolbar";
 
 // EPUB theme definitions
@@ -875,6 +877,30 @@ export function EpubReader({
   const handlePrevPage = useCallback(() => {
     renditionRef.current?.prev();
   }, []);
+
+  // U2: Compute current chapter index against the top-level TOC for the
+  // mobile bottom bar's chapter pill. Matches the same fuzzy href comparison
+  // that `findChapterTitle` uses inside the relocated handler (a TOC entry's
+  // href can include a fragment, so we strip it before comparing). Returns
+  // `null` until both the TOC and the current location are known.
+  const epubChapter = useMemo<{
+    currentIndex: number;
+    total: number;
+  } | null>(() => {
+    if (toc.length === 0 || !currentHref) return null;
+    const index = toc.findIndex((item) => {
+      const itemHref = item.href.split("#")[0];
+      return (
+        item.href === currentHref ||
+        currentHref === itemHref ||
+        currentHref.startsWith(itemHref)
+      );
+    });
+    // Clamp to 1 so the pill never shows "Ch 0 / N" while the location is
+    // resolving between chapter boundaries.
+    return { currentIndex: Math.max(1, index + 1), total: toc.length };
+  }, [toc, currentHref]);
+
   const { touchRef } = useTouchNav({
     enabled: !settingsOpened && !tocOpened && !bookmarksOpened && !searchOpened,
     onNextPage: handleNextPage,
@@ -1136,6 +1162,26 @@ export function EpubReader({
           </>
         }
       />
+
+      {/* U2: Phone-only bottom bar with a tappable chapter pill (opens TOC).
+          EPUB pagination is reflowable, so we render the chapter-variant
+          layout (no slider, just prev / chapter / next). */}
+      {epubChapter && (
+        <MobileReaderBottomBar
+          visible={toolbarVisible}
+          onPrevPage={handlePrevPage}
+          onNextPage={handleNextPage}
+          epubChapter={{
+            currentIndex: epubChapter.currentIndex,
+            total: epubChapter.total,
+            onTap: () => setTocOpened(true),
+          }}
+        />
+      )}
+
+      {/* First-run hint: teaches phone users that center-tap reveals the
+          toolbar. Once per session across all reader formats. */}
+      <ReaderFirstRunHint />
 
       {/* Boundary notification for series navigation */}
       <BoundaryNotification

@@ -17,6 +17,7 @@ export {
 export { PdfContinuousScrollReader } from "./PdfContinuousScrollReader";
 export { PdfReader, type PdfZoomLevel } from "./PdfReader";
 export { PdfReaderSettings } from "./PdfReaderSettings";
+export { ReaderFirstRunHint } from "./ReaderFirstRunHint";
 export { ReaderRouter } from "./ReaderRouter";
 export { ReaderSettings } from "./ReaderSettings";
 export { ReaderToolbar } from "./ReaderToolbar";
