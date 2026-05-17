@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 
-import { EpubTableOfContents } from "./EpubTableOfContents";
+import {
+  EpubTableOfContentsDrawer,
+  EpubTableOfContentsTrigger,
+} from "./EpubTableOfContents";
 
 const mockToc: NavItem[] = [
   {
@@ -39,56 +42,41 @@ const mockToc: NavItem[] = [
   },
 ];
 
-describe("EpubTableOfContents", () => {
-  describe("Toggle button", () => {
-    it("renders TOC toggle button", () => {
-      renderWithProviders(
-        <EpubTableOfContents
-          toc={mockToc}
-          opened={false}
-          onToggle={vi.fn()}
-          onNavigate={vi.fn()}
-        />,
-      );
+describe("EpubTableOfContentsTrigger", () => {
+  it("renders TOC toggle button", () => {
+    renderWithProviders(<EpubTableOfContentsTrigger onToggle={vi.fn()} />);
 
-      expect(
-        screen.getByRole("button", { name: /table of contents/i }),
-      ).toBeInTheDocument();
-    });
-
-    it("calls onToggle when button is clicked", async () => {
-      const user = userEvent.setup();
-      const onToggle = vi.fn();
-
-      renderWithProviders(
-        <EpubTableOfContents
-          toc={mockToc}
-          opened={false}
-          onToggle={onToggle}
-          onNavigate={vi.fn()}
-        />,
-      );
-
-      await user.click(
-        screen.getByRole("button", { name: /table of contents/i }),
-      );
-
-      expect(onToggle).toHaveBeenCalledTimes(1);
-    });
+    expect(
+      screen.getByRole("button", { name: /table of contents/i }),
+    ).toBeInTheDocument();
   });
 
+  it("calls onToggle when button is clicked", async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+
+    renderWithProviders(<EpubTableOfContentsTrigger onToggle={onToggle} />);
+
+    await user.click(
+      screen.getByRole("button", { name: /table of contents/i }),
+    );
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("EpubTableOfContentsDrawer", () => {
   describe("Drawer", () => {
     it("does not show drawer content when closed", () => {
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={mockToc}
           opened={false}
-          onToggle={vi.fn()}
+          onClose={vi.fn()}
           onNavigate={vi.fn()}
         />,
       );
 
-      // When drawer is closed, TOC items should not be visible
       expect(
         screen.queryByText("Chapter 1: Introduction"),
       ).not.toBeInTheDocument();
@@ -96,15 +84,14 @@ describe("EpubTableOfContents", () => {
 
     it("shows drawer content when opened", () => {
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={mockToc}
           opened={true}
-          onToggle={vi.fn()}
+          onClose={vi.fn()}
           onNavigate={vi.fn()}
         />,
       );
 
-      // Drawer title and content should be visible
       expect(screen.getByText("Table of Contents")).toBeInTheDocument();
       expect(screen.getByText("Chapter 1: Introduction")).toBeInTheDocument();
     });
@@ -113,10 +100,10 @@ describe("EpubTableOfContents", () => {
   describe("TOC items", () => {
     it("renders all top-level TOC items", () => {
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={mockToc}
           opened={true}
-          onToggle={vi.fn()}
+          onClose={vi.fn()}
           onNavigate={vi.fn()}
         />,
       );
@@ -132,10 +119,10 @@ describe("EpubTableOfContents", () => {
 
     it("renders nested TOC items (subitems)", () => {
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={mockToc}
           opened={true}
-          onToggle={vi.fn()}
+          onClose={vi.fn()}
           onNavigate={vi.fn()}
         />,
       );
@@ -144,16 +131,16 @@ describe("EpubTableOfContents", () => {
       expect(screen.getByText("2.2 Configuration")).toBeInTheDocument();
     });
 
-    it("calls onNavigate with href when TOC item is clicked", async () => {
+    it("calls onNavigate with href and closes drawer when TOC item is clicked", async () => {
       const user = userEvent.setup();
       const onNavigate = vi.fn();
-      const onToggle = vi.fn();
+      const onClose = vi.fn();
 
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={mockToc}
           opened={true}
-          onToggle={onToggle}
+          onClose={onClose}
           onNavigate={onNavigate}
         />,
       );
@@ -161,7 +148,7 @@ describe("EpubTableOfContents", () => {
       await user.click(screen.getByText("Chapter 1: Introduction"));
 
       expect(onNavigate).toHaveBeenCalledWith("chapter1.xhtml");
-      expect(onToggle).toHaveBeenCalledTimes(1); // Should close drawer
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
 
     it("calls onNavigate with nested item href", async () => {
@@ -169,10 +156,10 @@ describe("EpubTableOfContents", () => {
       const onNavigate = vi.fn();
 
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={mockToc}
           opened={true}
-          onToggle={vi.fn()}
+          onClose={vi.fn()}
           onNavigate={onNavigate}
         />,
       );
@@ -186,10 +173,10 @@ describe("EpubTableOfContents", () => {
   describe("Empty state", () => {
     it("shows empty message when TOC is empty", () => {
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={[]}
           opened={true}
-          onToggle={vi.fn()}
+          onClose={vi.fn()}
           onNavigate={vi.fn()}
         />,
       );
@@ -203,17 +190,15 @@ describe("EpubTableOfContents", () => {
   describe("Current chapter highlighting", () => {
     it("renders current chapter link", () => {
       renderWithProviders(
-        <EpubTableOfContents
+        <EpubTableOfContentsDrawer
           toc={mockToc}
           currentHref="chapter2.xhtml"
           opened={true}
-          onToggle={vi.fn()}
+          onClose={vi.fn()}
           onNavigate={vi.fn()}
         />,
       );
 
-      // The NavLink component handles active state internally
-      // We verify the link is rendered correctly
       const chapter2Link = screen.getByText("Chapter 2: Getting Started");
       expect(chapter2Link).toBeInTheDocument();
     });

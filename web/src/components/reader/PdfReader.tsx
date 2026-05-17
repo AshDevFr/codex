@@ -647,26 +647,30 @@ export function PdfReader({
   );
 
   // Page container style.
-  // When the toolbar is hidden (immersive mode), the page can slide under
-  // the iOS status bar in PWA standalone mode. The toolbar itself already
-  // pads for safe-area-inset-top, so when it's visible we use 64px; when
-  // it's hidden, fall back to env(safe-area-inset-top) so PDFs in
-  // notch-displays still center within the visible viewport.
+  // The toolbar is an overlay above the page, so the container always spans
+  // the full viewport — anchoring the top to the toolbar made short PDFs
+  // hug the title bar with a tall black gap below. The container itself
+  // honors safe-area insets so PDFs on notch displays don't slide under the
+  // iOS status bar in PWA standalone mode.
+  //
+  // `alignItems: center` would crop the top of pages taller than the
+  // viewport in some flex implementations; using `margin: auto` on the page
+  // wrapper centers when content is shorter than the container and pins to
+  // the top (allowing scroll past) when content overflows.
   const pageContainerStyle: CSSProperties = useMemo(
     () => ({
       position: "absolute",
-      top: toolbarVisible ? 64 : "env(safe-area-inset-top, 0px)",
+      top: "env(safe-area-inset-top, 0px)",
       left: 0,
       right: 0,
-      bottom: toolbarVisible ? 0 : "env(safe-area-inset-bottom, 0px)",
+      bottom: "env(safe-area-inset-bottom, 0px)",
       overflow: "auto",
       display: "flex",
       justifyContent: "center",
       alignItems: "flex-start",
       padding: "20px",
-      transition: "top 0.2s ease-in-out, bottom 0.2s ease-in-out",
     }),
-    [toolbarVisible],
+    [],
   );
 
   // Loading state
@@ -790,13 +794,10 @@ export function PdfReader({
           ref={setPageContainerRef}
           style={{
             ...pageContainerStyle,
-            // Allow vertical pan (long PDF pages need it in fit-width) and
-            // pinch-zoom for small text, but omit `pan-x` so iOS WebKit
-            // doesn't consume horizontal swipes for scroll/back-navigation.
-            // Otherwise the browser fires pointercancel mid-swipe and our
-            // gesture handler never resolves. `useTouchNav` listens
-            // passively, so this is the only gate on horizontal pans.
-            touchAction: "pan-y pinch-zoom",
+            // Click-only navigation: we no longer compete with the browser's
+            // native gestures, so allow standard pan + pinch-zoom for users
+            // who want to scroll long pages or zoom into small text.
+            touchAction: "manipulation",
           }}
         >
           {pageError ? (
@@ -839,6 +840,10 @@ export function PdfReader({
                     gap: pdfSpreadMode !== "single" ? "8px" : "0",
                     justifyContent: "center",
                     alignItems: "flex-start",
+                    // `margin: auto` inside the scrolling flex parent centers
+                    // the page vertically when shorter than the viewport,
+                    // and pins to the top (scrolling normally) when taller.
+                    margin: "auto",
                   }}
                 >
                   {/* Left page (or single page) */}

@@ -34,8 +34,11 @@ import { BoundaryNotification } from "./BoundaryNotification";
 import { EpubBookmarks } from "./EpubBookmarks";
 import { EpubReaderSettings } from "./EpubReaderSettings";
 import { EpubSearch, type SearchResult } from "./EpubSearch";
-import { EpubTableOfContents } from "./EpubTableOfContents";
-import { classifySwipe, classifyTapZone } from "./hooks/swipeGesture";
+import {
+  EpubTableOfContentsDrawer,
+  EpubTableOfContentsTrigger,
+} from "./EpubTableOfContents";
+import { classifyTapZone, isTap } from "./hooks/swipeGesture";
 import { useAdjacentBooks } from "./hooks/useAdjacentBooks";
 import { useBoundaryNotification } from "./hooks/useBoundaryNotification";
 import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
@@ -659,13 +662,14 @@ export function EpubReader({
       saveLocationRef.current(cfi, percentage, fullHref);
     });
 
-    // R10-1: bind tap + swipe pointer events *inside* the iframe document.
-    // The outer-container `useTouchNav` listeners can't see touches that land
+    // R10-1: bind tap pointer events *inside* the iframe document. The
+    // outer-container `useTouchNav` listeners can't see touches that land
     // inside the epub.js iframe — they don't bubble across the iframe
     // boundary. Registering on `rendition.hooks.content` fires once per
     // chapter document the renderer mounts, giving us a fresh
-    // `contents.document` each time. We share `classifySwipe` with the outer
-    // hook so tap/swipe semantics stay consistent.
+    // `contents.document` each time. Click-only navigation: we share
+    // `isTap` / `classifyTapZone` with the outer hook so any pointer
+    // movement above the tap tolerance is ignored and left to the browser.
     rendition.hooks.content.register((contents: { document: Document }) => {
       const doc = contents.document;
       if (!doc) return;
@@ -673,7 +677,6 @@ export function EpubReader({
       let pointerId: number | null = null;
       let startX = 0;
       let startY = 0;
-      let startTime = 0;
 
       const onPointerDown = (event: PointerEvent) => {
         if (!event.isPrimary) return;
@@ -689,15 +692,15 @@ export function EpubReader({
         pointerId = event.pointerId;
         startX = event.clientX;
         startY = event.clientY;
-        startTime = event.timeStamp || Date.now();
       };
 
       const onPointerUp = (event: PointerEvent) => {
         if (pointerId === null || event.pointerId !== pointerId) return;
         const deltaX = event.clientX - startX;
         const deltaY = event.clientY - startY;
-        const deltaTime = (event.timeStamp || Date.now()) - startTime;
         pointerId = null;
+
+        if (!isTap(deltaX, deltaY)) return;
 
         // Prefer the EPUB's metadata-declared direction (e.g. manga marked
         // RTL by the publisher) and fall back to the user's reader setting.
@@ -711,60 +714,35 @@ export function EpubReader({
         const readingDirection =
           metadataDirection === "rtl" ? "rtl" : readingDirectionRef.current;
 
-        const gesture = classifySwipe(deltaX, deltaY, deltaTime, {
-          readingDirection,
-        });
-
-        switch (gesture) {
-          case "tap": {
-            // Classify by zone so a center tap reveals the toolbar while
-            // edge taps page forward/back, matching the outer-container
-            // useTouchNav behavior (left/center/right for horizontal flow,
-            // top/center/bottom for TTB). Use the iframe element's bounding
-            // rect (taken from the parent document) as the source of truth
-            // for the visible viewport: in epub.js paginated mode the body
-            // uses CSS columns to lay out multiple pages side-by-side, and
-            // `doc.documentElement.clientWidth` (and on some iOS WebKit
-            // builds, `defaultView.innerWidth` too) can return the full
-            // multi-column content width instead of the single visible page.
-            // That would slide every "center" tap into an edge third and
-            // make the toolbar appear to never open. The iframe element
-            // itself is sized to one visible page, so its rect is reliable.
-            const view = doc.defaultView;
-            const frameElement = view?.frameElement as HTMLElement | null;
-            const frameRect = frameElement?.getBoundingClientRect();
-            const width =
-              frameRect?.width ||
-              view?.innerWidth ||
-              doc.documentElement.clientWidth;
-            const height =
-              frameRect?.height ||
-              view?.innerHeight ||
-              doc.documentElement.clientHeight;
-            const zone = classifyTapZone(
-              event.clientX,
-              event.clientY,
-              width,
-              height,
-              { readingDirection },
-            );
-            if (zone === "center") {
-              toggleToolbarRef.current();
-            } else if (zone === "next") {
-              renditionRef.current?.next();
-            } else {
-              renditionRef.current?.prev();
-            }
-            break;
-          }
-          case "next":
-            renditionRef.current?.next();
-            break;
-          case "prev":
-            renditionRef.current?.prev();
-            break;
-          case "none":
-            break;
+        // The iframe element's bounding rect is the source of truth for the
+        // visible viewport: in epub.js paginated mode the body uses CSS
+        // columns to lay out multiple pages side-by-side, so
+        // `doc.documentElement.clientWidth` can return the full multi-column
+        // content width and slide every center tap into an edge third.
+        const view = doc.defaultView;
+        const frameElement = view?.frameElement as HTMLElement | null;
+        const frameRect = frameElement?.getBoundingClientRect();
+        const width =
+          frameRect?.width ||
+          view?.innerWidth ||
+          doc.documentElement.clientWidth;
+        const height =
+          frameRect?.height ||
+          view?.innerHeight ||
+          doc.documentElement.clientHeight;
+        const zone = classifyTapZone(
+          event.clientX,
+          event.clientY,
+          width,
+          height,
+          { readingDirection },
+        );
+        if (zone === "center") {
+          toggleToolbarRef.current();
+        } else if (zone === "next") {
+          renditionRef.current?.next();
+        } else {
+          renditionRef.current?.prev();
         }
       };
 
@@ -1118,12 +1096,8 @@ export function EpubReader({
         onPrevBook={canGoPrevBook ? goToPrevBook : undefined}
         onNextBook={canGoNextBook ? goToNextBook : undefined}
         leftActions={
-          <EpubTableOfContents
-            toc={toc}
-            currentHref={currentHref}
-            opened={tocOpened}
+          <EpubTableOfContentsTrigger
             onToggle={() => setTocOpened((prev) => !prev)}
-            onNavigate={handleTocNavigate}
           />
         }
         rightActions={
@@ -1199,6 +1173,17 @@ export function EpubReader({
             </Menu.Item>
           </>
         }
+      />
+
+      {/* TOC drawer is rendered outside the toolbar's Transition so it
+          stays open while the toolbar auto-hides (otherwise the drawer
+          would unmount with the toolbar 3 seconds after opening). */}
+      <EpubTableOfContentsDrawer
+        toc={toc}
+        currentHref={currentHref}
+        opened={tocOpened}
+        onClose={() => setTocOpened(false)}
+        onNavigate={handleTocNavigate}
       />
 
       {/* U2: Phone-only bottom bar with a tappable chapter pill (opens TOC).
