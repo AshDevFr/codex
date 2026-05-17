@@ -3,9 +3,10 @@ import {
   selectEffectiveReadingDirection,
   useReaderStore,
 } from "@/store/readerStore";
+import { classifySwipe } from "./swipeGesture";
 
 export interface UseTouchNavOptions {
-  /** Whether touch navigation is enabled */
+  /** Whether pointer/touch navigation is enabled */
   enabled?: boolean;
   /** Minimum swipe distance in pixels to trigger navigation (default: 50) */
   minSwipeDistance?: number;
@@ -19,15 +20,27 @@ export interface UseTouchNavOptions {
   onTap?: () => void;
 }
 
-interface TouchState {
+interface GestureState {
+  pointerId: number | null;
   startX: number;
   startY: number;
   startTime: number;
-  isTracking: boolean;
 }
 
+const INITIAL_GESTURE: GestureState = {
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  startTime: 0,
+};
+
 /**
- * Hook for touch/swipe navigation in the reader.
+ * Hook for tap/swipe navigation in the reader.
+ *
+ * Uses Pointer Events so a single code path covers touch (finger) **and**
+ * mouse (desktop, Chrome mobile-viewport emulation, trackpad drag). Without
+ * this, mouse-drag swipes in Chrome DevTools never reach the navigation code
+ * unless the user manually enables Sensors > Touch (see R10-3 / R10-4).
  *
  * Supports:
  * - Horizontal swipes for page navigation
@@ -57,99 +70,58 @@ export function useTouchNav({
   const nextPage = onNextPage ?? storeNextPage;
   const prevPage = onPrevPage ?? storePrevPage;
 
-  // Track touch state
-  const touchState = useRef<TouchState>({
-    startX: 0,
-    startY: 0,
-    startTime: 0,
-    isTracking: false,
-  });
-
-  // Element ref for attaching listeners
+  const gestureState = useRef<GestureState>({ ...INITIAL_GESTURE });
   const elementRef = useRef<HTMLElement | null>(null);
 
-  const handleTouchStart = useCallback(
-    (e: TouchEvent) => {
+  const handlePointerDown = useCallback(
+    (e: PointerEvent) => {
       if (!enabled) return;
 
-      const touch = e.touches[0];
-      touchState.current = {
-        startX: touch.clientX,
-        startY: touch.clientY,
-        startTime: Date.now(),
-        isTracking: true,
+      // Only track the primary pointer; ignore secondary touches, right-click,
+      // and middle-click drags.
+      if (!e.isPrimary) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+
+      gestureState.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        startTime: e.timeStamp || Date.now(),
       };
     },
     [enabled],
   );
 
-  const handleTouchEnd = useCallback(
-    (e: TouchEvent) => {
-      if (!enabled || !touchState.current.isTracking) return;
+  const handlePointerUp = useCallback(
+    (e: PointerEvent) => {
+      if (!enabled) return;
+      const state = gestureState.current;
+      if (state.pointerId === null || state.pointerId !== e.pointerId) return;
 
-      const touch = e.changedTouches[0];
-      const { startX, startY, startTime } = touchState.current;
+      const deltaX = e.clientX - state.startX;
+      const deltaY = e.clientY - state.startY;
+      const deltaTime = (e.timeStamp || Date.now()) - state.startTime;
 
-      const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
-      const deltaTime = Date.now() - startTime;
+      gestureState.current = { ...INITIAL_GESTURE };
 
-      // Reset tracking
-      touchState.current.isTracking = false;
+      const gesture = classifySwipe(deltaX, deltaY, deltaTime, {
+        minSwipeDistance,
+        maxSwipeTime,
+        readingDirection,
+      });
 
-      // Check if it's within time limit for a swipe
-      if (deltaTime > maxSwipeTime) {
-        return;
-      }
-
-      const absX = Math.abs(deltaX);
-      const absY = Math.abs(deltaY);
-
-      // Determine if this is primarily a horizontal or vertical swipe
-      const isHorizontalSwipe = absX > absY && absX >= minSwipeDistance;
-      const isVerticalSwipe = absY > absX && absY >= minSwipeDistance;
-
-      // Check for tap (minimal movement)
-      if (absX < 10 && absY < 10) {
-        onTap?.();
-        return;
-      }
-
-      // Handle based on reading direction
-      const isVerticalMode =
-        readingDirection === "ttb" || readingDirection === "webtoon";
-      const isRtl = readingDirection === "rtl";
-
-      if (isVerticalMode) {
-        // TTB/Webtoon: vertical swipes control navigation
-        if (isVerticalSwipe) {
-          if (deltaY < 0) {
-            // Swipe up = next page
-            nextPage();
-          } else {
-            // Swipe down = prev page
-            prevPage();
-          }
-        }
-      } else {
-        // LTR/RTL: horizontal swipes control navigation
-        if (isHorizontalSwipe) {
-          if (isRtl) {
-            // RTL: reversed
-            if (deltaX < 0) {
-              prevPage();
-            } else {
-              nextPage();
-            }
-          } else {
-            // LTR: normal
-            if (deltaX < 0) {
-              nextPage();
-            } else {
-              prevPage();
-            }
-          }
-        }
+      switch (gesture) {
+        case "tap":
+          onTap?.();
+          break;
+        case "next":
+          nextPage();
+          break;
+        case "prev":
+          prevPage();
+          break;
+        case "none":
+          break;
       }
     },
     [
@@ -163,52 +135,56 @@ export function useTouchNav({
     ],
   );
 
-  const handleTouchCancel = useCallback(() => {
-    touchState.current.isTracking = false;
+  const handlePointerCancel = useCallback((e: PointerEvent) => {
+    if (gestureState.current.pointerId === e.pointerId) {
+      gestureState.current = { ...INITIAL_GESTURE };
+    }
   }, []);
 
   // Set ref callback to attach/detach listeners
   const setRef = useCallback(
     (element: HTMLElement | null) => {
-      // Remove listeners from previous element
       if (elementRef.current) {
-        elementRef.current.removeEventListener("touchstart", handleTouchStart);
-        elementRef.current.removeEventListener("touchend", handleTouchEnd);
         elementRef.current.removeEventListener(
-          "touchcancel",
-          handleTouchCancel,
+          "pointerdown",
+          handlePointerDown,
+        );
+        elementRef.current.removeEventListener("pointerup", handlePointerUp);
+        elementRef.current.removeEventListener(
+          "pointercancel",
+          handlePointerCancel,
         );
       }
 
       elementRef.current = element;
 
-      // Add listeners to new element
       if (element && enabled) {
-        element.addEventListener("touchstart", handleTouchStart, {
-          passive: true,
-        });
-        element.addEventListener("touchend", handleTouchEnd, { passive: true });
-        element.addEventListener("touchcancel", handleTouchCancel, {
-          passive: true,
-        });
+        // Pointer events are passive by default unless preventDefault() is
+        // called; we don't, so listeners stay cheap and don't block scroll.
+        element.addEventListener("pointerdown", handlePointerDown);
+        element.addEventListener("pointerup", handlePointerUp);
+        element.addEventListener("pointercancel", handlePointerCancel);
       }
     },
-    [enabled, handleTouchStart, handleTouchEnd, handleTouchCancel],
+    [enabled, handlePointerDown, handlePointerUp, handlePointerCancel],
   );
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (elementRef.current) {
-        elementRef.current.removeEventListener("touchstart", handleTouchStart);
-        elementRef.current.removeEventListener("touchend", handleTouchEnd);
         elementRef.current.removeEventListener(
-          "touchcancel",
-          handleTouchCancel,
+          "pointerdown",
+          handlePointerDown,
+        );
+        elementRef.current.removeEventListener("pointerup", handlePointerUp);
+        elementRef.current.removeEventListener(
+          "pointercancel",
+          handlePointerCancel,
         );
       }
     };
-  }, [handleTouchStart, handleTouchEnd, handleTouchCancel]);
+  }, [handlePointerDown, handlePointerUp, handlePointerCancel]);
 
   return { touchRef: setRef };
 }
