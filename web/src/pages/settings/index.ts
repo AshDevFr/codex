@@ -1,5 +1,6 @@
 export { BooksInErrorSettings } from "./BooksInErrorSettings";
 export { CleanupSettings } from "./CleanupSettings";
+export { DownloadsSettings } from "./DownloadsSettings";
 export { DuplicatesSettings } from "./DuplicatesSettings";
 export { IntegrationsSettings } from "./IntegrationsSettings";
 export { MetricsSettings } from "./MetricsSettings";

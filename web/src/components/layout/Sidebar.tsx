@@ -19,6 +19,7 @@ import {
   IconBrush,
   IconChartBar,
   IconClipboardList,
+  IconCloudDownload,
   IconCopy,
   IconDatabase,
   IconDotsVertical,
@@ -758,6 +759,14 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
                 </>
               )}
 
+              <NavLink
+                component={Link}
+                to="/settings/downloads"
+                label="Offline Downloads"
+                leftSection={<IconCloudDownload size={16} />}
+                active={currentPath.startsWith("/settings/downloads")}
+                onClick={onNavigate}
+              />
               <NavLink
                 component={Link}
                 to="/settings/integrations"

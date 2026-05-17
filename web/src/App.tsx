@@ -29,6 +29,7 @@ import { Setup } from "@/pages/Setup";
 import {
   BooksInErrorSettings,
   CleanupSettings,
+  DownloadsSettings,
   DuplicatesSettings,
   IntegrationsSettings,
   MetricsSettings,
@@ -439,6 +440,17 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <ReleaseTrackingSettings />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/settings/downloads"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <DownloadsSettings />
               </AppLayout>
             </ProtectedRoute>
           }

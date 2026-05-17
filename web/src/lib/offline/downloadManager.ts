@@ -78,6 +78,80 @@ function bookPageUrl(bookId: string, pageNumber: number): string {
   return `/api/v1/books/${bookId}/pages/${pageNumber}`;
 }
 
+// -- Storage persistence (T9) --------------------------------------------
+
+/**
+ * Result of `navigator.storage.persist()` for the current session.
+ *
+ * - `null`: not yet attempted (no successful download in this session, or
+ *   the StorageManager API is not available).
+ * - `true`: persist was granted; the browser will not evict our data under
+ *   ordinary storage pressure.
+ * - `false`: persist was denied (typical for non-installed PWAs on Safari
+ *   and for tabs that have not built up enough engagement on Chromium).
+ */
+export type StoragePersistence = boolean | null;
+
+let cachedPersistResult: StoragePersistence = null;
+let persistInFlight: Promise<StoragePersistence> | null = null;
+
+/**
+ * Returns the cached `navigator.storage.persist()` result without making a
+ * new request. Used by the Downloads page (T7) to render the durability
+ * indicator without forcing a re-prompt.
+ */
+export function getStoragePersistence(): StoragePersistence {
+  return cachedPersistResult;
+}
+
+/**
+ * Requests persistent storage if it has not been requested this session.
+ * Idempotent: subsequent calls return the cached result without re-asking
+ * the browser. Falls through silently in environments without the
+ * StorageManager API (older Safari, jsdom without injection).
+ *
+ * Exposed primarily so the Downloads page (T7) can opportunistically
+ * trigger the prompt when a user lands there, even if they haven't
+ * downloaded anything yet. The download flows below also call this after
+ * each successful completion.
+ */
+export async function requestStoragePersistence(
+  storage?: StorageManager,
+): Promise<StoragePersistence> {
+  if (cachedPersistResult !== null) return cachedPersistResult;
+  if (persistInFlight) return persistInFlight;
+
+  const storageManager = storage ?? globalThis.navigator?.storage;
+  if (!storageManager || typeof storageManager.persist !== "function") {
+    return null;
+  }
+
+  persistInFlight = (async () => {
+    try {
+      const granted = await storageManager.persist();
+      cachedPersistResult = granted;
+      return granted;
+    } catch {
+      // Some browsers reject persist() under restricted contexts; treat
+      // that as "not granted" rather than letting it propagate.
+      cachedPersistResult = false;
+      return false;
+    } finally {
+      persistInFlight = null;
+    }
+  })();
+
+  return persistInFlight;
+}
+
+/**
+ * Reset the cached persist result. Test-only.
+ */
+export function _resetPersistenceForTests(): void {
+  cachedPersistResult = null;
+  persistInFlight = null;
+}
+
 export async function downloadSingleFileBook(
   options: SingleFileDownloadOptions,
 ): Promise<DownloadResult> {
@@ -175,6 +249,8 @@ export async function downloadSingleFileBook(
   };
   await putDownload(completeRecord);
   broadcastDownloadsChange({ kind: "put", record: completeRecord });
+  // T9: request persistent storage once per session, opportunistically.
+  void requestStoragePersistence();
 
   return { bookId, bytes: loaded };
 }
@@ -316,6 +392,8 @@ export async function downloadComicBook(
   };
   await putDownload(completeRecord);
   broadcastDownloadsChange({ kind: "put", record: completeRecord });
+  // T9: request persistent storage once per session, opportunistically.
+  void requestStoragePersistence();
 
   return { bookId, bytes: totalBytes };
 }
