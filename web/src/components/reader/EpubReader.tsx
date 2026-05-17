@@ -38,13 +38,12 @@ import {
   EpubTableOfContentsDrawer,
   EpubTableOfContentsTrigger,
 } from "./EpubTableOfContents";
-import { classifyTapZone } from "./hooks/swipeGesture";
+import { classifyTapZone, isTap } from "./hooks/swipeGesture";
 import { useAdjacentBooks } from "./hooks/useAdjacentBooks";
 import { useBoundaryNotification } from "./hooks/useBoundaryNotification";
 import { useEpubBookmarks } from "./hooks/useEpubBookmarks";
 import { useEpubProgress } from "./hooks/useEpubProgress";
 import { useSeriesNavigation } from "./hooks/useSeriesNavigation";
-import { useTouchNav } from "./hooks/useTouchNav";
 import { MobileReaderBottomBar } from "./MobileReaderBottomBar";
 import { ReaderFirstRunHint } from "./ReaderFirstRunHint";
 import { ReaderToolbar } from "./ReaderToolbar";
@@ -141,12 +140,28 @@ function getReaderStyles(
   const themeColors = EPUB_THEMES[theme] ?? EPUB_THEMES.light;
   const isDark = theme === "dark" || theme === "slate";
 
+  // react-reader's default `reader` style hard-codes 50px L/R/T and 20px
+  // bottom insets around the EpubView (for its built-in title area and
+  // chevron arrows). Those add fixed margin on top of whatever body padding
+  // we set via `themes.override("padding", ...)`, so "None" (0%) still left
+  // a visible gutter. Zero them out so the user's margin slider is the sole
+  // source of margin. On desktop we keep a small inset so the side chevron
+  // arrows don't overlap edge text at margin=0; on mobile arrows are hidden
+  // so we go fully edge-to-edge.
+  const sideInset = isMobile ? 0 : 40;
   return {
     ...ReactReaderStyle,
     readerArea: {
       ...ReactReaderStyle.readerArea,
       backgroundColor: themeColors.body.background,
       transition: undefined,
+    },
+    reader: {
+      ...ReactReaderStyle.reader,
+      top: 0,
+      bottom: 0,
+      left: sideInset,
+      right: sideInset,
     },
     arrow: {
       ...ReactReaderStyle.arrow,
@@ -662,41 +677,116 @@ export function EpubReader({
       saveLocationRef.current(cfi, percentage, fullHref);
     });
 
-    // R10-1: bind tap handlers *inside* the iframe document. The outer
-    // `useTouchNav` listeners can't see touches that land inside the
-    // epub.js iframe — they don't bubble across the iframe boundary.
-    // `rendition.hooks.content` fires once per chapter document so we
-    // re-attach on every navigation.
+    // Neutralize the "position: absolute; left: -999em" sr-only pattern
+    // (Standard Ebooks ships this on hidden titlepage/imprint/colophon
+    // headings for AT and old-reader compatibility). epub.js sizes each
+    // section's iframe to fit a `Range.getBoundingClientRect()` measurement
+    // of the body's contents; that rect includes the offscreen heading, so
+    // a 1-column section ends up rendered as 19–25 columns of blank space
+    // and `rendition.next()` just scrolls one empty column at a time
+    // instead of advancing chapters. Replace the offset hide with the
+    // modern clip-based hide which keeps the text in the DOM for screen
+    // readers without inflating the document's bounding box.
+    rendition.hooks.content.register((contents: { document: Document }) => {
+      const doc = contents.document;
+      if (!doc?.head) return;
+      const style = doc.createElement("style");
+      style.textContent = `
+        section[epub\\:type~="titlepage"] h1,
+        section[epub\\:type~="titlepage"] p,
+        section[epub\\:type~="colophon"] h2,
+        section[epub\\:type~="imprint"] h2,
+        section[class*="epub-type-contains-word-titlepage"] h1,
+        section[class*="epub-type-contains-word-titlepage"] p,
+        section[class*="epub-type-contains-word-colophon"] h2,
+        section[class*="epub-type-contains-word-imprint"] h2 {
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 1px !important;
+          height: 1px !important;
+          margin: -1px !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+          clip: rect(0, 0, 0, 0) !important;
+          clip-path: inset(50%) !important;
+          white-space: nowrap !important;
+          border: 0 !important;
+        }
+      `;
+      doc.head.appendChild(style);
+    });
+
+    // R10-1: bind tap pointer events *inside* the iframe document. This
+    // is the sole authority for taps — the outer container deliberately
+    // has no useTouchNav listener so the same tap never gets classified
+    // twice.
     //
-    // We use `click` rather than pointerup as the authoritative tap
-    // event: on iOS Safari (especially in PWA standalone mode) pointerup
-    // inside an iframe sometimes fires with stale clientX coordinates,
-    // pushing what felt like a center tap into an edge third. `click`
-    // is synthesized by WebKit only after the browser has confirmed the
-    // gesture is a tap (drags / scrolls don't fire it), and reports
-    // accurate viewport-relative coordinates.
+    // Why this looks elaborate:
+    //   - `click` doesn't work: iOS Safari suppresses it inside sandboxed
+    //     iframes (epub.js sets sandbox="allow-same-origin"), which lost
+    //     navigation entirely in real-device testing.
+    //   - Plain `doc.addEventListener("pointerup", ...)` doesn't work
+    //     either: iOS Safari intermittently doesn't bubble pointer
+    //     events to `document` for taps that land on text nodes
+    //     (it's arbitrating against the long-press selection gesture).
+    //     The handler ends up firing for some taps and not others.
+    //   - We attach on **both** `doc` and `doc.documentElement`, with
+    //     `pointerdown` in the capture phase. documentElement catches
+    //     events one node lower in the tree, capture fires before any
+    //     child handler can stop propagation. The handler self-guards
+    //     on `pointerId` so the second delivery is a no-op when both
+    //     listeners do fire.
+    //   - `-webkit-touch-callout: none` on the iframe body keeps iOS's
+    //     selection arbitration from holding short taps.
+    //
+    // Tap zone math: `event.clientX` inside the iframe is iframe-local,
+    // and epub.js sizes each section's iframe to the FULL multi-column
+    // content width (e.g. 2700 for a 2-column chapter), then scrolls the
+    // wrapper to reveal one column at a time. So clientX on the visible
+    // page is in [scrollLeft, scrollLeft + viewport]. Comparing it
+    // directly against `window.innerWidth` (the parent viewport) put any
+    // tap on column 2 past the "next" threshold — taps on the LEFT side
+    // of column 2 would still register as next and cycle the user back
+    // and forth between two pages. Convert to parent-viewport coords by
+    // adding `frameElement.getBoundingClientRect().left` (negative once
+    // the iframe is scrolled off to the left).
     rendition.hooks.content.register((contents: { document: Document }) => {
       const doc = contents.document;
       if (!doc) return;
 
-      // `touch-action: manipulation` on the iframe body tells WebKit it can
-      // skip the 300 ms double-tap-zoom delay before firing `click`, so
-      // page-turn taps feel instant. Without this hint, mobile Safari can
-      // briefly render the next page, wait out the delay, then re-render —
-      // looking like a flicker to the user.
       if (doc.body) {
         doc.body.style.touchAction = "manipulation";
+        doc.body.style.setProperty("-webkit-touch-callout", "none");
       }
 
-      const onClick = (event: MouseEvent) => {
-        if (event.button !== 0) return;
+      let pointerId: number | null = null;
+      let startX = 0;
+      let startY = 0;
+
+      const onPointerDown = (event: PointerEvent) => {
+        if (!event.isPrimary) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
         const target = event.target as Element | null;
-        // Don't intercept clicks on interactive elements — epub.js's own
+        // Don't intercept taps on interactive elements — epub.js's own
         // link handler needs to see them, and form controls need their
         // default behavior.
         if (target?.closest("a, button, input, textarea, select, label")) {
+          pointerId = null;
           return;
         }
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+      };
+
+      const onPointerUp = (event: PointerEvent) => {
+        if (pointerId === null || event.pointerId !== pointerId) return;
+        const deltaX = event.clientX - startX;
+        const deltaY = event.clientY - startY;
+        pointerId = null;
+
+        if (!isTap(deltaX, deltaY)) return;
 
         // Prefer the EPUB's metadata-declared direction (e.g. manga marked
         // RTL by the publisher) and fall back to the user's reader setting.
@@ -708,19 +798,14 @@ export function EpubReader({
         const readingDirection =
           metadataDirection === "rtl" ? "rtl" : readingDirectionRef.current;
 
-        // Use the *parent* window's viewport size as the source of truth.
-        // epub.js renders the iframe at full window width, and on some iOS
-        // builds `doc.defaultView.innerWidth` (and documentElement.clientWidth)
-        // can momentarily report the multi-column body width during a page
-        // transition, sliding every "center" tap into an edge third. The
-        // parent window is immune to that since it has no CSS columns.
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        const frameRect = event.view?.frameElement?.getBoundingClientRect();
+        const viewportX = event.clientX + (frameRect?.left ?? 0);
+        const viewportY = event.clientY + (frameRect?.top ?? 0);
         const zone = classifyTapZone(
-          event.clientX,
-          event.clientY,
-          width,
-          height,
+          viewportX,
+          viewportY,
+          window.innerWidth,
+          window.innerHeight,
           { readingDirection },
         );
         if (zone === "center") {
@@ -732,7 +817,16 @@ export function EpubReader({
         }
       };
 
-      doc.addEventListener("click", onClick);
+      const onPointerCancel = (event: PointerEvent) => {
+        if (pointerId === event.pointerId) pointerId = null;
+      };
+
+      doc.documentElement.addEventListener("pointerdown", onPointerDown, true);
+      doc.documentElement.addEventListener("pointerup", onPointerUp);
+      doc.documentElement.addEventListener("pointercancel", onPointerCancel);
+      doc.addEventListener("pointerdown", onPointerDown, true);
+      doc.addEventListener("pointerup", onPointerUp);
+      doc.addEventListener("pointercancel", onPointerCancel);
     });
   }, []);
 
@@ -862,11 +956,10 @@ export function EpubReader({
     renditionRef.current?.display(cfi);
   }, []);
 
-  // R7-1: tap-to-toggle toolbar on the outer container. Most touches happen
-  // inside the epub.js iframe and never reach these listeners (handled by
-  // the rendition `click` handler in `handleGetRendition`); this covers the
-  // margin areas above/below the iframe and lets swipes here drive page nav.
-  // Listeners are passive so they don't interfere with epub.js's own gestures.
+  // Page navigation handlers for the bottom mobile bar's prev / next
+  // buttons (the iframe-internal tap handler in handleGetRendition is the
+  // primary path for touch). Kept as named callbacks so the bar's onClick
+  // identities are stable.
   const handleNextPage = useCallback(() => {
     renditionRef.current?.next();
   }, []);
@@ -896,13 +989,6 @@ export function EpubReader({
     // resolving between chapter boundaries.
     return { currentIndex: Math.max(1, index + 1), total: toc.length };
   }, [toc, currentHref]);
-
-  const { touchRef } = useTouchNav({
-    enabled: !settingsOpened && !tocOpened && !bookmarksOpened && !searchOpened,
-    onNextPage: handleNextPage,
-    onPrevPage: handlePrevPage,
-    onTap: toggleToolbar,
-  });
 
   // Keyboard navigation
   // Note: Arrow key navigation is handled by ReactReader/epub.js internally via the iframe,
@@ -1047,16 +1133,16 @@ export function EpubReader({
     return theme.body.background;
   };
 
-  // Combined ref callback: keep `containerRef` for fullscreen handling and
-  // attach the useTouchNav listeners (R7-1) on the same outer container.
-  const setContainerRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current =
-        element;
-      touchRef(element);
-    },
-    [touchRef],
-  );
+  // Plain ref callback — kept for fullscreen handling. There's no
+  // outer-container touch listener: taps inside the EPUB are owned by the
+  // inside-iframe handler in handleGetRendition, and adding a second
+  // handler here would race with it on real iOS (iframe events leaking
+  // into the parent dispatcher cause the same tap to be classified
+  // twice).
+  const setContainerRef = useCallback((element: HTMLDivElement | null) => {
+    (containerRef as React.MutableRefObject<HTMLDivElement | null>).current =
+      element;
+  }, []);
 
   return (
     <Box
