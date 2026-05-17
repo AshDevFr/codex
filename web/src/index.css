@@ -23,11 +23,26 @@ body {
    and bottom bar already apply their own safe-area padding (see Phase 3),
    so they remain immersive. */
 @media (display-mode: standalone) {
+  /* Grow the header to include the status-bar inset visually, AND push
+     Mantine's main + navbar offset variable so the page content (Home
+     title, Series/Book breadcrumbs, etc.) slides below the now-taller
+     header instead of being clipped underneath it. Mantine reads
+     --app-shell-header-offset to size .mantine-AppShell-main's padding-top
+     and .mantine-AppShell-navbar's top. */
+  .mantine-AppShell-root {
+    --app-shell-header-offset: calc(
+      var(--app-shell-header-height, 64px) +
+      env(safe-area-inset-top, 0px)
+    );
+  }
   .mantine-AppShell-header {
     padding-top: env(safe-area-inset-top, 0px);
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
-    height: calc(64px + env(safe-area-inset-top, 0px));
+    height: calc(
+      var(--app-shell-header-height, 64px) +
+      env(safe-area-inset-top, 0px)
+    );
   }
   .mantine-AppShell-navbar {
     padding-top: env(safe-area-inset-top, 0px);
@@ -46,6 +61,15 @@ body {
       var(--app-shell-padding, 1rem) +
       env(safe-area-inset-bottom, 0px)
     );
+  }
+
+  /* Mantine Drawer renders as a fixed overlay covering the full viewport
+     (used for the EPUB Table of Contents and the mobile search sheet). Its
+     internal header sits at top: 0, which puts the title under the iOS
+     status bar in PWA mode. Pad the inner content area down by the
+     status-bar inset so titles like "Table of Contents" stay readable. */
+  .mantine-Drawer-content {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }
 

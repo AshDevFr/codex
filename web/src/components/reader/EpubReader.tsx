@@ -720,12 +720,27 @@ export function EpubReader({
             // Classify by zone so a center tap reveals the toolbar while
             // edge taps page forward/back, matching the outer-container
             // useTouchNav behavior (left/center/right for horizontal flow,
-            // top/center/bottom for TTB). Use the iframe's viewport because
-            // pointer coords are relative to the iframe document.
+            // top/center/bottom for TTB). Use the iframe element's bounding
+            // rect (taken from the parent document) as the source of truth
+            // for the visible viewport: in epub.js paginated mode the body
+            // uses CSS columns to lay out multiple pages side-by-side, and
+            // `doc.documentElement.clientWidth` (and on some iOS WebKit
+            // builds, `defaultView.innerWidth` too) can return the full
+            // multi-column content width instead of the single visible page.
+            // That would slide every "center" tap into an edge third and
+            // make the toolbar appear to never open. The iframe element
+            // itself is sized to one visible page, so its rect is reliable.
             const view = doc.defaultView;
-            const width = view?.innerWidth ?? doc.documentElement.clientWidth;
+            const frameElement = view?.frameElement as HTMLElement | null;
+            const frameRect = frameElement?.getBoundingClientRect();
+            const width =
+              frameRect?.width ||
+              view?.innerWidth ||
+              doc.documentElement.clientWidth;
             const height =
-              view?.innerHeight ?? doc.documentElement.clientHeight;
+              frameRect?.height ||
+              view?.innerHeight ||
+              doc.documentElement.clientHeight;
             const zone = classifyTapZone(
               event.clientX,
               event.clientY,

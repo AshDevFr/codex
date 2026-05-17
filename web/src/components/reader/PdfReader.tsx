@@ -646,20 +646,25 @@ export function PdfReader({
     [bgColor],
   );
 
-  // Page container style
+  // Page container style.
+  // When the toolbar is hidden (immersive mode), the page can slide under
+  // the iOS status bar in PWA standalone mode. The toolbar itself already
+  // pads for safe-area-inset-top, so when it's visible we use 64px; when
+  // it's hidden, fall back to env(safe-area-inset-top) so PDFs in
+  // notch-displays still center within the visible viewport.
   const pageContainerStyle: CSSProperties = useMemo(
     () => ({
       position: "absolute",
-      top: toolbarVisible ? 64 : 0,
+      top: toolbarVisible ? 64 : "env(safe-area-inset-top, 0px)",
       left: 0,
       right: 0,
-      bottom: 0,
+      bottom: toolbarVisible ? 0 : "env(safe-area-inset-bottom, 0px)",
       overflow: "auto",
       display: "flex",
       justifyContent: "center",
       alignItems: "flex-start",
       padding: "20px",
-      transition: "top 0.2s ease-in-out",
+      transition: "top 0.2s ease-in-out, bottom 0.2s ease-in-out",
     }),
     [toolbarVisible],
   );
@@ -762,11 +767,11 @@ export function PdfReader({
         <Box
           style={{
             position: "absolute",
-            top: toolbarVisible ? 64 : 0,
+            top: toolbarVisible ? 64 : "env(safe-area-inset-top, 0px)",
             left: 0,
             right: 0,
-            bottom: 0,
-            transition: "top 0.2s ease-in-out",
+            bottom: toolbarVisible ? 0 : "env(safe-area-inset-bottom, 0px)",
+            transition: "top 0.2s ease-in-out, bottom 0.2s ease-in-out",
           }}
         >
           <PdfContinuousScrollReader

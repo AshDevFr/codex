@@ -60,26 +60,42 @@ describe("DownloadButton: format support", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("renders a download icon for epub", async () => {
+  it("renders a download menu trigger for epub", async () => {
     renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
     expect(
-      await screen.findByRole("button", { name: /save for offline/i }),
+      await screen.findByRole("button", { name: /^download options$/i }),
     ).toBeInTheDocument();
   });
 
-  it("renders a download icon for pdf", async () => {
+  it("renders a download menu trigger for pdf", async () => {
     renderWithProviders(<DownloadButton bookId="book-1" fileFormat="pdf" />);
     expect(
-      await screen.findByRole("button", { name: /save for offline/i }),
+      await screen.findByRole("button", { name: /^download options$/i }),
     ).toBeInTheDocument();
   });
 
-  it("renders a download icon for cbz when pageCount is provided", async () => {
+  it("renders a download menu trigger for cbz when pageCount is provided", async () => {
     renderWithProviders(
       <DownloadButton bookId="book-cbz" fileFormat="cbz" pageCount={20} />,
     );
     expect(
-      await screen.findByRole("button", { name: /save for offline/i }),
+      await screen.findByRole("button", { name: /^download options$/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("still renders when only a fileDownloadUrl is provided for an unsupported format", async () => {
+    // mobi can't be cached for offline reading, but the file URL is still
+    // surfaced as a "Download file" menu item so the user has a path to
+    // export the file.
+    renderWithProviders(
+      <DownloadButton
+        bookId="book-x"
+        fileFormat="mobi"
+        fileDownloadUrl="/api/v1/books/book-x/file"
+      />,
+    );
+    expect(
+      await screen.findByRole("button", { name: /^download options$/i }),
     ).toBeInTheDocument();
   });
 });
@@ -113,7 +129,9 @@ describe("DownloadButton: hydration from IDB", () => {
     });
     renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
     expect(
-      await screen.findByRole("button", { name: /retry download/i }),
+      await screen.findByRole("button", {
+        name: /download options \(retry available\)/i,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -135,131 +153,161 @@ describe("DownloadButton: hydration from IDB", () => {
   });
 });
 
-describe("DownloadButton: download trigger and progress", () => {
-  it("invokes downloadSingleFileBook and forwards progress to the ring", async () => {
-    let progressCallback:
-      | ((p: { loaded: number; total: number | null }) => void)
-      | undefined;
+// Each menuitem interaction can wait up to 5s for Mantine's portal+transition
+// under heavy parallel test load, and these tests chain two menu round-trips
+// (open → menuitem → cancel). Bump the per-test timeout so the chained waits
+// fit comfortably within a single test budget.
+describe(
+  "DownloadButton: download trigger and progress",
+  { timeout: 20000 },
+  () => {
+    it("invokes downloadSingleFileBook and forwards progress to the ring", async () => {
+      let progressCallback:
+        | ((p: { loaded: number; total: number | null }) => void)
+        | undefined;
 
-    stubDownload(async (opts) => {
-      progressCallback = opts.onProgress;
-      progressCallback?.({ loaded: 50, total: 100 });
-      progressCallback?.({ loaded: 100, total: 100 });
-      // Simulate the manager's final IDB write + broadcast so the listener
-      // can flip to "downloaded".
-      const complete: DownloadRecord = {
-        id: opts.bookId,
-        format: "epub",
-        status: "complete",
-        bytes: 100,
-        pageCount: 1,
-        downloadedAt: 1,
-      };
-      await putDownload(complete);
-      broadcastDownloadsChange({ kind: "put", record: complete });
-      return { bookId: opts.bookId, bytes: 100 };
-    });
-
-    renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
-
-    const trigger = await screen.findByRole("button", {
-      name: /save for offline/i,
-    });
-    await userEvent.click(trigger);
-
-    expect(downloadSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ bookId: "book-1", format: "epub" }),
-    );
-
-    // After completion the broadcast flips the UI to the downloaded state.
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /offline download options/i }),
-      ).toBeInTheDocument();
-    });
-  });
-
-  it("dispatches to downloadComicBook for cbz with pageCount", async () => {
-    const comicSpy = vi
-      .spyOn(downloadManagerModule, "downloadComicBook")
-      .mockImplementation(async (opts) => {
-        opts.onProgress?.({ loaded: opts.pageCount, total: opts.pageCount });
+      stubDownload(async (opts) => {
+        progressCallback = opts.onProgress;
+        progressCallback?.({ loaded: 50, total: 100 });
+        progressCallback?.({ loaded: 100, total: 100 });
+        // Simulate the manager's final IDB write + broadcast so the listener
+        // can flip to "downloaded".
         const complete: DownloadRecord = {
           id: opts.bookId,
-          format: "cbz",
+          format: "epub",
           status: "complete",
-          bytes: opts.pageCount,
-          pageCount: opts.pageCount,
+          bytes: 100,
+          pageCount: 1,
           downloadedAt: 1,
         };
         await putDownload(complete);
         broadcastDownloadsChange({ kind: "put", record: complete });
-        return { bookId: opts.bookId, bytes: opts.pageCount };
+        return { bookId: opts.bookId, bytes: 100 };
       });
 
-    try {
-      renderWithProviders(
-        <DownloadButton bookId="book-cbz" fileFormat="cbz" pageCount={12} />,
-      );
+      renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
+
       const trigger = await screen.findByRole("button", {
-        name: /save for offline/i,
+        name: /^download options$/i,
       });
       await userEvent.click(trigger);
-
-      expect(comicSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          bookId: "book-cbz",
-          format: "cbz",
-          pageCount: 12,
-        }),
+      // The menu lives in a Mantine portal with a brief transition; under
+      // heavy test load the default 1000ms timeout can flake. Bump it so we
+      // catch the dropdown reliably.
+      const startItem = await screen.findByRole(
+        "menuitem",
+        { name: /save for offline/i },
+        { timeout: 5000 },
       );
+      await userEvent.click(startItem);
+
+      expect(downloadSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ bookId: "book-1", format: "epub" }),
+      );
+
+      // After completion the broadcast flips the UI to the downloaded state.
       await waitFor(() => {
         expect(
           screen.getByRole("button", { name: /offline download options/i }),
         ).toBeInTheDocument();
       });
-    } finally {
-      comicSpy.mockRestore();
-    }
-  });
+    });
 
-  it("calls AbortController.abort when the user clicks cancel", async () => {
-    let receivedSignal: AbortSignal | undefined;
-    let resolveDownload: (() => void) | null = null;
+    it("dispatches to downloadComicBook for cbz with pageCount", async () => {
+      const comicSpy = vi
+        .spyOn(downloadManagerModule, "downloadComicBook")
+        .mockImplementation(async (opts) => {
+          opts.onProgress?.({ loaded: opts.pageCount, total: opts.pageCount });
+          const complete: DownloadRecord = {
+            id: opts.bookId,
+            format: "cbz",
+            status: "complete",
+            bytes: opts.pageCount,
+            pageCount: opts.pageCount,
+            downloadedAt: 1,
+          };
+          await putDownload(complete);
+          broadcastDownloadsChange({ kind: "put", record: complete });
+          return { bookId: opts.bookId, bytes: opts.pageCount };
+        });
 
-    stubDownload(async (opts) => {
-      receivedSignal = opts.signal;
-      // Block on a manual resolve so the test can simulate "still in flight".
-      await new Promise<void>((res) => {
-        resolveDownload = res;
+      try {
+        renderWithProviders(
+          <DownloadButton bookId="book-cbz" fileFormat="cbz" pageCount={12} />,
+        );
+        const trigger = await screen.findByRole("button", {
+          name: /^download options$/i,
+        });
+        await userEvent.click(trigger);
+        const startItem = await screen.findByRole("menuitem", {
+          name: /save for offline/i,
+        });
+        await userEvent.click(startItem);
+
+        expect(comicSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            bookId: "book-cbz",
+            format: "cbz",
+            pageCount: 12,
+          }),
+        );
+        await waitFor(() => {
+          expect(
+            screen.getByRole("button", { name: /offline download options/i }),
+          ).toBeInTheDocument();
+        });
+      } finally {
+        comicSpy.mockRestore();
+      }
+    });
+
+    it("calls AbortController.abort when the user clicks cancel", async () => {
+      let receivedSignal: AbortSignal | undefined;
+      let resolveDownload: (() => void) | null = null;
+
+      stubDownload(async (opts) => {
+        receivedSignal = opts.signal;
+        // Block on a manual resolve so the test can simulate "still in flight".
+        await new Promise<void>((res) => {
+          resolveDownload = res;
+        });
+        throw new DOMException("Aborted", "AbortError");
       });
-      throw new DOMException("Aborted", "AbortError");
+
+      renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
+      const trigger = await screen.findByRole("button", {
+        name: /^download options$/i,
+      });
+      await userEvent.click(trigger);
+      // The menu lives in a Mantine portal with a brief transition; under
+      // heavy test load the default 1000ms timeout can flake. Bump it so we
+      // catch the dropdown reliably.
+      const startItem = await screen.findByRole(
+        "menuitem",
+        { name: /save for offline/i },
+        { timeout: 5000 },
+      );
+      await userEvent.click(startItem);
+
+      const cancel = await screen.findByRole("button", {
+        name: /cancel download/i,
+      });
+      await userEvent.click(cancel);
+
+      expect(receivedSignal?.aborted).toBe(true);
+
+      // Unblock the stubbed download so the component's catch runs.
+      resolveDownload?.();
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /^download options$/i }),
+        ).toBeInTheDocument();
+      });
     });
+  },
+);
 
-    renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
-    const trigger = await screen.findByRole("button", {
-      name: /save for offline/i,
-    });
-    await userEvent.click(trigger);
-
-    const cancel = await screen.findByRole("button", {
-      name: /cancel download/i,
-    });
-    await userEvent.click(cancel);
-
-    expect(receivedSignal?.aborted).toBe(true);
-
-    // Unblock the stubbed download so the component's catch runs.
-    resolveDownload?.();
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /save for offline/i }),
-      ).toBeInTheDocument();
-    });
-  });
-});
-
-describe("DownloadButton: remove flow", () => {
+describe("DownloadButton: remove flow", { timeout: 20000 }, () => {
   it("removing deletes the IDB row and resets to not-downloaded", async () => {
     await seed({
       id: "book-1",
@@ -275,14 +323,16 @@ describe("DownloadButton: remove flow", () => {
     });
     await userEvent.click(menuTarget);
 
-    const removeItem = await screen.findByRole("menuitem", {
-      name: /remove offline copy/i,
-    });
+    const removeItem = await screen.findByRole(
+      "menuitem",
+      { name: /remove offline copy/i },
+      { timeout: 5000 },
+    );
     await userEvent.click(removeItem);
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /save for offline/i }),
+        screen.getByRole("button", { name: /^download options$/i }),
       ).toBeInTheDocument();
     });
     expect(await getDownload("book-1")).toBeUndefined();
@@ -293,7 +343,7 @@ describe("DownloadButton: cross-tab broadcast", () => {
   it("flips to downloaded when a put-complete broadcast arrives", async () => {
     renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
     expect(
-      await screen.findByRole("button", { name: /save for offline/i }),
+      await screen.findByRole("button", { name: /^download options$/i }),
     ).toBeInTheDocument();
 
     const record: DownloadRecord = {
@@ -333,7 +383,7 @@ describe("DownloadButton: cross-tab broadcast", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: /save for offline/i }),
+        screen.getByRole("button", { name: /^download options$/i }),
       ).toBeInTheDocument();
     });
   });
@@ -341,7 +391,7 @@ describe("DownloadButton: cross-tab broadcast", () => {
   it("ignores broadcasts for other book ids", async () => {
     renderWithProviders(<DownloadButton bookId="book-1" fileFormat="epub" />);
     expect(
-      await screen.findByRole("button", { name: /save for offline/i }),
+      await screen.findByRole("button", { name: /^download options$/i }),
     ).toBeInTheDocument();
 
     const otherRecord: DownloadRecord = {
@@ -356,7 +406,56 @@ describe("DownloadButton: cross-tab broadcast", () => {
 
     // Should still be in the not-downloaded state.
     expect(
-      screen.getByRole("button", { name: /save for offline/i }),
+      screen.getByRole("button", { name: /^download options$/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("DownloadButton: file URL fallback", { timeout: 20000 }, () => {
+  it("surfaces a 'Download file' menu item when fileDownloadUrl is provided", async () => {
+    renderWithProviders(
+      <DownloadButton
+        bookId="book-1"
+        fileFormat="epub"
+        fileDownloadUrl="/api/v1/books/book-1/file"
+      />,
+    );
+    const trigger = await screen.findByRole("button", {
+      name: /^download options$/i,
+    });
+    await userEvent.click(trigger);
+
+    const fileItem = await screen.findByRole(
+      "menuitem",
+      { name: /download file/i },
+      { timeout: 5000 },
+    );
+    expect(fileItem).toHaveAttribute("href", "/api/v1/books/book-1/file");
+  });
+
+  it("offers 'Download file' even when the format isn't cacheable for offline", async () => {
+    renderWithProviders(
+      <DownloadButton
+        bookId="book-x"
+        fileFormat="mobi"
+        fileDownloadUrl="/api/v1/books/book-x/file"
+      />,
+    );
+    const trigger = await screen.findByRole("button", {
+      name: /^download options$/i,
+    });
+    await userEvent.click(trigger);
+
+    expect(
+      await screen.findByRole(
+        "menuitem",
+        { name: /download file/i },
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument();
+    // No offline-save entry for unsupported formats.
+    expect(
+      screen.queryByRole("menuitem", { name: /save for offline/i }),
+    ).toBeNull();
   });
 });

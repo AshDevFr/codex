@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Group,
+  Menu,
   Modal,
   Progress,
   ScrollArea,
@@ -17,6 +18,7 @@ import {
   IconCheck,
   IconCloudCheck,
   IconCloudDownload,
+  IconDeviceFloppy,
   IconExclamationCircle,
   IconX,
 } from "@tabler/icons-react";
@@ -52,6 +54,14 @@ export interface SeriesDownloadButtonProps {
   books: SeriesBookSummary[];
   /** Optional label for the button. Defaults to "Download series". */
   label?: string;
+  /**
+   * Optional series-archive URL. When provided the dropdown exposes a
+   * "Download as archive" action that links directly to the URL alongside
+   * "Save series for offline". Lets SeriesDetail fold the legacy
+   * `/api/v1/series/:id/download` link into the same control instead of
+   * rendering a second adjacent button.
+   */
+  archiveDownloadUrl?: string;
 }
 
 type Phase =
@@ -109,6 +119,7 @@ export function SeriesDownloadButton({
   seriesId,
   books,
   label = "Download series",
+  archiveDownloadUrl,
 }: SeriesDownloadButtonProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [opened, { open, close }] = useDisclosure(false);
@@ -240,9 +251,13 @@ export function SeriesDownloadButton({
     phase.result.cancelled === 0 &&
     phase.result.completed === supportedCount;
 
-  return (
-    <>
-      <Group gap={6} wrap="nowrap" align="center">
+  // Primary button: when an archive URL is provided, the visible Button
+  // opens a Menu so the user can choose between "Save series for offline"
+  // and "Download as archive". Without the archive URL we just open the
+  // modal directly (legacy single-purpose UX).
+  const primaryButton = archiveDownloadUrl ? (
+    <Menu shadow="md" width={260} position="bottom-start">
+      <Menu.Target>
         <Button
           size="xs"
           variant={allDone ? "light" : "outline"}
@@ -254,11 +269,43 @@ export function SeriesDownloadButton({
               <IconCloudDownload size={14} />
             )
           }
-          onClick={open}
           aria-label={label}
         >
           {label}
         </Button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Item leftSection={<IconCloudDownload size={14} />} onClick={open}>
+          Save series for offline
+        </Menu.Item>
+        <Menu.Item
+          leftSection={<IconDeviceFloppy size={14} />}
+          component="a"
+          href={archiveDownloadUrl}
+        >
+          Download as archive
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  ) : (
+    <Button
+      size="xs"
+      variant={allDone ? "light" : "outline"}
+      color={allDone ? "green" : undefined}
+      leftSection={
+        allDone ? <IconCloudCheck size={14} /> : <IconCloudDownload size={14} />
+      }
+      onClick={open}
+      aria-label={label}
+    >
+      {label}
+    </Button>
+  );
+
+  return (
+    <>
+      <Group gap={6} wrap="nowrap" align="center">
+        {primaryButton}
         {phase.kind === "running" && aggregate && (
           <Tooltip
             label={`Downloading ${aggregate.completed} of ${aggregate.total}`}

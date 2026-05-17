@@ -62,7 +62,10 @@ afterEach(() => {
   downloadSpy = null;
 });
 
-describe("DownloadButton + InstallNudgeModal (T10)", () => {
+// Each test chains a menuitem interaction inside Mantine's portal/transition
+// pipeline; under heavy parallel-test load the menu finder can need a few
+// seconds to settle. Bump the per-test timeout so the chain fits comfortably.
+describe("DownloadButton + InstallNudgeModal (T10)", { timeout: 20000 }, () => {
   it("shows the nudge on first tap from an iOS Safari tab, then downloads after Continue", async () => {
     setIosUserAgent();
     downloadSpy = vi
@@ -71,9 +74,16 @@ describe("DownloadButton + InstallNudgeModal (T10)", () => {
 
     renderWithProviders(<DownloadButton bookId="book-ios" fileFormat="epub" />);
     const trigger = await screen.findByRole("button", {
-      name: /save for offline/i,
+      name: /^download options$/i,
     });
     await userEvent.click(trigger);
+    await userEvent.click(
+      await screen.findByRole(
+        "menuitem",
+        { name: /save for offline/i },
+        { timeout: 5000 },
+      ),
+    );
 
     // Modal appears with the iOS-specific copy.
     expect(
@@ -107,7 +117,14 @@ describe("DownloadButton + InstallNudgeModal (T10)", () => {
       <DownloadButton bookId="book-ios-2" fileFormat="epub" />,
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /save for offline/i }),
+      await screen.findByRole("button", { name: /^download options$/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole(
+        "menuitem",
+        { name: /save for offline/i },
+        { timeout: 5000 },
+      ),
     );
 
     await waitFor(() => {
@@ -128,7 +145,14 @@ describe("DownloadButton + InstallNudgeModal (T10)", () => {
       <DownloadButton bookId="book-desktop" fileFormat="epub" />,
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /save for offline/i }),
+      await screen.findByRole("button", { name: /^download options$/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole(
+        "menuitem",
+        { name: /save for offline/i },
+        { timeout: 5000 },
+      ),
     );
 
     await waitFor(() => {
