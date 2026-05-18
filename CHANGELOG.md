@@ -2,6 +2,45 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.22.0] - 2026-05-18
+
+### 🚀 Features
+
+- *(mobile)* Foundation pass — xs breakpoint, drawer auto-close, overflow fixes
+- *(mobile)* Full-screen search sheet below the xs breakpoint
+- *(mobile)* Reader polish with overflow menu and bottom navigation bar
+- *(mobile)* Collapse admin tables to mobile-friendly cards below xs
+- *(mobile)* Library toolbar stacking and alphabet jump picker below xs
+- *(mobile)* Add PWA shell with manifest, service worker, install + update prompts
+- *(mobile)* Polish EPUB tap-to-toolbar and PDF default zoom on phones
+- *(mobile)* Polish a11y and visual consistency at the xs breakpoint
+- *(mobile)* Polish reader hints, EPUB chapter cue, banner persistence
+- *(mobile)* Scaffold offline reading with custom service worker and IDB layer
+- *(mobile)* Stream EPUB and PDF downloads into the offline cache
+- *(mobile)* Add offline-download button to book detail
+- *(mobile)* Download comics by page into the offline cache
+- *(mobile)* Add offline downloads page with storage quota and persistence
+- *(mobile)* Queue reading-progress writes when offline and replay on reconnect
+- *(mobile)* Batch series downloads, iOS install nudge, reader prefetch expansion, docs
+
+### 🐛 Bug Fixes
+
+- *(mobile)* Reader real-device regressions (dvh, pointer events, EPUB iframe swipe)
+- *(reader)* Unify tap zones so center always reveals the overlay
+- *(reader)* Unblock mobile swipe and side-tap navigation in PWA
+- *(mobile)* PWA safe-area, reader gestures, and unified Download menu
+- *(reader)* Click-only nav, PDF centering, persistent EPUB TOC
+- *(reader)* Toolbar regressions on iOS PWA and tighten home padding
+- *(reader)* Eliminate flicker and dark midpoint in page transitions
+- *(reader)* Unblock EPUB chapter advance and tap cycling in multi-column sections
+- *(reader)* Vertically center short PDF pages in paginated mode
+- *(mobile)* Guard series aliases query and wrap dotted setting keys
+
+### ⚙️ Miscellaneous Tasks
+
+- *(mobile)* Clean up Vite cruft, guard release facets, mock /releases
+- Remove references to local-only implementation plans
+
 ## [1.21.5] - 2026-05-16
 
 ### 🚀 Features
