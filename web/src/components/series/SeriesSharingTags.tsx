@@ -13,6 +13,7 @@ import { IconEdit, IconShare, IconX } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { sharingTagsApi } from "@/api/sharingTags";
+import { MetadataLabel } from "@/components/common";
 import { useAuthStore } from "@/store/authStore";
 
 interface SeriesSharingTagsProps {
@@ -113,9 +114,7 @@ export function SeriesSharingTags({ seriesId }: SeriesSharingTagsProps) {
   if (isLoading) {
     return (
       <Group gap="md" align="flex-start">
-        <Text size="sm" c="dimmed" w={100}>
-          SHARING
-        </Text>
+        <MetadataLabel>SHARING</MetadataLabel>
         <Loader size="sm" />
       </Group>
     );
@@ -125,9 +124,7 @@ export function SeriesSharingTags({ seriesId }: SeriesSharingTagsProps) {
   if (!allTags || allTags.length === 0) {
     return (
       <Group gap="md" align="flex-start">
-        <Text size="sm" c="dimmed" w={100}>
-          SHARING
-        </Text>
+        <MetadataLabel>SHARING</MetadataLabel>
         <Text size="sm" c="dimmed">
           No sharing tags configured.{" "}
           <Text
@@ -146,9 +143,7 @@ export function SeriesSharingTags({ seriesId }: SeriesSharingTagsProps) {
 
   return (
     <Group gap="md" align="flex-start">
-      <Text size="sm" c="dimmed" w={100}>
-        SHARING
-      </Text>
+      <MetadataLabel>SHARING</MetadataLabel>
       {isEditing ? (
         <Stack gap="xs" style={{ flex: 1 }}>
           <MultiSelect

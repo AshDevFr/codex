@@ -19,6 +19,9 @@
         reduced-motion guard).
      8. Cover + media treatment (layered cover shadow, rounded cover
         corners, hover scale + shadow lift on desktop, image fade-in).
+     9. Typography micro-pass (display-size letter-spacing tightening on
+        desktop, mobile h1 line-height tightening; tabular numerals +
+        SF Pro alternates live on `body` above).
    Surface colors in section 5 reference `var(--mantine-color-body)` /
    `var(--card-bg)` / `var(--app-shell-main-bg)` rather than hardcoded
    hex values so palette tweaks live in theme.ts alone.
@@ -42,6 +45,14 @@ body {
      to track that too — otherwise the body is taller than the reader and
      a black band shows below it. */
   min-height: 100dvh;
+  /* OpenType features Mantine doesn't enable by default.
+       `tnum` — tabular numerals so dates and metric columns line up
+                vertically (Users table timestamps, DownloadsSettings
+                storage quota, etc.). Works in almost every system font.
+       `ss01` / `cv01` — SF Pro stylistic alternates (rounded zero,
+                         single-storey "a"). No-ops outside Apple devices,
+                         so safe to ship globally. */
+  font-feature-settings: "tnum", "ss01", "cv01";
 }
 
 #root {
@@ -146,10 +157,13 @@ body {
   /* Scale down Mantine Title sizes so page headings don't wrap to many lines
      at 390px. Mantine's Title renders an h1–h6 tag and sets font size via the
      `--title-fz` CSS variable; overriding the variable keeps all of Mantine's
-     other typography concerns (weight, line-height defaults) intact. */
+     other typography concerns (weight, line-height defaults) intact.
+     h1 uses a tighter `1.2` line-height to feel less verbose when a long
+     title wraps onto 2-3 lines on a phone (Solo Leveling, Friend in Need,
+     etc.); h2/h3 stay at `1.3` since they usually render single-line. */
   .mantine-Title-root[data-order="1"] {
     --title-fz: 1.5rem;
-    --title-lh: 1.3;
+    --title-lh: 1.2;
   }
   .mantine-Title-root[data-order="2"] {
     --title-fz: 1.25rem;
@@ -730,5 +744,25 @@ body {
      stationary on hover. */
   .media-card-cover:hover {
     transform: none;
+  }
+}
+
+/* ============================================
+   Typography micro-pass (Phase 7)
+   ============================================
+   Display-size letter-spacing tightening for desktop; mobile h1 keeps
+   the default tracking because tightening at 1.5rem (the mobile scale
+   from section 4 above) hurts legibility on phones. Tabular numerals +
+   SF Pro alternates are enabled on `body` (top of this file) so they
+   apply site-wide regardless of viewport. */
+
+/* Negative letter-spacing on h1 at desktop sizes only. Mantine's Title
+   renders h1–h6 with the `--title-fz` CSS variable; the `xs` breakpoint
+   in theme.ts is 30.125em (482px), so the min-width here mirrors the
+   mobile rule's `max-width: 30.0625em` cutoff. iOS-style tight tracking
+   on display sizes only. */
+@media (min-width: 30.125em) {
+  .mantine-Title-root[data-order="1"] {
+    letter-spacing: -0.015em;
   }
 }

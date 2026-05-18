@@ -56,7 +56,7 @@ import {
   BookTypeBadge,
 } from "@/components/book";
 import { BookMetadataEditModal } from "@/components/books/BookMetadataEditModal";
-import { ExternalIdEditModal } from "@/components/common";
+import { ExternalIdEditModal, MetadataLabel } from "@/components/common";
 import { MetadataApplyFlow } from "@/components/metadata";
 import { DownloadButton } from "@/components/offline/DownloadButton";
 import {
@@ -757,25 +757,19 @@ export function BookDetail() {
         <Stack gap="xs">
           {/* File Info */}
           <Group gap="md" align="center">
-            <Text size="sm" c="dimmed" w={100}>
-              SIZE
-            </Text>
+            <MetadataLabel>SIZE</MetadataLabel>
             <Text size="sm">{formatFileSize(book.fileSize)}</Text>
           </Group>
 
           <Group gap="md" align="center">
-            <Text size="sm" c="dimmed" w={100}>
-              PAGES
-            </Text>
+            <MetadataLabel>PAGES</MetadataLabel>
             <Text size="sm">{book.pageCount}</Text>
           </Group>
 
           {/* Publisher */}
           {metadata?.publisher && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                PUBLISHER
-              </Text>
+              <MetadataLabel>PUBLISHER</MetadataLabel>
               <Badge variant="outline" size="sm">
                 {metadata.publisher}
               </Badge>
@@ -785,9 +779,7 @@ export function BookDetail() {
           {/* Imprint */}
           {metadata?.imprint && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                IMPRINT
-              </Text>
+              <MetadataLabel>IMPRINT</MetadataLabel>
               <Badge variant="outline" size="sm">
                 {metadata.imprint}
               </Badge>
@@ -797,9 +789,7 @@ export function BookDetail() {
           {/* Release Year */}
           {releaseYear && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                YEAR
-              </Text>
+              <MetadataLabel>YEAR</MetadataLabel>
               <Text size="sm">{releaseYear}</Text>
             </Group>
           )}
@@ -807,9 +797,7 @@ export function BookDetail() {
           {/* Language */}
           {languageDisplay && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                LANGUAGE
-              </Text>
+              <MetadataLabel>LANGUAGE</MetadataLabel>
               <Text size="sm">{languageDisplay}</Text>
             </Group>
           )}
@@ -817,9 +805,7 @@ export function BookDetail() {
           {/* Genres */}
           {book.genres && book.genres.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                GENRES
-              </Text>
+              <MetadataLabel>GENRES</MetadataLabel>
               <GenreTagChips
                 genres={book.genres}
                 libraryId={book.libraryId}
@@ -831,9 +817,7 @@ export function BookDetail() {
           {/* Tags */}
           {book.tags && book.tags.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                TAGS
-              </Text>
+              <MetadataLabel>TAGS</MetadataLabel>
               <GenreTagChips
                 tags={book.tags}
                 libraryId={book.libraryId}
@@ -845,9 +829,7 @@ export function BookDetail() {
           {/* Subjects */}
           {metadata?.subjects && metadata.subjects.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                SUBJECTS
-              </Text>
+              <MetadataLabel>SUBJECTS</MetadataLabel>
               <GenreTagChips
                 groups={[
                   {
@@ -867,9 +849,7 @@ export function BookDetail() {
           {/* ISBN(s) */}
           {metadata?.isbns && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                ISBN
-              </Text>
+              <MetadataLabel>ISBN</MetadataLabel>
               <Group gap="xs">
                 {metadata.isbns.split(",").map((isbn: string) => (
                   <Badge
@@ -888,9 +868,7 @@ export function BookDetail() {
           {/* Edition */}
           {metadata?.edition && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                EDITION
-              </Text>
+              <MetadataLabel>EDITION</MetadataLabel>
               <Text size="sm">{metadata.edition}</Text>
             </Group>
           )}
@@ -898,9 +876,7 @@ export function BookDetail() {
           {/* Original Title */}
           {metadata?.originalTitle && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                ORIGINAL
-              </Text>
+              <MetadataLabel>ORIGINAL</MetadataLabel>
               <Group gap="xs">
                 <Text size="sm">{metadata.originalTitle}</Text>
                 {metadata.originalYear && (
@@ -915,9 +891,7 @@ export function BookDetail() {
           {/* Translator */}
           {metadata?.translator && (
             <Group gap="md" align="center">
-              <Text size="sm" c="dimmed" w={100}>
-                TRANSLATOR
-              </Text>
+              <MetadataLabel>TRANSLATOR</MetadataLabel>
               <Badge variant="light" size="sm" color="orange">
                 {metadata.translator}
               </Badge>
@@ -927,9 +901,9 @@ export function BookDetail() {
           {/* Authors (from authors_json — all roles unified) */}
           {bookAuthors.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
+              <MetadataLabel>
                 {bookAuthors.length > 1 ? "AUTHORS" : "AUTHOR"}
-              </Text>
+              </MetadataLabel>
               <AuthorsList authors={bookAuthors} showRoles />
             </Group>
           )}
@@ -937,9 +911,7 @@ export function BookDetail() {
           {/* Awards */}
           {metadata?.awards && metadata.awards.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                AWARDS
-              </Text>
+              <MetadataLabel>AWARDS</MetadataLabel>
               <Group gap="xs">
                 {metadata.awards.map((award) => (
                   <Tooltip
@@ -972,9 +944,7 @@ export function BookDetail() {
             typeof metadata.customMetadata === "object" &&
             Object.keys(metadata.customMetadata).length > 0 && (
               <Group gap="md" align="flex-start">
-                <Text size="sm" c="dimmed" w={100}>
-                  CUSTOM
-                </Text>
+                <MetadataLabel>CUSTOM</MetadataLabel>
                 <Group gap="xs">
                   {Object.entries(
                     metadata.customMetadata as Record<string, unknown>,
@@ -996,9 +966,7 @@ export function BookDetail() {
           {/* External Links */}
           {externalLinks && externalLinks.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                LINKS
-              </Text>
+              <MetadataLabel>LINKS</MetadataLabel>
               <ExternalLinks links={externalLinks} />
             </Group>
           )}
@@ -1006,9 +974,7 @@ export function BookDetail() {
           {/* External IDs */}
           {((externalIds && externalIds.length > 0) || canEditBook) && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                EXTERNAL IDS
-              </Text>
+              <MetadataLabel>EXTERNAL IDS</MetadataLabel>
               <BookExternalIds
                 externalIds={externalIds ?? []}
                 onEdit={canEditBook ? openExternalIdModal : undefined}
@@ -1018,9 +984,7 @@ export function BookDetail() {
 
           {/* File Path */}
           <Group gap="md" align="flex-start" wrap="nowrap">
-            <Text size="sm" c="dimmed" w={100} style={{ flexShrink: 0 }}>
-              FILE
-            </Text>
+            <MetadataLabel style={{ flexShrink: 0 }}>FILE</MetadataLabel>
             <Tooltip label={book.filePath} position="top" multiline maw={400}>
               <Text
                 size="sm"
@@ -1037,9 +1001,7 @@ export function BookDetail() {
 
           {/* Hash */}
           <Group gap="md" align="center">
-            <Text size="sm" c="dimmed" w={100}>
-              HASH
-            </Text>
+            <MetadataLabel>HASH</MetadataLabel>
             {isWideScreen ? (
               <Text size="sm">{book.fileHash}</Text>
             ) : (
