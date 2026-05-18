@@ -121,11 +121,18 @@ describe("PdfReaderSettings", () => {
       ).toBeInTheDocument();
     });
 
-    it("should show re-open warning message", () => {
+    it("should not show re-open warning until the user changes the mode", async () => {
+      const user = userEvent.setup();
       renderWithProviders(<PdfReaderSettings {...defaultProps} />);
 
       expect(
-        screen.getByText("Re-open the book after changing to apply"),
+        screen.queryByText("Re-open the book to apply this change"),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("radio", { name: "Streaming" }));
+
+      expect(
+        screen.getByText("Re-open the book to apply this change"),
       ).toBeInTheDocument();
     });
   });
