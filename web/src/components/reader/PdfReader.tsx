@@ -810,131 +810,134 @@ export function PdfReader({
               <Text c="red">{pageError}</Text>
             </Center>
           ) : (
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={handleDocumentLoadSuccess}
-              onLoadError={handleDocumentLoadError}
-              loading={
-                <Center
-                  style={{
-                    width: "100%",
-                    height: "calc(100dvh - 128px)",
-                    backgroundColor: "transparent",
-                  }}
-                >
-                  <Loader size="lg" color="gray" />
-                </Center>
-              }
-            >
-              {/* Wait for container dimensions before rendering pages in fit modes */}
-              {isFitMode && !containerReady ? (
-                <Center
-                  style={{
-                    width: "100%",
-                    height: "calc(100dvh - 128px)",
-                    backgroundColor: "transparent",
-                  }}
-                >
-                  <Loader size="lg" color="gray" />
-                </Center>
-              ) : (
-                <Box
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    gap: pdfSpreadMode !== "single" ? "8px" : "0",
-                    justifyContent: "center",
-                    alignItems: "flex-start",
-                    // `margin: auto` inside the scrolling flex parent centers
-                    // the page vertically when shorter than the viewport,
-                    // and pins to the top (scrolling normally) when taller.
-                    margin: "auto",
-                  }}
-                >
-                  {/* Left page (or single page) */}
-                  {spreadPages.left && (
-                    <Page
-                      pageNumber={spreadPages.left}
-                      {...(pdfSpreadMode === "single" || isSinglePageInSpread
-                        ? pageDimensions
-                        : spreadPageDimensions)}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={true}
-                      onRenderSuccess={handlePageRenderSuccess}
-                      loading={
-                        <Center
-                          style={{
-                            width: 300,
-                            height: 400,
-                            backgroundColor: "transparent",
-                          }}
-                        >
-                          <Loader size="md" color="gray" />
-                        </Center>
-                      }
-                      customTextRenderer={
-                        debouncedSearchText
-                          ? ({ str }) => {
-                              if (!debouncedSearchText) return str;
-                              const regex = new RegExp(
-                                `(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-                                "gi",
-                              );
-                              const parts = str.split(regex);
-                              return parts
-                                .map((part) =>
-                                  regex.test(part)
-                                    ? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
-                                    : part,
-                                )
-                                .join("");
-                            }
-                          : undefined
-                      }
-                    />
-                  )}
-                  {/* Right page (only in spread modes) */}
-                  {spreadPages.right && (
-                    <Page
-                      pageNumber={spreadPages.right}
-                      {...spreadPageDimensions}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={true}
-                      loading={
-                        <Center
-                          style={{
-                            width: 300,
-                            height: 400,
-                            backgroundColor: "transparent",
-                          }}
-                        >
-                          <Loader size="md" color="gray" />
-                        </Center>
-                      }
-                      customTextRenderer={
-                        debouncedSearchText
-                          ? ({ str }) => {
-                              if (!debouncedSearchText) return str;
-                              const regex = new RegExp(
-                                `(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-                                "gi",
-                              );
-                              const parts = str.split(regex);
-                              return parts
-                                .map((part) =>
-                                  regex.test(part)
-                                    ? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
-                                    : part,
-                                )
-                                .join("");
-                            }
-                          : undefined
-                      }
-                    />
-                  )}
-                </Box>
-              )}
-            </Document>
+            // `<Document>` is the direct flex child of the scrolling parent
+            // and renders a content-sized block div with no style prop. Apply
+            // `margin: auto` here so it consumes the cross-axis free space
+            // (centering short pages) while still pinning to the top when
+            // the page is taller than the viewport.
+            <Box style={{ margin: "auto" }}>
+              <Document
+                file={pdfUrl}
+                onLoadSuccess={handleDocumentLoadSuccess}
+                onLoadError={handleDocumentLoadError}
+                loading={
+                  <Center
+                    style={{
+                      width: "100%",
+                      height: "calc(100dvh - 128px)",
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    <Loader size="lg" color="gray" />
+                  </Center>
+                }
+              >
+                {/* Wait for container dimensions before rendering pages in fit modes */}
+                {isFitMode && !containerReady ? (
+                  <Center
+                    style={{
+                      width: "100%",
+                      height: "calc(100dvh - 128px)",
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    <Loader size="lg" color="gray" />
+                  </Center>
+                ) : (
+                  <Box
+                    style={{
+                      display: "flex",
+                      flexDirection: "row",
+                      gap: pdfSpreadMode !== "single" ? "8px" : "0",
+                      justifyContent: "center",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    {/* Left page (or single page) */}
+                    {spreadPages.left && (
+                      <Page
+                        pageNumber={spreadPages.left}
+                        {...(pdfSpreadMode === "single" || isSinglePageInSpread
+                          ? pageDimensions
+                          : spreadPageDimensions)}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                        onRenderSuccess={handlePageRenderSuccess}
+                        loading={
+                          <Center
+                            style={{
+                              width: 300,
+                              height: 400,
+                              backgroundColor: "transparent",
+                            }}
+                          >
+                            <Loader size="md" color="gray" />
+                          </Center>
+                        }
+                        customTextRenderer={
+                          debouncedSearchText
+                            ? ({ str }) => {
+                                if (!debouncedSearchText) return str;
+                                const regex = new RegExp(
+                                  `(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+                                  "gi",
+                                );
+                                const parts = str.split(regex);
+                                return parts
+                                  .map((part) =>
+                                    regex.test(part)
+                                      ? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
+                                      : part,
+                                  )
+                                  .join("");
+                              }
+                            : undefined
+                        }
+                      />
+                    )}
+                    {/* Right page (only in spread modes) */}
+                    {spreadPages.right && (
+                      <Page
+                        pageNumber={spreadPages.right}
+                        {...spreadPageDimensions}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                        loading={
+                          <Center
+                            style={{
+                              width: 300,
+                              height: 400,
+                              backgroundColor: "transparent",
+                            }}
+                          >
+                            <Loader size="md" color="gray" />
+                          </Center>
+                        }
+                        customTextRenderer={
+                          debouncedSearchText
+                            ? ({ str }) => {
+                                if (!debouncedSearchText) return str;
+                                const regex = new RegExp(
+                                  `(${debouncedSearchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+                                  "gi",
+                                );
+                                const parts = str.split(regex);
+                                return parts
+                                  .map((part) =>
+                                    regex.test(part)
+                                      ? `<mark style="background-color: yellow; padding: 0;">${part}</mark>`
+                                      : part,
+                                  )
+                                  .join("");
+                              }
+                            : undefined
+                        }
+                      />
+                    )}
+                  </Box>
+                )}
+              </Document>
+            </Box>
           )}
         </Box>
       )}
