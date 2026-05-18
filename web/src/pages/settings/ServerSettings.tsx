@@ -33,7 +33,7 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   type SettingDto,
   type SettingHistoryDto,
@@ -44,6 +44,28 @@ import { TemplateSelector } from "@/components/forms/TemplateSelector";
 import { MOBILE_MEDIA_QUERY, ResponsiveTable } from "@/components/ui";
 import { brandingQueryKey } from "@/hooks/useAppName";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+
+// Dotted/underscored identifiers like `auth.registration_enabled` have no
+// CSS-recognised break opportunities, so narrow containers (mobile cards)
+// either overflow or break mid-word ("enab\nled"). Insert <wbr/> after every
+// `.` and `_` so the browser prefers to wrap at segment boundaries.
+function formatSettingKey(key: string): React.ReactNode {
+  const segments = key.split(/[._]/);
+  const separators = key.match(/[._]/g) ?? [];
+  return segments.flatMap((segment, i) => {
+    const nodes: React.ReactNode[] = [segment];
+    if (i < separators.length) {
+      const sep = separators[i];
+      nodes.push(
+        <Fragment key={`sep-${i}-${sep}`}>
+          {sep}
+          <wbr />
+        </Fragment>,
+      );
+    }
+    return nodes;
+  });
+}
 
 // Group settings by category
 function groupSettingsByCategory(settings: SettingDto[]) {
@@ -160,7 +182,7 @@ function SettingRow({
     <Table.Tr>
       <Table.Td>
         <Stack gap={2}>
-          <Text fw={500}>{setting.key}</Text>
+          <Text fw={500}>{formatSettingKey(setting.key)}</Text>
           <Text size="xs" c="dimmed">
             {setting.description}
           </Text>
@@ -297,9 +319,7 @@ function SettingMobileCard({
       <Stack gap="xs">
         <Group justify="space-between" wrap="nowrap" align="flex-start">
           <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-            <Text fw={500} style={{ wordBreak: "break-word" }}>
-              {setting.key}
-            </Text>
+            <Text fw={500}>{formatSettingKey(setting.key)}</Text>
             <Text size="xs" c="dimmed">
               {setting.description}
             </Text>
