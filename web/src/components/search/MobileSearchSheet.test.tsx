@@ -78,6 +78,17 @@ describe("MobileSearchSheet", () => {
     ).toBeInTheDocument();
   });
 
+  it("marks the drawer content as translucent so the depth refresh CSS applies", () => {
+    renderWithProviders(<MobileSearchSheet opened={true} onClose={vi.fn()} />);
+    // index.css scopes the mobile sheet's backdrop-filter rule to
+    // `.mantine-Drawer-content.is-translucent-drawer`. If this class ever
+    // stops being forwarded, the sheet would silently fall back to an
+    // opaque background.
+    const content = document.querySelector(".mantine-Drawer-content");
+    expect(content).not.toBeNull();
+    expect(content?.classList.contains("is-translucent-drawer")).toBe(true);
+  });
+
   it("does not render result groups when query is below the minimum length", async () => {
     vi.mocked(useSearch).mockReturnValue({
       results: mockResults,

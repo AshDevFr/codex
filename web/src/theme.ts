@@ -128,6 +128,17 @@ export const theme = createTheme({
 // uses to replace the current 1px-solid-border treatment. Dark-mode alphas
 // are higher because shadows over a near-black body need more contrast to
 // be perceptible.
+//
+// Phase 2 also exposes:
+//   --surface-border-hairline: an almost-invisible 1px line used in place of
+//     the old `--mantine-color-default-border` solid line on the header,
+//     sidebar, card, menu and modal surfaces. The hairline lets us keep a
+//     pixel-precise edge without the "drawn-on" look the solid border had.
+//   --card-border-hairline: same idea, slightly stronger so cards still
+//     read as discrete tiles in dense grids.
+//   --shadow-card-mobile / --shadow-card-desktop: the card shadow split
+//     into two scales so the mobile 2-column grid doesn't get shadow bleed
+//     between neighbouring tiles while desktop keeps a more confident lift.
 export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
   variables: {
     // Scheme-independent variables
@@ -170,6 +181,20 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
       "0 4px 8px rgba(15, 23, 42, 0.08), 0 12px 24px rgba(15, 23, 42, 0.08)",
     "--shadow-xl":
       "0 8px 16px rgba(15, 23, 42, 0.10), 0 24px 48px rgba(15, 23, 42, 0.12)",
+
+    // Hairline borders replace the solid 1px Mantine defaults. Light scheme
+    // keeps these near-black at very low alpha so they read as a soft edge
+    // rather than a drawn-on line.
+    "--surface-border-hairline": "rgba(15, 23, 42, 0.06)",
+    "--card-border-hairline": "rgba(15, 23, 42, 0.05)",
+
+    // Mobile cards live in a 2-column grid with only ~12px of gutter; the
+    // desktop shadow scale would bleed across that gap. Cap the mobile blur
+    // at 8px so neighbouring tiles stay visually distinct.
+    "--shadow-card-mobile":
+      "0 1px 2px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04)",
+    "--shadow-card-desktop":
+      "0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.05)",
   },
   dark: {
     // Dark mode keeps existing styling
@@ -205,5 +230,19 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
       "0 4px 8px rgba(0, 0, 0, 0.32), 0 12px 24px rgba(0, 0, 0, 0.28)",
     "--shadow-xl":
       "0 8px 16px rgba(0, 0, 0, 0.38), 0 24px 48px rgba(0, 0, 0, 0.36)",
+
+    // Dark hairlines use a faint white instead of a faint black so the line
+    // still reads against the near-black body. Card hairline a touch
+    // stronger so grid tiles remain visible even when shadow alpha drops.
+    "--surface-border-hairline": "rgba(255, 255, 255, 0.06)",
+    "--card-border-hairline": "rgba(255, 255, 255, 0.08)",
+
+    // Mobile card shadow uses a tighter blur but higher alpha to remain
+    // visible against the near-black body; desktop keeps a slightly
+    // larger spread for a more confident lift.
+    "--shadow-card-mobile":
+      "0 1px 2px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.26)",
+    "--shadow-card-desktop":
+      "0 1px 2px rgba(0, 0, 0, 0.30), 0 4px 12px rgba(0, 0, 0, 0.24)",
   },
 });
