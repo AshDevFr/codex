@@ -158,6 +158,13 @@ async fn serve_pdf_page_with_streaming(
     let dpi = state.pdf_config.render_dpi;
     let cache = &state.pdf_page_cache;
 
+    tracing::debug!(
+        %book_id,
+        page = page_number,
+        dpi,
+        "pdf page request"
+    );
+
     // Check cache for metadata (fast - just stat the file)
     if let Some(meta) = cache.get_metadata(book_id, page_number, dpi).await {
         // Check If-None-Match header for ETag validation
@@ -169,6 +176,12 @@ async fn serve_pdf_page_with_streaming(
             if client_etag == meta.etag
                 || client_etag.trim_matches('"') == meta.etag.trim_matches('"')
             {
+                tracing::debug!(
+                    %book_id,
+                    page = page_number,
+                    reason = "etag",
+                    "pdf 304 not modified"
+                );
                 return Ok(Response::builder()
                     .status(StatusCode::NOT_MODIFIED)
                     .header(header::ETAG, &meta.etag)
@@ -186,6 +199,12 @@ async fn serve_pdf_page_with_streaming(
             let file_time = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
             // If file hasn't been modified since client's copy, return 304
             if file_time <= client_time {
+                tracing::debug!(
+                    %book_id,
+                    page = page_number,
+                    reason = "modified_since",
+                    "pdf 304 not modified"
+                );
                 return Ok(Response::builder()
                     .status(StatusCode::NOT_MODIFIED)
                     .header(header::ETAG, &meta.etag)
@@ -200,6 +219,13 @@ async fn serve_pdf_page_with_streaming(
             let last_modified = UNIX_EPOCH + Duration::from_secs(meta.modified_unix);
             let last_modified_str = fmt_http_date(last_modified);
 
+            tracing::debug!(
+                %book_id,
+                page = page_number,
+                bytes = meta.size,
+                "pdf disk cache hit"
+            );
+
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, content_type)
@@ -213,13 +239,47 @@ async fn serve_pdf_page_with_streaming(
     }
 
     // Cache miss - render the page using spawn_blocking to avoid blocking async runtime
+    tracing::debug!(
+        %book_id,
+        page = page_number,
+        dpi,
+        "pdf disk cache miss, rendering"
+    );
+
     let path = std::path::PathBuf::from(file_path);
-    let image_data = tokio::task::spawn_blocking(move || {
+    let render_start = std::time::Instant::now();
+    let render_result = tokio::task::spawn_blocking(move || {
         crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, page_number, dpi)
     })
     .await
-    .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
-    .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract page image"))?;
+    .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?;
+
+    let image_data = match render_result {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::warn!(
+                %book_id,
+                page = page_number,
+                dpi,
+                elapsed_ms = render_start.elapsed().as_millis() as u64,
+                error = %e,
+                "pdf render failed"
+            );
+            return Err(ApiError::from_anyhow_with_context(
+                e,
+                "Failed to extract page image",
+            ));
+        }
+    };
+
+    tracing::info!(
+        %book_id,
+        page = page_number,
+        dpi,
+        elapsed_ms = render_start.elapsed().as_millis() as u64,
+        bytes = image_data.len(),
+        "pdf render complete"
+    );
 
     // Store in cache asynchronously
     let cache_clone = cache.clone();

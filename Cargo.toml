@@ -165,6 +165,7 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 serial_test = "3.2"
+tracing-test = "0.2"
 
 # =============================================================================
 # Development Profile - Optimized for fast incremental builds
