@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createBook, createReadProgress } from "@/mocks/data/factories";
+import {
+  createBook,
+  createReadProgress,
+  createSeries,
+} from "@/mocks/data/factories";
 import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { MediaCard } from "./MediaCard";
 
@@ -124,6 +128,39 @@ describe("MediaCard", () => {
       // the affordance opt-in.
       const card = container.querySelector(".mantine-Card-root");
       expect(card).not.toHaveAttribute("data-pressable");
+    });
+  });
+
+  describe("cover treatment", () => {
+    it("leaves the cover image free of inline opacity transition so the CSS rule owns the fade", () => {
+      // The Phase 5 fade-in (200ms desktop / 150ms mobile) lives in
+      // index.css scoped to `.media-card-cover .mantine-Image-root`.
+      // Re-introducing an inline `transition` on the <Image> would beat
+      // the CSS rule due to inline-style specificity, so this assertion
+      // guards against that regression.
+      const book = createBook({ deleted: false });
+
+      renderWithProviders(<MediaCard type="book" data={book} />);
+
+      const image = screen.getByRole("img") as HTMLImageElement;
+      expect(image.style.transition).toBe("");
+      // The opacity toggle is the React-driven half of the fade and must
+      // still be present; the CSS rule transitions whatever we set here.
+      expect(image.style.opacity).toBe("0");
+    });
+
+    it("rounds the series unread badge's top-right corner to match the cover curve", () => {
+      // The Phase 5 cover gets `border-top-right-radius: 10px`; without
+      // a matching rounding on the badge, overflow:hidden on the cover
+      // would clip the badge's top-right square corner flat against the
+      // curve. Mirroring the radius keeps the badge sitting cleanly in
+      // the rounded corner.
+      const series = createSeries({ unreadCount: 3 });
+
+      renderWithProviders(<MediaCard type="series" data={series} />);
+
+      const badge = screen.getByText("3").closest("div");
+      expect(badge).toHaveStyle({ borderTopRightRadius: "10px" });
     });
   });
 

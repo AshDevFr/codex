@@ -501,12 +501,16 @@ export const MediaCard = memo(function MediaCard({
                 src={coverUrl}
                 alt={altText}
                 fit="cover"
+                // The opacity → 1 toggle drives the fade-in once onLoad
+                // fires; the matching `transition` lives in index.css
+                // (.media-card-cover .mantine-Image-root) so the mobile
+                // 150ms / desktop 200ms split via @media can win without
+                // fighting an inline style.
                 style={{
                   width: "100%",
                   height: "100%",
                   objectFit: "cover",
                   opacity: imageLoaded ? 1 : 0,
-                  transition: "opacity 0.2s ease-in-out",
                 }}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
@@ -605,6 +609,10 @@ export const MediaCard = memo(function MediaCard({
                 justifyContent: "center",
                 zIndex: 2,
                 borderBottomLeftRadius: "4px",
+                // Match the cover's Phase 5 top-right 10px curve so the
+                // badge follows the rounded corner instead of being
+                // clipped flat by overflow:hidden on the cover container.
+                borderTopRightRadius: "10px",
               }}
             >
               <Text
