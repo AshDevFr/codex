@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Divider,
   Grid,
@@ -10,6 +11,8 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { IconAlertTriangle } from "@tabler/icons-react";
+import { useEffect, useRef } from "react";
 import {
   type BackgroundColor,
   type PdfMode,
@@ -58,8 +61,31 @@ export function PdfReaderSettings({
     (state) => state.setAutoHideToolbar,
   );
 
+  // Capture the mode that was active when the modal opened, so we can show
+  // the "re-open the book" warning only after the user actually changes it.
+  // The effect intentionally only runs when `opened` flips: if pdfMode were
+  // in the dependency list the snapshot would re-take on every change and
+  // pdfModeChanged would never be true.
+  const pdfModeOnOpen = useRef(pdfMode);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot only on open
+  useEffect(() => {
+    if (opened) {
+      pdfModeOnOpen.current = pdfMode;
+    }
+  }, [opened]);
+  const pdfModeChanged = pdfMode !== pdfModeOnOpen.current;
+
   return (
-    <Modal opened={opened} onClose={onClose} title="Reader Settings" size="lg">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title="Reader Settings"
+      size="lg"
+      // Default "pop" transition scales the modal, which makes child
+      // SegmentedControls measure their active-item geometry against a
+      // pre-animation size and leaves the selected pill misaligned.
+      transitionProps={{ transition: "fade" }}
+    >
       <Stack gap="md">
         {/* PDF Rendering Mode - full width at top */}
         <Box>
@@ -83,9 +109,20 @@ export function PdfReaderSettings({
                 ? "Server renders pages as images (lower bandwidth)"
                 : "Downloads full PDF for text selection and search"}
           </Text>
-          <Text size="xs" c="yellow" mt={4}>
-            Re-open the book after changing to apply
-          </Text>
+          {pdfModeChanged && (
+            <Alert
+              variant="light"
+              color="yellow"
+              icon={<IconAlertTriangle size={16} />}
+              mt="xs"
+              styles={{
+                root: { paddingBlock: "var(--mantine-spacing-xs)" },
+                message: { fontSize: "var(--mantine-font-size-xs)" },
+              }}
+            >
+              Re-open the book to apply this change
+            </Alert>
+          )}
         </Box>
 
         <Group justify="space-between">

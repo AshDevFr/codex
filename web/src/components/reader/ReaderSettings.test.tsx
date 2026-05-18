@@ -160,13 +160,20 @@ describe("ReaderSettings", () => {
       ).toBeInTheDocument();
     });
 
-    it("should show re-open warning message", () => {
+    it("should not show re-open warning until the user changes the mode", async () => {
+      const user = userEvent.setup();
       renderWithProviders(
         <ReaderSettings opened={true} onClose={vi.fn()} format="PDF" />,
       );
 
       expect(
-        screen.getByText("Re-open the book after changing to apply"),
+        screen.queryByText("Re-open the book to apply this change"),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByText("Streaming"));
+
+      expect(
+        screen.getByText("Re-open the book to apply this change"),
       ).toBeInTheDocument();
     });
   });
