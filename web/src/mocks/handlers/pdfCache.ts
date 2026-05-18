@@ -11,16 +11,41 @@ type PdfCacheCleanupResultDto =
 type TriggerPdfCacheCleanupResponse =
   components["schemas"]["TriggerPdfCacheCleanupResponse"];
 
-// Mock data for PDF cache stats
-let mockPdfCacheStats: PdfCacheStatsDto = {
-  totalFiles: 1500,
-  totalSizeBytes: 157_286_400, // ~150 MB
-  totalSizeHuman: "150.0 MB",
-  bookCount: 45,
-  oldestFileAgeDays: 15,
-  cacheDir: "/data/cache",
-  cacheEnabled: true,
+const defaultMockPdfCacheStats: PdfCacheStatsDto = {
+  handles: {
+    capacity: 256,
+    currentSize: 12,
+    enabled: true,
+    entries: [
+      {
+        ageSeconds: 312,
+        bookId: "550e8400-e29b-41d4-a716-446655440000",
+        filePath: "/library/books/manual.pdf",
+        idleSeconds: 14,
+        renderCount: 27,
+      },
+    ],
+    evictions: 5,
+    hits: 4321,
+    idleEvictions: 3,
+    idleTtlSeconds: 900,
+    misses: 87,
+    opens: 87,
+  },
+  pages: {
+    bookCount: 45,
+    cacheDir: "/data/cache",
+    cacheEnabled: true,
+    oldestFileAgeDays: 15,
+    totalFiles: 1500,
+    totalSizeBytes: 157_286_400,
+    totalSizeHuman: "150.0 MB",
+  },
 };
+
+let mockPdfCacheStats: PdfCacheStatsDto = structuredClone(
+  defaultMockPdfCacheStats,
+);
 
 export const pdfCacheHandlers = [
   // Get PDF cache stats
@@ -46,20 +71,22 @@ export const pdfCacheHandlers = [
     await delay(500);
 
     const result: PdfCacheCleanupResultDto = {
-      filesDeleted: mockPdfCacheStats.totalFiles,
-      bytesReclaimed: mockPdfCacheStats.totalSizeBytes,
-      bytesReclaimedHuman: mockPdfCacheStats.totalSizeHuman,
+      filesDeleted: mockPdfCacheStats.pages.totalFiles,
+      bytesReclaimed: mockPdfCacheStats.pages.totalSizeBytes,
+      bytesReclaimedHuman: mockPdfCacheStats.pages.totalSizeHuman,
     };
 
     // Reset mock stats after clearing
     mockPdfCacheStats = {
-      totalFiles: 0,
-      totalSizeBytes: 0,
-      totalSizeHuman: "0 B",
-      bookCount: 0,
-      oldestFileAgeDays: 0,
-      cacheDir: "/data/cache",
-      cacheEnabled: true,
+      ...mockPdfCacheStats,
+      pages: {
+        ...mockPdfCacheStats.pages,
+        bookCount: 0,
+        oldestFileAgeDays: 0,
+        totalFiles: 0,
+        totalSizeBytes: 0,
+        totalSizeHuman: "0 B",
+      },
     };
 
     return HttpResponse.json(result);
@@ -68,18 +95,10 @@ export const pdfCacheHandlers = [
 
 // Helper to reset mock state (useful for tests)
 export function resetPdfCacheMockState() {
-  mockPdfCacheStats = {
-    totalFiles: 1500,
-    totalSizeBytes: 157_286_400,
-    totalSizeHuman: "150.0 MB",
-    bookCount: 45,
-    oldestFileAgeDays: 15,
-    cacheDir: "/data/cache",
-    cacheEnabled: true,
-  };
+  mockPdfCacheStats = structuredClone(defaultMockPdfCacheStats);
 }
 
 // Helper to set custom mock state for testing
-export function setPdfCacheMockState(stats: Partial<typeof mockPdfCacheStats>) {
+export function setPdfCacheMockState(stats: Partial<PdfCacheStatsDto>) {
   mockPdfCacheStats = { ...mockPdfCacheStats, ...stats };
 }

@@ -73,13 +73,94 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Get combined PDF cache statistics
+         * @description Returns statistics for both the on-disk rendered-page cache and the
+         *     in-memory PDFium handle cache in a single payload.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        get: operations["get_pdf_cache_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pdf-cache/handles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get PDFium handle cache statistics
+         * @description Returns statistics about the in-memory open-document handle cache, including
+         *     the list of currently-resident books.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        get: operations["get_handle_cache_stats"];
+        put?: never;
+        post?: never;
+        /**
+         * Close every PDFium handle currently held in memory.
+         * @description Forces a re-open on the next page request for any book that previously had
+         *     a cached handle. Useful when the underlying library files have been moved
+         *     outside of the scanner's awareness.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        delete: operations["clear_handle_cache"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pdf-cache/handles/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
         get?: never;
         put?: never;
         post?: never;
         /**
-         * Clear the entire PDF cache immediately (synchronous)
-         * @description Deletes all cached PDF pages immediately. This operation cannot be undone.
-         *     For selective cleanup based on age, use the trigger_pdf_cache_cleanup endpoint instead.
+         * Evict a single book's PDFium handle from the in-memory cache.
+         * @description No-op if the book has no cached handle. The next page request for that book
+         *     will re-open the PDF via PDFium.
+         *
+         *     # Permission Required
+         *     - Admin access required
+         */
+        delete: operations["evict_book_handle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pdf-cache/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Clear the entire PDF page cache immediately (synchronous)
+         * @description Deletes all cached rendered pages on disk. For selective cleanup based on
+         *     age, use the trigger_pdf_cache_cleanup endpoint instead.
          *
          *     # Permission Required
          *     - Admin access required
@@ -90,7 +171,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/pdf-cache/cleanup": {
+    "/api/v1/admin/pdf-cache/pages/cleanup": {
         parameters: {
             query?: never;
             header?: never;
@@ -100,7 +181,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Trigger PDF cache cleanup task
+         * Trigger PDF page cache cleanup task
          * @description Enqueues a background task to clean up cached PDF pages older than
          *     the configured max age (default: 30 days, configurable via settings).
          *
@@ -110,30 +191,6 @@ export interface paths {
          *     Returns the task ID which can be used to track progress.
          */
         post: operations["trigger_pdf_cache_cleanup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/pdf-cache/stats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get PDF cache statistics
-         * @description Returns statistics about the PDF page cache including total files,
-         *     total size, number of books with cached pages, and cache status.
-         *
-         *     # Permission Required
-         *     - Admin access required
-         */
-        get: operations["get_pdf_cache_stats"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13760,8 +13817,129 @@ export interface components {
              */
             filesDeleted: number;
         };
-        /** @description Statistics about the PDF page cache */
+        /**
+         * @description Combined PDF cache statistics.
+         *
+         *     Exposes both the on-disk rendered-page cache and the in-memory open-document
+         *     handle cache in a single payload.
+         */
         PdfCacheStatsDto: {
+            /** @description In-memory open-document handle cache (PDFium). */
+            handles: components["schemas"]["PdfHandleCacheStatsDto"];
+            /** @description Disk-backed rendered-page cache (JPEGs). */
+            pages: components["schemas"]["PdfPageCacheStatsDto"];
+        };
+        /** @description Response when clearing the handle cache (close-all or single). */
+        PdfHandleCacheClearResultDto: {
+            /**
+             * Format: int64
+             * @description Number of handles closed by the operation.
+             * @example 12
+             */
+            handlesClosed: number;
+        };
+        /** @description Per-entry view of the in-memory PDFium handle cache. */
+        PdfHandleCacheEntryDto: {
+            /**
+             * Format: int64
+             * @description Seconds since the handle was opened.
+             * @example 312
+             */
+            ageSeconds: number;
+            /**
+             * Format: uuid
+             * @description Book ID for the cached document.
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            bookId: string;
+            /**
+             * @description File path of the opened PDF.
+             * @example /library/books/manual.pdf
+             */
+            filePath: string;
+            /**
+             * Format: int64
+             * @description Seconds since the last render against this handle.
+             * @example 14
+             */
+            idleSeconds: number;
+            /**
+             * Format: int64
+             * @description Number of renders served from this handle.
+             * @example 27
+             */
+            renderCount: number;
+        };
+        /**
+         * @description Statistics about the in-memory open-document handle cache.
+         *
+         *     Backed by `PdfHandleCache` in the service layer. Avoids re-opening the
+         *     underlying PDF file via PDFium on every page request.
+         */
+        PdfHandleCacheStatsDto: {
+            /**
+             * Format: int64
+             * @description Maximum number of handles the cache will retain.
+             * @example 256
+             */
+            capacity: number;
+            /**
+             * Format: int64
+             * @description Number of handles currently cached.
+             * @example 12
+             */
+            currentSize: number;
+            /**
+             * @description Whether the handle cache is enabled.
+             * @example true
+             */
+            enabled: boolean;
+            /** @description Per-entry detail for the admin UI. */
+            entries: components["schemas"]["PdfHandleCacheEntryDto"][];
+            /**
+             * Format: int64
+             * @description Cumulative evictions (capacity + manual).
+             * @example 5
+             */
+            evictions: number;
+            /**
+             * Format: int64
+             * @description Cumulative cache hits (handle reused without re-opening).
+             * @example 4321
+             */
+            hits: number;
+            /**
+             * Format: int64
+             * @description Cumulative idle-TTL evictions performed by the sweeper.
+             * @example 3
+             */
+            idleEvictions: number;
+            /**
+             * Format: int64
+             * @description Idle TTL in seconds before a handle is evicted by the background sweeper.
+             * @example 900
+             */
+            idleTtlSeconds: number;
+            /**
+             * Format: int64
+             * @description Cumulative cache misses (no entry on lookup).
+             * @example 87
+             */
+            misses: number;
+            /**
+             * Format: int64
+             * @description Cumulative PDFium opens performed by the cache.
+             * @example 87
+             */
+            opens: number;
+        };
+        /**
+         * @description Statistics about the on-disk rendered-page cache.
+         *
+         *     This is the cache that stores already-rendered JPEG images of PDF pages.
+         *     Backed by `PdfPageCache` in the service layer.
+         */
+        PdfPageCacheStatsDto: {
             /**
              * Format: int64
              * @description Number of unique books with cached pages
@@ -18591,6 +18769,117 @@ export interface operations {
             };
         };
     };
+    get_pdf_cache_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Combined cache statistics retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfCacheStatsDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_handle_cache_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Handle cache statistics retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfHandleCacheStatsDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clear_handle_cache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Handle cache cleared successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfHandleCacheClearResultDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    evict_book_handle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Book identifier */
+                book_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Handle eviction result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfHandleCacheClearResultDto"];
+                };
+            };
+            /** @description Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     clear_pdf_cache: {
         parameters: {
             query?: never;
@@ -18648,44 +18937,6 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["TriggerPdfCacheCleanupResponse"];
-                };
-            };
-            /** @description Admin access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_pdf_cache_stats: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cache statistics retrieved successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "bookCount": 45,
-                     *       "cacheDir": "/data/cache",
-                     *       "cacheEnabled": true,
-                     *       "oldestFileAgeDays": 15,
-                     *       "totalFiles": 1500,
-                     *       "totalSizeBytes": 157286400,
-                     *       "totalSizeHuman": "150.0 MB"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["PdfCacheStatsDto"];
                 };
             };
             /** @description Admin access required */

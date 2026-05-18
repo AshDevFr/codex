@@ -503,8 +503,11 @@ The following paths are exempt from rate limiting:
 
         // PDF cache management endpoints
         v1::handlers::pdf_cache::get_pdf_cache_stats,
+        v1::handlers::pdf_cache::get_handle_cache_stats,
         v1::handlers::pdf_cache::trigger_pdf_cache_cleanup,
         v1::handlers::pdf_cache::clear_pdf_cache,
+        v1::handlers::pdf_cache::clear_handle_cache,
+        v1::handlers::pdf_cache::evict_book_handle,
 
         // Plugin storage management endpoints
         v1::handlers::plugin_storage::get_all_plugin_storage_stats,
@@ -987,6 +990,10 @@ The following paths are exempt from rate limiting:
 
             // PDF Cache DTOs
             v1::dto::PdfCacheStatsDto,
+            v1::dto::PdfPageCacheStatsDto,
+            v1::dto::PdfHandleCacheStatsDto,
+            v1::dto::PdfHandleCacheEntryDto,
+            v1::dto::PdfHandleCacheClearResultDto,
             v1::dto::PdfCacheCleanupResultDto,
             v1::dto::TriggerPdfCacheCleanupResponse,
 

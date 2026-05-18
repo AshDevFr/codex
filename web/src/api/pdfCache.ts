@@ -3,6 +3,14 @@ import { api } from "./client";
 
 // Re-export generated types for convenience
 export type PdfCacheStatsDto = components["schemas"]["PdfCacheStatsDto"];
+export type PdfPageCacheStatsDto =
+  components["schemas"]["PdfPageCacheStatsDto"];
+export type PdfHandleCacheStatsDto =
+  components["schemas"]["PdfHandleCacheStatsDto"];
+export type PdfHandleCacheEntryDto =
+  components["schemas"]["PdfHandleCacheEntryDto"];
+export type PdfHandleCacheClearResultDto =
+  components["schemas"]["PdfHandleCacheClearResultDto"];
 export type PdfCacheCleanupResultDto =
   components["schemas"]["PdfCacheCleanupResultDto"];
 export type TriggerPdfCacheCleanupResponse =
@@ -10,39 +18,67 @@ export type TriggerPdfCacheCleanupResponse =
 
 export const pdfCacheApi = {
   /**
-   * Get statistics about the PDF page cache (admin only)
-   *
-   * Returns information about cached PDF pages including total size,
-   * file count, and age of oldest files.
+   * Get combined statistics for both the disk page cache and the
+   * in-memory PDFium handle cache (admin only).
    */
   getStats: async (): Promise<PdfCacheStatsDto> => {
-    const response = await api.get<PdfCacheStatsDto>("/admin/pdf-cache/stats");
+    const response = await api.get<PdfCacheStatsDto>("/admin/pdf-cache");
     return response.data;
   },
 
   /**
-   * Trigger PDF cache cleanup task (admin only)
-   *
-   * Enqueues a background task to clean up cached PDF pages older than
-   * the configured max age (default 30 days). Returns a task ID which
-   * can be used to track progress.
+   * Get statistics about the in-memory PDFium handle cache (admin only),
+   * including the list of currently-resident open documents.
    */
-  triggerCleanup: async (): Promise<TriggerPdfCacheCleanupResponse> => {
-    const response = await api.post<TriggerPdfCacheCleanupResponse>(
-      "/admin/pdf-cache/cleanup",
+  getHandleStats: async (): Promise<PdfHandleCacheStatsDto> => {
+    const response = await api.get<PdfHandleCacheStatsDto>(
+      "/admin/pdf-cache/handles",
     );
     return response.data;
   },
 
   /**
-   * Clear all cached PDF pages immediately (admin only)
-   *
-   * Deletes all cached PDF pages immediately, returning the results.
-   * For large caches, prefer using the async triggerCleanup endpoint instead.
+   * Trigger an asynchronous cleanup of the on-disk rendered-page cache
+   * (admin only). Enqueues a background task that removes cached pages
+   * older than the configured max age.
    */
-  clearCache: async (): Promise<PdfCacheCleanupResultDto> => {
-    const response =
-      await api.delete<PdfCacheCleanupResultDto>("/admin/pdf-cache");
+  triggerCleanup: async (): Promise<TriggerPdfCacheCleanupResponse> => {
+    const response = await api.post<TriggerPdfCacheCleanupResponse>(
+      "/admin/pdf-cache/pages/cleanup",
+    );
+    return response.data;
+  },
+
+  /**
+   * Clear the on-disk rendered-page cache immediately (admin only).
+   */
+  clearPageCache: async (): Promise<PdfCacheCleanupResultDto> => {
+    const response = await api.delete<PdfCacheCleanupResultDto>(
+      "/admin/pdf-cache/pages",
+    );
+    return response.data;
+  },
+
+  /**
+   * Close every PDFium handle currently held in memory (admin only).
+   */
+  clearHandleCache: async (): Promise<PdfHandleCacheClearResultDto> => {
+    const response = await api.delete<PdfHandleCacheClearResultDto>(
+      "/admin/pdf-cache/handles",
+    );
+    return response.data;
+  },
+
+  /**
+   * Evict a single book's PDFium handle (admin only). Returns the count
+   * of handles closed (0 if the book was not in the cache, 1 otherwise).
+   */
+  evictBookHandle: async (
+    bookId: string,
+  ): Promise<PdfHandleCacheClearResultDto> => {
+    const response = await api.delete<PdfHandleCacheClearResultDto>(
+      `/admin/pdf-cache/handles/${bookId}`,
+    );
     return response.data;
   },
 };

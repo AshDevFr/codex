@@ -78,6 +78,34 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             delete(handlers::cleanup::delete_orphans),
         )
         // PDF cache management routes (admin only)
+        // Combined stats (preferred).
+        .route(
+            "/admin/pdf-cache",
+            get(handlers::pdf_cache::get_pdf_cache_stats),
+        )
+        // Page cache (disk-backed JPEGs).
+        .route(
+            "/admin/pdf-cache/pages/cleanup",
+            post(handlers::pdf_cache::trigger_pdf_cache_cleanup),
+        )
+        .route(
+            "/admin/pdf-cache/pages",
+            delete(handlers::pdf_cache::clear_pdf_cache),
+        )
+        // Handle cache (in-memory PDFium handles).
+        .route(
+            "/admin/pdf-cache/handles",
+            get(handlers::pdf_cache::get_handle_cache_stats),
+        )
+        .route(
+            "/admin/pdf-cache/handles",
+            delete(handlers::pdf_cache::clear_handle_cache),
+        )
+        .route(
+            "/admin/pdf-cache/handles/{book_id}",
+            delete(handlers::pdf_cache::evict_book_handle),
+        )
+        // Legacy aliases (deprecated, scheduled for removal in the next major).
         .route(
             "/admin/pdf-cache/stats",
             get(handlers::pdf_cache::get_pdf_cache_stats),

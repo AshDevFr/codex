@@ -34,10 +34,7 @@ pub use filter::FilterService;
 pub use inflight_thumbnails::InflightThumbnailTracker;
 pub use oidc::OidcService;
 pub use pdf_cache::{CacheStats, CleanupResult, PdfPageCache};
-#[allow(unused_imports)]
-pub use pdf_handle_cache::{
-    HandleCacheEntrySnapshot, HandleCacheSnapshot, HandleCacheStats, PdfHandleCache,
-};
+pub use pdf_handle_cache::{HandleCacheEntrySnapshot, HandleCacheSnapshot, PdfHandleCache};
 pub use pdf_handle_cache_subscriber::PdfHandleCacheSubscriber;
 pub use rate_limiter::RateLimiterService;
 pub use read_progress::ReadProgressService;

@@ -7,11 +7,13 @@ use codex::api::error::ErrorResponse;
 use codex::api::extractors::AppState;
 use codex::api::extractors::auth::UserAuthCache;
 use codex::api::routes::v1::dto::{
-    PdfCacheCleanupResultDto, PdfCacheStatsDto, TriggerPdfCacheCleanupResponse,
+    PdfCacheCleanupResultDto, PdfCacheStatsDto, PdfHandleCacheClearResultDto,
+    PdfHandleCacheStatsDto, TriggerPdfCacheCleanupResponse,
 };
 use codex::config::{AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
 use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;
+use codex::parsers::pdf::{open_pdf_document, renderer};
 use codex::services::email::EmailService;
 use codex::services::{
     AuthTrackingService, FileCleanupService, InflightThumbnailTracker, PdfHandleCache,
@@ -66,7 +68,7 @@ async fn create_test_app_state_with_pdf_cache(
     let pdf_handle_cache = Arc::new(PdfHandleCache::new(
         8,
         std::time::Duration::from_secs(60),
-        false,
+        true,
     ));
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
     let plugin_metrics_service = Arc::new(PluginMetricsService::new());
@@ -129,7 +131,7 @@ async fn create_regular_user_and_token(
 }
 
 // ============================================================
-// GET /api/v1/admin/pdf-cache/stats tests
+// GET /api/v1/admin/pdf-cache (combined stats) tests
 // ============================================================
 
 #[tokio::test]
@@ -140,17 +142,22 @@ async fn test_get_pdf_cache_stats_empty_cache() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
-    let request = get_request_with_auth("/api/v1/admin/pdf-cache/stats", &token);
+    let request = get_request_with_auth("/api/v1/admin/pdf-cache", &token);
     let (status, response): (StatusCode, Option<PdfCacheStatsDto>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let response = response.expect("Response should be present");
-    assert_eq!(response.total_files, 0);
-    assert_eq!(response.total_size_bytes, 0);
-    assert_eq!(response.book_count, 0);
-    assert!(response.oldest_file_age_days.is_none());
-    assert!(response.cache_enabled);
+    // Page cache (empty).
+    assert_eq!(response.pages.total_files, 0);
+    assert_eq!(response.pages.total_size_bytes, 0);
+    assert_eq!(response.pages.book_count, 0);
+    assert!(response.pages.oldest_file_age_days.is_none());
+    assert!(response.pages.cache_enabled);
+    // Handle cache (empty but enabled).
+    assert!(response.handles.enabled);
+    assert_eq!(response.handles.current_size, 0);
+    assert!(response.handles.entries.is_empty());
 }
 
 #[tokio::test]
@@ -174,15 +181,33 @@ async fn test_get_pdf_cache_stats_with_data() {
         .unwrap();
 
     let app = create_test_router_with_app_state(state.clone());
+    let request = get_request_with_auth("/api/v1/admin/pdf-cache", &token);
+    let (status, response): (StatusCode, Option<PdfCacheStatsDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Response should be present");
+    assert_eq!(response.pages.total_files, 2);
+    assert_eq!(response.pages.book_count, 1);
+    assert!(response.pages.cache_enabled);
+}
+
+#[tokio::test]
+async fn test_get_pdf_cache_stats_legacy_alias() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
     let request = get_request_with_auth("/api/v1/admin/pdf-cache/stats", &token);
     let (status, response): (StatusCode, Option<PdfCacheStatsDto>) =
         make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::OK);
     let response = response.expect("Response should be present");
-    assert_eq!(response.total_files, 2);
-    assert_eq!(response.book_count, 1);
-    assert!(response.cache_enabled);
+    assert_eq!(response.pages.total_files, 0);
+    assert!(response.handles.enabled);
 }
 
 #[tokio::test]
@@ -192,7 +217,7 @@ async fn test_get_pdf_cache_stats_requires_auth() {
     let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
     let app = create_test_router_with_app_state(state.clone());
 
-    let request = get_request("/api/v1/admin/pdf-cache/stats");
+    let request = get_request("/api/v1/admin/pdf-cache");
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -206,14 +231,14 @@ async fn test_get_pdf_cache_stats_requires_admin() {
     let token = create_regular_user_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
-    let request = get_request_with_auth("/api/v1/admin/pdf-cache/stats", &token);
+    let request = get_request_with_auth("/api/v1/admin/pdf-cache", &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 // ============================================================
-// POST /api/v1/admin/pdf-cache/cleanup tests
+// POST /api/v1/admin/pdf-cache/pages/cleanup tests
 // ============================================================
 
 #[tokio::test]
@@ -224,7 +249,7 @@ async fn test_trigger_pdf_cache_cleanup() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
-    let request = post_request_with_auth("/api/v1/admin/pdf-cache/cleanup", &token);
+    let request = post_request_with_auth("/api/v1/admin/pdf-cache/pages/cleanup", &token);
     let (status, response): (StatusCode, Option<TriggerPdfCacheCleanupResponse>) =
         make_json_request(app, request).await;
 
@@ -237,6 +262,22 @@ async fn test_trigger_pdf_cache_cleanup() {
 }
 
 #[tokio::test]
+async fn test_trigger_pdf_cache_cleanup_legacy_alias() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let request = post_request_with_auth("/api/v1/admin/pdf-cache/cleanup", &token);
+    let (status, response): (StatusCode, Option<TriggerPdfCacheCleanupResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(!response.expect("response").task_id.is_nil());
+}
+
+#[tokio::test]
 async fn test_trigger_pdf_cache_cleanup_requires_auth() {
     let (db, _temp_dir) = setup_test_db().await;
     let cache_dir = TempDir::new().expect("Failed to create temp dir");
@@ -245,7 +286,7 @@ async fn test_trigger_pdf_cache_cleanup_requires_auth() {
 
     let request = hyper::Request::builder()
         .method(hyper::Method::POST)
-        .uri("/api/v1/admin/pdf-cache/cleanup")
+        .uri("/api/v1/admin/pdf-cache/pages/cleanup")
         .header("content-type", "application/json")
         .body(String::new())
         .unwrap();
@@ -263,14 +304,14 @@ async fn test_trigger_pdf_cache_cleanup_requires_admin() {
     let token = create_regular_user_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
-    let request = post_request_with_auth("/api/v1/admin/pdf-cache/cleanup", &token);
+    let request = post_request_with_auth("/api/v1/admin/pdf-cache/pages/cleanup", &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 // ============================================================
-// DELETE /api/v1/admin/pdf-cache tests
+// DELETE /api/v1/admin/pdf-cache/pages tests
 // ============================================================
 
 #[tokio::test]
@@ -281,7 +322,7 @@ async fn test_clear_pdf_cache_empty() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
-    let request = delete_request_with_auth("/api/v1/admin/pdf-cache", &token);
+    let request = delete_request_with_auth("/api/v1/admin/pdf-cache/pages", &token);
     let (status, response): (StatusCode, Option<PdfCacheCleanupResultDto>) =
         make_json_request(app, request).await;
 
@@ -312,7 +353,7 @@ async fn test_clear_pdf_cache_with_data() {
         .unwrap();
 
     let app = create_test_router_with_app_state(state.clone());
-    let request = delete_request_with_auth("/api/v1/admin/pdf-cache", &token);
+    let request = delete_request_with_auth("/api/v1/admin/pdf-cache/pages", &token);
     let (status, response): (StatusCode, Option<PdfCacheCleanupResultDto>) =
         make_json_request(app, request).await;
 
@@ -327,6 +368,23 @@ async fn test_clear_pdf_cache_with_data() {
 }
 
 #[tokio::test]
+async fn test_clear_pdf_cache_legacy_alias() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let request = delete_request_with_auth("/api/v1/admin/pdf-cache", &token);
+    let (status, response): (StatusCode, Option<PdfCacheCleanupResultDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Response should be present");
+    assert_eq!(response.files_deleted, 0);
+}
+
+#[tokio::test]
 async fn test_clear_pdf_cache_requires_auth() {
     let (db, _temp_dir) = setup_test_db().await;
     let cache_dir = TempDir::new().expect("Failed to create temp dir");
@@ -335,7 +393,7 @@ async fn test_clear_pdf_cache_requires_auth() {
 
     let request = hyper::Request::builder()
         .method(hyper::Method::DELETE)
-        .uri("/api/v1/admin/pdf-cache")
+        .uri("/api/v1/admin/pdf-cache/pages")
         .header("content-type", "application/json")
         .body(String::new())
         .unwrap();
@@ -353,8 +411,219 @@ async fn test_clear_pdf_cache_requires_admin() {
     let token = create_regular_user_and_token(&db, &state).await;
     let app = create_test_router_with_app_state(state.clone());
 
-    let request = delete_request_with_auth("/api/v1/admin/pdf-cache", &token);
+    let request = delete_request_with_auth("/api/v1/admin/pdf-cache/pages", &token);
     let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
 
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// ============================================================
+// Handle cache endpoint tests
+// ============================================================
+
+/// Initialise PDFium for this test process. Returns false if the runtime is
+/// unavailable, so the calling test can skip cleanly.
+fn ensure_pdfium_init() -> bool {
+    if renderer::is_initialized() {
+        return true;
+    }
+    renderer::init_pdfium(None).is_ok()
+}
+
+/// Populate the handle cache with one resident entry by opening a real
+/// PDFium handle. Returns the book id used for the entry.
+fn populate_handle_cache(
+    state: &AppState,
+    temp_dir: &TempDir,
+) -> Option<(uuid::Uuid, std::path::PathBuf)> {
+    if !ensure_pdfium_init() {
+        return None;
+    }
+    let pdf_path = common::create_text_only_pdf(temp_dir, 1);
+    let book_id = uuid::Uuid::new_v4();
+
+    // First call: miss + open.
+    {
+        let path = pdf_path.clone();
+        state
+            .pdf_handle_cache
+            .get_or_open(book_id, path.clone(), move || open_pdf_document(&path))
+            .expect("first open should succeed");
+    }
+    // Second call: hit.
+    {
+        let path = pdf_path.clone();
+        state
+            .pdf_handle_cache
+            .get_or_open(book_id, path.clone(), move || open_pdf_document(&path))
+            .expect("hit should succeed");
+    }
+    Some((book_id, pdf_path))
+}
+
+#[tokio::test]
+async fn test_get_handle_cache_stats_empty() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let request = get_request_with_auth("/api/v1/admin/pdf-cache/handles", &token);
+    let (status, response): (StatusCode, Option<PdfHandleCacheStatsDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Response should be present");
+    assert!(response.enabled);
+    assert_eq!(response.current_size, 0);
+    assert!(response.entries.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_handle_cache_stats_with_data() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let pdf_dir = TempDir::new().expect("Failed to create temp pdf dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let Some((book_id, _)) = populate_handle_cache(&state, &pdf_dir) else {
+        eprintln!("Skipping: PDFium not installed");
+        return;
+    };
+
+    let app = create_test_router_with_app_state(state.clone());
+    let request = get_request_with_auth("/api/v1/admin/pdf-cache/handles", &token);
+    let (status, response): (StatusCode, Option<PdfHandleCacheStatsDto>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let response = response.expect("Response should be present");
+    assert_eq!(response.current_size, 1);
+    assert_eq!(response.entries.len(), 1);
+    assert_eq!(response.entries[0].book_id, book_id);
+    assert_eq!(response.hits, 1);
+    assert_eq!(response.misses, 1);
+    assert_eq!(response.opens, 1);
+}
+
+#[tokio::test]
+async fn test_get_handle_cache_stats_requires_admin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_regular_user_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let request = get_request_with_auth("/api/v1/admin/pdf-cache/handles", &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_clear_handle_cache_empty_is_noop() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let request = delete_request_with_auth("/api/v1/admin/pdf-cache/handles", &token);
+    let (status, response): (StatusCode, Option<PdfHandleCacheClearResultDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.expect("response").handles_closed, 0);
+}
+
+#[tokio::test]
+async fn test_clear_handle_cache_closes_all() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let pdf_dir_a = TempDir::new().expect("Failed to create pdf dir a");
+    let pdf_dir_b = TempDir::new().expect("Failed to create pdf dir b");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    if populate_handle_cache(&state, &pdf_dir_a).is_none() {
+        eprintln!("Skipping: PDFium not installed");
+        return;
+    }
+    populate_handle_cache(&state, &pdf_dir_b).expect("second populate");
+    assert_eq!(state.pdf_handle_cache.snapshot().current_size, 2);
+
+    let app = create_test_router_with_app_state(state.clone());
+    let request = delete_request_with_auth("/api/v1/admin/pdf-cache/handles", &token);
+    let (status, response): (StatusCode, Option<PdfHandleCacheClearResultDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.expect("response").handles_closed, 2);
+    assert_eq!(state.pdf_handle_cache.snapshot().current_size, 0);
+}
+
+#[tokio::test]
+async fn test_clear_handle_cache_requires_admin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_regular_user_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let request = delete_request_with_auth("/api/v1/admin/pdf-cache/handles", &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_evict_book_handle_missing_book_is_noop() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let path = format!("/api/v1/admin/pdf-cache/handles/{}", uuid::Uuid::new_v4());
+    let request = delete_request_with_auth(&path, &token);
+    let (status, response): (StatusCode, Option<PdfHandleCacheClearResultDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.expect("response").handles_closed, 0);
+}
+
+#[tokio::test]
+async fn test_evict_book_handle_removes_entry() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let pdf_dir = TempDir::new().expect("Failed to create pdf dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    let Some((book_id, _)) = populate_handle_cache(&state, &pdf_dir) else {
+        eprintln!("Skipping: PDFium not installed");
+        return;
+    };
+    assert_eq!(state.pdf_handle_cache.snapshot().current_size, 1);
+
+    let app = create_test_router_with_app_state(state.clone());
+    let path = format!("/api/v1/admin/pdf-cache/handles/{}", book_id);
+    let request = delete_request_with_auth(&path, &token);
+    let (status, response): (StatusCode, Option<PdfHandleCacheClearResultDto>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.expect("response").handles_closed, 1);
+    assert_eq!(state.pdf_handle_cache.snapshot().current_size, 0);
+}
+
+#[tokio::test]
+async fn test_evict_book_handle_requires_admin() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let cache_dir = TempDir::new().expect("Failed to create temp dir");
+    let state = create_test_app_state_with_pdf_cache(db.clone(), &cache_dir).await;
+    let token = create_regular_user_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state.clone());
+
+    let path = format!("/api/v1/admin/pdf-cache/handles/{}", uuid::Uuid::new_v4());
+    let request = delete_request_with_auth(&path, &token);
+    let (status, _): (StatusCode, Option<ErrorResponse>) = make_json_request(app, request).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
