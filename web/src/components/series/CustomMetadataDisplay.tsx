@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { MetadataLabel } from "@/components/common";
 import { renderTemplate } from "@/utils/templateEngine";
 import type { TemplateContext } from "@/utils/templateUtils";
 
@@ -182,9 +183,7 @@ export function CustomMetadataDisplay({
               return (
                 <List.Item icon={<span />}>
                   <Group gap="md" align="flex-start">
-                    <Text size="sm" c="dimmed" w={100} tt="uppercase">
-                      {parsed.label}
-                    </Text>
+                    <MetadataLabel>{parsed.label}</MetadataLabel>
                     <Box style={{ flex: 1 }}>
                       <Text size="sm" component="span">
                         {parsed.value}

@@ -49,7 +49,7 @@ import { seriesMetadataApi } from "@/api/seriesMetadata";
 import { settingsApi } from "@/api/settings";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { AuthorsList } from "@/components/book/AuthorsList";
-import { ExternalIdEditModal } from "@/components/common";
+import { ExternalIdEditModal, MetadataLabel } from "@/components/common";
 import { BulkSelectionToolbar } from "@/components/library/BulkSelectionToolbar";
 import { MetadataApplyFlow } from "@/components/metadata";
 import { SeriesDownloadButton } from "@/components/offline/SeriesDownloadButton";
@@ -960,9 +960,7 @@ export function SeriesDetail() {
           {/* Publisher */}
           {metadata?.publisher && (
             <Group gap="md">
-              <Text size="sm" c="dimmed" w={100}>
-                PUBLISHER
-              </Text>
+              <MetadataLabel>PUBLISHER</MetadataLabel>
               <Badge variant="outline" size="sm">
                 {metadata.publisher}
               </Badge>
@@ -972,9 +970,9 @@ export function SeriesDetail() {
           {/* Authors */}
           {metadata?.authors && metadata.authors.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
+              <MetadataLabel>
                 {metadata.authors.length > 1 ? "AUTHORS" : "AUTHOR"}
-              </Text>
+              </MetadataLabel>
               <AuthorsList authors={metadata.authors} showRoles />
             </Group>
           )}
@@ -982,9 +980,7 @@ export function SeriesDetail() {
           {/* Genres */}
           {series.genres && series.genres.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                GENRE
-              </Text>
+              <MetadataLabel>GENRE</MetadataLabel>
               <GenreTagChips
                 genres={series.genres}
                 libraryId={series.libraryId}
@@ -996,9 +992,7 @@ export function SeriesDetail() {
           {/* Tags */}
           {series.tags && series.tags.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                TAGS
-              </Text>
+              <MetadataLabel>TAGS</MetadataLabel>
               <GenreTagChips
                 tags={series.tags}
                 libraryId={series.libraryId}
@@ -1010,9 +1004,7 @@ export function SeriesDetail() {
           {/* Sharing Tags (admin only) */}
           {isAdmin && seriesSharingTags && seriesSharingTags.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                SHARING
-              </Text>
+              <MetadataLabel>SHARING</MetadataLabel>
               <Group gap="xs">
                 {seriesSharingTags.map((tag) => (
                   <Tooltip
@@ -1031,9 +1023,7 @@ export function SeriesDetail() {
           {/* External IDs */}
           {(series.externalIds?.length > 0 || canEditSeries) && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                EXTERNAL IDS
-              </Text>
+              <MetadataLabel>EXTERNAL IDS</MetadataLabel>
               <ExternalIds
                 externalIds={series.externalIds ?? []}
                 onEdit={canEditSeries ? openExternalIdModal : undefined}
@@ -1044,18 +1034,14 @@ export function SeriesDetail() {
           {/* External Links */}
           {series.externalLinks && series.externalLinks.length > 0 && (
             <Group gap="md" align="flex-start">
-              <Text size="sm" c="dimmed" w={100}>
-                LINKS
-              </Text>
+              <MetadataLabel>LINKS</MetadataLabel>
               <ExternalLinks links={series.externalLinks} />
             </Group>
           )}
 
           {/* Ratings Section - Your rating, Community average, External ratings */}
           <Group gap="md" align="flex-start">
-            <Text size="sm" c="dimmed" w={100}>
-              RATINGS
-            </Text>
+            <MetadataLabel>RATINGS</MetadataLabel>
             <Group gap="lg" wrap="wrap">
               {/* Your rating */}
               <SeriesRating seriesId={series.id} />
