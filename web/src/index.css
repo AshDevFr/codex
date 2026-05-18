@@ -17,6 +17,8 @@
         cover overlays).
      7. Motion layer (press/hover affordances, theme-toggle spin,
         reduced-motion guard).
+     8. Cover + media treatment (layered cover shadow, rounded cover
+        corners, hover scale + shadow lift on desktop, image fade-in).
    New rules should slot into the section they belong to rather than
    accumulating at the bottom of the file. */
 
@@ -649,5 +651,75 @@ body {
 
   [data-stagger-grid="true"] > * {
     animation: none;
+  }
+}
+
+/* ============================================
+   Cover + media treatment (Phase 5)
+   ============================================
+   Make book/series covers read as physical objects sitting on top of the
+   card rather than flat tiles. The cover container (.media-card-cover in
+   MediaCard.tsx) already owns the aspect-ratio + overflow:hidden box, so
+   the rounding, shadow, and hover lift sit on that element. Bottom corners
+   stay sharp because the cover is flush against the content section
+   underneath (Stack gap=0); rounding the bottom would expose card-bg as a
+   visible scoop in each corner. */
+.media-card-cover {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 6px 18px rgba(0, 0, 0, 0.06);
+  transition:
+    transform 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out);
+  will-change: transform;
+}
+
+[data-mantine-color-scheme="dark"] .media-card-cover {
+  /* Cover shadows over a near-black body need higher alpha to remain
+     visible; layered same way as the light scheme. */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.32),
+    0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+/* Hover lift is desktop-only. The (hover: hover) guard prevents sticky
+   hover state on touch devices where mobile browsers fake hover on first
+   tap. Mobile relies on the Phase 3 press-scale via [data-pressable] on
+   the card root instead. The card-root :hover from Phase 3 already adds
+   --shadow-md to the surrounding Card; here we lift the cover itself
+   relative to the card content. */
+@media (hover: hover) {
+  .media-card-cover:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* The fade-in transition on the cover image. The MediaCard flips
+   opacity from 0 to 1 when the image's onLoad fires, so this rule turns
+   the snap into a soft fade matching the rest of the motion language.
+   Mobile uses a shorter 150ms duration because users are already
+   scrolling by the time the image lands; long fades on a phone read as
+   sluggish. */
+.media-card-cover .mantine-Image-root {
+  transition: opacity 0.2s var(--ease-out);
+}
+
+@media (max-width: 30.0625em) {
+  .media-card-cover .mantine-Image-root {
+    transition-duration: 0.15s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Drop the hover scale + shadow expansion under reduced motion. The
+     global reduced-motion guard above already shortens transition
+     durations to 0.01ms, but :hover transforms still apply instantly
+     without this carve-out. Pinning transform:none keeps the cover
+     stationary on hover. */
+  .media-card-cover:hover {
+    transform: none;
   }
 }
