@@ -1,6 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { cssVariablesResolver, theme } from "./theme";
 
+// Minimal WCAG 2.1 contrast helper. Kept in the test file because the only
+// place we compute contrast today is the dark-mode contrast assertions
+// below; pulling in a dedicated dependency for ~15 lines of arithmetic is
+// overkill.
+const channelToLinear = (channel: number): number => {
+  const c = channel / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const relativeLuminance = (hex: string): number => {
+  const value = hex.replace("#", "");
+  const r = Number.parseInt(value.slice(0, 2), 16);
+  const g = Number.parseInt(value.slice(2, 4), 16);
+  const b = Number.parseInt(value.slice(4, 6), 16);
+  return (
+    0.2126 * channelToLinear(r) +
+    0.7152 * channelToLinear(g) +
+    0.0722 * channelToLinear(b)
+  );
+};
+const contrastRatio = (fg: string, bg: string): number => {
+  const l1 = relativeLuminance(fg);
+  const l2 = relativeLuminance(bg);
+  const [lighter, darker] = l1 >= l2 ? [l1, l2] : [l2, l1];
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
 const SURFACE_TOKENS = ["--surface-1", "--surface-2", "--surface-3"] as const;
 const SHADOW_TOKENS = [
   "--shadow-xs",
@@ -50,11 +76,55 @@ describe("cssVariablesResolver", () => {
     }
   });
 
-  it("keeps legacy surface variables intact for backwards compatibility", () => {
-    expect(resolved.dark["--mantine-color-body"]).toBe("#242424");
+  it("points legacy body / card tokens at the iOS elevation ladder", () => {
+    // Dark mode body sits at --surface-1, cards at --surface-2. Light mode
+    // body stays white while app-shell-main warms slightly (covered in its
+    // own test below).
+    expect(resolved.dark["--mantine-color-body"]).toBe("#1c1c1e");
+    expect(resolved.dark["--card-bg"]).toBe("#2c2c2e");
     expect(resolved.light["--mantine-color-body"]).toBe("#ffffff");
-    expect(resolved.dark["--card-bg"]).toBe("#242424");
     expect(resolved.light["--card-bg"]).toBe("#ffffff");
+  });
+
+  it("warms the light-mode app-shell-main surface", () => {
+    // Main content area sits one notch warmer than the pure-white body so
+    // cards have a hair more contrast against it.
+    expect(resolved.light["--app-shell-main-bg"]).toBe("#f7f7f9");
+    expect(resolved.light["--surface-1"]).toBe("#f7f7f9");
+    // Dark app-shell-main collapses onto the body in the iOS ladder.
+    expect(resolved.dark["--app-shell-main-bg"]).toBe("#1c1c1e");
+  });
+
+  it("keeps primaryBlue[8] aligned with the light-mode brand hue", () => {
+    // Mantine defaults `primaryShade.dark = 8`. Steps 6 and 8 deliberately
+    // share `#1d4ed8` (Tailwind blue-700) so primary buttons read the same
+    // in both schemes and line up with the PWA `theme_color`. Catches the
+    // regression where someone reverts step 8 to the older navy `#1e3a8a`.
+    const blue = theme.colors?.blue;
+    expect(blue).toBeDefined();
+    expect(blue?.[8]).toBe("#1d4ed8");
+  });
+
+  it("keeps dimmed text WCAG AA on the dark-mode card surface", () => {
+    // Mantine's default gray[5] (`#909296`) lands at ~4.47:1 against the
+    // `#2c2c2e` card surface — just below WCAG AA's 4.5:1 floor for normal
+    // text. The dimmed token is nudged so dimmed/caption text on cards
+    // stays compliant. Computed here so a future revert can't silently
+    // land sub-AA contrast.
+    const dimmed = resolved.dark["--mantine-color-dimmed"] ?? "";
+    expect(contrastRatio(dimmed, "#2c2c2e")).toBeGreaterThanOrEqual(4.5);
+    // Main text comfortably exceeds AAA on both body and card surfaces.
+    const text = resolved.dark["--mantine-color-text"] ?? "";
+    expect(contrastRatio(text, "#1c1c1e")).toBeGreaterThanOrEqual(7);
+    expect(contrastRatio(text, "#2c2c2e")).toBeGreaterThanOrEqual(7);
+  });
+
+  it("keeps light-mode text WCAG AA on the app-shell-main surface", () => {
+    const text = resolved.light["--mantine-color-text"] ?? "";
+    const dimmed = resolved.light["--mantine-color-dimmed"] ?? "";
+    expect(contrastRatio(text, "#f7f7f9")).toBeGreaterThanOrEqual(7);
+    expect(contrastRatio(dimmed, "#f7f7f9")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(dimmed, "#ffffff")).toBeGreaterThanOrEqual(4.5);
   });
 
   it("exposes hairline border tokens for the Phase 2 depth refresh", () => {
