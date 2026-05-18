@@ -9,6 +9,14 @@ const SHADOW_TOKENS = [
   "--shadow-lg",
   "--shadow-xl",
 ] as const;
+const HAIRLINE_TOKENS = [
+  "--surface-border-hairline",
+  "--card-border-hairline",
+] as const;
+const CARD_SHADOW_TOKENS = [
+  "--shadow-card-mobile",
+  "--shadow-card-desktop",
+] as const;
 
 describe("cssVariablesResolver", () => {
   const resolved = cssVariablesResolver(theme as never);
@@ -47,5 +55,42 @@ describe("cssVariablesResolver", () => {
     expect(resolved.light["--mantine-color-body"]).toBe("#ffffff");
     expect(resolved.dark["--card-bg"]).toBe("#242424");
     expect(resolved.light["--card-bg"]).toBe("#ffffff");
+  });
+
+  it("exposes hairline border tokens for the Phase 2 depth refresh", () => {
+    for (const token of HAIRLINE_TOKENS) {
+      // Light uses near-black with low alpha; dark uses near-white with low
+      // alpha. Both schemes must define both tokens so the depth refresh CSS
+      // can reference them without scheme-specific fallbacks.
+      expect(resolved.light[token]).toMatch(/rgba\(/);
+      expect(resolved.dark[token]).toMatch(/rgba\(/);
+    }
+    // Dark hairline is faint-white (`255, 255, 255`) so it reads against the
+    // near-black body. Catches regressions where the dark token gets copied
+    // from the light scheme.
+    expect(resolved.dark["--surface-border-hairline"]).toContain("255");
+    expect(resolved.dark["--card-border-hairline"]).toContain("255");
+  });
+
+  it("exposes mobile- and desktop-tuned card shadow tokens", () => {
+    for (const token of CARD_SHADOW_TOKENS) {
+      expect(resolved.light[token]).toMatch(/rgba\(/);
+      expect(resolved.dark[token]).toMatch(/rgba\(/);
+    }
+    // The mobile shadow must use a smaller blur radius than desktop so it
+    // doesn't bleed into the 2-column grid gutter. Compare the largest blur
+    // value in each token.
+    const largestBlur = (value: string): number => {
+      const matches = Array.from(
+        value.matchAll(/(-?\d+)px\s+(-?\d+)px\s+(\d+)px/g),
+      );
+      return Math.max(...matches.map((m) => Number.parseInt(m[3] ?? "0", 10)));
+    };
+    for (const scheme of ["light", "dark"] as const) {
+      const mobile = resolved[scheme]["--shadow-card-mobile"] ?? "";
+      const desktop = resolved[scheme]["--shadow-card-desktop"] ?? "";
+      expect(largestBlur(mobile)).toBeLessThanOrEqual(largestBlur(desktop));
+      expect(largestBlur(mobile)).toBeLessThanOrEqual(8);
+    }
   });
 });

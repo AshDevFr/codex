@@ -63,7 +63,7 @@ export function MobileSearchSheet({ opened, onClose }: MobileSearchSheetProps) {
       size="100%"
       withCloseButton
       title="Search"
-      classNames={{ body: classes.body }}
+      classNames={{ body: classes.body, content: "is-translucent-drawer" }}
     >
       <Stack gap="md" h="100%">
         <TextInput

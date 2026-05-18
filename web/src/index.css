@@ -161,22 +161,22 @@ body {
     background-color: #f1f3f5;
   }
 
-  /* Header styling */
+  /* Header background. The bottom border is replaced by a shadow-based
+     hairline in the "Depth refresh" section below so the header reads as
+     floating over content rather than nailed to it. */
   .mantine-AppShell-header {
     background-color: #ffffff;
-    border-bottom: 1px solid #dee2e6;
   }
 
-  /* Navbar/Sidebar styling */
+  /* Navbar/Sidebar background. Right edge is now a soft shadow (see the
+     "Depth refresh" section). */
   .mantine-AppShell-navbar {
     background-color: #ffffff;
-    border-right: 1px solid #dee2e6;
   }
 
-  /* Card improvements - white cards on gray background */
+  /* Card surface stays white; the border treatment is consolidated below. */
   .mantine-Card-root {
     background-color: #ffffff;
-    border-color: #dee2e6;
   }
 
   /* NavLink active state - more visible in light mode */
@@ -194,10 +194,9 @@ body {
     border-color: #ced4da;
   }
 
-  /* Menu dropdown */
+  /* Menu dropdown background; border + shadow handled in Depth refresh. */
   .mantine-Menu-dropdown {
     background-color: #ffffff;
-    border-color: #dee2e6;
   }
 
   /* Modal content */
@@ -219,17 +218,185 @@ body {
 
   .mantine-AppShell-header {
     background-color: #242424;
-    border-bottom: 1px solid #373a40;
   }
 
   .mantine-AppShell-navbar {
     background-color: #242424;
-    border-right: 1px solid #373a40;
   }
 
   .mantine-Card-root {
     background-color: #2c2c2c;
-    border-color: #373a40;
+  }
+}
+
+/* ============================================
+   Depth refresh (Phase 2)
+   ============================================
+   Replaces solid 1px Mantine borders on header / navbar / card / menu /
+   modal surfaces with hairline borders + the shadow + surface tokens
+   defined in src/theme.ts's cssVariablesResolver.
+
+   Border width stays 1px so the box-model widths match the legacy
+   treatment; only the colour changes. Shadows do the actual depth work. */
+
+.mantine-AppShell-header {
+  /* Hairline replaces the old 1px solid #dee2e6 / #373a40 line. */
+  border-bottom: 1px solid var(--surface-border-hairline);
+  /* Translucent header so content scrolls through it. Gated by @supports
+     so non-supporting browsers fall back to the opaque background colour
+     defined per-scheme above. */
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-body) 75%,
+    transparent
+  );
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+@supports not (backdrop-filter: blur(20px)) {
+  /* Restore opaque background when blur isn't supported. */
+  .mantine-AppShell-header {
+    background-color: var(--mantine-color-body);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  /* Accessibility + low-end Android performance: drop blur, go opaque. */
+  .mantine-AppShell-header {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--mantine-color-body);
+  }
+}
+
+.mantine-AppShell-navbar {
+  /* Replace the right border with a hairline + soft right-side shadow so
+     the sidebar reads as a layer above the main content. */
+  border-right: none;
+  box-shadow:
+    1px 0 0 var(--surface-border-hairline),
+    4px 0 12px rgba(0, 0, 0, 0.04);
+}
+
+[data-mantine-color-scheme="dark"] .mantine-AppShell-navbar {
+  /* Dark mode needs a bit more punch on the cast shadow to stay visible
+     against the near-body backdrop. */
+  box-shadow:
+    1px 0 0 var(--surface-border-hairline),
+    4px 0 12px rgba(0, 0, 0, 0.32);
+}
+
+/* Cards: hairline + the desktop card shadow by default; mobile widths get
+   a tighter blur so a 2-column grid doesn't bleed shadow into the gutter.
+   Mobile column count + the gutter are the constraint that drives this -
+   see Phase 2 mobile-considerations notes in ui-next.md. */
+.mantine-Card-root {
+  border-color: var(--card-border-hairline);
+  box-shadow: var(--shadow-card-desktop);
+}
+
+@media (max-width: 30.0625em) {
+  .mantine-Card-root {
+    box-shadow: var(--shadow-card-mobile);
+  }
+}
+
+/* Menu / Popover dropdowns float above cards; lift them on the shadow
+   scale rather than the legacy 1px border. */
+.mantine-Menu-dropdown,
+.mantine-Popover-dropdown {
+  border-color: var(--surface-border-hairline);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Modal: tighten the backdrop alpha and add a small blur so the underlying
+   app stays legible but recedes; lift the content with shadow-xl and a
+   slightly larger radius (16px) so it reads as floating rather than
+   stamped to the viewport. */
+.mantine-Modal-overlay {
+  background-color: color-mix(in srgb, #000 40%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .mantine-Modal-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: color-mix(in srgb, #000 55%, transparent);
+  }
+}
+
+.mantine-Modal-content {
+  border-radius: 16px;
+  box-shadow: var(--shadow-xl);
+}
+
+/* On mobile widths the AppShell.Navbar acts as the burger drawer (it slides
+   in as a fixed-position overlay below the `sm` breakpoint, 48em). Give it
+   the same translucent treatment as the header + search sheet so the three
+   surfaces share a visual language. Desktop navbar (the always-visible
+   sidebar) keeps its opaque background. */
+@media (max-width: 47.99em) {
+  .mantine-AppShell-navbar {
+    background-color: color-mix(
+      in srgb,
+      var(--mantine-color-body) 80%,
+      transparent
+    );
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  @supports not (backdrop-filter: blur(20px)) {
+    .mantine-AppShell-navbar {
+      background-color: var(--mantine-color-body);
+    }
+  }
+}
+
+@media (max-width: 47.99em) and (prefers-reduced-transparency: reduce) {
+  .mantine-AppShell-navbar {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--mantine-color-body);
+  }
+}
+
+/* Drawer-content opts in to the translucent treatment so reader-side
+   drawers (TOC, etc.) which need full opacity for legibility over body
+   text aren't affected. The mobile search sheet sets the opt-in itself
+   via the `is-translucent-drawer` className (Mantine 8's compound
+   Drawer doesn't expose the `attributes` styles-api prop, so we hook a
+   plain class name into Mantine's content part). The matching
+   `[data-translucent="true"]` selector is kept as a fallback so callers
+   that *can* set a data attribute (e.g. wrapped non-compound drawers)
+   pick up the same styling. */
+.mantine-Drawer-content[data-translucent="true"],
+.mantine-Drawer-content.is-translucent-drawer {
+  background-color: color-mix(
+    in srgb,
+    var(--mantine-color-body) 80%,
+    transparent
+  );
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+@supports not (backdrop-filter: blur(20px)) {
+  .mantine-Drawer-content[data-translucent="true"],
+  .mantine-Drawer-content.is-translucent-drawer {
+    background-color: var(--mantine-color-body);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .mantine-Drawer-content[data-translucent="true"],
+  .mantine-Drawer-content.is-translucent-drawer {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--mantine-color-body);
   }
 }
 
