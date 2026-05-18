@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UserPluginsListResponse } from "@/api/userPlugins";
 import { renderWithProviders, userEvent } from "@/test/utils";
@@ -96,9 +96,24 @@ describe("IntegrationsSettings", () => {
     });
   });
 
-  it("shows loading state initially", () => {
-    renderWithProviders(<IntegrationsSettings />);
-    expect(screen.getByText("Loading integrations...")).toBeInTheDocument();
+  it("renders the shape-matched skeleton after the 150ms gate", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(userPluginsApi.list).mockReturnValueOnce(new Promise(() => {}));
+      const { container } = renderWithProviders(<IntegrationsSettings />);
+
+      // Pre-gate: no Card placeholder yet.
+      expect(container.querySelector(".mantine-Card-root")).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // CardListSkeleton renders Mantine Cards once the gate elapses.
+      expect(container.querySelector(".mantine-Card-root")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows empty state when no plugins available", async () => {

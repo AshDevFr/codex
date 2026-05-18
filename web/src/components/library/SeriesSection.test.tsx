@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/utils";
 import { SeriesSection } from "./SeriesSection";
 
@@ -6,6 +7,7 @@ import { SeriesSection } from "./SeriesSection";
 vi.mock("@/api/series", () => ({
   seriesApi: {
     search: vi.fn(() => new Promise(() => {})),
+    getAlphabeticalGroups: vi.fn(() => new Promise(() => {})),
   },
 }));
 
@@ -46,7 +48,12 @@ vi.mock("@/hooks/useSeriesFilterState", () => ({
 
 describe("SeriesSection", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const renderComponent = (searchParams = new URLSearchParams()) => {
@@ -55,38 +62,41 @@ describe("SeriesSection", () => {
     );
   };
 
+  /** Advance past the 150ms skeleton flicker guard so the placeholder renders. */
+  const advancePastSkeletonDelay = () => {
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+  };
+
   describe("loading state", () => {
-    it("should render skeleton placeholders while loading", () => {
-      const { container } = renderComponent();
+    it("renders the shape-matched cover grid skeleton after the 150ms gate", () => {
+      const { getByTestId, queryByTestId } = renderComponent();
 
-      // Should show skeleton elements while loading
-      // Mantine Skeleton renders divs with mantine-Skeleton-root class
-      const skeletons = container.querySelectorAll(".mantine-Skeleton-root");
-      expect(skeletons.length).toBeGreaterThan(0);
+      // Before the gate the skeleton is intentionally hidden to avoid
+      // <150ms flashes on fast loads.
+      expect(queryByTestId("cover-grid-skeleton")).toBeNull();
+
+      advancePastSkeletonDelay();
+      expect(getByTestId("cover-grid-skeleton")).toBeInTheDocument();
     });
 
-    it("should render correct number of skeleton items based on pageSize", () => {
+    it("renders exactly `pageSize` skeleton cards when the page is small", () => {
       const searchParams = new URLSearchParams({ pageSize: "6" });
-      const { container } = renderComponent(searchParams);
+      const { getByTestId } = renderComponent(searchParams);
+      advancePastSkeletonDelay();
 
-      // Count skeleton elements
-      // With pageSize=6, should have 6 skeleton boxes with 2 skeletons each
-      const skeletonContainers = container.querySelectorAll(
-        ".mantine-Skeleton-root",
-      );
-      // Each item has 2 skeletons (image + title), so 6 items = 12 skeletons
-      expect(skeletonContainers.length).toBe(12);
+      const grid = getByTestId("cover-grid-skeleton");
+      expect(grid.children.length).toBe(6);
     });
 
-    it("should cap skeleton count at 12 even for larger page sizes", () => {
+    it("caps the skeleton at 12 cards even when `pageSize` is larger", () => {
       const searchParams = new URLSearchParams({ pageSize: "50" });
-      const { container } = renderComponent(searchParams);
+      const { getByTestId } = renderComponent(searchParams);
+      advancePastSkeletonDelay();
 
-      // Even with pageSize=50, should cap at 12 skeleton items (24 skeleton elements)
-      const skeletonContainers = container.querySelectorAll(
-        ".mantine-Skeleton-root",
-      );
-      expect(skeletonContainers.length).toBe(24); // 12 items * 2 skeletons each
+      const grid = getByTestId("cover-grid-skeleton");
+      expect(grid.children.length).toBe(12);
     });
   });
 });

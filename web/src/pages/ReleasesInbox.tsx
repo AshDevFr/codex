@@ -2,7 +2,6 @@ import {
   Badge,
   Card,
   Group,
-  Loader,
   Pagination,
   Select,
   Stack,
@@ -22,6 +21,7 @@ import type {
 import { ReleasesBulkActionBar } from "@/components/releases/ReleasesBulkActionBar";
 import { ReleasesBulkDeleteModal } from "@/components/releases/ReleasesBulkDeleteModal";
 import { ReleasesTable } from "@/components/releases/ReleasesTable";
+import { TableSkeleton } from "@/components/skeletons";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   useBulkReleaseAction,
@@ -33,6 +33,7 @@ import {
   useReleaseSources,
 } from "@/hooks/useReleases";
 import { useTableShiftSelection } from "@/hooks/useTableShiftSelection";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useReleaseAnnouncementsStore } from "@/store/releaseAnnouncementsStore";
 
 const STATE_OPTIONS = [
@@ -140,6 +141,7 @@ export function ReleasesInbox() {
   };
 
   const { data, isLoading, error } = useReleaseInbox(inboxParams);
+  const showSkeleton = useShowSkeleton(isLoading);
   const { data: facets } = useReleaseFacets(facetsParams);
   const { data: sources } = useReleaseSources();
   const dismiss = useDismissRelease();
@@ -275,9 +277,13 @@ export function ReleasesInbox() {
       )}
 
       {isLoading ? (
-        <Group justify="center" py="md">
-          <Loader />
-        </Group>
+        showSkeleton ? (
+          <TableSkeleton
+            rows={8}
+            columnLabels={["Series", "Release", "Source", "Language", "State"]}
+            withMobilePrimary
+          />
+        ) : null
       ) : entries.length === 0 ? (
         <Card withBorder padding="md" radius="md">
           <Text size="sm" c="dimmed">

@@ -1,3 +1,4 @@
+import { act } from "@testing-library/react";
 import {
   afterAll,
   beforeAll,
@@ -68,16 +69,25 @@ describe("SeriesBookList", () => {
   };
 
   describe("loading state", () => {
-    it("should render loading state initially", () => {
-      // Never resolve to keep loading state
-      mockSeriesApi.getBooks.mockReturnValue(new Promise(() => {}));
+    it("should render the shape-matched cover grid skeleton after the 150ms gate", () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        // Never resolve to keep loading state
+        mockSeriesApi.getBooks.mockReturnValue(new Promise(() => {}));
 
-      const { container } = renderComponent();
+        const { queryByTestId, getByTestId } = renderComponent();
 
-      // Mantine Loader uses a span with class mantine-Loader-root
-      expect(
-        container.querySelector(".mantine-Loader-root"),
-      ).toBeInTheDocument();
+        // Pre-gate: skeleton suppressed so fast loads stay flash-free.
+        expect(queryByTestId("cover-grid-skeleton")).toBeNull();
+
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+
+        expect(getByTestId("cover-grid-skeleton")).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

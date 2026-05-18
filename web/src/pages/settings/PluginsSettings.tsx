@@ -8,7 +8,6 @@ import {
   Code,
   Collapse,
   Group,
-  Loader,
   Modal,
   ScrollArea,
   Stack,
@@ -43,7 +42,9 @@ import {
   pluginsApi,
 } from "@/api/plugins";
 import { PluginConfigModal } from "@/components/forms/PluginConfigModal";
+import { TableSkeleton } from "@/components/skeletons";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import {
   type OfficialPlugin,
   OfficialPlugins,
@@ -82,6 +83,7 @@ export function PluginsSettings() {
     queryKey: ["plugins"],
     queryFn: pluginsApi.getAll,
   });
+  const showSkeleton = useShowSkeleton(isLoading);
 
   const plugins = pluginsResponse?.plugins ?? [];
 
@@ -424,9 +426,19 @@ export function PluginsSettings() {
         />
 
         {isLoading ? (
-          <Group justify="center" py="xl">
-            <Loader />
-          </Group>
+          showSkeleton ? (
+            <TableSkeleton
+              rows={5}
+              columnLabels={[
+                "Plugin",
+                "Command",
+                "Status",
+                "Health",
+                "Actions",
+              ]}
+              withMobilePrimary
+            />
+          ) : null
         ) : error ? (
           <Alert icon={<IconAlertCircle size={16} />} color="red">
             Failed to load plugins. Please try again.

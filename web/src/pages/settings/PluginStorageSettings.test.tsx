@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as pluginStorageApi from "@/api/pluginStorage";
@@ -45,12 +45,28 @@ describe("PluginStorageSettings", () => {
     });
   });
 
-  it("should show loading state initially", () => {
-    renderWithProviders(<PluginStorageSettings />);
+  it("renders the shape-matched skeleton after the 150ms gate", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(pluginStorageApi.pluginStorageApi.getStats).mockReturnValueOnce(
+        new Promise(() => {}),
+      );
+      const { getByTestId, queryByTestId } = renderWithProviders(
+        <PluginStorageSettings />,
+      );
 
-    expect(
-      screen.getByText("Loading plugin storage statistics..."),
-    ).toBeInTheDocument();
+      // Pre-gate: skeleton suppressed.
+      expect(queryByTestId("table-skeleton")).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // TableSkeleton renders with the shared data-testid.
+      expect(getByTestId("table-skeleton")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("should display stat card labels after loading", async () => {

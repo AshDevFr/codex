@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Group,
-  Loader,
   Modal,
   Stack,
   Text,
@@ -21,7 +20,9 @@ import {
   ConnectedPluginCard,
 } from "@/components/plugins/UserPluginCard";
 import { UserPluginSettingsModal } from "@/components/plugins/UserPluginSettingsModal";
+import { CardListSkeleton } from "@/components/skeletons";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
 function isTaskActive(task: UserPluginTaskDto | undefined): boolean {
   return task?.status === "pending" || task?.status === "processing";
@@ -54,6 +55,7 @@ export function IntegrationsSettings() {
     queryKey: ["user-plugins"],
     queryFn: userPluginsApi.list,
   });
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Poll sync task for the syncing plugin until completed/failed
   const { data: syncTask } = useQuery({
@@ -319,14 +321,11 @@ export function IntegrationsSettings() {
   };
 
   if (isLoading) {
-    return (
+    return showSkeleton ? (
       <Box py="xl" px="md">
-        <Stack align="center" gap="md" py="xl">
-          <Loader />
-          <Text c="dimmed">Loading integrations...</Text>
-        </Stack>
+        <CardListSkeleton count={3} lines={2} />
       </Box>
-    );
+    ) : null;
   }
 
   if (error) {

@@ -8,7 +8,6 @@ import {
   Collapse,
   Divider,
   Group,
-  Loader,
   Modal,
   Pagination,
   PasswordInput,
@@ -40,8 +39,10 @@ import { useSearchParams } from "react-router-dom";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { type UserDto, type UserListParams, usersApi } from "@/api/users";
 import { PermissionPicker } from "@/components/common";
+import { TableSkeleton } from "@/components/skeletons";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
 import { UserSharingTagGrants } from "@/components/users";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useAuthStore } from "@/store/authStore";
 import { type Permission, ROLE_PERMISSIONS } from "@/types/permissions";
 
@@ -105,6 +106,7 @@ export function UsersSettings() {
     queryKey: ["users", queryParams],
     queryFn: () => usersApi.list(queryParams),
   });
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Fetch sharing tags for filter dropdown
   const { data: sharingTags = [] } = useQuery({
@@ -477,9 +479,13 @@ export function UsersSettings() {
         </Collapse>
 
         {isLoading ? (
-          <Group justify="center" py="xl">
-            <Loader />
-          </Group>
+          showSkeleton ? (
+            <TableSkeleton
+              rows={6}
+              columnLabels={["Name", "Role", "Last Login", "Created"]}
+              withMobilePrimary
+            />
+          ) : null
         ) : error ? (
           <Alert icon={<IconAlertCircle size={16} />} color="red">
             Failed to load users. Please try again.

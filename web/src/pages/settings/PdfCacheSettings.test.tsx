@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as pdfCacheApi from "@/api/pdfCache";
 import { renderWithProviders } from "@/test/utils";
@@ -39,11 +39,25 @@ describe("PdfCacheSettings", () => {
     });
   });
 
-  it("should show loading state initially", () => {
-    renderWithProviders(<PdfCacheSettings />);
+  it("renders the shape-matched skeleton after the 150ms gate", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(pdfCacheApi.pdfCacheApi.getStats).mockReturnValueOnce(
+        new Promise(() => {}),
+      );
+      const { container } = renderWithProviders(<PdfCacheSettings />);
 
-    // Loading state shows a loader
-    expect(screen.getByText("Loading cache statistics...")).toBeInTheDocument();
+      // Pre-gate: skeleton tiles suppressed.
+      expect(container.querySelector(".mantine-Skeleton-root")).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(container.querySelector(".mantine-Skeleton-root")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("should display cache statistics labels after loading", async () => {

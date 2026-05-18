@@ -1,4 +1,5 @@
 import { notifications } from "@mantine/notifications";
+import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginDto } from "@/api/plugins";
 import { renderWithProviders, screen, userEvent, waitFor } from "@/test/utils";
@@ -185,14 +186,27 @@ describe("PluginsSettings - page header", () => {
 // 2. Loading state
 // ===========================================================================
 describe("PluginsSettings - loading state", () => {
-  it("shows a loader while data is loading", () => {
-    // Never resolve so the query stays in loading state
-    mockGetAll.mockReturnValue(new Promise(() => {}));
+  it("renders the shape-matched skeleton after the 150ms gate", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // Never resolve so the query stays in loading state
+      mockGetAll.mockReturnValue(new Promise(() => {}));
 
-    const { container } = renderWithProviders(<PluginsSettings />);
+      const { getByTestId, queryByTestId } = renderWithProviders(
+        <PluginsSettings />,
+      );
 
-    // Mantine Loader renders a span with the mantine-Loader-root class
-    expect(container.querySelector(".mantine-Loader-root")).toBeInTheDocument();
+      // Pre-gate: skeleton suppressed.
+      expect(queryByTestId("table-skeleton")).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(getByTestId("table-skeleton")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -8,7 +8,6 @@ import {
   Card,
   Group,
   Image,
-  Loader,
   SimpleGrid,
   Skeleton,
   Stack,
@@ -40,7 +39,9 @@ import type {
   ErrorGroupDto,
 } from "@/api/books";
 import { booksApi } from "@/api/books";
+import { CardListSkeleton } from "@/components/skeletons";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import {
   ERROR_TYPES_ORDER,
   getErrorTypeColor,
@@ -509,6 +510,7 @@ export function BooksInErrorSettings() {
     queryKey: ["books-with-errors"],
     queryFn: () => booksApi.getBooksWithErrors({ pageSize: 100 }),
   });
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Watch for completed analysis/thumbnail tasks and refresh
   useEffect(() => {
@@ -638,14 +640,11 @@ export function BooksInErrorSettings() {
   const hasErrors = totalBooks > 0;
 
   if (isLoading) {
-    return (
+    return showSkeleton ? (
       <Box py="xl" px="md">
-        <Stack gap="xl" align="center">
-          <Loader size="lg" />
-          <Text c="dimmed">Loading books with errors...</Text>
-        </Stack>
+        <CardListSkeleton count={3} lines={3} />
       </Box>
-    );
+    ) : null;
   }
 
   return (

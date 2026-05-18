@@ -1,12 +1,4 @@
-import {
-  Box,
-  Card,
-  Group,
-  Pagination,
-  Skeleton,
-  Stack,
-  Text,
-} from "@mantine/core";
+import { Card, Group, Pagination, Stack, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -18,51 +10,15 @@ import {
   type AlphabetLetter,
 } from "@/components/library/AlphabetFilter";
 import { MediaCard } from "@/components/library/MediaCard";
+import { CoverGridSkeleton } from "@/components/skeletons";
 import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import {
   selectCanSelectType,
   selectIsSelectionMode,
   useBulkSelectionStore,
 } from "@/store/bulkSelectionStore";
 import type { SeriesCondition } from "@/types";
-
-/** Fixed skeleton IDs to avoid array index keys */
-const SKELETON_IDS = [
-  "s1",
-  "s2",
-  "s3",
-  "s4",
-  "s5",
-  "s6",
-  "s7",
-  "s8",
-  "s9",
-  "s10",
-  "s11",
-  "s12",
-];
-
-/** Skeleton placeholder for loading state */
-function SeriesGridSkeleton({ count = 12 }: { count?: number }) {
-  const ids = SKELETON_IDS.slice(0, count);
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-        gap: "var(--mantine-spacing-md)",
-        width: "100%",
-      }}
-    >
-      {ids.map((id) => (
-        <Box key={id}>
-          <Skeleton height={225} radius="md" mb="xs" />
-          <Skeleton height={16} width="80%" radius="sm" />
-        </Box>
-      ))}
-    </div>
-  );
-}
 
 interface SeriesSectionProps {
   libraryId: string;
@@ -162,7 +118,7 @@ export function SeriesSection({
   }, [combinedCondition, filters]);
 
   // Fetch series data using the new POST search endpoint
-  const { data: seriesData, isLoading } = useQuery({
+  const { data: seriesData, isLoading: queryLoading } = useQuery({
     queryKey: ["series", "search", libraryId, page, pageSize, sort, filterKey],
     queryFn: () =>
       seriesApi.search(libraryId, {
@@ -174,6 +130,9 @@ export function SeriesSection({
     staleTime: 30000, // 30 seconds - shorter than global default
     refetchOnMount: true, // Always refetch when component mounts
   });
+
+  // Gate the skeleton on a 150ms delay so fast loads stay flash-free.
+  const showSkeleton = useShowSkeleton(queryLoading);
 
   // Serialize base condition (without alphabet filter) for alphabetical groups query
   const baseConditionKey = useMemo(
@@ -322,8 +281,10 @@ export function SeriesSection({
       {hasActiveFilters && <ActiveFilters />}
 
       {/* Series Grid */}
-      {isLoading ? (
-        <SeriesGridSkeleton count={pageSize > 12 ? 12 : pageSize} />
+      {queryLoading ? (
+        showSkeleton ? (
+          <CoverGridSkeleton count={pageSize > 12 ? 12 : pageSize} exactCount />
+        ) : null
       ) : seriesData?.data && seriesData.data.length > 0 ? (
         <>
           {/* Top Pagination */}
