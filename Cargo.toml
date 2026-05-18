@@ -38,7 +38,7 @@ unrar = { version = "0.5", optional = true }
 
 # PDF parsing
 lopdf = "0.39"
-pdfium-render = "0.8"
+pdfium-render = { version = "0.8", features = ["sync"] }
 
 # Image processing
 image = { version = "0.25", features = ["avif"] }
@@ -154,6 +154,7 @@ tokio-util = { version = "0.7", features = ["io"] }
 
 # Concurrent data structures
 dashmap = "6.1"
+lru = "0.18"
 
 # Static file embedding for frontend
 rust-embed = "8.5"

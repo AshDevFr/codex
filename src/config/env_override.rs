@@ -636,8 +636,8 @@ mod tests {
         // We'll use a helper to create a minimal config
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
-            SchedulerConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, PdfHandleCacheConfig,
+            RateLimitConfig, SQLiteConfig, SchedulerConfig,
         };
         let mut config = Config {
             data_dir: "data".to_string(),
@@ -666,6 +666,7 @@ mod tests {
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
+            pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
@@ -823,8 +824,8 @@ mod tests {
 
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, RateLimitConfig, SQLiteConfig,
-            SchedulerConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, PdfHandleCacheConfig,
+            RateLimitConfig, SQLiteConfig, SchedulerConfig,
         };
         let mut config = Config {
             data_dir: "data".to_string(),
@@ -853,6 +854,7 @@ mod tests {
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
+            pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig {
                 enabled: false,
                 prefix: "default".to_string(),

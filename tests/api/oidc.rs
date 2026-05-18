@@ -17,8 +17,8 @@ use codex::config::{
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
-    AuthTrackingService, FileCleanupService, InflightThumbnailTracker, OidcService, PdfPageCache,
-    PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
+    AuthTrackingService, FileCleanupService, InflightThumbnailTracker, OidcService, PdfHandleCache,
+    PdfPageCache, PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
     plugin::PluginManager,
 };
 use codex::utils::jwt::JwtService;
@@ -58,6 +58,11 @@ async fn create_test_state_with_oidc(
     let read_progress_service = Arc::new(ReadProgressService::new(db.clone()));
     let auth_tracking_service = Arc::new(AuthTrackingService::new(db.clone()));
     let pdf_page_cache = Arc::new(PdfPageCache::new(&pdf_config.cache_dir, false));
+    let pdf_handle_cache = Arc::new(PdfHandleCache::new(
+        8,
+        std::time::Duration::from_secs(60),
+        false,
+    ));
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
     let plugin_metrics_service = Arc::new(PluginMetricsService::new());
 
@@ -87,6 +92,7 @@ async fn create_test_state_with_oidc(
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
+        pdf_handle_cache,
         inflight_thumbnails: Arc::new(InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(UserAuthCache::new()),
         rate_limiter_service: None,

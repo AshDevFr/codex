@@ -10,6 +10,7 @@ pub mod library_jobs;
 pub mod metadata;
 pub mod oidc;
 pub mod pdf_cache;
+pub mod pdf_handle_cache;
 pub mod plugin;
 pub mod plugin_file_storage;
 pub mod plugin_metrics;
@@ -32,6 +33,10 @@ pub use filter::FilterService;
 pub use inflight_thumbnails::InflightThumbnailTracker;
 pub use oidc::OidcService;
 pub use pdf_cache::{CacheStats, CleanupResult, PdfPageCache};
+#[allow(unused_imports)]
+pub use pdf_handle_cache::{
+    HandleCacheEntrySnapshot, HandleCacheSnapshot, HandleCacheStats, PdfHandleCache,
+};
 pub use rate_limiter::RateLimiterService;
 pub use read_progress::ReadProgressService;
 pub use settings::SettingsService;
