@@ -262,6 +262,8 @@ pub struct Config {
     #[serde(default)]
     pub pdf: PdfConfig,
     #[serde(default)]
+    pub pdf_handle_cache: PdfHandleCacheConfig,
+    #[serde(default)]
     pub komga_api: KomgaApiConfig,
     #[serde(default)]
     pub koreader_api: KoreaderApiConfig,
@@ -393,6 +395,7 @@ impl Default for Config {
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
+            pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
@@ -855,6 +858,41 @@ impl Default for PdfConfig {
     }
 }
 
+/// PDF open-document handle cache configuration.
+///
+/// Independent of `PdfConfig` because the on-disk JPEG cache and the
+/// in-memory handle cache are separate subsystems with different tuning knobs.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct PdfHandleCacheConfig {
+    /// Master switch. When false, every page render re-opens the PDF.
+    pub enabled: bool,
+
+    /// Maximum number of open `PdfDocument` handles to keep resident.
+    /// Memory ceiling is roughly `capacity * typical_pdf_open_footprint`
+    /// (5-15 MB per book in practice).
+    pub capacity: usize,
+
+    /// Drop a cached handle after this many minutes of inactivity.
+    pub idle_ttl_minutes: u64,
+
+    /// How often the background sweeper walks the cache to apply
+    /// `idle_ttl_minutes`. Lower values catch idle handles sooner;
+    /// higher values reduce wakeups.
+    pub sweep_interval_seconds: u64,
+}
+
+impl Default for PdfHandleCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_PDF_HANDLE_CACHE_ENABLED", true),
+            capacity: env_or("CODEX_PDF_HANDLE_CACHE_CAPACITY", 256),
+            idle_ttl_minutes: env_or("CODEX_PDF_HANDLE_CACHE_IDLE_TTL_MINUTES", 15),
+            sweep_interval_seconds: env_or("CODEX_PDF_HANDLE_CACHE_SWEEP_INTERVAL_SECONDS", 60),
+        }
+    }
+}
+
 impl Default for EmailConfig {
     fn default() -> Self {
         Self {
@@ -1183,6 +1221,7 @@ verification_url_base: https://codex.example.com
             scheduler: SchedulerConfig::default(),
             files: FilesConfig::default(),
             pdf: PdfConfig::default(),
+            pdf_handle_cache: PdfHandleCacheConfig::default(),
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
@@ -1398,6 +1437,31 @@ scanner:
         assert!(config.cache_rendered_pages);
         assert_eq!(config.cache_dir, "data/cache");
         // pdfium_library_path is None by default (unless env var is set)
+    }
+
+    #[test]
+    fn test_pdf_handle_cache_config_default() {
+        let config = PdfHandleCacheConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.capacity, 256);
+        assert_eq!(config.idle_ttl_minutes, 15);
+        assert_eq!(config.sweep_interval_seconds, 60);
+    }
+
+    #[test]
+    fn test_pdf_handle_cache_config_roundtrip() {
+        let config = PdfHandleCacheConfig {
+            enabled: false,
+            capacity: 32,
+            idle_ttl_minutes: 5,
+            sweep_interval_seconds: 30,
+        };
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        let parsed: PdfHandleCacheConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(!parsed.enabled);
+        assert_eq!(parsed.capacity, 32);
+        assert_eq!(parsed.idle_ttl_minutes, 5);
+        assert_eq!(parsed.sweep_interval_seconds, 30);
     }
 
     #[test]

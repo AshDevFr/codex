@@ -189,6 +189,32 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("PDF page cache disabled");
     }
 
+    // Initialize PDF handle (open-document) cache and its idle sweeper.
+    // Bounded by capacity (hard cap) and an idle TTL applied by a background
+    // task. The cache stays empty until the page handler wires `get_or_open`
+    // into the render miss path.
+    let handle_cache_cfg = &config.pdf_handle_cache;
+    let pdf_handle_cache = Arc::new(crate::services::PdfHandleCache::new(
+        handle_cache_cfg.capacity,
+        std::time::Duration::from_secs(handle_cache_cfg.idle_ttl_minutes * 60),
+        handle_cache_cfg.enabled,
+    ));
+    let pdf_handle_cache_sweeper_handle = if handle_cache_cfg.enabled {
+        info!(
+            "PDF handle cache initialized (capacity: {}, idle TTL: {}min, sweep: {}s)",
+            handle_cache_cfg.capacity,
+            handle_cache_cfg.idle_ttl_minutes,
+            handle_cache_cfg.sweep_interval_seconds,
+        );
+        Some(pdf_handle_cache.clone().spawn_sweeper(
+            std::time::Duration::from_secs(handle_cache_cfg.sweep_interval_seconds),
+            background_task_cancel.clone(),
+        ))
+    } else {
+        info!("PDF handle cache disabled");
+        None
+    };
+
     // Initialize rate limiter service if enabled
     let rate_limiter_service = if config.rate_limit.enabled {
         let service = Arc::new(crate::services::RateLimiterService::new(Arc::new(
@@ -390,6 +416,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         read_progress_service,
         auth_tracking_service,
         pdf_page_cache,
+        pdf_handle_cache,
         inflight_thumbnails: Arc::new(crate::services::InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(crate::api::extractors::auth::UserAuthCache::new()),
         rate_limiter_service,
@@ -492,6 +519,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("Waiting for rate limiter cleanup task to complete...");
         if let Err(e) = handle.await {
             tracing::warn!("Rate limiter cleanup task panicked: {}", e);
+        }
+    }
+
+    // Await PDF handle cache sweeper if it was started
+    if let Some(handle) = pdf_handle_cache_sweeper_handle {
+        info!("Waiting for PDF handle cache sweeper to complete...");
+        if let Err(e) = handle.await {
+            tracing::warn!("PDF handle cache sweeper panicked: {}", e);
         }
     }
     info!("Background tasks shutdown complete");
