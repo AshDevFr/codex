@@ -91,6 +91,17 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("PDF page cache disabled");
     }
 
+    // Initialize PDF handle (open-document) cache so the scanner can invalidate
+    // cached PDFium documents when book files change. Standalone workers don't
+    // serve API requests, but the scanner still updates books and we want the
+    // cache contract (open once) to hold across deployments that share state.
+    let handle_cache_cfg = &config.pdf_handle_cache;
+    let pdf_handle_cache = Arc::new(crate::services::PdfHandleCache::new(
+        handle_cache_cfg.capacity,
+        std::time::Duration::from_secs(handle_cache_cfg.idle_ttl_minutes * 60),
+        handle_cache_cfg.enabled,
+    ));
+
     // Initialize PDFium library for PDF page rendering
     // Treat empty string same as None (auto-detect from system paths)
     let pdfium_path = config
@@ -157,6 +168,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         Some(task_metrics_service),
         config.files.clone(),
         Some(pdf_page_cache),
+        Some(pdf_handle_cache),
         Some(plugin_manager),
         None, // No OAuth state manager in standalone worker (no API state to clean)
         export_storage,

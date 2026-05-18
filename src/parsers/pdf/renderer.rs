@@ -8,27 +8,28 @@
 //! - At a configured path
 //! - In the same directory as the executable
 //!
-//! Note: The PDFium bindings are created on-demand per operation since they are not
-//! thread-safe. The library path is cached for efficiency.
+//! The library is bound once at startup into a process-global `Pdfium` instance. The
+//! `PdfHandleCache` borrows that `&'static Pdfium` to keep `PdfDocument<'static>` values
+//! resident across page renders; without a shared instance every open would need its own
+//! `Pdfium` and the borrow lifetime would prevent caching.
 
 use anyhow::{Context, Result};
 use pdfium_render::prelude::*;
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::OnceLock;
 
-/// Configuration for PDFium library location
-struct PdfiumConfig {
-    library_path: Option<PathBuf>,
-    validated: bool,
-}
+/// Global PDFium instance, initialised once at startup.
+///
+/// Stored as the owned value (not just a config) so callers can hand out
+/// `&'static Pdfium` references for the duration of the process. The handle
+/// cache requires `'static` to make cached `PdfDocument`s outlive any single
+/// request.
+static PDFIUM_INSTANCE: OnceLock<Pdfium> = OnceLock::new();
 
-/// Global PDFium library path configuration - set once at startup
-static PDFIUM_CONFIG: OnceLock<PdfiumConfig> = OnceLock::new();
-
-/// Check if PDFium has been initialized (configuration set)
+/// Check if PDFium has been initialized (instance bound)
 pub fn is_initialized() -> bool {
-    PDFIUM_CONFIG.get().map(|c| c.validated).unwrap_or(false)
+    PDFIUM_INSTANCE.get().is_some()
 }
 
 /// Initialize PDFium library configuration
@@ -45,25 +46,30 @@ pub fn is_initialized() -> bool {
 /// * `Ok(())` if initialization succeeded
 /// * `Err` if PDFium could not be loaded or was already initialized
 pub fn init_pdfium(library_path: Option<&Path>) -> Result<()> {
-    // Try to create a Pdfium instance to validate the library is available
-    let _ = create_pdfium_instance(library_path)?;
+    let pdfium = create_pdfium_instance(library_path)?;
 
-    // Store config for later use
-    PDFIUM_CONFIG
-        .set(PdfiumConfig {
-            library_path: library_path.map(|p| p.to_path_buf()),
-            validated: true,
-        })
+    PDFIUM_INSTANCE
+        .set(pdfium)
         .map_err(|_| anyhow::anyhow!("PDFium already initialized"))?;
 
     tracing::info!("PDFium library initialized successfully");
     Ok(())
 }
 
+/// Borrow the process-global `Pdfium` instance.
+///
+/// Returns `None` if `init_pdfium` has not been called. The lifetime is
+/// `'static`, which is what `PdfHandleCache` needs to keep cached
+/// `PdfDocument<'static>` values alive past the calling stack frame.
+pub fn static_pdfium() -> Option<&'static Pdfium> {
+    PDFIUM_INSTANCE.get()
+}
+
 /// Create a new Pdfium instance
 ///
-/// This creates a fresh Pdfium instance for thread-safe usage.
-/// Each call binds to the library, which is cheap after the first time.
+/// This creates a fresh Pdfium instance bound to the library at the given
+/// path (or discovered via the platform's library search). Only used at
+/// startup; callers thereafter borrow `static_pdfium()`.
 fn create_pdfium_instance(library_path: Option<&Path>) -> Result<Pdfium> {
     let bindings = match library_path {
         Some(path) => {
@@ -83,8 +89,8 @@ fn create_pdfium_instance(library_path: Option<&Path>) -> Result<Pdfium> {
             // 3. System library paths (uses dlopen search)
             let search_paths = [
                 Pdfium::pdfium_platform_library_name_at_path("./"),
-                PathBuf::from("/usr/local/lib/libpdfium.so"),
-                PathBuf::from("/usr/lib/libpdfium.so"),
+                std::path::PathBuf::from("/usr/local/lib/libpdfium.so"),
+                std::path::PathBuf::from("/usr/lib/libpdfium.so"),
             ];
 
             let mut last_error = None;
@@ -121,32 +127,35 @@ fn create_pdfium_instance(library_path: Option<&Path>) -> Result<Pdfium> {
     Ok(Pdfium::new(bindings))
 }
 
-/// Get a Pdfium instance using the configured library path
-fn get_pdfium() -> Result<Pdfium> {
-    let config = PDFIUM_CONFIG
-        .get()
+/// Open a PDF document against the process-global Pdfium binding.
+///
+/// Returns `PdfDocument<'static>` so the document can be cached past the
+/// caller's stack frame. Fails if `init_pdfium()` has not been called.
+pub fn open_pdf_document(path: &Path) -> Result<PdfDocument<'static>> {
+    let pdfium = static_pdfium()
         .ok_or_else(|| anyhow::anyhow!("PDFium not initialized. Call init_pdfium() first."))?;
 
-    create_pdfium_instance(config.library_path.as_deref())
+    pdfium
+        .load_pdf_from_file(path, None)
+        .with_context(|| format!("Failed to load PDF: {:?}", path))
 }
 
-/// Render a PDF page to JPEG image bytes
+/// Render a single page from an already-open `PdfDocument`.
+///
+/// This is the inner loop the handle cache exercises: callers open the PDF
+/// once (via [`open_pdf_document`]) and then render many pages without
+/// paying the cold-open cost again. The document is borrowed immutably;
+/// pdfium-rs does not require `&mut` for page access here.
 ///
 /// # Arguments
-/// * `path` - Path to the PDF file
+/// * `document` - An open PDF document
 /// * `page_number` - Page number (1-indexed)
 /// * `dpi` - Render resolution in DPI (72-300 recommended)
-///
-/// # Returns
-/// * `Ok(Vec<u8>)` - JPEG image data
-/// * `Err` if the page could not be rendered
-pub fn render_page(path: &Path, page_number: i32, dpi: u16) -> Result<Vec<u8>> {
-    let pdfium = get_pdfium()?;
-
-    let document = pdfium
-        .load_pdf_from_file(path, None)
-        .with_context(|| format!("Failed to load PDF: {:?}", path))?;
-
+pub fn render_page_from_doc(
+    document: &PdfDocument<'_>,
+    page_number: i32,
+    dpi: u16,
+) -> Result<Vec<u8>> {
     let page_index = (page_number - 1) as u16; // Convert 1-indexed to 0-indexed
     let pages = document.pages();
     let page_count = pages.len() as usize;
@@ -191,6 +200,22 @@ pub fn render_page(path: &Path, page_number: i32, dpi: u16) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// Render a PDF page to JPEG image bytes
+///
+/// Convenience wrapper that opens the document and renders a single page.
+/// Hot paths that render multiple pages should call [`open_pdf_document`] +
+/// [`render_page_from_doc`] (via the handle cache) instead, to avoid the
+/// per-page reopen cost.
+///
+/// # Arguments
+/// * `path` - Path to the PDF file
+/// * `page_number` - Page number (1-indexed)
+/// * `dpi` - Render resolution in DPI (72-300 recommended)
+pub fn render_page(path: &Path, page_number: i32, dpi: u16) -> Result<Vec<u8>> {
+    let document = open_pdf_document(path)?;
+    render_page_from_doc(&document, page_number, dpi)
+}
+
 /// Render a PDF page to JPEG image bytes with configurable quality
 ///
 /// # Arguments
@@ -209,11 +234,7 @@ pub fn render_page_with_quality(
     dpi: u16,
     quality: u8,
 ) -> Result<Vec<u8>> {
-    let pdfium = get_pdfium()?;
-
-    let document = pdfium
-        .load_pdf_from_file(path, None)
-        .with_context(|| format!("Failed to load PDF: {:?}", path))?;
+    let document = open_pdf_document(path)?;
 
     let page_index = (page_number - 1) as u16;
     let pages = document.pages();
@@ -267,12 +288,7 @@ pub fn render_page_with_quality(
 /// * `Err` if the PDF could not be loaded
 #[allow(dead_code)]
 pub fn get_page_count(path: &Path) -> Result<usize> {
-    let pdfium = get_pdfium()?;
-
-    let document = pdfium
-        .load_pdf_from_file(path, None)
-        .with_context(|| format!("Failed to load PDF: {:?}", path))?;
-
+    let document = open_pdf_document(path)?;
     Ok(document.pages().len() as usize)
 }
 
@@ -286,11 +302,7 @@ pub fn get_page_count(path: &Path) -> Result<usize> {
 /// * `Ok((f32, f32))` - Width and height in points (1 point = 1/72 inch)
 /// * `Err` if the page could not be accessed
 pub fn get_page_dimensions(path: &Path, page_number: i32) -> Result<(f32, f32)> {
-    let pdfium = get_pdfium()?;
-
-    let document = pdfium
-        .load_pdf_from_file(path, None)
-        .with_context(|| format!("Failed to load PDF: {:?}", path))?;
+    let document = open_pdf_document(path)?;
 
     let page_index = (page_number - 1) as u16;
     let pages = document.pages();
@@ -352,11 +364,10 @@ mod tests {
     }
 
     #[test]
-    fn test_get_pdfium_without_init() {
-        // Create a new OnceLock for this test to avoid interference
-        // Since we can't reset the global, we test the error case differently
+    fn test_open_pdf_document_without_init() {
+        // Without a global init, open_pdf_document must fail with a clear message.
         if !is_initialized() {
-            let result = get_pdfium();
+            let result = open_pdf_document(Path::new("/nonexistent/file.pdf"));
             assert!(result.is_err());
             assert!(
                 result

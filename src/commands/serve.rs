@@ -215,6 +215,19 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         None
     };
 
+    // Subscribe the handle cache to entity events so book mutations evict
+    // stale handles automatically. Covers BookUpdated (analyzer, manual edits,
+    // scanner soft-delete/restore) and BookDeleted (purge paths).
+    let _pdf_handle_cache_subscriber_handle = if handle_cache_cfg.enabled {
+        let subscriber = crate::services::PdfHandleCacheSubscriber::new(
+            pdf_handle_cache.clone(),
+            event_broadcaster.clone(),
+        );
+        Some(subscriber.start())
+    } else {
+        None
+    };
+
     // Initialize rate limiter service if enabled
     let rate_limiter_service = if config.rate_limit.enabled {
         let service = Arc::new(crate::services::RateLimiterService::new(Arc::new(
@@ -382,6 +395,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             Some(task_metrics_service.clone()),
             config.files.clone(),
             Some(pdf_page_cache.clone()),
+            Some(pdf_handle_cache.clone()),
             Some(plugin_manager.clone()),
             Some(oauth_state_manager.clone()),
             export_storage.clone(),

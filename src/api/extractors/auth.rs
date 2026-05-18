@@ -202,7 +202,6 @@ pub struct AppState {
     /// PDF handle cache service for caching open PDFium document handles
     /// Avoids re-opening the same PDF on every page request; complements the
     /// on-disk JPEG cache by short-circuiting the cold-render path
-    #[allow(dead_code)]
     pub pdf_handle_cache: Arc<crate::services::PdfHandleCache>,
     /// In-flight thumbnail request tracker to prevent thundering herd
     /// When multiple requests come in for the same uncached thumbnail,

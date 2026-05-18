@@ -248,11 +248,31 @@ async fn serve_pdf_page_with_streaming(
 
     let path = std::path::PathBuf::from(file_path);
     let render_start = std::time::Instant::now();
-    let render_result = tokio::task::spawn_blocking(move || {
-        crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, page_number, dpi)
-    })
-    .await
-    .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?;
+
+    // Route through the in-memory handle cache so repeated requests on the
+    // same book skip the per-page PDFium open. If PDFium isn't initialised
+    // (no library binding available), fall back to the legacy path which can
+    // serve embedded JPEGs directly via lopdf.
+    let render_result = if crate::parsers::pdf::static_pdfium().is_some() {
+        let cache = state.pdf_handle_cache.clone();
+        let opener_path = path.clone();
+        let lookup_path = path.clone();
+        tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
+            let doc_arc = cache.get_or_open(book_id, lookup_path, move || {
+                crate::parsers::pdf::open_pdf_document(&opener_path)
+            })?;
+            let doc = doc_arc.blocking_lock();
+            crate::parsers::pdf::render_page_from_doc(&doc, page_number, dpi)
+        })
+        .await
+        .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
+    } else {
+        tokio::task::spawn_blocking(move || {
+            crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, page_number, dpi)
+        })
+        .await
+        .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
+    };
 
     let image_data = match render_result {
         Ok(data) => data,

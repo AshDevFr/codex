@@ -418,6 +418,7 @@ pub fn spawn_workers(
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     files_config: crate::config::FilesConfig,
     pdf_page_cache: Option<Arc<crate::services::PdfPageCache>>,
+    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
     plugin_manager: Option<Arc<crate::services::plugin::PluginManager>>,
     oauth_state_manager: Option<Arc<crate::services::user_plugin::OAuthStateManager>>,
     export_storage: Arc<crate::services::ExportStorage>,
@@ -452,6 +453,12 @@ pub fn spawn_workers(
         // Add PDF cache handler if available
         if let Some(ref pdf_cache) = pdf_page_cache {
             task_worker = task_worker.with_pdf_cache(pdf_cache.clone(), settings_service.clone());
+        }
+
+        // Wire the PDF handle cache so scanner-triggered file updates can
+        // evict cached open PdfDocument handles for changed books.
+        if let Some(ref handle_cache) = pdf_handle_cache {
+            task_worker = task_worker.with_pdf_handle_cache(handle_cache.clone());
         }
 
         // Add plugin manager if available (for plugin auto-match tasks)
