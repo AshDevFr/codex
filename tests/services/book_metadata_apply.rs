@@ -1,6 +1,6 @@
-//! Tests for BookMetadataApplier — Phase 12 of metadata-count-split focus on
-//! the new per-book volume / chapter write blocks. Uses the same plugin-permission
-//! shape as the series-side `metadata_apply.rs` tests for consistency.
+//! Tests for BookMetadataApplier focused on the per-book volume / chapter
+//! write blocks. Uses the same plugin-permission shape as the series-side
+//! `metadata_apply.rs` tests for consistency.
 
 #[path = "../common/mod.rs"]
 mod common;

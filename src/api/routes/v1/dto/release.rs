@@ -6,7 +6,7 @@
 //!   admin source management UI.
 //!
 //! Note: this module deliberately does NOT introduce a new `ReleaseAnnounced`
-//! event variant - that lands in Phase 7 along with the frontend inbox UI.
+//! event variant; that lands later along with the frontend inbox UI.
 //! State-change endpoints in this module emit `SeriesUpdated` events with a
 //! `releases` field marker so the existing event broadcaster carries them.
 

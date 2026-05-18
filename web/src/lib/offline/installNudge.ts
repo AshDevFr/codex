@@ -1,5 +1,5 @@
 /**
- * iOS Safari install nudge (Phase 12 T10).
+ * iOS Safari install nudge.
  *
  * On a non-installed iOS Safari tab the browser is allowed to evict our
  * IndexedDB + Cache Storage after ~7 days of inactivity, even after

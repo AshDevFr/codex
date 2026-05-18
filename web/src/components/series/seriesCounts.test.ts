@@ -102,8 +102,8 @@ describe("formatSeriesCounts", () => {
     ).toBe("0/0 vol");
   });
 
-  // Phase 13: localMax* fields override the file-count numerator when the
-  // scanner has populated structured book_metadata.volume / chapter values.
+  // localMax* fields override the file-count numerator when the scanner
+  // has populated structured book_metadata.volume / chapter values.
   it("uses localMaxVolume as the volume numerator when present", () => {
     expect(
       formatSeriesCounts({

@@ -187,7 +187,7 @@ export function ComicReader({
   );
   const setGlobalPageLayout = useReaderStore((state) => state.setPageLayout);
 
-  // T11: track whether the current book has been saved for offline reading.
+  // Track whether the current book has been saved for offline reading.
   // When true, the prefetch window expands aggressively (every page is in
   // the SW cache; preloading them just primes the browser's image decoder).
   // The listener keeps the flag in sync if the user removes/re-downloads
@@ -649,7 +649,7 @@ export function ComicReader({
     // Build list of pages to preload (current page always included)
     const pagesToPreload = new Set<number>([currentPage]);
 
-    // T11: floor the prefetch window so cellular readers (and especially
+    // Floor the prefetch window so cellular readers (and especially
     // downloaded books where every page is a free cache hit) get a snappy
     // next-page tap regardless of the user's preload-pages setting.
     const widePreload = getEffectivePreloadWindow(

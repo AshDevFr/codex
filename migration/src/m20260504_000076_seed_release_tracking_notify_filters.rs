@@ -1,5 +1,5 @@
 //! Seed the server-wide `release_tracking.notify_languages` and
-//! `release_tracking.notify_plugins` settings (Phase 8 follow-up).
+//! `release_tracking.notify_plugins` settings.
 //!
 //! These two arrays filter the in-app `release_announced` notification stream
 //! (toasts + Releases nav badge):

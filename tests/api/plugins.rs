@@ -782,7 +782,7 @@ async fn test_list_plugins_with_data() {
 }
 
 // =============================================================================
-// Plugin Actions API Tests (Phase 4)
+// Plugin Actions API Tests
 // =============================================================================
 
 use codex::api::routes::v1::dto::{ExecutePluginResponse, PluginActionsResponse};
@@ -1017,7 +1017,7 @@ async fn test_apply_series_metadata_requires_auth() {
 }
 
 // =============================================================================
-// Permission-Based Access Tests (Phase 8)
+// Permission-Based Access Tests
 // =============================================================================
 
 /// Create a maintainer user and return a JWT token.
@@ -1441,7 +1441,7 @@ async fn test_get_search_title_with_search_query_template() {
 }
 
 // =============================================================================
-// Unified Series Context Integration Tests (Phase 4)
+// Unified Series Context Integration Tests
 // =============================================================================
 
 use codex::db::repositories::{GenreRepository, SeriesMetadataRepository, TagRepository};

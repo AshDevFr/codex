@@ -1,5 +1,5 @@
 /**
- * Series batch download queue (Phase 12 T5).
+ * Series batch download queue.
  *
  * Wraps the per-book download functions from `./downloadManager` in a small
  * in-process queue so a "Download series" action can fan out across every

@@ -137,7 +137,7 @@ pub struct Model {
     pub chapter: Option<f32>,
     pub count: Option<i32>,
     pub isbns: Option<String>,
-    // New book metadata fields (Phase 1)
+    // Extended book metadata fields
     /// Book type classification (comic, manga, novel, etc.)
     pub book_type: Option<String>,
     /// Book subtitle
@@ -183,7 +183,7 @@ pub struct Model {
     pub chapter_lock: bool,
     pub count_lock: bool,
     pub isbns_lock: bool,
-    // New lock fields for Phase 1 fields
+    // Lock fields for the extended book metadata fields
     pub book_type_lock: bool,
     pub subtitle_lock: bool,
     pub authors_json_lock: bool,

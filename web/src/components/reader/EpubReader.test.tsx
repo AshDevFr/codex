@@ -4,14 +4,14 @@ import { renderWithProviders, screen } from "@/test/utils";
 import { EpubReader } from "./EpubReader";
 
 // Captures the per-event handlers `EpubReader` registers on the rendition,
-// so tests can fire (e.g.) the "click" handler to verify R7-1 toolbar toggle.
+// so tests can fire (e.g.) the "click" handler to verify the toolbar toggle.
 const renditionHandlers: Record<string, (...args: unknown[]) => void> = {};
-// Captures hooks.content.register callbacks so R10-1 tests can drive the
-// inside-iframe pointer hook with a fake `contents` document.
+// Captures hooks.content.register callbacks so iframe pointer tests can drive
+// the inside-iframe pointer hook with a fake `contents` document.
 const contentHookCallbacks: Array<(contents: { document: Document }) => void> =
   [];
-// Stash the latest readerStyles ReactReader received so R7-3 tests can assert
-// the side-arrow `display: none` override is applied on mobile viewports.
+// Stash the latest readerStyles ReactReader received so mobile-styles tests can
+// assert the side-arrow `display: none` override is applied on mobile viewports.
 let lastReaderStyles: Record<string, Record<string, unknown>> | null = null;
 
 // Mock react-reader since it's a complex library that requires actual EPUB files
@@ -381,12 +381,12 @@ describe("EpubReader", () => {
     });
   });
 
-  describe("mobile tap-to-toggle toolbar (R7-1)", () => {
-    // The EPUB reader no longer wires an outer-container useTouchNav —
-    // the iframe-internal pointer handler (R10-1) is the sole authority
-    // for taps to avoid double-classifying the same touch on iOS Safari.
+  describe("mobile tap-to-toggle toolbar", () => {
+    // The EPUB reader no longer wires an outer-container useTouchNav: the
+    // iframe-internal pointer handler is the sole authority for taps, to
+    // avoid double-classifying the same touch on iOS Safari.
 
-    it("registers a content hook that wires pointer events on the iframe doc (R10-1)", async () => {
+    it("registers a content hook that wires pointer events on the iframe doc", async () => {
       renderWithProviders(<EpubReader {...defaultProps} />);
 
       // Rendition is wired asynchronously via setTimeout in the mock
@@ -396,11 +396,11 @@ describe("EpubReader", () => {
     });
   });
 
-  describe("EPUB iframe pointer navigation (R10-1)", () => {
-    // The iframe hook listens for pointer events (not `click`). iOS
-    // Safari can suppress `click` inside sandboxed iframes — switching
-    // to it during this work lost navigation entirely on real devices
-    // — while pointer events fire reliably. Tap-zone width comes from
+  describe("EPUB iframe pointer navigation", () => {
+    // The iframe hook listens for pointer events (not `click`). iOS Safari
+    // can suppress `click` inside sandboxed iframes (switching to it during
+    // earlier work lost navigation entirely on real devices), while pointer
+    // events fire reliably. Tap-zone width comes from
     // `window.innerWidth` (the parent viewport) because in epub.js's
     // paginated mode the iframe document is wider than the visible area
     // due to CSS columns.
@@ -584,7 +584,7 @@ describe("EpubReader", () => {
     });
   });
 
-  describe("mobile reader styles (R7-3)", () => {
+  describe("mobile reader styles", () => {
     it("does not hide side arrows on non-mobile viewports", () => {
       renderWithProviders(<EpubReader {...defaultProps} />);
 

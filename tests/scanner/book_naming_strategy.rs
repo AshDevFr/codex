@@ -546,7 +546,7 @@ async fn test_custom_book_strategy_persistence() {
 }
 
 // ============================================================================
-// Per-book volume/chapter classification (Phase 12 of metadata-count-split)
+// Per-book volume/chapter classification
 // ============================================================================
 //
 // These tests cover the strategy x parse-case matrix the scanner now relies on

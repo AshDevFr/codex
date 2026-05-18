@@ -74,7 +74,7 @@ pub async fn validate_metadata_refresh_config(
         None
     };
 
-    // Phase 9: only series_only is honoured at runtime.
+    // Only series_only is honoured at runtime.
     match config.scope {
         RefreshScope::SeriesOnly => {
             if !config.book_field_groups.is_empty() || !config.book_extra_fields.is_empty() {

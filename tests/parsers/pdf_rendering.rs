@@ -1,6 +1,6 @@
 //! PDF Rendering Integration Tests
 //!
-//! Tests for the PDF rendering infrastructure (Phase 5 of pdf-page-rendering.md).
+//! Tests for the PDF rendering infrastructure.
 //!
 //! These tests cover:
 //! 1. Text-only PDF rendering

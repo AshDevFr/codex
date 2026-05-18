@@ -48,7 +48,7 @@ impl BookMetadataRepository {
             chapter: Set(metadata_model.chapter),
             count: Set(metadata_model.count),
             isbns: Set(metadata_model.isbns.clone()),
-            // New Phase 1 fields
+            // Extended book metadata fields
             book_type: Set(metadata_model.book_type.clone()),
             subtitle: Set(metadata_model.subtitle.clone()),
             authors_json: Set(metadata_model.authors_json.clone()),
@@ -81,7 +81,7 @@ impl BookMetadataRepository {
             chapter_lock: Set(metadata_model.chapter_lock),
             count_lock: Set(metadata_model.count_lock),
             isbns_lock: Set(metadata_model.isbns_lock),
-            // New Phase 1 lock fields
+            // Extended book metadata lock fields
             book_type_lock: Set(metadata_model.book_type_lock),
             subtitle_lock: Set(metadata_model.subtitle_lock),
             authors_json_lock: Set(metadata_model.authors_json_lock),
@@ -191,7 +191,7 @@ impl BookMetadataRepository {
             chapter: Set(metadata_model.chapter),
             count: Set(metadata_model.count),
             isbns: Set(metadata_model.isbns.clone()),
-            // New Phase 1 fields
+            // Extended book metadata fields
             book_type: Set(metadata_model.book_type.clone()),
             subtitle: Set(metadata_model.subtitle.clone()),
             authors_json: Set(metadata_model.authors_json.clone()),
@@ -224,7 +224,7 @@ impl BookMetadataRepository {
             chapter_lock: Set(metadata_model.chapter_lock),
             count_lock: Set(metadata_model.count_lock),
             isbns_lock: Set(metadata_model.isbns_lock),
-            // New Phase 1 lock fields
+            // Extended book metadata lock fields
             book_type_lock: Set(metadata_model.book_type_lock),
             subtitle_lock: Set(metadata_model.subtitle_lock),
             authors_json_lock: Set(metadata_model.authors_json_lock),
@@ -355,7 +355,7 @@ impl BookMetadataRepository {
             chapter: Set(None),
             count: Set(None),
             isbns: Set(None),
-            // New Phase 1 fields
+            // Extended book metadata fields
             book_type: Set(None),
             subtitle: Set(None),
             authors_json: Set(None),
@@ -387,7 +387,7 @@ impl BookMetadataRepository {
             chapter_lock: Set(false),
             count_lock: Set(false),
             isbns_lock: Set(false),
-            // New Phase 1 lock fields
+            // Extended book metadata lock fields
             book_type_lock: Set(false),
             subtitle_lock: Set(false),
             authors_json_lock: Set(false),
@@ -493,7 +493,7 @@ mod tests {
             chapter: None,
             count: None,
             isbns: None,
-            // New Phase 1 fields
+            // Extended book metadata fields
             book_type: None,
             subtitle: None,
             authors_json: None,
@@ -525,7 +525,7 @@ mod tests {
             chapter_lock: false,
             count_lock: false,
             isbns_lock: false,
-            // New Phase 1 lock fields
+            // Extended book metadata lock fields
             book_type_lock: false,
             subtitle_lock: false,
             authors_json_lock: false,
@@ -722,7 +722,7 @@ mod tests {
         assert!(!retrieved.publisher_lock);
     }
 
-    // -- Per-book volume/chapter classification (Phase 11) --
+    // -- Per-book volume/chapter classification --
 
     #[tokio::test]
     async fn test_chapter_round_trip_fractional() {

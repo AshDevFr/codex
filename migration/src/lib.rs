@@ -79,7 +79,7 @@ mod m20260201_000042_add_cover_lock;
 // Rate-limited task reschedule support
 mod m20260202_000043_add_task_reschedule_count;
 
-// Book metadata expansion (Phase 1)
+// Book metadata expansion
 mod m20260202_000044_book_metadata_expansion;
 mod m20260202_000046_create_book_external_ids;
 mod m20260202_000047_create_book_covers;
@@ -137,25 +137,25 @@ mod m20260410_000066_add_export_type;
 
 // Split series_metadata.total_book_count into total_volume_count and total_chapter_count
 mod m20260502_000067_split_book_count;
-// Drop legacy series_metadata.total_book_count and lock columns (Phase 9 hard removal)
+// Drop legacy series_metadata.total_book_count and lock columns (hard removal)
 mod m20260502_000068_drop_book_count;
-// Add chapter + chapter_lock columns to book_metadata (Phase 11 per-book classification)
+// Add chapter + chapter_lock columns to book_metadata (per-book classification)
 mod m20260503_000069_add_book_chapter;
-// Backfill volume/chapter from filename for already-scanned books (Phase 12)
+// Backfill volume/chapter from filename for already-scanned books
 mod m20260503_000070_backfill_book_volume_chapter;
-// Library jobs table for scheduled work (Phase 9 of scheduled-metadata-refresh).
-// Filename retains the original Phase 1 name for git-history continuity; module
+// Library jobs table for scheduled work.
+// Filename retains the original name for git-history continuity; module
 // now creates the generic `library_jobs` table instead of adding a JSON column.
 mod m20260503_000071_add_metadata_refresh_config;
-// Release tracking (Phase 1): series_tracking sidecar + series_aliases
+// Release tracking: series_tracking sidecar + series_aliases
 mod m20260503_000072_create_release_tracking;
-// Release tracking (Phase 2): release_sources + release_ledger
+// Release tracking: release_sources + release_ledger
 mod m20260503_000073_create_release_ledger;
-// Release tracking (Phase 6): per-series language preference for scanlation feeds
+// Release tracking: per-series language preference for scanlation feeds
 mod m20260504_000074_add_tracking_languages;
-// Release tracking (Phase 6): server-wide default language list
+// Release tracking: server-wide default language list
 mod m20260504_000075_seed_release_tracking_languages;
-// Release tracking (Phase 8 follow-up): server-wide notification filter settings
+// Release tracking: server-wide notification filter settings
 mod m20260504_000076_seed_release_tracking_notify_filters;
 // Release tracking: per-source last-poll summary surfaced in the UI
 mod m20260505_000077_add_release_sources_last_summary;
@@ -236,7 +236,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260201_000042_add_cover_lock::Migration),
             // Rate-limited task reschedule support
             Box::new(m20260202_000043_add_task_reschedule_count::Migration),
-            // Book metadata expansion (Phase 1)
+            // Book metadata expansion
             Box::new(m20260202_000044_book_metadata_expansion::Migration),
             Box::new(m20260202_000046_create_book_external_ids::Migration),
             Box::new(m20260202_000047_create_book_covers::Migration),
@@ -278,23 +278,23 @@ impl MigratorTrait for Migrator {
             Box::new(m20260410_000066_add_export_type::Migration),
             // Split total_book_count into total_volume_count and total_chapter_count
             Box::new(m20260502_000067_split_book_count::Migration),
-            // Drop legacy total_book_count column and lock (Phase 9 hard removal)
+            // Drop legacy total_book_count column and lock (hard removal)
             Box::new(m20260502_000068_drop_book_count::Migration),
-            // Add chapter + chapter_lock columns to book_metadata (Phase 11)
+            // Add chapter + chapter_lock columns to book_metadata
             Box::new(m20260503_000069_add_book_chapter::Migration),
-            // Backfill book_metadata.volume / .chapter from filename (Phase 12)
+            // Backfill book_metadata.volume / .chapter from filename
             Box::new(m20260503_000070_backfill_book_volume_chapter::Migration),
-            // Per-library scheduled metadata refresh config (Phase 1)
+            // Per-library scheduled metadata refresh config
             Box::new(m20260503_000071_add_metadata_refresh_config::Migration),
-            // Release tracking (Phase 1)
+            // Release tracking
             Box::new(m20260503_000072_create_release_tracking::Migration),
-            // Release tracking (Phase 2)
+            // Release tracking
             Box::new(m20260503_000073_create_release_ledger::Migration),
-            // Release tracking (Phase 6): per-series language preference
+            // Release tracking: per-series language preference
             Box::new(m20260504_000074_add_tracking_languages::Migration),
-            // Release tracking (Phase 6): server-wide default language list
+            // Release tracking: server-wide default language list
             Box::new(m20260504_000075_seed_release_tracking_languages::Migration),
-            // Release tracking (Phase 8 follow-up): notification filter settings
+            // Release tracking: notification filter settings
             Box::new(m20260504_000076_seed_release_tracking_notify_filters::Migration),
             // Release tracking: per-source last-poll summary
             Box::new(m20260505_000077_add_release_sources_last_summary::Migration),

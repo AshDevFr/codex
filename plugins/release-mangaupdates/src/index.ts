@@ -205,7 +205,7 @@ async function* iterateTrackedSeries(
  *
  * However, the current `releases/list_tracked` response shape doesn't
  * expose per-series `languages` — see plan doc for this design choice.
- * For Phase 6 the plugin reads its admin-level group blocklist and emits
+ * Currently the plugin reads its admin-level group blocklist and emits
  * candidates with the language tag from the parsed entry; the host's
  * `latest_known_*` advance gate enforces the per-series language list
  * authoritatively (see `services/release/languages.rs`).

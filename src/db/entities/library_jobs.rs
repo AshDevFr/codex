@@ -2,7 +2,7 @@
 //!
 //! Generic across job types via the `r#type` discriminator. The `config`
 //! column carries a JSON payload whose shape depends on `r#type`.
-//! Phase 9 introduces the `metadata_refresh` type; future work can add
+//! Currently the `metadata_refresh` type is supported; future work can add
 //! `scan`, `cleanup`, etc. without schema changes.
 
 use chrono::{DateTime, Utc};

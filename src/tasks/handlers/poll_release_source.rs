@@ -186,12 +186,12 @@ impl TaskHandler for PollReleaseSourceHandler {
                 ));
             }
 
-            // Synthetic in-core sources (Phase 5 metadata-piggyback) don't
-            // route through a plugin process. We don't have a code path for
-            // them yet; record a benign skip so the scheduler doesn't loop.
+            // Synthetic in-core sources (metadata-piggyback) don't route
+            // through a plugin process. We don't have a code path for them
+            // yet; record a benign skip so the scheduler doesn't loop.
             if source.plugin_id == source_plugin_id::CORE {
                 debug!(
-                    "Task {}: Source {} is in-core (plugin_id=core); skipping (Phase 5 territory)",
+                    "Task {}: Source {} is in-core (plugin_id=core); skipping (no in-core poll path)",
                     task.id, source.id
                 );
                 return Ok(TaskResult::success_with_data(

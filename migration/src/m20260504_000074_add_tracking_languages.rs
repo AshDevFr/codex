@@ -1,4 +1,4 @@
-//! Add `languages` column to `series_tracking` (Phase 6 of release-tracking).
+//! Add `languages` column to `series_tracking`.
 //!
 //! Per-series language preference for release-source plugins (e.g.
 //! MangaUpdates) that aggregate scanlations across many languages. Stored as a

@@ -707,7 +707,7 @@ pub struct BookMetadataDto {
     pub editors: Vec<String>,
 
     // ==========================================================================
-    // New book metadata fields (Phase 6)
+    // New book metadata fields
     // ==========================================================================
     /// Book type classification (comic, manga, novel, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -919,7 +919,7 @@ pub struct ReplaceBookMetadataRequest {
     pub isbns: Option<String>,
 
     // ==========================================================================
-    // New book metadata fields (Phase 6)
+    // New book metadata fields
     // ==========================================================================
     /// Book type classification (comic, manga, novel, etc.)
     #[schema(example = "novel")]
@@ -1088,7 +1088,7 @@ pub struct PatchBookMetadataRequest {
     pub isbns: super::patch::PatchValue<String>,
 
     // ==========================================================================
-    // New book metadata fields (Phase 6)
+    // New book metadata fields
     // ==========================================================================
     /// Book type classification (comic, manga, novel, etc.)
     #[serde(default)]
@@ -1248,7 +1248,7 @@ pub struct BookMetadataResponse {
     pub isbns: Option<String>,
 
     // ==========================================================================
-    // New book metadata fields (Phase 6)
+    // New book metadata fields
     // ==========================================================================
     /// Book type classification (comic, manga, novel, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1423,7 +1423,7 @@ pub struct BookMetadataLocks {
     pub isbns_lock: bool,
 
     // ==========================================================================
-    // New lock fields (Phase 6)
+    // New lock fields
     // ==========================================================================
     /// Whether book_type is locked
     #[schema(example = false)]
@@ -1561,7 +1561,7 @@ pub struct UpdateBookMetadataLocksRequest {
     pub isbns_lock: Option<bool>,
 
     // ==========================================================================
-    // New lock fields (Phase 6)
+    // New lock fields
     // ==========================================================================
     /// Whether to lock book_type
     pub book_type_lock: Option<bool>,
@@ -2011,7 +2011,7 @@ pub struct BookFullMetadata {
     pub isbns: Option<String>,
 
     // ==========================================================================
-    // Phase 6 fields (book-specific rich metadata)
+    // Book-specific rich metadata fields
     // ==========================================================================
     /// Book type classification (comic, manga, novel, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]

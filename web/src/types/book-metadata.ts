@@ -1,9 +1,9 @@
 /**
- * Extended book metadata types for Phase 5 frontend improvements.
+ * Extended book metadata types for the frontend.
  *
- * These types represent the expanded book metadata fields added in Phase 1.
- * Once the backend DTOs are updated (Phase 6), these can be replaced with
- * the generated types from the OpenAPI spec.
+ * These types represent the expanded book metadata fields. Once the backend
+ * DTOs are updated, these can be replaced with the generated types from the
+ * OpenAPI spec.
  */
 
 /**
@@ -122,14 +122,14 @@ export interface BookCover {
 }
 
 /**
- * Extended book metadata with new Phase 1 fields.
+ * Extended book metadata with additional fields.
  * This extends the existing BookMetadataDto with additional fields.
  */
 export interface ExtendedBookMetadata {
   // Fields not included in BookMetadataDto but available in BookFullMetadata
   isbns?: string | null;
 
-  // New Phase 1 fields
+  // Extended metadata fields
   bookType?: BookType | null;
   subtitle?: string | null;
   authorsJson?: string | null;

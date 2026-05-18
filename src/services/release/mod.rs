@@ -9,9 +9,8 @@
 //!   same domain.
 //! - [`schedule`] — interval resolution and jitter for the polling
 //!   scheduler.
-//! - [`upstream_gap`] — Phase 5 metadata-derived publication-gap signal
-//!   surfaced on the series DTO. Read-side only; does not write to the
-//!   release ledger.
+//! - [`upstream_gap`] — metadata-derived publication-gap signal surfaced on
+//!   the series DTO. Read-side only; does not write to the release ledger.
 //! - [`seed`] — derives tracking defaults (aliases, `latest_known_*`,
 //!   per-axis tracking flags) from existing series data so a user toggling
 //!   tracking on doesn't have to fill in a setup form.

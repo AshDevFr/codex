@@ -1,10 +1,10 @@
 /// <reference lib="webworker" />
 
 /**
- * Codex service worker — Phase 12 (`injectManifest` mode).
+ * Codex service worker (`injectManifest` mode).
  *
- * Mirrors the runtime caching that Phase 6's `generateSW` config provided,
- * plus a new per-book CacheFirst route that serves downloaded books from a
+ * Mirrors the runtime caching the prior `generateSW` config provided,
+ * plus a per-book CacheFirst route that serves downloaded books from a
  * dedicated cache. The downloaded-id set is hydrated from IndexedDB at boot
  * and kept in sync via a BroadcastChannel published by the page-side
  * download manager.

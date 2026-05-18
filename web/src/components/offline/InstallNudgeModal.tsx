@@ -3,8 +3,8 @@ import { IconShare } from "@tabler/icons-react";
 import { recordNudgeDismissal } from "@/lib/offline/installNudge";
 
 /**
- * Phase 12 T10: iOS-Safari-only soft modal shown before the first
- * offline download in a session.
+ * iOS-Safari-only soft modal shown before the first offline download in
+ * a session.
  *
  * Explains the platform-specific eviction risk and offers two paths:
  *

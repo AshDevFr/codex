@@ -263,7 +263,7 @@ The following paths are exempt from rate limiting:
         v1::handlers::tracking::create_series_alias,
         v1::handlers::tracking::delete_series_alias,
 
-        // Release ledger + sources (Phase 2)
+        // Release ledger + sources
         v1::handlers::releases::list_series_releases,
         v1::handlers::releases::list_release_inbox,
         v1::handlers::releases::update_release_entry,
@@ -711,7 +711,7 @@ The following paths are exempt from rate limiting:
             v1::dto::tracking::SeriesAliasListResponse,
             v1::dto::tracking::CreateSeriesAliasRequest,
 
-            // Release-ledger + source DTOs (Phase 2)
+            // Release-ledger + source DTOs
             v1::dto::release::ReleaseSpanDto,
             v1::dto::release::ReleaseLedgerEntryDto,
             v1::dto::release::ReleaseLedgerListResponse,
@@ -945,7 +945,7 @@ The following paths are exempt from rate limiting:
             v1::dto::EnqueueBulkAutoMatchRequest,
             v1::dto::EnqueueLibraryAutoMatchRequest,
 
-            // Library Jobs DTOs (Phase 9)
+            // Library Jobs DTOs
             v1::dto::LibraryJobDto,
             v1::dto::LibraryJobConfigDto,
             v1::dto::MetadataRefreshJobConfigDto,

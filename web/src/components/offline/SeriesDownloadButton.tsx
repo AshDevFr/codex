@@ -34,7 +34,7 @@ import {
 import { InstallNudgeModal } from "./InstallNudgeModal";
 
 /**
- * Phase 12 T5: "Download series" entry point for SeriesDetail.
+ * "Download series" entry point for SeriesDetail.
  *
  * Renders a primary action that opens a modal listing every book in the
  * series with its planned size and current state. Confirming kicks off
@@ -206,7 +206,7 @@ export function SeriesDownloadButton({
   }, [seriesId, books]);
 
   const handleStart = useCallback(() => {
-    // T10: iOS Safari tab gets the install nudge before the batch starts.
+    // iOS Safari tab gets the install nudge before the batch starts.
     // Continue runs `startInternal`; dismissal just closes the nudge and
     // leaves the user on the confirmation panel so they can opt back in.
     if (shouldShowInstallNudge()) {

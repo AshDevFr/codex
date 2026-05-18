@@ -5,8 +5,8 @@
  * (`totalVolumeCount`, `totalChapterCount`). Either total may be null/undefined
  * when the metadata provider didn't expose it.
  *
- * `localMaxVolume` and `localMaxChapter` are per-series aggregates (Phase 13)
- * derived from `book_metadata.volume` / `book_metadata.chapter`. When present,
+ * `localMaxVolume` and `localMaxChapter` are per-series aggregates derived
+ * from `book_metadata.volume` / `book_metadata.chapter`. When present,
  * the numerator switches from "files on disk" to "highest known unit number"
  * so a series with `v01..v14 + v15-c126` correctly displays `14/17 vol` rather
  * than `15/17 vol`.

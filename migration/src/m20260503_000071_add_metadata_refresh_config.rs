@@ -1,13 +1,13 @@
-//! Create the `library_jobs` table (Phase 9 of scheduled-metadata-refresh).
+//! Create the `library_jobs` table.
 //!
-//! Replaces the original Phase 1 design (a `metadata_refresh_config` JSON
-//! column on `libraries`) with a generic, type-discriminated table that
-//! supports N independent jobs per library. The `type` column dispatches to
-//! type-specific config; `metadata_refresh` is the first type. Future job
-//! types (scan, cleanup) extend the discriminator without schema changes.
+//! Replaces the original design (a `metadata_refresh_config` JSON column on
+//! `libraries`) with a generic, type-discriminated table that supports N
+//! independent jobs per library. The `type` column dispatches to type-specific
+//! config; `metadata_refresh` is the first type. Future job types (scan,
+//! cleanup) extend the discriminator without schema changes.
 //!
 //! The migration filename is preserved (timestamp stays the same) because
-//! the original Phase 1 migration never shipped to production.
+//! the original migration never shipped to production.
 
 use sea_orm_migration::prelude::*;
 

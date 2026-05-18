@@ -22,9 +22,9 @@ export interface BehindByBadgeProps {
  * Compact "+N ch" / "+N vol" badge near the series header. Two variants:
  *
  * - `translation` (orange, actionable): `latestKnownChapter > localMaxChapter`.
- *   Click navigates to the Releases tab. Phase 6 (MangaUpdates) is the writer.
- * - `upstream` (grey, informational): `upstreamChapterGap > 0`. Phase 5 metadata
- *   gap signal — not actionable, no Releases tab to send the user to.
+ *   Click navigates to the Releases tab. The MangaUpdates plugin is the writer.
+ * - `upstream` (grey, informational): `upstreamChapterGap > 0`. Metadata-derived
+ *   gap signal, not actionable; no Releases tab to send the user to.
  */
 export function BehindByBadge({
   variant,

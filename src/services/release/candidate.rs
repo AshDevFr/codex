@@ -1,7 +1,7 @@
 //! Wire-format `ReleaseCandidate` and parsing helpers.
 //!
 //! Plugins emit candidates over `releases/record` (and as the response of
-//! `releases/poll` in Phase 4). The host rejects malformed candidates and
+//! `releases/poll`). The host rejects malformed candidates and
 //! drops below-threshold candidates before reaching the ledger.
 
 use chrono::{DateTime, Utc};

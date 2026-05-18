@@ -1365,7 +1365,7 @@ async fn test_book_metadata_locks_all_phase6_fields() {
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
-    // Verify all Phase 6 lock fields are present in the response
+    // Verify all extended book metadata lock fields are present in the response
     let request =
         get_request_with_auth(&format!("/api/v1/books/{}/metadata/locks", book_id), &token);
     let (status, response): (StatusCode, Option<serde_json::Value>) =
@@ -1374,7 +1374,7 @@ async fn test_book_metadata_locks_all_phase6_fields() {
     assert_eq!(status, StatusCode::OK);
     let body = response.unwrap();
 
-    // Phase 6 lock fields
+    // Extended book metadata lock fields
     assert!(
         body.get("bookTypeLock").is_some(),
         "bookTypeLock field should be present"

@@ -65,7 +65,7 @@ afterEach(() => {
 // Each test chains a menuitem interaction inside Mantine's portal/transition
 // pipeline; under heavy parallel-test load the menu finder can need a few
 // seconds to settle. Bump the per-test timeout so the chain fits comfortably.
-describe("DownloadButton + InstallNudgeModal (T10)", { timeout: 20000 }, () => {
+describe("DownloadButton + InstallNudgeModal", { timeout: 20000 }, () => {
   it("shows the nudge on first tap from an iOS Safari tab, then downloads after Continue", async () => {
     setIosUserAgent();
     downloadSpy = vi

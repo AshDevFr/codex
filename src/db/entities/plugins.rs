@@ -435,10 +435,10 @@ pub enum PluginPermission {
     /// Update ISBN identifiers
     #[serde(rename = "metadata:write:isbn")]
     MetadataWriteIsbn,
-    /// Update per-book volume number (Phase 12 of metadata-count-split)
+    /// Update per-book volume number
     #[serde(rename = "metadata:write:volume")]
     MetadataWriteVolume,
-    /// Update per-book chapter number (Phase 12 of metadata-count-split)
+    /// Update per-book chapter number
     #[serde(rename = "metadata:write:chapter")]
     MetadataWriteChapter,
 

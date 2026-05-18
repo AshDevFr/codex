@@ -197,7 +197,7 @@ impl From<SeriesWithRating> for series::Model {
 /// `book_metadata.chapter`.
 ///
 /// Used by series DTOs to render `<max>/<total>` counts when structured
-/// data has been populated by the scanner (Phase 12). All fields are
+/// data has been populated by the scanner. All fields are
 /// `None` when no books in the series have the underlying value set,
 /// keeping the legacy `<bookCount>/<total>` display intact for
 /// unclassified libraries.

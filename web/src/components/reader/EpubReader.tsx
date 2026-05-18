@@ -129,7 +129,7 @@ const EPUB_FONT_FAMILIES = {
  * This ensures the reader container background matches the EPUB content theme.
  *
  * On mobile (`isMobile = true`), the side-overlay chevron arrows are hidden;
- * touch users rely on the tap-to-toolbar (R7-1) and swipe gestures for nav.
+ * touch users rely on the tap-to-toolbar and swipe gestures for nav.
  * The arrow buttons are inline-styled in react-reader (no class names to
  * target), so the only reliable hook is the `readerStyles.arrow` override.
  */
@@ -328,9 +328,9 @@ export function EpubReader({
   epubLineHeightRef.current = epubLineHeight;
   epubMarginRef.current = epubMargin;
 
-  // Detect mobile viewport for touch-friendly tweaks (R7-1/R7-3):
-  // hide the side-arrow chevrons that overlap text below `xs`, and wire
-  // tap-to-toggle on the outer container as a fallback for the iframe boundary.
+  // Detect mobile viewport for touch-friendly tweaks: hide the side-arrow
+  // chevrons that overlap text below `xs`, and wire tap-to-toggle on the
+  // outer container as a fallback for the iframe boundary.
   const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY) ?? false;
 
   // Memoize reader styles based on theme + viewport (mobile hides side arrows)
@@ -717,10 +717,9 @@ export function EpubReader({
       doc.head.appendChild(style);
     });
 
-    // R10-1: bind tap pointer events *inside* the iframe document. This
-    // is the sole authority for taps — the outer container deliberately
-    // has no useTouchNav listener so the same tap never gets classified
-    // twice.
+    // Bind tap pointer events *inside* the iframe document. This is the
+    // sole authority for taps; the outer container deliberately has no
+    // useTouchNav listener so the same tap never gets classified twice.
     //
     // Why this looks elaborate:
     //   - `click` doesn't work: iOS Safari suppresses it inside sandboxed

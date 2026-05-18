@@ -38,7 +38,7 @@ use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
 
 /// Default page size for `releases/list_tracked` when the caller doesn't
-/// specify one. Matches the Phase 3 risk-mitigation note.
+/// specify one. Bounded to keep the response small on first load.
 const DEFAULT_TRACKED_PAGE_SIZE: u64 = 200;
 /// Hard cap on `limit` to keep a single page bounded.
 const MAX_TRACKED_PAGE_SIZE: u64 = 1_000;
@@ -2023,7 +2023,7 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // latest_known_* advancement tests (Phase 6)
+    // latest_known_* advancement tests
     // -------------------------------------------------------------------------
 
     async fn record_candidate(

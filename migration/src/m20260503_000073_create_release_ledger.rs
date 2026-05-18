@@ -1,4 +1,4 @@
-//! Create release-tracking ledger schema (Phase 2 of release-tracking implementation).
+//! Create release-tracking ledger schema.
 //!
 //! Adds two tables that store release announcements emitted by source plugins:
 //!
@@ -47,7 +47,7 @@ impl MigrationTrait for Migration {
 
         sources
             // Owning plugin. The string `"core"` is reserved for in-core
-            // synthetic sources (e.g., metadata-piggyback in Phase 5) so we
+            // synthetic sources (e.g., metadata-piggyback) so we
             // don't need a foreign key to plugins.id (which would force every
             // synthetic source to also have a plugins row).
             .col(

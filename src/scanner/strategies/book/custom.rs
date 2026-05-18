@@ -130,10 +130,10 @@ impl BookNamingStrategy for CustomStrategy {
     }
 
     /// Volume from the user's `(?P<volume>\d+)` named group. `extract_volume`
-    /// returns `f32` (Custom predates Phase 11); the trait narrows to `i32` for
-    /// schema compat. Fractional values are rejected rather than truncated —
-    /// silent truncation would discard user-meaningful information. If a user
-    /// hits this we widen the column.
+    /// returns `f32` (Custom predates the structured-volume schema); the trait
+    /// narrows to `i32` for schema compat. Fractional values are rejected
+    /// rather than truncated; silent truncation would discard user-meaningful
+    /// information. If a user hits this we widen the column.
     fn resolve_volume(
         &self,
         file_name: &str,

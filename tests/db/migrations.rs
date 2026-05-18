@@ -510,7 +510,7 @@ async fn test_migration_067_backfill_sqlite() {
 }
 
 // -- Migration 068 (drop_book_count) tests --
-// Verifies the Phase 9 hard-removal migration drops the legacy total_book_count
+// Verifies the hard-removal migration drops the legacy total_book_count
 // + total_book_count_lock columns while leaving the split-count columns intact.
 
 #[tokio::test]
@@ -540,8 +540,8 @@ async fn test_migration_068_drop_legacy_sqlite() {
 }
 
 // -- Migration 069 (add_book_chapter) tests --
-// Phase 11 of metadata-count-split: adds `chapter` and `chapter_lock` to
-// book_metadata. Verifies up/down behavior and default values for existing rows.
+// Adds `chapter` and `chapter_lock` to book_metadata. Verifies up/down
+// behavior and default values for existing rows.
 
 /// Helper: run all migrations through 068 so tests can apply 069 in isolation.
 async fn setup_db_before_migration_069() -> (Database, TempDir) {
@@ -654,9 +654,9 @@ async fn test_migration_069_down_drops_chapter_columns_sqlite() {
 }
 
 // -- Migration 070 (backfill_book_volume_chapter) tests --
-// Phase 12 of metadata-count-split: re-parse each book's filename and populate
-// `book_metadata.volume` / `chapter` where currently NULL. Idempotent and
-// strictly additive — never overwrites a populated value.
+// Re-parse each book's filename and populate `book_metadata.volume` /
+// `chapter` where currently NULL. Idempotent and strictly additive; never
+// overwrites a populated value.
 
 #[tokio::test]
 async fn test_migration_070_backfills_from_filename_sqlite() {

@@ -309,7 +309,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/bulk/genres",
             post(handlers::bulk_modify_series_genres),
         )
-        // Series metadata from plugins (Phase 4)
+        // Series metadata from plugins
         .route(
             "/series/{series_id}/metadata/search-title",
             get(handlers::plugin_actions::get_series_search_title),
@@ -326,7 +326,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/{series_id}/metadata/auto-match",
             post(handlers::plugin_actions::auto_match_series_metadata),
         )
-        // Task-based auto-match endpoints (Phase 5.5 - Worker plugin integration)
+        // Task-based auto-match endpoints (worker plugin integration)
         .route(
             "/series/{series_id}/metadata/auto-match/task",
             post(handlers::plugin_actions::enqueue_auto_match_task),
@@ -367,7 +367,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/series/{series_id}/aliases/{alias_id}",
             delete(handlers::tracking::delete_series_alias),
         )
-        // Per-series release ledger (Phase 2)
+        // Per-series release ledger
         .route(
             "/series/{series_id}/releases",
             get(handlers::releases::list_series_releases),

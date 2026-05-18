@@ -265,7 +265,7 @@ pub struct SeriesDto {
     /// Always `None` unless the series is tracked AND `track_chapters` is
     /// enabled AND the provider count is populated AND the rounded-to-1-
     /// decimal gap is positive. **This is an informational signal, not a
-    /// release announcement** — Phase 6's MangaUpdates plugin owns the
+    /// release announcement**; the MangaUpdates plugin owns the
     /// translation-release feed.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = 3.0)]
@@ -282,7 +282,7 @@ pub struct SeriesDto {
     /// Display name of the metadata provider that supplied the upstream
     /// counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
     /// `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
-    /// the Phase 7 badge tooltip.
+    /// the gap badge tooltip.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "MangaBaka")]
     pub upstream_gap_provider: Option<String>,

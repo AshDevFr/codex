@@ -1,4 +1,4 @@
-//! DTOs for `/api/v1/libraries/{id}/jobs` (Phase 9).
+//! DTOs for `/api/v1/libraries/{id}/jobs`.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use crate::services::library_jobs::{LibraryJobConfig, MetadataRefreshJobConfig, 
 
 /// Type-discriminated job config exposed over the wire.
 ///
-/// Phase 9 only ships the `metadata_refresh` variant; future job types
+/// Currently only ships the `metadata_refresh` variant; future job types
 /// extend the enum.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -25,7 +25,7 @@ pub enum LibraryJobConfigDto {
 pub struct MetadataRefreshJobConfigDto {
     /// Plugin reference, e.g. `"plugin:mangabaka"`.
     pub provider: String,
-    /// Refresh scope. Phase 9 only honours `series_only` at runtime.
+    /// Refresh scope. Currently only `series_only` is honoured at runtime.
     #[serde(default)]
     pub scope: RefreshScope,
     /// Series-side field groups (snake_case identifiers).

@@ -452,7 +452,7 @@ pub enum ReleaseSourceKind {
     /// Generic API-driven feed.
     ApiFeed,
     /// Metadata-derived signal (informational; usually doesn't write the
-    /// ledger - see Phase 5).
+    /// ledger).
     MetadataFeed,
 }
 
@@ -1942,10 +1942,11 @@ mod tests {
 
     #[test]
     fn test_protocol_version_is_minor_bumped() {
-        // Phase 9 of metadata-count-split bumps the protocol from 1.1 to 1.2:
-        // legacy `totalBookCount` field and `metadata:write:total_book_count`
-        // permission are removed. Plugins that still emit the legacy field
-        // round-trip through serde silently (the field is dropped on decode).
+        // The metadata-count-split hard removal bumps the protocol from 1.1
+        // to 1.2: legacy `totalBookCount` field and
+        // `metadata:write:total_book_count` permission are removed. Plugins
+        // that still emit the legacy field round-trip through serde silently
+        // (the field is dropped on decode).
         assert_eq!(PROTOCOL_VERSION, "1.2");
     }
 

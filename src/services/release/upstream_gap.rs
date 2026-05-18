@@ -1,4 +1,4 @@
-//! Upstream-publication gap signal (Phase 5 of release-tracking).
+//! Upstream-publication gap signal.
 //!
 //! Computes the per-series delta between *original-language* publication
 //! counts (from MangaBaka / AniList / etc., stored as
@@ -9,9 +9,7 @@
 //! The gap is purely a UI signal — it does **not** write `release_ledger`
 //! rows and does **not** advance `series_tracking.latest_known_*`. Original-
 //! language publication facts are not the same category as
-//! translation/scanlation releases (which Phase 6's MangaUpdates plugin
-//! handles). See the `release-tracking` plan, Key Technical Decisions, for
-//! the three-signal separation.
+//! translation/scanlation releases (which the MangaUpdates plugin handles).
 
 use crate::db::entities::series_external_ids::Model as SeriesExternalId;
 use crate::db::entities::series_tracking::Model as SeriesTrackingRow;
@@ -124,8 +122,7 @@ fn compute_volume_gap(total: Option<i32>, local_max: Option<i32>) -> Option<i32>
 /// counts.
 ///
 /// Returns `None` when no recognized provider source is attached to the
-/// series; the badge tooltip in Phase 7 then falls back to a generic
-/// message.
+/// series; the badge tooltip then falls back to a generic message.
 fn pick_provider(external_ids: &[SeriesExternalId]) -> Option<String> {
     const PRIORITY: &[(&str, &str)] = &[
         ("plugin:mangabaka", "MangaBaka"),
