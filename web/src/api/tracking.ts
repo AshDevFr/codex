@@ -28,10 +28,13 @@ export const trackingApi = {
   },
 
   listAliases: async (seriesId: string): Promise<SeriesAlias[]> => {
-    const response = await api.get<{ aliases: SeriesAlias[] }>(
+    const response = await api.get<{ aliases?: SeriesAlias[] } | null>(
       `/series/${seriesId}/aliases`,
     );
-    return response.data.aliases;
+    // Backends or mock layers that omit the wrapper key (or return null
+    // for an unconfigured series) would otherwise propagate `undefined`
+    // to TanStack Query, which rejects undefined query data.
+    return response.data?.aliases ?? [];
   },
 
   createAlias: async (
