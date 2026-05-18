@@ -419,6 +419,65 @@ async fn test_get_page_image_detects_content_type_without_metadata() {
     );
 }
 
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_get_page_image_pdf_emits_render_complete_log() {
+    use codex::parsers::pdf::renderer;
+
+    // The render path goes through PDFium; skip cleanly when the native
+    // library is not available in the test environment (matches the
+    // convention used in tests/parsers/pdf_rendering.rs).
+    if !renderer::is_initialized() && renderer::init_pdfium(None).is_err() {
+        eprintln!("Skipping test: PDFium not available");
+        return;
+    }
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    // Render path emits `pdf render complete` only when the disk JPEG cache
+    // misses. The test app state constructs `PdfPageCache::new(.., false)`
+    // (disabled), so every request takes the render path.
+    let pdf_temp_dir = TempDir::new().unwrap();
+    let pdf_path = create_test_pdf(&pdf_temp_dir, 2, 0);
+
+    let library = LibraryRepository::create(
+        &db,
+        "Test Library",
+        pdf_temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let series = SeriesRepository::create(&db, library.id, "Test Series", None)
+        .await
+        .unwrap();
+
+    let book = create_test_book_model(
+        series.id,
+        library.id,
+        pdf_path.to_str().unwrap(),
+        "test_document.pdf",
+        "pdf",
+        true,
+        2,
+    );
+    let book = BookRepository::create(&db, &book, None).await.unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth(&format!("/api/v1/books/{}/pages/1", book.id), &token);
+    let (status, _headers, _body) = make_full_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        logs_contain("pdf render complete"),
+        "Expected `pdf render complete` event from the PDF render path"
+    );
+}
+
 // ============================================================================
 // GET /api/v1/books/{book_id}/pages (List Pages) Tests
 // ============================================================================
