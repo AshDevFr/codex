@@ -305,16 +305,25 @@ struct BookBatch {
     capacity: usize,
     /// Whether to force re-analysis (Deep scan mode)
     force_analysis: bool,
+    /// PDF handle cache to invalidate when book file content changes on disk.
+    /// `BookRepository::update_batch` is silent (no per-book events), so the
+    /// global event subscriber would miss these mutations: evict directly.
+    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
 }
 
 impl BookBatch {
-    fn new(capacity: usize, force_analysis: bool) -> Self {
+    fn new(
+        capacity: usize,
+        force_analysis: bool,
+        pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+    ) -> Self {
         Self {
             to_create: Vec::with_capacity(capacity),
             to_update: Vec::with_capacity(capacity),
             needs_analysis: Vec::with_capacity(capacity),
             capacity,
             force_analysis,
+            pdf_handle_cache,
         }
     }
 
@@ -372,6 +381,19 @@ impl BookBatch {
                 Ok(count) => {
                     updated = count as usize;
                     debug!("Batch updated {} books", updated);
+
+                    // The batched update path does not emit per-book events,
+                    // so the PdfHandleCacheSubscriber would miss these.
+                    // Anything we update here has changed on disk (partial
+                    // hash, size, modified-at), so any cached PDFium handle
+                    // is now stale.
+                    if let Some(cache) = self.pdf_handle_cache.as_ref() {
+                        for book in &self.to_update {
+                            if book.format.eq_ignore_ascii_case("pdf") {
+                                cache.evict(book.id);
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     errors.push(format!("Failed to batch update books: {}", e));
@@ -419,6 +441,7 @@ pub async fn scan_library(
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
     task_id: Option<Uuid>,
+    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
 ) -> Result<ScanResult> {
     let scan_start = Instant::now();
     info!("Starting {} scan for library {}", mode, library_id);
@@ -451,6 +474,7 @@ pub async fn scan_library(
         progress_tx.clone(),
         event_broadcaster,
         task_id,
+        pdf_handle_cache,
     )
     .await;
 
@@ -534,6 +558,7 @@ async fn scan_batched(
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
     task_id: Option<Uuid>,
+    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
 ) -> Result<ScanResult> {
     // Load scanner configuration from database settings
     let config = ScannerConfig::load(db).await;
@@ -673,6 +698,7 @@ async fn scan_batched(
             let all_series_paths = Arc::clone(&all_series_paths);
             let config = config.clone();
             let event_broadcaster = event_broadcaster.cloned();
+            let pdf_handle_cache = pdf_handle_cache.clone();
 
             async move {
                 let _permit = match sem.acquire().await {
@@ -704,6 +730,7 @@ async fn scan_batched(
                     mode,
                     &config,
                     event_broadcaster.as_ref(),
+                    pdf_handle_cache.clone(),
                 )
                 .await
                 {
@@ -924,6 +951,7 @@ async fn process_series_batched(
     mode: ScanMode,
     config: &ScannerConfig,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
 ) -> Result<(SeriesProcessResult, bool)> {
     let mut result = SeriesProcessResult::new();
 
@@ -981,7 +1009,7 @@ async fn process_series_batched(
     // Create batch accumulator
     // Deep scan forces re-analysis of all books, Normal scan only analyzes new/changed books
     let force_analysis = mode == ScanMode::Deep;
-    let mut batch = BookBatch::new(config.batch_size, force_analysis);
+    let mut batch = BookBatch::new(config.batch_size, force_analysis, pdf_handle_cache);
 
     // Process files in chunks for parallel hashing
     let now = Utc::now();

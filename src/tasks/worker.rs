@@ -49,6 +49,7 @@ pub struct TaskWorker {
     thumbnail_service: Option<Arc<ThumbnailService>>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     plugin_manager: Option<Arc<PluginManager>>,
+    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
     /// Shared per-host backoff state used by the `PollReleaseSourceHandler`.
     /// Exposed via [`Self::release_backoff`] so the scheduler can read the
     /// same multipliers when picking next-poll intervals.
@@ -132,6 +133,7 @@ impl TaskWorker {
             thumbnail_service: None,
             task_metrics_service: None,
             plugin_manager: None,
+            pdf_handle_cache: None,
             release_backoff: crate::services::release::backoff::HostBackoff::new(),
             shutdown_tx: None,
         }
@@ -188,13 +190,32 @@ impl TaskWorker {
     /// This also registers/updates handlers that depend on settings:
     /// - `ScanLibraryHandler` for post-scan auto-match settings
     pub fn with_settings_service(mut self, settings_service: Arc<SettingsService>) -> Self {
-        // Re-register ScanLibraryHandler with settings service for post-scan auto-match
-        self.handlers.insert(
-            "scan_library".to_string(),
-            Arc::new(ScanLibraryHandler::new().with_settings_service(settings_service.clone())),
-        );
         self.settings_service = Some(settings_service);
+        self.register_scan_library_handler();
         self
+    }
+
+    /// Set the PDF handle cache so the scanner can invalidate cached open
+    /// `PdfDocument` handles when book files change during a scan.
+    pub fn with_pdf_handle_cache(mut self, cache: Arc<crate::services::PdfHandleCache>) -> Self {
+        self.pdf_handle_cache = Some(cache);
+        self.register_scan_library_handler();
+        self
+    }
+
+    /// Rebuild and register the `ScanLibraryHandler` with whichever optional
+    /// dependencies have been wired in so far. Idempotent: callers can invoke
+    /// any `with_*` builder in any order.
+    fn register_scan_library_handler(&mut self) {
+        let mut handler = ScanLibraryHandler::new();
+        if let Some(settings) = &self.settings_service {
+            handler = handler.with_settings_service(settings.clone());
+        }
+        if let Some(cache) = &self.pdf_handle_cache {
+            handler = handler.with_pdf_handle_cache(cache.clone());
+        }
+        self.handlers
+            .insert("scan_library".to_string(), Arc::new(handler));
     }
 
     /// Set the thumbnail service for thumbnail generation

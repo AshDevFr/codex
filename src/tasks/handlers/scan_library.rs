@@ -22,6 +22,7 @@ const DEFAULT_POST_SCAN_AUTO_MATCH_ENABLED: bool = false;
 
 pub struct ScanLibraryHandler {
     settings_service: Option<Arc<SettingsService>>,
+    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
 }
 
 impl Default for ScanLibraryHandler {
@@ -34,12 +35,20 @@ impl ScanLibraryHandler {
     pub fn new() -> Self {
         Self {
             settings_service: None,
+            pdf_handle_cache: None,
         }
     }
 
     /// Enable post-scan auto-match by providing a settings service
     pub fn with_settings_service(mut self, settings_service: Arc<SettingsService>) -> Self {
         self.settings_service = Some(settings_service);
+        self
+    }
+
+    /// Wire the PDF handle cache so the scanner can invalidate cached open
+    /// `PdfDocument` handles when book files change on disk.
+    pub fn with_pdf_handle_cache(mut self, cache: Arc<crate::services::PdfHandleCache>) -> Self {
+        self.pdf_handle_cache = Some(cache);
         self
     }
 
@@ -221,6 +230,7 @@ impl TaskHandler for ScanLibraryHandler {
                 None,
                 event_broadcaster,
                 Some(task.id),
+                self.pdf_handle_cache.clone(),
             )
             .await
             {

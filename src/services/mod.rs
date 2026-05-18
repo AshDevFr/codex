@@ -11,6 +11,7 @@ pub mod metadata;
 pub mod oidc;
 pub mod pdf_cache;
 pub mod pdf_handle_cache;
+pub mod pdf_handle_cache_subscriber;
 pub mod plugin;
 pub mod plugin_file_storage;
 pub mod plugin_metrics;
@@ -37,6 +38,7 @@ pub use pdf_cache::{CacheStats, CleanupResult, PdfPageCache};
 pub use pdf_handle_cache::{
     HandleCacheEntrySnapshot, HandleCacheSnapshot, HandleCacheStats, PdfHandleCache,
 };
+pub use pdf_handle_cache_subscriber::PdfHandleCacheSubscriber;
 pub use rate_limiter::RateLimiterService;
 pub use read_progress::ReadProgressService;
 pub use settings::SettingsService;

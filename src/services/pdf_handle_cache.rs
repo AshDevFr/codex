@@ -199,9 +199,9 @@ where
     /// Look up a cached handle, or run `opener` to load one and cache it.
     ///
     /// `opener` is invoked while no internal lock is held, so a slow PDFium
-    /// open does not block other cache operations. The closure is sync because
-    /// PDFium calls are CPU-bound and should be wrapped by callers in
-    /// `spawn_blocking` before being handed in here.
+    /// open does not block other cache operations. The whole function is sync
+    /// because PDFium calls are CPU-bound; callers should invoke it inside
+    /// `spawn_blocking` to keep the async runtime free during cold opens.
     ///
     /// When two callers race on the same `book_id`, both may invoke `opener`,
     /// but only one's handle is stored; both calls return the same `Arc`
@@ -212,7 +212,7 @@ where
     /// is wrapped in a fresh `Arc<Mutex<_>>` without being inserted into the
     /// cache. Callers should hold the returned `Arc` for the duration of the
     /// render to keep the document alive.
-    pub async fn get_or_open<F>(
+    pub fn get_or_open<F>(
         &self,
         book_id: Uuid,
         file_path: PathBuf,
@@ -467,19 +467,17 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn get_or_open_hits_after_first_open() {
+    #[test]
+    fn get_or_open_hits_after_first_open() {
         let (cache, _clock) = cache(4, Duration::from_secs(60));
         let book = Uuid::new_v4();
         let calls = Arc::new(AtomicUsize::new(0));
 
         let a = cache
             .get_or_open(book, PathBuf::from("/tmp/a.pdf"), opener(1, calls.clone()))
-            .await
             .unwrap();
         let b = cache
             .get_or_open(book, PathBuf::from("/tmp/a.pdf"), opener(99, calls.clone()))
-            .await
             .unwrap();
 
         assert_eq!(calls.load(Ordering::Relaxed), 1, "opener called once");
@@ -492,8 +490,8 @@ mod tests {
         assert_eq!(cache.stats().opens(), 1);
     }
 
-    #[tokio::test]
-    async fn capacity_evicts_least_recently_used() {
+    #[test]
+    fn capacity_evicts_least_recently_used() {
         let (cache, _clock) = cache(2, Duration::from_secs(60));
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
@@ -502,21 +500,17 @@ mod tests {
 
         let _ = cache
             .get_or_open(a, PathBuf::from("a"), opener(1, calls.clone()))
-            .await
             .unwrap();
         let _ = cache
             .get_or_open(b, PathBuf::from("b"), opener(2, calls.clone()))
-            .await
             .unwrap();
         // Touch `a` so `b` becomes LRU.
         let _ = cache
             .get_or_open(a, PathBuf::from("a"), opener(99, calls.clone()))
-            .await
             .unwrap();
-        // Insert `c` — `b` must be evicted.
+        // Insert `c`, evicting `b`.
         let _ = cache
             .get_or_open(c, PathBuf::from("c"), opener(3, calls.clone()))
-            .await
             .unwrap();
 
         let snap = cache.snapshot();
@@ -529,8 +523,8 @@ mod tests {
         assert_eq!(cache.stats().evictions(), 1);
     }
 
-    #[tokio::test]
-    async fn idle_sweep_drops_stale_entries() {
+    #[test]
+    fn idle_sweep_drops_stale_entries() {
         let idle = Duration::from_secs(10);
         let (cache, clock) = cache(4, idle);
         let book = Uuid::new_v4();
@@ -538,7 +532,6 @@ mod tests {
 
         let _ = cache
             .get_or_open(book, PathBuf::from("a"), opener(1, calls.clone()))
-            .await
             .unwrap();
         assert_eq!(cache.snapshot().current_size, 1);
 
@@ -552,13 +545,12 @@ mod tests {
         // Re-opening forces a fresh open.
         let _ = cache
             .get_or_open(book, PathBuf::from("a"), opener(2, calls.clone()))
-            .await
             .unwrap();
         assert_eq!(calls.load(Ordering::Relaxed), 2);
     }
 
-    #[tokio::test]
-    async fn idle_sweep_keeps_recently_used_entries() {
+    #[test]
+    fn idle_sweep_keeps_recently_used_entries() {
         let idle = Duration::from_secs(10);
         let (cache, clock) = cache(4, idle);
         let book = Uuid::new_v4();
@@ -566,13 +558,11 @@ mod tests {
 
         let _ = cache
             .get_or_open(book, PathBuf::from("a"), opener(1, calls.clone()))
-            .await
             .unwrap();
         clock.advance(Duration::from_secs(5));
-        // Touch the entry — last_used resets.
+        // Touch the entry, last_used resets.
         let _ = cache
             .get_or_open(book, PathBuf::from("a"), opener(99, calls.clone()))
-            .await
             .unwrap();
         clock.advance(Duration::from_secs(6));
 
@@ -581,8 +571,8 @@ mod tests {
         assert_eq!(cache.snapshot().current_size, 1);
     }
 
-    #[tokio::test]
-    async fn evict_removes_single_book() {
+    #[test]
+    fn evict_removes_single_book() {
         let (cache, _clock) = cache(4, Duration::from_secs(60));
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
@@ -590,11 +580,9 @@ mod tests {
 
         let _ = cache
             .get_or_open(a, PathBuf::from("a"), opener(1, calls.clone()))
-            .await
             .unwrap();
         let _ = cache
             .get_or_open(b, PathBuf::from("b"), opener(2, calls.clone()))
-            .await
             .unwrap();
 
         assert!(cache.evict(a));
@@ -604,15 +592,14 @@ mod tests {
         assert_eq!(snap.entries[0].book_id, b);
     }
 
-    #[tokio::test]
-    async fn clear_empties_cache() {
+    #[test]
+    fn clear_empties_cache() {
         let (cache, _clock) = cache(4, Duration::from_secs(60));
         let calls = Arc::new(AtomicUsize::new(0));
         for _ in 0..3 {
             let id = Uuid::new_v4();
             let _ = cache
                 .get_or_open(id, PathBuf::from("f"), opener(1, calls.clone()))
-                .await
                 .unwrap();
         }
         assert_eq!(cache.snapshot().current_size, 3);
@@ -621,8 +608,8 @@ mod tests {
         assert_eq!(cache.snapshot().current_size, 0);
     }
 
-    #[tokio::test]
-    async fn disabled_cache_never_stores() {
+    #[test]
+    fn disabled_cache_never_stores() {
         let clock = TestClock::new();
         let cache = PdfHandleCache::<TestDoc>::with_clock(
             4,
@@ -635,11 +622,9 @@ mod tests {
 
         let _ = cache
             .get_or_open(book, PathBuf::from("a"), opener(1, calls.clone()))
-            .await
             .unwrap();
         let _ = cache
             .get_or_open(book, PathBuf::from("a"), opener(2, calls.clone()))
-            .await
             .unwrap();
 
         assert_eq!(
@@ -663,15 +648,15 @@ mod tests {
         let book = Uuid::new_v4();
         let calls = Arc::new(AtomicUsize::new(0));
 
-        // Fire several concurrent get_or_open calls for the same book.
+        // Fire several concurrent get_or_open calls for the same book on
+        // blocking threads, since the cache API is sync.
         let mut handles = Vec::new();
         for _ in 0..8 {
             let cache = cache.clone();
             let calls = calls.clone();
-            handles.push(tokio::spawn(async move {
+            handles.push(tokio::task::spawn_blocking(move || {
                 cache
                     .get_or_open(book, PathBuf::from("a"), opener(1, calls))
-                    .await
                     .unwrap()
             }));
         }
@@ -684,20 +669,18 @@ mod tests {
         for window in arcs.windows(2) {
             assert!(Arc::ptr_eq(&window[0], &window[1]));
         }
-        // Opens may exceed 1 if there's a race (acceptable), but the final
-        // cache state must hold exactly one entry for the book.
+        // Opens may exceed 1 under a race (acceptable), but the final cache
+        // state must hold exactly one entry for the book.
         assert_eq!(cache.snapshot().current_size, 1);
     }
 
-    #[tokio::test]
-    async fn opener_error_propagates_without_caching() {
+    #[test]
+    fn opener_error_propagates_without_caching() {
         let (cache, _clock) = cache(4, Duration::from_secs(60));
         let book = Uuid::new_v4();
-        let result = cache
-            .get_or_open(book, PathBuf::from("a"), || -> Result<TestDoc> {
-                Err(anyhow::anyhow!("boom"))
-            })
-            .await;
+        let result = cache.get_or_open(book, PathBuf::from("a"), || -> Result<TestDoc> {
+            Err(anyhow::anyhow!("boom"))
+        });
         assert!(result.is_err());
         assert_eq!(cache.snapshot().current_size, 0);
         assert_eq!(cache.stats().misses(), 1);
