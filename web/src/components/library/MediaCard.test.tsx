@@ -91,6 +91,42 @@ describe("MediaCard", () => {
     });
   });
 
+  describe("press affordance", () => {
+    it("opts the card into the data-pressable affordance by default", () => {
+      const book = createBook({ deleted: false });
+
+      const { container } = renderWithProviders(
+        <MediaCard type="book" data={book} />,
+      );
+
+      // The Phase 3 press/hover styling fires off `data-pressable="true"`.
+      // Without this attribute, cards still navigate but the press scale +
+      // hover lift won't apply.
+      const card = container.querySelector(".mantine-Card-root");
+      expect(card).toHaveAttribute("data-pressable", "true");
+    });
+
+    it("drops data-pressable when the card cannot be selected in selection mode", () => {
+      const series = createBook({ deleted: false });
+
+      const { container } = renderWithProviders(
+        <MediaCard
+          type="book"
+          data={series}
+          onSelect={vi.fn()}
+          isSelectionMode={true}
+          canBeSelected={false}
+        />,
+      );
+
+      // When the type mismatches the active selection, the card is not
+      // interactive. The press scale would mislead the user, so we strip
+      // the affordance opt-in.
+      const card = container.querySelector(".mantine-Card-root");
+      expect(card).not.toHaveAttribute("data-pressable");
+    });
+  });
+
   describe("hover overlay and progress", () => {
     beforeEach(() => {
       mockNavigate.mockClear();

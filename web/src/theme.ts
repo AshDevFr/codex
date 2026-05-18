@@ -83,7 +83,29 @@ export const theme = createTheme({
         radius: "md",
       },
     },
+    // Spring-feel default transition. Mantine's `<Transition>` is a CSS
+    // easing wrapper rather than a true spring; pinning the curve to the
+    // shared `--ease-out` token + a slightly longer 280ms duration reads as
+    // "soft spring" without pulling motion-lib into the portal mount path
+    // (Mantine controls its own portal mount/unmount schedule and fights
+    // `<AnimatePresence>`). Reader-side drawers inherit the same defaults
+    // and keep their text legibility because the rule only changes timing,
+    // not opacity or transform.
+    Drawer: {
+      defaultProps: {
+        transitionProps: {
+          duration: 280,
+          timingFunction: "var(--ease-out)",
+        },
+      },
+    },
     Modal: {
+      defaultProps: {
+        transitionProps: {
+          duration: 240,
+          timingFunction: "var(--ease-out)",
+        },
+      },
       styles: {
         content: {
           // Make modals wider on desktop

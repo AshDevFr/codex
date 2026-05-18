@@ -8,7 +8,7 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconMenu2, IconMoon, IconSearch, IconSun } from "@tabler/icons-react";
-import type { RefObject } from "react";
+import { type RefObject, useEffect, useState } from "react";
 import {
   MobileSearchSheet,
   SearchInput,
@@ -37,8 +37,19 @@ export function Header({
     searchSheetOpened,
     { open: openSearchSheet, close: closeSearchSheet },
   ] = useDisclosure(false);
+  const [themeIconSpinning, setThemeIconSpinning] = useState(false);
+
+  // Clear the spin marker after the keyframe completes so the next toggle
+  // can re-trigger the animation. 400ms matches the keyframe duration in
+  // index.css; the small buffer covers compositor scheduling.
+  useEffect(() => {
+    if (!themeIconSpinning) return;
+    const timer = window.setTimeout(() => setThemeIconSpinning(false), 450);
+    return () => window.clearTimeout(timer);
+  }, [themeIconSpinning]);
 
   const toggleColorScheme = () => {
+    setThemeIconSpinning(true);
     // Toggle between light and dark (not system) for explicit user action
     setPreference(
       "ui.theme",
@@ -91,11 +102,17 @@ export function Header({
             aria-label="Toggle color scheme"
             title="Toggle color scheme"
           >
-            {computedColorScheme === "dark" ? (
-              <IconSun size={18} />
-            ) : (
-              <IconMoon size={18} />
-            )}
+            <span
+              className={`theme-toggle-icon${
+                themeIconSpinning ? " theme-toggle-icon--spinning" : ""
+              }`}
+            >
+              {computedColorScheme === "dark" ? (
+                <IconSun size={18} />
+              ) : (
+                <IconMoon size={18} />
+              )}
+            </span>
           </ActionIcon>
         </Group>
       </Group>

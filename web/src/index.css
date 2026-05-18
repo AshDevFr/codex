@@ -15,6 +15,8 @@
      5. Light + dark theme scoped Mantine component overrides.
      6. Component-specific helpers (hover affordances, bulk-selection,
         cover overlays).
+     7. Motion layer (press/hover affordances, theme-toggle spin,
+        reduced-motion guard).
    New rules should slot into the section they belong to rather than
    accumulating at the bottom of the file. */
 
@@ -497,4 +499,155 @@ body {
 /* Selected card styling - orange border applied via inline style */
 .media-card--selected {
   /* Border applied via inline style for better specificity with isNew state */
+}
+
+/* ============================================
+   Motion layer (Phase 3)
+   ============================================
+   Press + hover affordances for clickable cards, NavLink active-state
+   smoothing, theme-toggle micro-animation, and the reduced-motion guard
+   that collapses all of the above (plus motion-lib variants) to instant. */
+
+/* Cards opt in via `data-pressable="true"`. Adds:
+     - a soft elevated shadow on hover (desktop only, via @media hover),
+     - a tiny depress + radius punch on active press (touch + mouse),
+   with curves that match the rest of the motion language. The transform
+   sits on the card root; mobile press-scale of 0.98 on a 44×44 button keeps
+   the effective target ≥ 43×43 mid-frame, which is within tolerance.
+   Without :focus-visible we'd amplify the keyboard focus ring; the rule
+   only fires on hover and active, not :focus, by design. */
+.mantine-Card-root[data-pressable="true"] {
+  transition:
+    transform 0.12s var(--ease-out),
+    box-shadow 0.18s var(--ease-out);
+  will-change: transform;
+}
+
+@media (hover: hover) {
+  .mantine-Card-root[data-pressable="true"]:hover {
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.mantine-Card-root[data-pressable="true"]:active {
+  transform: scale(0.98);
+}
+
+/* NavLink active-state colour transition. Mantine swaps the active
+   indicator's background instantly; a 200ms ease softens the snap when the
+   user navigates between sibling routes (e.g. Settings sub-pages). The
+   property list is explicit so we don't accidentally animate layout. */
+.mantine-NavLink-root {
+  transition:
+    background-color 0.2s var(--ease-out),
+    color 0.2s var(--ease-out);
+}
+
+/* Theme-toggle micro-animation. The sun/moon icon inside the toggle gets a
+   short scale-and-rotate pulse on each click so the state change reads as
+   "the app is changing modes" rather than a silent palette flip. The
+   wrapper carries the keyframe; the icon swap itself is driven by React
+   state in Header.tsx. Transform-only so layout is untouched. */
+@keyframes theme-toggle-spin {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(0.7);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.theme-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle-icon--spinning {
+  animation: theme-toggle-spin 0.4s var(--ease-in-out);
+}
+
+/* Staggered grid entry helper. Page grids opt in with
+   `data-stagger-grid="true"`; each direct child fades and lifts in on
+   mount, using `:nth-child` to derive the per-card delay so no per-card JS
+   wiring is needed. Capped at 12 items: the 13th onward lands at the same
+   final delay so a 200-card library doesn't take seconds to settle. This
+   also matches the mobile prefetch boundary, where items past index 12 are
+   below the fold on the first paint. */
+@keyframes stagger-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-stagger-grid="true"] > * {
+  animation: stagger-enter 0.32s var(--ease-out) both;
+}
+
+[data-stagger-grid="true"] > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+[data-stagger-grid="true"] > *:nth-child(2) {
+  animation-delay: 30ms;
+}
+[data-stagger-grid="true"] > *:nth-child(3) {
+  animation-delay: 60ms;
+}
+[data-stagger-grid="true"] > *:nth-child(4) {
+  animation-delay: 90ms;
+}
+[data-stagger-grid="true"] > *:nth-child(5) {
+  animation-delay: 120ms;
+}
+[data-stagger-grid="true"] > *:nth-child(6) {
+  animation-delay: 150ms;
+}
+[data-stagger-grid="true"] > *:nth-child(7) {
+  animation-delay: 180ms;
+}
+[data-stagger-grid="true"] > *:nth-child(8) {
+  animation-delay: 210ms;
+}
+[data-stagger-grid="true"] > *:nth-child(9) {
+  animation-delay: 240ms;
+}
+[data-stagger-grid="true"] > *:nth-child(10) {
+  animation-delay: 270ms;
+}
+[data-stagger-grid="true"] > *:nth-child(11) {
+  animation-delay: 300ms;
+}
+[data-stagger-grid="true"] > *:nth-child(n + 12) {
+  animation-delay: 330ms;
+}
+
+/* Global reduced-motion guard. When the user (or their OS) asks for
+   reduced motion, collapse every transition, animation, and stagger to
+   instant. !important is necessary because Mantine + per-component inline
+   styles set transitions that would otherwise win specificity. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  .mantine-Card-root[data-pressable="true"]:active {
+    transform: none;
+  }
+
+  [data-stagger-grid="true"] > * {
+    animation: none;
+  }
 }
