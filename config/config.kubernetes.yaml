@@ -107,6 +107,13 @@ files:
 #   cache_rendered_pages: true
 #   cache_dir: data/cache
 
+# PDF Handle Cache (in-memory open-document cache):
+# pdf_handle_cache:
+#   enabled: true
+#   capacity: 256              # Resident open handles (memory ~ capacity * 5-15 MB)
+#   idle_ttl_minutes: 15
+#   sweep_interval_seconds: 60
+
 # Komga-Compatible API (for third-party apps):
 # komga_api:
 #   enabled: false

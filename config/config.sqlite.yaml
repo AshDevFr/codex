@@ -131,6 +131,14 @@ files:
 #   cache_rendered_pages: true # Enable rendered page caching
 #   cache_dir: data/cache      # Directory for caching rendered PDF pages
 
+# PDF Handle Cache (in-memory open-document cache, separate from the disk page cache)
+# ===================================================================================
+# pdf_handle_cache:
+#   enabled: true              # Master switch (when false, every render re-opens the PDF)
+#   capacity: 256              # Max resident open handles (memory ~ capacity * 5-15 MB)
+#   idle_ttl_minutes: 15       # Drop a handle after this many minutes of inactivity
+#   sweep_interval_seconds: 60 # Background sweeper period for enforcing idle_ttl_minutes
+
 # Komga-Compatible API (disabled by default)
 # ==========================================
 # Enables third-party apps like Komic to connect using Komga API format

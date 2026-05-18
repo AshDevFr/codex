@@ -424,6 +424,29 @@ To manually clear the cache:
 - Delete a specific book's cache: Remove `{cache_dir}/pdf_pages/{book_id}/`
 - Clear all cached pages: Remove `{cache_dir}/pdf_pages/`
 
+## PDF Handle Cache
+
+Separate from the on-disk page cache above, Codex keeps an in-memory cache of *open* PDF document handles. Opening a PDF (especially a large one) is significantly more expensive than rendering a single page from an already-open handle, so reusing handles across requests is the primary way the streaming reader stays responsive on big files.
+
+```yaml
+pdf_handle_cache:
+  enabled: true              # Master switch (when false, every render re-opens the PDF)
+  capacity: 256              # Max number of resident open handles
+  idle_ttl_minutes: 15       # Drop a handle after this many minutes of inactivity
+  sweep_interval_seconds: 60 # How often the background sweeper enforces idle_ttl_minutes
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | Master switch. When `false`, every page render re-opens the PDF from disk |
+| `capacity` | `256` | Hard cap on resident open handles. Memory footprint is roughly `capacity × per-PDF-open-cost` (typically 5–15 MB per book) |
+| `idle_ttl_minutes` | `15` | An entry is dropped if it hasn't been accessed for this many minutes |
+| `sweep_interval_seconds` | `60` | How often the background sweeper walks the cache to apply `idle_ttl_minutes`. Lower values catch idle handles sooner; higher values reduce wakeups |
+
+The handle cache is independent from the disk page cache (`pdf.cache_*`): the disk cache stores rendered JPEGs, while the handle cache stores open `PdfDocument` objects. Cached handles are automatically evicted when a book is updated (rescanned, edited) or deleted, so stale handles are not served.
+
+Admin endpoints under `/api/v1/admin/pdf-cache` expose handle-cache stats and a manual clear operation.
+
 ## Komga-Compatible API (Optional)
 
 Codex can expose a Komga-compatible API, allowing you to use third-party apps designed for Komga (such as Komic for iOS) with your Codex server.
@@ -708,6 +731,12 @@ CODEX_PDF_RENDER_DPI=150
 CODEX_PDF_JPEG_QUALITY=85
 CODEX_PDF_CACHE_RENDERED_PAGES=true
 CODEX_PDF_CACHE_DIR=data/cache
+
+# PDF Handle Cache (in-memory open-document cache)
+CODEX_PDF_HANDLE_CACHE_ENABLED=true
+CODEX_PDF_HANDLE_CACHE_CAPACITY=256
+CODEX_PDF_HANDLE_CACHE_IDLE_TTL_MINUTES=15
+CODEX_PDF_HANDLE_CACHE_SWEEP_INTERVAL_SECONDS=60
 
 # Komga-Compatible API
 CODEX_KOMGA_API_ENABLED=true

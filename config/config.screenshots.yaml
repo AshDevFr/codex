@@ -37,5 +37,11 @@ files:
 pdf:
   cache_dir: data/cache
 
+# pdf_handle_cache:
+#   enabled: true
+#   capacity: 256
+#   idle_ttl_minutes: 15
+#   sweep_interval_seconds: 60
+
 komga_api:
   enabled: false
