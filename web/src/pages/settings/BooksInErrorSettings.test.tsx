@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BooksWithErrorsResponse } from "@/api/books";
@@ -155,12 +155,27 @@ describe("BooksInErrorSettings", () => {
     });
   });
 
-  it("should show loading state initially", () => {
-    renderWithProviders(<BooksInErrorSettings />);
+  it("renders the shape-matched skeleton after the 150ms gate", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // Never resolve so the loading state stays true through the gate.
+      vi.mocked(booksApi.getBooksWithErrors).mockReturnValueOnce(
+        new Promise(() => {}),
+      );
+      const { container } = renderWithProviders(<BooksInErrorSettings />);
 
-    expect(
-      screen.getByText("Loading books with errors..."),
-    ).toBeInTheDocument();
+      // Pre-gate: skeleton is intentionally suppressed for fast loads.
+      expect(container.querySelector(".mantine-Card-root")).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // CardListSkeleton renders Mantine Cards once the gate elapses.
+      expect(container.querySelector(".mantine-Card-root")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("should display info alert after loading", async () => {

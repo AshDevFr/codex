@@ -8,7 +8,6 @@ import {
   Grid,
   Group,
   Image,
-  Loader,
   Menu,
   Modal,
   Stack,
@@ -71,10 +70,12 @@ import {
   TrackingPanel,
 } from "@/components/series";
 import { formatSeriesCounts } from "@/components/series/seriesCounts";
+import { SeriesDetailSkeleton } from "@/components/skeletons";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useReleaseTrackingApplicability } from "@/hooks/useReleaseTrackingApplicability";
 import { useSeriesTracking } from "@/hooks/useSeriesTracking";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
 import { transformFullSeriesToSeriesContext } from "@/utils/templateUtils";
@@ -507,13 +508,10 @@ export function SeriesDetail() {
 
   const isLoading = seriesLoading;
   const error = seriesError;
+  const showSkeleton = useShowSkeleton(isLoading);
 
   if (isLoading) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
+    return showSkeleton ? <SeriesDetailSkeleton /> : null;
   }
 
   if (error || !series) {

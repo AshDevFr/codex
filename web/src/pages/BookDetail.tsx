@@ -8,7 +8,6 @@ import {
   Grid,
   Group,
   Image,
-  Loader,
   Menu,
   Progress,
   Stack,
@@ -65,8 +64,10 @@ import {
   ExternalLinks,
   GenreTagChips,
 } from "@/components/series";
+import { BookDetailSkeleton } from "@/components/skeletons";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import { useCoverUpdatesStore } from "@/store/coverUpdatesStore";
 import { PERMISSIONS } from "@/types/permissions";
 import {
@@ -144,6 +145,10 @@ export function BookDetail() {
     queryFn: () => booksApi.getDetail(bookId!, { full: true }),
     enabled: !!bookId,
   });
+
+  // Skeleton flicker guard — 150ms gate before showing the shape-matched
+  // placeholder, so fast loads stay flash-free.
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Fetch adjacent books for series navigation
   const { data: adjacentBooks } = useQuery({
@@ -346,11 +351,7 @@ export function BookDetail() {
   });
 
   if (isLoading) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
+    return showSkeleton ? <BookDetailSkeleton /> : null;
   }
 
   if (error || !book) {

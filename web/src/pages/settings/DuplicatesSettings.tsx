@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Stack,
   Text,
   Title,
@@ -26,8 +25,10 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
 import { type DuplicateGroup, duplicatesApi } from "@/api/duplicates";
 import { AppLink } from "@/components/common/AppLink";
+import { CardListSkeleton } from "@/components/skeletons";
 import { ResponsiveTable } from "@/components/ui";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import type { Book } from "@/types";
 
 // Duplicate scan task type
@@ -205,6 +206,7 @@ export function DuplicatesSettings() {
     queryKey: ["duplicates"],
     queryFn: duplicatesApi.list,
   });
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Watch for duplicate scan task completions and refresh (throttled to 30s)
   useEffect(() => {
@@ -384,9 +386,9 @@ export function DuplicatesSettings() {
 
         {/* Duplicate Groups */}
         {isLoading ? (
-          <Group justify="center" py="xl">
-            <Loader />
-          </Group>
+          showSkeleton ? (
+            <CardListSkeleton count={3} lines={4} />
+          ) : null
         ) : error ? (
           <Alert icon={<IconAlertCircle size={16} />} color="red">
             Failed to load duplicates. Please try again.

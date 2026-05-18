@@ -2,7 +2,6 @@ import {
   Box,
   Center,
   Group,
-  Loader,
   Menu,
   Pagination,
   SegmentedControl,
@@ -21,6 +20,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { seriesApi } from "@/api/series";
 import { MediaCard } from "@/components/library/MediaCard";
 import { SeriesBookTable } from "@/components/series/SeriesBookTable";
+import { CoverGridSkeleton } from "@/components/skeletons";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import {
   selectCanSelectType,
   selectIsSelectionMode,
@@ -139,6 +140,8 @@ export function SeriesBookList({
     queryFn: () =>
       seriesApi.getBooks(seriesId, { includeDeleted: showDeletedBooks }),
   });
+
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Sort and paginate client-side since the API returns all books
   const sortedBooks = useMemo(() => {
@@ -324,9 +327,9 @@ export function SeriesBookList({
       </Group>
 
       {isLoading ? (
-        <Center py="xl">
-          <Loader size="lg" />
-        </Center>
+        showSkeleton ? (
+          <CoverGridSkeleton count={pageSize > 12 ? 12 : pageSize} exactCount />
+        ) : null
       ) : data?.data.length === 0 ? (
         <Text c="dimmed">No books in this series</Text>
       ) : (

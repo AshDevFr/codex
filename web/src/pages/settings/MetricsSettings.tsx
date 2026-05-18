@@ -7,11 +7,11 @@ import {
   Collapse,
   Grid,
   Group,
-  Loader,
   Paper,
   Progress,
   RingProgress,
   SimpleGrid,
+  Skeleton,
   Stack,
   Table,
   Tabs,
@@ -48,6 +48,7 @@ import type {
   TaskTypeMetricsDto,
 } from "@/api/metrics";
 import { metricsApi } from "@/api/metrics";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
 // Helper to format bytes
 function formatBytes(bytes: number): string {
@@ -1279,6 +1280,9 @@ export function MetricsSettings() {
     queryKey: ["metrics", "plugins"],
     queryFn: metricsApi.getPluginMetrics,
   });
+  const showSkeleton = useShowSkeleton(
+    inventoryLoading || taskLoading || pluginLoading,
+  );
 
   // Cleanup mutation
   const cleanupMutation = useMutation({
@@ -1305,11 +1309,20 @@ export function MetricsSettings() {
   };
 
   if (inventoryLoading || taskLoading || pluginLoading) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
+    return showSkeleton ? (
+      <Box py="xl" px="md">
+        <Stack gap="md">
+          <Skeleton height={28} width="35%" radius="sm" />
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
+            <Skeleton height={96} radius="md" />
+            <Skeleton height={96} radius="md" />
+            <Skeleton height={96} radius="md" />
+            <Skeleton height={96} radius="md" />
+          </SimpleGrid>
+          <Skeleton height={220} radius="md" />
+        </Stack>
+      </Box>
+    ) : null;
   }
 
   if (inventoryError || taskError || pluginError) {

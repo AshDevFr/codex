@@ -6,7 +6,6 @@ import {
   Center,
   Container,
   Group,
-  Loader,
   Menu,
   Modal,
   Stack,
@@ -32,9 +31,11 @@ import { LibraryActionsMenu } from "@/components/library/LibraryActionsMenu";
 import { LibraryToolbar } from "@/components/library/LibraryToolbar";
 import { RecommendedSection } from "@/components/library/RecommendedSection";
 import { SeriesSection } from "@/components/library/SeriesSection";
+import { CoverGridSkeleton } from "@/components/skeletons";
 import { useDynamicDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import {
   useLibraryPreferencesHydrated,
   useLibraryPreferencesStore,
@@ -119,6 +120,12 @@ export function LibraryPage() {
     },
     enabled: !isAllLibraries && !!libraryId,
   });
+
+  // Skeleton flicker guard for the page-level loader (preference hydration +
+  // library-by-id fetch). The shape-matched cover grid kicks in after 150ms.
+  const showLibrarySkeleton = useShowSkeleton(
+    !hasHydrated || (isLoading && !isAllLibraries),
+  );
 
   // Set document title based on library name
   useDynamicDocumentTitle(
@@ -420,13 +427,14 @@ export function LibraryPage() {
     return <Navigate to="/" replace />;
   }
 
-  // Wait for preferences to hydrate before rendering to prevent flash of default values
+  // Wait for preferences to hydrate before rendering to prevent flash of default values.
+  // Use the shape-matched skeleton (gated on 150ms) so fast loads stay flash-free.
   if (!hasHydrated || (isLoading && !isAllLibraries)) {
-    return (
-      <Center h={400}>
-        <Loader size="lg" />
-      </Center>
-    );
+    return showLibrarySkeleton ? (
+      <Box px="md" py="md">
+        <CoverGridSkeleton />
+      </Box>
+    ) : null;
   }
 
   if (error && !isAllLibraries) {

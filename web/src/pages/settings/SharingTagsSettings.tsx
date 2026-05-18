@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Modal,
   Stack,
   Text,
@@ -29,7 +28,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { type SharingTagDto, sharingTagsApi } from "@/api/sharingTags";
+import { TableSkeleton } from "@/components/skeletons";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
 export function SharingTagsSettings() {
   const queryClient = useQueryClient();
@@ -47,6 +48,7 @@ export function SharingTagsSettings() {
     queryKey: ["sharing-tags"],
     queryFn: sharingTagsApi.list,
   });
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Create form
   const createForm = useForm({
@@ -245,9 +247,13 @@ export function SharingTagsSettings() {
         </Group>
 
         {isLoading ? (
-          <Group justify="center" py="xl">
-            <Loader />
-          </Group>
+          showSkeleton ? (
+            <TableSkeleton
+              rows={4}
+              columnLabels={["Name", "Description", "Members"]}
+              withMobilePrimary
+            />
+          ) : null
         ) : error ? (
           <Alert icon={<IconAlertCircle size={16} />} color="red">
             Failed to load sharing tags. Please try again.

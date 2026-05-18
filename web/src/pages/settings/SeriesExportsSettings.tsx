@@ -27,6 +27,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { librariesApi } from "@/api/libraries";
 import type { ExportFieldDto, SeriesExportDto } from "@/api/seriesExports";
+import { TableSkeleton } from "@/components/skeletons";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
 import {
   useCreateSeriesExport,
@@ -35,6 +36,7 @@ import {
   useExportFieldCatalog,
   useSeriesExportsList,
 } from "@/hooks/useSeriesExports";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
 // =============================================================================
 // Status badge
@@ -569,6 +571,7 @@ function LibrariesCell({
 export function SeriesExportsSettings() {
   const [modalOpened, setModalOpened] = useState(false);
   const { data: exports, isLoading } = useSeriesExportsList();
+  const showSkeleton = useShowSkeleton(isLoading);
   const deleteMutation = useDeleteSeriesExport();
   const downloadMutation = useDownloadSeriesExport();
 
@@ -696,9 +699,13 @@ export function SeriesExportsSettings() {
       </Group>
 
       {isLoading ? (
-        <Group justify="center" py="xl">
-          <Loader />
-        </Group>
+        showSkeleton ? (
+          <TableSkeleton
+            rows={4}
+            columnLabels={["Export", "Format", "Status", "Created"]}
+            withMobilePrimary
+          />
+        ) : null
       ) : !exports || exports.length === 0 ? (
         <Card withBorder padding="xl">
           <Stack align="center" gap="sm">

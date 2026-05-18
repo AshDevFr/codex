@@ -7,7 +7,6 @@ import {
   Card,
   Collapse,
   Group,
-  Loader,
   MultiSelect,
   Stack,
   Switch,
@@ -37,6 +36,7 @@ import { pluginsApi } from "@/api/plugins";
 import type { ReleaseSource } from "@/api/releases";
 import { settingsApi } from "@/api/settings";
 import { CronInput } from "@/components/forms/CronInput";
+import { TableSkeleton } from "@/components/skeletons";
 import { ResponsiveTable } from "@/components/ui";
 import {
   usePollAllReleaseSourcesNow,
@@ -47,6 +47,7 @@ import {
   useUpdateReleaseSource,
 } from "@/hooks/useReleases";
 import { useUserPreference } from "@/hooks/useUserPreference";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
 const SETTING_NOTIFY_LANGUAGES = "release_tracking.notify_languages";
 const SETTING_NOTIFY_PLUGINS = "release_tracking.notify_plugins";
@@ -92,6 +93,7 @@ function describeCron(expression: string): string {
 
 export function ReleaseTrackingSettings() {
   const sourcesQuery = useReleaseSources();
+  const showSourcesSkeleton = useShowSkeleton(sourcesQuery.isLoading);
   const update = useUpdateReleaseSource();
   const pollNow = usePollReleaseSourceNow();
   const pollAll = usePollAllReleaseSourcesNow();
@@ -207,10 +209,13 @@ export function ReleaseTrackingSettings() {
         <NotificationPreferencesCard />
 
         {sourcesQuery.isLoading ? (
-          <Group>
-            <Loader size="sm" />
-            <Text>Loading sources…</Text>
-          </Group>
+          showSourcesSkeleton ? (
+            <TableSkeleton
+              rows={4}
+              columnLabels={["Source", "Plugin", "Status", "Last poll"]}
+              withMobilePrimary
+            />
+          ) : null
         ) : sourcesQuery.error ? (
           <Card withBorder padding="md">
             <Group gap="xs">

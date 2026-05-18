@@ -1,4 +1,4 @@
-import { Card, Stack, Text } from "@mantine/core";
+import { Box, Card, Skeleton, Stack, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
@@ -6,6 +6,8 @@ import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
 import { HorizontalCarousel } from "@/components/library/HorizontalCarousel";
 import { MediaCard } from "@/components/library/MediaCard";
+import { CoverGridSkeleton } from "@/components/skeletons";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import {
   selectCanSelectType,
   selectIsSelectionMode,
@@ -106,6 +108,11 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
     loadingUpdatedSeries ||
     loadingRecentlyRead;
 
+  // Gate the first-load skeleton on 150ms so fast loads stay flash-free,
+  // and only show it while there is no content yet — once any carousel
+  // has data we let the real carousels render piecewise.
+  const showSkeleton = useShowSkeleton(isLoading);
+
   const limitedRecentlyAddedBooks = (recentlyAddedBooks?.data ?? []).slice(
     0,
     MAX_ITEMS_PER_SECTION,
@@ -118,6 +125,22 @@ export function RecommendedSection({ libraryId }: RecommendedSectionProps) {
     (recentlyAddedSeries?.length ?? 0) > 0 ||
     (recentlyUpdatedSeries?.length ?? 0) > 0 ||
     (recentlyReadBooks?.length ?? 0) > 0;
+
+  // First-load shape-matched placeholder: header + a single cover grid.
+  // Hidden once any section has content so we never double-render with the
+  // real carousels below.
+  if (isLoading && !hasContent && showSkeleton) {
+    return (
+      <Stack gap="xl" data-testid="recommended-section-skeleton">
+        <Stack gap="sm">
+          <Skeleton height={22} width={180} radius="sm" />
+          <Box>
+            <CoverGridSkeleton count={6} exactCount />
+          </Box>
+        </Stack>
+      </Stack>
+    );
+  }
 
   return (
     <Stack gap="xl">

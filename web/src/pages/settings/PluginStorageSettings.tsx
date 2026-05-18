@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Modal,
   SimpleGrid,
   Stack,
@@ -29,7 +28,9 @@ import type {
   PluginStorageStatsDto,
 } from "@/api/pluginStorage";
 import { pluginStorageApi } from "@/api/pluginStorage";
+import { TableSkeleton } from "@/components/skeletons";
 import { ResponsiveTable, type ResponsiveTableColumn } from "@/components/ui";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -82,6 +83,7 @@ export function PluginStorageSettings() {
     queryKey: ["plugin-storage-stats"],
     queryFn: () => pluginStorageApi.getStats(),
   });
+  const showSkeleton = useShowSkeleton(isLoading);
 
   // Cleanup mutation
   const cleanupMutation = useMutation<PluginCleanupResultDto, Error, string>({
@@ -143,14 +145,17 @@ export function PluginStorageSettings() {
   ];
 
   if (isLoading) {
-    return (
+    return showSkeleton ? (
       <Box py="xl" px="md">
-        <Stack gap="xl" align="center">
-          <Loader size="lg" />
-          <Text c="dimmed">Loading plugin storage statistics...</Text>
+        <Stack gap="xl">
+          <TableSkeleton
+            rows={4}
+            columnLabels={["Plugin", "File Count", "Size"]}
+            withMobilePrimary
+          />
         </Stack>
       </Box>
-    );
+    ) : null;
   }
 
   return (

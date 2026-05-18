@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Modal,
   Progress,
   Stack,
@@ -27,7 +26,9 @@ import {
 } from "@tabler/icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
+import { TableSkeleton } from "@/components/skeletons";
 import { MOBILE_MEDIA_QUERY } from "@/components/ui/ResponsiveTable";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 import {
   broadcastDownloadsChange,
   clearDownloads,
@@ -112,6 +113,7 @@ function statusColor(status: DownloadRecord["status"]): string {
 export function DownloadsSettings() {
   const isMobile = useMediaQuery(MOBILE_MEDIA_QUERY);
   const [records, setRecords] = useState<DownloadRecord[] | null>(null);
+  const showSkeleton = useShowSkeleton(records === null);
   const [quota, setQuota] = useState<QuotaEstimate>({
     usage: null,
     quota: null,
@@ -301,11 +303,14 @@ export function DownloadsSettings() {
           </Stack>
         </Card>
 
-        {records === null && (
-          <Group justify="center" py="xl">
-            <Loader size="sm" />
-          </Group>
-        )}
+        {records === null &&
+          (showSkeleton ? (
+            <TableSkeleton
+              rows={4}
+              columnLabels={["Title", "Format", "Size", "Saved"]}
+              withMobilePrimary
+            />
+          ) : null)}
 
         {records !== null && records.length === 0 && (
           <Alert

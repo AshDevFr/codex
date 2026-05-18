@@ -5,9 +5,9 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Modal,
   SimpleGrid,
+  Skeleton,
   Stack,
   Text,
   Title,
@@ -30,6 +30,7 @@ import type {
 } from "@/api/pdfCache";
 import { pdfCacheApi } from "@/api/pdfCache";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
 
 // Cleanup task types that should trigger a stats refresh
 const PDF_CACHE_TASK_TYPES = ["cleanup_pdf_cache"];
@@ -92,6 +93,7 @@ export function PdfCacheSettings() {
     queryKey: ["pdf-cache-stats"],
     queryFn: () => pdfCacheApi.getStats(),
   });
+  const showSkeleton = useShowSkeleton(statsLoading);
 
   // Watch for cleanup task completions and refresh stats (throttled to 30s)
   useEffect(() => {
@@ -174,14 +176,18 @@ export function PdfCacheSettings() {
   const cacheEnabled = stats?.cacheEnabled ?? false;
 
   if (statsLoading) {
-    return (
+    return showSkeleton ? (
       <Box py="xl" px="md">
-        <Stack gap="xl" align="center">
-          <Loader size="lg" />
-          <Text c="dimmed">Loading cache statistics...</Text>
+        <Stack gap="md">
+          <Skeleton height={28} width="40%" radius="sm" />
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+            <Skeleton height={96} radius="md" />
+            <Skeleton height={96} radius="md" />
+            <Skeleton height={96} radius="md" />
+          </SimpleGrid>
         </Stack>
       </Box>
-    );
+    ) : null;
   }
 
   return (
