@@ -110,7 +110,24 @@ export const theme = createTheme({
   },
 });
 
-// CSS variables resolver for light/dark mode specific customizations
+// CSS variables resolver for light/dark mode specific customizations.
+//
+// Surface and shadow tokens are defined here so later polish phases can lean
+// on a stable depth ladder.
+//
+// Elevation ladder (--surface-1/2/3):
+//   1 = body / app-shell-main background
+//   2 = raised card sitting on top of body
+//   3 = elevated menu/popover/modal floating above cards
+// Dark-mode steps follow the iOS systemBackground family (#1c1c1e / #2c2c2e
+// / #3a3a3c) so cards visibly separate from the body. Light-mode steps keep
+// today's values to avoid an uncoordinated palette shift before later
+// phases apply the depth refresh.
+//
+// Shadows (--shadow-xs/sm/md/lg/xl) carry the depth language that Phase 2
+// uses to replace the current 1px-solid-border treatment. Dark-mode alphas
+// are higher because shadows over a near-black body need more contrast to
+// be perceptible.
 export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
   variables: {
     // Scheme-independent variables
@@ -136,6 +153,23 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
     // Navbar styling in light mode
     "--mantine-color-gray-light": "#f1f3f5",
     "--mantine-color-gray-light-hover": "#e9ecef",
+
+    // Elevation ladder. Phase 1 keeps light-mode values aligned with today's
+    // surfaces so no visual change ships in this phase.
+    "--surface-1": "#f8f9fa",
+    "--surface-2": "#ffffff",
+    "--surface-3": "#ffffff",
+
+    // Shadow scale (light): low alpha so cards float without weight.
+    "--shadow-xs": "0 1px 2px rgba(15, 23, 42, 0.04)",
+    "--shadow-sm":
+      "0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04)",
+    "--shadow-md":
+      "0 2px 4px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.06)",
+    "--shadow-lg":
+      "0 4px 8px rgba(15, 23, 42, 0.08), 0 12px 24px rgba(15, 23, 42, 0.08)",
+    "--shadow-xl":
+      "0 8px 16px rgba(15, 23, 42, 0.10), 0 24px 48px rgba(15, 23, 42, 0.12)",
   },
   dark: {
     // Dark mode keeps existing styling
@@ -152,5 +186,24 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
     "--app-shell-main-bg": "#242424",
     "--card-bg": "#242424",
     "--card-border": "#373a40",
+
+    // iOS-aligned elevation ladder. Defined here so later phases can apply
+    // them; Phase 1 ships these as inert tokens (the AppShell + Card still
+    // reference the legacy `--mantine-color-body` / `--card-bg` above).
+    "--surface-1": "#1c1c1e",
+    "--surface-2": "#2c2c2e",
+    "--surface-3": "#3a3a3c",
+
+    // Shadow scale (dark): higher alpha than light because shadows over a
+    // near-black body need more contrast to be perceptible.
+    "--shadow-xs": "0 1px 2px rgba(0, 0, 0, 0.20)",
+    "--shadow-sm":
+      "0 1px 2px rgba(0, 0, 0, 0.24), 0 1px 3px rgba(0, 0, 0, 0.18)",
+    "--shadow-md":
+      "0 2px 4px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.22)",
+    "--shadow-lg":
+      "0 4px 8px rgba(0, 0, 0, 0.32), 0 12px 24px rgba(0, 0, 0, 0.28)",
+    "--shadow-xl":
+      "0 8px 16px rgba(0, 0, 0, 0.38), 0 24px 48px rgba(0, 0, 0, 0.36)",
   },
 });

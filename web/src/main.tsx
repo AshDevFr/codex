@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { InstallPrompt, PwaUpdatePrompt } from "./components/pwa";
 import { ThemeSync } from "./components/ThemeSync.tsx";
+import { MotionProvider } from "./lib/motion/MotionProvider";
 import { installOutboxDrainListeners } from "./lib/offline/outbox";
 import { cssVariablesResolver, theme } from "./theme";
 
@@ -67,13 +68,15 @@ enableMocking().then(() => {
           defaultColorScheme="dark"
           cssVariablesResolver={cssVariablesResolver}
         >
-          <ThemeSync />
-          <Notifications zIndex={10000} />
-          {import.meta.env.PROD && <PwaUpdatePrompt />}
-          {import.meta.env.PROD && <InstallPrompt />}
-          <QueryClientProvider client={queryClient}>
-            <App />
-          </QueryClientProvider>
+          <MotionProvider>
+            <ThemeSync />
+            <Notifications zIndex={10000} />
+            {import.meta.env.PROD && <PwaUpdatePrompt />}
+            {import.meta.env.PROD && <InstallPrompt />}
+            <QueryClientProvider client={queryClient}>
+              <App />
+            </QueryClientProvider>
+          </MotionProvider>
         </MantineProvider>
       </StrictMode>,
     );
