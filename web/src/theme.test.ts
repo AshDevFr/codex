@@ -72,6 +72,30 @@ describe("cssVariablesResolver", () => {
     expect(resolved.dark["--card-border-hairline"]).toContain("255");
   });
 
+  it("sets spring-feel transition defaults on Drawer and Modal", () => {
+    // Phase 3 routes drawers and modals through the shared `--ease-out`
+    // curve so reader-side drawers, settings modals, and the mobile search
+    // sheet all read as the same motion language. Catches the regression
+    // where someone reverts Mantine back to its default linear easing.
+    const drawerProps = theme.components?.Drawer?.defaultProps as
+      | Record<string, unknown>
+      | undefined;
+    const drawerTransition = drawerProps?.transitionProps as
+      | { duration?: number; timingFunction?: string }
+      | undefined;
+    expect(drawerTransition?.timingFunction).toBe("var(--ease-out)");
+    expect(drawerTransition?.duration).toBeGreaterThanOrEqual(200);
+
+    const modalProps = theme.components?.Modal?.defaultProps as
+      | Record<string, unknown>
+      | undefined;
+    const modalTransition = modalProps?.transitionProps as
+      | { duration?: number; timingFunction?: string }
+      | undefined;
+    expect(modalTransition?.timingFunction).toBe("var(--ease-out)");
+    expect(modalTransition?.duration).toBeGreaterThanOrEqual(200);
+  });
+
   it("exposes mobile- and desktop-tuned card shadow tokens", () => {
     for (const token of CARD_SHADOW_TOKENS) {
       expect(resolved.light[token]).toMatch(/rgba\(/);

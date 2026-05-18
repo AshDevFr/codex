@@ -429,6 +429,10 @@ export const MediaCard = memo(function MediaCard({
       withBorder
       onClick={handleCardClick}
       className={cardClassNames || undefined}
+      // Opts into the Phase 3 press/hover affordance (press scale 0.98 +
+      // hover lift to --shadow-md). Disabled when the card is in selection
+      // mode but can't be selected, so the press doesn't suggest action.
+      data-pressable={isSelectionMode && !canBeSelected ? undefined : "true"}
       style={{
         height: "100%",
         display: "flex",

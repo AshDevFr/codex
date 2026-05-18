@@ -82,7 +82,9 @@ export function HorizontalCarousel({
         className={classes.scrollContainer}
         onScroll={updateScrollButtons}
       >
-        <div className={classes.itemsContainer}>{children}</div>
+        <div data-stagger-grid="true" className={classes.itemsContainer}>
+          {children}
+        </div>
       </div>
     </Stack>
   );
