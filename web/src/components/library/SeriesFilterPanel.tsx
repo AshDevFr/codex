@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Divider,
   Drawer,
@@ -13,14 +14,24 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
-import { IconAdjustments, IconX } from "@tabler/icons-react";
+import {
+  IconAdjustments,
+  IconBookmark,
+  IconLock,
+  IconNotebook,
+  IconTag,
+  IconX,
+  type TablerIcon,
+} from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { genresApi } from "@/api/genres";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { tagsApi } from "@/api/tags";
 import { useDraftSeriesFilterState } from "@/hooks/useDraftSeriesFilterState";
 import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
 import { useAuthStore } from "@/store/authStore";
+import { FilterBottomSheet } from "./FilterBottomSheet";
 import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
 
@@ -39,6 +50,30 @@ const SERIES_STATUS_OPTIONS = [
   { value: "abandoned", label: "Abandoned" },
   { value: "unknown", label: "Unknown" },
 ];
+
+/**
+ * Sticky section header for the filter panel. The label sits flush
+ * against the top of the scrolling region; a hairline below appears
+ * only when content scrolls under it (the rule lives in
+ * FilterPanel.module.css; the React side only needs to render the
+ * structure with the leading icon).
+ */
+function SectionHeader({
+  icon: Icon,
+  children,
+}: {
+  icon: TablerIcon;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.sectionHeader}>
+      <span className={classes.sectionHeaderIcon} aria-hidden>
+        <Icon size={14} />
+      </span>
+      {children}
+    </div>
+  );
+}
 
 /**
  * Filter panel component that displays filter groups in a drawer.
@@ -128,6 +163,201 @@ export function SeriesFilterPanel() {
   const hasMetadataFilters = genreOptions.length > 0 || tagOptions.length > 0;
   const hasSharingTagFilters = isAdmin && sharingTagOptions.length > 0;
 
+  const titleNode = (
+    <Group gap="sm">
+      <Title order={4}>Filters</Title>
+      {draftState.hasActiveFilters && (
+        <Badge size="sm" variant="light">
+          {draftState.activeFilterCount} active
+        </Badge>
+      )}
+    </Group>
+  );
+
+  const footerNode = (
+    <Group justify="space-between" className={classes.footer}>
+      <Button
+        variant="subtle"
+        color="gray"
+        size="sm"
+        leftSection={<IconX size={16} />}
+        onClick={handleClearAll}
+        disabled={!draftState.hasActiveFilters}
+      >
+        Clear all
+      </Button>
+      <Button size="sm" onClick={handleApply}>
+        Apply
+      </Button>
+    </Group>
+  );
+
+  const body = isLoading ? (
+    <Group justify="center" py="xl">
+      <Loader size="md" />
+      <Text size="sm" c="dimmed">
+        Loading filter options...
+      </Text>
+    </Group>
+  ) : (
+    <Stack gap="sm">
+      {/* Reading Progress */}
+      <SectionHeader icon={IconBookmark}>Reading Progress</SectionHeader>
+
+      <FilterGroup
+        title="Read Status"
+        options={READ_STATUS_OPTIONS}
+        state={draftState.draftFilters.readStatus}
+        onValueChange={draftState.setReadStatusState}
+        onModeChange={draftState.setReadStatusMode}
+        onClear={() => draftState.clearGroupDraft("readStatus")}
+        showModeToggle={false}
+        variant="progress"
+      />
+
+      <FilterGroup
+        title="My Rating"
+        options={[{ value: "rated", label: "Has Rating" }]}
+        state={{
+          mode: "allOf",
+          values:
+            draftState.draftFilters.hasUserRating !== "neutral"
+              ? new Map([["rated", draftState.draftFilters.hasUserRating]])
+              : new Map(),
+        }}
+        onValueChange={(_value, state) =>
+          draftState.setHasUserRatingState(state)
+        }
+        onModeChange={() => {}}
+        showModeToggle={false}
+        variant="neutral"
+      />
+
+      <Divider my={4} />
+
+      {/* Publication */}
+      <SectionHeader icon={IconNotebook}>Publication</SectionHeader>
+
+      <FilterGroup
+        title="Status"
+        options={SERIES_STATUS_OPTIONS}
+        state={draftState.draftFilters.status}
+        onValueChange={draftState.setStatusState}
+        onModeChange={draftState.setStatusMode}
+        onClear={() => draftState.clearGroupDraft("status")}
+        showModeToggle={false}
+        variant="status"
+      />
+
+      <FilterGroup
+        title="Collection"
+        options={[{ value: "complete", label: "Complete" }]}
+        state={{
+          mode: "allOf",
+          values:
+            draftState.draftFilters.completion !== "neutral"
+              ? new Map([["complete", draftState.draftFilters.completion]])
+              : new Map(),
+        }}
+        onValueChange={(_value, state) => draftState.setCompletionState(state)}
+        onModeChange={() => {}}
+        showModeToggle={false}
+        variant="neutral"
+      />
+
+      <FilterGroup
+        title="Metadata Source"
+        options={[{ value: "linked", label: "Has External ID" }]}
+        state={{
+          mode: "allOf",
+          values:
+            draftState.draftFilters.hasExternalSourceId !== "neutral"
+              ? new Map([
+                  ["linked", draftState.draftFilters.hasExternalSourceId],
+                ])
+              : new Map(),
+        }}
+        onValueChange={(_value, state) =>
+          draftState.setHasExternalSourceIdState(state)
+        }
+        onModeChange={() => {}}
+        showModeToggle={false}
+        variant="neutral"
+      />
+
+      <FilterGroup
+        title="Release Tracking"
+        options={[{ value: "tracked", label: "Tracked" }]}
+        state={{
+          mode: "allOf",
+          values:
+            draftState.draftFilters.isTracked !== "neutral"
+              ? new Map([["tracked", draftState.draftFilters.isTracked]])
+              : new Map(),
+        }}
+        onValueChange={(_value, state) => draftState.setIsTrackedState(state)}
+        onModeChange={() => {}}
+        showModeToggle={false}
+        variant="neutral"
+      />
+
+      {/* Metadata Section - Only show if there's data */}
+      {hasMetadataFilters && (
+        <>
+          <Divider my={4} />
+          <SectionHeader icon={IconTag}>Metadata</SectionHeader>
+
+          {genreOptions.length > 0 && (
+            <FilterGroup
+              title="Genres"
+              options={genreOptions}
+              state={draftState.draftFilters.genres}
+              onValueChange={draftState.setGenreState}
+              onModeChange={draftState.setGenreMode}
+              onClear={() => draftState.clearGroupDraft("genres")}
+            />
+          )}
+
+          {tagOptions.length > 0 && (
+            <FilterGroup
+              title="Tags"
+              options={tagOptions}
+              state={draftState.draftFilters.tags}
+              onValueChange={draftState.setTagState}
+              onModeChange={draftState.setTagMode}
+              onClear={() => draftState.clearGroupDraft("tags")}
+            />
+          )}
+        </>
+      )}
+
+      {/* Empty state hint when no metadata */}
+      {!hasMetadataFilters && (
+        <Text size="sm" c="dimmed" fs="italic" mt="md">
+          Genre and tag filters will appear here once your library has metadata.
+          You can add genres and tags to series from the series detail page.
+        </Text>
+      )}
+
+      {/* Access Control Section - Admin only */}
+      {hasSharingTagFilters && (
+        <>
+          <Divider my={4} />
+          <SectionHeader icon={IconLock}>Access Control</SectionHeader>
+
+          <FilterGroup
+            title="Sharing Tags"
+            options={sharingTagOptions}
+            state={draftState.draftFilters.sharingTags}
+            onValueChange={draftState.setSharingTagState}
+            onModeChange={draftState.setSharingTagMode}
+            onClear={() => draftState.clearGroupDraft("sharingTags")}
+          />
+        </>
+      )}
+    </Stack>
+  );
+
   return (
     <>
       {/* Trigger Button - shows committed filter count */}
@@ -149,238 +379,38 @@ export function SeriesFilterPanel() {
         </ActionIcon>
       </Indicator>
 
-      {/* Filter Drawer - uses draft state */}
-      <Drawer
-        opened={opened}
-        onClose={handleClose}
-        title={
-          <Group gap="sm">
-            <Title order={4}>Filters</Title>
-            {draftState.hasActiveFilters && (
-              <Badge size="sm" variant="light">
-                {draftState.activeFilterCount} active
-              </Badge>
-            )}
-          </Group>
-        }
-        position="right"
-        size={isMobile ? "100%" : "md"}
-        padding="md"
-        classNames={{
-          body: classes.drawerBody,
-        }}
-      >
-        {isLoading ? (
-          <Group justify="center" py="xl">
-            <Loader size="md" />
-            <Text size="sm" c="dimmed">
-              Loading filter options...
-            </Text>
-          </Group>
-        ) : (
-          <Stack gap="md" h="100%">
+      {/* Mobile: bottom sheet with snap points. Desktop: right-side drawer. */}
+      {isMobile ? (
+        <FilterBottomSheet
+          opened={opened}
+          onClose={handleClose}
+          title={titleNode}
+          footer={footerNode}
+        >
+          <ScrollArea flex={1} offsetScrollbars>
+            <Box pb="md">{body}</Box>
+          </ScrollArea>
+        </FilterBottomSheet>
+      ) : (
+        <Drawer
+          opened={opened}
+          onClose={handleClose}
+          title={titleNode}
+          position="right"
+          size="md"
+          padding="md"
+          classNames={{
+            body: classes.drawerBody,
+          }}
+        >
+          <Stack gap="sm" h="100%">
             <ScrollArea flex={1} offsetScrollbars>
-              <Stack gap="md">
-                {/* Reading Progress Section */}
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                  Reading Progress
-                </Text>
-
-                {/* Read Status Filters */}
-                <FilterGroup
-                  title="Read Status"
-                  options={READ_STATUS_OPTIONS}
-                  state={draftState.draftFilters.readStatus}
-                  onValueChange={draftState.setReadStatusState}
-                  onModeChange={draftState.setReadStatusMode}
-                  onClear={() => draftState.clearGroupDraft("readStatus")}
-                  showModeToggle={false}
-                />
-
-                {/* User Rating Filter */}
-                <FilterGroup
-                  title="My Rating"
-                  options={[{ value: "rated", label: "Has Rating" }]}
-                  state={{
-                    mode: "allOf",
-                    values:
-                      draftState.draftFilters.hasUserRating !== "neutral"
-                        ? new Map([
-                            ["rated", draftState.draftFilters.hasUserRating],
-                          ])
-                        : new Map(),
-                  }}
-                  onValueChange={(_value, state) =>
-                    draftState.setHasUserRatingState(state)
-                  }
-                  onModeChange={() => {}}
-                  showModeToggle={false}
-                />
-
-                <Divider my="xs" />
-
-                {/* Publication Status Section */}
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                  Publication
-                </Text>
-
-                {/* Status Filters */}
-                <FilterGroup
-                  title="Status"
-                  options={SERIES_STATUS_OPTIONS}
-                  state={draftState.draftFilters.status}
-                  onValueChange={draftState.setStatusState}
-                  onModeChange={draftState.setStatusMode}
-                  onClear={() => draftState.clearGroupDraft("status")}
-                  showModeToggle={false}
-                />
-
-                {/* Collection Completion Filter */}
-                <FilterGroup
-                  title="Collection"
-                  options={[{ value: "complete", label: "Complete" }]}
-                  state={{
-                    mode: "allOf",
-                    values:
-                      draftState.draftFilters.completion !== "neutral"
-                        ? new Map([
-                            ["complete", draftState.draftFilters.completion],
-                          ])
-                        : new Map(),
-                  }}
-                  onValueChange={(_value, state) =>
-                    draftState.setCompletionState(state)
-                  }
-                  onModeChange={() => {}}
-                  showModeToggle={false}
-                />
-
-                {/* External Source ID Filter */}
-                <FilterGroup
-                  title="Metadata Source"
-                  options={[{ value: "linked", label: "Has External ID" }]}
-                  state={{
-                    mode: "allOf",
-                    values:
-                      draftState.draftFilters.hasExternalSourceId !== "neutral"
-                        ? new Map([
-                            [
-                              "linked",
-                              draftState.draftFilters.hasExternalSourceId,
-                            ],
-                          ])
-                        : new Map(),
-                  }}
-                  onValueChange={(_value, state) =>
-                    draftState.setHasExternalSourceIdState(state)
-                  }
-                  onModeChange={() => {}}
-                  showModeToggle={false}
-                />
-
-                {/* Release Tracking Filter */}
-                <FilterGroup
-                  title="Release Tracking"
-                  options={[{ value: "tracked", label: "Tracked" }]}
-                  state={{
-                    mode: "allOf",
-                    values:
-                      draftState.draftFilters.isTracked !== "neutral"
-                        ? new Map([
-                            ["tracked", draftState.draftFilters.isTracked],
-                          ])
-                        : new Map(),
-                  }}
-                  onValueChange={(_value, state) =>
-                    draftState.setIsTrackedState(state)
-                  }
-                  onModeChange={() => {}}
-                  showModeToggle={false}
-                />
-
-                {/* Metadata Section - Only show if there's data */}
-                {hasMetadataFilters && (
-                  <>
-                    <Divider my="xs" />
-                    <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                      Metadata
-                    </Text>
-
-                    {/* Genre Filters */}
-                    {genreOptions.length > 0 && (
-                      <FilterGroup
-                        title="Genres"
-                        options={genreOptions}
-                        state={draftState.draftFilters.genres}
-                        onValueChange={draftState.setGenreState}
-                        onModeChange={draftState.setGenreMode}
-                        onClear={() => draftState.clearGroupDraft("genres")}
-                      />
-                    )}
-
-                    {/* Tag Filters */}
-                    {tagOptions.length > 0 && (
-                      <FilterGroup
-                        title="Tags"
-                        options={tagOptions}
-                        state={draftState.draftFilters.tags}
-                        onValueChange={draftState.setTagState}
-                        onModeChange={draftState.setTagMode}
-                        onClear={() => draftState.clearGroupDraft("tags")}
-                      />
-                    )}
-                  </>
-                )}
-
-                {/* Empty state hint when no metadata */}
-                {!hasMetadataFilters && (
-                  <Text size="sm" c="dimmed" fs="italic" mt="md">
-                    Genre and tag filters will appear here once your library has
-                    metadata. You can add genres and tags to series from the
-                    series detail page.
-                  </Text>
-                )}
-
-                {/* Access Control Section - Admin only */}
-                {hasSharingTagFilters && (
-                  <>
-                    <Divider my="xs" />
-                    <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                      Access Control
-                    </Text>
-
-                    <FilterGroup
-                      title="Sharing Tags"
-                      options={sharingTagOptions}
-                      state={draftState.draftFilters.sharingTags}
-                      onValueChange={draftState.setSharingTagState}
-                      onModeChange={draftState.setSharingTagMode}
-                      onClear={() => draftState.clearGroupDraft("sharingTags")}
-                    />
-                  </>
-                )}
-              </Stack>
+              <Box pb="md">{body}</Box>
             </ScrollArea>
-
-            {/* Footer Actions */}
-            <Group justify="space-between" className={classes.footer}>
-              <Button
-                variant="subtle"
-                color="gray"
-                size="sm"
-                leftSection={<IconX size={16} />}
-                onClick={handleClearAll}
-                disabled={!draftState.hasActiveFilters}
-              >
-                Clear all
-              </Button>
-              <Button size="sm" onClick={handleApply}>
-                Apply
-              </Button>
-            </Group>
+            {footerNode}
           </Stack>
-        )}
-      </Drawer>
+        </Drawer>
+      )}
     </>
   );
 }

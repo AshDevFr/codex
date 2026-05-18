@@ -623,4 +623,83 @@ describe("TaskNotificationBadge", () => {
     // Badge should not be rendered for readers
     expect(screen.queryByText(/pending task/i)).not.toBeInTheDocument();
   });
+
+  describe("compact variant", () => {
+    const buildRunning = (count: number): TaskProgressEvent[] =>
+      Array.from({ length: count }, (_, i) => ({
+        taskId: `task-${i + 1}`,
+        taskType: "analyze_book",
+        status: "running",
+        progress: undefined,
+        error: undefined,
+        startedAt: "2026-01-07T12:00:00Z",
+        libraryId: "lib-1",
+      }));
+
+    it("renders nothing when there are no running or pending tasks", () => {
+      vi.mocked(useTaskProgress).mockReturnValue({
+        activeTasks: [],
+        connectionState: "connected",
+        pendingCounts: {},
+        getTasksByStatus: vi.fn(() => []),
+        getTasksByLibrary: vi.fn(() => []),
+        getTask: vi.fn(() => undefined),
+      });
+
+      renderWithMantine(<TaskNotificationBadge variant="compact" />);
+
+      // No fullwidth pill text, no compact count digit, no aria-labelled badge.
+      // (Mantine injects its <style> tags into the container regardless, so we
+      // can't use `toBeEmptyDOMElement` directly — assert on the badge itself.)
+      expect(screen.queryByText(/pending task/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/pending task/i)).not.toBeInTheDocument();
+    });
+
+    it("renders the exact count for 1-99", () => {
+      vi.mocked(useTaskProgress).mockReturnValue({
+        activeTasks: buildRunning(12),
+        connectionState: "connected",
+        pendingCounts: {},
+        getTasksByStatus: vi.fn(() => buildRunning(12)),
+        getTasksByLibrary: vi.fn(() => buildRunning(12)),
+        getTask: vi.fn(() => undefined),
+      });
+
+      renderWithMantine(<TaskNotificationBadge variant="compact" />);
+
+      // Compact badge shows just the number, no "pending tasks" prefix.
+      expect(screen.getByText("12")).toBeInTheDocument();
+      expect(screen.queryByText(/pending task/i)).not.toBeInTheDocument();
+    });
+
+    it("truncates the count to `99+` past two digits", () => {
+      vi.mocked(useTaskProgress).mockReturnValue({
+        activeTasks: buildRunning(0),
+        connectionState: "connected",
+        pendingCounts: { analyze_book: 153 },
+        getTasksByStatus: vi.fn(() => []),
+        getTasksByLibrary: vi.fn(() => []),
+        getTask: vi.fn(() => undefined),
+      });
+
+      renderWithMantine(<TaskNotificationBadge variant="compact" />);
+
+      expect(screen.getByText("99+")).toBeInTheDocument();
+    });
+
+    it("exposes the precise total via aria-label for screen readers", () => {
+      vi.mocked(useTaskProgress).mockReturnValue({
+        activeTasks: buildRunning(0),
+        connectionState: "connected",
+        pendingCounts: { analyze_book: 7 },
+        getTasksByStatus: vi.fn(() => []),
+        getTasksByLibrary: vi.fn(() => []),
+        getTask: vi.fn(() => undefined),
+      });
+
+      renderWithMantine(<TaskNotificationBadge variant="compact" />);
+
+      expect(screen.getByLabelText("7 pending tasks")).toBeInTheDocument();
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Badge,
+  Box,
   Button,
   Divider,
   Drawer,
@@ -14,13 +15,23 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
-import { IconAdjustments, IconX } from "@tabler/icons-react";
+import {
+  IconAdjustments,
+  IconAlertTriangle,
+  IconBookmark,
+  IconCategory,
+  IconTag,
+  IconX,
+  type TablerIcon,
+} from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { genresApi } from "@/api/genres";
 import { tagsApi } from "@/api/tags";
 import { useBookFilterState } from "@/hooks/useBookFilterState";
 import { useDraftBookFilterState } from "@/hooks/useDraftBookFilterState";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
+import { FilterBottomSheet } from "./FilterBottomSheet";
 import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
 
@@ -44,6 +55,23 @@ const BOOK_TYPE_OPTIONS = [
   { value: "graphic_novel", label: "Graphic Novel" },
   { value: "magazine", label: "Magazine" },
 ];
+
+function SectionHeader({
+  icon: Icon,
+  children,
+}: {
+  icon: TablerIcon;
+  children: ReactNode;
+}) {
+  return (
+    <div className={classes.sectionHeader}>
+      <span className={classes.sectionHeaderIcon} aria-hidden>
+        <Icon size={14} />
+      </span>
+      {children}
+    </div>
+  );
+}
 
 /**
  * Filter panel component for books that displays filter groups in a drawer.
@@ -133,9 +161,143 @@ export function BookFilterPanel() {
     }
   };
 
+  const titleNode = (
+    <Group gap="sm">
+      <Title order={4}>Filters</Title>
+      {draftState.hasActiveFilters && (
+        <Badge size="sm" variant="light">
+          {draftState.activeFilterCount} active
+        </Badge>
+      )}
+    </Group>
+  );
+
+  const footerNode = (
+    <Group justify="space-between" className={classes.footer}>
+      <Button
+        variant="subtle"
+        color="gray"
+        size="sm"
+        leftSection={<IconX size={16} />}
+        onClick={handleClearAll}
+        disabled={!draftState.hasActiveFilters}
+      >
+        Clear all
+      </Button>
+      <Button size="sm" onClick={handleApply}>
+        Apply
+      </Button>
+    </Group>
+  );
+
+  const body = isLoading ? (
+    <Group justify="center" py="xl">
+      <Loader size="md" />
+      <Text size="sm" c="dimmed">
+        Loading filter options...
+      </Text>
+    </Group>
+  ) : (
+    <Stack gap="sm">
+      <SectionHeader icon={IconBookmark}>Reading Progress</SectionHeader>
+
+      <FilterGroup
+        title="Read Status"
+        options={READ_STATUS_OPTIONS}
+        state={draftState.draftFilters.readStatus}
+        onValueChange={draftState.setReadStatusState}
+        onModeChange={draftState.setReadStatusMode}
+        onClear={() => draftState.clearGroupDraft("readStatus")}
+        showModeToggle={false}
+        variant="progress"
+      />
+
+      <Divider my={4} />
+
+      <SectionHeader icon={IconAlertTriangle}>Book Status</SectionHeader>
+
+      <Group justify="space-between" px="xs">
+        <Text size="sm">Show books with errors</Text>
+        <Switch
+          checked={draftState.draftFilters.hasError === "include"}
+          onChange={handleHasErrorToggle}
+          color={
+            draftState.draftFilters.hasError === "include" ? "red" : "blue"
+          }
+          label={
+            draftState.draftFilters.hasError === "neutral"
+              ? "All"
+              : draftState.draftFilters.hasError === "include"
+                ? "Only errors"
+                : "No errors"
+          }
+        />
+      </Group>
+
+      <Group justify="space-between" px="xs">
+        <Text size="sm">Show deleted books</Text>
+        <Switch
+          checked={showDeletedBooks}
+          onChange={(e) =>
+            setPreference("library.show_deleted_books", e.currentTarget.checked)
+          }
+          color="red"
+        />
+      </Group>
+
+      <Divider my={4} />
+
+      <SectionHeader icon={IconCategory}>Book Type</SectionHeader>
+
+      <FilterGroup
+        title="Book Type"
+        options={BOOK_TYPE_OPTIONS}
+        state={draftState.draftFilters.bookType}
+        onValueChange={draftState.setBookTypeState}
+        onModeChange={draftState.setBookTypeMode}
+        onClear={() => draftState.clearGroupDraft("bookType")}
+      />
+
+      {hasMetadataFilters && (
+        <>
+          <Divider my={4} />
+          <SectionHeader icon={IconTag}>Metadata</SectionHeader>
+
+          {genreOptions.length > 0 && (
+            <FilterGroup
+              title="Genres"
+              options={genreOptions}
+              state={draftState.draftFilters.genres}
+              onValueChange={draftState.setGenreState}
+              onModeChange={draftState.setGenreMode}
+              onClear={() => draftState.clearGroupDraft("genres")}
+            />
+          )}
+
+          {tagOptions.length > 0 && (
+            <FilterGroup
+              title="Tags"
+              options={tagOptions}
+              state={draftState.draftFilters.tags}
+              onValueChange={draftState.setTagState}
+              onModeChange={draftState.setTagMode}
+              onClear={() => draftState.clearGroupDraft("tags")}
+            />
+          )}
+        </>
+      )}
+
+      {!hasMetadataFilters && (
+        <Text size="sm" c="dimmed" fs="italic" mt="md">
+          Genre and tag filters will appear here once your library has metadata.
+          Books inherit genres and tags from their series.
+        </Text>
+      )}
+    </Stack>
+  );
+
   return (
     <>
-      {/* Trigger Button - shows committed filter count */}
       <Indicator
         label={committedFilterCount}
         size={16}
@@ -154,176 +316,37 @@ export function BookFilterPanel() {
         </ActionIcon>
       </Indicator>
 
-      {/* Filter Drawer - uses draft state */}
-      <Drawer
-        opened={opened}
-        onClose={handleClose}
-        title={
-          <Group gap="sm">
-            <Title order={4}>Filters</Title>
-            {draftState.hasActiveFilters && (
-              <Badge size="sm" variant="light">
-                {draftState.activeFilterCount} active
-              </Badge>
-            )}
-          </Group>
-        }
-        position="right"
-        size={isMobile ? "100%" : "md"}
-        padding="md"
-        classNames={{
-          body: classes.drawerBody,
-        }}
-      >
-        {isLoading ? (
-          <Group justify="center" py="xl">
-            <Loader size="md" />
-            <Text size="sm" c="dimmed">
-              Loading filter options...
-            </Text>
-          </Group>
-        ) : (
-          <Stack gap="md" h="100%">
+      {isMobile ? (
+        <FilterBottomSheet
+          opened={opened}
+          onClose={handleClose}
+          title={titleNode}
+          footer={footerNode}
+        >
+          <ScrollArea flex={1} offsetScrollbars>
+            <Box pb="md">{body}</Box>
+          </ScrollArea>
+        </FilterBottomSheet>
+      ) : (
+        <Drawer
+          opened={opened}
+          onClose={handleClose}
+          title={titleNode}
+          position="right"
+          size="md"
+          padding="md"
+          classNames={{
+            body: classes.drawerBody,
+          }}
+        >
+          <Stack gap="sm" h="100%">
             <ScrollArea flex={1} offsetScrollbars>
-              <Stack gap="md">
-                {/* Reading Progress Section */}
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                  Reading Progress
-                </Text>
-
-                {/* Read Status Filters */}
-                <FilterGroup
-                  title="Read Status"
-                  options={READ_STATUS_OPTIONS}
-                  state={draftState.draftFilters.readStatus}
-                  onValueChange={draftState.setReadStatusState}
-                  onModeChange={draftState.setReadStatusMode}
-                  onClear={() => draftState.clearGroupDraft("readStatus")}
-                  showModeToggle={false}
-                />
-
-                <Divider my="xs" />
-
-                {/* Book Status Section */}
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                  Book Status
-                </Text>
-
-                {/* Has Error Toggle */}
-                <Group justify="space-between" px="xs">
-                  <Text size="sm">Show books with errors</Text>
-                  <Switch
-                    checked={draftState.draftFilters.hasError === "include"}
-                    onChange={handleHasErrorToggle}
-                    color={
-                      draftState.draftFilters.hasError === "include"
-                        ? "red"
-                        : "blue"
-                    }
-                    label={
-                      draftState.draftFilters.hasError === "neutral"
-                        ? "All"
-                        : draftState.draftFilters.hasError === "include"
-                          ? "Only errors"
-                          : "No errors"
-                    }
-                  />
-                </Group>
-
-                {/* Show Deleted Toggle */}
-                <Group justify="space-between" px="xs">
-                  <Text size="sm">Show deleted books</Text>
-                  <Switch
-                    checked={showDeletedBooks}
-                    onChange={(e) =>
-                      setPreference(
-                        "library.show_deleted_books",
-                        e.currentTarget.checked,
-                      )
-                    }
-                    color="red"
-                  />
-                </Group>
-
-                <Divider my="xs" />
-
-                {/* Book Type Section */}
-                <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                  Book Type
-                </Text>
-
-                <FilterGroup
-                  title="Book Type"
-                  options={BOOK_TYPE_OPTIONS}
-                  state={draftState.draftFilters.bookType}
-                  onValueChange={draftState.setBookTypeState}
-                  onModeChange={draftState.setBookTypeMode}
-                  onClear={() => draftState.clearGroupDraft("bookType")}
-                />
-
-                {/* Metadata Section - Only show if there's data */}
-                {hasMetadataFilters && (
-                  <>
-                    <Divider my="xs" />
-                    <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                      Metadata
-                    </Text>
-
-                    {/* Genre Filters */}
-                    {genreOptions.length > 0 && (
-                      <FilterGroup
-                        title="Genres"
-                        options={genreOptions}
-                        state={draftState.draftFilters.genres}
-                        onValueChange={draftState.setGenreState}
-                        onModeChange={draftState.setGenreMode}
-                        onClear={() => draftState.clearGroupDraft("genres")}
-                      />
-                    )}
-
-                    {/* Tag Filters */}
-                    {tagOptions.length > 0 && (
-                      <FilterGroup
-                        title="Tags"
-                        options={tagOptions}
-                        state={draftState.draftFilters.tags}
-                        onValueChange={draftState.setTagState}
-                        onModeChange={draftState.setTagMode}
-                        onClear={() => draftState.clearGroupDraft("tags")}
-                      />
-                    )}
-                  </>
-                )}
-
-                {/* Empty state hint when no metadata */}
-                {!hasMetadataFilters && (
-                  <Text size="sm" c="dimmed" fs="italic" mt="md">
-                    Genre and tag filters will appear here once your library has
-                    metadata. Books inherit genres and tags from their series.
-                  </Text>
-                )}
-              </Stack>
+              <Box pb="md">{body}</Box>
             </ScrollArea>
-
-            {/* Footer Actions */}
-            <Group justify="space-between" className={classes.footer}>
-              <Button
-                variant="subtle"
-                color="gray"
-                size="sm"
-                leftSection={<IconX size={16} />}
-                onClick={handleClearAll}
-                disabled={!draftState.hasActiveFilters}
-              >
-                Clear all
-              </Button>
-              <Button size="sm" onClick={handleApply}>
-                Apply
-              </Button>
-            </Group>
+            {footerNode}
           </Stack>
-        )}
-      </Drawer>
+        </Drawer>
+      )}
     </>
   );
 }

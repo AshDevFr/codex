@@ -1,23 +1,158 @@
+/* Filter panel info-design (Phase 9).
+   - Section headers stick to the top of the scroll container as the user
+     scrolls past them. A hairline below the header appears only when
+     content scrolls beneath it (managed by the sticky shadow rule below).
+   - The action footer (Clear all / Apply) pins to the bottom of the
+     drawer body and detaches from the scrolling chip lists via a top
+     hairline + a soft upward shadow.
+   - The mobile bottom-sheet variant reuses the same sticky rules but
+     scopes them to the sheet's scroll container so iOS Safari quirks
+     with `position: sticky` inside transformed ancestors don't bite. */
+
 .drawerBody {
   display: flex;
   flex-direction: column;
   height: calc(100% - 60px);
 }
 
+/* Sticky section header — uppercase label + small leading icon. Sits
+   flush against the top of its scroll container. The hairline below
+   only renders when content scrolls under the header (the box-shadow
+   acts as a 1px line that gets clipped by the parent's overflow when
+   nothing is scrolled beneath it). */
+.sectionHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  background-color: var(--surface-1);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mantine-color-dimmed);
+  box-shadow: 0 1px 0 var(--surface-border-hairline);
+}
+
+.sectionHeaderIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--mantine-color-dimmed);
+}
+
+/* Sticky action footer.
+   - Pinned to the bottom of the drawer/sheet body via `position: sticky`
+     so it stays in view at any scroll position.
+   - Top hairline + upward shadow detach it from the scrolling chip lists.
+   - `padding-bottom: env(safe-area-inset-bottom)` keeps the Clear all /
+     Apply buttons above the iOS home indicator in PWA standalone. */
 .footer {
-  padding-top: var(--mantine-spacing-md);
-  border-top: 1px solid
-    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: var(--mantine-spacing-sm);
+  padding-bottom: calc(
+    var(--mantine-spacing-sm) +
+    env(safe-area-inset-bottom, 0px)
+  );
+  background-color: var(--surface-1);
+  border-top: 1px solid var(--surface-border-hairline);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+}
+
+[data-mantine-color-scheme="dark"] .footer {
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Mobile bottom sheet variant.
+   - Anchors to the viewport bottom with the safe-area inset honored.
+   - Two snap states: `peek` (~55% viewport height) and `full` (90%).
+   - Drag handle is a dedicated 36×4px region at the top; the snap
+     animation rides on the shared spring tokens.
+   - The drag gesture is scoped to the handle (via `useDragControls`)
+     so vertical scrolls inside the chip list don't accidentally
+     dismiss the sheet. */
+.bottomSheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 320;
+  display: flex;
+  flex-direction: column;
+  height: 90dvh;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  background-color: var(--surface-1);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+  /* Reserve room for the drag handle row at the top. */
+  padding-top: 0;
+  overflow: hidden;
+  touch-action: none;
+  will-change: transform;
+}
+
+[data-mantine-color-scheme="dark"] .bottomSheet {
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.46);
+}
+
+.bottomSheetOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 319;
+  background-color: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.bottomSheetHandleRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 22px;
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.bottomSheetHandleRow:active {
+  cursor: grabbing;
+}
+
+.bottomSheetHandle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background-color: light-dark(
+    var(--mantine-color-gray-4),
+    var(--mantine-color-gray-6)
+  );
+}
+
+.bottomSheetTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--mantine-spacing-md) var(--mantine-spacing-sm);
+  flex-shrink: 0;
+}
+
+.bottomSheetBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--mantine-spacing-md);
 }
 
 /* Mobile-first responsive adjustments */
 @media (max-width: 768px) {
   .drawerBody {
     height: calc(100% - 80px);
-  }
-
-  .footer {
-    padding-top: var(--mantine-spacing-sm);
-    padding-bottom: var(--mantine-spacing-sm);
   }
 }

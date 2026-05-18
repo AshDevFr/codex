@@ -1,0 +1,106 @@
+/* Sidebar info-design layer.
+   - Groups are demarcated by *spacing only* (a single `data-section-break`
+     marker on the first row of each group). No panel, no border, no
+     elevated card. The earlier "primary group" wrapper was dropped because
+     lifting one section above an otherwise flat list created a visual
+     island; iOS-style sidebars (Mail, Music, Reminders) keep every row on
+     the same surface and let space + the active state do the grouping.
+   - Every NavLink (top-level + Settings sub-items) becomes a rounded pill
+     so hover and active read as soft shapes, not full-bleed rectangles.
+   - A 3px accent bar punches inward from the leading edge of *top-level*
+     active rows (direct children of `.navStack`). Sub-items skip the bar
+     so the Settings indent stays clean.
+   - Inactive leading icons fade to ~0.6 opacity; active icons go to full
+     opacity and the filled primary color, giving the active row a punch
+     that the previous color-only treatment lacked.
+   - `.footer` pins Logout + version to the bottom with a hairline above.
+   - Mobile (under the `sm` breakpoint, matches `MOBILE_MEDIA_QUERY`):
+     every row clears a 48px touch target and section breaks grow to 24px
+     so the groups read clearly on a phone. */
+
+/* Section grouping via top-margin. Marker is placed on the first NavLink
+   of each group (Libraries, Settings). All other rows sit at the Stack's
+   default gap. */
+.navStack > [data-section-break="true"] {
+  margin-top: 16px;
+}
+
+/* Every NavLink gets a soft pill so the active background isn't a
+   full-bleed rectangle. The Mantine `--nl-bg` (translucent primary) is
+   still what fills the pill; we just round it. */
+.navStack :global(.mantine-NavLink-root) {
+  border-radius: 8px;
+}
+
+/* Top-level rows host the accent-bar pseudo-element. Sub-items live inside
+   Settings's `<Collapse>` so they are *not* direct children of `.navStack`
+   and naturally skip this rule. */
+.navStack > :global(.mantine-NavLink-root) {
+  position: relative;
+}
+
+.navStack > :global(.mantine-NavLink-root)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 4px;
+  top: 50%;
+  height: 56%;
+  transform: translateY(-50%);
+  width: 3px;
+  border-radius: 2px;
+  background-color: transparent;
+  transition: background-color 0.2s var(--ease-out);
+  pointer-events: none;
+}
+
+.navStack
+  > :global(.mantine-NavLink-root)[data-active="true"]:not(
+    [data-no-accent]
+  )::before {
+  background-color: var(--mantine-color-primary-filled);
+}
+
+/* Icon two-state. Opacity carries the inactive/active distinction (color
+   alone wasn't enough against the tinted active background). Active rows
+   tint the icon to the filled primary so it visibly pops. */
+.navStack :global(.mantine-NavLink-root)
+  :global(.mantine-NavLink-section)[data-position="left"] {
+  opacity: 0.6;
+  transition:
+    opacity 0.2s var(--ease-out),
+    color 0.2s var(--ease-out);
+}
+
+.navStack
+  :global(.mantine-NavLink-root)[data-active="true"]
+  :global(.mantine-NavLink-section)[data-position="left"] {
+  opacity: 1;
+  color: var(--mantine-color-primary-filled);
+}
+
+/* Footer: pinned via `margin-top: auto` (the Mantine `AppShell.Section`
+   that wraps this is a regular div, but the parent navbar is a flex
+   column, so the auto margin still pushes the footer to the bottom of the
+   non-grow section). Hairline above so it reads as anchored, not floating. */
+.footer {
+  margin-top: auto;
+  padding-top: var(--mantine-spacing-xs);
+  border-top: 1px solid var(--surface-border-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-xs);
+}
+
+/* Mobile sheet: 48px row minimum (clears the 44px touch target with the
+   press-scale of Phase 3) + larger section breaks so groups read as
+   distinct blocks. */
+@media (max-width: 47.99em) {
+  .navStack :global(.mantine-NavLink-root) {
+    min-height: 48px;
+    padding-block: 12px;
+  }
+
+  .navStack > [data-section-break="true"] {
+    margin-top: 24px;
+  }
+}
