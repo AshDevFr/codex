@@ -19,6 +19,9 @@
         reduced-motion guard).
      8. Cover + media treatment (layered cover shadow, rounded cover
         corners, hover scale + shadow lift on desktop, image fade-in).
+   Surface colors in section 5 reference `var(--mantine-color-body)` /
+   `var(--card-bg)` / `var(--app-shell-main-bg)` rather than hardcoded
+   hex values so palette tweaks live in theme.ts alone.
    New rules should slot into the section they belong to rather than
    accumulating at the bottom of the file. */
 
@@ -160,9 +163,11 @@ body {
 
 /* Light theme improvements for Mantine components */
 [data-mantine-color-scheme="light"] {
-  /* AppShell main content area - subtle gray background for contrast */
+  /* AppShell main content area uses the warmed body background
+     (`--surface-1` = `#f7f7f9`) so pure-white cards separate slightly more
+     from the page than they would against a cooler gray. */
   .mantine-AppShell-main {
-    background-color: #f1f3f5;
+    background-color: var(--app-shell-main-bg);
   }
 
   /* Header background. The bottom border is replaced by a shadow-based
@@ -214,22 +219,26 @@ body {
   }
 }
 
-/* Dark theme - ensure consistent dark styling */
+/* Dark theme - ensure consistent dark styling.
+   Every dark-mode surface here is sourced from the elevation ladder
+   (`--mantine-color-body` = `--surface-1`, `--card-bg` = `--surface-2`) so
+   the AppShell, header, navbar, and Card all land on the iOS systemBackground
+   tiers (`#1c1c1e` / `#2c2c2e`) without per-element hex literals. */
 [data-mantine-color-scheme="dark"] {
   .mantine-AppShell-main {
-    background-color: #242424;
+    background-color: var(--mantine-color-body);
   }
 
   .mantine-AppShell-header {
-    background-color: #242424;
+    background-color: var(--mantine-color-body);
   }
 
   .mantine-AppShell-navbar {
-    background-color: #242424;
+    background-color: var(--mantine-color-body);
   }
 
   .mantine-Card-root {
-    background-color: #2c2c2c;
+    background-color: var(--card-bg);
   }
 }
 

@@ -6,7 +6,13 @@ import {
   type ModalProps,
 } from "@mantine/core";
 
-// Primary blue color palette (inspired by Komga)
+// Primary blue color palette (inspired by Komga).
+//
+// Mantine defaults `primaryShade` to `{ light: 6, dark: 8 }`. Steps 6 and 8
+// deliberately share a hue (Tailwind blue-700, `#1d4ed8`) so the brand blue
+// reads identically in light and dark schemes and lines up with the PWA
+// `theme_color`. Step 9 keeps a darker navy (`#1e3a8a`) for hover/active
+// layers.
 const primaryBlue: MantineColorsTuple = [
   "#e6f2ff",
   "#cce4ff",
@@ -16,7 +22,7 @@ const primaryBlue: MantineColorsTuple = [
   "#2563eb",
   "#1d4ed8",
   "#1e40af",
-  "#1e3a8a",
+  "#1d4ed8",
   "#1e3a8a",
 ];
 
@@ -178,8 +184,9 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
     "--mantine-color-default-hover": "#f8f9fa",
     "--mantine-color-default-border": "#dee2e6",
 
-    // Card and surface colors
-    "--app-shell-main-bg": "#f8f9fa",
+    // App-shell-main sits one notch warmer than the body so pure-white
+    // cards separate cleanly from the page; cards stay pure white.
+    "--app-shell-main-bg": "#f7f7f9",
     "--card-bg": "#ffffff",
     "--card-border": "#e9ecef",
 
@@ -187,9 +194,10 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
     "--mantine-color-gray-light": "#f1f3f5",
     "--mantine-color-gray-light-hover": "#e9ecef",
 
-    // Elevation ladder. Phase 1 keeps light-mode values aligned with today's
-    // surfaces so no visual change ships in this phase.
-    "--surface-1": "#f8f9fa",
+    // Elevation ladder. Light mode keeps the raised / elevated tiers at
+    // pure white and leans on shadows for depth; the body (surface-1)
+    // mirrors the warmed app-shell-main above.
+    "--surface-1": "#f7f7f9",
     "--surface-2": "#ffffff",
     "--surface-3": "#ffffff",
 
@@ -219,24 +227,37 @@ export const cssVariablesResolver: CSSVariablesResolver = (_theme) => ({
       "0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.05)",
   },
   dark: {
-    // Dark mode keeps existing styling
-    "--mantine-color-body": "#242424",
+    // Dark mode follows the iOS systemBackground family: a near-black body
+    // with a slight blue undertone, then a distinct raised tier for cards
+    // and a third tier for elevated menus / modals. Cards visibly separate
+    // from the body without relying on a 1px solid border.
+    "--mantine-color-body": "#1c1c1e",
     "--mantine-color-text": "#e0e0e0",
-    "--mantine-color-dimmed": "#909296",
+    // Dimmed text needs to clear WCAG AA (4.5:1) against the `#2c2c2e`
+    // card surface; Mantine's default gray[5] (`#909296`) lands at ~4.47:1
+    // there. This value bumps just enough to pass while preserving the
+    // visual hierarchy against `--mantine-color-text`.
+    "--mantine-color-dimmed": "#9a9da1",
 
-    // AppShell colors for dark mode
-    "--mantine-color-default": "#242424",
-    "--mantine-color-default-hover": "#2c2c2c",
+    // AppShell colors for dark mode follow the new body tier so input
+    // surfaces, action defaults, and hover states stay aligned with the
+    // elevation ladder.
+    "--mantine-color-default": "#1c1c1e",
+    "--mantine-color-default-hover": "#2c2c2e",
     "--mantine-color-default-border": "#373a40",
 
-    // Card and surface colors
-    "--app-shell-main-bg": "#242424",
-    "--card-bg": "#242424",
+    // Card surfaces land on the raised tier so a card on the body reads
+    // one elevation step above. Legacy `--card-bg` stays in sync with
+    // `--surface-2` so consumers that haven't migrated to the new token
+    // name still pick up the right tier.
+    "--app-shell-main-bg": "#1c1c1e",
+    "--card-bg": "#2c2c2e",
     "--card-border": "#373a40",
 
-    // iOS-aligned elevation ladder. Defined here so later phases can apply
-    // them; Phase 1 ships these as inert tokens (the AppShell + Card still
-    // reference the legacy `--mantine-color-body` / `--card-bg` above).
+    // iOS-aligned elevation ladder (systemBackground / secondarySystemBackground
+    // / tertiarySystemBackground). The legacy body / card tokens above
+    // point into the first two tiers; menus and modals pull `--surface-3`
+    // for the elevated step.
     "--surface-1": "#1c1c1e",
     "--surface-2": "#2c2c2e",
     "--surface-3": "#3a3a3c",
