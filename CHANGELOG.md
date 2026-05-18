@@ -2,6 +2,19 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.23.0] - 2026-05-18
+
+### 🚀 Features
+
+- *(ui)* Add motion provider, easings, useDelayedFlag, and depth tokens
+- *(ui)* Shadow-based depth and translucent mobile surfaces
+- *(ui)* Motion layer with press, stagger, theme toggle, and reduced-motion guard
+- *(ui)* Shape-matched skeletons with 150ms flicker guard
+- *(ui)* Layered cover shadows, rounded corners, and hover lift
+- *(ui)* IOS-aligned dark palette, warmer light surface, contrast pass
+- *(ui)* Tabular numerals, tightened tracking, and shared MetadataLabel
+- *(ui)* Info-design pass on sidebar and filter panels
+
 ## [1.22.0] - 2026-05-18
 
 ### 🚀 Features
