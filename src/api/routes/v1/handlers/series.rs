@@ -183,8 +183,8 @@ async fn series_to_dto(
         .map(|m| m.title.clone())
         .unwrap_or_else(|| "Unknown Series".to_string());
 
-    // Phase 5 of release-tracking: compute the upstream-publication gap
-    // signal. Skipped entirely for untracked series.
+    // Compute the upstream-publication gap signal. Skipped entirely for
+    // untracked series.
     let tracking = SeriesTrackingRepository::get(db, series.id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series tracking: {:?}", e)))?;
@@ -454,7 +454,7 @@ async fn series_to_full_dtos_batched(
             .map(|ids| ids.iter().cloned().map(SeriesExternalIdDto::from).collect())
             .unwrap_or_default();
 
-        // Phase 5 of release-tracking: upstream-publication gap signal.
+        // Upstream-publication gap signal.
         let series_external_ids = ext_ids_map
             .get(&series_id)
             .map(|v| v.as_slice())

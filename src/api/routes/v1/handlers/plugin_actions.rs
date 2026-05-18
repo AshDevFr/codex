@@ -1,4 +1,4 @@
-//! Plugin Actions API handlers (Phase 4)
+//! Plugin Actions API handlers
 //!
 //! Provides endpoints for plugin action discovery and execution:
 //! - GET /api/v1/plugins/actions - Get available plugin actions for a scope

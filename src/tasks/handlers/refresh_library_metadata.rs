@@ -1,15 +1,15 @@
 //! Per-job metadata refresh handler.
 //!
-//! Phase 9 entry point: the task carries a `job_id`, the handler loads the
+//! Entry point: the task carries a `job_id`, the handler loads the
 //! [`library_jobs`] row, decodes its [`LibraryJobConfig`] (must be
 //! `MetadataRefresh` to land here), resolves the library, builds a
 //! [`RefreshPlan`] via [`RefreshPlanner`], and walks the plan one
 //! `(series, plugin)` pair at a time.
 //!
-//! Scope: Phase 9 only honours `RefreshScope::SeriesOnly`. The validator
-//! gates this at PATCH time, but the handler also rejects non-series scopes
-//! at run time so a job that somehow persisted with a deferred scope
-//! short-circuits with a clear failure status.
+//! Scope: only `RefreshScope::SeriesOnly` is honoured. The validator gates
+//! this at PATCH time, but the handler also rejects non-series scopes at run
+//! time so a job that somehow persisted with a deferred scope short-circuits
+//! with a clear failure status.
 //!
 //! [`library_jobs`]: crate::db::entities::library_jobs
 
@@ -130,9 +130,9 @@ impl TaskHandler for RefreshLibraryMetadataHandler {
                 .context("Failed to decode library job config")?;
             let LibraryJobConfig::MetadataRefresh(cfg) = cfg;
 
-            // 2. Phase 9 scope guard. The validator should have rejected
-            //    non-series scopes already; this is defense-in-depth so a
-            //    persisted bad row fails loudly rather than silently no-op.
+            // 2. Scope guard. The validator should have rejected non-series
+            //    scopes already; this is defense-in-depth so a persisted bad
+            //    row fails loudly rather than silently no-op.
             if cfg.scope != RefreshScope::SeriesOnly {
                 let msg = format!(
                     "Book-scope refresh ('{}') not yet implemented",

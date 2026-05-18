@@ -65,8 +65,8 @@ describe("GenreTagChips", () => {
     renderWithProviders(<GenreTagChips tags={mockTags} clickable={false} />);
 
     // Mantine Badge sets `data-variant` on the root element. Tags must use
-    // `outline` (not the default `light`) so they don't disappear against the
-    // dark-mode surface — see Phase 9 / R9-2.
+    // `outline` (not the default `light`) so they don't disappear against
+    // the dark-mode surface.
     const favoriteBadge = screen
       .getByText("Favorite")
       .closest("[data-variant]");

@@ -1,8 +1,8 @@
 //! Planner that decides which `(series, provider)` pairs the scheduled
 //! metadata refresh should touch in a given run.
 //!
-//! Phase 9: each job carries a single provider, so the planner now resolves
-//! one `"plugin:<name>"` reference, lists the library's series, and emits one
+//! Each job carries a single provider, so the planner resolves one
+//! `"plugin:<name>"` reference, lists the library's series, and emits one
 //! `PlannedRefresh` per series (or skipped reason). The previous
 //! many-providers-per-config model has been removed alongside the per-provider
 //! override hatch.

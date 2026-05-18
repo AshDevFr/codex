@@ -1,4 +1,4 @@
-//! Add `chapter` and `chapter_lock` columns to `book_metadata` (Phase 11 of metadata-count-split).
+//! Add `chapter` and `chapter_lock` columns to `book_metadata`.
 //!
 //! Per-book classification: `book_metadata` already has `volume Option<i32>` and
 //! `volume_lock`. This migration adds the sibling `chapter Option<f32>` plus

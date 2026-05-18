@@ -485,7 +485,7 @@ pub async fn books_to_full_dtos_batched(
                 chapter: meta.chapter,
                 count: meta.count,
                 isbns: meta.isbns.clone(),
-                // Phase 6 fields
+                // Book-specific rich metadata fields
                 book_type: meta
                     .book_type
                     .as_ref()
@@ -1074,7 +1074,7 @@ pub async fn get_book(
                     letterers: extract_authors_by_role(&meta.authors_json, "letterer"),
                     cover_artists: extract_authors_by_role(&meta.authors_json, "cover_artist"),
                     editors: extract_authors_by_role(&meta.authors_json, "editor"),
-                    // New Phase 6 fields
+                    // New book-specific rich metadata fields
                     book_type: meta
                         .book_type
                         .as_ref()
@@ -1227,7 +1227,7 @@ pub async fn patch_book(
             chapter: Set(None),
             count: Set(None),
             isbns: Set(None),
-            // New Phase 1 fields
+            // New book metadata fields
             book_type: Set(None),
             subtitle: Set(None),
             authors_json: Set(None),
@@ -1259,7 +1259,7 @@ pub async fn patch_book(
             chapter_lock: Set(false),
             count_lock: Set(false),
             isbns_lock: Set(false),
-            // New Phase 1 lock fields
+            // New book metadata lock fields
             book_type_lock: Set(false),
             subtitle_lock: Set(false),
             authors_json_lock: Set(false),
@@ -2196,7 +2196,7 @@ pub async fn replace_book_metadata(
             chapter: Set(request.chapter),
             count: Set(request.count),
             isbns: Set(request.isbns.clone()),
-            // New Phase 1 fields
+            // New book metadata fields
             book_type: Set(None),
             subtitle: Set(None),
             authors_json: Set(new_authors_json),
@@ -2228,7 +2228,7 @@ pub async fn replace_book_metadata(
             chapter_lock: Set(request.chapter.is_some()),
             count_lock: Set(request.count.is_some()),
             isbns_lock: Set(request.isbns.is_some()),
-            // New Phase 1 lock fields
+            // New book metadata lock fields
             book_type_lock: Set(false),
             subtitle_lock: Set(false),
             authors_json_lock: Set(any_author_set),
@@ -2313,7 +2313,7 @@ pub async fn replace_book_metadata(
         chapter: updated.chapter,
         count: updated.count,
         isbns: updated.isbns,
-        // New Phase 6 fields
+        // New book-specific rich metadata fields
         book_type: updated
             .book_type
             .as_ref()
@@ -2587,7 +2587,7 @@ pub async fn patch_book_metadata(
             }
             has_changes = true;
         }
-        // New Phase 6 fields
+        // New book-specific rich metadata fields
         if let Some(opt) = request.book_type.into_nested_option() {
             let book_type_str = opt.as_ref().map(|bt| bt.to_string());
             active.book_type = Set(book_type_str);
@@ -2729,7 +2729,7 @@ pub async fn patch_book_metadata(
         let chapter_opt = request.chapter.into_option();
         let count_opt = request.count.into_option();
         let isbns_opt = request.isbns.into_option();
-        // New Phase 6 fields
+        // New book-specific rich metadata fields
         let book_type_opt = request.book_type.into_option();
         let book_type_str = book_type_opt.as_ref().map(|bt| bt.to_string());
         let subtitle_opt = request.subtitle.into_option();
@@ -2795,7 +2795,7 @@ pub async fn patch_book_metadata(
             chapter: Set(chapter_opt),
             count: Set(count_opt),
             isbns: Set(isbns_opt.clone()),
-            // New Phase 6 fields
+            // New book-specific rich metadata fields
             book_type: Set(book_type_str.clone()),
             subtitle: Set(subtitle_opt.clone()),
             authors_json: Set(merged_authors_json),
@@ -2829,7 +2829,7 @@ pub async fn patch_book_metadata(
             chapter_lock: Set(chapter_opt.is_some()),
             count_lock: Set(count_opt.is_some()),
             isbns_lock: Set(isbns_opt.is_some()),
-            // New Phase 6 lock fields
+            // New book-specific rich metadata lock fields
             book_type_lock: Set(book_type_str.is_some()),
             subtitle_lock: Set(subtitle_opt.is_some()),
             authors_json_lock: Set(any_author_set),
@@ -2916,7 +2916,7 @@ pub async fn patch_book_metadata(
         chapter: updated.chapter,
         count: updated.count,
         isbns: updated.isbns,
-        // New Phase 6 fields
+        // New book-specific rich metadata fields
         book_type: updated
             .book_type
             .as_ref()
@@ -3052,7 +3052,7 @@ pub async fn get_book_metadata_locks(
         chapter_lock: metadata.chapter_lock,
         count_lock: metadata.count_lock,
         isbns_lock: metadata.isbns_lock,
-        // New Phase 6 lock fields
+        // New book-specific rich metadata lock fields
         book_type_lock: metadata.book_type_lock,
         subtitle_lock: metadata.subtitle_lock,
         authors_json_lock: metadata.authors_json_lock,
@@ -3181,7 +3181,7 @@ pub async fn update_book_metadata_locks(
     if let Some(v) = request.isbns_lock {
         active.isbns_lock = Set(v);
     }
-    // New Phase 6 lock fields
+    // New book-specific rich metadata lock fields
     if let Some(v) = request.book_type_lock {
         active.book_type_lock = Set(v);
     }
@@ -3268,7 +3268,7 @@ pub async fn update_book_metadata_locks(
         chapter_lock: updated.chapter_lock,
         count_lock: updated.count_lock,
         isbns_lock: updated.isbns_lock,
-        // New Phase 6 lock fields
+        // New book-specific rich metadata lock fields
         book_type_lock: updated.book_type_lock,
         subtitle_lock: updated.subtitle_lock,
         authors_json_lock: updated.authors_json_lock,

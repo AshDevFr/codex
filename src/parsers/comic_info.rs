@@ -127,10 +127,10 @@ pub fn parse_comic_info(xml_content: &str) -> Result<ComicInfo, quick_xml::DeErr
         &xml_info.editor,
     );
 
-    // Phase 12 of metadata-count-split: derive a structured `chapter` from
-    // `<Number>`. ComicInfo's `<Number>` field is overloaded — issue, chapter,
-    // or part depending on the producer. v1: read it as a chapter; users whose
-    // files use it for issues can lock `chapter` after manual fix.
+    // Derive a structured `chapter` from `<Number>`. ComicInfo's `<Number>`
+    // field is overloaded (issue, chapter, or part depending on the producer).
+    // v1: read it as a chapter; users whose files use it for issues can lock
+    // `chapter` after manual fix.
     let chapter = xml_info
         .number
         .as_deref()
@@ -360,8 +360,8 @@ mod tests {
 
     #[test]
     fn test_parse_comic_info_derives_chapter_from_number() {
-        // Phase 12 of metadata-count-split: ComicInfo `<Number>` is the chapter
-        // axis on the parsed struct. Integer parses cleanly; fractional preserved.
+        // ComicInfo `<Number>` is the chapter axis on the parsed struct.
+        // Integer parses cleanly; fractional preserved.
         let xml = r#"<?xml version="1.0"?>
 <ComicInfo>
     <Number>42</Number>

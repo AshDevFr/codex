@@ -1,5 +1,5 @@
 /**
- * Page-side outbox helpers for offline write operations (Phase 12, T6).
+ * Page-side outbox helpers for offline write operations.
  *
  * The reading-progress mutation client (and other write paths down the
  * road) wraps its real network call in a try/catch: on offline failure it

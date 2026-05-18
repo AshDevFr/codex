@@ -1,8 +1,8 @@
 //! Split `series_metadata.total_book_count` into `total_volume_count` and `total_chapter_count`.
 //!
-//! Phase 1 of the metadata-count-split plan: adds new columns + locks and backfills
-//! the new volume column from the existing single book count, preserving the lock state.
-//! The legacy `total_book_count` column stays in place until Phase 9 (hard removal).
+//! Adds new columns + locks and backfills the new volume column from the existing
+//! single book count, preserving the lock state. The legacy `total_book_count`
+//! column stays in place until a later hard-removal migration.
 //!
 //! Why: `total_book_count` is overloaded (volumes, chapters, or whatever). Splitting it
 //! lets chapter-organized libraries show real "behind by N" indicators against provider

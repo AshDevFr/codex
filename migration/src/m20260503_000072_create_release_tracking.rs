@@ -1,4 +1,4 @@
-//! Create release-tracking schema (Phase 1 of release-tracking implementation).
+//! Create release-tracking schema.
 //!
 //! Adds two tables that augment the existing `series` and `series_external_ids`
 //! tables for tracked-series support:

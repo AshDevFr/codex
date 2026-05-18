@@ -1007,7 +1007,7 @@ pub fn available_credential_delivery_methods() -> Vec<&'static str> {
 }
 
 // =============================================================================
-// Plugin Actions DTOs (Phase 4)
+// Plugin Actions DTOs
 // =============================================================================
 
 /// A plugin action available for a specific scope
@@ -1214,7 +1214,7 @@ pub struct PluginSearchResponse {
 }
 
 // =============================================================================
-// Metadata Preview/Apply DTOs (Phase 4)
+// Metadata Preview/Apply DTOs
 // =============================================================================
 
 /// Status of a field during metadata preview

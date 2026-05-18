@@ -225,7 +225,7 @@ describe("PdfReader", () => {
     });
   });
 
-  describe("mobile default zoom (R7-2)", () => {
+  describe("mobile default zoom", () => {
     it("defaults to fit-page on non-mobile viewports", async () => {
       // Default beforeEach sets matchMedia matches=false (non-mobile)
       renderWithProviders(<PdfReader {...defaultProps} />);

@@ -45,7 +45,7 @@ import {
 import { cacheNameForBook } from "@/lib/offline/routeMatcher";
 
 /**
- * Phase 12 T7: Downloads management page.
+ * Downloads management page.
  *
  * Lists every book currently stored in IndexedDB's `downloads` store with
  * its size, format, last-read timestamp, and a Remove action. Surfaces the

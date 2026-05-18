@@ -34,7 +34,7 @@ impl UserRole {
     ///
     /// Admin can assign any role, Maintainer can only assign Reader,
     /// Reader cannot assign roles.
-    #[allow(dead_code)] // Used in Phase 2 for user role assignment API
+    #[allow(dead_code)] // Reserved for the user role assignment API
     pub fn can_assign(&self, target: UserRole) -> bool {
         match self {
             UserRole::Admin => true,
@@ -44,7 +44,7 @@ impl UserRole {
     }
 
     /// Returns all possible role values
-    #[allow(dead_code)] // Used in Phase 2 for user role assignment API
+    #[allow(dead_code)] // Reserved for the user role assignment API
     pub fn all() -> &'static [UserRole] {
         &[UserRole::Reader, UserRole::Maintainer, UserRole::Admin]
     }

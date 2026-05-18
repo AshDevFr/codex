@@ -569,7 +569,7 @@ impl Scheduler {
     /// Load library-jobs cron entries.
     ///
     /// Walks `library_jobs` rows where `enabled = true` and dispatches by
-    /// `r#type`. Phase 9 only handles `metadata_refresh`; future job types
+    /// `r#type`. Currently only handles `metadata_refresh`; future job types
     /// extend the match.
     async fn load_library_metadata_refresh_schedules(&mut self) -> Result<()> {
         let jobs = LibraryJobRepository::list_enabled(&self.db, None).await?;
@@ -607,7 +607,7 @@ impl Scheduler {
     /// the same library can run concurrently because the guard scopes
     /// per-job, not per-library.
     pub async fn add_library_job_schedule(&mut self, job: &library_jobs::Model) -> Result<()> {
-        // Type dispatch. Phase 9: only metadata_refresh.
+        // Type dispatch. Currently only metadata_refresh.
         let cfg = match parse_job_config(&job.r#type, &job.config) {
             Ok(c) => c,
             Err(e) => {

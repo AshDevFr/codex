@@ -27,8 +27,8 @@ body {
    apple-mobile-web-app-status-bar-style=black-translucent), the app draws
    under the notch / status bar / home indicator. Pad the AppShell shell so
    nav controls aren't tucked under those areas. The reader's own toolbar
-   and bottom bar already apply their own safe-area padding (see Phase 3),
-   so they remain immersive. */
+   and bottom bar already apply their own safe-area padding, so they remain
+   immersive. */
 @media (display-mode: standalone) {
   /* Grow the header to include the status-bar inset visually, AND push
      Mantine's main + navbar offset variable so the page content (Home

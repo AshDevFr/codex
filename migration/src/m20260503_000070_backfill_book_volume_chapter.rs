@@ -1,7 +1,7 @@
 //! Backfill `book_metadata.volume` and `book_metadata.chapter` from the
-//! structured filename parser (Phase 12 of metadata-count-split).
+//! structured filename parser.
 //!
-//! Phase 11 added the `chapter` column; the scanner now writes both columns
+//! The `chapter` column was added earlier; the scanner now writes both columns
 //! on insert/rescan. This migration handles the population for already-scanned
 //! libraries: re-parse each book's `file_name` and update `volume` / `chapter`
 //! where they are currently NULL and the parser has a value.

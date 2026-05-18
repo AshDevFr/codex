@@ -5,7 +5,7 @@
 //! The repository layer ([`crate::db::repositories::LibraryJobRepository`])
 //! persists strings; the parsing, default-filling, and validation lives here.
 //!
-//! Phase 9 introduces the `metadata_refresh` type. Future job types extend
+//! Currently the `metadata_refresh` type is supported. Future job types extend
 //! [`LibraryJobConfig`] without schema changes.
 //!
 //! [`library_jobs`]: crate::db::entities::library_jobs

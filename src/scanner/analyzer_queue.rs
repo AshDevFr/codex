@@ -285,7 +285,7 @@ async fn analyze_single_book(
     // Resolve book title using the library's book metadata strategy.
     // Note: title and number are now stored in book_metadata, not books table.
     let resolved_title = resolve_book_title(db, &book, &metadata, resolved_number).await;
-    // Phase 11: resolve structured volume/chapter via the same strategy.
+    // Resolve structured volume/chapter via the same strategy.
     let resolved_classification =
         resolve_book_classification(db, &book, &metadata, resolved_number).await;
     let resolved_number_decimal =
@@ -531,7 +531,7 @@ async fn analyze_single_book(
                 } else {
                     isbns_json.clone()
                 },
-                // New Phase 1 fields - preserve existing values (not populated from ComicInfo)
+                // Extended book metadata fields - preserve existing values (not populated from ComicInfo)
                 book_type: existing.book_type.clone(),
                 subtitle: existing.subtitle.clone(),
                 translator: existing.translator.clone(),
@@ -562,7 +562,7 @@ async fn analyze_single_book(
                 chapter_lock: existing.chapter_lock,
                 count_lock: existing.count_lock,
                 isbns_lock: existing.isbns_lock,
-                // New Phase 1 lock fields - preserve existing
+                // Extended book metadata lock fields - preserve existing
                 book_type_lock: existing.book_type_lock,
                 subtitle_lock: existing.subtitle_lock,
                 authors_json_lock: existing.authors_json_lock,
@@ -607,7 +607,7 @@ async fn analyze_single_book(
                 chapter: resolved_classification.chapter,
                 count: comic_info.count,
                 isbns: isbns_json,
-                // New Phase 1 fields
+                // Extended book metadata fields
                 book_type: None,
                 subtitle: None,
                 authors_json: comic_info.authors_json.clone(),
@@ -639,7 +639,7 @@ async fn analyze_single_book(
                 chapter_lock: false,
                 count_lock: false,
                 isbns_lock: false,
-                // New Phase 1 lock fields
+                // Extended book metadata lock fields
                 book_type_lock: false,
                 subtitle_lock: false,
                 authors_json_lock: false,
@@ -780,7 +780,7 @@ async fn analyze_single_book(
                 },
                 count: existing.count,
                 isbns: existing.isbns.clone(),
-                // New Phase 1 fields - preserve existing values
+                // Extended book metadata fields - preserve existing values
                 book_type: existing.book_type.clone(),
                 subtitle: existing.subtitle.clone(),
                 authors_json: existing.authors_json.clone(),
@@ -812,7 +812,7 @@ async fn analyze_single_book(
                 chapter_lock: existing.chapter_lock,
                 count_lock: existing.count_lock,
                 isbns_lock: existing.isbns_lock,
-                // New Phase 1 lock fields - preserve existing
+                // Extended book metadata lock fields - preserve existing
                 book_type_lock: existing.book_type_lock,
                 subtitle_lock: existing.subtitle_lock,
                 authors_json_lock: existing.authors_json_lock,
@@ -853,7 +853,7 @@ async fn analyze_single_book(
                 chapter: resolved_classification.chapter,
                 count: None,
                 isbns: None,
-                // New Phase 1 fields
+                // Extended book metadata fields
                 book_type: None,
                 subtitle: None,
                 authors_json: None,
@@ -884,7 +884,7 @@ async fn analyze_single_book(
                 chapter_lock: false,
                 count_lock: false,
                 isbns_lock: false,
-                // New Phase 1 lock fields
+                // Extended book metadata lock fields
                 book_type_lock: false,
                 subtitle_lock: false,
                 authors_json_lock: false,
@@ -1083,7 +1083,7 @@ async fn analyze_single_book(
 }
 
 /// Per-book classification output from the active book metadata strategy.
-/// Phase 11: lets scanner write `book_metadata.volume` and `book_metadata.chapter`
+/// Lets the scanner write `book_metadata.volume` and `book_metadata.chapter`
 /// alongside the title.
 #[derive(Debug, Default, Clone, Copy)]
 struct BookClassification {
@@ -1612,7 +1612,7 @@ mod tests {
             chapter: None,
             count: None,
             isbns: None,
-            // New Phase 1 fields
+            // Extended book metadata fields
             book_type: None,
             subtitle: None,
             authors_json: Some(r#"[{"name":"Test Writer","role":"writer"}]"#.to_string()),
@@ -1644,7 +1644,7 @@ mod tests {
             chapter_lock: false,
             count_lock: false,
             isbns_lock: false,
-            // New Phase 1 lock fields
+            // Extended book metadata lock fields
             book_type_lock: false,
             subtitle_lock: false,
             authors_json_lock: false,

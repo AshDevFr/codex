@@ -291,7 +291,7 @@ async fn test_apply_title_sets_title_sort_when_none() {
 }
 
 // =============================================================================
-// total_volume_count / total_chapter_count Apply Tests (Phase 3)
+// total_volume_count / total_chapter_count Apply Tests
 // =============================================================================
 
 /// Build a plugin with the given permission strings (e.g. "metadata:write:total_volume_count").

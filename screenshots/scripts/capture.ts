@@ -2,7 +2,7 @@ import { chromium, Browser, BrowserContext, Page } from "playwright";
 import { config } from "../playwright.config.js";
 import { printScreenshotSummary } from "./utils/screenshot.js";
 
-// Import scenarios (will be implemented in Phase 3)
+// Scenario imports (placeholders, not yet implemented):
 // import { runSetupScenario } from "./scenarios/setup.js";
 // import { runLibrariesScenario } from "./scenarios/libraries.js";
 // import { runSettingsScenario } from "./scenarios/settings.js";

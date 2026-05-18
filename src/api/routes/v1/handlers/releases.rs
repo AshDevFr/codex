@@ -9,8 +9,8 @@
 //! 3. Source admin (`GET /release-sources`, `PATCH /release-sources/{id}`,
 //!    `POST /release-sources/{id}/poll-now`) - admin-only source management.
 //!
-//! Phase 2 keeps `poll-now` as a stub returning HTTP 501; Phase 4 wires it
-//! into the task queue.
+//! `poll-now` started as a stub returning HTTP 501; it is now wired into the
+//! task queue.
 
 use axum::{
     Json,

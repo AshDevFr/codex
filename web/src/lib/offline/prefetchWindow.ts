@@ -1,5 +1,5 @@
 /**
- * Reader prefetch-window helper (Phase 12 T11).
+ * Reader prefetch-window helper.
  *
  * The Comic reader's preload-pages setting (`useReaderStore.settings.preloadPages`)
  * defaults to 1 and is user-clamped to 0-10. That default is fine for desktop
@@ -28,10 +28,9 @@
 export const MAX_PREFETCH_PAGES = 10;
 
 /**
- * Minimum window when the book is not downloaded. Per the Phase 12 plan:
- * "extend the existing prefetch logic from the current small window to 5-10
- * pages so the in-session experience improves on cellular regardless of
- * download status."
+ * Minimum window when the book is not downloaded. Widens the prefetch
+ * window to 5-10 pages so the in-session experience stays responsive on
+ * cellular regardless of download status.
  */
 export const MIN_PREFETCH_NOT_DOWNLOADED = 5;
 

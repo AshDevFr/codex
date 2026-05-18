@@ -4,7 +4,7 @@
 //! relationship is many-to-one: e.g., a single Nyaa plugin instance exposes
 //! one source per uploader subscription. CRUD here, plus state-tracking
 //! helpers (`record_poll_success`, `record_poll_error`) used by the polling
-//! task in Phase 4.
+//! task.
 
 #![allow(dead_code)]
 
@@ -185,8 +185,8 @@ impl ReleaseSourceRepository {
     }
 
     /// Get-or-create a synthetic in-core source (used by the metadata-piggyback
-    /// path in Phase 5). Distinct from `create` so callers don't accidentally
-    /// create duplicate synthetic rows.
+    /// path). Distinct from `create` so callers don't accidentally create
+    /// duplicate synthetic rows.
     pub async fn get_or_create(
         db: &DatabaseConnection,
         params: NewReleaseSource,

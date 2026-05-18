@@ -1,10 +1,9 @@
 //! Filename book metadata strategy
 //!
 //! Always uses the filename without extension for the title (Komga-compatible).
-//! Phase 11: also extracts structured volume/chapter numbers from canonical
-//! filename patterns (`v01`, `c042`, `v15 - c126`, etc.) so per-book
-//! classification can drive the new `local_max_volume` / `local_max_chapter`
-//! aggregations.
+//! Also extracts structured volume/chapter numbers from canonical filename
+//! patterns (`v01`, `c042`, `v15 - c126`, etc.) so per-book classification can
+//! drive the `local_max_volume` / `local_max_chapter` aggregations.
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -178,7 +177,7 @@ mod tests {
         );
     }
 
-    // -- Structured volume/chapter tests (Phase 11 table from plan) --
+    // -- Structured volume/chapter tests --
 
     fn parse(file_name: &str) -> (Option<i32>, Option<f32>) {
         let s = FilenameStrategy::new();

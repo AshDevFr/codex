@@ -150,9 +150,9 @@ pub fn fields_for_group(group: FieldGroup) -> &'static [&'static str] {
 
 /// Expand a slice of group names into a deduplicated set of field names.
 ///
-/// Unknown group strings are silently ignored — callers that want strict
+/// Unknown group strings are silently ignored; callers that want strict
 /// validation should call [`FieldGroup::from_str`] up front (the PATCH
-/// endpoint will, in Phase 6).
+/// endpoint does so).
 ///
 /// Returns `None` when both `groups` and `extras` are empty, matching the
 /// "no filter, apply everything" semantics of

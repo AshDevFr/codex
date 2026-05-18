@@ -27577,7 +27577,7 @@
             ]
           }
         ],
-        "description": "Type-discriminated job config exposed over the wire.\n\nPhase 9 only ships the `metadata_refresh` variant; future job types\nextend the enum."
+        "description": "Type-discriminated job config exposed over the wire.\n\nCurrently only ships the `metadata_refresh` variant; future job types\nextend the enum."
       },
       "LibraryJobDto": {
         "type": "object",
@@ -28505,7 +28505,7 @@
           },
           "scope": {
             "$ref": "#/components/schemas/RefreshScope",
-            "description": "Refresh scope. Phase 9 only honours `series_only` at runtime."
+            "description": "Refresh scope. Currently only `series_only` is honoured at runtime."
           },
           "skipRecentlySyncedWithinS": {
             "type": "integer",
@@ -30107,7 +30107,7 @@
                     "null"
                   ],
                   "format": "float",
-                  "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement** — Phase 6's MangaUpdates plugin owns the\ntranslation-release feed.",
+                  "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement**; the MangaUpdates plugin owns the\ntranslation-release feed.",
                   "example": 3.0
                 },
                 "upstreamGapProvider": {
@@ -30115,7 +30115,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe Phase 7 badge tooltip.",
+                  "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe gap badge tooltip.",
                   "example": "MangaBaka"
                 },
                 "upstreamVolumeGap": {
@@ -33137,7 +33137,7 @@
       },
       "RefreshScope": {
         "type": "string",
-        "description": "Scope of a metadata refresh job.\n\nPhase 9 only honours [`RefreshScope::SeriesOnly`] at runtime. The\nother variants are schema-accepted but rejected by the validator.",
+        "description": "Scope of a metadata refresh job.\n\nCurrently only [`RefreshScope::SeriesOnly`] is honoured at runtime. The\nother variants are schema-accepted but rejected by the validator.",
         "enum": [
           "series_only",
           "books_only",
@@ -35142,7 +35142,7 @@
               "null"
             ],
             "format": "float",
-            "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement** — Phase 6's MangaUpdates plugin owns the\ntranslation-release feed.",
+            "description": "Difference between the upstream original-language chapter count\n(`series_metadata.total_chapter_count`, supplied by metadata\nproviders like MangaBaka or AniList) and the highest locally-owned\nchapter (`local_max_chapter`).\n\nAlways `None` unless the series is tracked AND `track_chapters` is\nenabled AND the provider count is populated AND the rounded-to-1-\ndecimal gap is positive. **This is an informational signal, not a\nrelease announcement**; the MangaUpdates plugin owns the\ntranslation-release feed.",
             "example": 3.0
           },
           "upstreamGapProvider": {
@@ -35150,7 +35150,7 @@
               "string",
               "null"
             ],
-            "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe Phase 7 badge tooltip.",
+            "description": "Display name of the metadata provider that supplied the upstream\ncounts (e.g., \"MangaBaka\", \"AniList\"). Set whenever at least one of\n`upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by\nthe gap badge tooltip.",
             "example": "MangaBaka"
           },
           "upstreamVolumeGap": {

@@ -801,9 +801,9 @@ export function SeriesDetail() {
                 ) : null;
               })()}
 
-              {/* Behind-by-N badges: translation gap (Phase 6 release sources)
-                  and upstream gap (Phase 5 metadata signal). Each badge is a
-                  no-op when the gap is zero/missing, the series isn't tracked,
+              {/* Behind-by-N badges: translation gap (release sources)
+                  and upstream gap (metadata signal). Each badge is a no-op
+                  when the gap is zero/missing, the series isn't tracked,
                   or the corresponding axis is disabled. */}
               {tracking?.tracked && (
                 <Group gap={6} wrap="wrap">

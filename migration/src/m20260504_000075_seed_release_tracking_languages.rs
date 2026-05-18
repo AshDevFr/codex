@@ -1,4 +1,4 @@
-//! Seed the server-wide `release_tracking.default_languages` setting (Phase 6).
+//! Seed the server-wide `release_tracking.default_languages` setting.
 //!
 //! Aggregation feeds (e.g. MangaUpdates RSS) emit candidates in many languages.
 //! Plugins filter client-side using a per-series `series_tracking.languages`

@@ -17,7 +17,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     /// Owning plugin id (string). The literal `"core"` is reserved for in-core
-    /// synthetic sources (e.g., metadata-piggyback in Phase 5).
+    /// synthetic sources (e.g., metadata-piggyback).
     ///
     /// This is the plugin's manifest *name* — the identifier plugins use to
     /// self-reference over RPC. It is *not* the canonical lifecycle anchor;
@@ -89,9 +89,9 @@ impl ActiveModelBehavior for ActiveModel {}
 
 /// Canonical strings for `plugin_id`.
 pub mod plugin_id {
-    /// In-core synthetic sources (e.g., metadata-piggyback in Phase 5). Not a
+    /// In-core synthetic sources (e.g., metadata-piggyback). Not a
     /// real plugin; bypasses plugin-host lookup.
-    #[allow(dead_code)] // wired up in Phase 5 (metadata piggyback)
+    #[allow(dead_code)] // wired up by the metadata piggyback path
     pub const CORE: &str = "core";
 }
 

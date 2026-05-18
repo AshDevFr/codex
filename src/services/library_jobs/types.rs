@@ -1,7 +1,7 @@
 //! Typed configs for [`library_jobs`].
 //!
 //! [`LibraryJobConfig`] is a discriminated union keyed on the `type` row
-//! column. Phase 9 ships with `metadata_refresh`; future variants extend
+//! column. Currently ships with `metadata_refresh`; future variants extend
 //! the enum.
 //!
 //! [`library_jobs`]: crate::db::entities::library_jobs
@@ -48,8 +48,8 @@ impl LibraryJobType {
 /// Type-discriminated payload stored in [`library_jobs.config`].
 ///
 /// The serde representation is **internally tagged** under the JSON key
-/// `type`. Each variant carries its own typed payload. Phase 9 only ships
-/// the `metadata_refresh` variant.
+/// `type`. Each variant carries its own typed payload. Currently only the
+/// `metadata_refresh` variant ships.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LibraryJobConfig {
@@ -67,7 +67,7 @@ impl LibraryJobConfig {
 
 /// Scope of a metadata refresh job.
 ///
-/// Phase 9 only honours [`RefreshScope::SeriesOnly`] at runtime. The
+/// Currently only [`RefreshScope::SeriesOnly`] is honoured at runtime. The
 /// other variants are schema-accepted but rejected by the validator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "snake_case")]
@@ -113,7 +113,7 @@ pub struct MetadataRefreshJobConfig {
     /// resolve this to an installed plugin (disabled is fine).
     pub provider: String,
 
-    /// Refresh scope. Phase 9 only allows [`RefreshScope::SeriesOnly`].
+    /// Refresh scope. Currently only [`RefreshScope::SeriesOnly`] is allowed.
     #[serde(default)]
     pub scope: RefreshScope,
 
@@ -126,12 +126,12 @@ pub struct MetadataRefreshJobConfig {
     #[serde(default)]
     pub extra_fields: Vec<String>,
 
-    /// Reserved for the book-scope future work. Phase 9 rejects non-empty
+    /// Reserved for the book-scope future work. Currently rejects non-empty
     /// values when [`Self::scope`] is `series_only`.
     #[serde(default)]
     pub book_field_groups: Vec<String>,
 
-    /// Reserved for the book-scope future work. Phase 9 rejects non-empty
+    /// Reserved for the book-scope future work. Currently rejects non-empty
     /// values when [`Self::scope`] is `series_only`.
     #[serde(default)]
     pub book_extra_fields: Vec<String>,

@@ -3,8 +3,8 @@
 //! Book metadata strategies determine how per-book facts (title, volume,
 //! chapter) are resolved from filesystem paths and embedded metadata. The
 //! framing is "which sources do we trust for facts about this book"; title is
-//! just the first fact we extract. Volume and chapter classification (Phase 11
-//! of metadata-count-split) live on the same trait, mirroring the title flow.
+//! just the first fact we extract. Volume and chapter classification live on
+//! the same trait, mirroring the title flow.
 //!
 //! TODO: Remove allow(dead_code) once all book strategy features are fully integrated
 
@@ -57,11 +57,11 @@ pub struct BookMetadata {
 
 /// Trait for per-book metadata strategy implementations.
 ///
-/// Renamed from `BookNamingStrategy` (Phase 11 of metadata-count-split): the
-/// trait is no longer purely about titles. It now resolves three independent
-/// facts about a book — title, volume, chapter — from the same trio of inputs
-/// (filename, metadata, context). Strategies remain free to implement only the
-/// methods they have meaningful answers for; the rest return `None` defaults.
+/// Renamed from `BookNamingStrategy`: the trait is no longer purely about
+/// titles. It now resolves three independent facts about a book (title,
+/// volume, chapter) from the same trio of inputs (filename, metadata,
+/// context). Strategies remain free to implement only the methods they have
+/// meaningful answers for; the rest return `None` defaults.
 pub trait BookMetadataStrategy: Send + Sync {
     /// Get the strategy type
     fn strategy_type(&self) -> BookStrategy;
@@ -103,8 +103,8 @@ pub trait BookMetadataStrategy: Send + Sync {
 
 /// Backwards-compat alias. Prefer `BookMetadataStrategy` in new code; the
 /// `BookNamingStrategy` name is kept as a re-export for now to keep the
-/// downstream cascade narrow during Phase 11. Remove in a follow-up once all
-/// call sites are updated.
+/// downstream cascade narrow during the trait rename. Remove in a follow-up
+/// once all call sites are updated.
 pub use self::BookMetadataStrategy as BookNamingStrategy;
 
 /// Remove file extension from filename

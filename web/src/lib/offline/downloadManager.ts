@@ -1,27 +1,27 @@
 /**
- * Page-side download manager for the offline-reading feature (Phase 12).
+ * Page-side download manager for the offline-reading feature.
  *
  * Two entry points cover every book format Codex supports:
  *
- * - `downloadSingleFileBook` (T3) for EPUB and PDF, which the backend serves
- *   as one response from `/api/v1/books/{id}/file`. The body is streamed via
+ * - `downloadSingleFileBook` for EPUB and PDF, which the backend serves as
+ *   one response from `/api/v1/books/{id}/file`. The body is streamed via
  *   `ReadableStream.getReader()` so progress reports against `Content-Length`
  *   when present; the assembled response is stored in a per-book Cache.
  *
- * - `downloadComicBook` (T4) for CBZ/CBR, which the backend serves one page
- *   at a time from `/api/v1/books/{id}/pages/{n}`. Pages are fetched with
- *   bounded concurrency; progress is reported as pages-done/pages-total.
+ * - `downloadComicBook` for CBZ/CBR, which the backend serves one page at a
+ *   time from `/api/v1/books/{id}/pages/{n}`. Pages are fetched with bounded
+ *   concurrency; progress is reported as pages-done/pages-total.
  *
  * Both flows write the IDB row as `downloading` immediately, then flip it to
  * `complete` once everything lands. Abort cleans up the IDB row and the
  * per-book cache so a retry starts from a clean slate. Any other failure
  * (network throw, non-2xx response, mid-stream error, per-page 404) sets
- * the IDB row to `error` with the message preserved for the T7 Downloads
- * page to surface, and removes the partial cache so the reader never sees
- * a half-downloaded book.
+ * the IDB row to `error` with the message preserved for the Downloads page
+ * to surface, and removes the partial cache so the reader never sees a
+ * half-downloaded book.
  *
- * Series batch (T5) is a queue around these functions; it is not in this
- * module.
+ * The series batch download is a queue around these functions; it is not
+ * in this module.
  */
 
 import {
@@ -78,7 +78,7 @@ function bookPageUrl(bookId: string, pageNumber: number): string {
   return `/api/v1/books/${bookId}/pages/${pageNumber}`;
 }
 
-// -- Storage persistence (T9) --------------------------------------------
+// -- Storage persistence -------------------------------------------------
 
 /**
  * Result of `navigator.storage.persist()` for the current session.
@@ -97,7 +97,7 @@ let persistInFlight: Promise<StoragePersistence> | null = null;
 
 /**
  * Returns the cached `navigator.storage.persist()` result without making a
- * new request. Used by the Downloads page (T7) to render the durability
+ * new request. Used by the Downloads page to render the durability
  * indicator without forcing a re-prompt.
  */
 export function getStoragePersistence(): StoragePersistence {
@@ -110,8 +110,8 @@ export function getStoragePersistence(): StoragePersistence {
  * the browser. Falls through silently in environments without the
  * StorageManager API (older Safari, jsdom without injection).
  *
- * Exposed primarily so the Downloads page (T7) can opportunistically
- * trigger the prompt when a user lands there, even if they haven't
+ * Exposed primarily so the Downloads page can opportunistically trigger
+ * the prompt when a user lands there, even if they haven't
  * downloaded anything yet. The download flows below also call this after
  * each successful completion.
  */
@@ -249,7 +249,7 @@ export async function downloadSingleFileBook(
   };
   await putDownload(completeRecord);
   broadcastDownloadsChange({ kind: "put", record: completeRecord });
-  // T9: request persistent storage once per session, opportunistically.
+  // Request persistent storage once per session, opportunistically.
   void requestStoragePersistence();
 
   return { bookId, bytes: loaded };
@@ -377,7 +377,7 @@ export async function downloadComicBook(
     await recordError(startRecord, firstFailure);
     // Partial caches are useless for reading (the reader needs every page),
     // so evict the whole per-book cache. The IDB row stays at status=error
-    // so the Downloads page (T7) can show what went wrong.
+    // so the Downloads page can show what went wrong.
     await cachesImpl.delete(cacheNameForBook(bookId));
     throw firstFailure;
   }
@@ -392,7 +392,7 @@ export async function downloadComicBook(
   };
   await putDownload(completeRecord);
   broadcastDownloadsChange({ kind: "put", record: completeRecord });
-  // T9: request persistent storage once per session, opportunistically.
+  // Request persistent storage once per session, opportunistically.
   void requestStoragePersistence();
 
   return { bookId, bytes: totalBytes };

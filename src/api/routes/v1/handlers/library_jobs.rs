@@ -1,4 +1,4 @@
-//! Library jobs CRUD + run-now + dry-run handlers (Phase 9).
+//! Library jobs CRUD + run-now + dry-run handlers.
 
 use axum::{
     Json,
@@ -426,7 +426,7 @@ pub async fn dry_run_job(
         .unwrap_or(DRY_RUN_DEFAULT_SAMPLE)
         .min(DRY_RUN_MAX_SAMPLE) as usize;
 
-    // For Phase 9 we return a planner-only sample (no plugin call). Phase 6
+    // We return a planner-only sample (no plugin call). An earlier design
     // executed plugin calls per pair; the downsides (slow, brittle) outweigh
     // the marginal benefit when the user is previewing a single provider.
     let mut sample = Vec::new();

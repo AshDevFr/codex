@@ -37,7 +37,7 @@ import { cacheNameForBook } from "@/lib/offline/routeMatcher";
 import { InstallNudgeModal } from "./InstallNudgeModal";
 
 /**
- * Phase 12 T8: per-book download button.
+ * Per-book download button.
  *
  * Renders a single ActionIcon (or icon + ring) that hydrates from IDB on
  * mount, subscribes to the downloads BroadcastChannel for cross-tab updates,
@@ -46,8 +46,8 @@ import { InstallNudgeModal } from "./InstallNudgeModal";
  * Five visible states cycle through `loading` -> `not-downloaded` ->
  * `downloading` (RingProgress + cancel) -> `downloaded` (Menu) or `error`.
  *
- * Series batch (T5) wraps this component in a queue; the series-level
- * "Download series" button is intentionally not part of this slice.
+ * The series batch download wraps this component in a queue; the
+ * series-level "Download series" button is a separate component.
  */
 
 type ButtonState =
@@ -114,7 +114,7 @@ export function DownloadButton({
 
   // Hydrate from IDB + subscribe to broadcast updates from other tabs.
   // Effect intentionally does not depend on `supported` so the listener
-  // would still fire if T4 later flips comics into the supported set.
+  // would still fire if comics later get flipped into the supported set.
   useEffect(() => {
     let cancelled = false;
 
@@ -205,8 +205,8 @@ export function DownloadButton({
   if (!supported && !fileDownloadUrl) return null;
 
   function maybeNudgeThenDownload() {
-    // T10: On a fresh iOS Safari tab, show the install nudge before the
-    // first download instead of jumping straight in. After the user picks
+    // On a fresh iOS Safari tab, show the install nudge before the first
+    // download instead of jumping straight in. After the user picks
     // Continue (or dismisses), `startDownload` runs as usual; subsequent
     // taps within the 30-day TTL skip the modal entirely.
     if (shouldShowInstallNudge()) {

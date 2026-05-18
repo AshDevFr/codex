@@ -107,8 +107,8 @@ export function PdfReader({
     height: number;
   } | null>(null);
 
-  // R7-2: on a phone-sized viewport, `fit-page` produces an unreadably small
-  // page (portrait PDF scaled to a portrait viewport — text near ~33% width).
+  // On a phone-sized viewport, `fit-page` produces an unreadably small page
+  // (portrait PDF scaled to a portrait viewport leaves text near ~33% width).
   // Default to `fit-width` on first render below `xs`; persisted per-book
   // choices would still win once we surface them, but zoom is currently local.
   // `getInitialValueInEffect: false` makes useMediaQuery match synchronously

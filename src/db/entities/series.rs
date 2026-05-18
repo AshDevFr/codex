@@ -65,7 +65,7 @@ pub enum Relation {
     SeriesTracking,
     #[sea_orm(has_many = "super::series_aliases::Entity")]
     SeriesAliases,
-    // Release ledger entries for this series (Phase 2).
+    // Release ledger entries for this series.
     #[sea_orm(has_many = "super::release_ledger::Entity")]
     ReleaseLedger,
 }

@@ -11647,7 +11647,7 @@ export interface components {
         /**
          * @description Type-discriminated job config exposed over the wire.
          *
-         *     Phase 9 only ships the `metadata_refresh` variant; future job types
+         *     Currently only ships the `metadata_refresh` variant; future job types
          *     extend the enum.
          */
         LibraryJobConfigDto: components["schemas"]["MetadataRefreshJobConfigDto"] & {
@@ -12145,7 +12145,7 @@ export interface components {
             maxConcurrency?: number;
             /** @description Plugin reference, e.g. `"plugin:mangabaka"`. */
             provider: string;
-            /** @description Refresh scope. Phase 9 only honours `series_only` at runtime. */
+            /** @description Refresh scope. Currently only `series_only` is honoured at runtime. */
             scope?: components["schemas"]["RefreshScope"];
             /**
              * Format: int32
@@ -13165,7 +13165,7 @@ export interface components {
                  *     Always `None` unless the series is tracked AND `track_chapters` is
                  *     enabled AND the provider count is populated AND the rounded-to-1-
                  *     decimal gap is positive. **This is an informational signal, not a
-                 *     release announcement** — Phase 6's MangaUpdates plugin owns the
+                 *     release announcement**; the MangaUpdates plugin owns the
                  *     translation-release feed.
                  * @example 3
                  */
@@ -13174,7 +13174,7 @@ export interface components {
                  * @description Display name of the metadata provider that supplied the upstream
                  *     counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
                  *     `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
-                 *     the Phase 7 badge tooltip.
+                 *     the gap badge tooltip.
                  * @example MangaBaka
                  */
                 upstreamGapProvider?: string | null;
@@ -14853,7 +14853,7 @@ export interface components {
         /**
          * @description Scope of a metadata refresh job.
          *
-         *     Phase 9 only honours [`RefreshScope::SeriesOnly`] at runtime. The
+         *     Currently only [`RefreshScope::SeriesOnly`] is honoured at runtime. The
          *     other variants are schema-accepted but rejected by the validator.
          * @enum {string}
          */
@@ -16051,7 +16051,7 @@ export interface components {
              *     Always `None` unless the series is tracked AND `track_chapters` is
              *     enabled AND the provider count is populated AND the rounded-to-1-
              *     decimal gap is positive. **This is an informational signal, not a
-             *     release announcement** — Phase 6's MangaUpdates plugin owns the
+             *     release announcement**; the MangaUpdates plugin owns the
              *     translation-release feed.
              * @example 3
              */
@@ -16060,7 +16060,7 @@ export interface components {
              * @description Display name of the metadata provider that supplied the upstream
              *     counts (e.g., "MangaBaka", "AniList"). Set whenever at least one of
              *     `upstream_chapter_gap` / `upstream_volume_gap` is populated. Used by
-             *     the Phase 7 badge tooltip.
+             *     the gap badge tooltip.
              * @example MangaBaka
              */
             upstreamGapProvider?: string | null;

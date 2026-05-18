@@ -1,5 +1,5 @@
 /**
- * IndexedDB access layer for the offline-reading feature (Phase 12).
+ * IndexedDB access layer for the offline-reading feature.
  *
  * Two stores:
  * - `downloads`: per-book metadata, source of truth for whether a book is

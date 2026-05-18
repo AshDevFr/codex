@@ -16,11 +16,9 @@ export default defineConfig({
       // as-is; vite-plugin-pwa only compiles the service worker source.
       injectRegister: null,
       manifest: false,
-      // Phase 12 moved from generateSW to injectManifest so the SW can own a
-      // custom route for per-book offline caches and the downloads broadcast
-      // bus. App-shell precache + the previous NetworkFirst/CacheFirst rules
-      // are reimplemented inside src/sw.ts. See tmp/implementation/planned/
-      // mobile-support.md (Phase 12, T1).
+      // Use injectManifest (not generateSW) so the SW can own a custom route
+      // for per-book offline caches and the downloads broadcast bus. App-shell
+      // precache and the runtime caching rules live inside src/sw.ts.
       strategies: "injectManifest",
       srcDir: "src",
       filename: "sw.ts",

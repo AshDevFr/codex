@@ -2061,7 +2061,7 @@ async fn test_komga_mark_series_as_unread_not_found() {
 }
 
 // ============================================================================
-// Sort and Filter Tests (Phase 3 - Komga sort/filter fixes)
+// Sort and Filter Tests (Komga sort/filter fixes)
 // ============================================================================
 
 /// Helper to create a book_metadata record with release date

@@ -697,7 +697,7 @@ async fn test_get_series_classification_aggregates_absent_when_unclassified() {
 }
 
 // ============================================================================
-// Phase 5: Upstream-publication gap signal
+// Upstream-publication gap signal
 // ============================================================================
 
 /// Inputs for [`setup_tracked_series_with_gap`].

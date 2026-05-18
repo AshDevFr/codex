@@ -367,7 +367,7 @@ describe("downloadSingleFileBook: cancellation", () => {
   });
 });
 
-// -- Comic per-page download (T4) ----------------------------------------
+// -- Comic per-page download ---------------------------------------------
 
 function makePageResponse(
   bytes: Uint8Array,
@@ -589,7 +589,7 @@ describe("downloadComicBook: cancellation", () => {
   });
 });
 
-// -- Storage persistence (T9) --------------------------------------------
+// -- Storage persistence -------------------------------------------------
 
 describe("requestStoragePersistence", () => {
   it("calls persist() once and caches the result for subsequent calls", async () => {

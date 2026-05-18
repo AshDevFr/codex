@@ -91,7 +91,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/libraries/{library_id}/analyze-unanalyzed",
             post(handlers::trigger_library_unanalyzed_analysis),
         )
-        // Plugin auto-match for library (Phase 5.5)
+        // Plugin auto-match for library
         .route(
             "/libraries/{library_id}/metadata/auto-match/task",
             post(handlers::plugin_actions::enqueue_library_auto_match_tasks),
@@ -101,7 +101,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/libraries/{library_id}/series/titles/reprocess",
             post(handlers::task_queue::reprocess_library_series_titles),
         )
-        // Library jobs (Phase 9): generic CRUD for per-library scheduled work.
+        // Library jobs: generic CRUD for per-library scheduled work.
         .route(
             "/libraries/{library_id}/jobs",
             get(handlers::library_jobs::list_jobs).post(handlers::library_jobs::create_job),
