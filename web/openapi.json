@@ -134,12 +134,154 @@
       }
     },
     "/api/v1/admin/pdf-cache": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get combined PDF cache statistics",
+        "description": "Returns statistics for both the on-disk rendered-page cache and the\nin-memory PDFium handle cache in a single payload.\n\n# Permission Required\n- Admin access required",
+        "operationId": "get_pdf_cache_stats",
+        "responses": {
+          "200": {
+            "description": "Combined cache statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PdfCacheStatsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/pdf-cache/handles": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get PDFium handle cache statistics",
+        "description": "Returns statistics about the in-memory open-document handle cache, including\nthe list of currently-resident books.\n\n# Permission Required\n- Admin access required",
+        "operationId": "get_handle_cache_stats",
+        "responses": {
+          "200": {
+            "description": "Handle cache statistics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PdfHandleCacheStatsDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
       "delete": {
         "tags": [
           "Admin"
         ],
-        "summary": "Clear the entire PDF cache immediately (synchronous)",
-        "description": "Deletes all cached PDF pages immediately. This operation cannot be undone.\nFor selective cleanup based on age, use the trigger_pdf_cache_cleanup endpoint instead.\n\n# Permission Required\n- Admin access required",
+        "summary": "Close every PDFium handle currently held in memory.",
+        "description": "Forces a re-open on the next page request for any book that previously had\na cached handle. Useful when the underlying library files have been moved\noutside of the scanner's awareness.\n\n# Permission Required\n- Admin access required",
+        "operationId": "clear_handle_cache",
+        "responses": {
+          "200": {
+            "description": "Handle cache cleared successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PdfHandleCacheClearResultDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/pdf-cache/handles/{book_id}": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Evict a single book's PDFium handle from the in-memory cache.",
+        "description": "No-op if the book has no cached handle. The next page request for that book\nwill re-open the PDF via PDFium.\n\n# Permission Required\n- Admin access required",
+        "operationId": "evict_book_handle",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "description": "Book identifier",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Handle eviction result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PdfHandleCacheClearResultDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/pdf-cache/pages": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Clear the entire PDF page cache immediately (synchronous)",
+        "description": "Deletes all cached rendered pages on disk. For selective cleanup based on\nage, use the trigger_pdf_cache_cleanup endpoint instead.\n\n# Permission Required\n- Admin access required",
         "operationId": "clear_pdf_cache",
         "responses": {
           "200": {
@@ -171,12 +313,12 @@
         ]
       }
     },
-    "/api/v1/admin/pdf-cache/cleanup": {
+    "/api/v1/admin/pdf-cache/pages/cleanup": {
       "post": {
         "tags": [
           "Admin"
         ],
-        "summary": "Trigger PDF cache cleanup task",
+        "summary": "Trigger PDF page cache cleanup task",
         "description": "Enqueues a background task to clean up cached PDF pages older than\nthe configured max age (default: 30 days, configurable via settings).\n\n# Permission Required\n- Admin access required\n\nReturns the task ID which can be used to track progress.",
         "operationId": "trigger_pdf_cache_cleanup",
         "responses": {
@@ -191,48 +333,6 @@
                   "maxAgeDays": 30,
                   "message": "PDF cache cleanup task queued successfully",
                   "taskId": "550e8400-e29b-41d4-a716-446655440000"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Admin access required"
-          }
-        },
-        "security": [
-          {
-            "jwt_bearer": []
-          },
-          {
-            "api_key": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/pdf-cache/stats": {
-      "get": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Get PDF cache statistics",
-        "description": "Returns statistics about the PDF page cache including total files,\ntotal size, number of books with cached pages, and cache status.\n\n# Permission Required\n- Admin access required",
-        "operationId": "get_pdf_cache_stats",
-        "responses": {
-          "200": {
-            "description": "Cache statistics retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PdfCacheStatsDto"
-                },
-                "example": {
-                  "bookCount": 45,
-                  "cacheDir": "/data/cache",
-                  "cacheEnabled": true,
-                  "oldestFileAgeDays": 15,
-                  "totalFiles": 1500,
-                  "totalSizeBytes": 157286400,
-                  "totalSizeHuman": "150.0 MB"
                 }
               }
             }
@@ -31064,7 +31164,172 @@
       },
       "PdfCacheStatsDto": {
         "type": "object",
-        "description": "Statistics about the PDF page cache",
+        "description": "Combined PDF cache statistics.\n\nExposes both the on-disk rendered-page cache and the in-memory open-document\nhandle cache in a single payload.",
+        "required": [
+          "pages",
+          "handles"
+        ],
+        "properties": {
+          "handles": {
+            "$ref": "#/components/schemas/PdfHandleCacheStatsDto",
+            "description": "In-memory open-document handle cache (PDFium)."
+          },
+          "pages": {
+            "$ref": "#/components/schemas/PdfPageCacheStatsDto",
+            "description": "Disk-backed rendered-page cache (JPEGs)."
+          }
+        }
+      },
+      "PdfHandleCacheClearResultDto": {
+        "type": "object",
+        "description": "Response when clearing the handle cache (close-all or single).",
+        "required": [
+          "handlesClosed"
+        ],
+        "properties": {
+          "handlesClosed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of handles closed by the operation.",
+            "example": 12,
+            "minimum": 0
+          }
+        }
+      },
+      "PdfHandleCacheEntryDto": {
+        "type": "object",
+        "description": "Per-entry view of the in-memory PDFium handle cache.",
+        "required": [
+          "bookId",
+          "filePath",
+          "ageSeconds",
+          "idleSeconds",
+          "renderCount"
+        ],
+        "properties": {
+          "ageSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds since the handle was opened.",
+            "example": 312,
+            "minimum": 0
+          },
+          "bookId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Book ID for the cached document.",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "filePath": {
+            "type": "string",
+            "description": "File path of the opened PDF.",
+            "example": "/library/books/manual.pdf"
+          },
+          "idleSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds since the last render against this handle.",
+            "example": 14,
+            "minimum": 0
+          },
+          "renderCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of renders served from this handle.",
+            "example": 27,
+            "minimum": 0
+          }
+        }
+      },
+      "PdfHandleCacheStatsDto": {
+        "type": "object",
+        "description": "Statistics about the in-memory open-document handle cache.\n\nBacked by `PdfHandleCache` in the service layer. Avoids re-opening the\nunderlying PDF file via PDFium on every page request.",
+        "required": [
+          "enabled",
+          "capacity",
+          "idleTtlSeconds",
+          "currentSize",
+          "hits",
+          "misses",
+          "opens",
+          "evictions",
+          "idleEvictions",
+          "entries"
+        ],
+        "properties": {
+          "capacity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum number of handles the cache will retain.",
+            "example": 256,
+            "minimum": 0
+          },
+          "currentSize": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of handles currently cached.",
+            "example": 12,
+            "minimum": 0
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the handle cache is enabled.",
+            "example": true
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PdfHandleCacheEntryDto"
+            },
+            "description": "Per-entry detail for the admin UI."
+          },
+          "evictions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cumulative evictions (capacity + manual).",
+            "example": 5,
+            "minimum": 0
+          },
+          "hits": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cumulative cache hits (handle reused without re-opening).",
+            "example": 4321,
+            "minimum": 0
+          },
+          "idleEvictions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cumulative idle-TTL evictions performed by the sweeper.",
+            "example": 3,
+            "minimum": 0
+          },
+          "idleTtlSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Idle TTL in seconds before a handle is evicted by the background sweeper.",
+            "example": 900,
+            "minimum": 0
+          },
+          "misses": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cumulative cache misses (no entry on lookup).",
+            "example": 87,
+            "minimum": 0
+          },
+          "opens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cumulative PDFium opens performed by the cache.",
+            "example": 87,
+            "minimum": 0
+          }
+        }
+      },
+      "PdfPageCacheStatsDto": {
+        "type": "object",
+        "description": "Statistics about the on-disk rendered-page cache.\n\nThis is the cache that stores already-rendered JPEG images of PDF pages.\nBacked by `PdfPageCache` in the service layer.",
         "required": [
           "totalFiles",
           "totalSizeBytes",
