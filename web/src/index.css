@@ -1,3 +1,29 @@
+/* ============================================
+   Global CSS — section index
+   ============================================
+   Conventions for this file (kept in sync with src/lib/motion/):
+     1. Motion easings (`--ease-out`, `--ease-in-out`) — single source of
+        truth for CSS-side transitions. TS callers use the matching tokens
+        in `src/lib/motion/easings.ts`.
+     2. Shadow scale (`--shadow-xs/sm/md/lg/xl`) and surface elevation
+        ladder (`--surface-1/2/3`) — defined per scheme in `src/theme.ts`'s
+        `cssVariablesResolver`. Later phases of the UI polish pass apply
+        them in place of the current border-based depth treatment.
+     3. PWA standalone safe-area handling.
+     4. Mobile responsive helpers (overflow wrapping, touch-target opt-in,
+        mobile title scale).
+     5. Light + dark theme scoped Mantine component overrides.
+     6. Component-specific helpers (hover affordances, bulk-selection,
+        cover overlays).
+   New rules should slot into the section they belong to rather than
+   accumulating at the bottom of the file. */
+
+:root {
+  /* Motion easings shared with `src/lib/motion/easings.ts`. */
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
 body {
   margin: 0;
   min-width: 320px;
