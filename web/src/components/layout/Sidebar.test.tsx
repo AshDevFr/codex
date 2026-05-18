@@ -17,6 +17,18 @@ vi.mock("@/api/tasks", () => ({
   fetchPendingTaskCounts: vi.fn(() => Promise.resolve({})),
   fetchTasksByStatus: vi.fn(() => Promise.resolve([])),
 }));
+// Mocked at module scope so individual Phase 8 tests can override the return
+// shape (running tasks + pending counts) to drive the compact Tasks badge.
+vi.mock("@/hooks/useTaskProgress", () => ({
+  useTaskProgress: vi.fn(() => ({
+    activeTasks: [],
+    connectionState: "connected",
+    pendingCounts: {},
+    getTasksByStatus: vi.fn(() => []),
+    getTasksByLibrary: vi.fn(() => []),
+    getTask: vi.fn(() => undefined),
+  })),
+}));
 vi.mock("@/api/plugins", () => ({
   pluginsApi: {
     getAll: vi.fn(() => Promise.resolve({ plugins: [] })),
@@ -807,6 +819,144 @@ describe("Sidebar Component (via AppLayout)", () => {
           );
         }
       }
+    });
+  });
+
+  describe("Phase 8 info-design", () => {
+    const mockAdmin: User = {
+      id: "1",
+      username: "admin",
+      email: "admin@example.com",
+      role: "admin",
+      emailVerified: true,
+      permissions: [],
+    };
+
+    function renderAsAdmin(initialEntries: string[] = ["/"]) {
+      useAuthStore.setState({
+        user: mockAdmin,
+        token: "token",
+        isAuthenticated: true,
+      });
+      return renderWithProviders(
+        <AppLayout>
+          <div>Content</div>
+        </AppLayout>,
+        { initialEntries },
+      );
+    }
+
+    it("groups primary nav, Libraries and Settings via section-break markers (no elevated panel)", () => {
+      renderAsAdmin();
+
+      // The dropped panel must not exist: lifting one section above an
+      // otherwise flat list created a visual island in earlier iterations.
+      expect(
+        screen.queryByTestId("sidebar-primary-group"),
+      ).not.toBeInTheDocument();
+
+      // Libraries opens the second section.
+      const librariesLink = screen.getByText("Libraries").closest("a");
+      expect(librariesLink).toHaveAttribute("data-section-break", "true");
+
+      // Settings opens the third section.
+      const settingsToggle = screen.getByText("Settings").closest("a, button");
+      expect(settingsToggle).toHaveAttribute("data-section-break", "true");
+
+      // The primary rows (Home and friends) deliberately have NO break;
+      // they are the first group, no top-margin needed.
+      const homeLink = screen.getByText("Home").closest("a");
+      expect(homeLink).not.toHaveAttribute("data-section-break");
+    });
+
+    it("renders top-level icons at stroke 2 and Settings sub-icons at stroke 1.5", () => {
+      renderAsAdmin(["/settings/server"]);
+
+      const findIconSvg = (label: string): SVGElement | null => {
+        const link = screen.getByText(label).closest("a, button");
+        return (link?.querySelector("svg") as SVGElement) ?? null;
+      };
+
+      // Top-level rows carry a heavier 2.0 stroke. Stroke 1.5 on sub-items
+      // is a 25% lighter line — the contrast actually reads at the row
+      // size; the previous 1.75 vs 1.5 was sub-pixel and effectively
+      // invisible per design review.
+      expect(findIconSvg("Home")).toHaveAttribute("stroke-width", "2");
+      expect(findIconSvg("Libraries")).toHaveAttribute("stroke-width", "2");
+      expect(findIconSvg("Settings")).toHaveAttribute("stroke-width", "2");
+      expect(findIconSvg("Logout")).toHaveAttribute("stroke-width", "2");
+
+      expect(findIconSvg("Server")).toHaveAttribute("stroke-width", "1.5");
+      expect(findIconSvg("Tasks")).toHaveAttribute("stroke-width", "1.5");
+      expect(findIconSvg("Profile")).toHaveAttribute("stroke-width", "1.5");
+    });
+
+    it("pins Logout and version inside a semantic footer element", () => {
+      renderAsAdmin();
+
+      const footer = screen.getByTestId("sidebar-footer");
+      expect(footer.tagName.toLowerCase()).toBe("footer");
+
+      // Logout still lives in the footer; the old loud TaskNotificationBadge
+      // pill does NOT.
+      const logoutLink = screen.getByText("Logout").closest("a, button");
+      expect(footer.contains(logoutLink as Node)).toBe(true);
+      expect(
+        footer.querySelector("[data-mantine-component='Badge']"),
+      ).toBeNull();
+      // Sanity: the fullwidth "N pending task(s)" pill is not in the footer.
+      expect(screen.queryByText(/pending task/i)).not.toBeInTheDocument();
+    });
+
+    it("renders a compact pending-tasks badge on the Tasks NavLink when work is queued", async () => {
+      const { useTaskProgress } = await import("@/hooks/useTaskProgress");
+      // Set a persistent return value (not Once) so every re-render of the
+      // badge sees the same task data, not just the first invocation.
+      vi.mocked(useTaskProgress).mockReturnValue({
+        activeTasks: [
+          {
+            taskId: "task-1",
+            taskType: "analyze_book",
+            status: "running",
+            progress: undefined,
+            error: undefined,
+            startedAt: "2026-01-07T12:00:00Z",
+            libraryId: "lib-1",
+          },
+        ],
+        connectionState: "connected",
+        pendingCounts: { analyze_book: 4 },
+        getTasksByStatus: vi.fn(() => []),
+        getTasksByLibrary: vi.fn(() => []),
+        getTask: vi.fn(() => undefined),
+      });
+
+      try {
+        renderAsAdmin(["/settings/tasks"]);
+
+        // The accessible label reflects the precise total for SR users; we
+        // assert against this rather than .textContent because Mantine renders
+        // the rightSection inside its own portal-friendly tooltip wrapper.
+        expect(screen.getByLabelText("5 pending tasks")).toBeInTheDocument();
+      } finally {
+        // Reset back to the default empty state so other tests aren't polluted.
+        vi.mocked(useTaskProgress).mockReturnValue({
+          activeTasks: [],
+          connectionState: "connected",
+          pendingCounts: {},
+          getTasksByStatus: vi.fn(() => []),
+          getTasksByLibrary: vi.fn(() => []),
+          getTask: vi.fn(() => undefined),
+        });
+      }
+    });
+
+    it("hides the compact badge entirely when there are zero pending tasks", () => {
+      renderAsAdmin(["/settings/tasks"]);
+
+      // Default useTaskProgress mock returns empty arrays -> badge unmounts.
+      expect(screen.queryByLabelText(/pending task/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/pending task/i)).not.toBeInTheDocument();
     });
   });
 });

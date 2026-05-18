@@ -10,7 +10,7 @@ import {
 import { IconX } from "@tabler/icons-react";
 import type { FilterGroupState, FilterMode, TriState } from "@/types";
 import classes from "./FilterGroup.module.css";
-import { TriStateChip } from "./TriStateChip";
+import { TriStateChip, type TriStateChipVariant } from "./TriStateChip";
 
 interface FilterOption {
   value: string;
@@ -35,6 +35,13 @@ interface FilterGroupProps {
   showModeToggle?: boolean;
   /** Whether the group is disabled */
   disabled?: boolean;
+  /**
+   * Chip variant applied to every option in the group. Defaults to
+   * `metadata` so existing call sites (Genres, Tags) keep the square
+   * radius / no-leading-slot look. See `TriStateChip` for the per-variant
+   * shape language.
+   */
+  variant?: TriStateChipVariant;
 }
 
 /**
@@ -55,6 +62,7 @@ export function FilterGroup({
   onClear,
   showModeToggle = true,
   disabled = false,
+  variant = "metadata",
 }: FilterGroupProps) {
   // Get the current state for a value
   const getValueState = (value: string): TriState => {
@@ -65,10 +73,10 @@ export function FilterGroup({
   const hasActiveFilters = state.values.size > 0;
 
   return (
-    <Stack gap="xs" className={classes.container}>
-      <Group justify="space-between" align="center">
-        <Group gap="xs">
-          <Text size="sm" fw={600} c="dimmed">
+    <Stack gap={6} className={classes.container}>
+      <Group justify="space-between" align="center" gap="xs">
+        <Group gap={6}>
+          <Text size="xs" fw={600} c="dimmed">
             {title}
           </Text>
           {hasActiveFilters && onClear && (
@@ -97,12 +105,14 @@ export function FilterGroup({
               { label: "Any", value: "anyOf" },
             ]}
             className={classes.modeToggle}
+            transitionDuration={200}
+            transitionTimingFunction="cubic-bezier(0.32, 0.72, 0, 1)"
           />
         )}
       </Group>
 
       <Box className={classes.chipsContainer}>
-        <Group gap="xs" wrap="wrap">
+        <Group gap={6} wrap="wrap">
           {options.map((option) => (
             <TriStateChip
               key={option.value}
@@ -111,6 +121,8 @@ export function FilterGroup({
               onChange={(newState) => onValueChange(option.value, newState)}
               count={option.count}
               disabled={disabled}
+              variant={variant}
+              decorationKey={option.value}
             />
           ))}
         </Group>

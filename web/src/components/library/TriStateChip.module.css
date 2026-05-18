@@ -1,14 +1,33 @@
+/* Tri-state filter chip (Phase 9, post-review revision).
+   - All variants share the same 8px radius. The earlier per-variant
+     mix of capsule (status / progress) and square (metadata / neutral)
+     read as inconsistent; variant identity is now carried only by the
+     leading decoration (status dot, progress icon, or none).
+   - Hover keeps the chip in place (no scale). Scaling on hover was
+     pushing right-edge chips against the scrollbar and visually
+     clipping the right border. Hover feedback is now bg + border only.
+   - Compact size: smaller padding, 11px label, 6px gap to fit more
+     chips per row in the filter panel.
+   - The leading slot replays a 120ms scale-up whenever its content
+     swaps between decoration and selection icon; the global
+     reduced-motion guard in `index.css` collapses that to instant.
+   - Counts render as a soft tabular-numeral span; the boxed Mantine
+     `Badge` count from earlier phases is gone so multi-digit columns
+     can align via the chip's own `font-variant-numeric`. */
+
 .button {
   cursor: pointer;
-  transition: transform 0.1s ease;
-}
-
-.button:hover:not([data-disabled]) {
-  transform: scale(1.02);
+  display: inline-flex;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
 }
 
 .button:active:not([data-disabled]) {
-  transform: scale(0.98);
+  transform: scale(0.97);
+  transition: transform 0.08s ease;
 }
 
 .button[data-disabled] {
@@ -17,58 +36,178 @@
 }
 
 .badge {
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
   user-select: none;
+  /* Tabular numerals so multi-digit counts (`GENRE 15`, `GENRE 4`)
+     align vertically across stacked chips. */
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+  border-radius: 8px;
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
     color 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
+/* State: neutral — outlined, dimmed text. */
 .badge[data-state="neutral"] {
   border-color: light-dark(
     var(--mantine-color-gray-4),
     var(--mantine-color-gray-6)
   );
-  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-4));
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-3));
+  background-color: transparent;
 }
 
-.badge[data-state="neutral"]:hover {
-  border-color: light-dark(
-    var(--mantine-color-gray-5),
-    var(--mantine-color-gray-5)
-  );
-  background-color: light-dark(
-    var(--mantine-color-gray-1),
-    var(--mantine-color-gray-9)
-  );
+@media (hover: hover) {
+  /* On hover the neutral chip gains a clearer border + faint surface
+     tint. The previous rule dropped border-color back to gray-5 which
+     barely contrasted against the new fill on dark mode (chips at the
+     right edge of the scroll container felt borderless). Keeping the
+     border one step darker than at rest makes it read as "lifted". */
+  .button:hover:not([data-disabled]) .badge[data-state="neutral"] {
+    border-color: light-dark(
+      var(--mantine-color-gray-6),
+      var(--mantine-color-gray-4)
+    );
+    background-color: light-dark(
+      var(--mantine-color-gray-1),
+      var(--mantine-color-dark-5)
+    );
+    color: light-dark(var(--mantine-color-gray-9), var(--mantine-color-white));
+  }
 }
 
+/* State: include — filled blue. */
 .badge[data-state="include"] {
   background-color: var(--mantine-color-blue-7);
+  border-color: var(--mantine-color-blue-7);
   color: var(--mantine-color-white);
 }
 
-.badge[data-state="include"]:hover {
-  background-color: var(--mantine-color-blue-6);
+@media (hover: hover) {
+  .button:hover:not([data-disabled]) .badge[data-state="include"] {
+    background-color: var(--mantine-color-blue-6);
+    border-color: var(--mantine-color-blue-6);
+  }
 }
 
+/* State: exclude — filled red. */
 .badge[data-state="exclude"] {
   background-color: var(--mantine-color-red-7);
+  border-color: var(--mantine-color-red-7);
   color: var(--mantine-color-white);
 }
 
-.badge[data-state="exclude"]:hover {
-  background-color: var(--mantine-color-red-6);
+@media (hover: hover) {
+  .button:hover:not([data-disabled]) .badge[data-state="exclude"] {
+    background-color: var(--mantine-color-red-6);
+    border-color: var(--mantine-color-red-6);
+  }
 }
 
 .badge[data-disabled] {
   pointer-events: none;
 }
 
+/* Leading slot (status dot, progress icon, or check / X). The slot is
+   only rendered when it has content; React keys force a re-mount on
+   decoration ↔ selection swap so the pop animation replays. */
+.leading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.leading[data-selected] {
+  animation: chip-leading-pop 120ms var(--ease-out);
+  transform-origin: center;
+}
+
+@keyframes chip-leading-pop {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Status dot: 6px circle in a category color. Lives inside the 14px
+   leading slot so the chip sizing is identical to the progress variant. */
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-gray-5);
+}
+
+.statusDotGreen {
+  background-color: light-dark(
+    var(--mantine-color-green-6),
+    var(--mantine-color-green-5)
+  );
+}
+
+.statusDotBlue {
+  background-color: light-dark(
+    var(--mantine-color-blue-6),
+    var(--mantine-color-blue-4)
+  );
+}
+
+.statusDotAmber {
+  background-color: light-dark(
+    var(--mantine-color-yellow-6),
+    var(--mantine-color-yellow-5)
+  );
+}
+
+.statusDotGrey {
+  background-color: light-dark(
+    var(--mantine-color-gray-5),
+    var(--mantine-color-gray-5)
+  );
+}
+
+.statusDotMuted {
+  background-color: light-dark(
+    var(--mantine-color-gray-4),
+    var(--mantine-color-gray-6)
+  );
+}
+
+/* Label — no styling needed beyond inheriting the badge's font. */
+.label {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Count: dimmed monospace numeral, right-aligned with min-width so the
+   "this category has N items" affordance still claims its column. */
 .count {
-  font-size: 10px;
-  padding: 0 4px;
-  min-width: 18px;
-  height: 16px;
+  min-width: 1.5ch;
+  text-align: end;
+  font-weight: 500;
+  font-size: 0.85em;
+  opacity: 0.75;
+  margin-inline-start: 4px;
+}
+
+/* Selected chips ride on a filled background; the count needs a touch
+   more opacity to stay legible on the colored fill. */
+.badge[data-state="include"] .count,
+.badge[data-state="exclude"] .count {
+  opacity: 0.9;
 }

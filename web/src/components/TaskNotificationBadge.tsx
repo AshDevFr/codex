@@ -9,12 +9,33 @@ import { PERMISSIONS } from "@/types/permissions";
 import { elapsedSince, formatElapsed } from "@/utils/duration";
 import { getTaskTarget } from "@/utils/tasks";
 
+interface TaskNotificationBadgeProps {
+  /**
+   * Visual treatment:
+   * - `fullwidth` (default): the legacy loud pill that sat at the bottom of
+   *   the sidebar. Kept so callers outside the sidebar (and existing tests)
+   *   continue to work.
+   * - `compact`: a small inline badge sized for a NavLink's `rightSection`.
+   *   Shows just the count (or `99+` past two digits), no leading text. Used
+   *   by the Sidebar's Tasks row after Phase 8.
+   */
+  variant?: "fullwidth" | "compact";
+}
+
 /**
- * Task notification badge that appears at the bottom of the navigation sidebar
- * Shows count of active tasks with a tooltip containing task details
- * Only visible to users with TASKS_READ permission
+ * Task notification badge.
+ *
+ * - `fullwidth`: shows count of active tasks as a full-width pill with a
+ *   tooltip containing task details. Visible to anyone with TASKS_READ.
+ * - `compact`: a small badge sized for inline use inside a NavLink's right
+ *   section. Same tooltip, no full-width pill.
+ *
+ * Both variants hide entirely when the count is 0 and are gated behind
+ * the TASKS_READ permission.
  */
-export function TaskNotificationBadge() {
+export function TaskNotificationBadge({
+  variant = "fullwidth",
+}: TaskNotificationBadgeProps = {}) {
   const navigate = useNavigate();
   const { isAdmin, hasPermission } = usePermissions();
   const canReadTasks = hasPermission(PERMISSIONS.TASKS_READ);
@@ -185,6 +206,30 @@ export function TaskNotificationBadge() {
   );
 
   const totalTasks = runningTasks.length + totalPendingCount;
+
+  if (variant === "compact") {
+    // `99+` past two digits keeps the badge narrow enough to sit inside the
+    // Tasks NavLink's rightSection without pushing the icon/label around.
+    const display = totalTasks > 99 ? "99+" : String(totalTasks);
+    return (
+      <Tooltip label={tooltipContent} withArrow position="right">
+        <Badge
+          color="blue"
+          variant="light"
+          size="sm"
+          radius="sm"
+          style={{
+            // The whole NavLink is the click target; let the click bubble
+            // through the badge instead of capturing it on touch.
+            pointerEvents: "none",
+          }}
+          aria-label={`${totalTasks} pending task${totalTasks !== 1 ? "s" : ""}`}
+        >
+          {display}
+        </Badge>
+      </Tooltip>
+    );
+  }
 
   return (
     <Tooltip label={tooltipContent} withArrow position="top-start">

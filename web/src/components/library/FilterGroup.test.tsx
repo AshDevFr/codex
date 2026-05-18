@@ -177,6 +177,49 @@ describe("FilterGroup", () => {
     expect(comedyBadge).toHaveAttribute("data-state", "exclude");
   });
 
+  describe("variant prop (Phase 9)", () => {
+    it("defaults options to the metadata chip variant", () => {
+      renderWithProviders(
+        <FilterGroup
+          title="Genres"
+          options={defaultOptions}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+        />,
+      );
+
+      const badge = screen.getByText("Action").closest("[data-variant]");
+      expect(badge).toHaveAttribute("data-variant", "metadata");
+    });
+
+    it("passes a status variant through to every chip", () => {
+      const statusOptions = [
+        { value: "ongoing", label: "Ongoing" },
+        { value: "ended", label: "Ended" },
+      ];
+
+      renderWithProviders(
+        <FilterGroup
+          title="Status"
+          options={statusOptions}
+          state={createState()}
+          onValueChange={vi.fn()}
+          onModeChange={vi.fn()}
+          variant="status"
+          showModeToggle={false}
+        />,
+      );
+
+      expect(
+        screen.getByText("Ongoing").closest("[data-variant]"),
+      ).toHaveAttribute("data-variant", "status");
+      expect(
+        screen.getByText("Ended").closest("[data-variant]"),
+      ).toHaveAttribute("data-variant", "status");
+    });
+  });
+
   describe("clear button", () => {
     it("should not show clear button when no active filters", () => {
       const onClear = vi.fn();
