@@ -171,6 +171,8 @@ mod m20260508_000081_add_release_sources_plugin_uuid_fk;
 mod m20260511_000082_add_plugin_request_timeout;
 // Refresh tokens: rotatable, family-scoped sibling to access tokens
 mod m20260518_000083_create_refresh_tokens;
+// Seed the runtime flag that gates fuzzy-search use of the in-memory index
+mod m20260519_000084_seed_fuzzy_search_setting;
 
 pub struct Migrator;
 
@@ -312,6 +314,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260511_000082_add_plugin_request_timeout::Migration),
             // Refresh tokens: rotatable, family-scoped sibling to access tokens
             Box::new(m20260518_000083_create_refresh_tokens::Migration),
+            // Seed the fuzzy-search rollout flag
+            Box::new(m20260519_000084_seed_fuzzy_search_setting::Migration),
         ]
     }
 }
