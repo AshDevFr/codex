@@ -1,6 +1,7 @@
+import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { ReleaseLedgerEntry, ReleaseSource } from "@/api/releases";
-import { renderWithProviders, screen } from "@/test/utils";
+import { renderWithProviders, screen, userEvent } from "@/test/utils";
 import { ReleasesTable } from "./ReleasesTable";
 
 // -----------------------------------------------------------------------------
@@ -48,7 +49,10 @@ function entry(overrides: Partial<ReleaseLedgerEntry>): ReleaseLedgerEntry {
   } as ReleaseLedgerEntry;
 }
 
-function renderRow(e: ReleaseLedgerEntry) {
+function renderRow(
+  e: ReleaseLedgerEntry,
+  overrides: Partial<React.ComponentProps<typeof ReleasesTable>> = {},
+) {
   return renderWithProviders(
     <ReleasesTable
       entries={[e]}
@@ -58,7 +62,10 @@ function renderRow(e: ReleaseLedgerEntry) {
       onToggleAll={vi.fn()}
       onDismiss={vi.fn()}
       onMarkAcquired={vi.fn()}
+      onIgnore={vi.fn()}
+      onReset={vi.fn()}
       onDelete={vi.fn()}
+      {...overrides}
     />,
   );
 }
@@ -133,5 +140,42 @@ describe("ReleasesTable Ch / Vol formatting", () => {
   it("treats an empty span list as no info (renders dash)", () => {
     renderRow(entry({ chapters: [], volumes: [] }));
     expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("ReleasesTable row actions", () => {
+  it("shows Mark acquired / Dismiss / Ignore on announced rows, hides Reset", () => {
+    renderRow(entry({ state: "announced" }));
+    expect(screen.getByLabelText("Mark acquired")).toBeInTheDocument();
+    expect(screen.getByLabelText("Dismiss")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ignore")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Reset")).not.toBeInTheDocument();
+  });
+
+  it("shows Reset on non-announced rows and hides the announced-only actions", () => {
+    renderRow(entry({ state: "dismissed" }));
+    expect(screen.getByLabelText("Reset")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Mark acquired")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Dismiss")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Ignore")).not.toBeInTheDocument();
+  });
+
+  it("renders the Ignored state badge instead of the raw state string", () => {
+    renderRow(entry({ state: "ignored" }));
+    expect(screen.getByText("Ignored")).toBeInTheDocument();
+  });
+
+  it("invokes onIgnore with the row id when the Ignore icon is clicked", async () => {
+    const onIgnore = vi.fn();
+    renderRow(entry({ id: "row-42", state: "announced" }), { onIgnore });
+    await userEvent.setup().click(screen.getByLabelText("Ignore"));
+    expect(onIgnore).toHaveBeenCalledWith("row-42");
+  });
+
+  it("invokes onReset with the row id when the Reset icon is clicked", async () => {
+    const onReset = vi.fn();
+    renderRow(entry({ id: "row-99", state: "marked_acquired" }), { onReset });
+    await userEvent.setup().click(screen.getByLabelText("Reset"));
+    expect(onReset).toHaveBeenCalledWith("row-99");
   });
 });

@@ -29,6 +29,7 @@ import {
   useDeleteRelease,
   useDismissRelease,
   useMarkReleaseAcquired,
+  usePatchRelease,
   useReleaseSources,
   useSeriesReleases,
 } from "@/hooks/useReleases";
@@ -67,6 +68,8 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
   const { data: sources } = useReleaseSources();
   const dismiss = useDismissRelease();
   const markAcquired = useMarkReleaseAcquired();
+  const ignoreRelease = usePatchRelease();
+  const resetRelease = usePatchRelease();
   const deleteRelease = useDeleteRelease();
   const bulk = useBulkReleaseAction();
 
@@ -197,9 +200,23 @@ export function SeriesReleasesPanel({ seriesId }: SeriesReleasesPanelProps) {
                 onToggleAll={toggleAll}
                 onDismiss={(id) => dismiss.mutate(id)}
                 onMarkAcquired={(id) => markAcquired.mutate(id)}
+                onIgnore={(id) =>
+                  ignoreRelease.mutate({
+                    releaseId: id,
+                    update: { state: "ignored" },
+                  })
+                }
+                onReset={(id) =>
+                  resetRelease.mutate({
+                    releaseId: id,
+                    update: { state: "announced" },
+                  })
+                }
                 onDelete={(id) => deleteRelease.mutate(id)}
                 isDismissPending={dismiss.isPending}
                 isMarkAcquiredPending={markAcquired.isPending}
+                isIgnorePending={ignoreRelease.isPending}
+                isResetPending={resetRelease.isPending}
                 isDeletePending={deleteRelease.isPending}
                 verticalSpacing="xs"
               />

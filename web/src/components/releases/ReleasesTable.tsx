@@ -14,6 +14,8 @@ import { useMediaQuery } from "@mantine/hooks";
 import {
   IconCheck,
   IconExternalLink,
+  IconEyeOff,
+  IconRefresh,
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
@@ -27,6 +29,7 @@ const STATE_BADGE: Record<string, { color: string; label: string }> = {
   announced: { color: "blue", label: "New" },
   marked_acquired: { color: "green", label: "Acquired" },
   dismissed: { color: "gray", label: "Dismissed" },
+  ignored: { color: "gray", label: "Ignored" },
   hidden: { color: "gray", label: "Hidden" },
 };
 
@@ -39,6 +42,8 @@ interface ReleasesTableProps {
   onToggleAll: () => void;
   onDismiss: (id: string) => void;
   onMarkAcquired: (id: string) => void;
+  onIgnore: (id: string) => void;
+  onReset: (id: string) => void;
   onDelete: (id: string) => void;
   /** When true, render a Series column linking to the series detail page.
    *  Off when the table is already scoped to a single series. */
@@ -46,6 +51,8 @@ interface ReleasesTableProps {
   /** Disable per-row action buttons while a mutation is in flight. */
   isDismissPending?: boolean;
   isMarkAcquiredPending?: boolean;
+  isIgnorePending?: boolean;
+  isResetPending?: boolean;
   isDeletePending?: boolean;
   /** Visual density. The page-level inbox uses "sm"; the embedded panel
    *  uses "xs" so it doesn't dominate the surrounding card. */
@@ -88,10 +95,14 @@ export function ReleasesTable({
   onToggleAll,
   onDismiss,
   onMarkAcquired,
+  onIgnore,
+  onReset,
   onDelete,
   showSeriesColumn = false,
   isDismissPending = false,
   isMarkAcquiredPending = false,
+  isIgnorePending = false,
+  isResetPending = false,
   isDeletePending = false,
   verticalSpacing = "sm",
 }: ReleasesTableProps) {
@@ -211,7 +222,7 @@ export function ReleasesTable({
                     kind={entry.mediaUrlKind}
                   />
                 )}
-                {entry.state === "announced" && (
+                {entry.state === "announced" ? (
                   <>
                     <Tooltip label="Mark acquired">
                       <ActionIcon
@@ -235,7 +246,30 @@ export function ReleasesTable({
                         <IconX size={16} />
                       </ActionIcon>
                     </Tooltip>
+                    <Tooltip label="Ignore">
+                      <ActionIcon
+                        variant="subtle"
+                        color="gray"
+                        loading={isIgnorePending}
+                        onClick={() => onIgnore(entry.id)}
+                        aria-label="Ignore"
+                      >
+                        <IconEyeOff size={16} />
+                      </ActionIcon>
+                    </Tooltip>
                   </>
+                ) : (
+                  <Tooltip label="Reset to new">
+                    <ActionIcon
+                      variant="subtle"
+                      color="blue"
+                      loading={isResetPending}
+                      onClick={() => onReset(entry.id)}
+                      aria-label="Reset"
+                    >
+                      <IconRefresh size={16} />
+                    </ActionIcon>
+                  </Tooltip>
                 )}
                 <Tooltip label="Delete (will reappear on next poll)">
                   <ActionIcon
@@ -378,7 +412,7 @@ export function ReleasesTable({
                       kind={entry.mediaUrlKind}
                     />
                   )}
-                  {entry.state === "announced" && (
+                  {entry.state === "announced" ? (
                     <>
                       <Tooltip label="Mark acquired">
                         <ActionIcon
@@ -404,7 +438,32 @@ export function ReleasesTable({
                           <IconX size={16} />
                         </ActionIcon>
                       </Tooltip>
+                      <Tooltip label="Ignore">
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          color="gray"
+                          loading={isIgnorePending}
+                          onClick={() => onIgnore(entry.id)}
+                          aria-label="Ignore"
+                        >
+                          <IconEyeOff size={16} />
+                        </ActionIcon>
+                      </Tooltip>
                     </>
+                  ) : (
+                    <Tooltip label="Reset to new">
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        color="blue"
+                        loading={isResetPending}
+                        onClick={() => onReset(entry.id)}
+                        aria-label="Reset"
+                      >
+                        <IconRefresh size={16} />
+                      </ActionIcon>
+                    </Tooltip>
                   )}
                   <Tooltip label="Delete (will reappear on next poll)">
                     <ActionIcon
