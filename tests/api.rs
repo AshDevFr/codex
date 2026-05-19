@@ -40,6 +40,7 @@ mod api {
     mod releases;
     mod renumber;
     mod scan;
+    mod search;
     mod series;
     mod series_exports;
     mod series_external_ids;

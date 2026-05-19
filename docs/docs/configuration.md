@@ -786,6 +786,18 @@ These settings are stored in the database and can be changed via `/api/v1/admin/
 - Thumbnail JPEG quality
 - Application name
 - Logging level
+- Fuzzy search rollout flag (`search.fuzzy.enabled`)
+
+#### `search.fuzzy.enabled` (Boolean, default `false`)
+
+Routes the global search bar through the in-memory fuzzy index built at startup,
+replacing the legacy `LIKE %term%` substring match. The fuzzy path understands
+gap-skipped subsequences and treats punctuation as a gap, so queries like
+`"on ch"` or `"one punch"` match titles like `"One-Punch Man"`. When disabled,
+search falls back to the substring path with no other behavioural change. Toggle
+the flag through the admin settings UI or the settings API; no restart needed.
+The index itself is always live, so flipping the flag does not trigger a
+rebuild.
 
 ### Startup-Time (Restart Required)
 

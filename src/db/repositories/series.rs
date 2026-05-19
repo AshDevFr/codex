@@ -904,6 +904,44 @@ impl SeriesRepository {
             .context("Failed to find series by IDs")
     }
 
+    /// Hydrate a pre-ranked list of series IDs into models, preserving the
+    /// caller's order.
+    ///
+    /// Built for the fuzzy-search path: the in-memory index ranks candidates,
+    /// the handler post-filters them, and then this method materializes the
+    /// survivors without re-sorting them. Pass `library_id` to additionally
+    /// restrict to a single library (defense in depth — the index already
+    /// honors `library_id`).
+    pub async fn hydrate_by_ids(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        ids: &[Uuid],
+    ) -> Result<Vec<series::Model>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut query = Series::find().filter(series::Column::Id.is_in(ids.to_vec()));
+        if let Some(lib_id) = library_id {
+            query = query.filter(series::Column::LibraryId.eq(lib_id));
+        }
+
+        let fetched = query
+            .all(db)
+            .await
+            .context("Failed to hydrate series by IDs")?;
+
+        let mut by_id: std::collections::HashMap<Uuid, series::Model> =
+            fetched.into_iter().map(|s| (s.id, s)).collect();
+        let mut ordered = Vec::with_capacity(by_id.len());
+        for id in ids {
+            if let Some(model) = by_id.remove(id) {
+                ordered.push(model);
+            }
+        }
+        Ok(ordered)
+    }
+
     /// Get all series in a library
     pub async fn list_by_library(
         db: &DatabaseConnection,

@@ -938,29 +938,64 @@ pub async fn search_series(
 ) -> Result<Response, ApiError> {
     require_permission!(auth, Permission::SeriesRead)?;
 
-    let series_list = SeriesRepository::search_by_name(&state.db, &request.query)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
-
     // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
-    // Filter by library and sharing tags
-    let filtered: Vec<_> = series_list
-        .into_iter()
-        .filter(|s| {
-            // Apply library filter if specified
-            if let Some(lib_id) = request.library_id
-                && s.library_id != lib_id
-            {
-                return false;
-            }
-            // Apply sharing tag filter
-            content_filter.is_series_visible(s.id)
-        })
-        .collect();
+    let fuzzy_enabled = crate::db::repositories::SettingsRepository::get_value::<bool>(
+        &state.db,
+        "search.fuzzy.enabled",
+    )
+    .await
+    .unwrap_or(Some(false))
+    .unwrap_or(false);
+
+    let filtered: Vec<series::Model> = if fuzzy_enabled {
+        // Empty / whitespace-only queries return no results in fuzzy mode
+        // (explicit policy: see Phase 3 of the fuzzy-search plan).
+        if request.query.trim().is_empty() {
+            Vec::new()
+        } else {
+            // Over-fetch from the index to absorb permission drops; the UI
+            // historically displayed all matches without paging, so we cap at
+            // a generous upper bound.
+            const RESULT_LIMIT: usize = 100;
+            let candidates = state.fuzzy_index.search_series(
+                &request.query,
+                RESULT_LIMIT * 3,
+                request.library_id,
+            );
+            let visible: Vec<uuid::Uuid> = candidates
+                .into_iter()
+                .filter(|(id, _)| content_filter.is_series_visible(*id))
+                .take(RESULT_LIMIT)
+                .map(|(id, _)| id)
+                .collect();
+            SeriesRepository::hydrate_by_ids(&state.db, request.library_id, &visible)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to hydrate series: {}", e)))?
+        }
+    } else {
+        let series_list = SeriesRepository::search_by_name(&state.db, &request.query)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
+
+        // Filter by library and sharing tags
+        series_list
+            .into_iter()
+            .filter(|s| {
+                // Apply library filter if specified
+                if let Some(lib_id) = request.library_id
+                    && s.library_id != lib_id
+                {
+                    return false;
+                }
+                // Apply sharing tag filter
+                content_filter.is_series_visible(s.id)
+            })
+            .collect()
+    };
 
     // Build response based on full parameter
     if request.full {

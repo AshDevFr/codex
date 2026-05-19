@@ -889,9 +889,87 @@ pub async fn list_books_filtered(
         None
     };
 
+    let fuzzy_enabled = crate::db::repositories::SettingsRepository::get_value::<bool>(
+        &state.db,
+        "search.fuzzy.enabled",
+    )
+    .await
+    .unwrap_or(Some(false))
+    .unwrap_or(false);
+
+    let has_fuzzy_search_query = fuzzy_enabled
+        && request
+            .full_text_search
+            .as_ref()
+            .is_some_and(|q| !q.trim().is_empty());
+
+    // Sharing-tag visibility is applied to fuzzy matches before hydration;
+    // the legacy LIKE path relies on downstream callers to filter, so we only
+    // need to load the filter when fuzzy is taking the wheel.
+    let fuzzy_content_filter = if has_fuzzy_search_query {
+        Some(
+            ContentFilter::for_user(&state.db, auth.user_id)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?,
+        )
+    } else {
+        None
+    };
+
     // Fetch books based on filter results and full-text search
     let (books_list, total) = match (&filtered_ids, &request.full_text_search) {
-        // Full-text search with filter conditions
+        // Fuzzy full-text search (with or without filter conditions)
+        (filtered, Some(search_query)) if fuzzy_enabled && !search_query.trim().is_empty() => {
+            // If the filter pre-narrowed to empty, short-circuit.
+            if matches!(filtered, Some(ids) if ids.is_empty()) {
+                (vec![], 0)
+            } else {
+                // Over-fetch so permission drops and filter intersection still
+                // leave us with a full page when possible.
+                let raw_limit = (offset + page_size).max(page_size) as usize;
+                let candidate_limit = raw_limit.saturating_mul(3).max(50);
+                let candidates =
+                    state
+                        .fuzzy_index
+                        .search_books(search_query, candidate_limit, None);
+
+                let content_filter = fuzzy_content_filter.as_ref().expect("set above");
+
+                let visible: Vec<Uuid> = candidates
+                    .into_iter()
+                    .filter(|(book_id, series_id, _)| {
+                        if !content_filter.is_book_visible(*series_id) {
+                            return false;
+                        }
+                        if let Some(ids) = filtered {
+                            return ids.contains(book_id);
+                        }
+                        true
+                    })
+                    .map(|(book_id, _, _)| book_id)
+                    .collect();
+
+                let total = visible.len() as u64;
+
+                let page_ids: Vec<Uuid> = visible
+                    .into_iter()
+                    .skip(offset as usize)
+                    .take(page_size as usize)
+                    .collect();
+
+                let models = BookRepository::hydrate_by_ids(
+                    &state.db,
+                    None,
+                    &page_ids,
+                    request.include_deleted,
+                )
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to hydrate books: {}", e)))?;
+
+                (models, total)
+            }
+        }
+        // LIKE full-text search with filter conditions
         (Some(ids), Some(search_query)) if !search_query.trim().is_empty() => {
             if ids.is_empty() {
                 (vec![], 0)
@@ -909,7 +987,7 @@ pub async fn list_books_filtered(
                 .map_err(|e| ApiError::Internal(format!("Failed to search books: {}", e)))?
             }
         }
-        // Full-text search without filter conditions
+        // LIKE full-text search without filter conditions
         (None, Some(search_query)) if !search_query.trim().is_empty() => {
             BookRepository::search_by_title(
                 &state.db,

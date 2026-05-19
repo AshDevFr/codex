@@ -754,6 +754,46 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// Hydrate a pre-ranked list of book IDs into models, preserving the
+    /// caller's order.
+    ///
+    /// Built for the fuzzy-search path: the in-memory index ranks candidates,
+    /// the handler post-filters them, and then this method materializes the
+    /// survivors without re-sorting them.
+    pub async fn hydrate_by_ids(
+        db: &DatabaseConnection,
+        library_id: Option<Uuid>,
+        ids: &[Uuid],
+        include_deleted: bool,
+    ) -> Result<Vec<books::Model>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
+        if let Some(lib_id) = library_id {
+            query = query.filter(books::Column::LibraryId.eq(lib_id));
+        }
+        if !include_deleted {
+            query = query.filter(books::Column::Deleted.eq(false));
+        }
+
+        let fetched = query
+            .all(db)
+            .await
+            .context("Failed to hydrate books by IDs")?;
+
+        let mut by_id: std::collections::HashMap<Uuid, books::Model> =
+            fetched.into_iter().map(|b| (b.id, b)).collect();
+        let mut ordered = Vec::with_capacity(by_id.len());
+        for id in ids {
+            if let Some(model) = by_id.remove(id) {
+                ordered.push(model);
+            }
+        }
+        Ok(ordered)
+    }
+
     /// List books by their IDs with pagination
     pub async fn list_by_ids(
         db: &DatabaseConnection,
