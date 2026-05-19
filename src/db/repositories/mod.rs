@@ -17,6 +17,7 @@ pub mod page;
 pub mod plugin_failures;
 pub mod plugins;
 pub mod read_progress;
+pub mod refresh_token;
 pub mod release_ledger;
 pub mod release_sources;
 pub mod series;
@@ -67,6 +68,8 @@ pub use page::PageRepository;
 pub use plugin_failures::{FailureContext, PluginFailuresRepository};
 pub use plugins::PluginsRepository;
 pub use read_progress::ReadProgressRepository;
+#[allow(unused_imports)]
+pub use refresh_token::{NewRefreshToken, RefreshTokenRepository};
 #[allow(unused_imports)]
 pub use release_ledger::{
     LedgerInboxFilter, NewReleaseEntry, RecordOutcome, ReleaseLedgerRepository,
