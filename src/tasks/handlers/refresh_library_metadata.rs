@@ -450,7 +450,7 @@ async fn process_pair(
             EntityEvent::SeriesMetadataUpdated {
                 series_id: planned.series_id,
                 library_id,
-                plugin_id: plugin.id,
+                plugin_id: Some(plugin.id),
                 fields_updated: apply_result.applied_fields.clone(),
             },
             None,

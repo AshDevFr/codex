@@ -7,9 +7,11 @@
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::entities::{series_metadata, series_metadata::Entity as SeriesMetadata};
+use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use crate::utils::normalize_for_search;
 
 /// Repository for series metadata operations
@@ -98,7 +100,11 @@ impl SeriesMetadataRepository {
         Ok(model)
     }
 
-    /// Update series metadata (full replacement)
+    /// Update series metadata (full replacement).
+    ///
+    /// When `event_broadcaster` is provided, emits `SeriesMetadataUpdated`
+    /// because `title_sort` participates in the fuzzy search haystack.
+    #[allow(clippy::too_many_arguments)]
     pub async fn replace(
         db: &DatabaseConnection,
         series_id: Uuid,
@@ -107,6 +113,7 @@ impl SeriesMetadataRepository {
         publisher: Option<String>,
         year: Option<i32>,
         reading_direction: Option<String>,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series_metadata::Model> {
         let existing = Self::get_by_series_id(db, series_id)
             .await?
@@ -123,6 +130,21 @@ impl SeriesMetadataRepository {
         active_model.updated_at = Set(Utc::now());
 
         let model = active_model.update(db).await?;
+
+        emit_metadata_updated(
+            db,
+            event_broadcaster,
+            series_id,
+            &[
+                "title_sort",
+                "summary",
+                "publisher",
+                "year",
+                "reading_direction",
+            ],
+        )
+        .await;
+
         Ok(model)
     }
 
@@ -137,12 +159,17 @@ impl SeriesMetadataRepository {
         Ok(model)
     }
 
-    /// Update title and title_sort
+    /// Update title and title_sort.
+    ///
+    /// When `event_broadcaster` is provided, emits `SeriesMetadataUpdated`
+    /// after a successful write so downstream consumers (notably the in-memory
+    /// fuzzy search index) can incrementally refetch the series.
     pub async fn update_title(
         db: &DatabaseConnection,
         series_id: Uuid,
         title: String,
         title_sort: Option<String>,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series_metadata::Model> {
         let existing = Self::get_by_series_id(db, series_id)
             .await?
@@ -157,6 +184,9 @@ impl SeriesMetadataRepository {
         active_model.updated_at = Set(Utc::now());
 
         let model = active_model.update(db).await?;
+
+        emit_metadata_updated(db, event_broadcaster, series_id, &["title", "title_sort"]).await;
+
         Ok(model)
     }
 
@@ -348,11 +378,16 @@ impl SeriesMetadataRepository {
         Ok(model)
     }
 
-    /// Update authors JSON
+    /// Update authors JSON.
+    ///
+    /// When `event_broadcaster` is provided, emits `SeriesMetadataUpdated`
+    /// so the in-memory fuzzy search index can refresh the authors portion
+    /// of the haystack.
     pub async fn update_authors_json(
         db: &DatabaseConnection,
         series_id: Uuid,
         authors_json: Option<String>,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<series_metadata::Model> {
         let existing = Self::get_by_series_id(db, series_id)
             .await?
@@ -365,6 +400,9 @@ impl SeriesMetadataRepository {
         active_model.updated_at = Set(Utc::now());
 
         let model = active_model.update(db).await?;
+
+        emit_metadata_updated(db, event_broadcaster, series_id, &["authors_json"]).await;
+
         Ok(model)
     }
 
@@ -472,6 +510,54 @@ impl SeriesMetadataRepository {
         // Recreate with defaults
         Self::create(db, series_id, title).await
     }
+}
+
+/// Emit a `SeriesMetadataUpdated` event after a successful write.
+///
+/// Looks up `library_id` from the series row (one extra query, but writes
+/// are not hot paths). Failures are silently dropped: the write itself
+/// already succeeded and event delivery is best-effort. `plugin_id` is
+/// always `None` here — only the metadata-refresh / plugin-auto-match task
+/// handlers know their originating plugin, and those emit the event
+/// directly with `Some(plugin_id)` rather than going through this helper.
+async fn emit_metadata_updated(
+    db: &DatabaseConnection,
+    broadcaster: Option<&Arc<EventBroadcaster>>,
+    series_id: Uuid,
+    fields: &[&str],
+) {
+    let Some(broadcaster) = broadcaster else {
+        return;
+    };
+    let library_id = match crate::db::repositories::SeriesRepository::get_by_id(db, series_id).await
+    {
+        Ok(Some(series)) => series.library_id,
+        Ok(None) => {
+            tracing::debug!(
+                "skipping SeriesMetadataUpdated emission: series {} no longer exists",
+                series_id
+            );
+            return;
+        }
+        Err(err) => {
+            tracing::warn!(
+                "failed to lookup library_id for SeriesMetadataUpdated emission ({}): {:#}",
+                series_id,
+                err
+            );
+            return;
+        }
+    };
+    let event = EntityChangeEvent::new(
+        EntityEvent::SeriesMetadataUpdated {
+            series_id,
+            library_id,
+            plugin_id: None,
+            fields_updated: fields.iter().map(|s| s.to_string()).collect(),
+        },
+        None,
+    );
+    let _ = broadcaster.emit(event);
 }
 
 #[cfg(test)]
@@ -629,6 +715,7 @@ mod tests {
             Some("New Publisher".to_string()),
             Some(2024),
             Some("rtl".to_string()),
+            None,
         )
         .await
         .unwrap();
@@ -664,6 +751,7 @@ mod tests {
             series.id,
             "Plugin Title".to_string(),
             Some("sort title".to_string()),
+            None,
         )
         .await
         .unwrap();

@@ -15,6 +15,91 @@ use crate::db::repositories::AlternateTitleRepository;
 
 use super::index::{BookEntry, BookSources, FuzzyIndex, SeriesEntry, SeriesSources};
 
+/// Fetch one series and assemble a `SeriesEntry`.
+///
+/// Returns `Ok(None)` when the series row does not exist (already deleted).
+/// Used by the event listener to upsert a single series after a
+/// `SeriesCreated` / `SeriesUpdated` / `SeriesMetadataUpdated` event.
+pub async fn fetch_series_entry(
+    db: &DatabaseConnection,
+    series_id: Uuid,
+) -> Result<Option<SeriesEntry>> {
+    let Some(series_row) = Series::find_by_id(series_id)
+        .one(db)
+        .await
+        .context("Failed to load series for fuzzy index upsert")?
+    else {
+        return Ok(None);
+    };
+
+    let metadata_row = SeriesMetadata::find_by_id(series_id)
+        .one(db)
+        .await
+        .context("Failed to load series metadata for fuzzy index upsert")?;
+
+    let alt_titles_by_series = AlternateTitleRepository::get_for_series_ids(db, &[series_id])
+        .await
+        .context("Failed to load alt titles for fuzzy index upsert")?;
+    let alt_titles: Vec<String> = alt_titles_by_series
+        .get(&series_id)
+        .map(|v| v.iter().map(|t| t.title.clone()).collect())
+        .unwrap_or_default();
+
+    let (title, title_sort, authors) = match metadata_row {
+        Some(m) => {
+            let authors = parse_authors_names(m.authors_json.as_deref(), series_id);
+            (m.title, m.title_sort, authors)
+        }
+        None => (series_row.name.clone(), None, Vec::new()),
+    };
+
+    Ok(Some(SeriesEntry::new(
+        series_row.id,
+        series_row.library_id,
+        SeriesSources {
+            title,
+            title_sort,
+            name: series_row.name,
+            alt_titles,
+            authors,
+        },
+    )))
+}
+
+/// Fetch one book and assemble a `BookEntry`.
+///
+/// Returns `Ok(None)` when the book row does not exist or is soft-deleted
+/// (`books.deleted = true`); soft-deleted rows are intentionally absent
+/// from the index, mirroring the builder's filter.
+pub async fn fetch_book_entry(db: &DatabaseConnection, book_id: Uuid) -> Result<Option<BookEntry>> {
+    let Some(book_row) = Books::find_by_id(book_id)
+        .one(db)
+        .await
+        .context("Failed to load book for fuzzy index upsert")?
+    else {
+        return Ok(None);
+    };
+    if book_row.deleted {
+        return Ok(None);
+    }
+
+    let metadata_row = BookMetadata::find_by_id(book_id)
+        .one(db)
+        .await
+        .context("Failed to load book metadata for fuzzy index upsert")?;
+    let title = metadata_row.and_then(|m| m.title);
+
+    Ok(Some(BookEntry::new(
+        book_row.id,
+        book_row.series_id,
+        book_row.library_id,
+        BookSources {
+            title,
+            file_name: book_row.file_name,
+        },
+    )))
+}
+
 /// Build the entire index from scratch.
 ///
 /// Returns the populated index. Logs counts and elapsed time.
@@ -255,7 +340,7 @@ mod tests {
         let target = SeriesRepository::create(conn, library.id, "One-Punch Man", None)
             .await
             .unwrap();
-        AltRepo::create(conn, target.id, "Japanese", "ワンパンマン")
+        AltRepo::create(conn, target.id, "Japanese", "ワンパンマン", None)
             .await
             .unwrap();
 
@@ -372,9 +457,15 @@ mod tests {
         let target = SeriesRepository::create(conn, library.id, "one-punch-man", None)
             .await
             .unwrap();
-        SeriesMetadataRepository::update_title(conn, target.id, "One-Punch Man".to_string(), None)
-            .await
-            .unwrap();
+        SeriesMetadataRepository::update_title(
+            conn,
+            target.id,
+            "One-Punch Man".to_string(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         let index = build_from_db(conn).await.unwrap();
         // Searching by the metadata title should hit.

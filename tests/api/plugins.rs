@@ -1470,6 +1470,7 @@ async fn test_series_context_builder_full_flow() {
         Some("Shueisha".to_string()),                 // publisher
         Some(1997),                                   // year
         Some("rtl".to_string()),                      // reading_direction
+        None,
     )
     .await
     .unwrap();
@@ -1574,6 +1575,7 @@ async fn test_series_context_template_rendering() {
         Some("Shueisha".to_string()), // publisher
         Some(1984),                   // year
         None,                         // reading_direction
+        None,
     )
     .await
     .unwrap();

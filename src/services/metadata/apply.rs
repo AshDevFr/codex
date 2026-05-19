@@ -202,11 +202,17 @@ impl MetadataApplier {
                             });
                         }
                     } else {
+                        // Pass `None` for the broadcaster: the task layer
+                        // (plugin auto-match / refresh-library-metadata)
+                        // emits a single `SeriesMetadataUpdated` event with
+                        // the originating plugin_id once apply() returns.
+                        // Emitting from each repo write here would double up.
                         SeriesMetadataRepository::update_title(
                             db,
                             series_id,
                             title.clone(),
                             title_sort,
+                            None,
                         )
                         .await
                         .context("Failed to update title")?;
@@ -240,8 +246,11 @@ impl MetadataApplier {
                             after: serde_json::json!(metadata.alternate_titles),
                         });
                     } else {
-                        // Delete existing alternate titles
-                        AlternateTitleRepository::delete_all_for_series(db, series_id)
+                        // Delete existing alternate titles.
+                        // Skip the broadcaster — the task layer emits a single
+                        // SeriesMetadataUpdated event for the whole apply pass,
+                        // so per-row emissions would just generate duplicates.
+                        AlternateTitleRepository::delete_all_for_series(db, series_id, None)
                             .await
                             .context("Failed to delete old alternate titles")?;
 
@@ -271,6 +280,7 @@ impl MetadataApplier {
                                 series_id,
                                 &label,
                                 &alt_title.title,
+                                None,
                             )
                             .await
                             .context("Failed to create alternate title")?;
@@ -660,10 +670,13 @@ impl MetadataApplier {
                             after: serde_json::json!(metadata.authors),
                         });
                     } else {
+                        // See update_title note: plugin path emits a single
+                        // SeriesMetadataUpdated when apply() returns.
                         SeriesMetadataRepository::update_authors_json(
                             db,
                             series_id,
                             Some(authors_json),
+                            None,
                         )
                         .await
                         .context("Failed to update authors")?;

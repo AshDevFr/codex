@@ -23737,11 +23737,10 @@
           },
           {
             "type": "object",
-            "description": "Series metadata was updated by a plugin",
+            "description": "Series metadata was updated.\n\nEmitted from two kinds of sources:\n- Plugin / metadata-refresh tasks, which set `plugin_id` to the plugin\n  that produced the change.\n- Direct repository writes (manual edits, alt-title CRUD, etc.), which\n  leave `plugin_id` as `None`. These exist primarily so that the in-\n  memory fuzzy search index can incrementally refetch the affected\n  series without polling.",
             "required": [
               "seriesId",
               "libraryId",
-              "pluginId",
               "fieldsUpdated",
               "type"
             ],
@@ -23751,16 +23750,19 @@
                 "items": {
                   "type": "string"
                 },
-                "description": "Fields that were updated"
+                "description": "Fields that were updated. Empty for coarse-grained refetch\nsignals (e.g. alt-title CRUD where the change is in a related\ntable rather than a specific column)."
               },
               "libraryId": {
                 "type": "string",
                 "format": "uuid"
               },
               "pluginId": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "uuid",
-                "description": "Plugin that updated the metadata"
+                "description": "Plugin that updated the metadata, when the change originated from\na plugin or metadata-refresh task. `None` for direct repository\nwrites (e.g. manual edits, alt-title CRUD)."
               },
               "seriesId": {
                 "type": "string",

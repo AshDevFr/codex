@@ -13,12 +13,17 @@
 //!   (NFD, strip Latin combining marks, lowercase) so accent- and case-
 //!   insensitive matching works without re-normalizing on every query.
 //!
-//! Phase 1 only exposes build + query. Phase 2 wires in event-driven updates.
+//! Phase 1 exposed build + query. Phase 2 wires in event-driven updates via
+//! the `listener` module: a Tokio task subscribes to the global
+//! [`crate::events::EventBroadcaster`] and translates each entity event into
+//! a single-row upsert or remove against the index.
 
 pub mod builder;
 pub mod index;
+pub mod listener;
 
 pub use index::FuzzyIndex;
 // Re-exported for downstream phases (event listener, handler integration).
 #[allow(unused_imports)]
 pub use index::{BookEntry, BookSources, SeriesEntry, SeriesSources};
+pub use listener::spawn_listener;

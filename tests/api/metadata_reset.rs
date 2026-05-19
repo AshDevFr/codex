@@ -50,6 +50,7 @@ async fn create_series_with_metadata(
         series.id,
         format!("{} - Plugin Title", name),
         Some(format!("{} sort", name)),
+        None,
     )
     .await
     .unwrap();
@@ -102,7 +103,7 @@ async fn create_series_with_metadata(
     .unwrap();
 
     // Add alternate titles
-    AlternateTitleRepository::create(db, series.id, "Japanese", "テスト")
+    AlternateTitleRepository::create(db, series.id, "Japanese", "テスト", None)
         .await
         .unwrap();
 

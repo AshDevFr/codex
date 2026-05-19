@@ -156,6 +156,70 @@ impl FuzzyIndex {
         *self.books.write() = entries;
     }
 
+    /// Insert or replace a series entry by id.
+    ///
+    /// Used by the event listener to apply incremental updates. Returns
+    /// `true` if an existing entry was replaced, `false` if appended.
+    pub fn upsert_series(&self, entry: SeriesEntry) -> bool {
+        let mut entries = self.series.write();
+        if let Some(slot) = entries.iter_mut().find(|e| e.id == entry.id) {
+            *slot = entry;
+            true
+        } else {
+            entries.push(entry);
+            false
+        }
+    }
+
+    /// Remove a series entry by id.
+    ///
+    /// Returns `true` if a row was removed. Cascade-removes any book entries
+    /// whose `series_id` matches so the index doesn't keep orphaned books
+    /// pointing at a deleted parent.
+    pub fn remove_series(&self, id: Uuid) -> bool {
+        let removed = {
+            let mut entries = self.series.write();
+            let before = entries.len();
+            entries.retain(|e| e.id != id);
+            entries.len() != before
+        };
+        if removed {
+            let mut books = self.books.write();
+            books.retain(|b| b.series_id != id);
+        }
+        removed
+    }
+
+    /// Insert or replace a book entry by id.
+    pub fn upsert_book(&self, entry: BookEntry) -> bool {
+        let mut entries = self.books.write();
+        if let Some(slot) = entries.iter_mut().find(|e| e.id == entry.id) {
+            *slot = entry;
+            true
+        } else {
+            entries.push(entry);
+            false
+        }
+    }
+
+    /// Remove a book entry by id.
+    pub fn remove_book(&self, id: Uuid) -> bool {
+        let mut entries = self.books.write();
+        let before = entries.len();
+        entries.retain(|e| e.id != id);
+        entries.len() != before
+    }
+
+    /// Remove all books for a given series. Used by `SeriesBulkPurged` to
+    /// drop the deleted-and-purged books from the index without touching the
+    /// surviving series row.
+    pub fn remove_books_for_series(&self, series_id: Uuid) -> usize {
+        let mut entries = self.books.write();
+        let before = entries.len();
+        entries.retain(|e| e.series_id != series_id);
+        before - entries.len()
+    }
+
     /// Score every series against `query` and return up to `limit` results,
     /// ranked by descending score. Empty/whitespace-only queries return
     /// nothing (explicit policy — see Phase 3 of the plan).
@@ -447,6 +511,101 @@ mod tests {
         let idx = populated_series(entries);
         let hits = idx.search_series("berserk", 2, None);
         assert_eq!(hits.len(), 2);
+    }
+
+    #[test]
+    fn upsert_series_appends_when_new_and_replaces_when_existing() {
+        let idx = FuzzyIndex::empty();
+        let initial = series_entry("Berserk", &[]);
+        let initial_id = initial.id;
+        assert!(!idx.upsert_series(initial));
+        assert_eq!(idx.series_count(), 1);
+
+        // Re-upserting the same id with a new title should replace, not append.
+        let replacement = SeriesEntry::new(
+            initial_id,
+            Uuid::nil(),
+            SeriesSources {
+                title: "Berserk Deluxe".to_string(),
+                title_sort: None,
+                name: "Berserk Deluxe".to_string(),
+                alt_titles: Vec::new(),
+                authors: Vec::new(),
+            },
+        );
+        assert!(idx.upsert_series(replacement));
+        assert_eq!(idx.series_count(), 1);
+
+        let hits = idx.search_series("deluxe", 10, None);
+        assert_eq!(hits.first().map(|h| h.0), Some(initial_id));
+    }
+
+    #[test]
+    fn remove_series_cascades_to_books() {
+        let series = series_entry("Berserk", &[]);
+        let series_id = series.id;
+        let idx = populated_series(vec![series]);
+        let book = book_entry(Some("Vol 1"), "berserk-01.cbz", series_id);
+        idx.upsert_book(book);
+        assert_eq!(idx.book_count(), 1);
+
+        assert!(idx.remove_series(series_id));
+        assert_eq!(idx.series_count(), 0);
+        assert_eq!(idx.book_count(), 0, "books should cascade with parent");
+
+        // Removing a missing id is a no-op.
+        assert!(!idx.remove_series(Uuid::new_v4()));
+    }
+
+    #[test]
+    fn upsert_book_appends_or_replaces() {
+        let series_id = Uuid::new_v4();
+        let book = book_entry(Some("Old Title"), "old.cbz", series_id);
+        let book_id = book.id;
+        let idx = FuzzyIndex::empty();
+        assert!(!idx.upsert_book(book));
+
+        let replacement = BookEntry::new(
+            book_id,
+            series_id,
+            Uuid::nil(),
+            BookSources {
+                title: Some("New Title".to_string()),
+                file_name: "new.cbz".to_string(),
+            },
+        );
+        assert!(idx.upsert_book(replacement));
+        assert_eq!(idx.book_count(), 1);
+
+        let hits = idx.search_books("new title", 10, None);
+        assert_eq!(hits.first().map(|h| h.0), Some(book_id));
+    }
+
+    #[test]
+    fn remove_book_is_idempotent() {
+        let series_id = Uuid::new_v4();
+        let book = book_entry(Some("Vol 1"), "vol01.cbz", series_id);
+        let book_id = book.id;
+        let idx = populated_books(vec![book]);
+        assert!(idx.remove_book(book_id));
+        assert_eq!(idx.book_count(), 0);
+        assert!(!idx.remove_book(book_id));
+    }
+
+    #[test]
+    fn remove_books_for_series_only_touches_matching_parent() {
+        let s1 = Uuid::new_v4();
+        let s2 = Uuid::new_v4();
+        let idx = populated_books(vec![
+            book_entry(None, "a.cbz", s1),
+            book_entry(None, "b.cbz", s1),
+            book_entry(None, "c.cbz", s2),
+        ]);
+        let removed = idx.remove_books_for_series(s1);
+        assert_eq!(removed, 2);
+        assert_eq!(idx.book_count(), 1);
+        // Bulk-purging for a series with no books still works.
+        assert_eq!(idx.remove_books_for_series(Uuid::new_v4()), 0);
     }
 
     #[test]

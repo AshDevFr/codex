@@ -410,7 +410,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // The build itself runs in serial with startup so that the first request
     // sees a fully populated index. If the build fails (unlikely — it's just
     // reads) we fall back to an empty index and continue starting up; queries
-    // will simply return no results until Phase 2's listener catches up.
+    // will simply return no results until the event listener catches up.
     info!("Building in-memory fuzzy search index...");
     let fuzzy_index = match crate::search::builder::build_from_db(db.sea_orm_connection()).await {
         Ok(idx) => Arc::new(idx),
@@ -422,6 +422,17 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             Arc::new(crate::search::FuzzyIndex::empty())
         }
     };
+
+    // Spawn the event listener so the index applies entity CRUD events as
+    // they happen. Lifetime is tied to `background_task_cancel`; on shutdown
+    // either the cancel token fires or the broadcaster's shutdown signal
+    // wakes the recv and the listener exits.
+    let fuzzy_listener_handle = crate::search::spawn_listener(
+        fuzzy_index.clone(),
+        event_broadcaster.clone(),
+        db.sea_orm_connection().clone(),
+        background_task_cancel.clone(),
+    );
 
     // Create application state for API
     let refresh_token_service = Arc::new(crate::services::RefreshTokenService::new(
@@ -565,6 +576,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         if let Err(e) = handle.await {
             tracing::warn!("PDF handle cache sweeper panicked: {}", e);
         }
+    }
+
+    // Await fuzzy search event listener
+    info!("Waiting for fuzzy search event listener to complete...");
+    if let Err(e) = fuzzy_listener_handle.await {
+        tracing::warn!("Fuzzy search event listener panicked: {}", e);
     }
     info!("Background tasks shutdown complete");
 

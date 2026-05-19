@@ -2714,7 +2714,7 @@ pub async fn reset_series_metadata(
     ) = tokio::join!(
         GenreRepository::set_genres_for_series(&state.db, series_id, vec![]),
         TagRepository::set_tags_for_series(&state.db, series_id, vec![]),
-        AlternateTitleRepository::delete_all_for_series(&state.db, series_id),
+        AlternateTitleRepository::delete_all_for_series(&state.db, series_id, None),
         SeriesExternalIdRepository::delete_all_for_series(&state.db, series_id),
         ExternalRatingRepository::delete_all_for_series(&state.db, series_id),
         ExternalLinkRepository::delete_all_for_series(&state.db, series_id),
@@ -4448,10 +4448,17 @@ pub async fn create_alternate_title(
         .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Series not found".to_string()))?;
 
-    let title =
-        AlternateTitleRepository::create(&state.db, series_id, &request.label, &request.title)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to create alternate title: {}", e)))?;
+    // Skip the broadcaster — the handler emits a SeriesUpdated event below,
+    // which the fuzzy index listener treats as a refresh trigger.
+    let title = AlternateTitleRepository::create(
+        &state.db,
+        series_id,
+        &request.label,
+        &request.title,
+        None,
+    )
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to create alternate title: {}", e)))?;
 
     // Emit update event
     let event = EntityChangeEvent {
@@ -4520,11 +4527,13 @@ pub async fn update_alternate_title(
         return Err(ApiError::NotFound("Alternate title not found".to_string()));
     }
 
+    // Skip the broadcaster — the handler emits a SeriesUpdated event below.
     let title = AlternateTitleRepository::update(
         &state.db,
         title_id,
         request.label.as_deref(),
         request.title.as_deref(),
+        None,
     )
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update alternate title: {}", e)))?
@@ -4592,7 +4601,8 @@ pub async fn delete_alternate_title(
         return Err(ApiError::NotFound("Alternate title not found".to_string()));
     }
 
-    let deleted = AlternateTitleRepository::delete(&state.db, title_id)
+    // Skip the broadcaster — the handler emits a SeriesUpdated event below.
+    let deleted = AlternateTitleRepository::delete(&state.db, title_id, None)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete alternate title: {}", e)))?;
 
