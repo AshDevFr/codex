@@ -26,6 +26,7 @@ pub mod pages;
 pub mod plugin_failures;
 pub mod plugins;
 pub mod read_progress;
+pub mod refresh_tokens;
 pub mod series;
 pub mod settings;
 pub mod settings_history;

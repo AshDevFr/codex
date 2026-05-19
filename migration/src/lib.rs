@@ -169,6 +169,8 @@ mod m20260508_000080_add_release_ledger_span_columns;
 mod m20260508_000081_add_release_sources_plugin_uuid_fk;
 // Per-plugin RPC request timeout override
 mod m20260511_000082_add_plugin_request_timeout;
+// Refresh tokens: rotatable, family-scoped sibling to access tokens
+mod m20260518_000083_create_refresh_tokens;
 
 pub struct Migrator;
 
@@ -308,6 +310,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260508_000081_add_release_sources_plugin_uuid_fk::Migration),
             // Per-plugin RPC request timeout override
             Box::new(m20260511_000082_add_plugin_request_timeout::Migration),
+            // Refresh tokens: rotatable, family-scoped sibling to access tokens
+            Box::new(m20260518_000083_create_refresh_tokens::Migration),
         ]
     }
 }

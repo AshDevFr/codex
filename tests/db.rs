@@ -7,5 +7,6 @@ mod db {
     mod book_duplicates;
     mod migrations;
     mod postgres;
+    mod refresh_token_repository;
     mod repositories;
 }
