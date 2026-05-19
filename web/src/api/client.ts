@@ -6,15 +6,27 @@ import axios, {
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import type { ApiError } from "@/types";
+import { getFreshAccessToken } from "./refreshClient";
 
 // Rate limit retry configuration
 const RATE_LIMIT_MAX_RETRIES = 3;
 const RATE_LIMIT_DEFAULT_RETRY_AFTER = 5; // seconds
 const RATE_LIMIT_NOTIFICATION_THRESHOLD = 5; // Show notification if retry-after > 5 seconds
 
-// Extend axios config to track retry state
-interface RateLimitRequestConfig extends InternalAxiosRequestConfig {
+// Extend axios config to track retry state for rate limit and refresh-token flows.
+interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   _rateLimitRetryCount?: number;
+  _refreshRetried?: boolean;
+}
+
+// Endpoints that must not trigger a refresh-on-401 (the refresh endpoint itself
+// would be an infinite loop, and login/logout paths legitimately 401 on bad
+// credentials and should surface that to the UI).
+const AUTH_PATHS_NO_REFRESH = ["/auth/refresh", "/auth/login", "/auth/logout"];
+
+function isAuthPath(url: string | undefined): boolean {
+  if (!url) return false;
+  return AUTH_PATHS_NO_REFRESH.some((path) => url.includes(path));
 }
 
 // Event for rate limit notifications (can be subscribed to by UI components)
@@ -85,11 +97,12 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor to handle errors (including 429 rate limit retry)
+// Response interceptor to handle errors (including 429 rate limit retry and
+// 401 transparent refresh-token rotation).
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiError>) => {
-    const config = error.config as RateLimitRequestConfig | undefined;
+    const config = error.config as RetriableRequestConfig | undefined;
 
     // Handle 429 Too Many Requests with automatic retry
     if (error.response?.status === 429 && config) {
@@ -123,13 +136,39 @@ api.interceptors.response.use(
       } as ApiError);
     }
 
+    // Handle 401 Unauthorized.
+    // Try a single refresh-token exchange first; on failure (or for auth
+    // endpoints themselves) fall through to the legacy clear-auth + redirect.
+    if (
+      error.response?.status === 401 &&
+      config &&
+      !config._refreshRetried &&
+      !isAuthPath(config.url)
+    ) {
+      const { refreshToken } = useAuthStore.getState();
+      if (refreshToken) {
+        try {
+          const newAccessToken = await getFreshAccessToken();
+          config._refreshRetried = true;
+          config.headers = config.headers ?? {};
+          (config.headers as Record<string, string>).Authorization =
+            `Bearer ${newAccessToken}`;
+          return api.request(config);
+        } catch {
+          // Refresh failed; fall through to the clear-auth path below.
+        }
+      }
+    }
+
     if (error.response) {
       const apiError: ApiError = {
         error: error.response.data?.error || "An error occurred",
         message: error.response.data?.message || error.message,
       };
 
-      // Handle 401 Unauthorized - clear auth state and redirect to login
+      // Handle 401 Unauthorized - clear auth state and redirect to login.
+      // We reach this either because no refresh token was available, the
+      // refresh itself failed, or the retried request still 401'd.
       if (error.response.status === 401) {
         const { clearAuth } = useAuthStore.getState();
         clearAuth();

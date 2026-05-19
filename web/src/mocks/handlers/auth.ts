@@ -62,6 +62,7 @@ export const authHandlers = [
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ",
       tokenType: "Bearer",
       expiresIn: 86400,
+      refreshToken: "mock-refresh-token",
       user: currentUser,
     });
   }),
@@ -71,6 +72,24 @@ export const authHandlers = [
     await delay(100);
     isAuthenticated = false;
     return HttpResponse.json({ message: "Logged out successfully" });
+  }),
+
+  // Refresh
+  http.post("/api/v1/auth/refresh", async ({ request }) => {
+    await delay(100);
+    const body = (await request.json().catch(() => ({}))) as {
+      refreshToken?: string;
+    };
+    if (!body.refreshToken) {
+      return HttpResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return HttpResponse.json({
+      accessToken:
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.refreshed",
+      tokenType: "Bearer",
+      expiresIn: 86400,
+      refreshToken: "mock-refresh-token-rotated",
+    });
   }),
 
   // Register

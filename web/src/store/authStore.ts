@@ -5,10 +5,12 @@ import type { User } from "@/types";
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
 
   // Actions
-  setAuth: (user: User, token: string) => void;
+  setAuth: (user: User, token: string, refreshToken?: string | null) => void;
+  updateTokens: (token: string, refreshToken: string) => void;
   clearAuth: () => void;
 }
 
@@ -17,16 +19,39 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
+      refreshToken: null,
       isAuthenticated: false,
 
-      setAuth: (user, token) => {
+      setAuth: (user, token, refreshToken) => {
         localStorage.setItem("jwt_token", token);
-        set({ user, token, isAuthenticated: true });
+        if (refreshToken) {
+          localStorage.setItem("jwt_refresh_token", refreshToken);
+        } else {
+          localStorage.removeItem("jwt_refresh_token");
+        }
+        set({
+          user,
+          token,
+          refreshToken: refreshToken ?? null,
+          isAuthenticated: true,
+        });
+      },
+
+      updateTokens: (token, refreshToken) => {
+        localStorage.setItem("jwt_token", token);
+        localStorage.setItem("jwt_refresh_token", refreshToken);
+        set({ token, refreshToken });
       },
 
       clearAuth: () => {
         localStorage.removeItem("jwt_token");
-        set({ user: null, token: null, isAuthenticated: false });
+        localStorage.removeItem("jwt_refresh_token");
+        set({
+          user: null,
+          token: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        });
       },
     }),
     {
@@ -34,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         token: state.token,
+        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
     },

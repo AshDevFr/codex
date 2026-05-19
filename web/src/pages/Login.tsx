@@ -57,7 +57,7 @@ export function Login() {
   const loginMutation = useMutation<LoginResponse, ApiError, LoginRequest>({
     mutationFn: authApi.login,
     onSuccess: (data) => {
-      setAuth(data.user, data.accessToken);
+      setAuth(data.user, data.accessToken, data.refreshToken ?? null);
       navigate("/");
     },
   });
