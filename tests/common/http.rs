@@ -8,8 +8,8 @@ use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
     AuthTrackingService, FileCleanupService, InflightThumbnailTracker, PdfHandleCache,
-    PdfPageCache, PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
-    plugin::PluginManager,
+    PdfPageCache, PluginMetricsService, ReadProgressService, RefreshTokenService, SettingsService,
+    ThumbnailService, plugin::PluginManager,
 };
 use codex::utils::jwt::JwtService;
 use http_body_util::BodyExt;
@@ -26,6 +26,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         24, // 24 hour expiry
     ));
 
+    let refresh_token_service = Arc::new(RefreshTokenService::new(db.clone(), 30));
     let auth_config = Arc::new(AuthConfig::default());
     let database_config = Arc::new(DatabaseConfig::default());
     let pdf_config = Arc::new(PdfConfig::default());
@@ -54,6 +55,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
     Arc::new(AppState {
         db,
         jwt_service,
+        refresh_token_service,
         auth_config,
         database_config,
         pdf_config,
@@ -88,6 +90,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         24, // 24 hour expiry
     ));
 
+    let refresh_token_service = Arc::new(RefreshTokenService::new(db.clone(), 30));
     let auth_config = Arc::new(AuthConfig::default());
     let database_config = Arc::new(DatabaseConfig::default());
     let pdf_config = Arc::new(PdfConfig::default());
@@ -115,6 +118,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
     Arc::new(AppState {
         db,
         jwt_service,
+        refresh_token_service,
         auth_config,
         database_config,
         pdf_config,
@@ -198,9 +202,11 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
     ));
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(state.db.clone())));
     let plugin_metrics_service = Arc::new(PluginMetricsService::new());
+    let refresh_token_service = Arc::new(RefreshTokenService::new(state.db.clone(), 30));
     let app_state = Arc::new(AppState {
         db: state.db.clone(),
         jwt_service: state.jwt_service.clone(),
+        refresh_token_service,
         auth_config,
         database_config,
         pdf_config,

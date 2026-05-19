@@ -407,12 +407,17 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     }
 
     // Create application state for API
+    let refresh_token_service = Arc::new(crate::services::RefreshTokenService::new(
+        db.sea_orm_connection().clone(),
+        config.auth.refresh_token_expiry_days,
+    ));
     let api_state = Arc::new(crate::api::AppState {
         db: db.sea_orm_connection().clone(),
         jwt_service: Arc::new(crate::utils::jwt::JwtService::new(
             config.auth.jwt_secret.clone(),
             config.auth.jwt_expiry_hours,
         )),
+        refresh_token_service,
         auth_config: Arc::new(config.auth.clone()),
         database_config: Arc::new(config.database.clone()),
         pdf_config: Arc::new(config.pdf.clone()),

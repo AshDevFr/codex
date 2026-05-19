@@ -18,8 +18,8 @@ use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
 use codex::services::{
     AuthTrackingService, FileCleanupService, InflightThumbnailTracker, OidcService, PdfHandleCache,
-    PdfPageCache, PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
-    plugin::PluginManager,
+    PdfPageCache, PluginMetricsService, ReadProgressService, RefreshTokenService, SettingsService,
+    ThumbnailService, plugin::PluginManager,
 };
 use codex::utils::jwt::JwtService;
 use common::*;
@@ -65,6 +65,7 @@ async fn create_test_state_with_oidc(
     ));
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
     let plugin_metrics_service = Arc::new(PluginMetricsService::new());
+    let refresh_token_service = Arc::new(RefreshTokenService::new(db.clone(), 30));
 
     // Create OIDC service if enabled
     let oidc_service = if oidc_config.enabled {
@@ -79,6 +80,7 @@ async fn create_test_state_with_oidc(
     Arc::new(AppState {
         db,
         jwt_service,
+        refresh_token_service,
         auth_config,
         database_config,
         pdf_config,

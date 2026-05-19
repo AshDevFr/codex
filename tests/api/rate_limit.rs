@@ -69,8 +69,8 @@ async fn create_rate_limited_app_state(
     use codex::services::email::EmailService;
     use codex::services::{
         AuthTrackingService, FileCleanupService, PdfHandleCache, PdfPageCache,
-        PluginMetricsService, ReadProgressService, SettingsService, ThumbnailService,
-        plugin::PluginManager,
+        PluginMetricsService, ReadProgressService, RefreshTokenService, SettingsService,
+        ThumbnailService, plugin::PluginManager,
     };
     use codex::utils::jwt::JwtService;
 
@@ -105,10 +105,12 @@ async fn create_rate_limited_app_state(
     let rate_limiter_service = Some(Arc::new(RateLimiterService::new(Arc::new(config.clone()))));
     let plugin_manager = Arc::new(PluginManager::with_defaults(Arc::new(db.clone())));
     let plugin_metrics_service = Arc::new(PluginMetricsService::new());
+    let refresh_token_service = Arc::new(RefreshTokenService::new(db.clone(), 30));
 
     Arc::new(AppState {
         db,
         jwt_service,
+        refresh_token_service,
         auth_config,
         database_config,
         pdf_config,

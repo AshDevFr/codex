@@ -15,7 +15,8 @@ use std::sync::Arc;
 /// Routes:
 /// - POST /login - Authenticate user and return JWT token
 /// - POST /register - Register a new user account
-/// - POST /logout - Invalidate current session
+/// - POST /logout - Invalidate current session (revokes refresh token if supplied)
+/// - POST /refresh - Exchange a refresh token for a fresh access + refresh pair
 /// - GET  /me - Get current authenticated user (supports cookie auth)
 /// - POST /verify-email - Verify email address with token
 /// - POST /resend-verification - Request a new verification email
@@ -24,6 +25,7 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/login", post(handlers::login))
         .route("/register", post(handlers::register))
         .route("/logout", post(handlers::logout))
+        .route("/refresh", post(handlers::refresh))
         .route("/me", get(handlers::get_me))
         .route("/verify-email", post(handlers::verify_email))
         .route("/resend-verification", post(handlers::resend_verification))
