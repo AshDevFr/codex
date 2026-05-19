@@ -48,7 +48,9 @@ export function Register() {
   const registerMutation = useMutation<any, ApiError, RegisterRequest>({
     mutationFn: authApi.register,
     onSuccess: (data) => {
-      // If access token is provided, user is logged in automatically
+      // If access token is provided, user is logged in automatically.
+      // Register currently doesn't return a refresh token; the user will
+      // get one on their next /auth/login.
       if (data.accessToken) {
         setAuth(data.user, data.accessToken);
         navigate("/");

@@ -247,8 +247,13 @@ describe("Sidebar Component (via AppLayout)", () => {
     const logoutButton = screen.getByText("Logout");
     await user.click(logoutButton);
 
-    // Should clear auth (navigation is handled by React Router now)
-    expect(localStorage.getItem("jwt_token")).toBeNull();
+    // Should clear auth (navigation is handled by React Router now).
+    // Logout is async (it calls POST /auth/logout to revoke the refresh
+    // token server-side before clearing local state), so wait for the
+    // store-side cleanup to land.
+    await waitFor(() => {
+      expect(localStorage.getItem("jwt_token")).toBeNull();
+    });
   });
 
   describe("Settings navigation", () => {

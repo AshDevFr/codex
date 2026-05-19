@@ -45,6 +45,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { authApi } from "@/api/auth";
 import { librariesApi } from "@/api/libraries";
 import { userPluginsApi } from "@/api/userPlugins";
 import { LibraryModal } from "@/components/forms/LibraryModal";
@@ -74,6 +75,8 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const { pathname: currentPath } = useLocation();
   const queryClient = useQueryClient();
   const { clearAuth } = useAuthStore();
+  // Read refreshToken lazily inside handleLogout so we always see the current
+  // value, even if the user logged in within this mount.
   // Only subscribe to getLastTab action (doesn't cause re-renders since it's not state)
   const getLastTab = useLibraryPreferencesStore((state) => state.getLastTab);
   const { isAdmin, hasPermission } = usePermissions();
@@ -370,7 +373,9 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const refreshToken = useAuthStore.getState().refreshToken;
+    await authApi.logout(refreshToken);
     clearAuth();
     navigate("/login");
     onNavigate?.();

@@ -28,10 +28,20 @@ export const authApi = {
     return response.data;
   },
 
-  // Logout (just clear local storage, no API call needed)
-  logout: () => {
-    localStorage.removeItem("jwt_token");
-    localStorage.removeItem("user");
+  // Logout: revoke the refresh token server-side (best-effort) and clear local
+  // storage. Failures here are swallowed because the client is leaving anyway.
+  logout: async (refreshToken?: string | null): Promise<void> => {
+    try {
+      await api.post("/auth/logout", {
+        refreshToken: refreshToken ?? null,
+      });
+    } catch {
+      // Ignore: the user is signing out regardless.
+    } finally {
+      localStorage.removeItem("jwt_token");
+      localStorage.removeItem("jwt_refresh_token");
+      localStorage.removeItem("user");
+    }
   },
 
   // Get available OIDC providers

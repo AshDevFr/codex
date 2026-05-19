@@ -1,11 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { navigationService } from "@/services/navigation";
+import { useAuthStore } from "@/store/authStore";
 import { api, onRateLimitNotification } from "./client";
+import * as refreshClient from "./refreshClient";
 
 describe("API Client", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    refreshClient.__resetInFlightRefresh();
+    useAuthStore.setState({
+      user: null,
+      token: null,
+      refreshToken: null,
+      isAuthenticated: false,
+    });
     // Mock navigation service to avoid actual navigation
     vi.spyOn(navigationService, "navigateTo").mockImplementation(() => {});
   });
@@ -51,13 +60,18 @@ describe("API Client", () => {
     }
   });
 
-  it("should handle 401 errors and clear auth", async () => {
+  it("should handle 401 errors and clear auth when no refresh token is available", async () => {
     const mockError = {
       response: {
         status: 401,
         data: {
           error: "Unauthorized",
         },
+      },
+      config: {
+        url: "/users/me",
+        method: "get",
+        headers: {},
       },
     };
 
@@ -408,5 +422,205 @@ describe("Rate Limit Retry Logic", () => {
 
     // No error should occur - this is just testing the API works
     expect(true).toBe(true);
+  });
+});
+
+describe("Refresh Token Retry Logic", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    refreshClient.__resetInFlightRefresh();
+    useAuthStore.setState({
+      user: {
+        id: "1",
+        username: "tester",
+        email: "tester@example.com",
+        role: "reader",
+        emailVerified: true,
+        permissions: [],
+      },
+      token: "old-access",
+      refreshToken: "old-refresh",
+      isAuthenticated: true,
+    });
+    vi.spyOn(navigationService, "navigateTo").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    useAuthStore.setState({
+      user: null,
+      token: null,
+      refreshToken: null,
+      isAuthenticated: false,
+    });
+    localStorage.clear();
+  });
+
+  function getResponseInterceptor() {
+    const handlers = (api.interceptors.response as any).handlers;
+    return handlers?.[0]?.rejected as
+      | ((error: unknown) => Promise<unknown>)
+      | undefined;
+  }
+
+  it("refreshes on 401 and retries the original request once with the new token", async () => {
+    vi.spyOn(refreshClient, "getFreshAccessToken").mockResolvedValueOnce(
+      "fresh-access",
+    );
+    const requestSpy = vi.spyOn(api, "request").mockResolvedValueOnce({
+      data: { ok: true },
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      config: {} as any,
+    });
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url: "/users/me", method: "get", headers: {} },
+    };
+
+    const interceptor = getResponseInterceptor();
+    expect(interceptor).toBeTruthy();
+
+    const result = await interceptor!(mockError);
+    expect((result as any).data).toEqual({ ok: true });
+
+    expect(refreshClient.getFreshAccessToken).toHaveBeenCalledTimes(1);
+    const replayedConfig = requestSpy.mock.calls[0]?.[0] as any;
+    expect(replayedConfig.headers.Authorization).toBe("Bearer fresh-access");
+    expect(replayedConfig._refreshRetried).toBe(true);
+    expect(navigationService.navigateTo).not.toHaveBeenCalled();
+
+    requestSpy.mockRestore();
+  });
+
+  it("clears auth and redirects to /login when the refresh itself fails", async () => {
+    vi.spyOn(refreshClient, "getFreshAccessToken").mockRejectedValueOnce(
+      new Error("refresh failed"),
+    );
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url: "/users/me", method: "get", headers: {} },
+    };
+
+    const interceptor = getResponseInterceptor();
+    await expect(interceptor!(mockError)).rejects.toEqual({
+      error: "Unauthorized",
+      message: undefined,
+    });
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(navigationService.navigateTo).toHaveBeenCalledWith("/login");
+  });
+
+  it("does not loop: a request that 401s again after retry surfaces the error", async () => {
+    vi.spyOn(refreshClient, "getFreshAccessToken").mockResolvedValueOnce(
+      "fresh-access",
+    );
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: {
+        url: "/users/me",
+        method: "get",
+        headers: {},
+        _refreshRetried: true, // already retried once
+      },
+    };
+
+    const interceptor = getResponseInterceptor();
+    await expect(interceptor!(mockError)).rejects.toEqual({
+      error: "Unauthorized",
+      message: undefined,
+    });
+
+    // The refresh helper must NOT be called a second time for the same request.
+    expect(refreshClient.getFreshAccessToken).not.toHaveBeenCalled();
+    expect(navigationService.navigateTo).toHaveBeenCalledWith("/login");
+  });
+
+  it("skips refresh for /auth/refresh itself and falls straight to clear-auth", async () => {
+    const refreshSpy = vi.spyOn(refreshClient, "getFreshAccessToken");
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url: "/auth/refresh", method: "post", headers: {} },
+    };
+
+    const interceptor = getResponseInterceptor();
+    await expect(interceptor!(mockError)).rejects.toEqual({
+      error: "Unauthorized",
+      message: undefined,
+    });
+
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(navigationService.navigateTo).toHaveBeenCalledWith("/login");
+  });
+
+  it("shares a single refresh across two parallel 401s", async () => {
+    let resolveRefresh: (value: string) => void = () => {};
+    const pending = new Promise<string>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const refreshSpy = vi
+      .spyOn(refreshClient, "getFreshAccessToken")
+      .mockReturnValue(pending);
+
+    const requestSpy = vi.spyOn(api, "request").mockResolvedValue({
+      data: { ok: true },
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      config: {} as any,
+    });
+
+    const mkError = (url: string) => ({
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url, method: "get", headers: {} },
+    });
+
+    const interceptor = getResponseInterceptor();
+    const a = interceptor!(mkError("/users/me"));
+    const b = interceptor!(mkError("/libraries"));
+
+    // Allow microtasks to drain so both branches reach the refresh await.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    resolveRefresh("fresh-access");
+
+    await Promise.all([a, b]);
+
+    expect(refreshSpy).toHaveBeenCalledTimes(2);
+    // Both requests retried with the new token.
+    expect(requestSpy).toHaveBeenCalledTimes(2);
+    for (const call of requestSpy.mock.calls) {
+      const cfg = call[0] as any;
+      expect(cfg.headers.Authorization).toBe("Bearer fresh-access");
+      expect(cfg._refreshRetried).toBe(true);
+    }
+
+    requestSpy.mockRestore();
+  });
+
+  it("skips refresh when no refresh token is in the store", async () => {
+    useAuthStore.setState({ refreshToken: null });
+    const refreshSpy = vi.spyOn(refreshClient, "getFreshAccessToken");
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url: "/users/me", method: "get", headers: {} },
+    };
+
+    const interceptor = getResponseInterceptor();
+    await expect(interceptor!(mockError)).rejects.toEqual({
+      error: "Unauthorized",
+      message: undefined,
+    });
+
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(navigationService.navigateTo).toHaveBeenCalledWith("/login");
   });
 });
