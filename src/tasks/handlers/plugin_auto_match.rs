@@ -1012,7 +1012,7 @@ impl TaskHandler for PluginAutoMatchHandler {
                     EntityEvent::SeriesMetadataUpdated {
                         series_id,
                         library_id: series.library_id,
-                        plugin_id,
+                        plugin_id: Some(plugin_id),
                         fields_updated: applied_fields.clone(),
                     },
                     None,

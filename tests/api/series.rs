@@ -4467,6 +4467,7 @@ async fn test_list_series_sort_by_name_uses_title_sort() {
         series1.id,
         "The Batman".to_string(),
         Some("Batman, The".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -4485,6 +4486,7 @@ async fn test_list_series_sort_by_name_uses_title_sort() {
         series3.id,
         "A Spider-Man".to_string(),
         Some("Spider-Man".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -4689,6 +4691,7 @@ async fn test_list_series_sort_pagination_stable_with_ties() {
             s.id,
             name.clone(),
             Some("SAME_SORT_KEY".to_string()),
+            None,
         )
         .await
         .unwrap();
@@ -4835,6 +4838,7 @@ async fn test_list_series_sort_by_name_mixed_null_and_set_title_sort() {
         series_the.id,
         "The Amazing Spider-Man".to_string(),
         Some("Amazing Spider-Man, The".to_string()),
+        None,
     )
     .await
     .unwrap();

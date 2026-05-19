@@ -72,10 +72,10 @@ async fn test_list_alternate_titles_with_data() {
     let (_library_id, series_id) = create_test_series(&db).await;
 
     use codex::db::repositories::AlternateTitleRepository;
-    AlternateTitleRepository::create(&db, series_id, "Japanese", "日本語タイトル")
+    AlternateTitleRepository::create(&db, series_id, "Japanese", "日本語タイトル", None)
         .await
         .unwrap();
-    AlternateTitleRepository::create(&db, series_id, "Romaji", "Nihongo Taitoru")
+    AlternateTitleRepository::create(&db, series_id, "Romaji", "Nihongo Taitoru", None)
         .await
         .unwrap();
 
@@ -225,7 +225,7 @@ async fn test_update_alternate_title_label_only() {
     let (_library_id, series_id) = create_test_series(&db).await;
 
     use codex::db::repositories::AlternateTitleRepository;
-    let title = AlternateTitleRepository::create(&db, series_id, "Japanese", "タイトル")
+    let title = AlternateTitleRepository::create(&db, series_id, "Japanese", "タイトル", None)
         .await
         .unwrap();
 
@@ -258,7 +258,7 @@ async fn test_update_alternate_title_title_only() {
     let (_library_id, series_id) = create_test_series(&db).await;
 
     use codex::db::repositories::AlternateTitleRepository;
-    let title = AlternateTitleRepository::create(&db, series_id, "Japanese", "Old Title")
+    let title = AlternateTitleRepository::create(&db, series_id, "Japanese", "Old Title", None)
         .await
         .unwrap();
 
@@ -291,7 +291,7 @@ async fn test_update_alternate_title_both_fields() {
     let (_library_id, series_id) = create_test_series(&db).await;
 
     use codex::db::repositories::AlternateTitleRepository;
-    let title = AlternateTitleRepository::create(&db, series_id, "Old Label", "Old Title")
+    let title = AlternateTitleRepository::create(&db, series_id, "Old Label", "Old Title", None)
         .await
         .unwrap();
 
@@ -362,7 +362,7 @@ async fn test_update_alternate_title_wrong_series() {
 
     // Create title on series1
     use codex::db::repositories::AlternateTitleRepository;
-    let title = AlternateTitleRepository::create(&db, series1.id, "Japanese", "タイトル")
+    let title = AlternateTitleRepository::create(&db, series1.id, "Japanese", "タイトル", None)
         .await
         .unwrap();
 
@@ -400,7 +400,7 @@ async fn test_delete_alternate_title() {
     let (_library_id, series_id) = create_test_series(&db).await;
 
     use codex::db::repositories::AlternateTitleRepository;
-    let title = AlternateTitleRepository::create(&db, series_id, "Japanese", "タイトル")
+    let title = AlternateTitleRepository::create(&db, series_id, "Japanese", "タイトル", None)
         .await
         .unwrap();
 
@@ -461,7 +461,7 @@ async fn test_delete_alternate_title_wrong_series() {
 
     // Create title on series1
     use codex::db::repositories::AlternateTitleRepository;
-    let title = AlternateTitleRepository::create(&db, series1.id, "Japanese", "タイトル")
+    let title = AlternateTitleRepository::create(&db, series1.id, "Japanese", "タイトル", None)
         .await
         .unwrap();
 

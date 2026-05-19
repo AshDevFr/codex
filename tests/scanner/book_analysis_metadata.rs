@@ -1262,6 +1262,7 @@ async fn test_series_title_sort_not_overwritten_if_already_set() -> Result<()> {
         series.id,
         "The Amazing Spider-Man".to_string(),
         Some("Amazing Spider-Man, The".to_string()),
+        None,
     )
     .await?;
 

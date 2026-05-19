@@ -9775,15 +9775,21 @@ export interface components {
             /** @enum {string} */
             type: "series_deleted";
         } | {
-            /** @description Fields that were updated */
+            /**
+             * @description Fields that were updated. Empty for coarse-grained refetch
+             *     signals (e.g. alt-title CRUD where the change is in a related
+             *     table rather than a specific column).
+             */
             fieldsUpdated: string[];
             /** Format: uuid */
             libraryId: string;
             /**
              * Format: uuid
-             * @description Plugin that updated the metadata
+             * @description Plugin that updated the metadata, when the change originated from
+             *     a plugin or metadata-refresh task. `None` for direct repository
+             *     writes (e.g. manual edits, alt-title CRUD).
              */
-            pluginId: string;
+            pluginId?: string | null;
             /** Format: uuid */
             seriesId: string;
             /** @enum {string} */

@@ -108,7 +108,7 @@ async fn test_get_full_series_metadata_with_related_data() {
     TagRepository::add_tag_to_series(&db, series.id, "Ongoing")
         .await
         .unwrap();
-    AlternateTitleRepository::create(&db, series.id, "Japanese", "ワンピース")
+    AlternateTitleRepository::create(&db, series.id, "Japanese", "ワンピース", None)
         .await
         .unwrap();
     ExternalRatingRepository::upsert(
@@ -900,7 +900,7 @@ async fn test_get_full_series_with_related_data() {
     TagRepository::add_tag_to_series(&db, series.id, "Ongoing")
         .await
         .unwrap();
-    AlternateTitleRepository::create(&db, series.id, "Japanese", "ワンピース")
+    AlternateTitleRepository::create(&db, series.id, "Japanese", "ワンピース", None)
         .await
         .unwrap();
     ExternalRatingRepository::upsert(

@@ -1714,8 +1714,10 @@ impl SeriesRepository {
     pub async fn update_name(db: &DatabaseConnection, id: Uuid, name: &str) -> Result<()> {
         use crate::db::repositories::SeriesMetadataRepository;
 
-        // Update the title in series_metadata
-        SeriesMetadataRepository::update_title(db, id, name.to_string(), None).await?;
+        // Update the title in series_metadata.
+        // No broadcaster wired through `update_name`'s signature today; the
+        // caller can `update()` afterwards to emit `SeriesUpdated`.
+        SeriesMetadataRepository::update_title(db, id, name.to_string(), None, None).await?;
 
         // Also update the series updated_at timestamp
         let series = Series::find_by_id(id)
@@ -2631,6 +2633,7 @@ mod tests {
             db.sea_orm_connection(),
             series.id,
             "Crème Brûlée".to_string(),
+            None,
             None,
         )
         .await

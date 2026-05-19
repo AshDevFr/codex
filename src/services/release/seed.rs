@@ -320,10 +320,10 @@ mod tests {
             .await
             .unwrap();
         let s = make_series(conn, lib.id, "Solo Leveling").await;
-        AlternateTitleRepository::create(conn, s, "Korean", "나 혼자만 레벨업")
+        AlternateTitleRepository::create(conn, s, "Korean", "나 혼자만 레벨업", None)
             .await
             .unwrap();
-        AlternateTitleRepository::create(conn, s, "Romaji", "Na Honjaman Lebel-eob")
+        AlternateTitleRepository::create(conn, s, "Romaji", "Na Honjaman Lebel-eob", None)
             .await
             .unwrap();
 

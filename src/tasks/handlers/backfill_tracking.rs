@@ -167,7 +167,7 @@ mod tests {
             .await
             .unwrap();
         if let Some(jp) = japanese {
-            AlternateTitleRepository::create(db, series.id, "Japanese", jp)
+            AlternateTitleRepository::create(db, series.id, "Japanese", jp, None)
                 .await
                 .unwrap();
         }

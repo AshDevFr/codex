@@ -3108,10 +3108,10 @@ async fn test_komga_series_returns_alternate_titles() {
         .unwrap();
 
     // Add alternate titles
-    AlternateTitleRepository::create(&db, series.id, "Native", "ブラッククローバー")
+    AlternateTitleRepository::create(&db, series.id, "Native", "ブラッククローバー", None)
         .await
         .unwrap();
-    AlternateTitleRepository::create(&db, series.id, "Roman", "Black Clover")
+    AlternateTitleRepository::create(&db, series.id, "Roman", "Black Clover", None)
         .await
         .unwrap();
 
@@ -3250,7 +3250,7 @@ async fn test_komga_series_returns_all_metadata_fields() {
     .await
     .unwrap();
 
-    AlternateTitleRepository::create(&db, series.id, "Japanese", "テスト")
+    AlternateTitleRepository::create(&db, series.id, "Japanese", "テスト", None)
         .await
         .unwrap();
 
@@ -3767,6 +3767,7 @@ async fn test_komga_search_series_sort_by_title_sort_asc() {
         series_z.id,
         "Zebra".to_string(),
         Some("01 Zebra".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -3775,6 +3776,7 @@ async fn test_komga_search_series_sort_by_title_sort_asc() {
         series_a.id,
         "Apple".to_string(),
         Some("03 Apple".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -3783,6 +3785,7 @@ async fn test_komga_search_series_sort_by_title_sort_asc() {
         series_m.id,
         "Mango".to_string(),
         Some("02 Mango".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -3833,6 +3836,7 @@ async fn test_komga_search_series_sort_by_title_sort_desc() {
         series_z.id,
         "Zebra".to_string(),
         Some("01 Zebra".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -3841,6 +3845,7 @@ async fn test_komga_search_series_sort_by_title_sort_desc() {
         series_a.id,
         "Apple".to_string(),
         Some("03 Apple".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -3849,6 +3854,7 @@ async fn test_komga_search_series_sort_by_title_sort_desc() {
         series_m.id,
         "Mango".to_string(),
         Some("02 Mango".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -4496,6 +4502,7 @@ async fn test_komga_search_series_sort_title_with_pagination() {
             series.id,
             name.to_string(),
             Some(sort_key.to_string()),
+            None,
         )
         .await
         .unwrap();
@@ -4665,6 +4672,7 @@ async fn test_komga_search_series_sort_by_title_mixed_null_and_set() {
         series_the.id,
         "The Amazing Spider-Man".to_string(),
         Some("Amazing Spider-Man, The".to_string()),
+        None,
     )
     .await
     .unwrap();

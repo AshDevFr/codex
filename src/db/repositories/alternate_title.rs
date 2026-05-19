@@ -7,11 +7,13 @@
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::entities::series_alternate_titles::{
     self, Entity as AlternateTitles, Model as AlternateTitle,
 };
+use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Repository for series alternate title operations
 pub struct AlternateTitleRepository;
@@ -35,12 +37,16 @@ impl AlternateTitleRepository {
         Ok(results)
     }
 
-    /// Create a new alternate title for a series
+    /// Create a new alternate title for a series.
+    ///
+    /// When `event_broadcaster` is provided, emits `SeriesMetadataUpdated`
+    /// so the in-memory fuzzy search index can refresh the affected series.
     pub async fn create(
         db: &DatabaseConnection,
         series_id: Uuid,
         label: &str,
         title: &str,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<AlternateTitle> {
         let now = Utc::now();
         let active_model = series_alternate_titles::ActiveModel {
@@ -53,15 +59,22 @@ impl AlternateTitleRepository {
         };
 
         let model = active_model.insert(db).await?;
+
+        emit_metadata_updated(db, event_broadcaster, series_id).await;
+
         Ok(model)
     }
 
-    /// Update an alternate title
+    /// Update an alternate title.
+    ///
+    /// Emits `SeriesMetadataUpdated` when a broadcaster is provided and the
+    /// row exists (no event on a no-op update of a missing row).
     pub async fn update(
         db: &DatabaseConnection,
         id: Uuid,
         label: Option<&str>,
         title: Option<&str>,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
     ) -> Result<Option<AlternateTitle>> {
         let existing = AlternateTitles::find_by_id(id).one(db).await?;
 
@@ -69,6 +82,7 @@ impl AlternateTitleRepository {
             return Ok(None);
         };
 
+        let series_id = existing.series_id;
         let mut active_model: series_alternate_titles::ActiveModel = existing.into();
         active_model.updated_at = Set(Utc::now());
 
@@ -81,21 +95,50 @@ impl AlternateTitleRepository {
         }
 
         let model = active_model.update(db).await?;
+
+        emit_metadata_updated(db, event_broadcaster, series_id).await;
+
         Ok(Some(model))
     }
 
-    /// Delete an alternate title by ID
-    pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
+    /// Delete an alternate title by ID.
+    ///
+    /// Emits `SeriesMetadataUpdated` for the owning series when the row
+    /// actually existed and a broadcaster is provided.
+    pub async fn delete(
+        db: &DatabaseConnection,
+        id: Uuid,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<bool> {
+        // Fetch series_id first so we can emit the right event after delete.
+        let series_id = AlternateTitles::find_by_id(id)
+            .one(db)
+            .await?
+            .map(|t| t.series_id);
         let result = AlternateTitles::delete_by_id(id).exec(db).await?;
-        Ok(result.rows_affected > 0)
+        let deleted = result.rows_affected > 0;
+        if deleted && let Some(series_id) = series_id {
+            emit_metadata_updated(db, event_broadcaster, series_id).await;
+        }
+        Ok(deleted)
     }
 
-    /// Delete all alternate titles for a series
-    pub async fn delete_all_for_series(db: &DatabaseConnection, series_id: Uuid) -> Result<u64> {
+    /// Delete all alternate titles for a series.
+    ///
+    /// Emits `SeriesMetadataUpdated` once when at least one row was deleted
+    /// and a broadcaster is provided (a no-op delete emits nothing).
+    pub async fn delete_all_for_series(
+        db: &DatabaseConnection,
+        series_id: Uuid,
+        event_broadcaster: Option<&Arc<EventBroadcaster>>,
+    ) -> Result<u64> {
         let result = AlternateTitles::delete_many()
             .filter(series_alternate_titles::Column::SeriesId.eq(series_id))
             .exec(db)
             .await?;
+        if result.rows_affected > 0 {
+            emit_metadata_updated(db, event_broadcaster, series_id).await;
+        }
         Ok(result.rows_affected)
     }
 
@@ -139,6 +182,53 @@ impl AlternateTitleRepository {
     }
 }
 
+/// Emit a `SeriesMetadataUpdated` event for the owning series after an
+/// alt-title CRUD operation.
+///
+/// Looks up `library_id` from the series row (one extra query). Failures are
+/// silently dropped: the write itself already succeeded and event delivery is
+/// best-effort. `plugin_id` is always `None` here because alt-title CRUD is
+/// either user-initiated or driven by a plugin path that emits its own
+/// SeriesMetadataUpdated at the task boundary.
+async fn emit_metadata_updated(
+    db: &DatabaseConnection,
+    broadcaster: Option<&Arc<EventBroadcaster>>,
+    series_id: Uuid,
+) {
+    let Some(broadcaster) = broadcaster else {
+        return;
+    };
+    let library_id = match crate::db::repositories::SeriesRepository::get_by_id(db, series_id).await
+    {
+        Ok(Some(series)) => series.library_id,
+        Ok(None) => {
+            tracing::debug!(
+                "skipping SeriesMetadataUpdated emission: series {} no longer exists",
+                series_id
+            );
+            return;
+        }
+        Err(err) => {
+            tracing::warn!(
+                "failed to lookup library_id for alt-title SeriesMetadataUpdated emission ({}): {:#}",
+                series_id,
+                err
+            );
+            return;
+        }
+    };
+    let event = EntityChangeEvent::new(
+        EntityEvent::SeriesMetadataUpdated {
+            series_id,
+            library_id,
+            plugin_id: None,
+            fields_updated: vec!["alternate_titles".to_string()],
+        },
+        None,
+    );
+    let _ = broadcaster.emit(event);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,6 +259,7 @@ mod tests {
             series.id,
             "Japanese",
             "テストシリーズ",
+            None,
         )
         .await
         .unwrap();
@@ -208,6 +299,7 @@ mod tests {
             series.id,
             "Japanese",
             "日本語タイトル",
+            None,
         )
         .await
         .unwrap();
@@ -217,6 +309,7 @@ mod tests {
             series.id,
             "Romaji",
             "Nihongo Taitoru",
+            None,
         )
         .await
         .unwrap();
@@ -226,6 +319,7 @@ mod tests {
             series.id,
             "Korean",
             "한국어 제목",
+            None,
         )
         .await
         .unwrap();
@@ -260,6 +354,7 @@ mod tests {
             series.id,
             "Japanese",
             "Original Title",
+            None,
         )
         .await
         .unwrap();
@@ -269,6 +364,7 @@ mod tests {
             db.sea_orm_connection(),
             alt_title.id,
             Some("Romaji"),
+            None,
             None,
         )
         .await
@@ -284,6 +380,7 @@ mod tests {
             alt_title.id,
             None,
             Some("Updated Title"),
+            None,
         )
         .await
         .unwrap()
@@ -298,6 +395,7 @@ mod tests {
             alt_title.id,
             Some("English"),
             Some("Final Title"),
+            None,
         )
         .await
         .unwrap()
@@ -316,6 +414,7 @@ mod tests {
             Uuid::new_v4(),
             Some("Label"),
             Some("Title"),
+            None,
         )
         .await
         .unwrap();
@@ -346,11 +445,12 @@ mod tests {
             series.id,
             "Japanese",
             "タイトル",
+            None,
         )
         .await
         .unwrap();
 
-        let deleted = AlternateTitleRepository::delete(db.sea_orm_connection(), alt_title.id)
+        let deleted = AlternateTitleRepository::delete(db.sea_orm_connection(), alt_title.id, None)
             .await
             .unwrap();
         assert!(deleted);
@@ -365,9 +465,10 @@ mod tests {
     async fn test_delete_nonexistent_title() {
         let (db, _temp_dir) = create_test_db().await;
 
-        let deleted = AlternateTitleRepository::delete(db.sea_orm_connection(), Uuid::new_v4())
-            .await
-            .unwrap();
+        let deleted =
+            AlternateTitleRepository::delete(db.sea_orm_connection(), Uuid::new_v4(), None)
+                .await
+                .unwrap();
         assert!(!deleted);
     }
 
@@ -396,15 +497,19 @@ mod tests {
                 series.id,
                 &format!("Label {}", i),
                 &format!("Title {}", i),
+                None,
             )
             .await
             .unwrap();
         }
 
-        let count =
-            AlternateTitleRepository::delete_all_for_series(db.sea_orm_connection(), series.id)
-                .await
-                .unwrap();
+        let count = AlternateTitleRepository::delete_all_for_series(
+            db.sea_orm_connection(),
+            series.id,
+            None,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(count, 5);
 
@@ -438,10 +543,15 @@ mod tests {
                 .await
                 .unwrap();
 
-        let alt_title =
-            AlternateTitleRepository::create(db.sea_orm_connection(), series1.id, "Label", "Title")
-                .await
-                .unwrap();
+        let alt_title = AlternateTitleRepository::create(
+            db.sea_orm_connection(),
+            series1.id,
+            "Label",
+            "Title",
+            None,
+        )
+        .await
+        .unwrap();
 
         let belongs = AlternateTitleRepository::belongs_to_series(
             db.sea_orm_connection(),
@@ -485,6 +595,7 @@ mod tests {
             series.id,
             "  Spaced Label  ",
             "  Spaced Title  ",
+            None,
         )
         .await
         .unwrap();

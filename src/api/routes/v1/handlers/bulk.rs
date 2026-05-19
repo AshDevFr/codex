@@ -860,7 +860,7 @@ pub async fn bulk_reset_series_metadata(
         ) = tokio::join!(
             GenreRepository::set_genres_for_series(&state.db, *series_id, vec![]),
             TagRepository::set_tags_for_series(&state.db, *series_id, vec![]),
-            AlternateTitleRepository::delete_all_for_series(&state.db, *series_id),
+            AlternateTitleRepository::delete_all_for_series(&state.db, *series_id, None),
             SeriesExternalIdRepository::delete_all_for_series(&state.db, *series_id),
             ExternalRatingRepository::delete_all_for_series(&state.db, *series_id),
             ExternalLinkRepository::delete_all_for_series(&state.db, *series_id),

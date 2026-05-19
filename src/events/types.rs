@@ -103,16 +103,28 @@ pub enum EntityEvent {
         #[serde(rename = "libraryId")]
         library_id: Uuid,
     },
-    /// Series metadata was updated by a plugin
+    /// Series metadata was updated.
+    ///
+    /// Emitted from two kinds of sources:
+    /// - Plugin / metadata-refresh tasks, which set `plugin_id` to the plugin
+    ///   that produced the change.
+    /// - Direct repository writes (manual edits, alt-title CRUD, etc.), which
+    ///   leave `plugin_id` as `None`. These exist primarily so that the in-
+    ///   memory fuzzy search index can incrementally refetch the affected
+    ///   series without polling.
     SeriesMetadataUpdated {
         #[serde(rename = "seriesId")]
         series_id: Uuid,
         #[serde(rename = "libraryId")]
         library_id: Uuid,
-        /// Plugin that updated the metadata
-        #[serde(rename = "pluginId")]
-        plugin_id: Uuid,
-        /// Fields that were updated
+        /// Plugin that updated the metadata, when the change originated from
+        /// a plugin or metadata-refresh task. `None` for direct repository
+        /// writes (e.g. manual edits, alt-title CRUD).
+        #[serde(rename = "pluginId", skip_serializing_if = "Option::is_none")]
+        plugin_id: Option<Uuid>,
+        /// Fields that were updated. Empty for coarse-grained refetch
+        /// signals (e.g. alt-title CRUD where the change is in a related
+        /// table rather than a specific column).
         #[serde(rename = "fieldsUpdated")]
         fields_updated: Vec<String>,
     },
