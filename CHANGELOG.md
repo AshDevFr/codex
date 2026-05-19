@@ -2,6 +2,27 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.24.0] - 2026-05-19
+
+### 🚀 Features
+
+- *(observability)* Structured tracing for PDF page render path
+- *(pdf)* Add in-memory open-document handle cache service
+- *(pdf)* Route page renders through in-memory handle cache
+- *(admin)* Combine PDF page + handle caches into one admin surface
+
+### 🐛 Bug Fixes
+
+- *(reader)* Align segmented-control pills and clean up PDF mode warning
+
+### 📚 Documentation
+
+- *(pdf)* Document pdf_handle_cache config and env vars
+
+### 🧪 Testing
+
+- *(reader)* Click Native to trigger PDF mode change warning
+
 ## [1.23.0] - 2026-05-18
 
 ### 🚀 Features
