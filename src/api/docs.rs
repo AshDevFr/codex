@@ -143,6 +143,7 @@ The following paths are exempt from rate limiting:
         // Auth endpoints
         v1::handlers::login,
         v1::handlers::logout,
+        v1::handlers::refresh,
         v1::handlers::register,
         v1::handlers::verify_email,
         v1::handlers::resend_verification,
@@ -594,6 +595,9 @@ The following paths are exempt from rate limiting:
             v1::dto::ResendVerificationRequest,
             v1::dto::ResendVerificationResponse,
             v1::dto::TokenResponse,
+            v1::dto::RefreshRequest,
+            v1::dto::TokenPair,
+            v1::dto::LogoutRequest,
 
             // OIDC DTOs
             v1::dto::OidcProviderInfo,

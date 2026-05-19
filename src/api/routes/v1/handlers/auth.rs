@@ -1,16 +1,18 @@
 use super::super::dto::{
-    LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, ResendVerificationRequest,
-    ResendVerificationResponse, UserInfo, VerifyEmailRequest, VerifyEmailResponse,
+    LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, RegisterRequest, RegisterResponse,
+    ResendVerificationRequest, ResendVerificationResponse, TokenPair, UserInfo, VerifyEmailRequest,
+    VerifyEmailResponse,
 };
 use crate::api::{
     error::ApiError,
-    extractors::{AuthContext, AuthState, FlexibleAuthContext},
+    extractors::{AuthContext, AuthState, ClientInfo, FlexibleAuthContext},
     permissions::UserRole, // Used for creating users with default role
 };
 use crate::db::{
     entities::users,
     repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
 };
+use crate::services::RefreshTokenError;
 use crate::utils::password;
 use axum::{
     Json,
@@ -24,6 +26,24 @@ use sea_orm::Set;
 use std::env;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Maximum length of a `User-Agent` value we persist alongside a refresh token.
+/// Matches the column width on `refresh_tokens.user_agent`.
+const USER_AGENT_MAX_LEN: usize = 512;
+
+/// Pull a sanitized `User-Agent` value off the request headers, truncated to
+/// the persisted column width. Returns `None` for missing / non-UTF8 / empty.
+fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
+    let raw = headers.get(header::USER_AGENT)?.to_str().ok()?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let mut s = raw.to_string();
+    if s.len() > USER_AGENT_MAX_LEN {
+        s.truncate(USER_AGENT_MAX_LEN);
+    }
+    Some(s)
+}
 
 /// Parse permissions from JSON value (stored as array of strings in database)
 fn parse_permissions_json(json: &serde_json::Value) -> Vec<String> {
@@ -77,6 +97,8 @@ pub(crate) fn build_auth_cookie(token: &str, max_age: u64) -> String {
 )]
 pub async fn login(
     State(state): State<Arc<AuthState>>,
+    client_info: ClientInfo,
+    request_headers: HeaderMap,
     Json(request): Json<LoginRequest>,
 ) -> Result<Response, ApiError> {
     // Try to find user by username first
@@ -116,11 +138,27 @@ pub async fn login(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update last login: {}", e)))?;
 
+    // Optionally issue a refresh token alongside the access token.
+    // Persisted as sha256 with a fresh `family_id`; the plain value is shown
+    // to the client exactly once in this response.
+    let refresh_token = if state.auth_config.refresh_token_enabled {
+        let user_agent = extract_user_agent(&request_headers);
+        let issued = state
+            .refresh_token_service
+            .issue(user.id, user_agent, client_info.ip_address.clone())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to issue refresh token: {}", e)))?;
+        Some(issued.plain_token)
+    } else {
+        None
+    };
+
     // Build response
     let role = user.get_role().to_string();
     let permissions = parse_permissions_json(&user.permissions);
     let response = LoginResponse {
         access_token: access_token.clone(),
+        refresh_token,
         token_type: "Bearer".to_string(),
         expires_in: 24 * 3600, // 24 hours in seconds
         user: UserInfo {
@@ -151,10 +189,16 @@ pub async fn login(
 
 /// Logout handler
 ///
-/// No-op for stateless JWT - client should discard token
+/// Revokes the supplied refresh token (when refresh tokens are enabled) so that
+/// it can no longer be exchanged for a new access token. The access token
+/// itself is stateless JWT; the client is expected to discard it.
+///
+/// The body is optional to preserve backwards-compatibility with legacy clients
+/// that POST `/auth/logout` with no payload.
 #[utoipa::path(
     post,
     path = "/api/v1/auth/logout",
+    request_body = LogoutRequest,
     responses(
         (status = 200, description = "Logout successful"),
     ),
@@ -164,12 +208,120 @@ pub async fn login(
     ),
     tag = "Auth"
 )]
-pub async fn logout(_auth: AuthContext) -> Result<Json<serde_json::Value>, ApiError> {
-    // For stateless JWT, logout is handled client-side by discarding the token
-    // In the future, we could implement token blacklisting or refresh token revocation
+pub async fn logout(
+    State(state): State<Arc<AuthState>>,
+    _auth: AuthContext,
+    body: axum::body::Bytes,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let request: LogoutRequest = if body.is_empty() {
+        LogoutRequest::default()
+    } else {
+        serde_json::from_slice(&body)
+            .map_err(|e| ApiError::BadRequest(format!("Invalid logout body: {}", e)))?
+    };
+
+    if state.auth_config.refresh_token_enabled
+        && let Some(refresh_token) = request.refresh_token.as_deref()
+    {
+        // Revoke only the supplied token, not the whole family. The user may
+        // still be signed in from other devices.
+        state
+            .refresh_token_service
+            .revoke(refresh_token)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to revoke refresh token: {}", e)))?;
+    }
+
     Ok(Json(serde_json::json!({
         "message": "Logged out successfully"
     })))
+}
+
+/// Refresh-token exchange handler
+///
+/// Validates the supplied refresh token, atomically rotates it for a new pair,
+/// and returns the new tokens. Reusing an already-rotated refresh token is
+/// treated as a theft signal: the entire token family is revoked so the
+/// legitimate session is also forced to re-authenticate. All error paths
+/// surface as 401 so the client falls through to its login-redirect fallback.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/refresh",
+    request_body = RefreshRequest,
+    responses(
+        (status = 200, description = "Token refreshed successfully", body = TokenPair),
+        (status = 401, description = "Invalid, expired, or revoked refresh token"),
+    ),
+    tag = "Auth"
+)]
+pub async fn refresh(
+    State(state): State<Arc<AuthState>>,
+    client_info: ClientInfo,
+    request_headers: HeaderMap,
+    Json(request): Json<RefreshRequest>,
+) -> Result<Response, ApiError> {
+    if !state.auth_config.refresh_token_enabled {
+        return Err(ApiError::Unauthorized(
+            "Refresh tokens are not enabled".to_string(),
+        ));
+    }
+
+    let user_agent = extract_user_agent(&request_headers);
+    let issued = state
+        .refresh_token_service
+        .validate_and_rotate(
+            &request.refresh_token,
+            user_agent,
+            client_info.ip_address.clone(),
+        )
+        .await
+        .map_err(|err| match err {
+            RefreshTokenError::Unknown
+            | RefreshTokenError::Expired
+            | RefreshTokenError::Revoked => {
+                ApiError::Unauthorized("Invalid refresh token".to_string())
+            }
+            RefreshTokenError::Other(e) => {
+                ApiError::Internal(format!("Failed to rotate refresh token: {}", e))
+            }
+        })?;
+
+    // Look up the user so we can mint a JWT carrying the current role / claims.
+    let user = UserRepository::get_by_id(&state.db, issued.model.user_id)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to load user: {}", e)))?
+        .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
+
+    if !user.is_active {
+        return Err(ApiError::Unauthorized(
+            "User account is inactive".to_string(),
+        ));
+    }
+
+    let access_token = state
+        .jwt_service
+        .generate_token(user.id, user.username.clone(), user.get_role())
+        .map_err(|e| ApiError::Internal(format!("Failed to generate token: {}", e)))?;
+
+    let response = TokenPair {
+        access_token: access_token.clone(),
+        refresh_token: issued.plain_token,
+        token_type: "Bearer".to_string(),
+        expires_in: 24 * 3600,
+    };
+
+    // Reissue the image-auth cookie so the new access token is in effect for
+    // browser image requests as well as Authorization-header requests.
+    let cookie = build_auth_cookie(&access_token, 24 * 3600);
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        cookie
+            .parse()
+            .map_err(|_| ApiError::Internal("Failed to create cookie header".to_string()))?,
+    );
+
+    Ok((headers, Json(response)).into_response())
 }
 
 /// Get current authenticated user

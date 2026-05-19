@@ -28,14 +28,15 @@ use crate::tasks::error::check_rate_limited;
 use crate::tasks::handlers::{
     AnalyzeBookHandler, AnalyzeSeriesHandler, BackfillTrackingFromMetadataHandler,
     BulkTrackForReleasesHandler, CleanupBookFilesHandler, CleanupOrphanedFilesHandler,
-    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupSeriesExportsHandler,
-    CleanupSeriesFilesHandler, ExportSeriesHandler, FindDuplicatesHandler,
-    GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler, GenerateThumbnailHandler,
-    GenerateThumbnailsHandler, PluginAutoMatchHandler, PollReleaseSourceHandler,
-    PurgeDeletedHandler, RefreshLibraryMetadataHandler, RenumberSeriesBatchHandler,
-    RenumberSeriesHandler, ReprocessSeriesTitleHandler, ReprocessSeriesTitlesHandler,
-    ScanLibraryHandler, TaskHandler, UserPluginRecommendationDismissHandler,
-    UserPluginRecommendationsHandler, UserPluginSyncHandler,
+    CleanupPdfCacheHandler, CleanupPluginDataHandler, CleanupRefreshTokensHandler,
+    CleanupSeriesExportsHandler, CleanupSeriesFilesHandler, ExportSeriesHandler,
+    FindDuplicatesHandler, GenerateSeriesThumbnailHandler, GenerateSeriesThumbnailsHandler,
+    GenerateThumbnailHandler, GenerateThumbnailsHandler, PluginAutoMatchHandler,
+    PollReleaseSourceHandler, PurgeDeletedHandler, RefreshLibraryMetadataHandler,
+    RenumberSeriesBatchHandler, RenumberSeriesHandler, ReprocessSeriesTitleHandler,
+    ReprocessSeriesTitlesHandler, ScanLibraryHandler, TaskHandler,
+    UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
+    UserPluginSyncHandler,
 };
 
 /// Task worker that processes tasks from the queue
@@ -106,6 +107,11 @@ impl TaskWorker {
         handlers.insert(
             "cleanup_plugin_data".to_string(),
             Arc::new(CleanupPluginDataHandler::new()),
+        );
+        // Refresh-token cleanup handler (no dependencies)
+        handlers.insert(
+            "cleanup_refresh_tokens".to_string(),
+            Arc::new(CleanupRefreshTokensHandler::new()),
         );
         // Release-tracking maintenance: backfill aliases from metadata.
         handlers.insert(

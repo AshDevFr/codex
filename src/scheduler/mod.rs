@@ -91,6 +91,9 @@ impl Scheduler {
         // Load plugin data cleanup schedule (OAuth flows, expired storage)
         self.load_plugin_data_cleanup_schedule().await?;
 
+        // Load refresh-token cleanup schedule
+        self.load_refresh_token_cleanup_schedule().await?;
+
         // Load series exports cleanup schedule
         self.load_series_exports_cleanup_schedule().await?;
 
@@ -272,6 +275,43 @@ impl Scheduler {
             "Added PDF cache cleanup schedule: {} (timezone: {})",
             cron, self.default_tz
         );
+
+        Ok(())
+    }
+
+    /// Load refresh-token cleanup schedule
+    ///
+    /// Daily sweep that removes expired refresh-token rows and any rows that
+    /// were revoked more than 30 days ago. Always enabled - the table grows
+    /// linearly with logins and would otherwise accumulate forever.
+    async fn load_refresh_token_cleanup_schedule(&mut self) -> Result<()> {
+        // 02:30 every day (6-part cron: sec min hour day month weekday).
+        // Chosen to avoid colliding with the 02:00 scan windows and the 15-min
+        // plugin-data sweep.
+        let cron = "0 30 2 * * *";
+
+        let db = self.db.clone();
+        let tz = self.default_tz;
+        let job = Job::new_async_tz(cron, tz, move |_uuid, _lock| {
+            let db = db.clone();
+            Box::pin(async move {
+                debug!("Triggering scheduled refresh-token cleanup");
+
+                let task_type = TaskType::CleanupRefreshTokens;
+                match TaskRepository::enqueue(&db, task_type, None).await {
+                    Ok(_) => debug!("Refresh-token cleanup task enqueued"),
+                    Err(e) => error!("Failed to enqueue refresh-token cleanup: {}", e),
+                }
+            })
+        })
+        .context("Failed to create refresh-token cleanup cron job")?;
+
+        self.scheduler
+            .add(job)
+            .await
+            .context("Failed to add refresh-token cleanup job to scheduler")?;
+
+        info!("Added refresh-token cleanup schedule: {}", cron);
 
         Ok(())
     }

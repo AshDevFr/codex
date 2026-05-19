@@ -609,7 +609,12 @@ export interface paths {
         put?: never;
         /**
          * Logout handler
-         * @description No-op for stateless JWT - client should discard token
+         * @description Revokes the supplied refresh token (when refresh tokens are enabled) so that
+         *     it can no longer be exchanged for a new access token. The access token
+         *     itself is stateless JWT; the client is expected to discard it.
+         *
+         *     The body is optional to preserve backwards-compatibility with legacy clients
+         *     that POST `/auth/logout` with no payload.
          */
         post: operations["logout"];
         delete?: never;
@@ -697,6 +702,30 @@ export interface paths {
          *     The client should redirect the user to this URL to authenticate.
          */
         post: operations["oidc_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh-token exchange handler
+         * @description Validates the supplied refresh token, atomically rotates it for a new pair,
+         *     and returns the new tokens. Reusing an already-rotated refresh token is
+         *     treated as a theft signal: the entire token family is revoked so the
+         *     legitimate session is also forced to re-authenticate. All error paths
+         *     surface as 401 so the client falls through to its login-redirect fallback.
+         */
+        post: operations["refresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11825,12 +11854,29 @@ export interface components {
              */
             expiresIn: number;
             /**
+             * @description Refresh token (only present when refresh tokens are enabled in config).
+             *     Old clients can safely ignore this field.
+             * @example Mz3Wmw7lq...
+             */
+            refreshToken?: string | null;
+            /**
              * @description Token type (always "Bearer")
              * @example Bearer
              */
             tokenType: string;
             /** @description User information */
             user: components["schemas"]["UserInfo"];
+        };
+        /**
+         * @description Logout request body. The refresh token is optional so legacy clients
+         *     (no refresh-token support) can still call this endpoint successfully.
+         */
+        LogoutRequest: {
+            /**
+             * @description Refresh token to revoke server-side. When omitted, only the access-side
+             *     session ends (client just discards the access token).
+             */
+            refreshToken?: string | null;
         };
         /** @description Response for bulk mark as read/unread operations */
         MarkReadResponse: {
@@ -15028,6 +15074,14 @@ export interface components {
             /** @description Status of a running/pending background task ("pending" or "running"), if any */
             taskStatus?: string | null;
         };
+        /** @description Refresh-token exchange request body. */
+        RefreshRequest: {
+            /**
+             * @description Plain refresh token previously issued by /auth/login or /auth/refresh.
+             * @example Mz3Wmw7lq...
+             */
+            refreshToken: string;
+        };
         /**
          * @description Scope of a metadata refresh job.
          *
@@ -17511,6 +17565,9 @@ export interface components {
             /** @enum {string} */
             type: "cleanup_series_exports";
         } | {
+            /** @enum {string} */
+            type: "cleanup_refresh_tokens";
+        } | {
             /** Format: uuid */
             pluginId: string;
             /** @enum {string} */
@@ -17691,6 +17748,35 @@ export interface components {
              *     ]
              */
             deletedNames: string[];
+        };
+        /**
+         * @description Successful refresh response.
+         *
+         *     Mirrors the access-token side of [`LoginResponse`] plus a freshly-rotated
+         *     refresh token. The frontend persists both and discards the previous pair.
+         */
+        TokenPair: {
+            /**
+             * @description New JWT access token.
+             * @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+             */
+            accessToken: string;
+            /**
+             * Format: int64
+             * @description Access-token TTL in seconds.
+             * @example 86400
+             */
+            expiresIn: number;
+            /**
+             * @description New refresh token. Replaces whatever the client previously held.
+             * @example Mz3Wmw7lq...
+             */
+            refreshToken: string;
+            /**
+             * @description Token type (always "Bearer").
+             * @example Bearer
+             */
+            tokenType: string;
         };
         /** @description Token response (for refresh tokens in future) */
         TokenResponse: {
@@ -20172,7 +20258,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogoutRequest"];
+            };
+        };
         responses: {
             /** @description Logout successful */
             200: {
@@ -20300,6 +20390,37 @@ export interface operations {
             };
             /** @description Failed to generate authorization URL */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Token refreshed successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenPair"];
+                };
+            };
+            /** @description Invalid, expired, or revoked refresh token */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

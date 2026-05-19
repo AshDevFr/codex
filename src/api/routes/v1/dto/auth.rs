@@ -24,6 +24,12 @@ pub struct LoginResponse {
     )]
     pub access_token: String,
 
+    /// Refresh token (only present when refresh tokens are enabled in config).
+    /// Old clients can safely ignore this field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "Mz3Wmw7lq...")]
+    pub refresh_token: Option<String>,
+
     /// Token type (always "Bearer")
     #[schema(example = "Bearer")]
     pub token_type: String,
@@ -34,6 +40,50 @@ pub struct LoginResponse {
 
     /// User information
     pub user: UserInfo,
+}
+
+/// Refresh-token exchange request body.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshRequest {
+    /// Plain refresh token previously issued by /auth/login or /auth/refresh.
+    #[schema(example = "Mz3Wmw7lq...")]
+    pub refresh_token: String,
+}
+
+/// Successful refresh response.
+///
+/// Mirrors the access-token side of [`LoginResponse`] plus a freshly-rotated
+/// refresh token. The frontend persists both and discards the previous pair.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenPair {
+    /// New JWT access token.
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
+    pub access_token: String,
+
+    /// New refresh token. Replaces whatever the client previously held.
+    #[schema(example = "Mz3Wmw7lq...")]
+    pub refresh_token: String,
+
+    /// Token type (always "Bearer").
+    #[schema(example = "Bearer")]
+    pub token_type: String,
+
+    /// Access-token TTL in seconds.
+    #[schema(example = 86400)]
+    pub expires_in: u64,
+}
+
+/// Logout request body. The refresh token is optional so legacy clients
+/// (no refresh-token support) can still call this endpoint successfully.
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LogoutRequest {
+    /// Refresh token to revoke server-side. When omitted, only the access-side
+    /// session ends (client just discards the access token).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
 }
 
 /// User information in login response

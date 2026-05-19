@@ -1857,8 +1857,18 @@
           "Auth"
         ],
         "summary": "Logout handler",
-        "description": "No-op for stateless JWT - client should discard token",
+        "description": "Revokes the supplied refresh token (when refresh tokens are enabled) so that\nit can no longer be exchanged for a new access token. The access token\nitself is stateless JWT; the client is expected to discard it.\n\nThe body is optional to preserve backwards-compatibility with legacy clients\nthat POST `/auth/logout` with no payload.",
         "operationId": "logout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Logout successful"
@@ -2014,6 +2024,41 @@
           },
           "500": {
             "description": "Failed to generate authorization URL"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh-token exchange handler",
+        "description": "Validates the supplied refresh token, atomically rotates it for a new pair,\nand returns the new tokens. Reusing an already-rotated refresh token is\ntreated as a theft signal: the entire token family is revoked so the\nlegitimate session is also forced to re-authenticate. All error paths\nsurface as 401 so the client falls through to its login-redirect fallback.",
+        "operationId": "refresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid, expired, or revoked refresh token"
           }
         }
       }
@@ -27905,6 +27950,14 @@
             "example": 86400,
             "minimum": 0
           },
+          "refreshToken": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Refresh token (only present when refresh tokens are enabled in config).\nOld clients can safely ignore this field.",
+            "example": "Mz3Wmw7lq..."
+          },
           "tokenType": {
             "type": "string",
             "description": "Token type (always \"Bearer\")",
@@ -27913,6 +27966,19 @@
           "user": {
             "$ref": "#/components/schemas/UserInfo",
             "description": "User information"
+          }
+        }
+      },
+      "LogoutRequest": {
+        "type": "object",
+        "description": "Logout request body. The refresh token is optional so legacy clients\n(no refresh-token support) can still call this endpoint successfully.",
+        "properties": {
+          "refreshToken": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Refresh token to revoke server-side. When omitted, only the access-side\nsession ends (client just discards the access token)."
           }
         }
       },
@@ -33400,6 +33466,20 @@
           }
         }
       },
+      "RefreshRequest": {
+        "type": "object",
+        "description": "Refresh-token exchange request body.",
+        "required": [
+          "refreshToken"
+        ],
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Plain refresh token previously issued by /auth/login or /auth/refresh.",
+            "example": "Mz3Wmw7lq..."
+          }
+        }
+      },
       "RefreshScope": {
         "type": "string",
         "description": "Scope of a metadata refresh job.\n\nCurrently only [`RefreshScope::SeriesOnly`] is honoured at runtime. The\nother variants are schema-accepted but rejected by the validator.",
@@ -37866,6 +37946,21 @@
           },
           {
             "type": "object",
+            "description": "Clean up expired and old-revoked refresh tokens.\n\nDeletes any `refresh_tokens` row whose `expires_at` is in the past, plus\nrows that were revoked more than 30 days ago. Idempotent.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "cleanup_refresh_tokens"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Sync user plugin data with external service",
             "required": [
               "pluginId",
@@ -38264,6 +38359,40 @@
               "OldGenre",
               "UnusedGenre"
             ]
+          }
+        }
+      },
+      "TokenPair": {
+        "type": "object",
+        "description": "Successful refresh response.\n\nMirrors the access-token side of [`LoginResponse`] plus a freshly-rotated\nrefresh token. The frontend persists both and discards the previous pair.",
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "tokenType",
+          "expiresIn"
+        ],
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "New JWT access token.",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Access-token TTL in seconds.",
+            "example": 86400,
+            "minimum": 0
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "New refresh token. Replaces whatever the client previously held.",
+            "example": "Mz3Wmw7lq..."
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "Token type (always \"Bearer\").",
+            "example": "Bearer"
           }
         }
       },

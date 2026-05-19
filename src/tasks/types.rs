@@ -171,6 +171,12 @@ pub enum TaskType {
     /// Clean up expired series exports (files + DB records)
     CleanupSeriesExports,
 
+    /// Clean up expired and old-revoked refresh tokens.
+    ///
+    /// Deletes any `refresh_tokens` row whose `expires_at` is in the past, plus
+    /// rows that were revoked more than 30 days ago. Idempotent.
+    CleanupRefreshTokens,
+
     /// Sync user plugin data with external service
     UserPluginSync {
         #[serde(rename = "pluginId")]
@@ -306,7 +312,8 @@ impl TaskType {
             | TaskType::CleanupOrphanedFiles
             | TaskType::CleanupPdfCache
             | TaskType::CleanupPluginData
-            | TaskType::CleanupSeriesExports => 100,
+            | TaskType::CleanupSeriesExports
+            | TaskType::CleanupRefreshTokens => 100,
         }
     }
 
@@ -335,6 +342,7 @@ impl TaskType {
             TaskType::RenumberSeriesBatch { .. } => "renumber_series_batch",
             TaskType::CleanupPluginData => "cleanup_plugin_data",
             TaskType::CleanupSeriesExports => "cleanup_series_exports",
+            TaskType::CleanupRefreshTokens => "cleanup_refresh_tokens",
             TaskType::ExportSeries { .. } => "export_series",
             TaskType::UserPluginSync { .. } => "user_plugin_sync",
             TaskType::UserPluginRecommendations { .. } => "user_plugin_recommendations",

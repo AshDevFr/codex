@@ -171,6 +171,10 @@ impl AuthContext {
 pub struct AppState {
     pub db: DatabaseConnection,
     pub jwt_service: Arc<JwtService>,
+    /// Refresh-token issuer / validator / rotator.
+    /// Always present; the [`AuthConfig::refresh_token_enabled`] flag gates
+    /// whether handlers actually call `issue` on login.
+    pub refresh_token_service: Arc<crate::services::RefreshTokenService>,
     pub auth_config: Arc<crate::config::AuthConfig>,
     /// Database configuration - used for operation deadlines and pool settings
     pub database_config: Arc<crate::config::DatabaseConfig>,
