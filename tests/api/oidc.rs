@@ -105,6 +105,7 @@ async fn create_test_state_with_oidc(
         export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
+        fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
     })
 }
 

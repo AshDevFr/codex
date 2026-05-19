@@ -7,6 +7,7 @@ mod models;
 mod parsers;
 mod scanner;
 mod scheduler;
+mod search;
 mod services;
 mod tasks;
 mod utils;

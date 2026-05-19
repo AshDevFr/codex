@@ -236,6 +236,12 @@ pub struct AppState {
     pub export_storage: Option<Arc<crate::services::ExportStorage>>,
     /// Server-level default timezone for cron scheduling (IANA name, e.g. "America/Los_Angeles")
     pub scheduler_timezone: String,
+    /// In-memory fuzzy search index over series and books.
+    /// Populated at startup; updates are driven by `event_broadcaster` in
+    /// Phase 2. Queries are gated by the `search.fuzzy.enabled` setting in
+    /// Phase 3 — the handler falls back to the existing LIKE search when off.
+    #[allow(dead_code)]
+    pub fuzzy_index: Arc<crate::search::FuzzyIndex>,
 }
 
 // Legacy alias for backwards compatibility during transition

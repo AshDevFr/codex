@@ -406,6 +406,23 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("All {} task workers started successfully", worker_count);
     }
 
+    // Build the in-memory fuzzy search index from the current DB snapshot.
+    // The build itself runs in serial with startup so that the first request
+    // sees a fully populated index. If the build fails (unlikely — it's just
+    // reads) we fall back to an empty index and continue starting up; queries
+    // will simply return no results until Phase 2's listener catches up.
+    info!("Building in-memory fuzzy search index...");
+    let fuzzy_index = match crate::search::builder::build_from_db(db.sea_orm_connection()).await {
+        Ok(idx) => Arc::new(idx),
+        Err(err) => {
+            tracing::warn!(
+                "Failed to build fuzzy search index at startup: {err:#}. \
+                 Continuing with an empty index; results will be incomplete until rebuild."
+            );
+            Arc::new(crate::search::FuzzyIndex::empty())
+        }
+    };
+
     // Create application state for API
     let refresh_token_service = Arc::new(crate::services::RefreshTokenService::new(
         db.sea_orm_connection().clone(),
@@ -446,6 +463,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         export_storage: Some(export_storage.clone()),
         plugin_file_storage: Some(plugin_file_storage),
         scheduler_timezone: config.scheduler.timezone.clone(),
+        fuzzy_index,
     });
 
     // Build router using API module
