@@ -96,6 +96,7 @@ async fn create_test_app_state_with_metrics(db: DatabaseConnection) -> Arc<AppSt
         export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
+        fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
     })
 }
 

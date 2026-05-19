@@ -98,6 +98,7 @@ async fn build_state(db: DatabaseConnection, refresh_enabled: bool) -> Arc<AppSt
         export_storage: None,
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
+        fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
     })
 }
 
