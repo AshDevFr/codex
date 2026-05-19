@@ -2,6 +2,15 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.25.0] - 2026-05-19
+
+### 🚀 Features
+
+- *(auth)* Persist refresh tokens with rotation and theft detection
+- *(auth)* Add /auth/refresh and wire refresh tokens into login/logout
+- *(auth)* Refresh access tokens transparently on 401 in the web client
+- *(auth)* Enable refresh tokens by default and document the flow
+
 ## [1.24.1] - 2026-05-19
 
 ### 🚀 Features

@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "codex"
-version = "1.24.1"
+version = "1.25.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
