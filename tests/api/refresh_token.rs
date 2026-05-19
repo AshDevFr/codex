@@ -34,8 +34,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Build an `AppState` whose `AuthConfig.refresh_token_enabled` honors the
-/// passed flag. The default factory bakes in `refresh_token_enabled: false`
-/// so the refresh endpoint would always 401.
+/// passed flag, so each test can pin the behavior it cares about regardless
+/// of the global default.
 async fn build_state(db: DatabaseConnection, refresh_enabled: bool) -> Arc<AppState> {
     let jwt_service = Arc::new(JwtService::new(
         "test_secret_key_for_integration_tests".to_string(),
