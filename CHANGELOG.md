@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.24.1] - 2026-05-19
+
+### 🚀 Features
+
+- *(releases)* Expose Ignore and Reset as per-row actions
+
 ## [1.24.0] - 2026-05-19
 
 ### 🚀 Features
