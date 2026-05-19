@@ -152,7 +152,8 @@ application:
 auth:
   jwt_secret: "CHANGE_ME_IN_PRODUCTION"
   jwt_expiry_hours: 24
-  refresh_token_enabled: false
+  refresh_token_enabled: true
+  refresh_token_expiry_days: 30
   email_confirmation_required: false
   argon2_memory_cost: 19456
   argon2_time_cost: 2
@@ -162,8 +163,9 @@ auth:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `jwt_secret` | Required | Secret key for JWT signing |
-| `jwt_expiry_hours` | `24` | Token validity period |
-| `refresh_token_enabled` | `false` | Enable refresh tokens |
+| `jwt_expiry_hours` | `24` | Access token validity period |
+| `refresh_token_enabled` | `true` | Issue refresh tokens on login and accept them at `POST /api/v1/auth/refresh` |
+| `refresh_token_expiry_days` | `30` | Refresh token lifetime, in days |
 | `email_confirmation_required` | `false` | Require email verification |
 | `argon2_memory_cost` | `19456` | Argon2 memory cost (KiB) |
 | `argon2_time_cost` | `2` | Argon2 iterations |
@@ -175,6 +177,22 @@ auth:
 ```bash
 openssl rand -base64 32
 ```
+:::
+
+### Refresh Tokens
+
+When `refresh_token_enabled` is `true` (default), `POST /api/v1/auth/login` returns a `refreshToken` alongside the access token. The frontend transparently exchanges an expired access token for a fresh pair on the next API call via `POST /api/v1/auth/refresh`, so users are not bounced to the login screen mid-session.
+
+- **Rotation:** every refresh issues a new refresh token and revokes the old one atomically.
+- **Theft detection:** replaying an already-rotated (revoked) refresh token revokes every refresh token in that login's family, forcing all sessions for that login to re-authenticate. This matches the OAuth 2.0 security recommendations (RFC 6819).
+- **Storage at rest:** refresh tokens are stored as `sha256` hashes in the `refresh_tokens` table. Compromise of the database does not yield usable tokens.
+- **Cleanup:** a daily background task prunes expired tokens and revoked tokens older than 30 days.
+- **Logout:** `POST /api/v1/auth/logout` accepts `{ "refreshToken": "..." }` and revokes that specific token server-side.
+
+Disable the feature by setting `refresh_token_enabled: false`. The login response then omits `refreshToken` and `/auth/refresh` returns `401`. Clients fall back to the legacy "log in again at access-token expiry" behavior.
+
+:::note Storage on the client
+The web client currently stores the refresh token in `localStorage` alongside the access token. The XSS posture is identical to today's access-token-only storage. Migration to an httpOnly cookie is tracked as a separate hardening ticket.
 :::
 
 ### OIDC (Single Sign-On)

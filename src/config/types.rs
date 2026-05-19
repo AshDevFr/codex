@@ -424,7 +424,7 @@ impl Default for AuthConfig {
         Self {
             jwt_secret: "INSECURE_DEFAULT_SECRET_CHANGE_IN_PRODUCTION".to_string(),
             jwt_expiry_hours: 24,
-            refresh_token_enabled: false,
+            refresh_token_enabled: true,
             refresh_token_expiry_days: 30,
             email_confirmation_required: env_bool_or(
                 "CODEX_AUTH_EMAIL_CONFIRMATION_REQUIRED",
@@ -1246,7 +1246,7 @@ verification_url_base: https://codex.example.com
 
         // JWT config
         assert_eq!(config.jwt_expiry_hours, 24);
-        assert!(!config.refresh_token_enabled);
+        assert!(config.refresh_token_enabled);
         assert_eq!(config.refresh_token_expiry_days, 30);
 
         // Argon2 config

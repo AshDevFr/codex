@@ -37,7 +37,7 @@ logging:
 auth:
   jwt_secret: "CHANGE_ME_IN_PRODUCTION" # Override with CODEX_AUTH_JWT_SECRET env var
   # jwt_expiry_hours: 24
-  # refresh_token_enabled: false
+  # refresh_token_enabled: true
   # refresh_token_expiry_days: 30
   # email_confirmation_required: false
   # argon2_memory_cost: 19456
