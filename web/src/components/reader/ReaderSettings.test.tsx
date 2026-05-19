@@ -170,7 +170,7 @@ describe("ReaderSettings", () => {
         screen.queryByText("Re-open the book to apply this change"),
       ).not.toBeInTheDocument();
 
-      await user.click(screen.getByText("Streaming"));
+      await user.click(screen.getByText("Native"));
 
       expect(
         screen.getByText("Re-open the book to apply this change"),
