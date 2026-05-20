@@ -22,7 +22,7 @@ export interface GroupNode {
 
 export function isGroup(
   c: Condition,
-): c is { allOf: Condition[] } | { anyOf: Condition[] } {
+): c is Extract<Condition, { allOf: unknown } | { anyOf: unknown }> {
   return typeof c === "object" && c !== null && ("allOf" in c || "anyOf" in c);
 }
 

@@ -37,6 +37,7 @@ import {
 import { FilterBuilder } from "@/components/search/filterBuilder/FilterBuilder";
 import { PresetsSidebar } from "@/components/search/PresetsSidebar";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import type { Book, Series } from "@/types";
 import type { BookCondition, SeriesCondition } from "@/types/filters";
 import {
   DEFAULT_SEARCH_PAGE_SIZE,
@@ -387,7 +388,7 @@ interface ResultsGridProps {
   loading: boolean;
   error: unknown;
   // Series or Book rows; both satisfy MediaCard's `data` shape per `type`.
-  data: { id: string }[];
+  data: (Book | Series)[];
   total: number;
   page: number;
   pageSize: number;
