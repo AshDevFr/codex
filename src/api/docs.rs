@@ -519,6 +519,8 @@ The following paths are exempt from rate limiting:
         v1::handlers::duplicates::list_duplicates,
         v1::handlers::duplicates::trigger_duplicate_scan,
         v1::handlers::duplicates::delete_duplicate_group,
+        v1::handlers::duplicates::list_series_duplicates,
+        v1::handlers::duplicates::delete_series_duplicate_group,
 
         // SSE streaming endpoints
         v1::handlers::events::entity_events_stream,
@@ -984,6 +986,8 @@ The following paths are exempt from rate limiting:
             v1::dto::DuplicateGroup,
             v1::dto::ListDuplicatesResponse,
             v1::dto::TriggerDuplicateScanResponse,
+            v1::dto::SeriesDuplicateGroup,
+            v1::dto::ListSeriesDuplicatesResponse,
 
             // Cleanup DTOs
             v1::dto::OrphanStatsDto,

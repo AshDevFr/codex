@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::db::entities::tasks;
-use crate::db::repositories::BookDuplicatesRepository;
+use crate::db::repositories::{BookDuplicatesRepository, SeriesDuplicatesRepository};
 use crate::events::EventBroadcaster;
 use crate::tasks::types::TaskResult;
 
@@ -35,17 +35,24 @@ impl TaskHandler for FindDuplicatesHandler {
         Box::pin(async move {
             info!("Starting duplicate detection scan");
 
-            // Rebuild duplicates table from current books
-            let count = BookDuplicatesRepository::rebuild_from_books(db).await?;
+            let book_groups = BookDuplicatesRepository::rebuild_from_books(db).await?;
+            let series_groups = SeriesDuplicatesRepository::rebuild_from_series(db).await?;
 
             info!(
-                "Duplicate detection complete: {} duplicate groups found",
-                count
+                "Duplicate detection complete: {} book groups, {} series groups",
+                book_groups, series_groups
             );
 
             Ok(TaskResult::success_with_data(
-                format!("Found {} duplicate groups", count),
-                serde_json::json!({ "duplicate_groups": count }),
+                format!(
+                    "Found {} book and {} series duplicate groups",
+                    book_groups, series_groups
+                ),
+                serde_json::json!({
+                    "duplicate_groups": book_groups,
+                    "book_duplicate_groups": book_groups,
+                    "series_duplicate_groups": series_groups,
+                }),
             ))
         })
     }

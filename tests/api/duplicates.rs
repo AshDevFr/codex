@@ -7,12 +7,13 @@ mod common;
 use chrono::Utc;
 use codex::api::error::ErrorResponse;
 use codex::api::routes::v1::dto::duplicates::{
-    ListDuplicatesResponse, TriggerDuplicateScanResponse,
+    ListDuplicatesResponse, ListSeriesDuplicatesResponse, TriggerDuplicateScanResponse,
 };
 use codex::db::ScanningStrategy;
 use codex::db::entities::{books, series, series_metadata};
 use codex::db::repositories::{
-    BookDuplicatesRepository, BookRepository, LibraryRepository, UserRepository,
+    BookDuplicatesRepository, BookRepository, LibraryRepository, SeriesDuplicatesRepository,
+    SeriesExternalIdRepository, UserRepository,
 };
 use codex::utils::password;
 use common::*;
@@ -440,4 +441,233 @@ async fn test_duplicates_exclude_soft_deleted_books() {
     // Verify duplicate group was removed (soft deleted book shouldn't count)
     let duplicates_after = BookDuplicatesRepository::find_all(&db).await.unwrap();
     assert_eq!(duplicates_after.len(), 0);
+}
+
+// ============================================================================
+// Series Duplicate Tests
+// ============================================================================
+
+async fn insert_series(db: &DatabaseConnection, library_id: Uuid, name: &str, title: &str) -> Uuid {
+    let now = Utc::now();
+    let id = Uuid::new_v4();
+    let model = series::ActiveModel {
+        id: Set(id),
+        library_id: Set(library_id),
+        fingerprint: Set(Some(format!("fp-{}", id))),
+        path: Set(format!("/series/{}", id)),
+        name: Set(name.to_string()),
+        normalized_name: Set(name.to_lowercase()),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+    model.insert(db).await.unwrap();
+
+    let meta = series_metadata::ActiveModel {
+        series_id: Set(id),
+        title: Set(title.to_string()),
+        search_title: Set(title.to_lowercase()),
+        created_at: Set(now),
+        updated_at: Set(now),
+        ..Default::default()
+    };
+    meta.insert(db).await.unwrap();
+    id
+}
+
+#[tokio::test]
+async fn test_list_series_duplicates_empty() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth("/api/v1/duplicates/series", &token);
+    let (status, response): (StatusCode, Option<ListSeriesDuplicatesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    assert_eq!(body.total_groups, 0);
+    assert_eq!(body.total_duplicate_series, 0);
+    assert_eq!(body.external_id_groups, 0);
+    assert_eq!(body.title_groups, 0);
+}
+
+#[tokio::test]
+async fn test_list_series_duplicates_external_id_match() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Lib",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let s1 = insert_series(&db, library.id, "Naruto", "Naruto").await;
+    let s2 = insert_series(&db, library.id, "Naruto-JP", "ナルト").await;
+
+    SeriesExternalIdRepository::create_for_plugin(&db, s1, "mangabaka", "12345", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create_for_plugin(&db, s2, "mangabaka", "12345", None, None)
+        .await
+        .unwrap();
+
+    SeriesDuplicatesRepository::rebuild_from_series(&db)
+        .await
+        .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth("/api/v1/duplicates/series", &token);
+    let (status, response): (StatusCode, Option<ListSeriesDuplicatesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    assert_eq!(body.total_groups, 1);
+    assert_eq!(body.external_id_groups, 1);
+    assert_eq!(body.title_groups, 0);
+
+    let group = &body.duplicates[0];
+    assert_eq!(group.match_type, "external_id");
+    assert_eq!(group.match_key, "plugin:mangabaka:12345");
+    assert!(group.library_id.is_none());
+    assert_eq!(group.duplicate_count, 2);
+}
+
+#[tokio::test]
+async fn test_list_series_duplicates_filter_by_match_type() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Lib",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    // One external-id group.
+    let a1 = insert_series(&db, library.id, "A", "A").await;
+    let a2 = insert_series(&db, library.id, "A-jp", "ぁ").await;
+    SeriesExternalIdRepository::create_for_plugin(&db, a1, "mangabaka", "1", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create_for_plugin(&db, a2, "mangabaka", "1", None, None)
+        .await
+        .unwrap();
+
+    // One title group.
+    let b1 = insert_series(&db, library.id, "B", "Bleach").await;
+    let b2 = insert_series(&db, library.id, "B2", "Bleach").await;
+    let _ = (b1, b2);
+
+    SeriesDuplicatesRepository::rebuild_from_series(&db)
+        .await
+        .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+
+    // External-id filter
+    let app = create_test_router_with_app_state(state.clone());
+    let request = get_request_with_auth("/api/v1/duplicates/series?matchType=external_id", &token);
+    let (status, response): (StatusCode, Option<ListSeriesDuplicatesResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    assert_eq!(body.total_groups, 1);
+    assert_eq!(body.external_id_groups, 1);
+    assert_eq!(body.title_groups, 0);
+
+    // Title filter
+    let app = create_test_router_with_app_state(state.clone());
+    let request = get_request_with_auth("/api/v1/duplicates/series?matchType=title", &token);
+    let (status, response): (StatusCode, Option<ListSeriesDuplicatesResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    assert_eq!(body.total_groups, 1);
+    assert_eq!(body.title_groups, 1);
+    assert_eq!(body.external_id_groups, 0);
+}
+
+#[tokio::test]
+async fn test_list_series_duplicates_rejects_invalid_match_type() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth("/api/v1/duplicates/series?matchType=bogus", &token);
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_delete_series_duplicate_group() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "Lib",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let s1 = insert_series(&db, library.id, "A", "Title").await;
+    let s2 = insert_series(&db, library.id, "B", "Title").await;
+    let _ = (s1, s2);
+
+    SeriesDuplicatesRepository::rebuild_from_series(&db)
+        .await
+        .unwrap();
+
+    let groups = SeriesDuplicatesRepository::find_all(&db).await.unwrap();
+    assert_eq!(groups.len(), 1);
+    let group_id = groups[0].id;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let uri = format!("/api/v1/duplicates/series/{}", group_id);
+    let request = delete_request_with_auth(&uri, &token);
+    let (status, _): (StatusCode, Option<()>) = make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    assert!(
+        SeriesDuplicatesRepository::find_all(&db)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn test_delete_series_duplicate_group_not_found() {
+    let (db, temp_dir) = setup_test_db().await;
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let fake_id = Uuid::new_v4();
+    let uri = format!("/api/v1/duplicates/series/{}", fake_id);
+    let request = delete_request_with_auth(&uri, &token);
+    let (status, _response): (StatusCode, Option<ErrorResponse>) =
+        make_json_request(app, request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

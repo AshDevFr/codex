@@ -1699,6 +1699,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/duplicates/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all series duplicate groups.
+         * @description Optionally filter by `match_type` (`external_id` or `title`).
+         *
+         *     # Permission Required
+         *     - `series:read`
+         */
+        get: operations["list_series_duplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/duplicates/series/{duplicate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a series duplicate group (does not delete the underlying series).
+         * @description # Permission Required
+         *     - `series:write`
+         */
+        delete: operations["delete_series_duplicate_group"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/duplicates/{duplicate_id}": {
         parameters: {
             query?: never;
@@ -11825,6 +11869,31 @@ export interface components {
         ListLibraryJobsResponse: {
             jobs: components["schemas"]["LibraryJobDto"][];
         };
+        /** @description Response for listing series duplicates. */
+        ListSeriesDuplicatesResponse: {
+            /** @description List of duplicate groups */
+            duplicates: components["schemas"]["SeriesDuplicateGroup"][];
+            /**
+             * @description Number of groups matched by external ID (high confidence).
+             * @example 1
+             */
+            externalIdGroups: number;
+            /**
+             * @description Number of groups matched by normalized title (lower confidence).
+             * @example 2
+             */
+            titleGroups: number;
+            /**
+             * @description Total number of series that participate in any duplicate group.
+             * @example 8
+             */
+            totalDuplicateSeries: number;
+            /**
+             * @description Total number of duplicate groups (across both match types).
+             * @example 3
+             */
+            totalGroups: number;
+        };
         /** @description Query parameters for listing settings */
         ListSettingsQuery: {
             /**
@@ -16328,6 +16397,57 @@ export interface components {
              * @example 1987
              */
             year?: number | null;
+        };
+        /**
+         * @description A group of duplicate series.
+         *
+         *     Two detection methods are surfaced through `match_type`:
+         *     - `external_id`: high-confidence match where two or more series resolve to
+         *       the same plugin/external identifier. Cross-library by design.
+         *     - `title`: medium-confidence match where two or more series in the same
+         *       library share the same normalized title.
+         */
+        SeriesDuplicateGroup: {
+            /**
+             * @description When the duplicate was first detected
+             * @example 2026-05-20T10:30:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: int32
+             * @description Number of series in the group.
+             * @example 2
+             */
+            duplicateCount: number;
+            /**
+             * Format: uuid
+             * @description Unique identifier for the duplicate group
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Library this group is scoped to. Null for `external_id` matches.
+             */
+            libraryId?: string | null;
+            /**
+             * @description For `external_id` matches: "<source>:<external_id>" e.g. "plugin:mangabaka:12345".
+             *     For `title` matches: the normalized search title (e.g. "naruto").
+             * @example plugin:mangabaka:12345
+             */
+            matchKey: string;
+            /**
+             * @description `external_id` or `title`
+             * @example external_id
+             */
+            matchType: string;
+            /** @description IDs of the series sharing this match key. */
+            seriesIds: string[];
+            /**
+             * @description When the group was last updated
+             * @example 2026-05-20T10:30:00Z
+             */
+            updatedAt: string;
         };
         /** @description Response DTO for a series export record */
         SeriesExportDto: {
@@ -22585,6 +22705,78 @@ export interface operations {
             };
             /** @description Scan already in progress */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_series_duplicates: {
+        parameters: {
+            query?: {
+                /** @description Optional filter: `external_id` or `title`. */
+                matchType?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of series duplicate groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSeriesDuplicatesResponse"];
+                };
+            };
+            /** @description Invalid match_type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_series_duplicate_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Series duplicate group ID */
+                duplicate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Duplicate group deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permission denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Duplicate group not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

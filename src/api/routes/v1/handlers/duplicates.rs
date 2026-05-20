@@ -1,14 +1,20 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use std::sync::Arc;
 use uuid::Uuid;
 
-use super::super::dto::{DuplicateGroup, ListDuplicatesResponse, TriggerDuplicateScanResponse};
+use super::super::dto::{
+    DuplicateGroup, ListDuplicatesResponse, ListSeriesDuplicatesQuery,
+    ListSeriesDuplicatesResponse, SeriesDuplicateGroup, TriggerDuplicateScanResponse,
+};
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::db::repositories::{BookDuplicatesRepository, TaskRepository};
+use crate::db::entities::series_duplicates::{MATCH_TYPE_EXTERNAL_ID, MATCH_TYPE_TITLE};
+use crate::db::repositories::{
+    BookDuplicatesRepository, SeriesDuplicatesRepository, TaskRepository,
+};
 use crate::tasks::types::TaskType;
 
 /// List all duplicate book groups
@@ -163,6 +169,143 @@ pub async fn delete_duplicate_group(
     BookDuplicatesRepository::delete_group(&state.db, duplicate_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to delete duplicate group: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// List all series duplicate groups.
+///
+/// Optionally filter by `match_type` (`external_id` or `title`).
+///
+/// # Permission Required
+/// - `series:read`
+#[utoipa::path(
+    get,
+    path = "/api/v1/duplicates/series",
+    params(ListSeriesDuplicatesQuery),
+    responses(
+        (status = 200, description = "List of series duplicate groups", body = ListSeriesDuplicatesResponse),
+        (status = 400, description = "Invalid match_type"),
+        (status = 403, description = "Permission denied"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Duplicates"
+)]
+pub async fn list_series_duplicates(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ListSeriesDuplicatesQuery>,
+    auth: AuthContext,
+) -> Result<Json<ListSeriesDuplicatesResponse>, ApiError> {
+    auth.require_permission(&Permission::SeriesRead)?;
+
+    let groups = match query.match_type.as_deref() {
+        None => SeriesDuplicatesRepository::find_all(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to list series duplicates: {}", e)))?,
+        Some(value @ (MATCH_TYPE_EXTERNAL_ID | MATCH_TYPE_TITLE)) => {
+            SeriesDuplicatesRepository::find_by_match_type(&state.db, value)
+                .await
+                .map_err(|e| {
+                    ApiError::Internal(format!("Failed to list series duplicates: {}", e))
+                })?
+        }
+        Some(other) => {
+            return Err(ApiError::BadRequest(format!(
+                "Invalid match_type '{}': expected 'external_id' or 'title'",
+                other
+            )));
+        }
+    };
+
+    let total_groups = groups.len();
+    let mut external_id_groups = 0;
+    let mut title_groups = 0;
+    let mut total_duplicate_series = 0usize;
+
+    let duplicate_groups: Vec<SeriesDuplicateGroup> = groups
+        .into_iter()
+        .map(|d| {
+            total_duplicate_series += d.duplicate_count as usize;
+            match d.match_type.as_str() {
+                MATCH_TYPE_EXTERNAL_ID => external_id_groups += 1,
+                MATCH_TYPE_TITLE => title_groups += 1,
+                _ => {}
+            }
+            SeriesDuplicateGroup {
+                id: d.id,
+                match_type: d.match_type,
+                match_key: d.match_key,
+                library_id: d.library_id,
+                series_ids: serde_json::from_str(&d.series_ids).unwrap_or_default(),
+                duplicate_count: d.duplicate_count,
+                created_at: d.created_at.to_rfc3339(),
+                updated_at: d.updated_at.to_rfc3339(),
+            }
+        })
+        .collect();
+
+    Ok(Json(ListSeriesDuplicatesResponse {
+        duplicates: duplicate_groups,
+        total_groups,
+        total_duplicate_series,
+        external_id_groups,
+        title_groups,
+    }))
+}
+
+/// Delete a series duplicate group (does not delete the underlying series).
+///
+/// # Permission Required
+/// - `series:write`
+#[utoipa::path(
+    delete,
+    path = "/api/v1/duplicates/series/{duplicate_id}",
+    params(
+        ("duplicate_id" = Uuid, Path, description = "Series duplicate group ID")
+    ),
+    responses(
+        (status = 204, description = "Duplicate group deleted"),
+        (status = 403, description = "Permission denied"),
+        (status = 404, description = "Duplicate group not found"),
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    ),
+    tag = "Duplicates"
+)]
+pub async fn delete_series_duplicate_group(
+    State(state): State<Arc<AppState>>,
+    Path(duplicate_id): Path<Uuid>,
+    auth: AuthContext,
+) -> Result<StatusCode, ApiError> {
+    auth.require_permission(&Permission::SeriesWrite)?;
+
+    use crate::db::entities::prelude::SeriesDuplicates;
+    use sea_orm::EntityTrait;
+
+    let exists = SeriesDuplicates::find_by_id(duplicate_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| {
+            ApiError::Internal(format!("Failed to check series duplicate group: {}", e))
+        })?;
+
+    if exists.is_none() {
+        return Err(ApiError::NotFound(format!(
+            "Series duplicate group {} not found",
+            duplicate_id
+        )));
+    }
+
+    SeriesDuplicatesRepository::delete_group(&state.db, duplicate_id)
+        .await
+        .map_err(|e| {
+            ApiError::Internal(format!("Failed to delete series duplicate group: {}", e))
+        })?;
 
     Ok(StatusCode::NO_CONTENT)
 }

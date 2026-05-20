@@ -35,6 +35,8 @@ pub use super::plugins::Entity as Plugins;
 
 // Series metadata enhancement entities
 #[allow(unused_imports)]
+pub use super::series_duplicates::Entity as SeriesDuplicates;
+#[allow(unused_imports)]
 pub use super::series_external_ids::Entity as SeriesExternalIds;
 pub use super::series_metadata::Entity as SeriesMetadata;
 
