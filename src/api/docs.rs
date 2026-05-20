@@ -234,6 +234,13 @@ The following paths are exempt from rate limiting:
         v1::handlers::series_exports::delete_export,
         v1::handlers::series_exports::get_field_catalog,
 
+        // Filter Presets
+        v1::handlers::filter_presets::create_filter_preset,
+        v1::handlers::filter_presets::list_filter_presets,
+        v1::handlers::filter_presets::get_filter_preset,
+        v1::handlers::filter_presets::update_filter_preset,
+        v1::handlers::filter_presets::delete_filter_preset,
+
         // Alternate title endpoints
         v1::handlers::get_series_alternate_titles,
         v1::handlers::create_alternate_title,
@@ -707,6 +714,13 @@ The following paths are exempt from rate limiting:
             v1::dto::series_export::ExportFieldCatalogResponse,
             v1::dto::series_export::ExportPresetsDto,
 
+            // Filter Preset DTOs
+            v1::dto::filter_preset::CreateFilterPresetRequest,
+            v1::dto::filter_preset::UpdateFilterPresetRequest,
+            v1::dto::filter_preset::FilterPresetDto,
+            v1::dto::filter_preset::FilterPresetListResponse,
+            v1::dto::filter_preset::ListFilterPresetsQuery,
+
             // Alternate Title DTOs
             v1::dto::AlternateTitleDto,
             v1::dto::AlternateTitleListResponse,
@@ -1086,6 +1100,7 @@ The following paths are exempt from rate limiting:
         // User Features
         (name = "Users", description = "User management (admin only)"),
         (name = "User Preferences", description = "Per-user settings and preferences"),
+        (name = "Filter Presets", description = "Saved filter combinations for list pages and the advanced search page"),
         (name = "Reading Progress", description = "Reading progress tracking"),
 
         // Background Jobs
@@ -1225,7 +1240,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "User Features",
-                "tags": ["Users", "User Preferences", "User Plugins", "Recommendations", "Reading Progress"]
+                "tags": ["Users", "User Preferences", "Filter Presets", "User Plugins", "Recommendations", "Reading Progress"]
             },
             {
                 "name": "Background Jobs",

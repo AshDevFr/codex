@@ -41,6 +41,9 @@ pub mod oidc_connections;
 pub mod user_plugin_data;
 pub mod user_plugins;
 
+// Filter presets (advanced search + list-page saved filters)
+pub mod filter_presets;
+
 // Series metadata enhancement entities
 pub mod genres;
 pub mod release_ledger;

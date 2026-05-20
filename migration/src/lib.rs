@@ -176,6 +176,8 @@ mod m20260519_000084_seed_fuzzy_search_setting;
 // Series-level duplicate detection (matches by external ID or normalized title)
 mod m20260520_000085_create_series_duplicates;
 mod m20260520_000086_seed_duplicate_detection_settings;
+// Filter presets: unified storage for saved list-page filters and /search-page state
+mod m20260520_000087_create_filter_presets;
 
 pub struct Migrator;
 
@@ -323,6 +325,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260520_000085_create_series_duplicates::Migration),
             // Duplicate detection: trusted external-ID source whitelist setting
             Box::new(m20260520_000086_seed_duplicate_detection_settings::Migration),
+            // Unified filter preset storage (list pages + advanced search page)
+            Box::new(m20260520_000087_create_filter_presets::Migration),
         ]
     }
 }

@@ -48,6 +48,7 @@ pub mod cleanup;
 pub mod duplicates;
 pub mod events;
 pub mod filesystem;
+pub mod filter_presets;
 pub mod health;
 pub mod info;
 pub mod libraries;
