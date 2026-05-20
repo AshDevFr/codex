@@ -182,6 +182,10 @@ pub async fn books_to_dtos(
     user_id: Uuid,
     books: Vec<crate::db::entities::books::Model>,
 ) -> Result<Vec<BookDto>, ApiError> {
+    if books.is_empty() {
+        return Ok(Vec::new());
+    }
+
     // Collect unique series IDs and library IDs
     let series_ids: Vec<Uuid> = books
         .iter()
@@ -200,42 +204,29 @@ pub async fn books_to_dtos(
     // Collect book IDs for metadata lookup
     let book_ids: Vec<Uuid> = books.iter().map(|b| b.id).collect();
 
-    // Fetch series metadata (contains title, reading direction, etc.)
-    let mut series_metadata_map: HashMap<Uuid, crate::db::entities::series_metadata::Model> =
-        HashMap::new();
-    for series_id in &series_ids {
-        if let Ok(Some(metadata)) = SeriesMetadataRepository::get_by_series_id(db, *series_id).await
-        {
-            series_metadata_map.insert(*series_id, metadata);
-        }
-    }
+    // Fan out one batched query per related table. Previous per-row loops
+    // produced O(books) sequential DB roundtrips here.
+    let (series_metadata_result, book_metadata_result, libraries_result, progress_result) = tokio::join!(
+        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
+        BookMetadataRepository::get_by_book_ids(db, &book_ids),
+        LibraryRepository::get_by_ids(db, &library_ids),
+        ReadProgressRepository::get_for_user_books(db, user_id, &book_ids),
+    );
 
-    // Fetch book metadata for all books (contains title, number, etc.)
-    let mut book_metadata_map: HashMap<Uuid, crate::db::entities::book_metadata::Model> =
-        HashMap::new();
-    for book_id in &book_ids {
-        if let Ok(Some(metadata)) = BookMetadataRepository::get_by_book_id(db, *book_id).await {
-            book_metadata_map.insert(*book_id, metadata);
-        }
-    }
-
-    // Fetch libraries for name and default reading direction fallback
-    let mut library_map: HashMap<Uuid, crate::db::entities::libraries::Model> = HashMap::new();
-    for library_id in &library_ids {
-        if let Ok(Some(library)) = LibraryRepository::get_by_id(db, *library_id).await {
-            library_map.insert(*library_id, library);
-        }
-    }
-
-    // Fetch read progress for all books
-    let mut progress_map = HashMap::new();
-    for book in &books {
-        if let Ok(Some(progress)) =
-            ReadProgressRepository::get_by_user_and_book(db, user_id, book.id).await
-        {
-            progress_map.insert(book.id, progress.into());
-        }
-    }
+    let series_metadata_map = series_metadata_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch series metadata: {}", e)))?;
+    let book_metadata_map = book_metadata_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch book metadata: {}", e)))?;
+    let library_map = libraries_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+    let progress_map: HashMap<
+        Uuid,
+        crate::api::routes::v1::dto::read_progress::ReadProgressResponse,
+    > = progress_result
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch read progress: {}", e)))?
+        .into_iter()
+        .map(|(book_id, model)| (book_id, model.into()))
+        .collect();
 
     // Convert books to DTOs
     let dtos = books

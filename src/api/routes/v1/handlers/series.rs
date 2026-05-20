@@ -237,6 +237,154 @@ async fn series_to_dto(
     })
 }
 
+/// Batched counterpart to `series_to_dto`. Produces one `SeriesDto` per input
+/// model using a single batched query per related table, rather than the
+/// per-row fan-out the single-row helper does. Order of `series_list` is
+/// preserved in the output.
+async fn series_to_dtos_batched(
+    db: &DatabaseConnection,
+    series_list: Vec<series::Model>,
+    user_id: Option<Uuid>,
+) -> Result<Vec<SeriesDto>, ApiError> {
+    use std::collections::HashMap;
+
+    if series_list.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let series_ids: Vec<Uuid> = series_list.iter().map(|s| s.id).collect();
+    let library_ids: Vec<Uuid> = series_list
+        .iter()
+        .map(|s| s.library_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    let (
+        metadata_map,
+        book_counts_map,
+        classification_map,
+        unread_counts_map,
+        selected_covers_map,
+        custom_covers_map,
+        libraries_map,
+        tracking_map,
+        ext_ids_map,
+    ) = tokio::join!(
+        SeriesMetadataRepository::get_by_series_ids(db, &series_ids),
+        SeriesRepository::get_book_counts_for_series_ids(db, &series_ids),
+        SeriesRepository::get_book_classification_aggregates_for_series_ids(db, &series_ids),
+        async {
+            if let Some(uid) = user_id {
+                BookRepository::count_unread_in_series_ids(db, &series_ids, uid).await
+            } else {
+                Ok(HashMap::new())
+            }
+        },
+        SeriesCoversRepository::get_selected_for_series_ids(db, &series_ids),
+        SeriesCoversRepository::has_custom_cover_for_series_ids(db, &series_ids),
+        LibraryRepository::get_by_ids(db, &library_ids),
+        SeriesTrackingRepository::get_for_series_ids(db, &series_ids),
+        SeriesExternalIdRepository::get_for_series_ids(db, &series_ids),
+    );
+
+    let metadata_map =
+        metadata_map.map_err(|e| ApiError::Internal(format!("Failed to fetch metadata: {}", e)))?;
+    let book_counts_map = book_counts_map
+        .map_err(|e| ApiError::Internal(format!("Failed to get book counts: {}", e)))?;
+    let classification_map = classification_map.map_err(|e| {
+        ApiError::Internal(format!(
+            "Failed to compute book classification aggregates: {}",
+            e
+        ))
+    })?;
+    let unread_counts_map = unread_counts_map
+        .map_err(|e| ApiError::Internal(format!("Failed to count unread: {}", e)))?;
+    let selected_covers_map = selected_covers_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch covers: {}", e)))?;
+    let custom_covers_map = custom_covers_map
+        .map_err(|e| ApiError::Internal(format!("Failed to check custom covers: {}", e)))?;
+    let libraries_map = libraries_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch libraries: {}", e)))?;
+    let tracking_map = tracking_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch tracking rows: {}", e)))?;
+    let ext_ids_map = ext_ids_map
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch external IDs: {}", e)))?;
+
+    let mut results = Vec::with_capacity(series_list.len());
+    for series in series_list {
+        let series_id = series.id;
+        let metadata = metadata_map.get(&series_id);
+        let aggregates = classification_map
+            .get(&series_id)
+            .copied()
+            .unwrap_or_default();
+        let book_count = book_counts_map.get(&series_id).copied().unwrap_or(0);
+        let unread_count = if user_id.is_some() {
+            Some(unread_counts_map.get(&series_id).copied().unwrap_or(0))
+        } else {
+            None
+        };
+        let selected_cover = selected_covers_map.get(&series_id);
+        let has_custom_cover = custom_covers_map.get(&series_id).copied().unwrap_or(false);
+        let library_name = libraries_map
+            .get(&series.library_id)
+            .map(|l| l.name.clone())
+            .unwrap_or_else(|| "Unknown Library".to_string());
+        let name = metadata
+            .map(|m| m.title.clone())
+            .unwrap_or_else(|| "Unknown Series".to_string());
+
+        let tracked = tracking_map
+            .get(&series_id)
+            .map(|t| t.tracked)
+            .unwrap_or(false);
+        let series_external_ids = ext_ids_map
+            .get(&series_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+        let UpstreamGap {
+            chapter_gap: upstream_chapter_gap,
+            volume_gap: upstream_volume_gap,
+            provider: upstream_gap_provider,
+        } = compute_upstream_gap(&UpstreamGapInputs {
+            tracking: tracking_map.get(&series_id),
+            total_chapter_count: metadata.and_then(|m| m.total_chapter_count),
+            total_volume_count: metadata.and_then(|m| m.total_volume_count),
+            local_max_chapter: aggregates.local_max_chapter,
+            local_max_volume: aggregates.local_max_volume,
+            external_ids: series_external_ids,
+        });
+
+        results.push(SeriesDto {
+            id: series.id,
+            library_id: series.library_id,
+            library_name,
+            title: name,
+            title_sort: metadata.and_then(|m| m.title_sort.clone()),
+            summary: metadata.and_then(|m| m.summary.clone()),
+            publisher: metadata.and_then(|m| m.publisher.clone()),
+            year: metadata.and_then(|m| m.year),
+            book_count,
+            local_max_volume: aggregates.local_max_volume,
+            local_max_chapter: aggregates.local_max_chapter,
+            volumes_owned: aggregates.volumes_owned,
+            path: Some(series.path),
+            selected_cover_source: selected_cover.map(|c| c.source.clone()),
+            has_custom_cover: Some(has_custom_cover),
+            unread_count,
+            tracked,
+            upstream_chapter_gap,
+            upstream_volume_gap,
+            upstream_gap_provider,
+            created_at: series.created_at,
+            updated_at: series.updated_at,
+        });
+    }
+
+    Ok(results)
+}
+
 /// Convert multiple series models to FullSeriesResponse DTOs using batched queries
 ///
 /// This is much more efficient than calling series_to_dto + full data fetching N times
@@ -1003,17 +1151,7 @@ pub async fn search_series(
             series_to_full_dtos_batched(&state.db, filtered, Some(auth.user_id)).await?;
         Ok(Json(full_dtos).into_response())
     } else {
-        let user_id = Some(auth.user_id);
-        let dtos: Vec<SeriesDto> = futures::future::join_all(
-            filtered
-                .into_iter()
-                .map(|series| series_to_dto(&state.db, series, user_id)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ApiError::Internal(format!("Failed to build series DTOs: {:?}", e)))?;
-
+        let dtos = series_to_dtos_batched(&state.db, filtered, Some(auth.user_id)).await?;
         Ok(Json(dtos).into_response())
     }
 }
