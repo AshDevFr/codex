@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { FilterGroupState, SeriesCondition } from "./filters";
+import type {
+  BookCondition,
+  FilterGroupState,
+  SeriesCondition,
+} from "./filters";
 import {
+  bookFilterStateToCondition,
+  conditionToBookFilterState,
+  conditionToSeriesFilterState,
   countActiveFilters,
+  createEmptyBookFilterState,
   createEmptyFilterGroup,
   createEmptySeriesFilterState,
   filterGroupToConditions,
@@ -514,6 +522,119 @@ describe("Filter Types - URL Serialization", () => {
 
       expect(parsed.completion).toBe("include");
       expect(parsed.genres.values.get("action")).toBe("include");
+    });
+  });
+});
+
+describe("Filter Types - Condition → UI state", () => {
+  describe("conditionToSeriesFilterState", () => {
+    it("returns an empty state for undefined", () => {
+      const state = conditionToSeriesFilterState(undefined);
+      expect(state).not.toBeNull();
+      expect(state).toEqual(createEmptySeriesFilterState());
+    });
+
+    it("round-trips a single-field condition", () => {
+      const original = createEmptySeriesFilterState();
+      original.genres.values.set("action", "include");
+      const condition = seriesFilterStateToCondition(original);
+
+      const restored = conditionToSeriesFilterState(condition);
+      expect(restored).not.toBeNull();
+      expect(restored?.genres.values.get("action")).toBe("include");
+    });
+
+    it("round-trips a multi-group condition", () => {
+      const original = createEmptySeriesFilterState();
+      original.genres.values.set("Action", "include");
+      original.genres.values.set("Horror", "exclude");
+      original.genres.mode = "anyOf";
+      original.tags.values.set("favorite", "include");
+      original.status.values.set("ongoing", "include");
+      original.completion = "include";
+      original.hasUserRating = "exclude";
+      const condition = seriesFilterStateToCondition(original);
+
+      const restored = conditionToSeriesFilterState(condition);
+      expect(restored).not.toBeNull();
+      expect(restored?.genres.values.get("Action")).toBe("include");
+      expect(restored?.genres.values.get("Horror")).toBe("exclude");
+      expect(restored?.genres.mode).toBe("anyOf");
+      expect(restored?.tags.values.get("favorite")).toBe("include");
+      expect(restored?.status.values.get("ongoing")).toBe("include");
+      expect(restored?.completion).toBe("include");
+      expect(restored?.hasUserRating).toBe("exclude");
+    });
+
+    it("preserves allOf mode on multi-value groups", () => {
+      const original = createEmptySeriesFilterState();
+      original.tags.mode = "allOf";
+      original.tags.values.set("a", "include");
+      original.tags.values.set("b", "include");
+      const condition = seriesFilterStateToCondition(original);
+
+      const restored = conditionToSeriesFilterState(condition);
+      expect(restored?.tags.mode).toBe("allOf");
+      expect(restored?.tags.values.get("a")).toBe("include");
+      expect(restored?.tags.values.get("b")).toBe("include");
+    });
+
+    it("returns null when the condition uses an unknown field", () => {
+      const condition: SeriesCondition = {
+        year: { operator: "eq", value: 2020 },
+      };
+      expect(conditionToSeriesFilterState(condition)).toBeNull();
+    });
+
+    it("returns null for nested allOf groups", () => {
+      const condition: SeriesCondition = {
+        allOf: [
+          {
+            allOf: [
+              { genre: { operator: "is", value: "Action" } },
+              {
+                anyOf: [{ tag: { operator: "is", value: "favorite" } }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(conditionToSeriesFilterState(condition)).toBeNull();
+    });
+  });
+
+  describe("conditionToBookFilterState", () => {
+    it("returns an empty state for undefined", () => {
+      const state = conditionToBookFilterState(undefined);
+      expect(state).not.toBeNull();
+      expect(state).toEqual(createEmptyBookFilterState());
+    });
+
+    it("round-trips a multi-group condition", () => {
+      const original = createEmptyBookFilterState();
+      original.genres.values.set("Action", "include");
+      original.tags.values.set("favorite", "exclude");
+      original.bookType.values.set("manga", "include");
+      original.bookType.values.set("comic", "include");
+      original.readStatus.values.set("unread", "include");
+      original.hasError = "exclude";
+      const condition = bookFilterStateToCondition(original);
+
+      const restored = conditionToBookFilterState(condition);
+      expect(restored).not.toBeNull();
+      expect(restored?.genres.values.get("Action")).toBe("include");
+      expect(restored?.tags.values.get("favorite")).toBe("exclude");
+      expect(restored?.bookType.values.get("manga")).toBe("include");
+      expect(restored?.bookType.values.get("comic")).toBe("include");
+      expect(restored?.readStatus.values.get("unread")).toBe("include");
+      expect(restored?.hasError).toBe("exclude");
+    });
+
+    it("returns null when the condition uses an unknown field", () => {
+      const condition: BookCondition = {
+        path: { operator: "contains", value: "/manga/" },
+      };
+      expect(conditionToBookFilterState(condition)).toBeNull();
     });
   });
 });

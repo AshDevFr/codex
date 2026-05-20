@@ -17,6 +17,7 @@ import {
   IconBookmark,
   IconCheck,
   IconDeviceFloppy,
+  IconSettings,
   IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,6 +27,7 @@ import {
   type FilterPresetTarget,
   filterPresetsApi,
 } from "@/api/filterPresets";
+import { ManagePresetsModal } from "@/components/library/ManagePresetsModal";
 import type { BookCondition, SeriesCondition } from "@/types/filters";
 
 interface PresetsSidebarProps {
@@ -52,6 +54,7 @@ export function PresetsSidebar({
   });
 
   const [saveOpened, saveHandlers] = useDisclosure(false);
+  const [manageOpened, manageHandlers] = useDisclosure(false);
   const [presetName, setPresetName] = useState("");
 
   const createMutation = useMutation({
@@ -110,23 +113,36 @@ export function PresetsSidebar({
             Presets
           </Text>
         </Group>
-        <Tooltip
-          label={
-            canSave
-              ? "Save current filters as a preset"
-              : "Add a filter, query, or sort first"
-          }
-        >
-          <ActionIcon
-            variant="light"
-            size="sm"
-            onClick={saveHandlers.open}
-            disabled={!canSave}
-            aria-label="Save preset"
+        <Group gap={4}>
+          <Tooltip
+            label={
+              canSave
+                ? "Save current filters as a preset"
+                : "Add a filter, query, or sort first"
+            }
           >
-            <IconDeviceFloppy size={14} />
-          </ActionIcon>
-        </Tooltip>
+            <ActionIcon
+              variant="light"
+              size="sm"
+              onClick={saveHandlers.open}
+              disabled={!canSave}
+              aria-label="Save preset"
+            >
+              <IconDeviceFloppy size={14} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Manage presets">
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={manageHandlers.open}
+              disabled={(presets?.length ?? 0) === 0}
+              aria-label="Manage presets"
+            >
+              <IconSettings size={14} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Group>
 
       {isLoading && <Loader size="sm" />}
@@ -176,6 +192,12 @@ export function PresetsSidebar({
           </Card>
         ))}
       </Stack>
+
+      <ManagePresetsModal
+        opened={manageOpened}
+        onClose={manageHandlers.close}
+        target={target}
+      />
 
       <Modal
         opened={saveOpened}

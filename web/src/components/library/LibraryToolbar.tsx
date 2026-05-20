@@ -26,6 +26,8 @@ interface LibraryToolbarProps {
   sortOptions?: SortOption[];
   pageSize?: number;
   onPageSizeChange?: (value: number) => void;
+  /** UUID of the library being browsed, or "all" / null for the cross-library view. */
+  libraryId?: string | null;
 }
 
 const PAGE_SIZE_OPTIONS = [
@@ -45,6 +47,7 @@ export function LibraryToolbar({
   sortOptions = [],
   pageSize = 50,
   onPageSizeChange,
+  libraryId,
 }: LibraryToolbarProps) {
   const showControls = currentTab !== "recommended" && sortOptions.length > 0;
   // Below the `xs` breakpoint the tabs + controls don't fit in one row (audit
@@ -156,7 +159,11 @@ export function LibraryToolbar({
       </Menu>
 
       {/* Filter Panel - show appropriate panel based on current tab */}
-      {currentTab === "books" ? <BookFilterPanel /> : <SeriesFilterPanel />}
+      {currentTab === "books" ? (
+        <BookFilterPanel libraryId={libraryId} />
+      ) : (
+        <SeriesFilterPanel libraryId={libraryId} />
+      )}
     </Group>
   ) : null;
 

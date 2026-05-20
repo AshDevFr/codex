@@ -14,6 +14,7 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import {
   IconAdjustments,
   IconBookmark,
@@ -25,15 +26,23 @@ import {
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { FilterPresetDto } from "@/api/filterPresets";
 import { genresApi } from "@/api/genres";
 import { sharingTagsApi } from "@/api/sharingTags";
 import { tagsApi } from "@/api/tags";
 import { useDraftSeriesFilterState } from "@/hooks/useDraftSeriesFilterState";
 import { useSeriesFilterState } from "@/hooks/useSeriesFilterState";
 import { useAuthStore } from "@/store/authStore";
+import {
+  conditionToSeriesFilterState,
+  type SeriesCondition,
+  serializeSeriesFilters,
+} from "@/types/filters";
 import { FilterBottomSheet } from "./FilterBottomSheet";
 import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
+import { ListPresetControls } from "./ListPresetControls";
 
 // Read status options (user's reading progress)
 const READ_STATUS_OPTIONS = [
@@ -84,18 +93,68 @@ function SectionHeader({
  * - Shows active filter count on the trigger button
  * - URL-synchronized filter state
  */
-export function SeriesFilterPanel() {
+export interface SeriesFilterPanelProps {
+  /** UUID of the library being filtered, or null when scope is "all libraries". */
+  libraryId?: string | null;
+}
+
+export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
   const [opened, { open, close }] = useDisclosure(false);
   // Use committed state for the indicator badge (shows what's actually applied)
   const {
     activeFilterCount: committedFilterCount,
     hasActiveFilters: hasCommittedFilters,
+    condition: committedCondition,
   } = useSeriesFilterState();
   // Use draft state for editing within the drawer
   const draftState = useDraftSeriesFilterState();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === "admin";
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const normalizedLibraryId =
+    !libraryId || libraryId === "all" ? null : libraryId;
+
+  const handleApplyPreset = (preset: FilterPresetDto) => {
+    const condition = preset.condition as unknown as
+      | SeriesCondition
+      | undefined;
+    const next = conditionToSeriesFilterState(condition);
+    if (!next) {
+      notifications.show({
+        title: "Preset uses advanced filters",
+        message:
+          "This preset can't be applied here. Open it in the advanced search page.",
+        color: "yellow",
+      });
+      return;
+    }
+
+    const filterParams = serializeSeriesFilters(next);
+    const newParams = new URLSearchParams(searchParams);
+    for (const key of [
+      "gf",
+      "tf",
+      "sf",
+      "rf",
+      "pf",
+      "lf",
+      "stf",
+      "cf",
+      "esf",
+      "urf",
+      "trf",
+    ]) {
+      newParams.delete(key);
+    }
+    for (const [key, value] of filterParams) {
+      newParams.set(key, value);
+    }
+    newParams.set("page", "1");
+    setSearchParams(newParams, { replace: true });
+    close();
+  };
 
   // Handle Apply - commit draft to URL and close
   const handleApply = () => {
@@ -201,6 +260,16 @@ export function SeriesFilterPanel() {
     </Group>
   ) : (
     <Stack gap="sm">
+      <ListPresetControls
+        target="series"
+        libraryId={normalizedLibraryId}
+        currentCondition={committedCondition}
+        hasActiveFilters={hasCommittedFilters}
+        onApply={handleApplyPreset}
+      />
+
+      <Divider my={4} />
+
       {/* Reading Progress */}
       <SectionHeader icon={IconBookmark}>Reading Progress</SectionHeader>
 

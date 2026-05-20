@@ -519,6 +519,7 @@ export function LibraryPage() {
               currentTab={currentTab}
               onTabChange={handleTabChange}
               showRecommended={!isAllLibraries}
+              libraryId={libraryId}
               sort={sort}
               onSortChange={(value) => {
                 if (libraryId) {

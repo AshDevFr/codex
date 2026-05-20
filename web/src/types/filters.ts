@@ -481,6 +481,286 @@ export function bookFilterStateToCondition(
   return { allOf: allConditions };
 }
 
+// =============================================================================
+// Condition → UI state (reverse converters used by list-page preset apply)
+//
+// The chip-based list-page UIs serialize their state through
+// `seriesFilterStateToCondition` / `bookFilterStateToCondition`. The shape they
+// produce is a strict subset of the full grammar:
+//
+//   * A top-level `allOf` of group conditions, or a single group condition.
+//   * Each group is either a single leaf or a `allOf`/`anyOf` of same-field
+//     leaves with `is`/`isNot` (or a bool leaf for the four boolean toggles).
+//
+// These reverse converters round-trip that subset. Conditions that fall
+// outside it (nested groups, fields not exposed by the chip UI, custom
+// operators) cause the visitor to bail and the caller can refuse to apply
+// the preset.
+// =============================================================================
+
+const SERIES_FIELD_GROUPS: Record<
+  string,
+  keyof Omit<
+    SeriesFilterState,
+    "completion" | "hasExternalSourceId" | "hasUserRating" | "isTracked"
+  >
+> = {
+  genre: "genres",
+  tag: "tags",
+  status: "status",
+  readStatus: "readStatus",
+  publisher: "publisher",
+  language: "language",
+  sharingTag: "sharingTags",
+};
+
+const SERIES_BOOL_FIELDS = new Set([
+  "completion",
+  "hasExternalSourceId",
+  "hasUserRating",
+  "isTracked",
+]);
+
+function applySeriesLeaf(
+  state: SeriesFilterState,
+  leaf: Record<string, unknown>,
+  groupMode?: FilterMode,
+): boolean {
+  const fieldKeys = Object.keys(leaf);
+  if (fieldKeys.length !== 1) return false;
+  const field = fieldKeys[0];
+  const op = leaf[field] as { operator?: string; value?: string };
+  if (!op || typeof op !== "object" || typeof op.operator !== "string") {
+    return false;
+  }
+
+  // Bool fields land directly on the state.
+  if (SERIES_BOOL_FIELDS.has(field)) {
+    const tri: TriState | null =
+      op.operator === "isTrue"
+        ? "include"
+        : op.operator === "isFalse"
+          ? "exclude"
+          : null;
+    if (tri === null) return false;
+    (state as unknown as Record<string, TriState>)[field] = tri;
+    return true;
+  }
+
+  // Field-operator backed group filters.
+  const groupKey = SERIES_FIELD_GROUPS[field];
+  if (!groupKey) return false;
+
+  const group = state[groupKey];
+  if (groupMode) group.mode = groupMode;
+  if (op.operator === "is" && typeof op.value === "string") {
+    group.values.set(op.value, "include");
+    return true;
+  }
+  if (op.operator === "isNot" && typeof op.value === "string") {
+    group.values.set(op.value, "exclude");
+    return true;
+  }
+  return false;
+}
+
+function applySeriesGroup(
+  state: SeriesFilterState,
+  items: SeriesCondition[],
+  groupMode: FilterMode,
+): boolean {
+  if (items.length === 0) return true;
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) return false;
+    if (!applySeriesLeaf(state, item as Record<string, unknown>, groupMode)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function applySeriesItem(
+  state: SeriesFilterState,
+  item: SeriesCondition,
+): boolean {
+  const record = item as Record<string, unknown>;
+  if (Array.isArray(record.anyOf)) {
+    return applySeriesGroup(state, record.anyOf as SeriesCondition[], "anyOf");
+  }
+  if (Array.isArray(record.allOf)) {
+    return applySeriesGroup(state, record.allOf as SeriesCondition[], "allOf");
+  }
+  return applySeriesLeaf(state, record);
+}
+
+// Returns the shared field name when every item is a single-field leaf that
+// references the same field (and not allOf/anyOf). Used to distinguish a
+// "single group with multiple values" top-level wrapper from a "multi-group"
+// wrapper, since the forward converter unwraps both into the same `allOf`
+// shape when no other group is present.
+function sharedLeafField(items: readonly unknown[]): string | null {
+  if (items.length === 0) return null;
+  let field: string | null = null;
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) return null;
+    const keys = Object.keys(item as Record<string, unknown>);
+    if (keys.length !== 1) return null;
+    const key = keys[0];
+    if (key === "allOf" || key === "anyOf") return null;
+    if (field === null) field = key;
+    else if (field !== key) return null;
+  }
+  return field;
+}
+
+/**
+ * Convert a saved condition back into the chip-based SeriesFilterState used
+ * by the library list page. Returns `null` when the condition uses fields or
+ * shapes that the chip UI can't represent — the caller should surface an
+ * error instead of silently dropping filters.
+ */
+export function conditionToSeriesFilterState(
+  condition: SeriesCondition | undefined | null,
+): SeriesFilterState | null {
+  const state = createEmptySeriesFilterState();
+  if (!condition) return state;
+
+  const record = condition as Record<string, unknown>;
+
+  if (Array.isArray(record.allOf)) {
+    const items = record.allOf as SeriesCondition[];
+    // Single-group wrapper (e.g. genres in allOf mode is the only active
+    // group): forward conversion produces `{allOf: [<leaf>, <leaf>]}` with no
+    // outer wrapper, so we reapply the mode here.
+    if (sharedLeafField(items)) {
+      return applySeriesGroup(state, items, "allOf") ? state : null;
+    }
+    for (const item of items) {
+      if (!applySeriesItem(state, item)) return null;
+    }
+    return state;
+  }
+
+  if (Array.isArray(record.anyOf)) {
+    const items = record.anyOf as SeriesCondition[];
+    // Top-level anyOf is only emitted for a single anyOf group; mixed-field
+    // anyOf at the top isn't expressible in the chip UI.
+    if (items.length > 0 && !sharedLeafField(items)) return null;
+    return applySeriesGroup(state, items, "anyOf") ? state : null;
+  }
+
+  return applySeriesItem(state, condition) ? state : null;
+}
+
+const BOOK_FIELD_GROUPS: Record<
+  string,
+  keyof Omit<BookFilterState, "hasError">
+> = {
+  genre: "genres",
+  tag: "tags",
+  readStatus: "readStatus",
+  bookType: "bookType",
+};
+
+function applyBookLeaf(
+  state: BookFilterState,
+  leaf: Record<string, unknown>,
+  groupMode?: FilterMode,
+): boolean {
+  const fieldKeys = Object.keys(leaf);
+  if (fieldKeys.length !== 1) return false;
+  const field = fieldKeys[0];
+  const op = leaf[field] as { operator?: string; value?: string };
+  if (!op || typeof op !== "object" || typeof op.operator !== "string") {
+    return false;
+  }
+
+  if (field === "hasError") {
+    if (op.operator === "isTrue") {
+      state.hasError = "include";
+      return true;
+    }
+    if (op.operator === "isFalse") {
+      state.hasError = "exclude";
+      return true;
+    }
+    return false;
+  }
+
+  const groupKey = BOOK_FIELD_GROUPS[field];
+  if (!groupKey) return false;
+
+  const group = state[groupKey];
+  if (groupMode) group.mode = groupMode;
+  if (op.operator === "is" && typeof op.value === "string") {
+    group.values.set(op.value, "include");
+    return true;
+  }
+  if (op.operator === "isNot" && typeof op.value === "string") {
+    group.values.set(op.value, "exclude");
+    return true;
+  }
+  return false;
+}
+
+function applyBookGroup(
+  state: BookFilterState,
+  items: BookCondition[],
+  groupMode: FilterMode,
+): boolean {
+  if (items.length === 0) return true;
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) return false;
+    if (!applyBookLeaf(state, item as Record<string, unknown>, groupMode)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function applyBookItem(state: BookFilterState, item: BookCondition): boolean {
+  const record = item as Record<string, unknown>;
+  if (Array.isArray(record.anyOf)) {
+    return applyBookGroup(state, record.anyOf as BookCondition[], "anyOf");
+  }
+  if (Array.isArray(record.allOf)) {
+    return applyBookGroup(state, record.allOf as BookCondition[], "allOf");
+  }
+  return applyBookLeaf(state, record);
+}
+
+/**
+ * Convert a saved condition back into the chip-based BookFilterState. See
+ * conditionToSeriesFilterState for caveats.
+ */
+export function conditionToBookFilterState(
+  condition: BookCondition | undefined | null,
+): BookFilterState | null {
+  const state = createEmptyBookFilterState();
+  if (!condition) return state;
+
+  const record = condition as Record<string, unknown>;
+
+  if (Array.isArray(record.allOf)) {
+    const items = record.allOf as BookCondition[];
+    if (sharedLeafField(items)) {
+      return applyBookGroup(state, items, "allOf") ? state : null;
+    }
+    for (const item of items) {
+      if (!applyBookItem(state, item)) return null;
+    }
+    return state;
+  }
+
+  if (Array.isArray(record.anyOf)) {
+    const items = record.anyOf as BookCondition[];
+    if (items.length > 0 && !sharedLeafField(items)) return null;
+    return applyBookGroup(state, items, "anyOf") ? state : null;
+  }
+
+  return applyBookItem(state, condition) ? state : null;
+}
+
 /**
  * Count active filters in book filter state
  */
