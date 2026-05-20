@@ -178,6 +178,8 @@ mod m20260520_000085_create_series_duplicates;
 mod m20260520_000086_seed_duplicate_detection_settings;
 // Filter presets: unified storage for saved list-page filters and /search-page state
 mod m20260520_000087_create_filter_presets;
+// Indexes that back the new BookCondition::Format / PageCount filter variants
+mod m20260520_000088_add_filter_indexes;
 
 pub struct Migrator;
 
@@ -327,6 +329,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260520_000086_seed_duplicate_detection_settings::Migration),
             // Unified filter preset storage (list pages + advanced search page)
             Box::new(m20260520_000087_create_filter_presets::Migration),
+            // Indexes for the new BookCondition::Format / PageCount filter variants
+            Box::new(m20260520_000088_add_filter_indexes::Migration),
         ]
     }
 }

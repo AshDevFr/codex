@@ -5,7 +5,8 @@
 #![allow(dead_code)]
 
 use crate::api::routes::v1::dto::{
-    BookCondition, BoolOperator, FieldOperator, SeriesCondition, UuidOperator,
+    BookCondition, BoolOperator, DateOperator, FieldOperator, NumberOperator, SeriesCondition,
+    UuidOperator,
 };
 use crate::db::repositories::{GenreRepository, TagRepository};
 use anyhow::Result;
@@ -149,6 +150,18 @@ impl FilterService {
 
                 SeriesCondition::IsTracked { is_tracked } => {
                     Self::filter_by_is_tracked(db, is_tracked, candidate_ids).await
+                }
+
+                SeriesCondition::Year { year } => {
+                    Self::filter_by_year(db, year, candidate_ids).await
+                }
+
+                SeriesCondition::Author { author } => {
+                    Self::filter_by_author(db, author, candidate_ids).await
+                }
+
+                SeriesCondition::DateAdded { date_added } => {
+                    Self::filter_series_by_date_added(db, date_added, candidate_ids).await
                 }
             }
         })
@@ -1487,6 +1500,220 @@ impl FilterService {
 
         Ok(matching_series)
     }
+
+    /// Filter series by `series_metadata.year`.
+    ///
+    /// `IsNull` returns series that either lack a metadata row or have a
+    /// null year. `IsNotNull` returns the inverse.
+    async fn filter_by_year(
+        db: &DatabaseConnection,
+        operator: &NumberOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::{series, series_metadata};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        // IsNull is special: also include series with no metadata row at all.
+        if matches!(operator, NumberOperator::IsNull) {
+            let with_year: HashSet<Uuid> = series_metadata::Entity::find()
+                .filter(series_metadata::Column::Year.is_not_null())
+                .select_only()
+                .column(series_metadata::Column::SeriesId)
+                .into_tuple()
+                .all(db)
+                .await?
+                .into_iter()
+                .collect();
+
+            return if let Some(candidates) = candidate_ids {
+                Ok(candidates
+                    .iter()
+                    .filter(|id| !with_year.contains(id))
+                    .copied()
+                    .collect())
+            } else {
+                let all_series: HashSet<Uuid> = series::Entity::find()
+                    .select_only()
+                    .column(series::Column::Id)
+                    .into_tuple()
+                    .all(db)
+                    .await?
+                    .into_iter()
+                    .collect();
+                Ok(all_series
+                    .into_iter()
+                    .filter(|id| !with_year.contains(id))
+                    .collect())
+            };
+        }
+
+        let query = series_metadata::Entity::find();
+        let filtered_query = match operator {
+            NumberOperator::Eq { value } => {
+                query.filter(series_metadata::Column::Year.eq(*value as i32))
+            }
+            NumberOperator::Ne { value } => {
+                query.filter(series_metadata::Column::Year.ne(*value as i32))
+            }
+            NumberOperator::Gt { value } => {
+                query.filter(series_metadata::Column::Year.gt(*value as i32))
+            }
+            NumberOperator::Gte { value } => {
+                query.filter(series_metadata::Column::Year.gte(*value as i32))
+            }
+            NumberOperator::Lt { value } => {
+                query.filter(series_metadata::Column::Year.lt(*value as i32))
+            }
+            NumberOperator::Lte { value } => {
+                query.filter(series_metadata::Column::Year.lte(*value as i32))
+            }
+            NumberOperator::Between { min, max } => {
+                let mut q = query;
+                if let Some(min) = min {
+                    q = q.filter(series_metadata::Column::Year.gte(*min as i32));
+                }
+                if let Some(max) = max {
+                    q = q.filter(series_metadata::Column::Year.lte(*max as i32));
+                }
+                q
+            }
+            NumberOperator::IsNotNull => query.filter(series_metadata::Column::Year.is_not_null()),
+            NumberOperator::IsNull => unreachable!("handled above"),
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+        Ok(result)
+    }
+
+    /// Filter series by author via substring match on
+    /// `series_metadata.authors_json`.
+    ///
+    /// `authors_json` is a JSON string column whose shape varies between
+    /// scrapers (`["A", "B"]`, `[{"name": "A", ...}]`, ...). To stay
+    /// portable across both SQLite and Postgres without depending on JSON
+    /// operators that differ between the two, the match runs against the raw
+    /// JSON text. This is intentionally tolerant; callers that need precise
+    /// matching should include the surrounding quote characters in the value
+    /// (e.g. `"\"name\":\"Toriyama\""`).
+    async fn filter_by_author(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::series_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series_metadata::Entity::find();
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => {
+                query.filter(series_metadata::Column::AuthorsJson.eq(value.clone()))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(series_metadata::Column::AuthorsJson.ne(value.clone()))
+            }
+            FieldOperator::IsNull => query.filter(series_metadata::Column::AuthorsJson.is_null()),
+            FieldOperator::IsNotNull => {
+                query.filter(series_metadata::Column::AuthorsJson.is_not_null())
+            }
+            FieldOperator::Contains { value } => {
+                query.filter(series_metadata::Column::AuthorsJson.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(series_metadata::Column::AuthorsJson.not_like(format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(series_metadata::Column::AuthorsJson.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(series_metadata::Column::AuthorsJson.ends_with(value.clone()))
+            }
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series_metadata::Column::SeriesId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+        Ok(result)
+    }
+
+    /// Filter series by `series.created_at` (date the series row was added).
+    async fn filter_series_by_date_added(
+        db: &DatabaseConnection,
+        operator: &DateOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::series;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series::Entity::find();
+        let filtered_query = match operator {
+            DateOperator::After { value } => query.filter(series::Column::CreatedAt.gt(*value)),
+            DateOperator::Before { value } => query.filter(series::Column::CreatedAt.lt(*value)),
+            DateOperator::OnOrAfter { value } => {
+                query.filter(series::Column::CreatedAt.gte(*value))
+            }
+            DateOperator::OnOrBefore { value } => {
+                query.filter(series::Column::CreatedAt.lte(*value))
+            }
+            DateOperator::Between { start, end } => {
+                let mut q = query;
+                if let Some(start) = start {
+                    q = q.filter(series::Column::CreatedAt.gte(*start));
+                }
+                if let Some(end) = end {
+                    q = q.filter(series::Column::CreatedAt.lte(*end));
+                }
+                q
+            }
+            // `series.created_at` is NOT NULL, so IsNull is always empty and
+            // IsNotNull matches all rows.
+            DateOperator::IsNull => return Ok(HashSet::new()),
+            DateOperator::IsNotNull => query.filter(series::Column::CreatedAt.is_not_null()),
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+        Ok(result)
+    }
 }
 
 // Book condition evaluation
@@ -1587,6 +1814,22 @@ impl FilterService {
 
                 BookCondition::BookType { book_type } => {
                     Self::filter_books_by_book_type(db, book_type, candidate_ids).await
+                }
+
+                BookCondition::Path { path } => {
+                    Self::filter_books_by_path(db, path, candidate_ids).await
+                }
+
+                BookCondition::Format { format } => {
+                    Self::filter_books_by_format(db, format, candidate_ids).await
+                }
+
+                BookCondition::PageCount { page_count } => {
+                    Self::filter_books_by_page_count(db, page_count, candidate_ids).await
+                }
+
+                BookCondition::DateAdded { date_added } => {
+                    Self::filter_books_by_date_added(db, date_added, candidate_ids).await
                 }
             }
         })
@@ -2037,6 +2280,226 @@ impl FilterService {
             .into_iter()
             .collect();
 
+        Ok(result)
+    }
+
+    /// Filter books by `books.file_path`.
+    ///
+    /// The column is NOT NULL, so `IsNull` returns empty and `IsNotNull`
+    /// matches every book.
+    async fn filter_books_by_path(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::books;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => query.filter(books::Column::FilePath.eq(value.clone())),
+            FieldOperator::IsNot { value } => {
+                query.filter(books::Column::FilePath.ne(value.clone()))
+            }
+            FieldOperator::IsNull => return Ok(HashSet::new()),
+            FieldOperator::IsNotNull => query,
+            FieldOperator::Contains { value } => {
+                query.filter(books::Column::FilePath.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(books::Column::FilePath.not_like(format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(books::Column::FilePath.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(books::Column::FilePath.ends_with(value.clone()))
+            }
+        };
+
+        let book_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(books::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            book_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            book_ids.into_iter().collect()
+        };
+        Ok(result)
+    }
+
+    /// Filter books by `books.format` (e.g. `cbz`, `cbr`, `epub`, `pdf`).
+    /// Equality and substring match are case-insensitive at the SQL layer
+    /// (SQLite collates ASCII LIKE case-insensitively; Postgres uses the
+    /// `contains`/`starts_with`/`ends_with` helpers below which already
+    /// quote the pattern).
+    async fn filter_books_by_format(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::books;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
+
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => query.filter(books::Column::Format.eq(value.clone())),
+            FieldOperator::IsNot { value } => query.filter(books::Column::Format.ne(value.clone())),
+            FieldOperator::IsNull => return Ok(HashSet::new()),
+            FieldOperator::IsNotNull => query,
+            FieldOperator::Contains { value } => {
+                query.filter(books::Column::Format.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(books::Column::Format.not_like(format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(books::Column::Format.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(books::Column::Format.ends_with(value.clone()))
+            }
+        };
+
+        let book_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(books::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            book_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            book_ids.into_iter().collect()
+        };
+        Ok(result)
+    }
+
+    /// Filter books by `books.page_count`.
+    ///
+    /// The column is NOT NULL (defaults to 0), so `IsNull` returns empty and
+    /// `IsNotNull` matches every book.
+    async fn filter_books_by_page_count(
+        db: &DatabaseConnection,
+        operator: &NumberOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::books;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
+
+        let filtered_query = match operator {
+            NumberOperator::Eq { value } => {
+                query.filter(books::Column::PageCount.eq(*value as i32))
+            }
+            NumberOperator::Ne { value } => {
+                query.filter(books::Column::PageCount.ne(*value as i32))
+            }
+            NumberOperator::Gt { value } => {
+                query.filter(books::Column::PageCount.gt(*value as i32))
+            }
+            NumberOperator::Gte { value } => {
+                query.filter(books::Column::PageCount.gte(*value as i32))
+            }
+            NumberOperator::Lt { value } => {
+                query.filter(books::Column::PageCount.lt(*value as i32))
+            }
+            NumberOperator::Lte { value } => {
+                query.filter(books::Column::PageCount.lte(*value as i32))
+            }
+            NumberOperator::Between { min, max } => {
+                let mut q = query;
+                if let Some(min) = min {
+                    q = q.filter(books::Column::PageCount.gte(*min as i32));
+                }
+                if let Some(max) = max {
+                    q = q.filter(books::Column::PageCount.lte(*max as i32));
+                }
+                q
+            }
+            NumberOperator::IsNull => return Ok(HashSet::new()),
+            NumberOperator::IsNotNull => query,
+        };
+
+        let book_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(books::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            book_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            book_ids.into_iter().collect()
+        };
+        Ok(result)
+    }
+
+    /// Filter books by `books.created_at` (date the book was added).
+    async fn filter_books_by_date_added(
+        db: &DatabaseConnection,
+        operator: &DateOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::books;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
+        let filtered_query = match operator {
+            DateOperator::After { value } => query.filter(books::Column::CreatedAt.gt(*value)),
+            DateOperator::Before { value } => query.filter(books::Column::CreatedAt.lt(*value)),
+            DateOperator::OnOrAfter { value } => query.filter(books::Column::CreatedAt.gte(*value)),
+            DateOperator::OnOrBefore { value } => {
+                query.filter(books::Column::CreatedAt.lte(*value))
+            }
+            DateOperator::Between { start, end } => {
+                let mut q = query;
+                if let Some(start) = start {
+                    q = q.filter(books::Column::CreatedAt.gte(*start));
+                }
+                if let Some(end) = end {
+                    q = q.filter(books::Column::CreatedAt.lte(*end));
+                }
+                q
+            }
+            // `books.created_at` is NOT NULL.
+            DateOperator::IsNull => return Ok(HashSet::new()),
+            DateOperator::IsNotNull => query,
+        };
+
+        let book_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(books::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            book_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            book_ids.into_iter().collect()
+        };
         Ok(result)
     }
 }

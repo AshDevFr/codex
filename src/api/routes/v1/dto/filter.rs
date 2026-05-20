@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -42,6 +43,67 @@ pub enum BoolOperator {
     IsTrue,
     /// Is false
     IsFalse,
+}
+
+/// Operators for numeric comparisons (year, page count, etc.).
+///
+/// Values are deserialized as `i64` so the same operator can target either
+/// `INTEGER` or `BIGINT` columns. Implementations downcast as needed.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "operator", rename_all = "camelCase")]
+pub enum NumberOperator {
+    /// Equal to value
+    Eq { value: i64 },
+    /// Not equal to value
+    Ne { value: i64 },
+    /// Greater than value (strict)
+    Gt { value: i64 },
+    /// Greater than or equal to value
+    Gte { value: i64 },
+    /// Less than value (strict)
+    Lt { value: i64 },
+    /// Less than or equal to value
+    Lte { value: i64 },
+    /// Inclusive range, `min <= field <= max`. Either bound may be omitted to
+    /// model open-ended ranges (e.g. "year >= 2000").
+    Between {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<i64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<i64>,
+    },
+    /// Field is null
+    IsNull,
+    /// Field is not null
+    IsNotNull,
+}
+
+/// Operators for date/timestamp comparisons.
+///
+/// Values are RFC 3339 / ISO 8601 timestamps. For range comparisons either
+/// bound may be omitted to express an open-ended range.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "operator", rename_all = "camelCase")]
+pub enum DateOperator {
+    /// Strictly after the given timestamp
+    After { value: DateTime<Utc> },
+    /// Strictly before the given timestamp
+    Before { value: DateTime<Utc> },
+    /// On or after the given timestamp
+    OnOrAfter { value: DateTime<Utc> },
+    /// On or before the given timestamp
+    OnOrBefore { value: DateTime<Utc> },
+    /// Inclusive between range. Either bound may be omitted.
+    Between {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        start: Option<DateTime<Utc>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        end: Option<DateTime<Utc>>,
+    },
+    /// Field is null
+    IsNull,
+    /// Field is not null
+    IsNotNull,
 }
 
 /// Series-level search conditions
@@ -116,6 +178,21 @@ pub enum SeriesCondition {
         #[serde(rename = "isTracked")]
         is_tracked: BoolOperator,
     },
+    /// Filter by release year (from `series_metadata.year`).
+    Year { year: NumberOperator },
+    /// Filter by author (substring match on `series_metadata.authors_json`).
+    ///
+    /// The match is performed against the raw JSON text. It is tolerant of
+    /// both string-list and object-list shapes but may incidentally match
+    /// other fields (e.g. `role`); callers wanting strict matching should
+    /// pre-quote the value.
+    Author { author: FieldOperator },
+    /// Filter by date the series was added to the library
+    /// (`series.created_at`).
+    DateAdded {
+        #[serde(rename = "dateAdded")]
+        date_added: DateOperator,
+    },
 }
 
 /// Book-level search conditions
@@ -164,6 +241,23 @@ pub enum BookCondition {
     BookType {
         #[serde(rename = "bookType")]
         book_type: FieldOperator,
+    },
+    /// Filter by the book's file path (`books.file_path`). Useful for matching
+    /// books under a given directory or with a specific filename fragment.
+    Path { path: FieldOperator },
+    /// Filter by file format (`books.format`, e.g. `cbz`, `cbr`, `epub`,
+    /// `pdf`). Distinct from `BookType`, which classifies content (comic,
+    /// manga, novel, ...).
+    Format { format: FieldOperator },
+    /// Filter by page count (`books.page_count`).
+    PageCount {
+        #[serde(rename = "pageCount")]
+        page_count: NumberOperator,
+    },
+    /// Filter by date the book was added to the library (`books.created_at`).
+    DateAdded {
+        #[serde(rename = "dateAdded")]
+        date_added: DateOperator,
     },
 }
 
@@ -674,5 +768,170 @@ mod tests {
             } => {}
             _ => panic!("Expected IsTracked condition with IsTrue operator"),
         }
+    }
+
+    #[test]
+    fn test_number_operator_eq_serialization() {
+        let op = NumberOperator::Eq { value: 2024 };
+        let json = serde_json::to_string(&op).unwrap();
+        assert_eq!(json, r#"{"operator":"eq","value":2024}"#);
+    }
+
+    #[test]
+    fn test_number_operator_between_serialization() {
+        let op = NumberOperator::Between {
+            min: Some(1980),
+            max: Some(1989),
+        };
+        let json = serde_json::to_string(&op).unwrap();
+        assert!(json.contains(r#""operator":"between""#));
+        assert!(json.contains(r#""min":1980"#));
+        assert!(json.contains(r#""max":1989"#));
+    }
+
+    #[test]
+    fn test_number_operator_between_open_ended() {
+        // No max bound: "year >= 2000"
+        let op = NumberOperator::Between {
+            min: Some(2000),
+            max: None,
+        };
+        let json = serde_json::to_string(&op).unwrap();
+        assert!(json.contains(r#""min":2000"#));
+        assert!(!json.contains(r#""max""#));
+    }
+
+    #[test]
+    fn test_year_condition_round_trip() {
+        let condition = SeriesCondition::Year {
+            year: NumberOperator::Gte { value: 2000 },
+        };
+        let json = serde_json::to_string(&condition).unwrap();
+        let parsed: SeriesCondition = serde_json::from_str(&json).unwrap();
+        match parsed {
+            SeriesCondition::Year {
+                year: NumberOperator::Gte { value },
+            } => assert_eq!(value, 2000),
+            _ => panic!("Expected Year/Gte condition"),
+        }
+    }
+
+    #[test]
+    fn test_year_condition_between_deserialization() {
+        let json = r#"{"year":{"operator":"between","min":1990,"max":1999}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+        match condition {
+            SeriesCondition::Year {
+                year: NumberOperator::Between { min, max },
+            } => {
+                assert_eq!(min, Some(1990));
+                assert_eq!(max, Some(1999));
+            }
+            _ => panic!("Expected Year/Between condition"),
+        }
+    }
+
+    #[test]
+    fn test_author_condition_contains() {
+        let json = r#"{"author":{"operator":"contains","value":"Toriyama"}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+        match condition {
+            SeriesCondition::Author {
+                author: FieldOperator::Contains { value },
+            } => assert_eq!(value, "Toriyama"),
+            _ => panic!("Expected Author/Contains condition"),
+        }
+    }
+
+    #[test]
+    fn test_series_date_added_condition() {
+        let json = r#"{"dateAdded":{"operator":"after","value":"2026-01-01T00:00:00Z"}}"#;
+        let condition: SeriesCondition = serde_json::from_str(json).unwrap();
+        match condition {
+            SeriesCondition::DateAdded {
+                date_added: DateOperator::After { .. },
+            } => {}
+            _ => panic!("Expected SeriesCondition::DateAdded/After"),
+        }
+    }
+
+    #[test]
+    fn test_book_path_condition_round_trip() {
+        let condition = BookCondition::Path {
+            path: FieldOperator::Contains {
+                value: "/manga/".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&condition).unwrap();
+        let parsed: BookCondition = serde_json::from_str(&json).unwrap();
+        match parsed {
+            BookCondition::Path {
+                path: FieldOperator::Contains { value },
+            } => assert_eq!(value, "/manga/"),
+            _ => panic!("Expected Path/Contains condition"),
+        }
+    }
+
+    #[test]
+    fn test_book_format_condition_is_cbz() {
+        let json = r#"{"format":{"operator":"is","value":"cbz"}}"#;
+        let condition: BookCondition = serde_json::from_str(json).unwrap();
+        match condition {
+            BookCondition::Format {
+                format: FieldOperator::Is { value },
+            } => assert_eq!(value, "cbz"),
+            _ => panic!("Expected Format/Is(cbz) condition"),
+        }
+    }
+
+    #[test]
+    fn test_book_page_count_between() {
+        let json = r#"{"pageCount":{"operator":"between","min":100,"max":300}}"#;
+        let condition: BookCondition = serde_json::from_str(json).unwrap();
+        match condition {
+            BookCondition::PageCount {
+                page_count: NumberOperator::Between { min, max },
+            } => {
+                assert_eq!(min, Some(100));
+                assert_eq!(max, Some(300));
+            }
+            _ => panic!("Expected PageCount/Between condition"),
+        }
+    }
+
+    #[test]
+    fn test_book_date_added_on_or_before() {
+        let json = r#"{"dateAdded":{"operator":"onOrBefore","value":"2026-05-01T12:00:00Z"}}"#;
+        let condition: BookCondition = serde_json::from_str(json).unwrap();
+        match condition {
+            BookCondition::DateAdded {
+                date_added: DateOperator::OnOrBefore { .. },
+            } => {}
+            _ => panic!("Expected BookCondition::DateAdded/OnOrBefore"),
+        }
+    }
+
+    #[test]
+    fn test_date_operator_between_deserialization() {
+        let json = r#"{
+            "operator": "between",
+            "start": "2026-01-01T00:00:00Z",
+            "end": "2026-12-31T23:59:59Z"
+        }"#;
+        let op: DateOperator = serde_json::from_str(json).unwrap();
+        match op {
+            DateOperator::Between { start, end } => {
+                assert!(start.is_some());
+                assert!(end.is_some());
+            }
+            _ => panic!("Expected DateOperator::Between"),
+        }
+    }
+
+    #[test]
+    fn test_date_operator_is_null() {
+        let json = r#"{"operator":"isNull"}"#;
+        let op: DateOperator = serde_json::from_str(json).unwrap();
+        assert!(matches!(op, DateOperator::IsNull));
     }
 }

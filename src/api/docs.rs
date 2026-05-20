@@ -651,6 +651,8 @@ The following paths are exempt from rate limiting:
             v1::dto::FieldOperator,
             v1::dto::UuidOperator,
             v1::dto::BoolOperator,
+            v1::dto::NumberOperator,
+            v1::dto::DateOperator,
             v1::dto::ReplaceSeriesMetadataRequest,
             v1::dto::PatchSeriesMetadataRequest,
             v1::dto::SeriesMetadataResponse,

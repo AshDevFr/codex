@@ -18962,6 +18962,54 @@
                 "$ref": "#/components/schemas/FieldOperator"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Filter by the book's file path (`books.file_path`). Useful for matching\nbooks under a given directory or with a specific filename fragment.",
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by file format (`books.format`, e.g. `cbz`, `cbr`, `epub`,\n`pdf`). Distinct from `BookType`, which classifies content (comic,\nmanga, novel, ...).",
+            "required": [
+              "format"
+            ],
+            "properties": {
+              "format": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by page count (`books.page_count`).",
+            "required": [
+              "pageCount"
+            ],
+            "properties": {
+              "pageCount": {
+                "$ref": "#/components/schemas/NumberOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by date the book was added to the library (`books.created_at`).",
+            "required": [
+              "dateAdded"
+            ],
+            "properties": {
+              "dateAdded": {
+                "$ref": "#/components/schemas/DateOperator"
+              }
+            }
           }
         ],
         "description": "Book-level search conditions"
@@ -23448,6 +23496,150 @@
             "description": "Template for constructing series name from capture groups\nExample: \"{publisher} - {series}\""
           }
         }
+      },
+      "DateOperator": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Strictly after the given timestamp",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "after"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Strictly before the given timestamp",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "before"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "On or after the given timestamp",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "onOrAfter"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "On or before the given timestamp",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "onOrBefore"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Inclusive between range. Either bound may be omitted.",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "end": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "between"
+                ]
+              },
+              "start": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Field is null",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNull"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Field is not null",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNotNull"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Operators for date/timestamp comparisons.\n\nValues are RFC 3339 / ISO 8601 timestamps. For range comparisons either\nbound may be omitted to express an open-ended range."
       },
       "DeletePreferenceResponse": {
         "type": "object",
@@ -29332,6 +29524,190 @@
             "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
+      },
+      "NumberOperator": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Equal to value",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "eq"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not equal to value",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "ne"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Greater than value (strict)",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "gt"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Greater than or equal to value",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "gte"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Less than value (strict)",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "lt"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Less than or equal to value",
+            "required": [
+              "value",
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "lte"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Inclusive range, `min <= field <= max`. Either bound may be omitted to\nmodel open-ended ranges (e.g. \"year >= 2000\").",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "max": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "min": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "between"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Field is null",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNull"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Field is not null",
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "isNotNull"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Operators for numeric comparisons (year, page count, etc.).\n\nValues are deserialized as `i64` so the same operator can target either\n`INTEGER` or `BIGINT` columns. Implementations downcast as needed."
       },
       "NumberStrategy": {
         "type": "string",
@@ -35722,6 +36098,42 @@
             "properties": {
               "isTracked": {
                 "$ref": "#/components/schemas/BoolOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by release year (from `series_metadata.year`).",
+            "required": [
+              "year"
+            ],
+            "properties": {
+              "year": {
+                "$ref": "#/components/schemas/NumberOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by author (substring match on `series_metadata.authors_json`).\n\nThe match is performed against the raw JSON text. It is tolerant of\nboth string-list and object-list shapes but may incidentally match\nother fields (e.g. `role`); callers wanting strict matching should\npre-quote the value.",
+            "required": [
+              "author"
+            ],
+            "properties": {
+              "author": {
+                "$ref": "#/components/schemas/FieldOperator"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Filter by date the series was added to the library\n(`series.created_at`).",
+            "required": [
+              "dateAdded"
+            ],
+            "properties": {
+              "dateAdded": {
+                "$ref": "#/components/schemas/DateOperator"
               }
             }
           }

@@ -6973,6 +6973,14 @@ export interface components {
             hasError: components["schemas"]["BoolOperator"];
         } | {
             bookType: components["schemas"]["FieldOperator"];
+        } | {
+            path: components["schemas"]["FieldOperator"];
+        } | {
+            format: components["schemas"]["FieldOperator"];
+        } | {
+            pageCount: components["schemas"]["NumberOperator"];
+        } | {
+            dateAdded: components["schemas"]["DateOperator"];
         };
         /**
          * @description Book context for template and condition evaluation.
@@ -9607,6 +9615,46 @@ export interface components {
              *     Example: "{publisher} - {series}"
              */
             seriesNameTemplate?: string;
+        };
+        /**
+         * @description Operators for date/timestamp comparisons.
+         *
+         *     Values are RFC 3339 / ISO 8601 timestamps. For range comparisons either
+         *     bound may be omitted to express an open-ended range.
+         */
+        DateOperator: {
+            /** @enum {string} */
+            operator: "after";
+            /** Format: date-time */
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "before";
+            /** Format: date-time */
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "onOrAfter";
+            /** Format: date-time */
+            value: string;
+        } | {
+            /** @enum {string} */
+            operator: "onOrBefore";
+            /** Format: date-time */
+            value: string;
+        } | {
+            /** Format: date-time */
+            end?: string | null;
+            /** @enum {string} */
+            operator: "between";
+            /** Format: date-time */
+            start?: string | null;
+        } | {
+            /** @enum {string} */
+            operator: "isNull";
+        } | {
+            /** @enum {string} */
+            operator: "isNotNull";
         };
         /** @description Response after deleting a preference */
         DeletePreferenceResponse: {
@@ -12512,6 +12560,56 @@ export interface components {
              * @example 550e8400-e29b-41d4-a716-446655440000
              */
             sharingTagId: string;
+        };
+        /**
+         * @description Operators for numeric comparisons (year, page count, etc.).
+         *
+         *     Values are deserialized as `i64` so the same operator can target either
+         *     `INTEGER` or `BIGINT` columns. Implementations downcast as needed.
+         */
+        NumberOperator: {
+            /** @enum {string} */
+            operator: "eq";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** @enum {string} */
+            operator: "ne";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** @enum {string} */
+            operator: "gt";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** @enum {string} */
+            operator: "gte";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** @enum {string} */
+            operator: "lt";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** @enum {string} */
+            operator: "lte";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** Format: int64 */
+            max?: number | null;
+            /** Format: int64 */
+            min?: number | null;
+            /** @enum {string} */
+            operator: "between";
+        } | {
+            /** @enum {string} */
+            operator: "isNull";
+        } | {
+            /** @enum {string} */
+            operator: "isNotNull";
         };
         /**
          * @description Book number strategy type for determining book ordering numbers
@@ -16203,6 +16301,12 @@ export interface components {
             hasUserRating: components["schemas"]["BoolOperator"];
         } | {
             isTracked: components["schemas"]["BoolOperator"];
+        } | {
+            year: components["schemas"]["NumberOperator"];
+        } | {
+            author: components["schemas"]["FieldOperator"];
+        } | {
+            dateAdded: components["schemas"]["DateOperator"];
         };
         /**
          * @description Series context for template and condition evaluation.
