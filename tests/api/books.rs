@@ -2722,6 +2722,197 @@ async fn test_list_books_filtered_by_read_status_read() {
     assert_eq!(book_list.data[0].id, book3.id);
 }
 
+#[tokio::test]
+async fn test_list_books_filtered_by_path_contains() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    let book1 =
+        create_test_book_model(series.id, library.id, "/lib/manga/one.cbz", "one.cbz", None);
+    let book2 = create_test_book_model(
+        series.id,
+        library.id,
+        "/lib/comics/two.cbz",
+        "two.cbz",
+        None,
+    );
+    let book3 = create_test_book_model(
+        series.id,
+        library.id,
+        "/lib/manga/three.cbz",
+        "three.cbz",
+        None,
+    );
+    BookRepository::create(&db, &book1, None).await.unwrap();
+    BookRepository::create(&db, &book2, None).await.unwrap();
+    BookRepository::create(&db, &book3, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BookListRequest {
+        condition: Some(BookCondition::Path {
+            path: FieldOperator::Contains {
+                value: "manga".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/books/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 2);
+    assert!(book_list.data.iter().all(|b| b.file_path.contains("manga")));
+}
+
+#[tokio::test]
+async fn test_list_books_filtered_by_format_is_epub() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    let mut book1 = create_test_book_model(series.id, library.id, "/a.cbz", "a.cbz", None);
+    book1.format = "cbz".to_string();
+    let mut book2 = create_test_book_model(series.id, library.id, "/b.epub", "b.epub", None);
+    book2.format = "epub".to_string();
+    let mut book3 = create_test_book_model(series.id, library.id, "/c.pdf", "c.pdf", None);
+    book3.format = "pdf".to_string();
+
+    BookRepository::create(&db, &book1, None).await.unwrap();
+    BookRepository::create(&db, &book2, None).await.unwrap();
+    BookRepository::create(&db, &book3, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BookListRequest {
+        condition: Some(BookCondition::Format {
+            format: FieldOperator::Is {
+                value: "epub".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/books/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 1);
+    assert_eq!(book_list.data[0].id, book2.id);
+}
+
+#[tokio::test]
+async fn test_list_books_filtered_by_page_count_between() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    let mut short = create_test_book_model(series.id, library.id, "/short.cbz", "short.cbz", None);
+    short.page_count = 20;
+    let mut medium =
+        create_test_book_model(series.id, library.id, "/medium.cbz", "medium.cbz", None);
+    medium.page_count = 150;
+    let mut long = create_test_book_model(series.id, library.id, "/long.cbz", "long.cbz", None);
+    long.page_count = 500;
+
+    BookRepository::create(&db, &short, None).await.unwrap();
+    BookRepository::create(&db, &medium, None).await.unwrap();
+    BookRepository::create(&db, &long, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // 100..=300 — only medium qualifies.
+    let request_body = BookListRequest {
+        condition: Some(BookCondition::PageCount {
+            page_count: NumberOperator::Between {
+                min: Some(100),
+                max: Some(300),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/books/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 1);
+    assert_eq!(book_list.data[0].id, medium.id);
+}
+
+#[tokio::test]
+async fn test_list_books_filtered_by_date_added_after() {
+    use chrono::{TimeZone, Utc};
+    use codex::api::routes::v1::dto::filter::DateOperator;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    let mut old = create_test_book_model(series.id, library.id, "/old.cbz", "old.cbz", None);
+    old.created_at = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+    let mut recent =
+        create_test_book_model(series.id, library.id, "/recent.cbz", "recent.cbz", None);
+    recent.created_at = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+
+    BookRepository::create(&db, &old, None).await.unwrap();
+    BookRepository::create(&db, &recent, None).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BookListRequest {
+        condition: Some(BookCondition::DateAdded {
+            date_added: DateOperator::After {
+                value: Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/books/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let book_list = response.unwrap();
+    assert_eq!(book_list.data.len(), 1);
+    assert_eq!(book_list.data[0].id, recent.id);
+}
+
 // ============================================================================
 // Book Errors V2 Tests
 // ============================================================================

@@ -5835,6 +5835,212 @@ async fn test_list_series_filtered_by_has_user_rating_with_rating_sort() {
     assert_eq!(series_list.data[2].title, "Unrated");
 }
 
+#[tokio::test]
+async fn test_list_series_filtered_by_year_between() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let s1990 = SeriesRepository::create(&db, library.id, "S 1990", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, s1990.id, Some(1990))
+        .await
+        .unwrap();
+    let s2005 = SeriesRepository::create(&db, library.id, "S 2005", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, s2005.id, Some(2005))
+        .await
+        .unwrap();
+    let s2024 = SeriesRepository::create(&db, library.id, "S 2024", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, s2024.id, Some(2024))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Year {
+            year: NumberOperator::Between {
+                min: Some(2000),
+                max: Some(2010),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, s2005.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_year_gte_open_ended() {
+    use codex::api::routes::v1::dto::filter::NumberOperator;
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let s1990 = SeriesRepository::create(&db, library.id, "S 1990", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, s1990.id, Some(1990))
+        .await
+        .unwrap();
+    let s2024 = SeriesRepository::create(&db, library.id, "S 2024", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_year(&db, s2024.id, Some(2024))
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    // "year >= 2000" via open-ended Between, exercising the optional min path.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Year {
+            year: NumberOperator::Between {
+                min: Some(2000),
+                max: None,
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, s2024.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_author_contains() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let torishima = SeriesRepository::create(&db, library.id, "Dragon Ball", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_authors_json(
+        &db,
+        torishima.id,
+        Some(r#"[{"name":"Akira Toriyama","role":"author"}]"#.to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let oda = SeriesRepository::create(&db, library.id, "One Piece", None)
+        .await
+        .unwrap();
+    SeriesMetadataRepository::update_authors_json(
+        &db,
+        oda.id,
+        Some(r#"[{"name":"Eiichiro Oda","role":"author"}]"#.to_string()),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Author {
+            author: FieldOperator::Contains {
+                value: "Toriyama".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, torishima.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_date_added_after() {
+    use chrono::{TimeZone, Utc};
+    use codex::api::routes::v1::dto::filter::DateOperator;
+    use codex::db::entities::series;
+    use sea_orm::{ActiveModelTrait, EntityTrait, IntoActiveModel, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let old = SeriesRepository::create(&db, library.id, "Old Series", None)
+        .await
+        .unwrap();
+    let recent = SeriesRepository::create(&db, library.id, "Recent Series", None)
+        .await
+        .unwrap();
+
+    // Backdate the "old" row so the filter has something to discriminate on;
+    // the `SeriesRepository::create` helper stamps `created_at = NOW()`.
+    let old_model = series::Entity::find_by_id(old.id)
+        .one(&db)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut am = old_model.into_active_model();
+    am.created_at = Set(Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap());
+    am.update(&db).await.unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::DateAdded {
+            date_added: DateOperator::After {
+                value: Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, recent.id);
+}
+
 // ============================================================================
 // Reprocess Title Tests
 // ============================================================================
