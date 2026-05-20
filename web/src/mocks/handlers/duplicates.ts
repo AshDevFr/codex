@@ -3,8 +3,8 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
-import type { DuplicateGroup } from "../data/factories";
-import { mockBooks } from "../data/store";
+import type { DuplicateGroup, SeriesDuplicateGroup } from "../data/factories";
+import { mockBooks, mockSeries } from "../data/store";
 
 // Generate mock duplicate groups using actual book IDs
 const createMockDuplicates = (): DuplicateGroup[] => {
@@ -32,7 +32,64 @@ const createMockDuplicates = (): DuplicateGroup[] => {
   return groups;
 };
 
+// Generate mock series duplicate groups. We create one `external_id` group
+// (cross-library) and one `title` group (scoped to a single library) so the
+// frontend can exercise both code paths.
+const createMockSeriesDuplicates = (): SeriesDuplicateGroup[] => {
+  const groups: SeriesDuplicateGroup[] = [];
+  if (mockSeries.length >= 2) {
+    groups.push({
+      id: "series-dup-external-1",
+      matchType: "external_id",
+      matchKey: "plugin:mangabaka:12345",
+      libraryId: null,
+      seriesIds: [mockSeries[0].id, mockSeries[1].id],
+      duplicateCount: 2,
+      createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    });
+  }
+  if (mockSeries.length >= 4) {
+    // Pick two series that share the same library so the `title` group has a
+    // libraryId set (matching backend semantics).
+    const sameLibrarySeries = mockSeries.filter(
+      (s) => s.libraryId === mockSeries[2].libraryId,
+    );
+    if (sameLibrarySeries.length >= 2) {
+      groups.push({
+        id: "series-dup-title-1",
+        matchType: "title",
+        matchKey: "naruto",
+        libraryId: sameLibrarySeries[0].libraryId,
+        seriesIds: [sameLibrarySeries[0].id, sameLibrarySeries[1].id],
+        duplicateCount: 2,
+        createdAt: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      });
+    }
+  }
+  return groups;
+};
+
 const mockDuplicates = createMockDuplicates();
+const mockSeriesDuplicates = createMockSeriesDuplicates();
+
+const computeSeriesDuplicateTotals = (groups: SeriesDuplicateGroup[]) => {
+  let externalIdGroups = 0;
+  let titleGroups = 0;
+  let totalDuplicateSeries = 0;
+  for (const g of groups) {
+    totalDuplicateSeries += g.duplicateCount;
+    if (g.matchType === "external_id") externalIdGroups += 1;
+    else if (g.matchType === "title") titleGroups += 1;
+  }
+  return {
+    totalGroups: groups.length,
+    totalDuplicateSeries,
+    externalIdGroups,
+    titleGroups,
+  };
+};
 
 export const duplicatesHandlers = [
   // List all duplicates
@@ -55,6 +112,22 @@ export const duplicatesHandlers = [
       duplicates: filteredDuplicates,
       totalGroups: filteredDuplicates.length,
       totalDuplicateBooks: totalDuplicateBooks,
+    });
+  }),
+
+  // List series duplicates (optionally filtered by matchType)
+  http.get("/api/v1/duplicates/series", async ({ request }) => {
+    await delay(100);
+    const url = new URL(request.url);
+    const matchType = url.searchParams.get("matchType");
+    const filtered = matchType
+      ? mockSeriesDuplicates.filter((g) => g.matchType === matchType)
+      : mockSeriesDuplicates;
+    const totals = computeSeriesDuplicateTotals(filtered);
+
+    return HttpResponse.json({
+      duplicates: filtered,
+      ...totals,
     });
   }),
 
@@ -91,6 +164,18 @@ export const duplicatesHandlers = [
       deletedCount: deletedCount,
       keptBookId: keepBookId,
     });
+  }),
+
+  // Delete a series duplicate group
+  http.delete("/api/v1/duplicates/series/:groupId", async ({ params }) => {
+    await delay(120);
+    const { groupId } = params;
+    const idx = mockSeriesDuplicates.findIndex((g) => g.id === groupId);
+    if (idx === -1) {
+      return new HttpResponse(null, { status: 404 });
+    }
+    mockSeriesDuplicates.splice(idx, 1);
+    return new HttpResponse(null, { status: 204 });
   }),
 
   // Rescan for duplicates

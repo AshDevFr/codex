@@ -36,6 +36,8 @@ export type TaskStats = components["schemas"]["TaskStats"];
 export type SettingDto = components["schemas"]["SettingDto"];
 export type SettingHistoryDto = components["schemas"]["SettingHistoryDto"];
 export type DuplicateGroup = components["schemas"]["DuplicateGroup"];
+export type SeriesDuplicateGroup =
+  components["schemas"]["SeriesDuplicateGroup"];
 
 // Re-export pagination types from centralized definitions
 export type { PaginatedResponse, PaginationLinks };
@@ -951,6 +953,26 @@ export const createDuplicateGroup = (
   fileHash: faker.string.alphanumeric(64),
   duplicateCount: faker.number.int({ min: 2, max: 5 }),
   bookIds: [faker.string.uuid(), faker.string.uuid()],
+  createdAt: faker.date.past().toISOString(),
+  updatedAt: faker.date.recent().toISOString(),
+  ...overrides,
+});
+
+/**
+ * Series duplicate group factory - matches SeriesDuplicateGroup schema.
+ *
+ * Defaults to an `external_id` match (cross-library, library_id null). Override
+ * `matchType: "title"` and supply a `libraryId` for the title-match variant.
+ */
+export const createSeriesDuplicateGroup = (
+  overrides: Partial<SeriesDuplicateGroup> = {},
+): SeriesDuplicateGroup => ({
+  id: faker.string.uuid(),
+  matchType: "external_id",
+  matchKey: "plugin:mangabaka:12345",
+  libraryId: null,
+  seriesIds: [faker.string.uuid(), faker.string.uuid()],
+  duplicateCount: 2,
   createdAt: faker.date.past().toISOString(),
   updatedAt: faker.date.recent().toISOString(),
   ...overrides,
