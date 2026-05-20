@@ -309,13 +309,13 @@ If you move files:
 
 ## Duplicate Detection
 
-Codex can detect duplicate books across libraries using file hashes (SHA-256).
+Codex can detect duplicate **books** (by file hash) and duplicate **series** (by external ID or normalized title) from a single page.
 
 ![Duplicate Detection](../screenshots/settings/duplicates.png)
 
 ### Enable Duplicate Scanning
 
-Via the web interface, go to **Settings** > **Duplicates** and click **Scan for Duplicates**.
+Via the web interface, go to **Settings** > **Duplicates** and click **Scan for Duplicates**. A single scan runs both the book and series detection passes.
 
 Or via the API:
 
@@ -324,16 +324,55 @@ curl -X POST http://localhost:8080/api/v1/duplicates/scan \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### View Duplicates
+### Book Duplicates
+
+Books are compared by their file hash (SHA-256). Two books with the same content, regardless of filename, library, or series, are grouped together.
 
 ```bash
 curl http://localhost:8080/api/v1/duplicates \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Duplicates are detected by:
-- File hash (exact duplicates)
-- Metadata matching (same series/number)
+### Series Duplicates
+
+Series are matched by two independent signals, shown on the **Series** tab:
+
+- **External ID (High confidence).** Two series resolve to the same upstream record after metadata fetch (e.g. both point at `plugin:mangabaka:12345`). This match is global: the same external ID in two different libraries is still flagged.
+- **Normalized title (Possible match).** Two series in the **same library** share the same normalized title (e.g. `naruto`). This match is scoped to one library so that a comic and a manga edition in separate libraries are not treated as duplicates.
+
+Each group shows the matched series with their library, book count, and last-updated date so you can decide which entry to keep.
+
+```bash
+# All series duplicate groups
+curl http://localhost:8080/api/v1/duplicates/series \
+  -H "Authorization: Bearer $TOKEN"
+
+# Filter by signal: external_id or title
+curl "http://localhost:8080/api/v1/duplicates/series?matchType=external_id" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Deleting a Group
+
+Deleting a duplicate group from the UI or API only removes the **tracking record**. The underlying books and series are never touched. If the duplicates still exist on disk, the next scan recreates the group.
+
+```bash
+# Remove a book duplicate group
+curl -X DELETE http://localhost:8080/api/v1/duplicates/{id} \
+  -H "Authorization: Bearer $TOKEN"
+
+# Remove a series duplicate group
+curl -X DELETE http://localhost:8080/api/v1/duplicates/series/{id} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### When to Rescan
+
+The scan is triggered manually. Rerun it after:
+
+- A library scan that ingested new series.
+- A metadata fetch that assigned or changed external IDs (this can promote a title-only match into a higher-confidence external ID match).
+- Renaming a series, which changes its normalized title.
 
 ## Troubleshooting
 
