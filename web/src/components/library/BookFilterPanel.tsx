@@ -15,6 +15,7 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import {
   IconAdjustments,
   IconAlertTriangle,
@@ -26,14 +27,23 @@ import {
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { FilterPresetDto } from "@/api/filterPresets";
 import { genresApi } from "@/api/genres";
 import { tagsApi } from "@/api/tags";
 import { useBookFilterState } from "@/hooks/useBookFilterState";
 import { useDraftBookFilterState } from "@/hooks/useDraftBookFilterState";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
+import {
+  BOOK_FILTER_PARAM_KEYS,
+  type BookCondition,
+  conditionToBookFilterState,
+  serializeBookFilters,
+} from "@/types/filters";
 import { FilterBottomSheet } from "./FilterBottomSheet";
 import { FilterGroup } from "./FilterGroup";
 import classes from "./FilterPanel.module.css";
+import { ListPresetControls } from "./ListPresetControls";
 
 // Read status options (user's reading progress)
 const READ_STATUS_OPTIONS = [
@@ -83,16 +93,54 @@ function SectionHeader({
  * - URL-synchronized filter state
  * - Book-specific filters: Read Status, Has Error
  */
-export function BookFilterPanel() {
+export interface BookFilterPanelProps {
+  /** UUID of the library being filtered, or null when scope is "all libraries". */
+  libraryId?: string | null;
+}
+
+export function BookFilterPanel({ libraryId }: BookFilterPanelProps = {}) {
   const [opened, { open, close }] = useDisclosure(false);
   // Use committed state for the indicator badge (shows what's actually applied)
   const {
     activeFilterCount: committedFilterCount,
     hasActiveFilters: hasCommittedFilters,
+    condition: committedCondition,
   } = useBookFilterState();
   // Use draft state for editing within the drawer
   const draftState = useDraftBookFilterState();
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const normalizedLibraryId =
+    !libraryId || libraryId === "all" ? null : libraryId;
+
+  const handleApplyPreset = (preset: FilterPresetDto) => {
+    const condition = preset.condition as unknown as BookCondition | undefined;
+    const next = conditionToBookFilterState(condition);
+    if (!next) {
+      notifications.show({
+        title: "Preset uses advanced filters",
+        message:
+          "This preset can't be applied here. Open it in the advanced search page.",
+        color: "yellow",
+      });
+      return;
+    }
+
+    const filterParams = serializeBookFilters(next);
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.genres);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.tags);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.readStatus);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.bookType);
+    newParams.delete(BOOK_FILTER_PARAM_KEYS.hasError);
+    for (const [key, value] of filterParams) {
+      newParams.set(key, value);
+    }
+    newParams.set("page", "1");
+    setSearchParams(newParams, { replace: true });
+    close();
+  };
 
   // Get show deleted preference from user preferences store
   const showDeletedBooks = useUserPreferencesStore((state) =>
@@ -199,6 +247,16 @@ export function BookFilterPanel() {
     </Group>
   ) : (
     <Stack gap="sm">
+      <ListPresetControls
+        target="books"
+        libraryId={normalizedLibraryId}
+        currentCondition={committedCondition}
+        hasActiveFilters={hasCommittedFilters}
+        onApply={handleApplyPreset}
+      />
+
+      <Divider my={4} />
+
       <SectionHeader icon={IconBookmark}>Reading Progress</SectionHeader>
 
       <FilterGroup
