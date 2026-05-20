@@ -1184,6 +1184,7 @@ pub async fn list_series_filtered(
     Query(pagination): Query<ListPaginationParams>,
     Json(request): Json<SeriesListRequest>,
 ) -> Result<Response, ApiError> {
+    use crate::api::routes::v1::dto::series::{SeriesSortField, SortDirection};
     use crate::services::FilterService;
     use std::collections::HashSet;
 
@@ -1191,81 +1192,166 @@ pub async fn list_series_filtered(
 
     // Validate and normalize pagination params (1-indexed, from query params)
     let (page, page_size) = pagination.validated();
+    let offset = (page - 1) * page_size;
 
-    // Get all series IDs first (we'll filter from this)
-    let all_series = SeriesRepository::list_all(&state.db)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?;
+    let fuzzy_enabled = crate::db::repositories::SettingsRepository::get_value::<bool>(
+        &state.db,
+        "search.fuzzy.enabled",
+    )
+    .await
+    .unwrap_or(Some(false))
+    .unwrap_or(false);
+
+    let has_fuzzy_search_query = fuzzy_enabled
+        && request
+            .full_text_search
+            .as_ref()
+            .is_some_and(|q| !q.trim().is_empty());
+
+    // Sort resolution precedence:
+    //   1. Explicit `sort` param wins (incl. "relevance").
+    //   2. No sort + query present + fuzzy on → implicit relevance.
+    //   3. Otherwise → default name asc.
+    // `Relevance` only takes effect when a fuzzy query is actually in play; if
+    // it isn't, fall back to the natural default so the repo never has to
+    // pretend to sort by an in-memory score.
+    let parsed_sort = pagination.sort.as_deref().map(SeriesSortParam::parse);
+    let sort = match parsed_sort {
+        Some(s) if s.field == SeriesSortField::Relevance && !has_fuzzy_search_query => {
+            SeriesSortParam::default()
+        }
+        Some(s) => s,
+        None if has_fuzzy_search_query => SeriesSortParam {
+            field: SeriesSortField::Relevance,
+            direction: SortDirection::Desc,
+        },
+        None => SeriesSortParam::default(),
+    };
+    let use_relevance_order = sort.field == SeriesSortField::Relevance && has_fuzzy_search_query;
 
     // Apply sharing tag content filter
     let content_filter = ContentFilter::for_user(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to load content filter: {}", e)))?;
 
-    let all_series: Vec<_> = all_series
-        .into_iter()
-        .filter(|s| content_filter.is_series_visible(s.id))
-        .collect();
-
-    let all_series_ids: HashSet<Uuid> = all_series.iter().map(|s| s.id).collect();
-
-    // Apply filter condition if provided (with user context for ReadStatus filtering)
-    let matching_ids = if let Some(ref condition) = request.condition {
-        FilterService::get_matching_series_for_user(
-            &state.db,
-            condition,
-            Some(&all_series_ids),
-            Some(auth.user_id),
+    // Evaluate filter condition once up-front; both branches reuse this set.
+    let condition_matches: Option<HashSet<Uuid>> = if let Some(ref condition) = request.condition {
+        Some(
+            FilterService::get_matching_series_for_user(
+                &state.db,
+                condition,
+                None,
+                Some(auth.user_id),
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to apply filter: {}", e)))?,
         )
-        .await
-        .map_err(|e| ApiError::Internal(format!("Failed to apply filter: {}", e)))?
     } else {
-        all_series_ids.clone()
+        None
     };
 
-    // Apply full-text search if provided - get the final list of IDs
-    let filtered_ids: Vec<Uuid> = if let Some(ref search_query) = request.full_text_search {
-        if !search_query.trim().is_empty() {
-            // Use full-text search with candidate filtering
+    let (series_list, total) = if has_fuzzy_search_query {
+        // FUZZY PATH: rank candidates with the in-memory index, then intersect
+        // with content + condition filters. Over-fetch so permission drops and
+        // condition cuts still leave a full page when possible.
+        let search_query = request
+            .full_text_search
+            .as_deref()
+            .unwrap_or("")
+            .to_string();
+        let raw_limit = (offset + page_size).max(page_size) as usize;
+        let candidate_limit = raw_limit.saturating_mul(3).max(50);
+        let candidates = state
+            .fuzzy_index
+            .search_series(&search_query, candidate_limit, None);
+
+        let visible: Vec<Uuid> = candidates
+            .into_iter()
+            .filter(|(series_id, _)| content_filter.is_series_visible(*series_id))
+            .filter(|(series_id, _)| {
+                condition_matches
+                    .as_ref()
+                    .is_none_or(|ids| ids.contains(series_id))
+            })
+            .map(|(series_id, _)| series_id)
+            .collect();
+        let total = visible.len() as u64;
+
+        let series_list = if use_relevance_order {
+            // Preserve nucleo rank order: paginate the ranked id list first,
+            // then hydrate that exact slice so SeaORM doesn't re-order them.
+            let page_ids: Vec<Uuid> = visible
+                .into_iter()
+                .skip(offset as usize)
+                .take(page_size as usize)
+                .collect();
+            SeriesRepository::hydrate_by_ids(&state.db, None, &page_ids)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Failed to hydrate series: {}", e)))?
+        } else {
+            // Explicit sort overrides relevance: defer sorting + pagination to
+            // the repo so the DB returns rows already ordered by the chosen
+            // field, not by fuzzy score.
+            let (models, _) = SeriesRepository::list_by_ids_sorted(
+                &state.db,
+                &visible,
+                &sort,
+                Some(auth.user_id),
+                offset,
+                page_size,
+            )
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
+            models
+        };
+
+        (series_list, total)
+    } else {
+        // LEGACY (LIKE / no-search) PATH: unchanged behavior when fuzzy is off
+        // or no text query is present.
+        let all_series_ids: HashSet<Uuid> = SeriesRepository::list_all(&state.db)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to fetch series: {}", e)))?
+            .into_iter()
+            .filter(|s| content_filter.is_series_visible(s.id))
+            .map(|s| s.id)
+            .collect();
+
+        let matching_ids: HashSet<Uuid> = match condition_matches {
+            Some(ids) => ids.intersection(&all_series_ids).copied().collect(),
+            None => all_series_ids,
+        };
+
+        let filtered_ids: Vec<Uuid> = if let Some(ref search_query) = request.full_text_search
+            && !search_query.trim().is_empty()
+        {
+            // Use LIKE-based search restricted to the matching set.
             let candidate_ids: Vec<Uuid> = matching_ids.iter().cloned().collect();
             let (search_results, _) = SeriesRepository::search_by_title(
                 &state.db,
                 search_query,
                 None,
                 Some(&candidate_ids),
-                None, // No pagination - we need all matching IDs
+                None,
             )
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to search series: {}", e)))?;
             search_results.iter().map(|s| s.id).collect()
         } else {
-            // Empty search query, use condition-filtered results
             matching_ids.into_iter().collect()
-        }
-    } else {
-        // No full-text search, use condition-filtered results
-        matching_ids.into_iter().collect()
+        };
+
+        SeriesRepository::list_by_ids_sorted(
+            &state.db,
+            &filtered_ids,
+            &sort,
+            Some(auth.user_id),
+            offset,
+            page_size,
+        )
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?
     };
-
-    // Parse sort parameter from query params (default to name,asc)
-    let sort = pagination
-        .sort
-        .as_ref()
-        .map(|s| SeriesSortParam::parse(s))
-        .unwrap_or_default();
-
-    // Use database-level sorting with the filtered IDs (convert to 0-indexed offset)
-    let offset = (page - 1) * page_size;
-    let (series_list, total) = SeriesRepository::list_by_ids_sorted(
-        &state.db,
-        &filtered_ids,
-        &sort,
-        Some(auth.user_id),
-        offset,
-        page_size,
-    )
-    .await
-    .map_err(|e| ApiError::Internal(format!("Failed to fetch sorted series: {}", e)))?;
 
     // Build pagination links with query params
     let total_pages = if page_size == 0 {
