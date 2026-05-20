@@ -194,12 +194,29 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
                       {books.slice(0, 5).map(renderBookOption)}
                     </Combobox.Group>
                   )}
-                  {(series.length > 5 || books.length > 5) && (
-                    <Combobox.Footer className={classes.footer}>
+                  <Combobox.Footer className={classes.footer}>
+                    <Group justify="space-between" wrap="nowrap" gap="xs">
+                      {series.length > 5 || books.length > 5 ? (
+                        <Text
+                          size="xs"
+                          c="dimmed"
+                          style={{ cursor: "pointer" }}
+                          onClick={() => {
+                            combobox.closeDropdown();
+                            navigate(
+                              `/search?q=${encodeURIComponent(query.trim())}`,
+                            );
+                          }}
+                        >
+                          Press Enter to see all results
+                        </Text>
+                      ) : (
+                        <span />
+                      )}
                       <Text
                         size="xs"
                         c="dimmed"
-                        ta="center"
+                        fw={500}
                         style={{ cursor: "pointer" }}
                         onClick={() => {
                           combobox.closeDropdown();
@@ -208,10 +225,10 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
                           );
                         }}
                       >
-                        Press Enter to see all results
+                        Advanced search →
                       </Text>
-                    </Combobox.Footer>
-                  )}
+                    </Group>
+                  </Combobox.Footer>
                 </Combobox.Options>
               )}
             </ScrollArea.Autosize>

@@ -23,7 +23,7 @@ import { Reader } from "@/pages/Reader";
 import { Recommendations } from "@/pages/Recommendations";
 import { Register } from "@/pages/Register";
 import { ReleasesInbox } from "@/pages/ReleasesInbox";
-import { SearchResults } from "@/pages/SearchResults";
+import { SearchPage } from "@/pages/SearchPage";
 import { SeriesDetail } from "@/pages/SeriesDetail";
 import { Setup } from "@/pages/Setup";
 import {
@@ -273,7 +273,7 @@ function App() {
           element={
             <ProtectedRoute>
               <AppLayout>
-                <SearchResults />
+                <SearchPage />
               </AppLayout>
             </ProtectedRoute>
           }
