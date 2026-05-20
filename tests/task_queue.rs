@@ -1366,13 +1366,10 @@ async fn test_find_duplicates_handler_with_duplicates() {
         .expect("Handler failed");
 
     assert!(result.success, "Handler should succeed");
+    let msg = result.message.as_ref().unwrap();
     assert!(
-        result
-            .message
-            .as_ref()
-            .unwrap()
-            .contains("1 duplicate group"),
-        "Should find 1 duplicate group"
+        msg.contains("1 book"),
+        "Should report 1 book duplicate group, got: {msg}"
     );
 
     // Verify duplicate group was created
@@ -1419,13 +1416,10 @@ async fn test_find_duplicates_handler_with_no_duplicates() {
         .expect("Handler failed");
 
     assert!(result.success, "Handler should succeed");
+    let msg = result.message.as_ref().unwrap();
     assert!(
-        result
-            .message
-            .as_ref()
-            .unwrap()
-            .contains("0 duplicate groups"),
-        "Should find 0 duplicate groups"
+        msg.contains("0 book") && msg.contains("0 series"),
+        "Should report 0 book and 0 series duplicate groups, got: {msg}"
     );
 
     // Verify no duplicate groups were created
@@ -1472,13 +1466,10 @@ async fn test_find_duplicates_handler_with_multiple_groups() {
         .expect("Handler failed");
 
     assert!(result.success, "Handler should succeed");
+    let msg = result.message.as_ref().unwrap();
     assert!(
-        result
-            .message
-            .as_ref()
-            .unwrap()
-            .contains("2 duplicate groups"),
-        "Should find 2 duplicate groups"
+        msg.contains("2 book"),
+        "Should report 2 book duplicate groups, got: {msg}"
     );
 
     // Verify duplicate groups were created

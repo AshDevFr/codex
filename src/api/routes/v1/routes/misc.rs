@@ -61,6 +61,13 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
         // Duplicate detection routes
         .route("/duplicates", get(handlers::list_duplicates))
         .route("/duplicates/scan", post(handlers::trigger_duplicate_scan))
+        // Series duplicate routes (declared before /duplicates/{duplicate_id}
+        // so the literal "series" segment is matched first by Axum's router).
+        .route("/duplicates/series", get(handlers::list_series_duplicates))
+        .route(
+            "/duplicates/series/{duplicate_id}",
+            delete(handlers::delete_series_duplicate_group),
+        )
         .route(
             "/duplicates/{duplicate_id}",
             delete(handlers::delete_duplicate_group),

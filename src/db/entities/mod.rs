@@ -48,6 +48,7 @@ pub mod release_sources;
 pub mod series_aliases;
 pub mod series_alternate_titles;
 pub mod series_covers;
+pub mod series_duplicates;
 pub mod series_exports;
 pub mod series_external_ids;
 pub mod series_external_links;

@@ -2165,6 +2165,12 @@ impl SeriesRepository {
 
     /// Delete a series
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
+        // Remove this series from any duplicate group it participates in before
+        // dropping the row, since series_duplicates.series_ids is a JSON text
+        // column (no FK cascade available).
+        use crate::db::repositories::SeriesDuplicatesRepository;
+        SeriesDuplicatesRepository::cleanup_for_series(db, id).await?;
+
         Series::delete_by_id(id)
             .exec(db)
             .await
@@ -2199,6 +2205,9 @@ impl SeriesRepository {
 
             if book_count == 0 {
                 let series_id = series_model.id;
+
+                use crate::db::repositories::SeriesDuplicatesRepository;
+                SeriesDuplicatesRepository::cleanup_for_series(db, series_id).await?;
 
                 Series::delete_by_id(series_id)
                     .exec(db)
@@ -2256,6 +2265,9 @@ impl SeriesRepository {
 
         if book_count == 0 {
             // Series is empty, delete it
+            use crate::db::repositories::SeriesDuplicatesRepository;
+            SeriesDuplicatesRepository::cleanup_for_series(db, series_id).await?;
+
             Series::delete_by_id(series_id)
                 .exec(db)
                 .await

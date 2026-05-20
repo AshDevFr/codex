@@ -23,6 +23,7 @@ pub mod release_sources;
 pub mod series;
 pub mod series_aliases;
 pub mod series_covers;
+pub mod series_duplicates;
 pub mod series_export;
 pub mod series_external_id;
 pub mod series_metadata;
@@ -80,6 +81,8 @@ pub use series::{SeriesQueryOptions, SeriesQuerySort, SeriesRepository, SeriesSo
 #[allow(unused_imports)]
 pub use series_aliases::SeriesAliasRepository;
 pub use series_covers::SeriesCoversRepository;
+#[allow(unused_imports)]
+pub use series_duplicates::SeriesDuplicatesRepository;
 pub use series_export::SeriesExportRepository;
 pub use series_external_id::SeriesExternalIdRepository;
 pub use series_metadata::SeriesMetadataRepository;

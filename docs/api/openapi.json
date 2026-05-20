@@ -5034,6 +5034,97 @@
         ]
       }
     },
+    "/api/v1/duplicates/series": {
+      "get": {
+        "tags": [
+          "Duplicates"
+        ],
+        "summary": "List all series duplicate groups.",
+        "description": "Optionally filter by `match_type` (`external_id` or `title`).\n\n# Permission Required\n- `series:read`",
+        "operationId": "list_series_duplicates",
+        "parameters": [
+          {
+            "name": "matchType",
+            "in": "query",
+            "description": "Optional filter: `external_id` or `title`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of series duplicate groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSeriesDuplicatesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid match_type"
+          },
+          "403": {
+            "description": "Permission denied"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/duplicates/series/{duplicate_id}": {
+      "delete": {
+        "tags": [
+          "Duplicates"
+        ],
+        "summary": "Delete a series duplicate group (does not delete the underlying series).",
+        "description": "# Permission Required\n- `series:write`",
+        "operationId": "delete_series_duplicate_group",
+        "parameters": [
+          {
+            "name": "duplicate_id",
+            "in": "path",
+            "description": "Series duplicate group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Duplicate group deleted"
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "Duplicate group not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/duplicates/{duplicate_id}": {
       "delete": {
         "tags": [
@@ -27896,6 +27987,50 @@
           }
         }
       },
+      "ListSeriesDuplicatesResponse": {
+        "type": "object",
+        "description": "Response for listing series duplicates.",
+        "required": [
+          "duplicates",
+          "totalGroups",
+          "totalDuplicateSeries",
+          "externalIdGroups",
+          "titleGroups"
+        ],
+        "properties": {
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesDuplicateGroup"
+            },
+            "description": "List of duplicate groups"
+          },
+          "externalIdGroups": {
+            "type": "integer",
+            "description": "Number of groups matched by external ID (high confidence).",
+            "example": 1,
+            "minimum": 0
+          },
+          "titleGroups": {
+            "type": "integer",
+            "description": "Number of groups matched by normalized title (lower confidence).",
+            "example": 2,
+            "minimum": 0
+          },
+          "totalDuplicateSeries": {
+            "type": "integer",
+            "description": "Total number of series that participate in any duplicate group.",
+            "example": 8,
+            "minimum": 0
+          },
+          "totalGroups": {
+            "type": "integer",
+            "description": "Total number of duplicate groups (across both match types).",
+            "example": 3,
+            "minimum": 0
+          }
+        }
+      },
       "ListSettingsQuery": {
         "type": "object",
         "description": "Query parameters for listing settings",
@@ -35526,6 +35661,69 @@
             "format": "int32",
             "description": "Release year",
             "example": 1987
+          }
+        }
+      },
+      "SeriesDuplicateGroup": {
+        "type": "object",
+        "description": "A group of duplicate series.\n\nTwo detection methods are surfaced through `match_type`:\n- `external_id`: high-confidence match where two or more series resolve to\n  the same plugin/external identifier. Cross-library by design.\n- `title`: medium-confidence match where two or more series in the same\n  library share the same normalized title.",
+        "required": [
+          "id",
+          "matchType",
+          "matchKey",
+          "seriesIds",
+          "duplicateCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "description": "When the duplicate was first detected",
+            "example": "2026-05-20T10:30:00Z"
+          },
+          "duplicateCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of series in the group.",
+            "example": 2
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the duplicate group",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "libraryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Library this group is scoped to. Null for `external_id` matches."
+          },
+          "matchKey": {
+            "type": "string",
+            "description": "For `external_id` matches: \"<source>:<external_id>\" e.g. \"plugin:mangabaka:12345\".\nFor `title` matches: the normalized search title (e.g. \"naruto\").",
+            "example": "plugin:mangabaka:12345"
+          },
+          "matchType": {
+            "type": "string",
+            "description": "`external_id` or `title`",
+            "example": "external_id"
+          },
+          "seriesIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "IDs of the series sharing this match key."
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "When the group was last updated",
+            "example": "2026-05-20T10:30:00Z"
           }
         }
       },

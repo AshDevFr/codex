@@ -58,3 +58,78 @@ pub struct TriggerDuplicateScanResponse {
     #[schema(example = "Duplicate scan started")]
     pub message: String,
 }
+
+/// A group of duplicate series.
+///
+/// Two detection methods are surfaced through `match_type`:
+/// - `external_id`: high-confidence match where two or more series resolve to
+///   the same plugin/external identifier. Cross-library by design.
+/// - `title`: medium-confidence match where two or more series in the same
+///   library share the same normalized title.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesDuplicateGroup {
+    /// Unique identifier for the duplicate group
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub id: Uuid,
+
+    /// `external_id` or `title`
+    #[schema(example = "external_id")]
+    pub match_type: String,
+
+    /// For `external_id` matches: "<source>:<external_id>" e.g. "plugin:mangabaka:12345".
+    /// For `title` matches: the normalized search title (e.g. "naruto").
+    #[schema(example = "plugin:mangabaka:12345")]
+    pub match_key: String,
+
+    /// Library this group is scoped to. Null for `external_id` matches.
+    pub library_id: Option<Uuid>,
+
+    /// IDs of the series sharing this match key.
+    pub series_ids: Vec<Uuid>,
+
+    /// Number of series in the group.
+    #[schema(example = 2)]
+    pub duplicate_count: i32,
+
+    /// When the duplicate was first detected
+    #[schema(example = "2026-05-20T10:30:00Z")]
+    pub created_at: String,
+
+    /// When the group was last updated
+    #[schema(example = "2026-05-20T10:30:00Z")]
+    pub updated_at: String,
+}
+
+/// Response for listing series duplicates.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListSeriesDuplicatesResponse {
+    /// List of duplicate groups
+    pub duplicates: Vec<SeriesDuplicateGroup>,
+
+    /// Total number of duplicate groups (across both match types).
+    #[schema(example = 3)]
+    pub total_groups: usize,
+
+    /// Total number of series that participate in any duplicate group.
+    #[schema(example = 8)]
+    pub total_duplicate_series: usize,
+
+    /// Number of groups matched by external ID (high confidence).
+    #[schema(example = 1)]
+    pub external_id_groups: usize,
+
+    /// Number of groups matched by normalized title (lower confidence).
+    #[schema(example = 2)]
+    pub title_groups: usize,
+}
+
+/// Query parameters for listing series duplicates.
+#[derive(Debug, Clone, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+pub struct ListSeriesDuplicatesQuery {
+    /// Optional filter: `external_id` or `title`.
+    #[serde(default)]
+    pub match_type: Option<String>,
+}

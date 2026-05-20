@@ -173,6 +173,8 @@ mod m20260511_000082_add_plugin_request_timeout;
 mod m20260518_000083_create_refresh_tokens;
 // Seed the runtime flag that gates fuzzy-search use of the in-memory index
 mod m20260519_000084_seed_fuzzy_search_setting;
+// Series-level duplicate detection (matches by external ID or normalized title)
+mod m20260520_000085_create_series_duplicates;
 
 pub struct Migrator;
 
@@ -316,6 +318,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260518_000083_create_refresh_tokens::Migration),
             // Seed the fuzzy-search rollout flag
             Box::new(m20260519_000084_seed_fuzzy_search_setting::Migration),
+            // Series-level duplicate detection
+            Box::new(m20260520_000085_create_series_duplicates::Migration),
         ]
     }
 }
