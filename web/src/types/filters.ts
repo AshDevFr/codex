@@ -46,6 +46,37 @@ export type UuidOperator =
 export type BoolOperator = { operator: "isTrue" } | { operator: "isFalse" };
 
 // =============================================================================
+// Number operators (matches backend NumberOperator)
+// =============================================================================
+
+export type NumberOperator =
+  | { operator: "eq"; value: number }
+  | { operator: "ne"; value: number }
+  | { operator: "gt"; value: number }
+  | { operator: "gte"; value: number }
+  | { operator: "lt"; value: number }
+  | { operator: "lte"; value: number }
+  | { operator: "between"; min?: number | null; max?: number | null }
+  | { operator: "isNull" }
+  | { operator: "isNotNull" };
+
+// =============================================================================
+// Date operators (matches backend DateOperator)
+//
+// Values are ISO-8601 UTC strings (the same shape that comes back over the
+// wire). Open-ended ranges set `start`/`end` to null.
+// =============================================================================
+
+export type DateOperator =
+  | { operator: "after"; value: string }
+  | { operator: "before"; value: string }
+  | { operator: "onOrAfter"; value: string }
+  | { operator: "onOrBefore"; value: string }
+  | { operator: "between"; start?: string | null; end?: string | null }
+  | { operator: "isNull" }
+  | { operator: "isNotNull" };
+
+// =============================================================================
 // Series conditions (matches backend SeriesCondition)
 // =============================================================================
 
@@ -65,7 +96,10 @@ export type SeriesCondition =
   | { completion: BoolOperator }
   | { hasExternalSourceId: BoolOperator }
   | { hasUserRating: BoolOperator }
-  | { isTracked: BoolOperator };
+  | { isTracked: BoolOperator }
+  | { year: NumberOperator }
+  | { author: FieldOperator }
+  | { dateAdded: DateOperator };
 
 // =============================================================================
 // Book conditions (matches backend BookCondition)
@@ -81,7 +115,11 @@ export type BookCondition =
   | { title: FieldOperator }
   | { readStatus: FieldOperator }
   | { hasError: BoolOperator }
-  | { bookType: FieldOperator };
+  | { bookType: FieldOperator }
+  | { path: FieldOperator }
+  | { format: FieldOperator }
+  | { pageCount: NumberOperator }
+  | { dateAdded: DateOperator };
 
 // =============================================================================
 // Request types (matches backend SeriesListRequest/BookListRequest)
