@@ -2,6 +2,14 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.26.0] - 2026-05-20
+
+### 🚀 Features
+
+- *(search)* Add in-memory fuzzy index over series and books
+- *(search)* Keep fuzzy index live via event-driven incremental updates
+- *(search)* Route global search through the fuzzy index behind a runtime flag
+
 ## [1.25.0] - 2026-05-19
 
 ### 🚀 Features
