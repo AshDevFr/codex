@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.26.1] - 2026-05-20
+
+### ⚡ Performance
+
+- *(search)* Batch DTO hydration in fuzzy search path
+
 ## [1.26.0] - 2026-05-20
 
 ### 🚀 Features
