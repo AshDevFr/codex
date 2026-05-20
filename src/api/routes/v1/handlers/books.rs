@@ -858,6 +858,9 @@ pub async fn list_books_filtered(
     Query(pagination): Query<ListPaginationParams>,
     Json(request): Json<BookListRequest>,
 ) -> Result<Response, ApiError> {
+    use crate::api::routes::v1::dto::book::{BookSortField, BookSortParam};
+    use crate::api::routes::v1::dto::series::SortDirection;
+
     require_permission!(auth, Permission::BooksRead)?;
 
     // Validate and normalize pagination params (1-indexed, from query params)
@@ -893,6 +896,27 @@ pub async fn list_books_filtered(
             .full_text_search
             .as_ref()
             .is_some_and(|q| !q.trim().is_empty());
+
+    // Sort resolution precedence:
+    //   1. Explicit `sort` param wins (incl. "relevance").
+    //   2. No sort + query present + fuzzy on → implicit relevance.
+    //   3. Otherwise → default title asc.
+    // `Relevance` only takes effect when a fuzzy query is actually in play; if
+    // it isn't, fall back to the natural default so the repo never has to
+    // pretend to sort by an in-memory score.
+    let parsed_sort = pagination.sort.as_deref().map(BookSortParam::parse);
+    let sort = match parsed_sort {
+        Some(s) if s.field == BookSortField::Relevance && !has_fuzzy_search_query => {
+            BookSortParam::default()
+        }
+        Some(s) => s,
+        None if has_fuzzy_search_query => BookSortParam {
+            field: BookSortField::Relevance,
+            direction: SortDirection::Desc,
+        },
+        None => BookSortParam::default(),
+    };
+    let use_relevance_order = sort.field == BookSortField::Relevance && has_fuzzy_search_query;
 
     // Sharing-tag visibility is applied to fuzzy matches before hydration;
     // the legacy LIKE path relies on downstream callers to filter, so we only
@@ -942,22 +966,43 @@ pub async fn list_books_filtered(
 
                 let total = visible.len() as u64;
 
-                let page_ids: Vec<Uuid> = visible
-                    .into_iter()
-                    .skip(offset as usize)
-                    .take(page_size as usize)
-                    .collect();
+                if use_relevance_order {
+                    // Preserve nucleo rank order: paginate the ranked id list
+                    // first, then hydrate that exact slice.
+                    let page_ids: Vec<Uuid> = visible
+                        .into_iter()
+                        .skip(offset as usize)
+                        .take(page_size as usize)
+                        .collect();
 
-                let models = BookRepository::hydrate_by_ids(
-                    &state.db,
-                    None,
-                    &page_ids,
-                    request.include_deleted,
-                )
-                .await
-                .map_err(|e| ApiError::Internal(format!("Failed to hydrate books: {}", e)))?;
+                    let models = BookRepository::hydrate_by_ids(
+                        &state.db,
+                        None,
+                        &page_ids,
+                        request.include_deleted,
+                    )
+                    .await
+                    .map_err(|e| ApiError::Internal(format!("Failed to hydrate books: {}", e)))?;
 
-                (models, total)
+                    (models, total)
+                } else {
+                    // Explicit sort overrides relevance: defer sort + pagination
+                    // to the DB so we don't sort a single page in isolation.
+                    let (models, _) = BookRepository::list_by_ids_sorted(
+                        &state.db,
+                        &visible,
+                        &sort,
+                        Some(auth.user_id),
+                        request.include_deleted,
+                        offset,
+                        page_size,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ApiError::Internal(format!("Failed to fetch sorted books: {}", e))
+                    })?;
+                    (models, total)
+                }
             }
         }
         // LIKE full-text search with filter conditions

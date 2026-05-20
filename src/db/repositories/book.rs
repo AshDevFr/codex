@@ -833,6 +833,178 @@ impl BookRepository {
         Ok((books, total))
     }
 
+    /// List books by their IDs with database-level sorting.
+    ///
+    /// Used when an upstream step (filter evaluator, fuzzy index, ContentFilter…)
+    /// has already narrowed the candidate set; this method materializes a
+    /// paginated slice with the requested sort applied at the SQL layer so
+    /// `(sort, offset, limit)` agree across pages.
+    ///
+    /// Pass `BookSortField::Relevance` to indicate "the caller will preserve
+    /// fuzzy rank order itself" — this method silently falls back to a stable
+    /// title sort so it remains safe to call with whatever sort param the
+    /// handler resolved.
+    pub async fn list_by_ids_sorted(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+        sort: &crate::api::routes::v1::dto::book::BookSortParam,
+        user_id: Option<Uuid>,
+        include_deleted: bool,
+        offset: u64,
+        limit: u64,
+    ) -> Result<(Vec<books::Model>, u64)> {
+        use crate::api::routes::v1::dto::book::BookSortField;
+        use crate::api::routes::v1::dto::series::SortDirection;
+        use crate::db::entities::{book_metadata, read_progress, series, series_metadata};
+        use sea_orm::{Condition, JoinType};
+
+        if ids.is_empty() {
+            return Ok((vec![], 0));
+        }
+
+        let total = ids.len() as u64;
+
+        let mut base_query = Books::find().filter(books::Column::Id.is_in(ids.to_vec()));
+        if !include_deleted {
+            base_query = base_query.filter(books::Column::Deleted.eq(false));
+        }
+
+        let order = match sort.direction {
+            SortDirection::Asc => Order::Asc,
+            SortDirection::Desc => Order::Desc,
+        };
+
+        let books = match sort.field {
+            BookSortField::Series => base_query
+                .join(JoinType::LeftJoin, books::Relation::Series.def())
+                .join(JoinType::LeftJoin, series::Relation::SeriesMetadata.def())
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(series_metadata::Column::TitleSort, order.clone())
+                .order_by(series_metadata::Column::Title, order.clone())
+                .order_by(book_metadata::Column::Number, Order::Asc)
+                .order_by(book_metadata::Column::Title, Order::Asc)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with series sort")?,
+
+            BookSortField::Title | BookSortField::Relevance => base_query
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(book_metadata::Column::TitleSort, order.clone())
+                .order_by(book_metadata::Column::Title, order)
+                .order_by_asc(books::Column::FileName)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with title sort")?,
+
+            BookSortField::DateAdded => base_query
+                .order_by(books::Column::CreatedAt, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with date added sort")?,
+
+            BookSortField::ReleaseDate => base_query
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(book_metadata::Column::Year, order.clone())
+                .order_by(book_metadata::Column::Month, order.clone())
+                .order_by(book_metadata::Column::Day, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with release date sort")?,
+
+            BookSortField::ChapterNumber => base_query
+                .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
+                .order_by(book_metadata::Column::Number, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with chapter number sort")?,
+
+            BookSortField::FileSize => base_query
+                .order_by(books::Column::FileSize, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with file size sort")?,
+
+            BookSortField::Filename => base_query
+                .order_by(books::Column::FileName, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with filename sort")?,
+
+            BookSortField::PageCount => base_query
+                .order_by(books::Column::PageCount, order)
+                .order_by_asc(books::Column::Id)
+                .offset(offset)
+                .limit(limit)
+                .all(db)
+                .await
+                .context("Failed to list books by IDs with page count sort")?,
+
+            BookSortField::LastRead => {
+                if let Some(uid) = user_id {
+                    base_query
+                        .join(
+                            JoinType::LeftJoin,
+                            books::Relation::ReadProgress.def().on_condition(
+                                move |_left, right| {
+                                    Condition::all().add(
+                                        Expr::col((right, read_progress::Column::UserId)).eq(uid),
+                                    )
+                                },
+                            ),
+                        )
+                        .column_as(
+                            Expr::col((
+                                Alias::new("read_progress"),
+                                read_progress::Column::UpdatedAt,
+                            ))
+                            .max(),
+                            "last_read_at",
+                        )
+                        .group_by(books::Column::Id)
+                        .order_by(Expr::col(Alias::new("last_read_at")), order)
+                        .order_by_asc(books::Column::Id)
+                        .offset(offset)
+                        .limit(limit)
+                        .all(db)
+                        .await
+                        .context("Failed to list books by IDs with last read sort")?
+                } else {
+                    base_query
+                        .order_by(books::Column::CreatedAt, order)
+                        .order_by_asc(books::Column::Id)
+                        .offset(offset)
+                        .limit(limit)
+                        .all(db)
+                        .await
+                        .context("Failed to list books by IDs (LastRead fallback to DateAdded)")?
+                }
+            }
+        };
+
+        Ok((books, total))
+    }
+
     /// List books by library with pagination
     pub async fn list_by_library(
         db: &DatabaseConnection,
@@ -993,8 +1165,11 @@ impl BookRepository {
                     .await
                     .context("Failed to list books with series sort")?
             }
-            BookSortField::Title => {
-                // Sort by title_sort, then title, then file_name
+            BookSortField::Title | BookSortField::Relevance => {
+                // Relevance lives in the in-memory fuzzy index, not the database — callers
+                // wanting relevance order must hydrate from the ranked id list directly.
+                // We accept the variant here so the param round-trips through generic code
+                // paths and fall back to a stable title sort.
                 base_query
                     .join(JoinType::LeftJoin, books::Relation::BookMetadata.def())
                     .order_by(book_metadata::Column::TitleSort, order.clone())

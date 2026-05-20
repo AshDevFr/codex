@@ -434,6 +434,10 @@ pub enum BookSortField {
     PageCount,
     /// Sort by last read date (requires user_id for filtering)
     LastRead,
+    /// Sort by fuzzy-search relevance score. Only meaningful when a
+    /// `fullTextSearch` query is present and `search.fuzzy.enabled` is on;
+    /// otherwise handlers fall back to the natural default (`Title`).
+    Relevance,
 }
 
 impl fmt::Display for BookSortField {
@@ -448,6 +452,7 @@ impl fmt::Display for BookSortField {
             BookSortField::Filename => write!(f, "filename"),
             BookSortField::PageCount => write!(f, "page_count"),
             BookSortField::LastRead => write!(f, "last_read"),
+            BookSortField::Relevance => write!(f, "relevance"),
         }
     }
 }
@@ -466,6 +471,7 @@ impl FromStr for BookSortField {
             "filename" => Ok(BookSortField::Filename),
             "page_count" => Ok(BookSortField::PageCount),
             "last_read" | "read_date" => Ok(BookSortField::LastRead),
+            "relevance" | "score" => Ok(BookSortField::Relevance),
             _ => Err(format!("Invalid sort field: {}", s)),
         }
     }
@@ -488,9 +494,20 @@ impl Default for BookSortParam {
 }
 
 impl BookSortParam {
-    /// Parse from "field,direction" format (e.g., "title,asc")
+    /// Parse from "field,direction" format (e.g., "title,asc").
+    ///
+    /// "relevance" (with or without a direction) is accepted as a shorthand
+    /// that pairs with a `fullTextSearch` query.
     pub fn parse(s: &str) -> Self {
-        let parts: Vec<&str> = s.split(',').collect();
+        let trimmed = s.trim();
+        if trimmed.eq_ignore_ascii_case("relevance") || trimmed.eq_ignore_ascii_case("score") {
+            return Self {
+                field: BookSortField::Relevance,
+                direction: SortDirection::Desc,
+            };
+        }
+
+        let parts: Vec<&str> = trimmed.split(',').collect();
         if parts.len() != 2 {
             return Self::default();
         }
@@ -2697,5 +2714,38 @@ impl From<crate::services::metadata::preprocessing::context::BookContext> for Bo
             custom_metadata: ctx.custom_metadata,
             series: ctx.series.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod sort_param_tests {
+    use super::super::series::SortDirection;
+    use super::{BookSortField, BookSortParam};
+
+    #[test]
+    fn parse_relevance_without_direction() {
+        let parsed = BookSortParam::parse("relevance");
+        assert_eq!(parsed.field, BookSortField::Relevance);
+        assert_eq!(parsed.direction, SortDirection::Desc);
+    }
+
+    #[test]
+    fn parse_relevance_alias_score() {
+        let parsed = BookSortParam::parse("score");
+        assert_eq!(parsed.field, BookSortField::Relevance);
+    }
+
+    #[test]
+    fn parse_unknown_field_falls_back_to_default() {
+        let parsed = BookSortParam::parse("nonsense,asc");
+        assert_eq!(parsed.field, BookSortParam::default().field);
+        assert_eq!(parsed.direction, BookSortParam::default().direction);
+    }
+
+    #[test]
+    fn parse_existing_fields_unchanged() {
+        let parsed = BookSortParam::parse("title,desc");
+        assert_eq!(parsed.field, BookSortField::Title);
+        assert_eq!(parsed.direction, SortDirection::Desc);
     }
 }

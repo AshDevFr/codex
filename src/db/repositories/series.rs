@@ -1231,11 +1231,11 @@ impl SeriesRepository {
         let base_condition = series::Column::Id.is_in(ids.to_vec());
 
         let series = match sort.field {
-            SeriesSortField::Name => {
-                // Use COALESCE(title_sort, title) so that series with NULL title_sort
-                // are sorted by title rather than clustering at the start/end.
-                // Tie-break on series.id so pagination is stable when many series
-                // share the same sort title.
+            SeriesSortField::Name | SeriesSortField::Relevance => {
+                // Relevance lives in the in-memory fuzzy index, not the database — callers
+                // wanting relevance order must hydrate from the ranked id list directly.
+                // We accept the variant here so the param round-trips through generic code
+                // paths and fall back to a stable name sort.
                 let sort_expr = Func::coalesce([
                     Expr::col((series_metadata::Entity, series_metadata::Column::TitleSort)).into(),
                     Expr::col((series_metadata::Entity, series_metadata::Column::Title)).into(),

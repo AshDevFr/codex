@@ -8,8 +8,10 @@
 mod common;
 
 use codex::api::routes::v1::dto::book::{BookDto, BookListResponse};
-use codex::api::routes::v1::dto::filter::{BookCondition, BookListRequest, UuidOperator};
-use codex::api::routes::v1::dto::series::{SearchSeriesRequest, SeriesDto};
+use codex::api::routes::v1::dto::filter::{
+    BookCondition, BookListRequest, SeriesCondition, SeriesListRequest, UuidOperator,
+};
+use codex::api::routes::v1::dto::series::{SearchSeriesRequest, SeriesDto, SeriesListResponse};
 use codex::db::ScanningStrategy;
 use codex::db::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, SeriesMetadataRepository,
@@ -409,4 +411,306 @@ async fn fuzzy_books_search_intersects_filter_condition() {
         "filter condition should pin the fuzzy result set to one book",
     );
     assert_eq!(body.data[0].id, target.id);
+}
+
+#[tokio::test]
+async fn fuzzy_series_list_returns_ranked_results() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let target = seed_series(&db, library.id, "one-punch-man", "One-Punch Man").await;
+    seed_series(&db, library.id, "berserk", "Berserk").await;
+    seed_series(&db, library.id, "vagabond", "Vagabond").await;
+
+    enable_fuzzy(&db).await;
+
+    let (state, app) = setup_test_app(db.clone()).await;
+    rebuild_into(&state.fuzzy_index, &db).await.unwrap();
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Mirrors the gap-skipped query the /series/search test exercises, but
+    // now routed through /series/list — exercising the fuzzy branch.
+    let request_body = SeriesListRequest {
+        full_text_search: Some("on ch".to_string()),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?page=1&pageSize=10",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("response body");
+    assert!(
+        body.data.iter().any(|s| s.id == target.id),
+        "fuzzy /series/list should return One-Punch Man for 'on ch'",
+    );
+    assert_eq!(
+        body.data.first().map(|s| s.id),
+        Some(target.id),
+        "One-Punch Man should rank first under implicit relevance sort",
+    );
+}
+
+#[tokio::test]
+async fn fuzzy_series_list_intersects_filter_condition() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_a = LibraryRepository::create(&db, "Manga", "/manga", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let library_b = LibraryRepository::create(&db, "Comics", "/comics", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let manga_target = seed_series(&db, library_a.id, "one-punch-man", "One-Punch Man").await;
+    let comic_decoy = seed_series(
+        &db,
+        library_b.id,
+        "one-punch-american",
+        "One Punch American",
+    )
+    .await;
+
+    enable_fuzzy(&db).await;
+
+    let (state, app) = setup_test_app(db.clone()).await;
+    rebuild_into(&state.fuzzy_index, &db).await.unwrap();
+    let token = create_admin_and_token(&db, &state).await;
+
+    // Both series match the fuzzy query, but the LibraryId condition pins to
+    // library_a only — the intersection should drop the decoy.
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::LibraryId {
+            library_id: UuidOperator::Is {
+                value: library_a.id,
+            },
+        }),
+        full_text_search: Some("one punch".to_string()),
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?page=1&pageSize=10",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("response body");
+    assert!(
+        body.data.iter().any(|s| s.id == manga_target.id),
+        "library_a hit should appear in the filtered fuzzy result",
+    );
+    assert!(
+        body.data.iter().all(|s| s.id != comic_decoy.id),
+        "library_b hit must be filtered out by the LibraryId condition",
+    );
+}
+
+#[tokio::test]
+async fn fuzzy_series_list_explicit_sort_overrides_relevance() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Both series match "one punch" via fuzzy. Under relevance sort
+    // One-Punch Man would rank first (closer to query); under name ascending
+    // sort "One Punch American" beats "One-Punch Man" because the canonical
+    // title_sort/title comparison ignores the hyphen tie-breaker.
+    let one_punch_man = seed_series(&db, library.id, "one-punch-man", "One-Punch Man").await;
+    let one_punch_american =
+        seed_series(&db, library.id, "one-punch-american", "One Punch American").await;
+
+    enable_fuzzy(&db).await;
+
+    let (state, app) = setup_test_app(db.clone()).await;
+    rebuild_into(&state.fuzzy_index, &db).await.unwrap();
+    let token = create_admin_and_token(&db, &state).await;
+
+    let request_body = SeriesListRequest {
+        full_text_search: Some("one punch".to_string()),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?page=1&pageSize=10&sort=name,asc",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("response body");
+    assert_eq!(body.data.len(), 2, "both fuzzy hits should survive");
+    // "One Punch American" sorts before "One-Punch Man" alphabetically.
+    assert_eq!(
+        body.data.first().map(|s| s.id),
+        Some(one_punch_american.id),
+        "explicit name,asc sort should override fuzzy ranking",
+    );
+    assert_eq!(body.data.get(1).map(|s| s.id), Some(one_punch_man.id),);
+}
+
+#[tokio::test]
+async fn fuzzy_books_list_explicit_sort_overrides_relevance() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = seed_series(&db, library.id, "berserk", "Berserk").await;
+
+    // Two books that both match "berserk chapter" via fuzzy. Under relevance,
+    // "Berserk Chapter 12" lands higher (better fuzzy hit). Under title sort
+    // asc, "Berserk Chapter 100" sorts first because '1' < '9' lexically.
+    let chapter_100 = seed_book(
+        &db,
+        series.id,
+        library.id,
+        "/berserk-chapter-100.cbz",
+        "berserk-chapter-100.cbz",
+        "Berserk Chapter 100",
+    )
+    .await;
+    let _chapter_12 = seed_book(
+        &db,
+        series.id,
+        library.id,
+        "/berserk-chapter-12.cbz",
+        "berserk-chapter-12.cbz",
+        "Berserk Chapter 12",
+    )
+    .await;
+
+    enable_fuzzy(&db).await;
+
+    let (state, app) = setup_test_app(db.clone()).await;
+    rebuild_into(&state.fuzzy_index, &db).await.unwrap();
+    let token = create_admin_and_token(&db, &state).await;
+
+    let request_body = BookListRequest {
+        full_text_search: Some("berserk chapter".to_string()),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/books/list?page=1&pageSize=10&sort=title,asc",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("response body");
+    assert!(body.data.len() >= 2, "both books should appear");
+    assert_eq!(
+        body.data.first().map(|b: &BookDto| b.id),
+        Some(chapter_100.id),
+        "explicit title,asc should override fuzzy relevance ordering",
+    );
+}
+
+#[tokio::test]
+async fn relevance_sort_without_query_falls_back_to_default() {
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    // Seed in non-alphabetical order so the natural Name sort is verifiable.
+    let zebra = seed_series(&db, library.id, "zebra", "Zebra Manga").await;
+    let alpha = seed_series(&db, library.id, "alpha", "Alpha Manga").await;
+
+    enable_fuzzy(&db).await;
+
+    let (state, app) = setup_test_app(db.clone()).await;
+    rebuild_into(&state.fuzzy_index, &db).await.unwrap();
+    let token = create_admin_and_token(&db, &state).await;
+
+    // sort=relevance + no query: the handler should silently fall back to
+    // the natural default (name,asc) rather than try to rank against nothing.
+    let request_body = SeriesListRequest::default();
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?page=1&pageSize=10&sort=relevance",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("response body");
+    assert_eq!(body.data.len(), 2);
+    assert_eq!(
+        body.data.first().map(|s| s.id),
+        Some(alpha.id),
+        "alpha should sort first under fallback name,asc",
+    );
+    assert_eq!(body.data.get(1).map(|s| s.id), Some(zebra.id));
+}
+
+#[tokio::test]
+async fn series_list_falls_back_to_like_when_fuzzy_flag_off() {
+    // Phase 3 sanity check: with the flag off, /series/list must NOT consult
+    // the fuzzy index and must behave like the pre-Phase-3 LIKE path.
+    let (db, _temp_dir) = setup_test_db().await;
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let target = seed_series(&db, library.id, "one-punch-man", "One-Punch Man").await;
+    seed_series(&db, library.id, "berserk", "Berserk").await;
+
+    // Flag left at its default (false).
+    let (state, app) = setup_test_app(db.clone()).await;
+    rebuild_into(&state.fuzzy_index, &db).await.unwrap();
+    let token = create_admin_and_token(&db, &state).await;
+
+    // "Punch" is a literal substring of "One-Punch Man" so the LIKE path
+    // still matches. Picked deliberately to differ from the gap-skipped
+    // query below — together they prove the fuzzy index is not consulted.
+    let request_body = SeriesListRequest {
+        full_text_search: Some("Punch".to_string()),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth(
+        "/api/v1/series/list?page=1&pageSize=10",
+        &request_body,
+        &token,
+    );
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.expect("response body");
+    assert!(
+        body.data.iter().any(|s| s.id == target.id),
+        "LIKE path should still find 'Punch' inside 'One-Punch Man'",
+    );
+
+    // "on ch" — only the fuzzy index can match the gap-skipped form, so a
+    // flag-off /series/list must NOT return the target series here.
+    let gap_request = SeriesListRequest {
+        full_text_search: Some("on ch".to_string()),
+        ..Default::default()
+    };
+    let app2 = setup_test_app(db.clone()).await.1;
+    let request2 = post_json_request_with_auth(
+        "/api/v1/series/list?page=1&pageSize=10",
+        &gap_request,
+        &token,
+    );
+    let (status2, response2): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app2, request2).await;
+    assert_eq!(status2, StatusCode::OK);
+    let body2 = response2.expect("response body");
+    assert!(
+        body2.data.iter().all(|s| s.id != target.id),
+        "LIKE path cannot match 'on ch' as a contiguous substring",
+    );
 }

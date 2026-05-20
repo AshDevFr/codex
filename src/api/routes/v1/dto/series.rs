@@ -60,6 +60,10 @@ pub enum SeriesSortField {
     CommunityRating,
     /// Sort by external rating (highest external source rating)
     ExternalRating,
+    /// Sort by fuzzy-search relevance score. Only meaningful when a
+    /// `fullTextSearch` query is present and `search.fuzzy.enabled` is on;
+    /// otherwise handlers fall back to the natural default (`Name`).
+    Relevance,
 }
 
 impl fmt::Display for SeriesSortField {
@@ -74,6 +78,7 @@ impl fmt::Display for SeriesSortField {
             SeriesSortField::Rating => write!(f, "rating"),
             SeriesSortField::CommunityRating => write!(f, "community_rating"),
             SeriesSortField::ExternalRating => write!(f, "external_rating"),
+            SeriesSortField::Relevance => write!(f, "relevance"),
         }
     }
 }
@@ -92,6 +97,7 @@ impl FromStr for SeriesSortField {
             "rating" | "user_rating" => Ok(SeriesSortField::Rating),
             "community_rating" | "avg_rating" => Ok(SeriesSortField::CommunityRating),
             "external_rating" => Ok(SeriesSortField::ExternalRating),
+            "relevance" | "score" => Ok(SeriesSortField::Relevance),
             _ => Err(format!("Invalid sort field: {}", s)),
         }
     }
@@ -119,9 +125,20 @@ impl SeriesSortParam {
         Self { field, direction }
     }
 
-    /// Parse from "field,direction" format (e.g., "name,asc")
+    /// Parse from "field,direction" format (e.g., "name,asc").
+    ///
+    /// "relevance" (with or without a direction) is accepted as a shorthand
+    /// that pairs with a `fullTextSearch` query.
     pub fn parse(s: &str) -> Self {
-        let parts: Vec<&str> = s.split(',').collect();
+        let trimmed = s.trim();
+        if trimmed.eq_ignore_ascii_case("relevance") || trimmed.eq_ignore_ascii_case("score") {
+            return Self {
+                field: SeriesSortField::Relevance,
+                direction: SortDirection::Desc,
+            };
+        }
+
+        let parts: Vec<&str> = trimmed.split(',').collect();
         if parts.len() != 2 {
             return Self::default();
         }
@@ -2120,4 +2137,38 @@ pub struct EnqueueReprocessTitleResponse {
     /// Message describing the result
     #[schema(example = "Reprocess title task enqueued")]
     pub message: String,
+}
+
+#[cfg(test)]
+mod sort_param_tests {
+    use super::{SeriesSortField, SeriesSortParam, SortDirection};
+
+    #[test]
+    fn parse_relevance_without_direction() {
+        let parsed = SeriesSortParam::parse("relevance");
+        assert_eq!(parsed.field, SeriesSortField::Relevance);
+        assert_eq!(parsed.direction, SortDirection::Desc);
+    }
+
+    #[test]
+    fn parse_relevance_with_direction_keeps_relevance() {
+        // Direction is irrelevant for relevance (it's score-descending by
+        // construction); accepting "relevance,asc" keeps the round-trip
+        // through ListPaginationParams::sort robust.
+        let parsed = SeriesSortParam::parse("relevance,asc");
+        assert_eq!(parsed.field, SeriesSortField::Relevance);
+    }
+
+    #[test]
+    fn parse_unknown_field_falls_back_to_default() {
+        let parsed = SeriesSortParam::parse("nonsense,asc");
+        assert_eq!(parsed, SeriesSortParam::default());
+    }
+
+    #[test]
+    fn parse_existing_fields_unchanged() {
+        let parsed = SeriesSortParam::parse("name,desc");
+        assert_eq!(parsed.field, SeriesSortField::Name);
+        assert_eq!(parsed.direction, SortDirection::Desc);
+    }
 }
