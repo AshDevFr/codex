@@ -2,6 +2,21 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.27.0] - 2026-05-20
+
+### 🚀 Features
+
+- *(duplicates)* Detect series duplicates by external ID or normalized title
+- *(duplicates)* Add Series tab to duplicate detection UI
+
+### 🐛 Bug Fixes
+
+- *(duplicates)* Show book title on duplicate cards and prevent overflow
+
+### 📚 Documentation
+
+- *(duplicates)* Document series duplicate detection
+
 ## [1.26.1] - 2026-05-20
 
 ### ⚡ Performance
