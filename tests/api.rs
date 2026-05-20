@@ -17,6 +17,7 @@ mod api {
     mod external_links;
     mod external_ratings;
     mod filesystem;
+    mod filter_presets;
     mod genres;
     mod info;
     mod komga;

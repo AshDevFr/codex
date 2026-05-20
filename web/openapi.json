@@ -5305,6 +5305,245 @@
         ]
       }
     },
+    "/api/v1/filter-presets": {
+      "get": {
+        "tags": [
+          "Filter Presets"
+        ],
+        "summary": "GET /api/v1/filter-presets - List the caller's presets.",
+        "operationId": "list_filter_presets",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Filter by scope ('list' or 'search')",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "description": "Filter by target ('series' or 'books')",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "libraryId",
+            "in": "query",
+            "description": "Filter by library id",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of presets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterPresetListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Filter Presets"
+        ],
+        "summary": "POST /api/v1/filter-presets - Create a new preset.",
+        "operationId": "create_filter_preset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFilterPresetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Preset created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterPresetDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "409": {
+            "description": "Duplicate preset name"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/filter-presets/{id}": {
+      "get": {
+        "tags": [
+          "Filter Presets"
+        ],
+        "summary": "GET /api/v1/filter-presets/{id} - Fetch a single preset.",
+        "operationId": "get_filter_preset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Preset id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preset detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterPresetDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Preset not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Filter Presets"
+        ],
+        "summary": "PUT /api/v1/filter-presets/{id} - Update a preset.",
+        "operationId": "update_filter_preset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Preset id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFilterPresetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preset updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterPresetDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "404": {
+            "description": "Preset not found"
+          },
+          "409": {
+            "description": "Duplicate preset name"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Filter Presets"
+        ],
+        "summary": "DELETE /api/v1/filter-presets/{id} - Delete a preset.",
+        "operationId": "delete_filter_preset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Preset id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Preset deleted"
+          },
+          "404": {
+            "description": "Preset not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/genres": {
       "get": {
         "tags": [
@@ -22597,6 +22836,55 @@
           }
         }
       },
+      "CreateFilterPresetRequest": {
+        "type": "object",
+        "description": "Request body for creating a new filter preset.",
+        "required": [
+          "name",
+          "scope",
+          "target",
+          "condition"
+        ],
+        "properties": {
+          "condition": {
+            "type": "object",
+            "description": "The saved condition. Must parse as `SeriesCondition` when\n`target = \"series\"` and as `BookCondition` when `target = \"books\"`."
+          },
+          "libraryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Optional library scope; `None` means the preset applies globally."
+          },
+          "name": {
+            "type": "string"
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional saved text query (only meaningful for `scope = \"search\"` or\nlist pages that have a search box)."
+          },
+          "scope": {
+            "type": "string",
+            "description": "Where this preset is used: `\"list\"` or `\"search\"`."
+          },
+          "sort": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional saved sort key, mirrors the URL `sort` query parameter\n(e.g. `\"title:asc\"`, `\"year:desc\"`, `\"relevance\"`)."
+          },
+          "target": {
+            "type": "string",
+            "description": "Target entity: `\"series\"` or `\"books\"`."
+          }
+        }
+      },
       "CreateLibraryJobRequest": {
         "type": "object",
         "description": "Request body for `POST /api/v1/libraries/{id}/jobs`.",
@@ -24886,6 +25174,79 @@
           "isReadable": true,
           "name": "Documents",
           "path": "/home/user/Documents"
+        }
+      },
+      "FilterPresetDto": {
+        "type": "object",
+        "description": "Filter preset response payload.",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "target",
+          "condition",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "condition": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "libraryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "sort": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FilterPresetListResponse": {
+        "type": "object",
+        "description": "Response payload for listing filter presets.",
+        "required": [
+          "presets"
+        ],
+        "properties": {
+          "presets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilterPresetDto"
+            }
+          }
         }
       },
       "FlatStrategyConfig": {
@@ -27969,6 +28330,34 @@
             "description": "Total number of duplicate groups",
             "example": 5,
             "minimum": 0
+          }
+        }
+      },
+      "ListFilterPresetsQuery": {
+        "type": "object",
+        "description": "Query string parameters for `GET /api/v1/filter-presets`.",
+        "properties": {
+          "libraryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Filter by library id."
+          },
+          "scope": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by scope (`\"list\"` or `\"search\"`)."
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by target (`\"series\"` or `\"books\"`)."
           }
         }
       },
@@ -39086,6 +39475,41 @@
           }
         }
       },
+      "UpdateFilterPresetRequest": {
+        "type": "object",
+        "description": "Request body for updating an existing filter preset.\n\nTreated as a full replacement of the mutable fields. `scope` and `target`\nare immutable since the condition is validated against them on create.",
+        "required": [
+          "name",
+          "condition"
+        ],
+        "properties": {
+          "condition": {
+            "type": "object"
+          },
+          "libraryId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sort": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "UpdateLibraryRequest": {
         "type": "object",
         "description": "Update library request\n\nNote: series_strategy and series_config are immutable after library creation.\nbook_strategy, book_config, number_strategy, and number_config can be updated.",
@@ -40551,6 +40975,10 @@
       "description": "Per-user settings and preferences"
     },
     {
+      "name": "Filter Presets",
+      "description": "Saved filter combinations for list pages and the advanced search page"
+    },
+    {
       "name": "Reading Progress",
       "description": "Reading progress tracking"
     },
@@ -40666,6 +41094,7 @@
       "tags": [
         "Users",
         "User Preferences",
+        "Filter Presets",
         "User Plugins",
         "Recommendations",
         "Reading Progress"

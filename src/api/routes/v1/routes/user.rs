@@ -93,4 +93,25 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/api-keys/{api_key_id}",
             delete(handlers::api_keys::delete_api_key),
         )
+        // Filter preset routes
+        .route(
+            "/filter-presets",
+            get(handlers::filter_presets::list_filter_presets),
+        )
+        .route(
+            "/filter-presets",
+            post(handlers::filter_presets::create_filter_preset),
+        )
+        .route(
+            "/filter-presets/{id}",
+            get(handlers::filter_presets::get_filter_preset),
+        )
+        .route(
+            "/filter-presets/{id}",
+            put(handlers::filter_presets::update_filter_preset),
+        )
+        .route(
+            "/filter-presets/{id}",
+            delete(handlers::filter_presets::delete_filter_preset),
+        )
 }

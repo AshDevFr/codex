@@ -10,6 +10,7 @@ pub mod cleanup;
 pub mod common;
 pub mod duplicates;
 pub mod filter;
+pub mod filter_preset;
 pub mod info;
 pub mod library;
 pub mod library_jobs;
@@ -44,6 +45,8 @@ pub use cleanup::*;
 pub use common::*;
 pub use duplicates::*;
 pub use filter::*;
+#[allow(unused_imports)]
+pub use filter_preset::*;
 pub use info::*;
 pub use library::*;
 pub use library_jobs::*;

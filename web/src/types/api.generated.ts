@@ -1844,6 +1844,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/filter-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/filter-presets - List the caller's presets. */
+        get: operations["list_filter_presets"];
+        put?: never;
+        /** POST /api/v1/filter-presets - Create a new preset. */
+        post: operations["create_filter_preset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/filter-presets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/filter-presets/{id} - Fetch a single preset. */
+        get: operations["get_filter_preset"];
+        /** PUT /api/v1/filter-presets/{id} - Update a preset. */
+        put: operations["update_filter_preset"];
+        post?: never;
+        /** DELETE /api/v1/filter-presets/{id} - Delete a preset. */
+        delete: operations["delete_filter_preset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/genres": {
         parameters: {
             query?: never;
@@ -9227,6 +9264,34 @@ export interface components {
              */
             voteCount?: number | null;
         };
+        /** @description Request body for creating a new filter preset. */
+        CreateFilterPresetRequest: {
+            /**
+             * @description The saved condition. Must parse as `SeriesCondition` when
+             *     `target = "series"` and as `BookCondition` when `target = "books"`.
+             */
+            condition: Record<string, never>;
+            /**
+             * Format: uuid
+             * @description Optional library scope; `None` means the preset applies globally.
+             */
+            libraryId?: string | null;
+            name: string;
+            /**
+             * @description Optional saved text query (only meaningful for `scope = "search"` or
+             *     list pages that have a search box).
+             */
+            query?: string | null;
+            /** @description Where this preset is used: `"list"` or `"search"`. */
+            scope: string;
+            /**
+             * @description Optional saved sort key, mirrors the URL `sort` query parameter
+             *     (e.g. `"title:asc"`, `"year:desc"`, `"relevance"`).
+             */
+            sort?: string | null;
+            /** @description Target entity: `"series"` or `"books"`. */
+            target: string;
+        };
         /** @description Request body for `POST /api/v1/libraries/{id}/jobs`. */
         CreateLibraryJobRequest: {
             config: components["schemas"]["LibraryJobConfigDto"];
@@ -10283,6 +10348,27 @@ export interface components {
             name: string;
             /** @description Full path to the entry */
             path: string;
+        };
+        /** @description Filter preset response payload. */
+        FilterPresetDto: {
+            condition: Record<string, never>;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            libraryId?: string | null;
+            name: string;
+            query?: string | null;
+            scope: string;
+            sort?: string | null;
+            target: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description Response payload for listing filter presets. */
+        FilterPresetListResponse: {
+            presets: components["schemas"]["FilterPresetDto"][];
         };
         /** @description Configuration for flat scanning strategy */
         FlatStrategyConfig: {
@@ -11864,6 +11950,18 @@ export interface components {
              * @example 5
              */
             totalGroups: number;
+        };
+        /** @description Query string parameters for `GET /api/v1/filter-presets`. */
+        ListFilterPresetsQuery: {
+            /**
+             * Format: uuid
+             * @description Filter by library id.
+             */
+            libraryId?: string | null;
+            /** @description Filter by scope (`"list"` or `"search"`). */
+            scope?: string | null;
+            /** @description Filter by target (`"series"` or `"books"`). */
+            target?: string | null;
         };
         /** @description Response for `GET /libraries/{id}/jobs`. */
         ListLibraryJobsResponse: {
@@ -18146,6 +18244,20 @@ export interface components {
             yearLock?: boolean | null;
         };
         /**
+         * @description Request body for updating an existing filter preset.
+         *
+         *     Treated as a full replacement of the mutable fields. `scope` and `target`
+         *     are immutable since the condition is validated against them on create.
+         */
+        UpdateFilterPresetRequest: {
+            condition: Record<string, never>;
+            /** Format: uuid */
+            libraryId?: string | null;
+            name: string;
+            query?: string | null;
+            sort?: string | null;
+        };
+        /**
          * @description Update library request
          *
          *     Note: series_strategy and series_config are immutable after library creation.
@@ -22966,6 +23078,177 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+        };
+    };
+    list_filter_presets: {
+        parameters: {
+            query?: {
+                /** @description Filter by scope ('list' or 'search') */
+                scope?: string;
+                /** @description Filter by target ('series' or 'books') */
+                target?: string;
+                /** @description Filter by library id */
+                libraryId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of presets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterPresetListResponse"];
+                };
+            };
+        };
+    };
+    create_filter_preset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFilterPresetRequest"];
+            };
+        };
+        responses: {
+            /** @description Preset created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterPresetDto"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Duplicate preset name */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_filter_preset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Preset id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preset detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterPresetDto"];
+                };
+            };
+            /** @description Preset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_filter_preset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Preset id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFilterPresetRequest"];
+            };
+        };
+        responses: {
+            /** @description Preset updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterPresetDto"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Preset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Duplicate preset name */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_filter_preset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Preset id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preset deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Preset not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

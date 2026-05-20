@@ -50,6 +50,10 @@ pub use super::user_plugins::Entity as UserPlugins;
 #[allow(unused_imports)]
 pub use super::series_exports::Entity as SeriesExports;
 
+// Filter presets
+#[allow(unused_imports)]
+pub use super::filter_presets::Entity as FilterPresets;
+
 // Sharing tags for content access control (WIP feature)
 #[allow(unused_imports)]
 pub use super::series_sharing_tags::Entity as SeriesSharingTags;
