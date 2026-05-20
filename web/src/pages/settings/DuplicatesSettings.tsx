@@ -53,11 +53,13 @@ function DuplicateGroupCard({
 
   return (
     <Card withBorder padding="md">
-      <Group justify="space-between" mb="md">
-        <Group gap="sm">
-          <IconCopy size={20} />
-          <Box>
-            <Text fw={500}>{group.duplicateCount} Duplicates</Text>
+      <Group justify="space-between" mb="md" wrap="nowrap">
+        <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+          <IconCopy size={20} style={{ flexShrink: 0 }} />
+          <Box style={{ minWidth: 0, flex: 1 }}>
+            <Text fw={500} truncate="end">
+              {books[0]?.title ?? `${group.duplicateCount} Duplicates`}
+            </Text>
             <Text size="xs" c="dimmed" style={{ fontFamily: "monospace" }}>
               {group.fileHash.slice(0, 16)}...
             </Text>
