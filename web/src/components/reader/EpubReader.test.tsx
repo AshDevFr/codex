@@ -1,4 +1,3 @@
-import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
 import { renderWithProviders, screen } from "@/test/utils";
@@ -466,9 +465,18 @@ describe("EpubReader", () => {
       expect(contentHookCallbacks.length).toBeGreaterThan(0);
 
       const fakeIframeDoc = document.implementation.createHTMLDocument("epub");
-      // Drive every registered content callback so the hook attaches its
-      // pointer listeners to this fake document.
-      for (const cb of contentHookCallbacks) {
+      // Drive only the most recent registration's callbacks. `handleGetRendition`
+      // calls `rendition.hooks.content.register(...)` twice (style hide + pointer
+      // hook), and the mocked `ReactReader` re-fires `getRendition` on every
+      // re-render. Under heavy parallel-test load, EpubReader may have committed
+      // 1+ extra renders before the awaits above flush, leaving multiple
+      // (style, pointer) pairs in `contentHookCallbacks`. Replaying all of them
+      // attaches multiple pointer listeners to the fake doc, which then toggle
+      // the toolbar an EVEN number of times per tap (cancelling out) and flake
+      // the assertion. Take only the last pair — that mirrors what epub.js
+      // does in real life (latest registration wins for the next iframe load).
+      const latestCallbacks = contentHookCallbacks.slice(-2);
+      for (const cb of latestCallbacks) {
         cb({ document: fakeIframeDoc });
       }
       return fakeIframeDoc;
@@ -479,23 +487,14 @@ describe("EpubReader", () => {
 
       // mountAndGetIframeDoc pins window.innerWidth=900, innerHeight=600;
       // center third is x ∈ [300, 600], y ∈ [200, 400]. (450, 300) is dead-center.
-      // Use waitFor on the assertions: under heavy parallel-test CPU load
-      // React's render/effect cycle following the prior setState can still be
-      // pending when we dispatch, and the toggle then races with that flush.
-      // The handler itself is synchronous; waitFor just absorbs the scheduler
-      // jitter without hiding a real regression.
       useReaderStore.setState({ toolbarVisible: true });
       dispatchPointerEvent(doc, "pointerdown", 450, 300);
       dispatchPointerEvent(doc, "pointerup", 451, 300);
-      await waitFor(() => {
-        expect(useReaderStore.getState().toolbarVisible).toBe(false);
-      });
+      expect(useReaderStore.getState().toolbarVisible).toBe(false);
 
       dispatchPointerEvent(doc, "pointerdown", 450, 300);
       dispatchPointerEvent(doc, "pointerup", 450, 301);
-      await waitFor(() => {
-        expect(useReaderStore.getState().toolbarVisible).toBe(true);
-      });
+      expect(useReaderStore.getState().toolbarVisible).toBe(true);
     });
 
     it("routes edge-zone taps to prev/next without toggling the toolbar (LTR)", async () => {
