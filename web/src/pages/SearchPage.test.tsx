@@ -1,4 +1,5 @@
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { booksApi } from "@/api/books";
 import { seriesApi } from "@/api/series";
@@ -124,6 +125,23 @@ describe("SearchPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("only fetches after the user submits the search form", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SearchPage />, { initialEntries: ["/search"] });
+
+    const input = screen.getByRole("textbox", { name: /search query/i });
+    await user.type(input, "batman");
+
+    // Typing alone must not trigger a fetch.
+    expect(seriesApi.search).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /^search$/i }));
+
+    await waitFor(() => {
+      expect(seriesApi.search).toHaveBeenCalled();
+    });
+  });
+
   it("fetches results when only a configured filter is provided", async () => {
     // base64url-encoded `{"title":{"operator":"contains","value":"punch"}}`
     const c =
@@ -138,5 +156,29 @@ describe("SearchPage", () => {
     expect(
       screen.queryByText(/nothing to search yet/i),
     ).not.toBeInTheDocument();
+  });
+
+  it("sends the condition through to both tabs' queries", async () => {
+    // base64url-encoded `{"title":{"operator":"contains","value":"space"}}`.
+    // Both tabs should receive the filter so the inactive-tab badge
+    // reflects the same condition the user is searching with.
+    const c =
+      "eyJ0aXRsZSI6eyJvcGVyYXRvciI6ImNvbnRhaW5zIiwidmFsdWUiOiJzcGFjZSJ9fQ";
+    renderWithProviders(<SearchPage />, {
+      initialEntries: [`/search?c=${c}`],
+    });
+
+    await waitFor(() => {
+      expect(seriesApi.search).toHaveBeenCalled();
+      expect(booksApi.search).toHaveBeenCalled();
+    });
+
+    const expectedLeaf = {
+      title: { operator: "contains", value: "space" },
+    };
+    const seriesCall = vi.mocked(seriesApi.search).mock.calls[0];
+    expect(seriesCall[1].condition).toEqual(expectedLeaf);
+    const booksCall = vi.mocked(booksApi.search).mock.calls[0];
+    expect(booksCall[1].condition).toEqual(expectedLeaf);
   });
 });
