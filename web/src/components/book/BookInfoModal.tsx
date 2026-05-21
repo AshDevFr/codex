@@ -73,7 +73,11 @@ function InfoRow({ label, value, copyable, monospace }: InfoRowProps) {
           </Code>
           <CopyButton value={displayValue}>
             {({ copied, copy }) => (
-              <Tooltip label={copied ? "Copied" : "Copy"} withArrow>
+              <Tooltip
+                label={copied ? "Copied" : "Copy"}
+                withArrow
+                zIndex={1100}
+              >
                 <ActionIcon
                   size="xs"
                   variant="subtle"

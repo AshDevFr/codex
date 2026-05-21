@@ -517,9 +517,12 @@ async fn test_list_series_duplicates_external_id_match() {
         .await
         .unwrap();
 
-    SeriesDuplicatesRepository::rebuild_from_series(&db)
-        .await
-        .unwrap();
+    SeriesDuplicatesRepository::rebuild_from_series(
+        &db,
+        &["plugin:mangabaka".to_string(), "plugin:anilist".to_string()],
+    )
+    .await
+    .unwrap();
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -540,6 +543,111 @@ async fn test_list_series_duplicates_external_id_match() {
     assert_eq!(group.match_key, "plugin:mangabaka:12345");
     assert!(group.library_id.is_none());
     assert_eq!(group.duplicate_count, 2);
+
+    // Members must be hydrated by the list endpoint so the UI never needs to
+    // fetch /series/{id} per row.
+    assert_eq!(group.members.len(), 2);
+    let ids: Vec<Uuid> = group.members.iter().map(|m| m.id).collect();
+    assert!(ids.contains(&s1));
+    assert!(ids.contains(&s2));
+    let titles: Vec<&str> = group.members.iter().map(|m| m.title.as_str()).collect();
+    assert!(titles.contains(&"Naruto"));
+    assert!(titles.contains(&"ナルト"));
+    assert!(group.members.iter().all(|m| m.library_name == "Lib"));
+    assert!(group.members.iter().all(|m| m.book_count == 0));
+}
+
+#[tokio::test]
+async fn test_list_series_duplicates_members_include_book_count_and_library() {
+    // Verifies the hydrated member shape: title falls back to series.name when
+    // metadata is empty, book_count excludes soft-deleted books, and the
+    // library_name comes from the joined libraries row.
+    let (db, temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(
+        &db,
+        "My Library",
+        temp_dir.path().to_str().unwrap(),
+        ScanningStrategy::Default,
+    )
+    .await
+    .unwrap();
+
+    let s1 = insert_series(&db, library.id, "Fairy Tail", "Fairy Tail").await;
+    let s2 = insert_series(&db, library.id, "Fairy Tail 2", "Fairy Tail").await;
+
+    // Two non-deleted books on s1, plus one soft-deleted that must not count.
+    let now = Utc::now();
+    for i in 0..2 {
+        let id = Uuid::new_v4();
+        books::ActiveModel {
+            id: Set(id),
+            series_id: Set(s1),
+            library_id: Set(library.id),
+            file_path: Set(format!("/tmp/{}-{}.cbz", id, i)),
+            file_name: Set(format!("{}-{}.cbz", id, i)),
+            file_size: Set(1024),
+            file_hash: Set(format!("hash-{}-{}", id, i)),
+            partial_hash: Set(format!("partial-{}", id)),
+            format: Set("cbz".to_string()),
+            page_count: Set(10),
+            modified_at: Set(now),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(&db)
+        .await
+        .unwrap();
+    }
+    let deleted_id = Uuid::new_v4();
+    books::ActiveModel {
+        id: Set(deleted_id),
+        series_id: Set(s1),
+        library_id: Set(library.id),
+        file_path: Set(format!("/tmp/{}-deleted.cbz", deleted_id)),
+        file_name: Set(format!("{}-deleted.cbz", deleted_id)),
+        file_size: Set(1024),
+        file_hash: Set(format!("hash-{}-deleted", deleted_id)),
+        partial_hash: Set(format!("partial-{}-deleted", deleted_id)),
+        format: Set("cbz".to_string()),
+        page_count: Set(10),
+        deleted: Set(true),
+        modified_at: Set(now),
+        created_at: Set(now),
+        updated_at: Set(now),
+        ..Default::default()
+    }
+    .insert(&db)
+    .await
+    .unwrap();
+
+    // Title pass groups both series under the same library — runs without any
+    // trusted external sources.
+    SeriesDuplicatesRepository::rebuild_from_series(&db, &[])
+        .await
+        .unwrap();
+
+    let state = create_test_app_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router_with_app_state(state);
+
+    let request = get_request_with_auth("/api/v1/duplicates/series", &token);
+    let (status, response): (StatusCode, Option<ListSeriesDuplicatesResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body = response.unwrap();
+    assert_eq!(body.total_groups, 1);
+    let group = &body.duplicates[0];
+    assert_eq!(group.members.len(), 2);
+
+    let m1 = group.members.iter().find(|m| m.id == s1).unwrap();
+    assert_eq!(m1.title, "Fairy Tail");
+    assert_eq!(m1.library_name, "My Library");
+    assert_eq!(m1.book_count, 2, "soft-deleted book must not count");
+    let m2 = group.members.iter().find(|m| m.id == s2).unwrap();
+    assert_eq!(m2.book_count, 0);
 }
 
 #[tokio::test]
@@ -570,9 +678,12 @@ async fn test_list_series_duplicates_filter_by_match_type() {
     let b2 = insert_series(&db, library.id, "B2", "Bleach").await;
     let _ = (b1, b2);
 
-    SeriesDuplicatesRepository::rebuild_from_series(&db)
-        .await
-        .unwrap();
+    SeriesDuplicatesRepository::rebuild_from_series(
+        &db,
+        &["plugin:mangabaka".to_string(), "plugin:anilist".to_string()],
+    )
+    .await
+    .unwrap();
 
     let state = create_test_app_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
@@ -631,9 +742,12 @@ async fn test_delete_series_duplicate_group() {
     let s2 = insert_series(&db, library.id, "B", "Title").await;
     let _ = (s1, s2);
 
-    SeriesDuplicatesRepository::rebuild_from_series(&db)
-        .await
-        .unwrap();
+    SeriesDuplicatesRepository::rebuild_from_series(
+        &db,
+        &["plugin:mangabaka".to_string(), "plugin:anilist".to_string()],
+    )
+    .await
+    .unwrap();
 
     let groups = SeriesDuplicatesRepository::find_all(&db).await.unwrap();
     assert_eq!(groups.len(), 1);

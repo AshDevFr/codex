@@ -4,7 +4,9 @@
 //! detection passes:
 //!
 //! 1. **External-ID pass**: groups series by `(source, external_id)` in
-//!    `series_external_ids`. High-confidence matches; not scoped to library.
+//!    `series_external_ids`. Only `source` values that appear in the caller's
+//!    trusted-source whitelist participate; an empty whitelist disables the
+//!    pass entirely. High-confidence matches; not scoped to library.
 //! 2. **Title pass**: groups series by `(library_id, search_title)` from
 //!    `series_metadata`. Lower-confidence matches; scoped to a single library so
 //!    we do not collide common names across distinct libraries.
@@ -15,7 +17,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
-    EntityTrait, PaginatorTrait, QueryFilter, Set, Statement,
+    EntityTrait, PaginatorTrait, QueryFilter, Set, Statement, Value,
 };
 use tracing::{debug, info};
 use uuid::Uuid;
@@ -66,9 +68,24 @@ impl SeriesDuplicatesRepository {
 
     /// Rebuild the entire `series_duplicates` table from current series state.
     ///
+    /// `trusted_external_id_sources` gates the external-ID pass: only rows whose
+    /// `series_external_ids.source` appears in the slice are eligible for
+    /// high-confidence grouping. An empty slice disables the pass entirely and
+    /// only the (always library-scoped) title pass runs.
+    ///
     /// Returns the total number of duplicate groups found (both match types).
-    pub async fn rebuild_from_series(db: &DatabaseConnection) -> Result<usize> {
-        info!("Starting series duplicate rebuild");
+    pub async fn rebuild_from_series(
+        db: &DatabaseConnection,
+        trusted_external_id_sources: &[String],
+    ) -> Result<usize> {
+        info!(
+            "Starting series duplicate rebuild (trusted sources: {})",
+            if trusted_external_id_sources.is_empty() {
+                "<none>".to_string()
+            } else {
+                trusted_external_id_sources.join(", ")
+            }
+        );
 
         debug!("Clearing existing series duplicate records");
         let delete_stmt = Statement::from_string(
@@ -80,19 +97,39 @@ impl SeriesDuplicatesRepository {
             .context("Failed to clear series duplicate records")?;
 
         let mut total = 0usize;
-        total += Self::rebuild_external_id_groups(db).await?;
+        total += Self::rebuild_external_id_groups(db, trusted_external_id_sources).await?;
         total += Self::rebuild_title_groups(db).await?;
 
         info!("Series duplicate rebuild complete: {} groups found", total);
         Ok(total)
     }
 
-    /// Detect series sharing the same `(source, external_id)` tuple.
-    async fn rebuild_external_id_groups(db: &DatabaseConnection) -> Result<usize> {
-        // Group external IDs by (source, external_id) and emit a row per group
-        // that contains more than one *distinct* series.
+    /// Detect series sharing the same `(source, external_id)` tuple. Only
+    /// sources listed in `trusted_sources` participate; an empty slice short-
+    /// circuits with zero groups.
+    async fn rebuild_external_id_groups(
+        db: &DatabaseConnection,
+        trusted_sources: &[String],
+    ) -> Result<usize> {
+        if trusted_sources.is_empty() {
+            debug!("No trusted external-ID sources configured; skipping external-ID pass");
+            return Ok(0);
+        }
+
+        // Build a parameterized IN clause sized to the whitelist. We can't
+        // bind a `Vec<String>` as a single array on SQLite, so emit one
+        // placeholder per source on both backends for symmetry.
+        let placeholders: Vec<String> = match db.get_database_backend() {
+            DatabaseBackend::Postgres => (1..=trusted_sources.len())
+                .map(|i| format!("${}", i))
+                .collect(),
+            DatabaseBackend::Sqlite => vec!["?".to_string(); trusted_sources.len()],
+            _ => return Err(anyhow::anyhow!("Unsupported database backend")),
+        };
+        let in_list = placeholders.join(", ");
+
         let query = match db.get_database_backend() {
-            DatabaseBackend::Postgres => {
+            DatabaseBackend::Postgres => format!(
                 r#"
                 SELECT
                     source || ':' || external_id AS match_key,
@@ -100,12 +137,13 @@ impl SeriesDuplicatesRepository {
                     COUNT(DISTINCT series_id) AS duplicate_count
                 FROM series_external_ids
                 WHERE external_id != ''
+                  AND source IN ({in_list})
                 GROUP BY source, external_id
                 HAVING COUNT(DISTINCT series_id) > 1
                 ORDER BY COUNT(DISTINCT series_id) DESC
                 "#
-            }
-            DatabaseBackend::Sqlite => {
+            ),
+            DatabaseBackend::Sqlite => format!(
                 // SQLite has no DISTINCT inside GROUP_CONCAT with an ORDER BY,
                 // but we can rely on the fact that each row in this table is
                 // already unique per (series_id, source). Concatenate ids and
@@ -117,15 +155,20 @@ impl SeriesDuplicatesRepository {
                     COUNT(DISTINCT series_id) AS duplicate_count
                 FROM series_external_ids
                 WHERE external_id != ''
+                  AND source IN ({in_list})
                 GROUP BY source, external_id
                 HAVING COUNT(DISTINCT series_id) > 1
                 ORDER BY COUNT(DISTINCT series_id) DESC
                 "#
-            }
+            ),
             _ => return Err(anyhow::anyhow!("Unsupported database backend")),
         };
 
-        let stmt = Statement::from_string(db.get_database_backend(), query.to_owned());
+        let params: Vec<Value> = trusted_sources
+            .iter()
+            .map(|s| Value::String(Some(Box::new(s.clone()))))
+            .collect();
+        let stmt = Statement::from_sql_and_values(db.get_database_backend(), query, params);
         let rows = db
             .query_all(stmt)
             .await

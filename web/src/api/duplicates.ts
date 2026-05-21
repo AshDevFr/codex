@@ -9,6 +9,8 @@ export type TriggerDuplicateScanResponse =
   components["schemas"]["TriggerDuplicateScanResponse"];
 export type SeriesDuplicateGroup =
   components["schemas"]["SeriesDuplicateGroup"];
+export type SeriesDuplicateMember =
+  components["schemas"]["SeriesDuplicateMember"];
 export type ListSeriesDuplicatesResponse =
   components["schemas"]["ListSeriesDuplicatesResponse"];
 

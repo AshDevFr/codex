@@ -56,12 +56,27 @@ const bookGroup: duplicatesApiModule.DuplicateGroup = {
   updatedAt: "2026-05-19T11:00:00Z",
 };
 
+const memberA: duplicatesApiModule.SeriesDuplicateMember = {
+  id: SERIES_ID_A,
+  libraryId: LIBRARY_ID,
+  libraryName: "Manga",
+  title: "Naruto",
+  bookCount: 72,
+  updatedAt: "2026-05-01T00:00:00Z",
+};
+const memberB: duplicatesApiModule.SeriesDuplicateMember = {
+  ...memberA,
+  id: SERIES_ID_B,
+  title: "ナルト",
+  bookCount: 1,
+};
+
 const externalIdGroup: duplicatesApiModule.SeriesDuplicateGroup = {
   id: "series-group-external",
   matchType: "external_id",
   matchKey: "plugin:mangabaka:12345",
   libraryId: null,
-  seriesIds: [SERIES_ID_A, SERIES_ID_B],
+  members: [memberA, memberB],
   duplicateCount: 2,
   createdAt: "2026-05-19T08:00:00Z",
   updatedAt: "2026-05-19T09:00:00Z",
@@ -72,27 +87,10 @@ const titleGroup: duplicatesApiModule.SeriesDuplicateGroup = {
   matchType: "title",
   matchKey: "naruto",
   libraryId: LIBRARY_ID,
-  seriesIds: [SERIES_ID_A, SERIES_ID_B],
+  members: [memberA, memberB],
   duplicateCount: 2,
   createdAt: "2026-05-19T08:30:00Z",
   updatedAt: "2026-05-19T09:30:00Z",
-};
-
-const seriesA = {
-  id: SERIES_ID_A,
-  libraryId: LIBRARY_ID,
-  libraryName: "Manga",
-  title: "Naruto",
-  bookCount: 72,
-  tracked: false,
-  createdAt: "2024-01-01T00:00:00Z",
-  updatedAt: "2026-05-01T00:00:00Z",
-};
-const seriesB = {
-  ...seriesA,
-  id: SERIES_ID_B,
-  title: "ナルト",
-  bookCount: 1,
 };
 
 const bookA = {
@@ -134,7 +132,9 @@ function setupHappyPath(
     titleGroups: seriesGroups.filter((g) => g.matchType === "title").length,
   });
 
-  // Detail fetches for the expanded rows.
+  // Detail fetches for the expanded rows. Series rows are hydrated via the
+  // group `members` field, so only book detail and the trusted-sources setting
+  // are fetched here.
   vi.mocked(api.get).mockImplementation((async (url: string) => {
     if (url === `/books/${BOOK_ID_A}`) {
       return { data: { book: bookA } };
@@ -142,11 +142,14 @@ function setupHappyPath(
     if (url === `/books/${BOOK_ID_B}`) {
       return { data: { book: bookB } };
     }
-    if (url === `/series/${SERIES_ID_A}`) {
-      return { data: seriesA };
-    }
-    if (url === `/series/${SERIES_ID_B}`) {
-      return { data: seriesB };
+    if (url.startsWith("/admin/settings/")) {
+      return {
+        data: {
+          key: "duplicate_detection.trusted_external_id_sources",
+          value: "[]",
+          updatedAt: "2026-05-01T00:00:00Z",
+        },
+      };
     }
     throw new Error(`Unexpected GET ${url}`);
   }) as typeof api.get);
@@ -247,7 +250,7 @@ describe("DuplicatesSettings", () => {
     });
   });
 
-  it("expands a series group and surfaces fetched series details", async () => {
+  it("expands a series group and surfaces hydrated member rows", async () => {
     const user = userEvent.setup();
     setupHappyPath({ seriesGroups: [externalIdGroup] });
     renderWithProviders(<DuplicatesSettings />);
@@ -255,12 +258,6 @@ describe("DuplicatesSettings", () => {
     await user.click(screen.getByRole("tab", { name: /series/i }));
     await waitFor(() => {
       expect(screen.getByText(/plugin:mangabaka:12345/)).toBeInTheDocument();
-    });
-
-    // Wait for the detail fetch to populate so the rows are real series, not
-    // the "(unavailable)" placeholder.
-    await waitFor(() => {
-      expect(api.get).toHaveBeenCalledWith(`/series/${SERIES_ID_A}`);
     });
 
     const showDetailsButton = screen.getByRole("button", {

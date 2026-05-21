@@ -59,6 +59,38 @@ pub struct TriggerDuplicateScanResponse {
     pub message: String,
 }
 
+/// A single series participating in a duplicate group, hydrated with the
+/// fields the duplicate-detection UI needs to render each row.
+///
+/// Returning the title, library, book count, and last-updated timestamp on
+/// the list endpoint lets the client render groups in one round trip, instead
+/// of issuing a `GET /series/{id}` for every member.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesDuplicateMember {
+    /// Series UUID.
+    pub id: Uuid,
+
+    /// Display title, falling back to `series.name` when no metadata exists.
+    #[schema(example = "Fairy Tail")]
+    pub title: String,
+
+    /// Library this series belongs to.
+    pub library_id: Uuid,
+
+    /// Library display name.
+    #[schema(example = "Manga")]
+    pub library_name: String,
+
+    /// Number of (non-deleted) books in the series.
+    #[schema(example = 63)]
+    pub book_count: i64,
+
+    /// Series row's last-updated timestamp.
+    #[schema(example = "2026-02-15T00:00:00Z")]
+    pub updated_at: String,
+}
+
 /// A group of duplicate series.
 ///
 /// Two detection methods are surfaced through `match_type`:
@@ -85,10 +117,13 @@ pub struct SeriesDuplicateGroup {
     /// Library this group is scoped to. Null for `external_id` matches.
     pub library_id: Option<Uuid>,
 
-    /// IDs of the series sharing this match key.
-    pub series_ids: Vec<Uuid>,
+    /// Hydrated details for each series in the group, in the same order the
+    /// detector emitted them. May be shorter than `duplicate_count` if a
+    /// member series has since been deleted.
+    pub members: Vec<SeriesDuplicateMember>,
 
-    /// Number of series in the group.
+    /// Number of series in the group at detection time. `members.len()` may
+    /// be smaller if a member has been deleted between scan and read.
     #[schema(example = 2)]
     pub duplicate_count: i32,
 

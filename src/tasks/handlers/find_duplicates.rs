@@ -1,16 +1,23 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::db::entities::tasks;
-use crate::db::repositories::{BookDuplicatesRepository, SeriesDuplicatesRepository};
+use crate::db::repositories::{
+    BookDuplicatesRepository, SeriesDuplicatesRepository, SettingsRepository,
+};
 use crate::events::EventBroadcaster;
 use crate::tasks::types::TaskResult;
 
 use super::TaskHandler;
 
-/// Handler for finding duplicate books
+/// Settings key that holds the JSON-encoded array of trusted
+/// `series_external_ids.source` values. Seeded by
+/// `m20260520_000086_seed_duplicate_detection_settings`.
+pub const TRUSTED_EXTERNAL_ID_SOURCES_KEY: &str = "duplicate_detection.trusted_external_id_sources";
+
+/// Handler for finding duplicate books and series.
 pub struct FindDuplicatesHandler;
 
 impl Default for FindDuplicatesHandler {
@@ -25,6 +32,25 @@ impl FindDuplicatesHandler {
     }
 }
 
+/// Resolve the trusted-source whitelist for the external-ID duplicate pass.
+/// Reads `duplicate_detection.trusted_external_id_sources` (a JSON array)
+/// directly from the settings table so changes take effect on the next scan
+/// without restarting the worker. Falls back to an empty whitelist if the
+/// setting is missing or malformed.
+pub async fn load_trusted_external_id_sources(db: &DatabaseConnection) -> Vec<String> {
+    match SettingsRepository::get_value::<Vec<String>>(db, TRUSTED_EXTERNAL_ID_SOURCES_KEY).await {
+        Ok(Some(sources)) => sources,
+        Ok(None) => Vec::new(),
+        Err(e) => {
+            warn!(
+                "Failed to load `{}`; treating as empty (external-ID pass disabled): {}",
+                TRUSTED_EXTERNAL_ID_SOURCES_KEY, e
+            );
+            Vec::new()
+        }
+    }
+}
+
 impl TaskHandler for FindDuplicatesHandler {
     fn handle<'a>(
         &'a self,
@@ -35,8 +61,11 @@ impl TaskHandler for FindDuplicatesHandler {
         Box::pin(async move {
             info!("Starting duplicate detection scan");
 
+            let trusted = load_trusted_external_id_sources(db).await;
+
             let book_groups = BookDuplicatesRepository::rebuild_from_books(db).await?;
-            let series_groups = SeriesDuplicatesRepository::rebuild_from_series(db).await?;
+            let series_groups =
+                SeriesDuplicatesRepository::rebuild_from_series(db, &trusted).await?;
 
             info!(
                 "Duplicate detection complete: {} book groups, {} series groups",

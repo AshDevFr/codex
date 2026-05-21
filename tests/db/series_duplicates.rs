@@ -20,6 +20,13 @@ use common::{create_test_library, setup_test_db};
 use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 use uuid::Uuid;
 
+/// Whitelist used by tests that exercise the external-ID pass. The pass is
+/// disabled when this slice is empty, so every existing test passes the
+/// sources it relies on through here.
+fn trusted_test_sources() -> Vec<String> {
+    vec!["plugin:mangabaka".to_string(), "plugin:anilist".to_string()]
+}
+
 /// Create a series with a unique path (UUID-based) and an explicit name.
 /// Unlike the shared `create_test_series` helper this never collides on the
 /// `(library_id, path)` unique constraint when multiple series share a name.
@@ -89,7 +96,7 @@ async fn test_rebuild_detects_shared_external_id_within_library() {
         .await
         .unwrap();
 
-    let count = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(count, 1);
@@ -125,7 +132,7 @@ async fn test_rebuild_detects_external_id_across_libraries() {
         .await
         .unwrap();
 
-    let count = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(count, 1);
@@ -151,7 +158,7 @@ async fn test_rebuild_distinguishes_sources_for_same_external_id() {
         .await
         .unwrap();
 
-    let count = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(count, 0);
@@ -174,7 +181,7 @@ async fn test_rebuild_detects_title_duplicates_within_library() {
     upsert_series_title(&db, s2.id, "Naruto").await;
     upsert_series_title(&db, s3.id, "Bleach").await;
 
-    let count = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(count, 1);
@@ -205,7 +212,7 @@ async fn test_title_duplicates_scoped_to_library() {
     upsert_series_title(&db, s2.id, "Naruto").await;
 
     // Title-only matches across libraries are intentionally not flagged.
-    let count = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(count, 0);
@@ -222,7 +229,7 @@ async fn test_rebuild_ignores_empty_search_title() {
     upsert_series_title(&db, s1.id, "").await;
     upsert_series_title(&db, s2.id, "").await;
 
-    let count = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(count, 0);
@@ -253,7 +260,7 @@ async fn test_rebuild_emits_both_match_types() {
     upsert_series_title(&db, b1.id, "Bleach").await;
     upsert_series_title(&db, b2.id, "Bleach").await;
 
-    let count = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(count, 2);
@@ -282,13 +289,13 @@ async fn test_rebuild_is_idempotent() {
     upsert_series_title(&db, s1.id, "A").await;
     upsert_series_title(&db, s2.id, "A").await;
 
-    let c1 = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let c1 = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
-    let c2 = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let c2 = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
-    let c3 = SeriesDuplicatesRepository::rebuild_from_series(&db)
+    let c3 = SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(c1, c2);
@@ -308,7 +315,7 @@ async fn test_cleanup_removes_series_from_group() {
     upsert_series_title(&db, s2.id, "X").await;
     upsert_series_title(&db, s3.id, "X").await;
 
-    SeriesDuplicatesRepository::rebuild_from_series(&db)
+    SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     let groups = SeriesDuplicatesRepository::find_all(&db).await.unwrap();
@@ -338,7 +345,7 @@ async fn test_cleanup_deletes_group_when_one_remains() {
     upsert_series_title(&db, s1.id, "Y").await;
     upsert_series_title(&db, s2.id, "Y").await;
 
-    SeriesDuplicatesRepository::rebuild_from_series(&db)
+    SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     assert_eq!(
@@ -371,7 +378,7 @@ async fn test_delete_group() {
     upsert_series_title(&db, s1.id, "Z").await;
     upsert_series_title(&db, s2.id, "Z").await;
 
-    SeriesDuplicatesRepository::rebuild_from_series(&db)
+    SeriesDuplicatesRepository::rebuild_from_series(&db, &trusted_test_sources())
         .await
         .unwrap();
     let groups = SeriesDuplicatesRepository::find_all(&db).await.unwrap();
@@ -386,4 +393,108 @@ async fn test_delete_group() {
             .unwrap()
             .is_empty()
     );
+}
+
+// ---------------------------------------------------------------------------
+// Trusted-source whitelist
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_external_id_pass_skipped_when_whitelist_empty() {
+    // Two series share `plugin:mangabaka:12345` and would otherwise be a
+    // high-confidence external-ID match. With an empty whitelist the
+    // external-ID pass should not run at all.
+    let (db, _tmp) = setup_test_db().await;
+    let library = create_test_library(&db, "Lib", "/lib").await;
+
+    let s1 = make_series(&db, &library, "Naruto").await;
+    let s2 = make_series(&db, &library, "ナルト").await;
+    SeriesExternalIdRepository::create_for_plugin(&db, s1.id, "mangabaka", "12345", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create_for_plugin(&db, s2.id, "mangabaka", "12345", None, None)
+        .await
+        .unwrap();
+
+    let count = SeriesDuplicatesRepository::rebuild_from_series(&db, &[])
+        .await
+        .unwrap();
+    assert_eq!(count, 0, "external-ID pass must be disabled by default");
+    let by_type = SeriesDuplicatesRepository::find_by_match_type(&db, MATCH_TYPE_EXTERNAL_ID)
+        .await
+        .unwrap();
+    assert!(by_type.is_empty());
+}
+
+#[tokio::test]
+async fn test_external_id_pass_ignores_untrusted_sources() {
+    // `api:animenewsnetwork` is known-noisy: two unrelated series share the
+    // same ANN ID. Trusting only `plugin:mangabaka` must skip the ANN match.
+    let (db, _tmp) = setup_test_db().await;
+    let library = create_test_library(&db, "Lib", "/lib").await;
+
+    let s1 = make_series(&db, &library, "Fairy Tail").await;
+    let s2 = make_series(&db, &library, "Fairy Tail: Blue Mistral").await;
+
+    // Bad ANN data (untrusted): same external_id on two distinct series.
+    SeriesExternalIdRepository::create(&db, s1.id, "api:animenewsnetwork", "6872", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create(&db, s2.id, "api:animenewsnetwork", "6872", None, None)
+        .await
+        .unwrap();
+
+    // Good MangaBaka data (trusted): different external_id per series — no match.
+    SeriesExternalIdRepository::create_for_plugin(&db, s1.id, "mangabaka", "a", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create_for_plugin(&db, s2.id, "mangabaka", "b", None, None)
+        .await
+        .unwrap();
+
+    let count =
+        SeriesDuplicatesRepository::rebuild_from_series(&db, &["plugin:mangabaka".to_string()])
+            .await
+            .unwrap();
+    assert_eq!(
+        count, 0,
+        "ANN false positive must not be grouped when ANN is not whitelisted"
+    );
+}
+
+#[tokio::test]
+async fn test_external_id_pass_groups_only_whitelisted_sources() {
+    // Same external_id "42" on two sources; whitelist allows only mangabaka.
+    let (db, _tmp) = setup_test_db().await;
+    let library = create_test_library(&db, "Lib", "/lib").await;
+
+    let s1 = make_series(&db, &library, "A").await;
+    let s2 = make_series(&db, &library, "B").await;
+    let s3 = make_series(&db, &library, "C").await;
+    let s4 = make_series(&db, &library, "D").await;
+
+    SeriesExternalIdRepository::create_for_plugin(&db, s1.id, "mangabaka", "42", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create_for_plugin(&db, s2.id, "mangabaka", "42", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create(&db, s3.id, "api:animenewsnetwork", "42", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create(&db, s4.id, "api:animenewsnetwork", "42", None, None)
+        .await
+        .unwrap();
+
+    let count =
+        SeriesDuplicatesRepository::rebuild_from_series(&db, &["plugin:mangabaka".to_string()])
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+
+    let groups = SeriesDuplicatesRepository::find_by_match_type(&db, MATCH_TYPE_EXTERNAL_ID)
+        .await
+        .unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].match_key, "plugin:mangabaka:42");
 }

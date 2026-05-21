@@ -3,12 +3,18 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
+use chrono::{DateTime, Utc};
+use sea_orm::{
+    ConnectionTrait, DatabaseBackend, DatabaseConnection, FromQueryResult, Statement, Value,
+};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use super::super::dto::{
     DuplicateGroup, ListDuplicatesResponse, ListSeriesDuplicatesQuery,
-    ListSeriesDuplicatesResponse, SeriesDuplicateGroup, TriggerDuplicateScanResponse,
+    ListSeriesDuplicatesResponse, SeriesDuplicateGroup, SeriesDuplicateMember,
+    TriggerDuplicateScanResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::entities::series_duplicates::{MATCH_TYPE_EXTERNAL_ID, MATCH_TYPE_TITLE};
@@ -220,26 +226,56 @@ pub async fn list_series_duplicates(
         }
     };
 
-    let total_groups = groups.len();
+    // Decode each group's stored UUID list once so we can both batch-load
+    // member details and reuse the parsed list when emitting DTOs.
+    let parsed: Vec<(_, Vec<Uuid>)> = groups
+        .into_iter()
+        .map(|g| {
+            let ids: Vec<Uuid> = serde_json::from_str(&g.series_ids).unwrap_or_default();
+            (g, ids)
+        })
+        .collect();
+
+    let mut unique_ids: HashSet<Uuid> = HashSet::new();
+    for (_, ids) in &parsed {
+        unique_ids.extend(ids.iter().copied());
+    }
+    let unique_ids: Vec<Uuid> = unique_ids.into_iter().collect();
+
+    let members_by_series = if unique_ids.is_empty() {
+        HashMap::new()
+    } else {
+        load_series_duplicate_members(&state.db, &unique_ids)
+            .await
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to load duplicate group members: {}", e))
+            })?
+    };
+
+    let total_groups = parsed.len();
     let mut external_id_groups = 0;
     let mut title_groups = 0;
     let mut total_duplicate_series = 0usize;
 
-    let duplicate_groups: Vec<SeriesDuplicateGroup> = groups
+    let duplicate_groups: Vec<SeriesDuplicateGroup> = parsed
         .into_iter()
-        .map(|d| {
+        .map(|(d, ids)| {
             total_duplicate_series += d.duplicate_count as usize;
             match d.match_type.as_str() {
                 MATCH_TYPE_EXTERNAL_ID => external_id_groups += 1,
                 MATCH_TYPE_TITLE => title_groups += 1,
                 _ => {}
             }
+            let members = ids
+                .iter()
+                .filter_map(|id| members_by_series.get(id).cloned())
+                .collect();
             SeriesDuplicateGroup {
                 id: d.id,
                 match_type: d.match_type,
                 match_key: d.match_key,
                 library_id: d.library_id,
-                series_ids: serde_json::from_str(&d.series_ids).unwrap_or_default(),
+                members,
                 duplicate_count: d.duplicate_count,
                 created_at: d.created_at.to_rfc3339(),
                 updated_at: d.updated_at.to_rfc3339(),
@@ -254,6 +290,79 @@ pub async fn list_series_duplicates(
         external_id_groups,
         title_groups,
     }))
+}
+
+/// Load the per-series details that the duplicate-detection UI renders, in
+/// one batched query, so the frontend never has to issue a `GET /series/{id}`
+/// per row.
+async fn load_series_duplicate_members(
+    db: &DatabaseConnection,
+    ids: &[Uuid],
+) -> anyhow::Result<HashMap<Uuid, SeriesDuplicateMember>> {
+    #[derive(Debug, FromQueryResult)]
+    struct Row {
+        id: Uuid,
+        title: String,
+        library_id: Uuid,
+        library_name: String,
+        book_count: i64,
+        updated_at: DateTime<Utc>,
+    }
+
+    let backend = db.get_database_backend();
+    let placeholders: Vec<String> = match backend {
+        DatabaseBackend::Postgres => (1..=ids.len()).map(|i| format!("${}", i)).collect(),
+        DatabaseBackend::Sqlite => vec!["?".to_string(); ids.len()],
+        _ => return Err(anyhow::anyhow!("Unsupported database backend")),
+    };
+    let in_list = placeholders.join(", ");
+
+    let deleted_predicate = match backend {
+        DatabaseBackend::Postgres => "b.deleted = false",
+        DatabaseBackend::Sqlite => "b.deleted = 0",
+        _ => unreachable!(),
+    };
+
+    let sql = format!(
+        r#"
+        SELECT
+            s.id          AS id,
+            COALESCE(NULLIF(sm.title, ''), s.name) AS title,
+            s.library_id  AS library_id,
+            l.name        AS library_name,
+            s.updated_at  AS updated_at,
+            (SELECT COUNT(*) FROM books b
+             WHERE b.series_id = s.id AND {deleted_predicate}) AS book_count
+        FROM series s
+        JOIN libraries l ON l.id = s.library_id
+        LEFT JOIN series_metadata sm ON sm.series_id = s.id
+        WHERE s.id IN ({in_list})
+        "#
+    );
+
+    let params: Vec<Value> = ids
+        .iter()
+        .map(|id| Value::Uuid(Some(Box::new(*id))))
+        .collect();
+    let stmt = Statement::from_sql_and_values(backend, sql, params);
+
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            (
+                r.id,
+                SeriesDuplicateMember {
+                    id: r.id,
+                    title: r.title,
+                    library_id: r.library_id,
+                    library_name: r.library_name,
+                    book_count: r.book_count,
+                    updated_at: r.updated_at.to_rfc3339(),
+                },
+            )
+        })
+        .collect())
 }
 
 /// Delete a series duplicate group (does not delete the underlying series).

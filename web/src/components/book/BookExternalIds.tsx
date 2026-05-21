@@ -150,13 +150,19 @@ export function BookExternalIds({ externalIds, onEdit }: BookExternalIdsProps) {
         );
 
         return (
-          <Tooltip key={extId.id} label={tooltipContent} multiline withArrow>
+          <Tooltip
+            key={extId.id}
+            label={tooltipContent}
+            multiline
+            withArrow
+            zIndex={1100}
+          >
             {badge}
           </Tooltip>
         );
       })}
       {onEdit && (
-        <Tooltip label="Edit external IDs" withArrow>
+        <Tooltip label="Edit external IDs" withArrow zIndex={1100}>
           <ActionIcon variant="subtle" color="gray" size="xs" onClick={onEdit}>
             <IconEdit size={12} />
           </ActionIcon>

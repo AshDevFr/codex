@@ -175,6 +175,7 @@ mod m20260518_000083_create_refresh_tokens;
 mod m20260519_000084_seed_fuzzy_search_setting;
 // Series-level duplicate detection (matches by external ID or normalized title)
 mod m20260520_000085_create_series_duplicates;
+mod m20260520_000086_seed_duplicate_detection_settings;
 
 pub struct Migrator;
 
@@ -320,6 +321,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260519_000084_seed_fuzzy_search_setting::Migration),
             // Series-level duplicate detection
             Box::new(m20260520_000085_create_series_duplicates::Migration),
+            // Duplicate detection: trusted external-ID source whitelist setting
+            Box::new(m20260520_000086_seed_duplicate_detection_settings::Migration),
         ]
     }
 }

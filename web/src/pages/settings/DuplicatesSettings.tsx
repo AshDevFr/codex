@@ -31,14 +31,16 @@ import {
   type DuplicateGroup,
   duplicatesApi,
   type SeriesDuplicateGroup,
+  type SeriesDuplicateMember,
   seriesDuplicatesApi,
 } from "@/api/duplicates";
 import { AppLink } from "@/components/common/AppLink";
+import { TrustedSourcesEditor } from "@/components/settings/TrustedSourcesEditor";
 import { CardListSkeleton } from "@/components/skeletons";
 import { ResponsiveTable } from "@/components/ui";
 import { useTaskProgress } from "@/hooks/useTaskProgress";
 import { useShowSkeleton } from "@/lib/motion/useShowSkeleton";
-import type { Book, Series } from "@/types";
+import type { Book } from "@/types";
 
 // Duplicate scan task type
 const DUPLICATE_SCAN_TASK_TYPE = "find_duplicates";
@@ -199,12 +201,10 @@ function BookDuplicateGroupCard({
 // Series duplicate group card
 function SeriesDuplicateGroupCard({
   group,
-  seriesList,
   onDelete,
   isDeleting,
 }: {
   group: SeriesDuplicateGroup;
-  seriesList: Series[];
   onDelete: () => void;
   isDeleting: boolean;
 }) {
@@ -214,6 +214,7 @@ function SeriesDuplicateGroupCard({
     ? { color: "green", label: "High confidence" }
     : { color: "orange", label: "Possible match" };
   const primaryLabel = isExternalId ? "External ID" : "Title";
+  const members = group.members ?? [];
 
   return (
     <Card withBorder padding="md">
@@ -222,8 +223,7 @@ function SeriesDuplicateGroupCard({
           <IconStack2 size={20} style={{ flexShrink: 0 }} />
           <Box style={{ minWidth: 0, flex: 1 }}>
             <Text fw={500} truncate="end">
-              {seriesList[0]?.title ??
-                `${group.duplicateCount} Duplicate Series`}
+              {members[0]?.title ?? `${group.duplicateCount} Duplicate Series`}
             </Text>
             <Text size="xs" c="dimmed" style={{ fontFamily: "monospace" }}>
               {primaryLabel}: {group.matchKey}
@@ -259,78 +259,61 @@ function SeriesDuplicateGroupCard({
       </Group>
 
       {expanded && (
-        <ResponsiveTable<{ id: string; series: Series | null }>
-          data={group.seriesIds.map((id) => ({
-            id,
-            series: seriesList.find((s) => s.id === id) ?? null,
-          }))}
+        <ResponsiveTable<SeriesDuplicateMember>
+          data={members}
           columns={[
             {
               key: "series",
               header: "Series",
               mobilePrimary: true,
               thProps: { style: { width: "40%" } },
-              accessor: ({ id, series }) =>
-                series ? (
-                  <Anchor
-                    size="sm"
-                    fw={500}
-                    truncate="end"
-                    c="blue.4"
-                    component={AppLink}
-                    to={`/series/${series.id}`}
-                  >
-                    {series.title}
-                  </Anchor>
-                ) : (
-                  <Text size="sm" c="dimmed" truncate>
-                    Series {id.slice(0, 8)} (unavailable)
-                  </Text>
-                ),
+              accessor: (member) => (
+                <Anchor
+                  size="sm"
+                  fw={500}
+                  truncate="end"
+                  c="blue.4"
+                  component={AppLink}
+                  to={`/series/${member.id}`}
+                >
+                  {member.title}
+                </Anchor>
+              ),
             },
             {
               key: "library",
               header: "Library",
               thProps: { style: { width: "25%" } },
-              accessor: ({ series }) =>
-                series ? (
-                  <Anchor
-                    size="sm"
-                    truncate="end"
-                    c="blue.4"
-                    component={AppLink}
-                    to={`/libraries/${series.libraryId}`}
-                  >
-                    {series.libraryName || "-"}
-                  </Anchor>
-                ) : (
-                  <Text size="sm" truncate>
-                    -
-                  </Text>
-                ),
+              accessor: (member) => (
+                <Anchor
+                  size="sm"
+                  truncate="end"
+                  c="blue.4"
+                  component={AppLink}
+                  to={`/libraries/${member.libraryId}`}
+                >
+                  {member.libraryName || "-"}
+                </Anchor>
+              ),
             },
             {
               key: "books",
               header: "Books",
               thProps: { style: { width: "15%" } },
-              accessor: ({ series }) => (
-                <Text size="sm">{series?.bookCount ?? "-"}</Text>
-              ),
+              accessor: (member) => <Text size="sm">{member.bookCount}</Text>,
             },
             {
               key: "updated",
               header: "Last Updated",
               thProps: { style: { width: "20%" } },
-              accessor: ({ series }) => (
+              accessor: (member) => (
                 <Text size="sm">
-                  {series
-                    ? new Date(series.updatedAt).toLocaleDateString()
-                    : "-"}
+                  {new Date(member.updatedAt).toLocaleDateString()}
                 </Text>
               ),
             },
           ]}
-          getRowKey={(row, index) => `${row.id}-${index}`}
+          getRowKey={(member, index) => `${member.id}-${index}`}
           tableProps={{ layout: "fixed" }}
         />
       )}
@@ -351,9 +334,6 @@ export function DuplicatesSettings() {
   const [bookDetailsCache, setBookDetailsCache] = useState<Map<string, Book[]>>(
     new Map(),
   );
-  const [seriesDetailsCache, setSeriesDetailsCache] = useState<
-    Map<string, Series[]>
-  >(new Map());
 
   // Track completed duplicate scan tasks to trigger refresh
   const { activeTasks } = useTaskProgress();
@@ -430,27 +410,6 @@ export function DuplicatesSettings() {
     return books;
   };
 
-  // Fetch series details for a group
-  const fetchSeriesForGroup = async (
-    group: SeriesDuplicateGroup,
-  ): Promise<Series[]> => {
-    const cached = seriesDetailsCache.get(group.id);
-    if (cached) return cached;
-
-    const seriesList: Series[] = [];
-    for (const seriesId of group.seriesIds) {
-      try {
-        const response = await api.get<Series>(`/series/${seriesId}`);
-        seriesList.push(response.data);
-      } catch (err) {
-        console.error(`Failed to fetch series ${seriesId}:`, err);
-      }
-    }
-
-    setSeriesDetailsCache((prev) => new Map(prev).set(group.id, seriesList));
-    return seriesList;
-  };
-
   // Preload book details when duplicates change
   const { data: groupBooks } = useQuery({
     queryKey: ["duplicate-books", duplicates?.map((d) => d.id).join(",")],
@@ -465,23 +424,6 @@ export function DuplicatesSettings() {
       return results;
     },
     enabled: !!duplicates && duplicates.length > 0,
-  });
-
-  // Preload series details when series duplicates change
-  const { data: groupSeries } = useQuery({
-    queryKey: [
-      "duplicate-series-details",
-      seriesDuplicates.map((d) => d.id).join(","),
-    ],
-    queryFn: async () => {
-      const results = new Map<string, Series[]>();
-      for (const group of seriesDuplicates) {
-        const list = await fetchSeriesForGroup(group);
-        results.set(group.id, list);
-      }
-      return results;
-    },
-    enabled: seriesDuplicates.length > 0,
   });
 
   // Mutations
@@ -743,6 +685,8 @@ export function DuplicatesSettings() {
                 record; the underlying series are kept.
               </Alert>
 
+              <TrustedSourcesEditor />
+
               {isSeriesLoading ? (
                 showSeriesSkeleton ? (
                   <CardListSkeleton count={3} lines={4} />
@@ -757,7 +701,6 @@ export function DuplicatesSettings() {
                     <SeriesDuplicateGroupCard
                       key={group.id}
                       group={group}
-                      seriesList={groupSeries?.get(group.id) || []}
                       onDelete={() =>
                         deleteSeriesGroupMutation.mutate(group.id)
                       }

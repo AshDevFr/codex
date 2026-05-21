@@ -35671,7 +35671,7 @@
           "id",
           "matchType",
           "matchKey",
-          "seriesIds",
+          "members",
           "duplicateCount",
           "createdAt",
           "updatedAt"
@@ -35685,7 +35685,7 @@
           "duplicateCount": {
             "type": "integer",
             "format": "int32",
-            "description": "Number of series in the group.",
+            "description": "Number of series in the group at detection time. `members.len()` may\nbe smaller if a member has been deleted between scan and read.",
             "example": 2
           },
           "id": {
@@ -35712,18 +35712,62 @@
             "description": "`external_id` or `title`",
             "example": "external_id"
           },
-          "seriesIds": {
+          "members": {
             "type": "array",
             "items": {
-              "type": "string",
-              "format": "uuid"
+              "$ref": "#/components/schemas/SeriesDuplicateMember"
             },
-            "description": "IDs of the series sharing this match key."
+            "description": "Hydrated details for each series in the group, in the same order the\ndetector emitted them. May be shorter than `duplicate_count` if a\nmember series has since been deleted."
           },
           "updatedAt": {
             "type": "string",
             "description": "When the group was last updated",
             "example": "2026-05-20T10:30:00Z"
+          }
+        }
+      },
+      "SeriesDuplicateMember": {
+        "type": "object",
+        "description": "A single series participating in a duplicate group, hydrated with the\nfields the duplicate-detection UI needs to render each row.\n\nReturning the title, library, book count, and last-updated timestamp on\nthe list endpoint lets the client render groups in one round trip, instead\nof issuing a `GET /series/{id}` for every member.",
+        "required": [
+          "id",
+          "title",
+          "libraryId",
+          "libraryName",
+          "bookCount",
+          "updatedAt"
+        ],
+        "properties": {
+          "bookCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of (non-deleted) books in the series.",
+            "example": 63
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Series UUID."
+          },
+          "libraryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Library this series belongs to."
+          },
+          "libraryName": {
+            "type": "string",
+            "description": "Library display name.",
+            "example": "Manga"
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title, falling back to `series.name` when no metadata exists.",
+            "example": "Fairy Tail"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "Series row's last-updated timestamp.",
+            "example": "2026-02-15T00:00:00Z"
           }
         }
       },

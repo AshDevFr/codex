@@ -16415,7 +16415,8 @@ export interface components {
             createdAt: string;
             /**
              * Format: int32
-             * @description Number of series in the group.
+             * @description Number of series in the group at detection time. `members.len()` may
+             *     be smaller if a member has been deleted between scan and read.
              * @example 2
              */
             duplicateCount: number;
@@ -16441,11 +16442,56 @@ export interface components {
              * @example external_id
              */
             matchType: string;
-            /** @description IDs of the series sharing this match key. */
-            seriesIds: string[];
+            /**
+             * @description Hydrated details for each series in the group, in the same order the
+             *     detector emitted them. May be shorter than `duplicate_count` if a
+             *     member series has since been deleted.
+             */
+            members: components["schemas"]["SeriesDuplicateMember"][];
             /**
              * @description When the group was last updated
              * @example 2026-05-20T10:30:00Z
+             */
+            updatedAt: string;
+        };
+        /**
+         * @description A single series participating in a duplicate group, hydrated with the
+         *     fields the duplicate-detection UI needs to render each row.
+         *
+         *     Returning the title, library, book count, and last-updated timestamp on
+         *     the list endpoint lets the client render groups in one round trip, instead
+         *     of issuing a `GET /series/{id}` for every member.
+         */
+        SeriesDuplicateMember: {
+            /**
+             * Format: int64
+             * @description Number of (non-deleted) books in the series.
+             * @example 63
+             */
+            bookCount: number;
+            /**
+             * Format: uuid
+             * @description Series UUID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Library this series belongs to.
+             */
+            libraryId: string;
+            /**
+             * @description Library display name.
+             * @example Manga
+             */
+            libraryName: string;
+            /**
+             * @description Display title, falling back to `series.name` when no metadata exists.
+             * @example Fairy Tail
+             */
+            title: string;
+            /**
+             * @description Series row's last-updated timestamp.
+             * @example 2026-02-15T00:00:00Z
              */
             updatedAt: string;
         };

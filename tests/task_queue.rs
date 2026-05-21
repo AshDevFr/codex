@@ -1359,7 +1359,7 @@ async fn test_find_duplicates_handler_with_duplicates() {
         .expect("Task not found");
 
     // Execute the handler
-    let handler = FindDuplicatesHandler;
+    let handler = FindDuplicatesHandler::new();
     let result = handler
         .handle(&task, &db, None)
         .await
@@ -1409,7 +1409,7 @@ async fn test_find_duplicates_handler_with_no_duplicates() {
         .expect("Task not found");
 
     // Execute the handler
-    let handler = FindDuplicatesHandler;
+    let handler = FindDuplicatesHandler::new();
     let result = handler
         .handle(&task, &db, None)
         .await
@@ -1459,7 +1459,7 @@ async fn test_find_duplicates_handler_with_multiple_groups() {
         .expect("Task not found");
 
     // Execute the handler
-    let handler = FindDuplicatesHandler;
+    let handler = FindDuplicatesHandler::new();
     let result = handler
         .handle(&task, &db, None)
         .await
@@ -1517,7 +1517,7 @@ async fn test_find_duplicates_handler_rebuilds_existing() {
         .expect("Failed to get task")
         .expect("Task not found");
 
-    let handler = FindDuplicatesHandler;
+    let handler = FindDuplicatesHandler::new();
     handler
         .handle(&task1, &db, None)
         .await
@@ -2088,6 +2088,95 @@ async fn test_has_pending_or_processing_different_task_type() {
 }
 
 /// Test has_pending_or_processing with recommendations task type
+#[tokio::test]
+async fn test_find_duplicates_handler_reads_trusted_sources_setting() {
+    use codex::db::entities::series_duplicates::MATCH_TYPE_EXTERNAL_ID;
+    use codex::db::repositories::{
+        SeriesDuplicatesRepository, SeriesExternalIdRepository, SettingsRepository,
+    };
+    use codex::tasks::handlers::find_duplicates::TRUSTED_EXTERNAL_ID_SOURCES_KEY;
+    use codex::tasks::handlers::{FindDuplicatesHandler, TaskHandler};
+
+    let (db, _temp_dir) = setup_test_db().await;
+    let library_id = create_test_library(&db).await;
+
+    async fn make_unique_series(db: &DatabaseConnection, library_id: Uuid) -> Uuid {
+        let id = Uuid::new_v4();
+        let now = Utc::now();
+        series::ActiveModel {
+            id: Set(id),
+            library_id: Set(library_id),
+            fingerprint: Set(Some(format!("fp-{}", id))),
+            path: Set(format!("/series/{}", id)),
+            name: Set(format!("Series {}", id)),
+            normalized_name: Set(format!("series {}", id)),
+            created_at: Set(now),
+            updated_at: Set(now),
+        }
+        .insert(db)
+        .await
+        .expect("Failed to insert series");
+        id
+    }
+
+    // Two distinct series sharing the same MangaBaka external ID -- the
+    // exact high-confidence pattern the detector should pick up once the
+    // source is whitelisted.
+    let s1 = make_unique_series(&db, library_id).await;
+    let s2 = make_unique_series(&db, library_id).await;
+    SeriesExternalIdRepository::create_for_plugin(&db, s1, "mangabaka", "777", None, None)
+        .await
+        .unwrap();
+    SeriesExternalIdRepository::create_for_plugin(&db, s2, "mangabaka", "777", None, None)
+        .await
+        .unwrap();
+
+    let task_type = TaskType::FindDuplicates;
+    let task_id = TaskRepository::enqueue(&db, task_type.clone(), None)
+        .await
+        .expect("Failed to enqueue task");
+    let task = TaskRepository::get_by_id(&db, task_id)
+        .await
+        .expect("Failed to get task")
+        .expect("Task not found");
+    let handler = FindDuplicatesHandler::new();
+
+    // Default seed value is `[]`, so the external-ID pass must be a no-op.
+    handler
+        .handle(&task, &db, None)
+        .await
+        .expect("first scan failed");
+    let groups = SeriesDuplicatesRepository::find_by_match_type(&db, MATCH_TYPE_EXTERNAL_ID)
+        .await
+        .unwrap();
+    assert!(
+        groups.is_empty(),
+        "external-ID pass must be disabled by default (whitelist seeded empty)"
+    );
+
+    // Opt in via the settings table. Next scan should pick it up.
+    SettingsRepository::set(
+        &db,
+        TRUSTED_EXTERNAL_ID_SOURCES_KEY,
+        "[\"plugin:mangabaka\"]".to_string(),
+        Uuid::new_v4(),
+        Some("test enable".to_string()),
+        None,
+    )
+    .await
+    .expect("Failed to update trusted sources setting");
+
+    handler
+        .handle(&task, &db, None)
+        .await
+        .expect("second scan failed");
+    let groups = SeriesDuplicatesRepository::find_by_match_type(&db, MATCH_TYPE_EXTERNAL_ID)
+        .await
+        .unwrap();
+    assert_eq!(groups.len(), 1, "whitelisted source must produce a group");
+    assert_eq!(groups[0].match_key, "plugin:mangabaka:777");
+}
+
 #[tokio::test]
 async fn test_has_pending_or_processing_recommendations_task() {
     let (db, _temp_dir) = setup_test_db().await;
