@@ -29,7 +29,12 @@ import {
   removeAtPath,
   replaceAtPath,
 } from "./conditionUtils";
-import { type FieldTarget, fieldsForTarget } from "./fieldCatalog";
+import {
+  type FieldDef,
+  type FieldTarget,
+  fieldsForTarget,
+  findField,
+} from "./fieldCatalog";
 import { LeafEditor } from "./LeafEditor";
 
 interface FilterBuilderProps {
@@ -89,7 +94,7 @@ function GroupNodeView({
   if (!group) return null;
 
   const fields = fieldsForTarget(target);
-  const defaultField = fields[0];
+  const defaultField = pickDefaultField(target, fields);
 
   const updateMode = (mode: "allOf" | "anyOf") => {
     onChange(makeGroup({ mode, children: group.children }));
@@ -138,20 +143,27 @@ function GroupNodeView({
       )}
 
       {isRoot && (
-        <Group justify="space-between" align="center" gap="xs">
-          <Text size="sm" fw={600}>
-            Match
+        <Stack gap={4}>
+          <Group justify="space-between" align="center" gap="xs">
+            <Text size="sm" fw={600}>
+              Match
+            </Text>
+            <SegmentedControl
+              size="xs"
+              value={group.mode}
+              onChange={(value) => updateMode(value as "allOf" | "anyOf")}
+              data={[
+                { label: "All of", value: "allOf" },
+                { label: "Any of", value: "anyOf" },
+              ]}
+            />
+          </Group>
+          <Text size="xs" c="dimmed">
+            Filters under "Series only" or "Books only" apply on that tab only.
+            Cross-tab rows stay visible and get a small note saying they'll be
+            ignored on the current tab.
           </Text>
-          <SegmentedControl
-            size="xs"
-            value={group.mode}
-            onChange={(value) => updateMode(value as "allOf" | "anyOf")}
-            data={[
-              { label: "All of", value: "allOf" },
-              { label: "Any of", value: "anyOf" },
-            ]}
-          />
-        </Group>
+        </Stack>
       )}
 
       {group.children.length === 0 && (
@@ -215,6 +227,16 @@ function GroupNodeView({
       {inner}
     </Card>
   );
+}
+
+// Land the user on a text field by default so a freshly-added filter doesn't
+// emit an invalid UUID and trip a 4xx round-trip.
+function pickDefaultField(
+  target: FieldTarget,
+  fields: FieldDef[],
+): FieldDef | undefined {
+  const preferredKey = target === "series" ? "name" : "title";
+  return findField(target, preferredKey) ?? fields[0];
 }
 
 interface ChildRowProps {

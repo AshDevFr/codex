@@ -6,6 +6,7 @@ import {
   emptyRoot,
   ensureRoot,
   isGroup,
+  isLeafComplete,
   leafFieldKey,
   leafOperator,
   newLeaf,
@@ -186,6 +187,137 @@ describe("conditionUtils — normalizeForEmit", () => {
       ],
     };
     expect(normalizeForEmit(multi)).toEqual(multi);
+  });
+});
+
+describe("conditionUtils — isLeafComplete", () => {
+  it("treats no-value operators as complete", () => {
+    expect(
+      isLeafComplete({ title: { operator: "isNull" } } as BookCondition),
+    ).toBe(true);
+    expect(
+      isLeafComplete({ completion: { operator: "isTrue" } } as SeriesCondition),
+    ).toBe(true);
+  });
+
+  it("rejects empty UUIDs and blank strings", () => {
+    expect(
+      isLeafComplete({
+        libraryId: { operator: "is", value: "" },
+      } as SeriesCondition),
+    ).toBe(false);
+    expect(
+      isLeafComplete({
+        title: { operator: "contains", value: "   " },
+      } as BookCondition),
+    ).toBe(false);
+  });
+
+  it("accepts populated string and number values", () => {
+    expect(
+      isLeafComplete({
+        title: { operator: "contains", value: "punch" },
+      } as BookCondition),
+    ).toBe(true);
+    expect(
+      isLeafComplete({
+        year: { operator: "eq", value: 1999 },
+      } as SeriesCondition),
+    ).toBe(true);
+  });
+
+  it("requires at least one bound on between ranges", () => {
+    expect(
+      isLeafComplete({
+        pageCount: { operator: "between", min: null, max: null },
+      } as BookCondition),
+    ).toBe(false);
+    expect(
+      isLeafComplete({
+        pageCount: { operator: "between", min: 100, max: null },
+      } as BookCondition),
+    ).toBe(true);
+  });
+});
+
+describe("conditionUtils — normalizeForEmit prunes leaves not on the active target", () => {
+  it("drops a series-only leaf when emitting for books", () => {
+    const c: SeriesCondition = {
+      allOf: [
+        {
+          libraryId: {
+            operator: "is",
+            value: "83197543-5435-4a35-983a-abae4ff77884",
+          },
+        },
+        { titleSort: { operator: "contains", value: "space" } },
+      ],
+    };
+    // titleSort is series-only; BookCondition has no such variant. Without
+    // target pruning the backend would 422 on the books tab.
+    expect(normalizeForEmit(c, "books")).toEqual({
+      libraryId: {
+        operator: "is",
+        value: "83197543-5435-4a35-983a-abae4ff77884",
+      },
+    });
+  });
+
+  it("drops a books-only leaf when emitting for series", () => {
+    const c: BookCondition = {
+      allOf: [
+        { format: { operator: "is", value: "cbz" } },
+        { genre: { operator: "is", value: "Action" } },
+      ],
+    };
+    expect(normalizeForEmit(c, "series")).toEqual({
+      genre: { operator: "is", value: "Action" },
+    });
+  });
+
+  it("emits undefined when no leaves match the target", () => {
+    const c: SeriesCondition = {
+      allOf: [{ titleSort: { operator: "contains", value: "x" } }],
+    };
+    expect(normalizeForEmit(c, "books")).toBeUndefined();
+  });
+});
+
+describe("conditionUtils — normalizeForEmit prunes incomplete leaves", () => {
+  it("drops a single incomplete leaf, emitting undefined", () => {
+    const c: SeriesCondition = {
+      allOf: [{ libraryId: { operator: "is", value: "" } }],
+    };
+    expect(normalizeForEmit(c)).toBeUndefined();
+  });
+
+  it("keeps complete siblings when one leaf is incomplete", () => {
+    const c: SeriesCondition = {
+      allOf: [
+        { name: { operator: "contains", value: "foo" } },
+        { libraryId: { operator: "is", value: "" } },
+      ],
+    };
+    expect(normalizeForEmit(c)).toEqual({
+      name: { operator: "contains", value: "foo" },
+    });
+  });
+
+  it("collapses a nested group when all its children are incomplete", () => {
+    const c: SeriesCondition = {
+      allOf: [
+        { name: { operator: "contains", value: "foo" } },
+        {
+          anyOf: [
+            { libraryId: { operator: "is", value: "" } },
+            { tag: { operator: "is", value: "" } },
+          ],
+        },
+      ],
+    };
+    expect(normalizeForEmit(c)).toEqual({
+      name: { operator: "contains", value: "foo" },
+    });
   });
 });
 

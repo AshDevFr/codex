@@ -1,7 +1,6 @@
 import {
   Alert,
   Badge,
-  Box,
   Button,
   Card,
   Collapse,
@@ -35,7 +34,7 @@ import {
   normalizeForEmit,
 } from "@/components/search/filterBuilder/conditionUtils";
 import { FilterBuilder } from "@/components/search/filterBuilder/FilterBuilder";
-import { PresetsSidebar } from "@/components/search/PresetsSidebar";
+import { PresetsMenu } from "@/components/search/PresetsMenu";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { Book, Series } from "@/types";
 import type { BookCondition, SeriesCondition } from "@/types/filters";
@@ -125,25 +124,25 @@ export function SearchPage() {
   );
 
   // ---- Result queries (run in parallel; counts feed the tab labels) ----
-  const targetForActiveTab = state.tab;
-  const conditionForActiveTab = useMemo(
-    () => normalizeForEmit(state.condition ?? { allOf: [] }),
-    [state.condition],
-  );
-
+  // Normalize per target so series-only fields don't leak to /books/list
+  // (and vice-versa) when the user switches tabs mid-edit.
   const seriesCondition = useMemo(
     () =>
-      targetForActiveTab === "series"
-        ? (conditionForActiveTab as SeriesCondition | undefined)
+      state.tab === "series"
+        ? (normalizeForEmit(state.condition ?? { allOf: [] }, "series") as
+            | SeriesCondition
+            | undefined)
         : undefined,
-    [targetForActiveTab, conditionForActiveTab],
+    [state.tab, state.condition],
   );
   const booksCondition = useMemo(
     () =>
-      targetForActiveTab === "books"
-        ? (conditionForActiveTab as BookCondition | undefined)
+      state.tab === "books"
+        ? (normalizeForEmit(state.condition ?? { allOf: [] }, "books") as
+            | BookCondition
+            | undefined)
         : undefined,
-    [targetForActiveTab, conditionForActiveTab],
+    [state.tab, state.condition],
   );
 
   const seriesSort = useMemo(() => {
@@ -239,7 +238,7 @@ export function SearchPage() {
           aria-label="Search query"
         />
 
-        <Group justify="space-between">
+        <Group justify="space-between" wrap="wrap" gap="md">
           <Button
             variant="subtle"
             leftSection={<IconAdjustmentsHorizontal size={16} />}
@@ -249,18 +248,42 @@ export function SearchPage() {
           >
             {builderOpened ? "Hide filters" : "Show filters"}
           </Button>
-          <Group gap="xs">
-            <Text size="sm" c="dimmed">
-              Sort:
-            </Text>
-            <Select
-              size="xs"
-              data={sortOptionsWithRelevance}
-              value={state.sort || null}
-              onChange={(value) => updateState({ sort: value ?? "", page: 1 })}
-              placeholder={state.query.trim() ? "Relevance" : "Default"}
-              clearable
-              w={240}
+          <Group gap="md" wrap="nowrap">
+            <Group gap="xs" wrap="nowrap">
+              <Text size="sm" c="dimmed">
+                Sort:
+              </Text>
+              <Select
+                size="xs"
+                data={sortOptionsWithRelevance}
+                value={state.sort || null}
+                onChange={(value) =>
+                  updateState({ sort: value ?? "", page: 1 })
+                }
+                placeholder={state.query.trim() ? "Relevance" : "Default"}
+                clearable
+                w={240}
+              />
+            </Group>
+            <PresetsMenu
+              target={state.tab}
+              current={{
+                query: state.query,
+                sort: state.sort,
+                condition: state.condition,
+              }}
+              onApply={(preset) => {
+                updateState({
+                  query: preset.query ?? "",
+                  sort: preset.sort ?? "",
+                  condition:
+                    (preset.condition as unknown as
+                      | SeriesCondition
+                      | BookCondition
+                      | undefined) ?? undefined,
+                  page: 1,
+                });
+              }}
             />
           </Group>
         </Group>
@@ -295,90 +318,59 @@ export function SearchPage() {
           </Alert>
         )}
 
-        <Box
-          style={{
-            display: "grid",
-            gridTemplateColumns: "260px 1fr",
-            gap: "1.5rem",
+        <Tabs
+          value={state.tab}
+          onChange={(value) => {
+            if (value === "series" || value === "books") {
+              updateState({ tab: value, page: 1 });
+            }
           }}
         >
-          <PresetsSidebar
-            target={state.tab}
-            current={{
-              query: state.query,
-              sort: state.sort,
-              condition: state.condition,
-            }}
-            onApply={(preset) => {
-              updateState({
-                query: preset.query ?? "",
-                sort: preset.sort ?? "",
-                condition:
-                  (preset.condition as unknown as
-                    | SeriesCondition
-                    | BookCondition
-                    | undefined) ?? undefined,
-                page: 1,
-              });
-            }}
-          />
+          <Tabs.List>
+            <Tabs.Tab value="series">
+              Series{" "}
+              {seriesQuery.isSuccess && (
+                <Badge size="sm" ml={6} variant="light">
+                  {seriesCount}
+                </Badge>
+              )}
+            </Tabs.Tab>
+            <Tabs.Tab value="books">
+              Books{" "}
+              {booksQuery.isSuccess && (
+                <Badge size="sm" ml={6} variant="light">
+                  {booksCount}
+                </Badge>
+              )}
+            </Tabs.Tab>
+          </Tabs.List>
 
-          <Stack gap="md">
-            <Tabs
-              value={state.tab}
-              onChange={(value) => {
-                if (value === "series" || value === "books") {
-                  updateState({ tab: value, page: 1 });
-                }
-              }}
-            >
-              <Tabs.List>
-                <Tabs.Tab value="series">
-                  Series{" "}
-                  {seriesQuery.isSuccess && (
-                    <Badge size="sm" ml={6} variant="light">
-                      {seriesCount}
-                    </Badge>
-                  )}
-                </Tabs.Tab>
-                <Tabs.Tab value="books">
-                  Books{" "}
-                  {booksQuery.isSuccess && (
-                    <Badge size="sm" ml={6} variant="light">
-                      {booksCount}
-                    </Badge>
-                  )}
-                </Tabs.Tab>
-              </Tabs.List>
+          <Tabs.Panel value="series" pt="md">
+            <ResultsGrid
+              loading={seriesQuery.isLoading}
+              error={seriesQuery.error}
+              data={seriesQuery.data?.data ?? []}
+              total={seriesCount}
+              page={state.page}
+              pageSize={DEFAULT_SEARCH_PAGE_SIZE}
+              onPageChange={(p) => updateState({ page: p })}
+              type="series"
+            />
+          </Tabs.Panel>
 
-              <Tabs.Panel value="series" pt="md">
-                <ResultsGrid
-                  loading={seriesQuery.isLoading}
-                  error={seriesQuery.error}
-                  data={seriesQuery.data?.data ?? []}
-                  total={seriesCount}
-                  page={state.page}
-                  pageSize={DEFAULT_SEARCH_PAGE_SIZE}
-                  onPageChange={(p) => updateState({ page: p })}
-                  type="series"
-                />
-              </Tabs.Panel>
-
-              <Tabs.Panel value="books" pt="md">
-                <ResultsGrid
-                  loading={booksQuery.isLoading}
-                  error={booksQuery.error}
-                  data={booksQuery.data?.data ?? []}
-                  total={booksCount}
-                  page={state.page}
-                  pageSize={DEFAULT_SEARCH_PAGE_SIZE}
-                  onPageChange={(p) => updateState({ page: p })}
-                  type="book"
-                />
-              </Tabs.Panel>
-            </Tabs>
-          </Stack>
-        </Box>
+          <Tabs.Panel value="books" pt="md">
+            <ResultsGrid
+              loading={booksQuery.isLoading}
+              error={booksQuery.error}
+              data={booksQuery.data?.data ?? []}
+              total={booksCount}
+              page={state.page}
+              pageSize={DEFAULT_SEARCH_PAGE_SIZE}
+              onPageChange={(p) => updateState({ page: p })}
+              type="book"
+            />
+          </Tabs.Panel>
+        </Tabs>
       </Stack>
     </Container>
   );

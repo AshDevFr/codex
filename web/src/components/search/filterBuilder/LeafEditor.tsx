@@ -3,6 +3,8 @@ import {
   Group,
   NumberInput,
   Select,
+  Stack,
+  Text,
   TextInput,
   Tooltip,
 } from "@mantine/core";
@@ -28,7 +30,8 @@ import {
   type EnumOption,
   type FieldDef,
   type FieldTarget,
-  fieldsForTarget,
+  fieldPickerGroups,
+  findFieldAnyTarget,
 } from "./fieldCatalog";
 
 interface LeafEditorProps {
@@ -54,21 +57,21 @@ export function LeafEditor({
   onRemove,
   fieldKey,
 }: LeafEditorProps) {
-  const fields = useMemo(() => fieldsForTarget(target), [target]);
-  const field = fields.find((f) => f.key === fieldKey);
+  const pickerGroups = useMemo(() => fieldPickerGroups(target), [target]);
+  const field = findFieldAnyTarget(fieldKey);
+
+  // Field truly missing (malformed condition): fall back to a bare picker so
+  // the user can either pick something or remove the row.
   if (!field) {
-    // Leaf carries a field that isn't available for the active target
-    // (e.g. a books-only field after switching to the Series tab). Show a
-    // disabled row so the user can drop it explicitly.
     return (
       <Group gap="xs">
         <Select
           value={null}
-          placeholder={`Unsupported: ${fieldKey}`}
-          data={fields.map((f) => ({ value: f.key, label: f.label }))}
+          placeholder={`Unknown field: ${fieldKey}`}
+          data={pickerGroups}
           onChange={(nextKey) => {
             if (nextKey) {
-              const nextField = fields.find((f) => f.key === nextKey);
+              const nextField = findFieldAnyTarget(nextKey);
               if (nextField) onChange(newLeaf(nextField));
             }
           }}
@@ -93,14 +96,24 @@ export function LeafEditor({
   const ops = operatorsForField(field);
   const opLabels = OPERATOR_LABELS[field.operatorType];
 
-  return (
+  // Leaf is for the other tab: render the editor as usual but flag that the
+  // current /list query will skip it. The prune-on-emit logic does the drop;
+  // this note tells the user why their filter looks like it's doing nothing.
+  const appliesToActiveTab = field.targets.includes(target);
+  const ignoredFor = appliesToActiveTab
+    ? null
+    : target === "series"
+      ? "Series"
+      : "Books";
+
+  const row = (
     <Group gap="xs" wrap="nowrap" align="flex-start">
       <Select
         value={field.key}
-        data={fields.map((f) => ({ value: f.key, label: f.label }))}
+        data={pickerGroups}
         onChange={(nextKey) => {
           if (nextKey && nextKey !== field.key) {
-            const nextField = fields.find((f) => f.key === nextKey);
+            const nextField = findFieldAnyTarget(nextKey);
             if (nextField) {
               // Caller (parent) replaces the entire leaf; we do that here
               // by emitting a fresh leaf shape.
@@ -139,6 +152,17 @@ export function LeafEditor({
         </ActionIcon>
       </Tooltip>
     </Group>
+  );
+
+  if (!ignoredFor) return row;
+
+  return (
+    <Stack gap={2}>
+      {row}
+      <Text size="xs" c="dimmed" pl={4}>
+        Will be ignored for {ignoredFor} — switch tabs to apply.
+      </Text>
+    </Stack>
   );
 }
 

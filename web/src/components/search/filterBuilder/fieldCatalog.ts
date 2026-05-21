@@ -101,7 +101,7 @@ export const FIELD_CATALOG: FieldDef[] = [
   // ----- Series-only -----
   {
     key: "name",
-    label: "Series name",
+    label: "Title",
     group: "Text",
     operatorType: "field",
     targets: ["series"],
@@ -199,7 +199,7 @@ export const FIELD_CATALOG: FieldDef[] = [
   },
   {
     key: "title",
-    label: "Book title",
+    label: "Title",
     group: "Text",
     operatorType: "field",
     targets: ["books"],
@@ -255,4 +255,72 @@ export function findField(
   key: string,
 ): FieldDef | undefined {
   return FIELD_CATALOG.find((f) => f.key === key && f.targets.includes(target));
+}
+
+/**
+ * `true` when this field is available on both series and books — the leaf
+ * survives a tab switch. The picker uses this to group "shared" vs.
+ * "this tab only" so users can see what will be pruned on switch.
+ */
+export function isSharedField(field: FieldDef): boolean {
+  return field.targets.includes("series") && field.targets.includes("books");
+}
+
+export interface FieldPickerGroup {
+  group: string;
+  items: { value: string; label: string }[];
+}
+
+/**
+ * Field options for the leaf picker. Always exposes three groups regardless
+ * of the active tab so users can see what exists on the other side:
+ *
+ *   1. "Shared filters" — apply on both series and books.
+ *   2. "Series only" / "Books only" (active tab first) — picking from the
+ *      non-active group still adds the leaf; it just won't run against the
+ *      current tab's query until the user switches.
+ *
+ * Returns the Mantine Select grouped-data shape.
+ */
+export function fieldPickerGroups(target: FieldTarget): FieldPickerGroup[] {
+  const shared = FIELD_CATALOG.filter(isSharedField);
+  const seriesOnly = FIELD_CATALOG.filter(
+    (f) => f.targets.length === 1 && f.targets[0] === "series",
+  );
+  const booksOnly = FIELD_CATALOG.filter(
+    (f) => f.targets.length === 1 && f.targets[0] === "books",
+  );
+  const toItems = (defs: FieldDef[]) =>
+    defs.map((f) => ({ value: f.key, label: f.label }));
+  const groups: FieldPickerGroup[] = [];
+  if (shared.length > 0) {
+    groups.push({ group: "Shared filters", items: toItems(shared) });
+  }
+  // Lead with the active tab's specific group so the most-likely picks are
+  // at the top; the other group follows so users still see what's available.
+  if (target === "series") {
+    if (seriesOnly.length > 0) {
+      groups.push({ group: "Series only", items: toItems(seriesOnly) });
+    }
+    if (booksOnly.length > 0) {
+      groups.push({ group: "Books only", items: toItems(booksOnly) });
+    }
+  } else {
+    if (booksOnly.length > 0) {
+      groups.push({ group: "Books only", items: toItems(booksOnly) });
+    }
+    if (seriesOnly.length > 0) {
+      groups.push({ group: "Series only", items: toItems(seriesOnly) });
+    }
+  }
+  return groups;
+}
+
+/**
+ * Look up a field by key alone (ignores target). Used by the leaf picker so
+ * that users can pick a cross-tab field — the leaf is created on whichever
+ * tab it applies to; the prune-on-emit logic keeps it out of the wrong tab.
+ */
+export function findFieldAnyTarget(key: string): FieldDef | undefined {
+  return FIELD_CATALOG.find((f) => f.key === key);
 }
