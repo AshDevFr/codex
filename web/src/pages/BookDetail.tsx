@@ -985,7 +985,7 @@ export function BookDetail() {
           {/* File Path */}
           <Group gap="md" align="flex-start" wrap="nowrap">
             <MetadataLabel style={{ flexShrink: 0 }}>FILE</MetadataLabel>
-            <Tooltip label={book.filePath} position="top" multiline maw={400}>
+            <Tooltip label={book.path} position="top" multiline maw={400}>
               <Text
                 size="sm"
                 style={{
@@ -994,7 +994,7 @@ export function BookDetail() {
                   minWidth: 0,
                 }}
               >
-                {book.filePath.split("/").pop() || book.filePath}
+                {book.path.split("/").pop() || book.path}
               </Text>
             </Tooltip>
           </Group>

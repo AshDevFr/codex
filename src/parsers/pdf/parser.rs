@@ -302,7 +302,7 @@ impl FormatParser for PdfParser {
         let pages = Self::build_page_info_list(&doc, path, page_count);
 
         Ok(BookMetadata {
-            file_path: path.to_string_lossy().to_string(),
+            path: path.to_string_lossy().to_string(),
             format: FileFormat::PDF,
             file_size,
             file_hash,

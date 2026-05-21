@@ -23,23 +23,23 @@ async fn setup_library_with_mixed_formats(
     // Create test files of different formats
     // CBZ files
     for i in 1..=2 {
-        let file_path = series_path.join(format!("book{}.cbz", i));
+        let path = series_path.join(format!("book{}.cbz", i));
         let cbz_path = create_test_cbz(temp_dir, i, false);
-        fs::copy(&cbz_path, &file_path).unwrap();
+        fs::copy(&cbz_path, &path).unwrap();
     }
 
     // EPUB files
     for i in 1..=2 {
-        let file_path = series_path.join(format!("book{}.epub", i));
+        let path = series_path.join(format!("book{}.epub", i));
         let epub_path = create_test_epub(temp_dir, 1, 1);
-        fs::copy(&epub_path, &file_path).unwrap();
+        fs::copy(&epub_path, &path).unwrap();
     }
 
     // PDF files
     for i in 1..=2 {
-        let file_path = series_path.join(format!("book{}.pdf", i));
+        let path = series_path.join(format!("book{}.pdf", i));
         let pdf_path = create_test_pdf(temp_dir, 1, 0);
-        fs::copy(&pdf_path, &file_path).unwrap();
+        fs::copy(&pdf_path, &path).unwrap();
     }
 
     LibraryRepository::create(

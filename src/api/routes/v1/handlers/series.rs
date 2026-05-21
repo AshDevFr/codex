@@ -2724,20 +2724,20 @@ pub async fn download_series(
     let mut used_filenames = std::collections::HashSet::new();
 
     for book in &books {
-        let file_path = std::path::Path::new(&book.file_path);
+        let path = std::path::Path::new(&book.path);
 
         // Skip books whose files don't exist on disk
-        if !file_path.exists() {
+        if !path.exists() {
             tracing::warn!(
                 book_id = %book.id,
-                file_path = %book.file_path,
+                path = %book.path,
                 "Skipping book download - file not found on disk"
             );
             continue;
         }
 
         // Read the file contents
-        let file_contents = tokio::fs::read(&book.file_path).await.map_err(|e| {
+        let file_contents = tokio::fs::read(&book.path).await.map_err(|e| {
             ApiError::Internal(format!(
                 "Failed to read book file {}: {}",
                 book.file_name, e

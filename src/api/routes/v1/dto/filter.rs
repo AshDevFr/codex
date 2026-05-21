@@ -140,8 +140,8 @@ pub enum SeriesCondition {
     Publisher { publisher: FieldOperator },
     /// Filter by language
     Language { language: FieldOperator },
-    /// Filter by series name/title
-    Name { name: FieldOperator },
+    /// Filter by series title (`series_metadata.title`)
+    Title { title: FieldOperator },
     /// Filter by series title_sort field (used for alphabetical filtering)
     TitleSort {
         #[serde(rename = "titleSort")]
@@ -187,6 +187,9 @@ pub enum SeriesCondition {
     /// other fields (e.g. `role`); callers wanting strict matching should
     /// pre-quote the value.
     Author { author: FieldOperator },
+    /// Filter by the series' folder path (`series.path`). Useful for matching
+    /// series under a given directory.
+    Path { path: FieldOperator },
     /// Filter by date the series was added to the library
     /// (`series.created_at`).
     DateAdded {
@@ -225,8 +228,14 @@ pub enum BookCondition {
     Genre { genre: FieldOperator },
     /// Filter by tag name (from parent series)
     Tag { tag: FieldOperator },
-    /// Filter by book title
+    /// Filter by book title (`book_metadata.title`)
     Title { title: FieldOperator },
+    /// Filter by book title_sort field (`book_metadata.title_sort`,
+    /// used for alphabetical filtering)
+    TitleSort {
+        #[serde(rename = "titleSort")]
+        title_sort: FieldOperator,
+    },
     /// Filter by read status (unread, in_progress, read)
     ReadStatus {
         #[serde(rename = "readStatus")]
@@ -242,7 +251,7 @@ pub enum BookCondition {
         #[serde(rename = "bookType")]
         book_type: FieldOperator,
     },
-    /// Filter by the book's file path (`books.file_path`). Useful for matching
+    /// Filter by the book's file path (`books.path`). Useful for matching
     /// books under a given directory or with a specific filename fragment.
     Path { path: FieldOperator },
     /// Filter by file format (`books.format`, e.g. `cbz`, `cbr`, `epub`,
@@ -852,6 +861,63 @@ mod tests {
                 date_added: DateOperator::After { .. },
             } => {}
             _ => panic!("Expected SeriesCondition::DateAdded/After"),
+        }
+    }
+
+    #[test]
+    fn test_series_title_condition_round_trip() {
+        let condition = SeriesCondition::Title {
+            title: FieldOperator::Contains {
+                value: "Naruto".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&condition).unwrap();
+        assert_eq!(
+            json,
+            r#"{"title":{"operator":"contains","value":"Naruto"}}"#
+        );
+        let parsed: SeriesCondition = serde_json::from_str(&json).unwrap();
+        match parsed {
+            SeriesCondition::Title {
+                title: FieldOperator::Contains { value },
+            } => assert_eq!(value, "Naruto"),
+            _ => panic!("Expected SeriesCondition::Title/Contains"),
+        }
+    }
+
+    #[test]
+    fn test_series_path_condition_round_trip() {
+        let condition = SeriesCondition::Path {
+            path: FieldOperator::Contains {
+                value: "/manga/".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&condition).unwrap();
+        let parsed: SeriesCondition = serde_json::from_str(&json).unwrap();
+        match parsed {
+            SeriesCondition::Path {
+                path: FieldOperator::Contains { value },
+            } => assert_eq!(value, "/manga/"),
+            _ => panic!("Expected SeriesCondition::Path/Contains"),
+        }
+    }
+
+    #[test]
+    fn test_book_title_sort_condition_begins_with() {
+        let condition = BookCondition::TitleSort {
+            title_sort: FieldOperator::BeginsWith {
+                value: "A".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&condition).unwrap();
+        assert!(json.contains(r#""titleSort""#));
+        assert!(json.contains(r#""operator":"beginsWith""#));
+        let parsed: BookCondition = serde_json::from_str(&json).unwrap();
+        match parsed {
+            BookCondition::TitleSort {
+                title_sort: FieldOperator::BeginsWith { value },
+            } => assert_eq!(value, "A"),
+            _ => panic!("Expected BookCondition::TitleSort/BeginsWith"),
         }
     }
 

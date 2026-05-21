@@ -53,7 +53,7 @@ pub trait ScanningStrategyImpl: Send + Sync {
     /// Extract series name from a file path
     ///
     /// Returns the series name for the given file based on this strategy's rules.
-    fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String;
+    fn extract_series_name(&self, path: &Path, library_path: &Path) -> String;
 
     /// Validate if this strategy can be used with the given library path
     ///

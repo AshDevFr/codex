@@ -37,7 +37,7 @@ const mockResults = {
       libraryName: "Comics",
       seriesName: "Gamma Series",
       seriesId: "s1",
-      filePath: "/path/first.cbz",
+      path: "/path/first.cbz",
       fileSize: 1000,
       fileHash: "hash1",
       fileFormat: "cbz",

@@ -79,11 +79,11 @@ impl ScanningStrategyImpl for SeriesVolumeChapterStrategy {
     ) -> Result<HashMap<String, DetectedSeries>> {
         let mut series_map: HashMap<String, DetectedSeries> = HashMap::new();
 
-        for file_path in files {
-            let series_name = self.extract_series_name(file_path, library_path);
+        for path in files {
+            let series_name = self.extract_series_name(path, library_path);
 
             // Get the relative path to the series folder (parent of the file)
-            let series_path = file_path
+            let series_path = path
                 .parent()
                 .and_then(|p| p.strip_prefix(library_path).ok())
                 .map(|p| p.to_string_lossy().to_string());
@@ -97,12 +97,12 @@ impl ScanningStrategyImpl for SeriesVolumeChapterStrategy {
                 series.path = series_path;
             }
 
-            let mut book = DetectedBook::new(file_path.clone());
+            let mut book = DetectedBook::new(path.clone());
 
             // Extract volume info from the second-to-last folder (grandparent of file)
             // e.g., /library/part1/part2/volume_folder/series_folder/file.cbz
             // -> volume_folder is grandparent, series_folder is parent
-            if let Some(parent) = file_path.parent()
+            if let Some(parent) = path.parent()
                 && let Some(grandparent) = parent.parent()
             {
                 // Only extract volume if grandparent is not the library root
@@ -116,7 +116,7 @@ impl ScanningStrategyImpl for SeriesVolumeChapterStrategy {
             }
 
             // Extract chapter number from filename
-            if let Some(filename) = file_path.file_name() {
+            if let Some(filename) = path.file_name() {
                 book.number = self.extract_chapter_number(&filename.to_string_lossy());
             }
 
@@ -126,9 +126,9 @@ impl ScanningStrategyImpl for SeriesVolumeChapterStrategy {
         Ok(series_map)
     }
 
-    fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
+    fn extract_series_name(&self, path: &Path, library_path: &Path) -> String {
         // Get the immediate parent folder (containing folder) as the series name
-        if let Some(parent) = file_path.parent() {
+        if let Some(parent) = path.parent() {
             // Check if parent is the library root
             if parent == library_path {
                 return "Unsorted".to_string();

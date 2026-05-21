@@ -89,7 +89,7 @@ export type SeriesCondition =
   | { status: FieldOperator }
   | { publisher: FieldOperator }
   | { language: FieldOperator }
-  | { name: FieldOperator }
+  | { title: FieldOperator }
   | { titleSort: FieldOperator }
   | { readStatus: FieldOperator }
   | { sharingTag: FieldOperator }
@@ -99,6 +99,7 @@ export type SeriesCondition =
   | { isTracked: BoolOperator }
   | { year: NumberOperator }
   | { author: FieldOperator }
+  | { path: FieldOperator }
   | { dateAdded: DateOperator };
 
 // =============================================================================
@@ -113,6 +114,7 @@ export type BookCondition =
   | { genre: FieldOperator }
   | { tag: FieldOperator }
   | { title: FieldOperator }
+  | { titleSort: FieldOperator }
   | { readStatus: FieldOperator }
   | { hasError: BoolOperator }
   | { bookType: FieldOperator }

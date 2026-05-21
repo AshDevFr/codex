@@ -1012,7 +1012,7 @@ async fn get_default_series_cover(
     }
 
     // Extract first page from the book
-    extract_page_image(&first_book.file_path, &first_book.format, 1)
+    extract_page_image(&first_book.path, &first_book.format, 1)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))
 }

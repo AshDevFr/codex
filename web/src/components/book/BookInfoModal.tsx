@@ -184,7 +184,7 @@ export function BookInfoModal({ opened, onClose, book }: BookInfoModalProps) {
             <InfoRow label="Format" value={book.fileFormat.toUpperCase()} />
             <InfoRow label="Size" value={formatFileSize(book.fileSize)} />
             <InfoRow label="Pages" value={book.pageCount} />
-            <InfoRow label="Path" value={book.filePath} copyable monospace />
+            <InfoRow label="Path" value={book.path} copyable monospace />
             <InfoRow label="Hash" value={book.fileHash} copyable monospace />
             <InfoRow
               label="KOReader Hash"

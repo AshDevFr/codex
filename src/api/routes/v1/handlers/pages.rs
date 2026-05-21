@@ -84,7 +84,7 @@ pub async fn get_page_image(
             &headers,
             book_id,
             page_number,
-            &book.file_path,
+            &book.path,
             "image/jpeg",
         )
         .await;
@@ -97,7 +97,7 @@ pub async fn get_page_image(
 
     // For non-PDF formats, extract and serve directly
     // This works even if the book hasn't been analyzed - the parser will extract the page
-    let image_data = match extract_page_image(&book.file_path, &book.format, page_number).await {
+    let image_data = match extract_page_image(&book.path, &book.format, page_number).await {
         Ok(data) => data,
         Err(e) => {
             // If extraction fails and book isn't analyzed, provide a helpful message
@@ -152,7 +152,7 @@ async fn serve_pdf_page_with_streaming(
     headers: &HeaderMap,
     book_id: Uuid,
     page_number: i32,
-    file_path: &str,
+    path: &str,
     content_type: &str,
 ) -> Result<Response, ApiError> {
     let dpi = state.pdf_config.render_dpi;
@@ -246,7 +246,7 @@ async fn serve_pdf_page_with_streaming(
         "pdf disk cache miss, rendering"
     );
 
-    let path = std::path::PathBuf::from(file_path);
+    let path = std::path::PathBuf::from(path);
     let render_start = std::time::Instant::now();
 
     // Route through the in-memory handle cache so repeated requests on the
@@ -558,7 +558,7 @@ async fn generate_book_thumbnail(
             cached
         } else {
             // Render in blocking task to avoid blocking async runtime
-            let path = std::path::PathBuf::from(&book.file_path);
+            let path = std::path::PathBuf::from(&book.path);
             let data = tokio::task::spawn_blocking(move || {
                 crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, 1, dpi)
             })
@@ -578,7 +578,7 @@ async fn generate_book_thumbnail(
             data
         }
     } else {
-        extract_page_image(&book.file_path, &book.format, 1)
+        extract_page_image(&book.path, &book.format, 1)
             .await
             .map_err(|e| ApiError::from_anyhow_with_context(e, "Failed to extract cover image"))?
     };
@@ -698,11 +698,11 @@ fn detect_content_type(data: &[u8]) -> &'static str {
 /// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
 /// image extraction operations (ZIP parsing, RAR extraction, EPUB parsing, PDF rendering)
 async fn extract_page_image(
-    file_path: &str,
+    path: &str,
     file_format: &str,
     page_number: i32,
 ) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::PathBuf::from(file_path);
+    let path = std::path::PathBuf::from(path);
     let format = file_format.to_uppercase();
 
     // Use spawn_blocking for CPU-intensive file parsing operations

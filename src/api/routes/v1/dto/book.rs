@@ -559,7 +559,7 @@ pub struct BookDto {
 
     /// Filesystem path to the book file
     #[schema(example = "/media/comics/Batman/Batman - Year One 001.cbz")]
-    pub file_path: String,
+    pub path: String,
 
     /// File format (cbz, cbr, epub, pdf)
     #[schema(example = "cbz")]
@@ -2163,7 +2163,7 @@ pub struct FullBookResponse {
 
     /// Filesystem path to the book file
     #[schema(example = "/media/comics/Batman/Batman - Year One 001.cbz")]
-    pub file_path: String,
+    pub path: String,
 
     /// File format (cbz, cbr, epub, pdf)
     #[schema(example = "cbz")]

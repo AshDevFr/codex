@@ -282,7 +282,7 @@ mod tests {
             id: Uuid::new_v4(),
             series_id,
             library_id,
-            file_path: path.to_string(),
+            path: path.to_string(),
             file_name: path.rsplit('/').next().unwrap_or(path).to_string(),
             file_size: 1024,
             file_hash: format!("hash_{}", Uuid::new_v4()),

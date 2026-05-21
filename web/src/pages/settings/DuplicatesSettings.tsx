@@ -166,9 +166,9 @@ function BookDuplicateGroupCard({
               thProps: { style: { width: "35%" } },
               mobileFullWidth: true,
               accessor: (book) => (
-                <Tooltip label={book.filePath}>
+                <Tooltip label={book.path}>
                   <Text size="sm" truncate>
-                    {book.filePath}
+                    {book.path}
                   </Text>
                 </Tooltip>
               ),

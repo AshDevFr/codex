@@ -108,17 +108,17 @@ impl ScanningStrategyImpl for FlatStrategy {
     ) -> Result<HashMap<String, DetectedSeries>> {
         let mut series_map: HashMap<String, DetectedSeries> = HashMap::new();
 
-        for file_path in files {
-            let series_name = self.extract_series_name(file_path, library_path);
+        for path in files {
+            let series_name = self.extract_series_name(path, library_path);
 
             let series = series_map
                 .entry(series_name.clone())
                 .or_insert_with(|| DetectedSeries::new(&series_name));
 
-            let mut book = DetectedBook::new(file_path.clone());
+            let mut book = DetectedBook::new(path.clone());
 
             // Extract book number from filename
-            if let Some(filename) = file_path.file_name() {
+            if let Some(filename) = path.file_name() {
                 book.number = self.extract_number(&filename.to_string_lossy());
             }
 
@@ -128,8 +128,8 @@ impl ScanningStrategyImpl for FlatStrategy {
         Ok(series_map)
     }
 
-    fn extract_series_name(&self, file_path: &Path, _library_path: &Path) -> String {
-        let filename = file_path
+    fn extract_series_name(&self, path: &Path, _library_path: &Path) -> String {
+        let filename = path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();

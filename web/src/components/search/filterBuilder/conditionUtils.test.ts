@@ -22,15 +22,15 @@ describe("conditionUtils — group inspection", () => {
     expect(isGroup({ allOf: [] } as SeriesCondition)).toBe(true);
     expect(isGroup({ anyOf: [] } as SeriesCondition)).toBe(true);
     expect(
-      isGroup({ name: { operator: "is", value: "x" } } as SeriesCondition),
+      isGroup({ title: { operator: "is", value: "x" } } as SeriesCondition),
     ).toBe(false);
   });
 
   it("extracts mode and children from a group", () => {
     const c: SeriesCondition = {
       anyOf: [
-        { name: { operator: "is", value: "a" } },
-        { name: { operator: "is", value: "b" } },
+        { title: { operator: "is", value: "a" } },
+        { title: { operator: "is", value: "b" } },
       ],
     };
     const g = asGroup(c);
@@ -39,27 +39,29 @@ describe("conditionUtils — group inspection", () => {
   });
 
   it("returns the leaf field key and operator", () => {
-    const c: SeriesCondition = { name: { operator: "contains", value: "foo" } };
-    expect(leafFieldKey(c)).toBe("name");
+    const c: SeriesCondition = {
+      title: { operator: "contains", value: "foo" },
+    };
+    expect(leafFieldKey(c)).toBe("title");
     expect(leafOperator(c)).toBe("contains");
   });
 });
 
 describe("conditionUtils — newLeaf", () => {
   it("creates a default leaf for each operator type", () => {
-    const nameField = findField("series", "name");
+    const titleField = findField("series", "title");
     const yearField = findField("series", "year");
     const completionField = findField("series", "completion");
     const dateField = findField("books", "dateAdded");
     const libraryField = findField("books", "libraryId");
-    expect(nameField).toBeTruthy();
+    expect(titleField).toBeTruthy();
     expect(yearField).toBeTruthy();
     expect(completionField).toBeTruthy();
     expect(dateField).toBeTruthy();
     expect(libraryField).toBeTruthy();
 
-    const nameLeaf = newLeaf(nameField!);
-    expect(leafOperator(nameLeaf)).toBe("contains");
+    const titleLeaf = newLeaf(titleField!);
+    expect(leafOperator(titleLeaf)).toBe("contains");
 
     const yearLeaf = newLeaf(yearField!);
     expect(leafOperator(yearLeaf)).toBe("eq");
@@ -115,7 +117,7 @@ describe("conditionUtils — updateLeafOperator", () => {
 describe("conditionUtils — tree mutations", () => {
   const root = (): SeriesCondition => ({
     allOf: [
-      { name: { operator: "is", value: "a" } },
+      { title: { operator: "is", value: "a" } },
       {
         anyOf: [
           { tag: { operator: "is", value: "x" } },
@@ -127,10 +129,10 @@ describe("conditionUtils — tree mutations", () => {
 
   it("replaces at path", () => {
     const next = replaceAtPath(root(), [0], {
-      name: { operator: "is", value: "b" },
+      title: { operator: "is", value: "b" },
     } as SeriesCondition);
     expect(asGroup(next)!.children[0]).toEqual({
-      name: { operator: "is", value: "b" },
+      title: { operator: "is", value: "b" },
     });
   });
 
@@ -151,7 +153,7 @@ describe("conditionUtils — tree mutations", () => {
 
   it("appends a child to the root", () => {
     const next = appendChildAtPath(root(), [], {
-      name: { operator: "is", value: "c" },
+      title: { operator: "is", value: "c" },
     } as SeriesCondition);
     expect(asGroup(next)!.children).toHaveLength(3);
   });
@@ -172,18 +174,18 @@ describe("conditionUtils — normalizeForEmit", () => {
 
   it("unwraps a single-leaf root", () => {
     const single: SeriesCondition = {
-      allOf: [{ name: { operator: "is", value: "a" } }],
+      allOf: [{ title: { operator: "is", value: "a" } }],
     };
     expect(normalizeForEmit(single)).toEqual({
-      name: { operator: "is", value: "a" },
+      title: { operator: "is", value: "a" },
     });
   });
 
   it("passes through multi-child groups", () => {
     const multi: SeriesCondition = {
       allOf: [
-        { name: { operator: "is", value: "a" } },
-        { name: { operator: "is", value: "b" } },
+        { title: { operator: "is", value: "a" } },
+        { title: { operator: "is", value: "b" } },
       ],
     };
     expect(normalizeForEmit(multi)).toEqual(multi);
@@ -250,10 +252,10 @@ describe("conditionUtils — normalizeForEmit prunes leaves not on the active ta
             value: "83197543-5435-4a35-983a-abae4ff77884",
           },
         },
-        { titleSort: { operator: "contains", value: "space" } },
+        { author: { operator: "contains", value: "Toriyama" } },
       ],
     };
-    // titleSort is series-only; BookCondition has no such variant. Without
+    // `author` is series-only; BookCondition has no such variant. Without
     // target pruning the backend would 422 on the books tab.
     expect(normalizeForEmit(c, "books")).toEqual({
       libraryId: {
@@ -277,7 +279,7 @@ describe("conditionUtils — normalizeForEmit prunes leaves not on the active ta
 
   it("emits undefined when no leaves match the target", () => {
     const c: SeriesCondition = {
-      allOf: [{ titleSort: { operator: "contains", value: "x" } }],
+      allOf: [{ author: { operator: "contains", value: "x" } }],
     };
     expect(normalizeForEmit(c, "books")).toBeUndefined();
   });
@@ -294,19 +296,19 @@ describe("conditionUtils — normalizeForEmit prunes incomplete leaves", () => {
   it("keeps complete siblings when one leaf is incomplete", () => {
     const c: SeriesCondition = {
       allOf: [
-        { name: { operator: "contains", value: "foo" } },
+        { title: { operator: "contains", value: "foo" } },
         { libraryId: { operator: "is", value: "" } },
       ],
     };
     expect(normalizeForEmit(c)).toEqual({
-      name: { operator: "contains", value: "foo" },
+      title: { operator: "contains", value: "foo" },
     });
   });
 
   it("collapses a nested group when all its children are incomplete", () => {
     const c: SeriesCondition = {
       allOf: [
-        { name: { operator: "contains", value: "foo" } },
+        { title: { operator: "contains", value: "foo" } },
         {
           anyOf: [
             { libraryId: { operator: "is", value: "" } },
@@ -316,14 +318,14 @@ describe("conditionUtils — normalizeForEmit prunes incomplete leaves", () => {
       ],
     };
     expect(normalizeForEmit(c)).toEqual({
-      name: { operator: "contains", value: "foo" },
+      title: { operator: "contains", value: "foo" },
     });
   });
 });
 
 describe("conditionUtils — ensureRoot", () => {
   it("wraps a bare leaf so the builder always sees a group", () => {
-    const leaf: SeriesCondition = { name: { operator: "is", value: "a" } };
+    const leaf: SeriesCondition = { title: { operator: "is", value: "a" } };
     const wrapped = ensureRoot(leaf);
     expect(isGroup(wrapped)).toBe(true);
     expect(asGroup(wrapped)!.children).toHaveLength(1);

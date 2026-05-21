@@ -1455,7 +1455,7 @@ function toFullBookResponse(book: (typeof mockBooks)[0]) {
     titleSort: book.title.toLowerCase().replace(/[^a-z0-9 ]/g, ""),
     number: book.number,
     pageCount: book.pageCount,
-    filePath: `/media/comics/${book.seriesName}/${book.title}.${book.fileFormat}`,
+    path: `/media/comics/${book.seriesName}/${book.title}.${book.fileFormat}`,
     fileSize: book.fileSize || 52428800,
     fileFormat: book.fileFormat,
     fileHash: book.fileHash || `hash-${book.id}`,

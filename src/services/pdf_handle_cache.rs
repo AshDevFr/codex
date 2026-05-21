@@ -118,7 +118,7 @@ pub struct HandleCacheSnapshot {
 #[derive(Debug, Clone, Serialize)]
 pub struct HandleCacheEntrySnapshot {
     pub book_id: Uuid,
-    pub file_path: String,
+    pub path: String,
     pub age_seconds: u64,
     pub idle_seconds: u64,
     pub render_count: u64,
@@ -126,7 +126,7 @@ pub struct HandleCacheEntrySnapshot {
 
 struct Entry<V> {
     doc: Arc<AsyncMutex<V>>,
-    file_path: PathBuf,
+    path: PathBuf,
     opened_at: Instant,
     last_used: Instant,
     render_count: u64,
@@ -215,7 +215,7 @@ where
     pub fn get_or_open<F>(
         &self,
         book_id: Uuid,
-        file_path: PathBuf,
+        path: PathBuf,
         opener: F,
     ) -> Result<Arc<AsyncMutex<V>>>
     where
@@ -236,7 +236,7 @@ where
                 entry.render_count = entry.render_count.saturating_add(1);
                 debug!(
                     %book_id,
-                    file = %entry.file_path.display(),
+                    file = %entry.path.display(),
                     "pdf handle cache hit"
                 );
                 return Ok(entry.doc.clone());
@@ -258,7 +258,7 @@ where
         let open_elapsed_ms = opened_at.saturating_duration_since(open_start).as_millis() as u64;
         info!(
             %book_id,
-            file = %file_path.display(),
+            file = %path.display(),
             elapsed_ms = open_elapsed_ms,
             "pdf handle opened"
         );
@@ -266,7 +266,7 @@ where
         let doc = Arc::new(AsyncMutex::new(doc));
         let entry = Entry {
             doc: doc.clone(),
-            file_path: file_path.clone(),
+            path: path.clone(),
             opened_at,
             last_used: opened_at,
             render_count: 1,
@@ -322,7 +322,7 @@ where
             .iter()
             .map(|(book_id, entry)| HandleCacheEntrySnapshot {
                 book_id: *book_id,
-                file_path: entry.file_path.display().to_string(),
+                path: entry.path.display().to_string(),
                 age_seconds: now.saturating_duration_since(entry.opened_at).as_secs(),
                 idle_seconds: now.saturating_duration_since(entry.last_used).as_secs(),
                 render_count: entry.render_count,

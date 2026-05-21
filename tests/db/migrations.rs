@@ -818,3 +818,66 @@ async fn test_migration_070_is_idempotent_sqlite() {
 
     db.close().await;
 }
+
+#[tokio::test]
+async fn test_migration_089_renames_books_file_path_to_path_sqlite() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    // All migrations have already run on the wrapper — verify the rename
+    // landed: `path` exists, `file_path` does not, the unique index has the
+    // new name, and the old one is gone.
+    assert!(sqlite_has_column(conn, "books", "path").await);
+    assert!(!sqlite_has_column(conn, "books", "file_path").await);
+
+    let new_idx = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_books_library_path_unique'".to_string(),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        new_idx.is_some(),
+        "expected new unique index idx_books_library_path_unique to exist"
+    );
+
+    let old_idx = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_books_library_file_path_unique'".to_string(),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        old_idx.is_none(),
+        "old index idx_books_library_file_path_unique should have been dropped"
+    );
+
+    db.close().await;
+}
+
+#[tokio::test]
+async fn test_migration_089_down_restores_file_path_sqlite() {
+    let (db, _temp_dir) = setup_test_db_wrapper().await;
+    let conn = db.sea_orm_connection();
+
+    Migrator::down(conn, Some(1)).await.unwrap();
+
+    assert!(sqlite_has_column(conn, "books", "file_path").await);
+    assert!(!sqlite_has_column(conn, "books", "path").await);
+
+    let old_idx = conn
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_books_library_file_path_unique'".to_string(),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        old_idx.is_some(),
+        "down migration should restore the old unique index"
+    );
+
+    db.close().await;
+}

@@ -100,7 +100,7 @@ impl FormatParser for CbzParser {
         let page_count = pages.len();
 
         Ok(BookMetadata {
-            file_path: path.to_string_lossy().to_string(),
+            path: path.to_string_lossy().to_string(),
             format: FileFormat::CBZ,
             file_size,
             file_hash,

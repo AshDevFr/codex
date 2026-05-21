@@ -38,7 +38,7 @@ impl From<&BookMetadata> for BookRow {
             .and_then(|ci| ci.title.clone())
             .unwrap_or_else(|| {
                 // Extract filename without extension as fallback
-                std::path::Path::new(&metadata.file_path)
+                std::path::Path::new(&metadata.path)
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("Unknown")
@@ -94,7 +94,7 @@ impl From<&BookMetadata> for BookRow {
             pages: metadata.page_count,
             size,
             isbn,
-            path: metadata.file_path.clone(),
+            path: metadata.path.clone(),
         }
     }
 }
@@ -168,7 +168,7 @@ pub fn scan_command(path: PathBuf, json: bool, pages: bool, verbose: bool) -> an
             if pages {
                 println!();
                 for metadata in &results {
-                    println!("📖 {} ({} pages)", metadata.file_path, metadata.page_count);
+                    println!("📖 {} ({} pages)", metadata.path, metadata.page_count);
                     if metadata.pages.is_empty() {
                         println!("  No page information available");
                     } else {

@@ -97,14 +97,12 @@ export const FIELD_CATALOG: FieldDef[] = [
     operatorType: "date",
     targets: ["series", "books"],
   },
-
-  // ----- Series-only -----
   {
-    key: "name",
+    key: "title",
     label: "Title",
     group: "Text",
     operatorType: "field",
-    targets: ["series"],
+    targets: ["series", "books"],
     hint: "text",
   },
   {
@@ -112,9 +110,19 @@ export const FIELD_CATALOG: FieldDef[] = [
     label: "Sort title",
     group: "Text",
     operatorType: "field",
-    targets: ["series"],
+    targets: ["series", "books"],
     hint: "text",
   },
+  {
+    key: "path",
+    label: "Path",
+    group: "Files",
+    operatorType: "field",
+    targets: ["series", "books"],
+    hint: "path",
+  },
+
+  // ----- Series-only -----
   {
     key: "author",
     label: "Author",
@@ -196,22 +204,6 @@ export const FIELD_CATALOG: FieldDef[] = [
     group: "Scope",
     operatorType: "uuid",
     targets: ["books"],
-  },
-  {
-    key: "title",
-    label: "Title",
-    group: "Text",
-    operatorType: "field",
-    targets: ["books"],
-    hint: "text",
-  },
-  {
-    key: "path",
-    label: "File path",
-    group: "Files",
-    operatorType: "field",
-    targets: ["books"],
-    hint: "path",
   },
   {
     key: "format",

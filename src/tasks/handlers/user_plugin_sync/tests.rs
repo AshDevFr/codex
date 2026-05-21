@@ -39,7 +39,7 @@ async fn create_test_book(
         id: Uuid::new_v4(),
         series_id,
         library_id,
-        file_path: format!("/test/book_{}_{}.cbz", index, Uuid::new_v4()),
+        path: format!("/test/book_{}_{}.cbz", index, Uuid::new_v4()),
         file_name: format!("book_{}.cbz", index),
         file_size: 1024,
         file_hash: format!("hash_{}_{}", index, Uuid::new_v4()),

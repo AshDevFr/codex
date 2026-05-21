@@ -20,7 +20,7 @@ const defaultMockPdfCacheStats: PdfCacheStatsDto = {
       {
         ageSeconds: 312,
         bookId: "550e8400-e29b-41d4-a716-446655440000",
-        filePath: "/library/books/manual.pdf",
+        path: "/library/books/manual.pdf",
         idleSeconds: 14,
         renderCount: 27,
       },

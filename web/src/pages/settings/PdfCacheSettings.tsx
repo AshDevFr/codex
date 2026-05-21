@@ -547,9 +547,9 @@ export function PdfCacheSettings() {
                             </Text>
                           </Table.Td>
                           <Table.Td>
-                            <Tooltip label={entry.filePath} withinPortal>
+                            <Tooltip label={entry.path} withinPortal>
                               <Text size="xs" ff="monospace" truncate maw={320}>
-                                {entry.filePath}
+                                {entry.path}
                               </Text>
                             </Tooltip>
                           </Table.Td>

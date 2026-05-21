@@ -43,7 +43,7 @@ fn create_test_book_model(
         id: uuid::Uuid::new_v4(),
         series_id,
         library_id,
-        file_path: path.to_string(),
+        path: path.to_string(),
         file_name: name.to_string(),
         file_size: 1024,
         file_hash: format!("hash_{}", uuid::Uuid::new_v4()),
@@ -2211,6 +2211,73 @@ async fn test_list_books_filtered_by_title() {
 }
 
 #[tokio::test]
+async fn test_list_books_filtered_by_title_sort_begins_with() {
+    use codex::db::entities::book_metadata;
+    use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
+
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    // "The Batman" with title_sort "Batman, The" — sorts under B.
+    let batman = create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/batman.cbz",
+        "batman.cbz",
+        Some("The Batman".to_string()),
+    )
+    .await;
+    let meta = book_metadata::Entity::find()
+        .filter(book_metadata::Column::BookId.eq(batman.id))
+        .one(&db)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut active = meta.into_active_model();
+    active.title_sort = Set(Some("Batman, The".to_string()));
+    active.update(&db).await.unwrap();
+
+    // "Avengers" with no title_sort — falls through; should NOT match a B prefix.
+    create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/avengers.cbz",
+        "avengers.cbz",
+        Some("Avengers".to_string()),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = BookListRequest {
+        condition: Some(BookCondition::TitleSort {
+            title_sort: FieldOperator::BeginsWith {
+                value: "B".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/books/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<BookListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let books_list = response.unwrap();
+    assert_eq!(books_list.data.len(), 1);
+    assert_eq!(books_list.data[0].id, batman.id);
+}
+
+#[tokio::test]
 async fn test_list_books_filtered_all_of() {
     let (db, _temp_dir) = setup_test_db().await;
 
@@ -2772,7 +2839,7 @@ async fn test_list_books_filtered_by_path_contains() {
     assert_eq!(status, StatusCode::OK);
     let book_list = response.unwrap();
     assert_eq!(book_list.data.len(), 2);
-    assert!(book_list.data.iter().all(|b| b.file_path.contains("manga")));
+    assert!(book_list.data.iter().all(|b| b.path.contains("manga")));
 }
 
 #[tokio::test]

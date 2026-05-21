@@ -235,8 +235,9 @@ function pickDefaultField(
   target: FieldTarget,
   fields: FieldDef[],
 ): FieldDef | undefined {
-  const preferredKey = target === "series" ? "name" : "title";
-  return findField(target, preferredKey) ?? fields[0];
+  // "title" is now a shared field that works on both targets, so the
+  // default-field picker no longer needs target-specific logic.
+  return findField(target, "title") ?? fields[0];
 }
 
 interface ChildRowProps {

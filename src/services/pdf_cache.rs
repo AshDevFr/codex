@@ -518,10 +518,10 @@ impl PdfPageCache {
 
                     if should_delete {
                         let file_size = metadata.len();
-                        let file_path = page_entry.path();
+                        let path = page_entry.path();
 
-                        if let Err(e) = fs::remove_file(&file_path).await {
-                            warn!("Failed to delete cached page {:?}: {}", file_path, e);
+                        if let Err(e) = fs::remove_file(&path).await {
+                            warn!("Failed to delete cached page {:?}: {}", path, e);
                         } else {
                             result.files_deleted += 1;
                             result.bytes_reclaimed += file_size;

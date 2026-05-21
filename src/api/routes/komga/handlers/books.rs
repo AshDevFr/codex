@@ -217,7 +217,7 @@ pub async fn get_book_thumbnail(
     }
 
     // Extract first page from the book
-    let image_data = extract_page_image(&book.file_path, &book.format, 1)
+    let image_data = extract_page_image(&book.path, &book.format, 1)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))?;
 
@@ -710,15 +710,15 @@ pub async fn download_book_file(
         .ok_or_else(|| ApiError::NotFound("Book not found".to_string()))?;
 
     // Check if file exists
-    let file_path = std::path::Path::new(&book.file_path);
-    if !file_path.exists() {
+    let path = std::path::Path::new(&book.path);
+    if !path.exists() {
         return Err(ApiError::NotFound(
             "Book file not found on disk".to_string(),
         ));
     }
 
     // Get file metadata for content-length
-    let metadata = tokio::fs::metadata(&book.file_path)
+    let metadata = tokio::fs::metadata(&book.path)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to read file metadata: {}", e)))?;
 
@@ -732,7 +732,7 @@ pub async fn download_book_file(
     };
 
     // Open file for streaming
-    let file = tokio::fs::File::open(&book.file_path)
+    let file = tokio::fs::File::open(&book.path)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to open book file: {}", e)))?;
 

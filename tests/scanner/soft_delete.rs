@@ -25,9 +25,9 @@ async fn setup_library_with_files(
 
     // Create test CBZ files
     for i in 1..=file_count {
-        let file_path = series_path.join(format!("book{}.cbz", i));
+        let path = series_path.join(format!("book{}.cbz", i));
         let cbz_path = create_test_cbz(temp_dir, i, false);
-        fs::copy(&cbz_path, &file_path).unwrap();
+        fs::copy(&cbz_path, &path).unwrap();
     }
 
     LibraryRepository::create(
@@ -99,7 +99,7 @@ async fn test_scan_marks_missing_books_deleted() {
 
     // Verify the deleted book is marked correctly
     let deleted_book = all_books.iter().find(|b| b.deleted).unwrap();
-    assert!(deleted_book.file_path.ends_with("book2.cbz"));
+    assert!(deleted_book.path.ends_with("book2.cbz"));
 
     db_wrapper.close().await;
 }
@@ -124,9 +124,9 @@ async fn test_scan_restores_reappeared_books() {
     let series_path = temp_dir.path().join("test_library/Test Series");
 
     // Delete a file
-    let file_path = series_path.join("book1.cbz");
+    let path = series_path.join("book1.cbz");
     let backup_path = temp_dir.path().join("backup_book1.cbz");
-    fs::rename(&file_path, &backup_path).unwrap();
+    fs::rename(&path, &backup_path).unwrap();
 
     // Scan - should mark as deleted
     let result = scan_library(db, library.id, ScanMode::Normal, None, None, None, None)
@@ -141,7 +141,7 @@ async fn test_scan_restores_reappeared_books() {
     assert_eq!(active_books.len(), 1);
 
     // Restore the file
-    fs::rename(&backup_path, &file_path).unwrap();
+    fs::rename(&backup_path, &path).unwrap();
 
     // Scan again - should restore the book
     let result = scan_library(db, library.id, ScanMode::Normal, None, None, None, None)

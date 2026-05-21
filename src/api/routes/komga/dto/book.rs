@@ -335,7 +335,7 @@ impl KomgaBookDto {
             series_title: series_title.to_string(),
             library_id: book.library_id.to_string(),
             name: book.file_name.clone(),
-            url: book.file_path.clone(),
+            url: book.path.clone(),
             number,
             created: book.created_at.to_rfc3339(),
             last_modified: book.updated_at.to_rfc3339(),

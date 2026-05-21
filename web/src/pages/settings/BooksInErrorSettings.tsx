@@ -122,7 +122,7 @@ function exportErrorsToCsv(groups: ErrorGroupDto[]) {
     const sortedBooks = [...group.books].sort((a, b) => {
       const titleCompare = a.book.title.localeCompare(b.book.title);
       if (titleCompare !== 0) return titleCompare;
-      return a.book.filePath.localeCompare(b.book.filePath);
+      return a.book.path.localeCompare(b.book.path);
     });
 
     for (const bookWithErrors of sortedBooks) {
@@ -142,7 +142,7 @@ function exportErrorsToCsv(groups: ErrorGroupDto[]) {
         rows.push([
           escapeCsvValue(book.title),
           escapeCsvValue(book.seriesName || ""),
-          escapeCsvValue(book.filePath),
+          escapeCsvValue(book.path),
           book.fileFormat.toUpperCase(),
           book.pageCount?.toString() || "",
           getErrorTypeLabel(error.errorType),
@@ -470,7 +470,7 @@ function ErrorGroupAccordion({
                 // Sort by title first, then by file path for consistency
                 const titleCompare = a.book.title.localeCompare(b.book.title);
                 if (titleCompare !== 0) return titleCompare;
-                return a.book.filePath.localeCompare(b.book.filePath);
+                return a.book.path.localeCompare(b.book.path);
               })
               .map((bookWithErrors) => (
                 <BookErrorCard

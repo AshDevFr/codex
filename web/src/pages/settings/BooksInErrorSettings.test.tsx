@@ -35,7 +35,7 @@ const createMockBook = (overrides: {
   analyzed: false,
   deleted: false,
   fileHash: `hash-${overrides.id}`,
-  filePath: `/path/to/${overrides.title}.${overrides.fileFormat}`,
+  path: `/path/to/${overrides.title}.${overrides.fileFormat}`,
   fileSize: 1024 * 1024 * 10, // 10 MB
   libraryId: "library-1",
   libraryName: "Test Library",

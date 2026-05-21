@@ -382,7 +382,7 @@ impl BookRepository {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
             library_id: Set(book_model.library_id),
-            file_path: Set(book_model.file_path.clone()),
+            path: Set(book_model.path.clone()),
             file_name: Set(book_model.file_name.clone()),
             file_size: Set(book_model.file_size),
             file_hash: Set(book_model.file_hash.clone()),
@@ -536,7 +536,7 @@ impl BookRepository {
     ) -> Result<Option<books::Model>> {
         Books::find()
             .filter(books::Column::LibraryId.eq(library_id))
-            .filter(books::Column::FilePath.eq(path))
+            .filter(books::Column::Path.eq(path))
             .one(db)
             .await
             .context("Failed to get book by path")
@@ -1684,7 +1684,7 @@ impl BookRepository {
             id: Set(book_model.id),
             series_id: Set(book_model.series_id),
             library_id: Set(book_model.library_id),
-            file_path: Set(book_model.file_path.clone()),
+            path: Set(book_model.path.clone()),
             file_name: Set(book_model.file_name.clone()),
             file_size: Set(book_model.file_size),
             file_hash: Set(book_model.file_hash.clone()),
@@ -2403,7 +2403,7 @@ impl BookRepository {
                 id: Set(book_model.id),
                 series_id: Set(book_model.series_id),
                 library_id: Set(book_model.library_id),
-                file_path: Set(book_model.file_path.clone()),
+                path: Set(book_model.path.clone()),
                 file_name: Set(book_model.file_name.clone()),
                 file_size: Set(book_model.file_size),
                 file_hash: Set(book_model.file_hash.clone()),
@@ -2467,7 +2467,7 @@ impl BookRepository {
                 id: Set(book_model.id),
                 series_id: Set(book_model.series_id),
                 library_id: Set(book_model.library_id),
-                file_path: Set(book_model.file_path.clone()),
+                path: Set(book_model.path.clone()),
                 file_name: Set(book_model.file_name.clone()),
                 file_size: Set(book_model.file_size),
                 file_hash: Set(book_model.file_hash.clone()),
@@ -2526,14 +2526,14 @@ impl BookRepository {
 
         let books_list = Books::find()
             .filter(books::Column::LibraryId.eq(library_id))
-            .filter(books::Column::FilePath.is_in(paths.to_vec()))
+            .filter(books::Column::Path.is_in(paths.to_vec()))
             .all(db)
             .await
             .context("Failed to get books by paths")?;
 
         let mut map = HashMap::with_capacity(books_list.len());
         for book in books_list {
-            map.insert(book.file_path.clone(), book);
+            map.insert(book.path.clone(), book);
         }
 
         Ok(map)
@@ -2697,7 +2697,7 @@ mod tests {
             id: Uuid::new_v4(),
             series_id,
             library_id,
-            file_path: path.to_string(),
+            path: path.to_string(),
             file_name: name.to_string(),
             file_size: 1024,
             file_hash: format!("hash_{}", Uuid::new_v4()),
@@ -2743,7 +2743,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(created.id, book.id);
-        assert_eq!(created.file_path, "/test/book.cbz");
+        assert_eq!(created.path, "/test/book.cbz");
         assert_eq!(created.format, "cbz");
     }
 
@@ -2776,7 +2776,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(retrieved.id, book.id);
-        assert_eq!(retrieved.file_path, "/test/book.cbz");
+        assert_eq!(retrieved.path, "/test/book.cbz");
     }
 
     #[tokio::test]
@@ -2843,7 +2843,7 @@ mod tests {
                 .unwrap();
 
         assert_eq!(retrieved.id, book.id);
-        assert_eq!(retrieved.file_path, "/test/book.cbz");
+        assert_eq!(retrieved.path, "/test/book.cbz");
     }
 
     #[tokio::test]
@@ -3566,7 +3566,7 @@ mod tests {
                 .await
                 .unwrap();
             assert!(retrieved.is_some());
-            assert_eq!(retrieved.unwrap().file_path, book.file_path);
+            assert_eq!(retrieved.unwrap().path, book.path);
         }
 
         // Test with empty input

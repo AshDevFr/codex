@@ -146,8 +146,8 @@ pub fn init_tracing(
     let console_enabled = config.logging.console;
 
     let guard = match (console_enabled, &config.logging.file) {
-        (true, Some(log_file_path)) => {
-            let log_path = std::path::Path::new(log_file_path);
+        (true, Some(log_path)) => {
+            let log_path = std::path::Path::new(log_path);
             if let Some(parent) = log_path.parent() {
                 fs::create_dir_all(parent)?;
             }
@@ -176,8 +176,8 @@ pub fn init_tracing(
             tracing_subscriber::fmt().with_env_filter(env_filter).init();
             None
         }
-        (false, Some(log_file_path)) => {
-            let log_path = std::path::Path::new(log_file_path);
+        (false, Some(log_path)) => {
+            let log_path = std::path::Path::new(log_path);
             if let Some(parent) = log_path.parent() {
                 fs::create_dir_all(parent)?;
             }
@@ -572,35 +572,35 @@ mod tests {
     #[test]
     fn test_ensure_parent_dir_exists_creates_parent() {
         let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("parent_dir").join("file.txt");
+        let path = temp_dir.path().join("parent_dir").join("file.txt");
 
-        assert!(!file_path.parent().unwrap().exists());
-        ensure_parent_dir_exists(&file_path).unwrap();
-        assert!(file_path.parent().unwrap().exists());
-        assert!(!file_path.exists()); // File itself should not be created
+        assert!(!path.parent().unwrap().exists());
+        ensure_parent_dir_exists(&path).unwrap();
+        assert!(path.parent().unwrap().exists());
+        assert!(!path.exists()); // File itself should not be created
     }
 
     #[test]
     fn test_ensure_parent_dir_exists_nested() {
         let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir
+        let path = temp_dir
             .path()
             .join("a")
             .join("b")
             .join("c")
             .join("file.db");
 
-        assert!(!file_path.parent().unwrap().exists());
-        ensure_parent_dir_exists(&file_path).unwrap();
-        assert!(file_path.parent().unwrap().exists());
+        assert!(!path.parent().unwrap().exists());
+        ensure_parent_dir_exists(&path).unwrap();
+        assert!(path.parent().unwrap().exists());
     }
 
     #[test]
     fn test_ensure_parent_dir_exists_empty_parent() {
         // File in current directory (empty parent)
-        let file_path = Path::new("file.txt");
+        let path = Path::new("file.txt");
         // Should not error
-        ensure_parent_dir_exists(file_path).unwrap();
+        ensure_parent_dir_exists(path).unwrap();
     }
 
     #[test]
