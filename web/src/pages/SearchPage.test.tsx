@@ -1,5 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { booksApi } from "@/api/books";
+import { seriesApi } from "@/api/series";
 import { renderWithProviders } from "@/test/utils";
 import { SearchPage } from "./SearchPage";
 
@@ -97,5 +99,44 @@ describe("SearchPage", () => {
     });
     // The "no filters yet" message should NOT appear when a condition is present.
     expect(screen.queryByText(/no filters yet/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the idle empty state and skips fetching when no query or filter is set", async () => {
+    renderWithProviders(<SearchPage />, { initialEntries: ["/search"] });
+
+    expect(
+      await screen.findByText(/nothing to search yet/i),
+    ).toBeInTheDocument();
+    expect(seriesApi.search).not.toHaveBeenCalled();
+    expect(booksApi.search).not.toHaveBeenCalled();
+  });
+
+  it("fetches results when only a query is provided", async () => {
+    renderWithProviders(<SearchPage />, {
+      initialEntries: ["/search?q=batman"],
+    });
+
+    await waitFor(() => {
+      expect(seriesApi.search).toHaveBeenCalled();
+    });
+    expect(
+      screen.queryByText(/nothing to search yet/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("fetches results when only a configured filter is provided", async () => {
+    // base64url-encoded `{"title":{"operator":"contains","value":"punch"}}`
+    const c =
+      "eyJ0aXRsZSI6eyJvcGVyYXRvciI6ImNvbnRhaW5zIiwidmFsdWUiOiJwdW5jaCJ9fQ";
+    renderWithProviders(<SearchPage />, {
+      initialEntries: [`/search?c=${c}`],
+    });
+
+    await waitFor(() => {
+      expect(seriesApi.search).toHaveBeenCalled();
+    });
+    expect(
+      screen.queryByText(/nothing to search yet/i),
+    ).not.toBeInTheDocument();
   });
 });

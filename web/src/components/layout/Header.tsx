@@ -7,8 +7,15 @@ import {
   useComputedColorScheme,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconMenu2, IconMoon, IconSearch, IconSun } from "@tabler/icons-react";
+import {
+  IconAdjustmentsHorizontal,
+  IconMenu2,
+  IconMoon,
+  IconSearch,
+  IconSun,
+} from "@tabler/icons-react";
 import { type RefObject, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MobileSearchSheet,
   SearchInput,
@@ -31,6 +38,7 @@ export function Header({
   searchInputRef,
 }: HeaderProps) {
   const appName = useAppName();
+  const navigate = useNavigate();
   const computedColorScheme = useComputedColorScheme("dark");
   const setPreference = useUserPreferencesStore((state) => state.setPreference);
   const [
@@ -82,8 +90,19 @@ export function Header({
           </Text>
         </Group>
 
-        <Group>
+        <Group gap="xs">
           <SearchInput ref={searchInputRef} />
+
+          <ActionIcon
+            variant="subtle"
+            onClick={() => navigate("/search")}
+            visibleFrom="xs"
+            size="lg"
+            aria-label="Advanced search"
+            title="Advanced search"
+          >
+            <IconAdjustmentsHorizontal size={20} />
+          </ActionIcon>
 
           <ActionIcon
             variant="subtle"
