@@ -155,6 +155,15 @@ export function SearchPage() {
     return "";
   }, [state.tab, state.sort]);
 
+  // Advanced search needs *something* to act on: a non-empty query, or at
+  // least one fully-configured filter leaf (normalizeForEmit returns
+  // undefined when every leaf is incomplete, which keeps an empty
+  // "+ Add filter" row from counting as a filter).
+  const hasQuery = state.query.trim().length > 0;
+  const hasFilter =
+    state.tab === "series" ? !!seriesCondition : !!booksCondition;
+  const canSearch = hasQuery || hasFilter;
+
   const seriesQuery = useQuery({
     queryKey: [
       "search",
@@ -173,6 +182,7 @@ export function SearchPage() {
         sort: seriesSort || undefined,
       }),
     staleTime: 30_000,
+    enabled: canSearch,
   });
 
   const booksQuery = useQuery({
@@ -193,6 +203,7 @@ export function SearchPage() {
         sort: booksSort || undefined,
       }),
     staleTime: 30_000,
+    enabled: canSearch,
   });
 
   const seriesCount = seriesQuery.data?.total ?? 0;
@@ -345,31 +356,46 @@ export function SearchPage() {
             </Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="series" pt="md">
-            <ResultsGrid
-              loading={seriesQuery.isLoading}
-              error={seriesQuery.error}
-              data={seriesQuery.data?.data ?? []}
-              total={seriesCount}
-              page={state.page}
-              pageSize={DEFAULT_SEARCH_PAGE_SIZE}
-              onPageChange={(p) => updateState({ page: p })}
-              type="series"
-            />
-          </Tabs.Panel>
+          {canSearch ? (
+            <>
+              <Tabs.Panel value="series" pt="md">
+                <ResultsGrid
+                  loading={seriesQuery.isLoading}
+                  error={seriesQuery.error}
+                  data={seriesQuery.data?.data ?? []}
+                  total={seriesCount}
+                  page={state.page}
+                  pageSize={DEFAULT_SEARCH_PAGE_SIZE}
+                  onPageChange={(p) => updateState({ page: p })}
+                  type="series"
+                />
+              </Tabs.Panel>
 
-          <Tabs.Panel value="books" pt="md">
-            <ResultsGrid
-              loading={booksQuery.isLoading}
-              error={booksQuery.error}
-              data={booksQuery.data?.data ?? []}
-              total={booksCount}
-              page={state.page}
-              pageSize={DEFAULT_SEARCH_PAGE_SIZE}
-              onPageChange={(p) => updateState({ page: p })}
-              type="book"
-            />
-          </Tabs.Panel>
+              <Tabs.Panel value="books" pt="md">
+                <ResultsGrid
+                  loading={booksQuery.isLoading}
+                  error={booksQuery.error}
+                  data={booksQuery.data?.data ?? []}
+                  total={booksCount}
+                  page={state.page}
+                  pageSize={DEFAULT_SEARCH_PAGE_SIZE}
+                  onPageChange={(p) => updateState({ page: p })}
+                  type="book"
+                />
+              </Tabs.Panel>
+            </>
+          ) : (
+            <Card mt="md" p="xl" withBorder>
+              <Stack align="center" gap="sm">
+                <Text size="lg" fw={600}>
+                  Nothing to search yet
+                </Text>
+                <Text size="sm" c="dimmed">
+                  Enter a search term or add a filter to see results.
+                </Text>
+              </Stack>
+            </Card>
+          )}
         </Tabs>
       </Stack>
     </Container>
