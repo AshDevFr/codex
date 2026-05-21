@@ -43,8 +43,8 @@ describe("FilterBuilder", () => {
       <FilterBuilder
         condition={{
           allOf: [
-            { name: { operator: "contains", value: "punch" } },
-            { name: { operator: "contains", value: "saitama" } },
+            { title: { operator: "contains", value: "punch" } },
+            { title: { operator: "contains", value: "saitama" } },
           ],
         }}
         target="series"
@@ -64,7 +64,7 @@ describe("FilterBuilder", () => {
     renderWithProviders(
       <FilterBuilder
         condition={{
-          allOf: [{ name: { operator: "contains", value: "punch" } }],
+          allOf: [{ title: { operator: "contains", value: "punch" } }],
         }}
         target="series"
         onChange={onChange}

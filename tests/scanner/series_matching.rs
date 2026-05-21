@@ -28,9 +28,9 @@ async fn setup_library_with_series(
 
     // Create test CBZ files with specified names
     for (i, filename) in filenames.iter().enumerate() {
-        let file_path = series_path.join(filename);
+        let path = series_path.join(filename);
         let cbz_path = create_test_cbz(temp_dir, i + 1, false);
-        fs::copy(&cbz_path, &file_path).unwrap();
+        fs::copy(&cbz_path, &path).unwrap();
     }
 
     let library = LibraryRepository::create(

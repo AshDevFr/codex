@@ -42,7 +42,7 @@ const mockBookDetail = {
     number: 1,
     sortNumber: 1,
     fileFormat: "cbz",
-    filePath: "/test/path",
+    path: "/test/path",
     fileSize: 1000,
     fileHash: "abc123",
     pageCount: 24,

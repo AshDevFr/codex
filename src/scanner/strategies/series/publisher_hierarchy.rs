@@ -26,8 +26,8 @@ impl PublisherHierarchyStrategy {
     }
 
     /// Extract skipped folder names (e.g., publisher, year)
-    fn extract_skipped_levels(&self, file_path: &Path, library_path: &Path) -> Vec<String> {
-        let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
+    fn extract_skipped_levels(&self, path: &Path, library_path: &Path) -> Vec<String> {
+        let relative = path.strip_prefix(library_path).unwrap_or(path);
         let components: Vec<_> = relative.components().collect();
 
         let skip = self.config.skip_depth as usize;
@@ -51,9 +51,9 @@ impl ScanningStrategyImpl for PublisherHierarchyStrategy {
     ) -> Result<HashMap<String, DetectedSeries>> {
         let mut series_map: HashMap<String, DetectedSeries> = HashMap::new();
 
-        for file_path in files {
-            let series_name = self.extract_series_name(file_path, library_path);
-            let skipped_levels = self.extract_skipped_levels(file_path, library_path);
+        for path in files {
+            let series_name = self.extract_series_name(path, library_path);
+            let skipped_levels = self.extract_skipped_levels(path, library_path);
 
             let series = series_map.entry(series_name.clone()).or_insert_with(|| {
                 let mut s = DetectedSeries::new(&series_name);
@@ -81,21 +81,21 @@ impl ScanningStrategyImpl for PublisherHierarchyStrategy {
             // Set series path if not already set (use parent folder's relative path)
             if series.path.is_none()
                 && series_name != "Unsorted"
-                && let Some(parent) = file_path.parent()
+                && let Some(parent) = path.parent()
                 && let Ok(rel_parent) = parent.strip_prefix(library_path)
             {
                 series.path = Some(rel_parent.to_string_lossy().to_string());
             }
 
-            series.add_book(DetectedBook::new(file_path.clone()));
+            series.add_book(DetectedBook::new(path.clone()));
         }
 
         Ok(series_map)
     }
 
-    fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
+    fn extract_series_name(&self, path: &Path, library_path: &Path) -> String {
         // Use immediate parent folder as series name
-        if let Some(parent) = file_path.parent() {
+        if let Some(parent) = path.parent() {
             // Check if parent is the library root
             if parent == library_path {
                 return "Unsorted".to_string();
@@ -103,7 +103,7 @@ impl ScanningStrategyImpl for PublisherHierarchyStrategy {
 
             // Check if file is at a level that should be skipped
             // (i.e., file is directly in one of the skipped levels)
-            let relative = file_path.strip_prefix(library_path).unwrap_or(file_path);
+            let relative = path.strip_prefix(library_path).unwrap_or(path);
             let depth = relative.components().count();
             let skip = self.config.skip_depth as usize;
 

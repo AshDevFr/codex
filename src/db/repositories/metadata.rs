@@ -441,7 +441,7 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series.id,
             library_id: library.id,
-            file_path: "/test/book.cbz".to_string(),
+            path: "/test/book.cbz".to_string(),
             file_name: "book.cbz".to_string(),
             file_size: 1024,
             file_hash: "test_hash".to_string(),

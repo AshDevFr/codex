@@ -163,7 +163,7 @@ fn test_epub_parser_file_metadata() {
     assert!(metadata.file_size > 0);
     assert!(!metadata.file_hash.is_empty());
     assert!(metadata.file_hash.len() == 64); // SHA-256
-    assert!(!metadata.file_path.is_empty());
+    assert!(!metadata.path.is_empty());
 }
 
 #[test]

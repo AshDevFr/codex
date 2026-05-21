@@ -65,7 +65,7 @@ pub struct PdfHandleCacheEntryDto {
 
     /// File path of the opened PDF.
     #[schema(example = "/library/books/manual.pdf")]
-    pub file_path: String,
+    pub path: String,
 
     /// Seconds since the handle was opened.
     #[schema(example = 312)]
@@ -84,7 +84,7 @@ impl From<crate::services::HandleCacheEntrySnapshot> for PdfHandleCacheEntryDto 
     fn from(entry: crate::services::HandleCacheEntrySnapshot) -> Self {
         Self {
             book_id: entry.book_id,
-            file_path: entry.file_path,
+            path: entry.path,
             age_seconds: entry.age_seconds,
             idle_seconds: entry.idle_seconds,
             render_count: entry.render_count,

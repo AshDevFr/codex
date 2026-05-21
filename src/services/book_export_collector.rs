@@ -550,7 +550,7 @@ pub async fn collect_batched(
                 row.file_name = Some(book.file_name.clone());
             }
             if has(BookExportField::FilePath) {
-                row.file_path = Some(book.file_path.clone());
+                row.file_path = Some(book.path.clone());
             }
             if has(BookExportField::FileSize) {
                 row.file_size = Some(book.file_size);

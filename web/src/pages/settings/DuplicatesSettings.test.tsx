@@ -100,14 +100,14 @@ const bookA = {
   seriesId: SERIES_ID_A,
   seriesName: "Naruto",
   title: "Naruto Vol. 1",
-  filePath: "/library/naruto/vol1.cbz",
+  path: "/library/naruto/vol1.cbz",
   fileSize: 12_000_000,
 };
 const bookB = {
   ...bookA,
   id: BOOK_ID_B,
   title: "Naruto Vol. 1 (copy)",
-  filePath: "/library/naruto-copy/vol1.cbz",
+  path: "/library/naruto-copy/vol1.cbz",
 };
 
 function setupHappyPath(

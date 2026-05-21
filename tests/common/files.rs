@@ -705,8 +705,8 @@ pub fn create_multi_page_pdf(temp_dir: &TempDir, num_pages: usize) -> PathBuf {
 pub fn create_test_cbz_with_metadata(temp_dir: &TempDir, filename: &str) -> std::path::PathBuf {
     use std::fs;
 
-    let file_path = temp_dir.path().join(filename);
-    let file = fs::File::create(&file_path).unwrap();
+    let path = temp_dir.path().join(filename);
+    let file = fs::File::create(&path).unwrap();
     let mut zip = ZipWriter::new(file);
 
     let options: FileOptions<'_, ()> =
@@ -756,5 +756,5 @@ pub fn create_test_cbz_with_metadata(temp_dir: &TempDir, filename: &str) -> std:
     }
 
     zip.finish().unwrap();
-    file_path
+    path
 }

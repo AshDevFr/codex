@@ -97,10 +97,10 @@ pub async fn get_epub_manifest(
     let base_url = format!("{}://{}{}", scheme, host, book_path);
 
     // Open EPUB as ZIP
-    let file_path = book.file_path.clone();
+    let path = book.path.clone();
     let (manifest_items, spine_order, toc_entries, metadata) =
         tokio::task::spawn_blocking(move || -> Result<_, ApiError> {
-            let file = std::fs::File::open(&file_path)
+            let file = std::fs::File::open(&path)
                 .map_err(|e| ApiError::Internal(format!("Failed to open EPUB file: {}", e)))?;
             let mut archive = ZipArchive::new(file)
                 .map_err(|e| ApiError::Internal(format!("Failed to read EPUB archive: {}", e)))?;
@@ -428,12 +428,12 @@ pub async fn get_epub_resource(
         ));
     }
 
-    let file_path = book.file_path.clone();
+    let path = book.path.clone();
     let resource_path = resource.clone();
 
     let (data, content_type) =
         tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, String), ApiError> {
-            let file = std::fs::File::open(&file_path)
+            let file = std::fs::File::open(&path)
                 .map_err(|e| ApiError::Internal(format!("Failed to open EPUB file: {}", e)))?;
             let mut archive = ZipArchive::new(file)
                 .map_err(|e| ApiError::Internal(format!("Failed to read EPUB archive: {}", e)))?;

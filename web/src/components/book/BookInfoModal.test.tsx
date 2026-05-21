@@ -11,7 +11,7 @@ const createMockBook = (overrides?: Partial<Book>): Book => ({
   fileSize: 52428800, // 50 MB
   pageCount: 200,
   fileHash: "abc123def456ghi789jkl012mno345pqr678",
-  filePath: "/library/comics/Test Book/issue-01.cbz",
+  path: "/library/comics/Test Book/issue-01.cbz",
   libraryId: "lib-1",
   libraryName: "Comics",
   seriesId: "series-1",
@@ -154,7 +154,7 @@ describe("BookInfoModal", () => {
         opened={true}
         onClose={vi.fn()}
         book={createMockBook({
-          filePath: "/path/to/book.cbz",
+          path: "/path/to/book.cbz",
           fileHash: "abcdef123456",
         })}
       />,

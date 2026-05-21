@@ -1158,7 +1158,7 @@ impl ThumbnailService {
     /// This method tries to extract the first valid image from the book.
     /// If the first image is corrupted, it will try subsequent images.
     async fn extract_cover_image(&self, book: &books::Model) -> Result<Vec<u8>> {
-        let path = Path::new(&book.file_path);
+        let path = Path::new(&book.path);
 
         // Use the appropriate parser extraction function based on format
         // Enable fallback mode to skip corrupted images

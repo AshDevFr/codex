@@ -43,14 +43,14 @@ impl CalibreStrategy {
     }
 
     /// Extract author from folder structure (grandparent folder - parent of book folder)
-    fn extract_author(&self, file_path: &Path, library_path: &Path) -> Option<String> {
+    fn extract_author(&self, path: &Path, library_path: &Path) -> Option<String> {
         if !self.config.author_from_folder {
             return None;
         }
 
         // Author is the grandparent folder (parent of the book folder)
         // Structure: library/Author/Book Title/file.epub
-        if let Some(parent) = file_path.parent()
+        if let Some(parent) = path.parent()
             && let Some(grandparent) = parent.parent()
         {
             // Only if grandparent is not the library root
@@ -64,9 +64,9 @@ impl CalibreStrategy {
     }
 
     /// Extract book title from folder structure (immediate parent folder)
-    fn extract_book_title(&self, file_path: &Path, _library_path: &Path) -> Option<String> {
+    fn extract_book_title(&self, path: &Path, _library_path: &Path) -> Option<String> {
         // Use immediate parent folder as book title
-        if let Some(parent) = file_path.parent()
+        if let Some(parent) = path.parent()
             && let Some(folder_name) = parent.file_name()
         {
             let name = folder_name.to_string_lossy().to_string();
@@ -80,7 +80,7 @@ impl CalibreStrategy {
         &self,
         author: Option<&str>,
         book_title: Option<&str>,
-        file_path: &Path,
+        path: &Path,
     ) -> String {
         match self.config.series_mode {
             CalibreSeriesMode::Standalone => {
@@ -94,7 +94,7 @@ impl CalibreStrategy {
             CalibreSeriesMode::FromMetadata => {
                 // Read calibre:series from metadata.opf in the book's parent directory
                 if self.config.read_opf_metadata
-                    && let Some(series_name) = self.read_series_from_opf(file_path)
+                    && let Some(series_name) = self.read_series_from_opf(path)
                 {
                     return series_name;
                 }
@@ -106,8 +106,8 @@ impl CalibreStrategy {
 
     /// Read the `calibre:series` field from a sidecar `metadata.opf` file
     /// in the same directory as the given book file.
-    fn read_series_from_opf(&self, file_path: &Path) -> Option<String> {
-        let parent = file_path.parent()?;
+    fn read_series_from_opf(&self, path: &Path) -> Option<String> {
+        let parent = path.parent()?;
         let opf_path = parent.join("metadata.opf");
 
         match opf::parse_opf_file(&opf_path) {
@@ -144,19 +144,19 @@ impl ScanningStrategyImpl for CalibreStrategy {
     ) -> Result<HashMap<String, DetectedSeries>> {
         let mut series_map: HashMap<String, DetectedSeries> = HashMap::new();
 
-        for file_path in files {
+        for path in files {
             // Skip metadata files
-            if let Some(filename) = file_path.file_name() {
+            if let Some(filename) = path.file_name() {
                 let name = filename.to_string_lossy();
                 if name == "metadata.opf" || name == "metadata.db" || name == "cover.jpg" {
                     continue;
                 }
             }
 
-            let author = self.extract_author(file_path, library_path);
-            let book_title = self.extract_book_title(file_path, library_path);
+            let author = self.extract_author(path, library_path);
+            let book_title = self.extract_book_title(path, library_path);
             let series_name =
-                self.determine_series_name(author.as_deref(), book_title.as_deref(), file_path);
+                self.determine_series_name(author.as_deref(), book_title.as_deref(), path);
 
             let series = series_map.entry(series_name.clone()).or_insert_with(|| {
                 let mut s = DetectedSeries::new(&series_name);
@@ -177,8 +177,8 @@ impl ScanningStrategyImpl for CalibreStrategy {
             // For other modes, use the book folder (parent)
             if series.path.is_none() {
                 let target_folder = match self.config.series_mode {
-                    CalibreSeriesMode::ByAuthor => file_path.parent().and_then(|p| p.parent()),
-                    _ => file_path.parent(),
+                    CalibreSeriesMode::ByAuthor => path.parent().and_then(|p| p.parent()),
+                    _ => path.parent(),
                 };
 
                 if let Some(folder) = target_folder
@@ -188,16 +188,16 @@ impl ScanningStrategyImpl for CalibreStrategy {
                 }
             }
 
-            series.add_book(DetectedBook::new(file_path.clone()));
+            series.add_book(DetectedBook::new(path.clone()));
         }
 
         Ok(series_map)
     }
 
-    fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
-        let author = self.extract_author(file_path, library_path);
-        let book_title = self.extract_book_title(file_path, library_path);
-        self.determine_series_name(author.as_deref(), book_title.as_deref(), file_path)
+    fn extract_series_name(&self, path: &Path, library_path: &Path) -> String {
+        let author = self.extract_author(path, library_path);
+        let book_title = self.extract_book_title(path, library_path);
+        self.determine_series_name(author.as_deref(), book_title.as_deref(), path)
     }
 
     fn validate(&self, library_path: &Path) -> Result<()> {
@@ -449,9 +449,8 @@ mod tests {
         let strategy = strategy_with_mode(CalibreSeriesMode::FromMetadata);
 
         // Use non-existent paths — no metadata.opf will be found
-        let file_path = Path::new("/nonexistent/Author/Book Title (1)/Book.epub");
-        let series_name =
-            strategy.determine_series_name(Some("Author"), Some("Book Title"), file_path);
+        let path = Path::new("/nonexistent/Author/Book Title (1)/Book.epub");
+        let series_name = strategy.determine_series_name(Some("Author"), Some("Book Title"), path);
 
         assert_eq!(series_name, "Book Title");
     }

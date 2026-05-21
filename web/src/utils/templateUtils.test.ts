@@ -1060,7 +1060,7 @@ describe("templateUtils", () => {
         seriesName: "Test Series",
         title: "Test Book",
         titleSort: "test book",
-        filePath: "/path/to/book.epub",
+        path: "/path/to/book.epub",
         fileFormat: "epub",
         fileSize: 1024000,
         fileHash: "abc123",

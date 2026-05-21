@@ -11,7 +11,7 @@ const createMockBook = (overrides?: Partial<Book>): Book => ({
   fileSize: 52428800, // 50 MB
   pageCount: 200,
   fileHash: "abc123def456ghi789jkl012mno345pqr678",
-  filePath: "/library/comics/Test Book/issue-01.cbz",
+  path: "/library/comics/Test Book/issue-01.cbz",
   libraryId: "lib-1",
   libraryName: "Comics",
   seriesId: "series-1",
@@ -110,7 +110,7 @@ describe("BookFileInfo", () => {
     renderWithProviders(
       <BookFileInfo
         book={createMockBook({
-          filePath: "/library/comics/Series/issue-01.cbz",
+          path: "/library/comics/Series/issue-01.cbz",
         })}
       />,
     );
@@ -121,7 +121,7 @@ describe("BookFileInfo", () => {
 
   it("should handle file path without directory", () => {
     renderWithProviders(
-      <BookFileInfo book={createMockBook({ filePath: "simple-file.cbz" })} />,
+      <BookFileInfo book={createMockBook({ path: "simple-file.cbz" })} />,
     );
 
     expect(screen.getByText("simple-file.cbz")).toBeInTheDocument();

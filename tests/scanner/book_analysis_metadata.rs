@@ -24,7 +24,7 @@ use common::{files::create_test_cbz_with_metadata, files::create_test_png, setup
 /// Helper to create a test book in database
 async fn create_test_book(
     db: &codex::db::Database,
-    file_path: &str,
+    path: &str,
 ) -> Result<(books::Model, series::Model)> {
     let library = LibraryRepository::create(
         db.sea_orm_connection(),
@@ -41,8 +41,8 @@ async fn create_test_book(
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string(),
-        file_name: PathBuf::from(file_path)
+        path: path.to_string(),
+        file_name: PathBuf::from(path)
             .file_name()
             .unwrap()
             .to_string_lossy()
@@ -73,7 +73,7 @@ async fn create_test_book(
 /// Helper to create a test book with a specific book naming strategy
 async fn create_test_book_with_strategy(
     db: &codex::db::Database,
-    file_path: &str,
+    path: &str,
     book_strategy: BookStrategy,
 ) -> Result<(books::Model, series::Model)> {
     let params =
@@ -88,8 +88,8 @@ async fn create_test_book_with_strategy(
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string(),
-        file_name: PathBuf::from(file_path)
+        path: path.to_string(),
+        file_name: PathBuf::from(path)
             .file_name()
             .unwrap()
             .to_string_lossy()
@@ -281,8 +281,8 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     let temp_dir = TempDir::new()?;
 
     // Create a CBZ without ComicInfo.xml
-    let file_path = temp_dir.path().join("no_metadata.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("no_metadata.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // Add only image pages, no ComicInfo.xml
@@ -296,7 +296,7 @@ async fn test_analyze_book_without_comic_info() -> Result<()> {
     zip.finish()?;
 
     // Create book record
-    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    let (book, _series) = create_test_book(&db, path.to_str().unwrap()).await?;
 
     // Analyze the book
     let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
@@ -339,8 +339,8 @@ async fn test_analyze_book_title_fallback_to_filename() -> Result<()> {
     let temp_dir = TempDir::new()?;
 
     // Create a CBZ with ComicInfo.xml but without Title field
-    let file_path = temp_dir.path().join("my_awesome_book.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("my_awesome_book.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // ComicInfo.xml without Title field
@@ -364,7 +364,7 @@ async fn test_analyze_book_title_fallback_to_filename() -> Result<()> {
     zip.finish()?;
 
     // Create book record
-    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    let (book, _series) = create_test_book(&db, path.to_str().unwrap()).await?;
 
     // Analyze the book
     let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
@@ -410,8 +410,8 @@ async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> 
     let temp_dir = TempDir::new()?;
 
     // Create a CBZ with ComicInfo.xml that has a Title field
-    let file_path = temp_dir.path().join("filename_fallback.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("filename_fallback.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // ComicInfo.xml with Title field - should take precedence over filename
@@ -436,12 +436,9 @@ async fn test_analyze_book_title_from_metadata_takes_precedence() -> Result<()> 
     zip.finish()?;
 
     // Create book record with MetadataFirst strategy (required for metadata to override filename)
-    let (book, _series) = create_test_book_with_strategy(
-        &db,
-        file_path.to_str().unwrap(),
-        BookStrategy::MetadataFirst,
-    )
-    .await?;
+    let (book, _series) =
+        create_test_book_with_strategy(&db, path.to_str().unwrap(), BookStrategy::MetadataFirst)
+            .await?;
 
     // Analyze the book
     let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
@@ -478,8 +475,8 @@ async fn test_analyze_book_filename_no_extension() -> Result<()> {
     // Create a CBZ without ComicInfo.xml
     // Use .cbz extension for format detection, but test filename extraction logic
     // by creating a book with a file_name that has no extension (simulating edge case)
-    let file_path = temp_dir.path().join("noextension.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("noextension.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // Add only image pages, no ComicInfo.xml
@@ -492,8 +489,8 @@ async fn test_analyze_book_filename_no_extension() -> Result<()> {
 
     zip.finish()?;
 
-    // Create book record - file_path has extension but we'll test with file_name without extension
-    let (mut book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    // Create book record - path has extension but we'll test with file_name without extension
+    let (mut book, _series) = create_test_book(&db, path.to_str().unwrap()).await?;
 
     // Manually set file_name to have no extension to test the fallback logic
     book.file_name = "noextension".to_string();
@@ -532,8 +529,8 @@ async fn test_analyze_book_filename_multiple_dots() -> Result<()> {
     let temp_dir = TempDir::new()?;
 
     // Create a CBZ without ComicInfo.xml and with filename that has multiple dots
-    let file_path = temp_dir.path().join("book.vol.1.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("book.vol.1.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // Add only image pages, no ComicInfo.xml
@@ -547,7 +544,7 @@ async fn test_analyze_book_filename_multiple_dots() -> Result<()> {
     zip.finish()?;
 
     // Create book record
-    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    let (book, _series) = create_test_book(&db, path.to_str().unwrap()).await?;
 
     // Analyze the book
     let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
@@ -582,8 +579,8 @@ async fn test_analyze_book_empty_title_in_comic_info() -> Result<()> {
     let temp_dir = TempDir::new()?;
 
     // Create a CBZ with ComicInfo.xml that has an empty Title field
-    let file_path = temp_dir.path().join("empty_title_test.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("empty_title_test.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // ComicInfo.xml with empty Title field
@@ -607,7 +604,7 @@ async fn test_analyze_book_empty_title_in_comic_info() -> Result<()> {
     zip.finish()?;
 
     // Create book record
-    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    let (book, _series) = create_test_book(&db, path.to_str().unwrap()).await?;
 
     // Analyze the book
     let result = analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
@@ -665,8 +662,8 @@ async fn test_reanalyze_book_updates_metadata() -> Result<()> {
     );
 
     // Simulate file change by creating a new CBZ with different metadata
-    let file_path = temp_dir.path().join("reanalysis_test.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("reanalysis_test.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // New ComicInfo with updated writer
@@ -733,8 +730,8 @@ async fn test_analyze_book_with_isbns() -> Result<()> {
     let (db, _temp_dir) = setup_test_db_wrapper().await;
     let temp_dir = TempDir::new()?;
 
-    let file_path = temp_dir.path().join("isbn_test.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("isbn_test.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // Add ComicInfo.xml
@@ -752,7 +749,7 @@ async fn test_analyze_book_with_isbns() -> Result<()> {
     zip.finish()?;
 
     // Create and analyze book
-    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    let (book, _series) = create_test_book(&db, path.to_str().unwrap()).await?;
     analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Note: ISBN extraction happens in the parser if barcodes are detected
@@ -775,8 +772,8 @@ async fn test_analyze_book_with_manga_flag() -> Result<()> {
     let (db, _temp_dir) = setup_test_db_wrapper().await;
     let temp_dir = TempDir::new()?;
 
-    let file_path = temp_dir.path().join("manga_test.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("manga_test.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // Test various manga flag formats
@@ -794,7 +791,7 @@ async fn test_analyze_book_with_manga_flag() -> Result<()> {
 
     zip.finish()?;
 
-    let (book, _series) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    let (book, _series) = create_test_book(&db, path.to_str().unwrap()).await?;
     analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     let metadata = BookMetadataRepository::get_by_book_id(db.sea_orm_connection(), book.id)
@@ -834,8 +831,8 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     assert_eq!(metadata.year, None);
 
     // Create first book with ComicInfo metadata
-    let file_path = temp_dir.path().join("book1.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     let comic_info_xml = r#"<?xml version="1.0"?>
@@ -863,7 +860,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string_lossy().to_string(),
+        path: path.to_string_lossy().to_string(),
         file_name: "book1.cbz".to_string(),
         file_size: 0,
         file_hash: "test_hash".to_string(),
@@ -897,8 +894,8 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
     assert_eq!(metadata.year, Some(2024));
 
     // Create second book with different metadata
-    let file_path2 = temp_dir.path().join("book2.cbz");
-    let file = fs::File::create(&file_path2)?;
+    let path2 = temp_dir.path().join("book2.cbz");
+    let file = fs::File::create(&path2)?;
     let mut zip = ZipWriter::new(file);
 
     let comic_info_xml2 = r#"<?xml version="1.0"?>
@@ -924,7 +921,7 @@ async fn test_series_metadata_populated_from_first_book() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path2.to_string_lossy().to_string(),
+        path: path2.to_string_lossy().to_string(),
         file_name: "book2.cbz".to_string(),
         file_size: 0,
         file_hash: "test_hash2".to_string(),
@@ -1001,8 +998,8 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
     SeriesMetadataRepository::set_lock(db.sea_orm_connection(), series.id, "year", true).await?;
 
     // Create a book with different metadata
-    let file_path = temp_dir.path().join("book1.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     let comic_info_xml = r#"<?xml version="1.0"?>
@@ -1023,7 +1020,7 @@ async fn test_series_metadata_respects_manual_changes() -> Result<()> {
 
     zip.finish()?;
 
-    let (book, _) = create_test_book(&db, file_path.to_str().unwrap()).await?;
+    let (book, _) = create_test_book(&db, path.to_str().unwrap()).await?;
     analyze_book(db.sea_orm_connection(), book.id, false, None).await?;
 
     // Verify series metadata was NOT overwritten (locked fields preserved)
@@ -1070,8 +1067,8 @@ async fn test_series_title_sort_populated_from_title() -> Result<()> {
     assert_eq!(metadata.title_sort, None);
 
     // Create a book
-    let file_path = temp_dir.path().join("book1.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     let comic_info_xml = r#"<?xml version="1.0"?>
@@ -1095,7 +1092,7 @@ async fn test_series_title_sort_populated_from_title() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string_lossy().to_string(),
+        path: path.to_string_lossy().to_string(),
         file_name: "book1.cbz".to_string(),
         file_size: 0,
         file_hash: "test_hash".to_string(),
@@ -1169,8 +1166,8 @@ async fn test_series_title_sort_respects_lock() -> Result<()> {
     assert!(metadata.title_sort_lock);
 
     // Create a book
-    let file_path = temp_dir.path().join("book1.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     let comic_info_xml = r#"<?xml version="1.0"?>
@@ -1194,7 +1191,7 @@ async fn test_series_title_sort_respects_lock() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string_lossy().to_string(),
+        path: path.to_string_lossy().to_string(),
         file_name: "book1.cbz".to_string(),
         file_size: 0,
         file_hash: "test_hash".to_string(),
@@ -1276,8 +1273,8 @@ async fn test_series_title_sort_not_overwritten_if_already_set() -> Result<()> {
     );
 
     // Create a book
-    let file_path = temp_dir.path().join("book1.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     let comic_info_xml = r#"<?xml version="1.0"?>
@@ -1301,7 +1298,7 @@ async fn test_series_title_sort_not_overwritten_if_already_set() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string_lossy().to_string(),
+        path: path.to_string_lossy().to_string(),
         file_name: "book1.cbz".to_string(),
         file_size: 0,
         file_hash: "test_hash".to_string(),
@@ -1365,8 +1362,8 @@ async fn test_series_title_sort_populated_without_comic_info() -> Result<()> {
     assert_eq!(metadata.title_sort, None);
 
     // Create a book WITHOUT ComicInfo.xml
-    let file_path = temp_dir.path().join("book1.cbz");
-    let file = fs::File::create(&file_path)?;
+    let path = temp_dir.path().join("book1.cbz");
+    let file = fs::File::create(&path)?;
     let mut zip = ZipWriter::new(file);
 
     // Only add image pages, no ComicInfo.xml
@@ -1381,7 +1378,7 @@ async fn test_series_title_sort_populated_without_comic_info() -> Result<()> {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string_lossy().to_string(),
+        path: path.to_string_lossy().to_string(),
         file_name: "book1.cbz".to_string(),
         file_size: 0,
         file_hash: "test_hash".to_string(),

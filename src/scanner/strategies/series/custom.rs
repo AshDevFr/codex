@@ -106,11 +106,11 @@ impl ScanningStrategyImpl for CustomStrategy {
     ) -> Result<HashMap<String, DetectedSeries>> {
         let mut series_map: HashMap<String, DetectedSeries> = HashMap::new();
 
-        for file_path in files {
+        for path in files {
             // Get relative path for pattern matching
-            let relative = file_path
+            let relative = path
                 .strip_prefix(library_path)
-                .unwrap_or(file_path)
+                .unwrap_or(path)
                 .to_string_lossy();
 
             let (series_name, metadata) = if let Some(caps) = self.pattern.captures(&relative) {
@@ -119,7 +119,7 @@ impl ScanningStrategyImpl for CustomStrategy {
                 (name, meta)
             } else {
                 // Fallback: use parent folder name
-                let parent = file_path
+                let parent = path
                     .parent()
                     .and_then(|p| p.file_name())
                     .map(|n| n.to_string_lossy().to_string())
@@ -141,15 +141,15 @@ impl ScanningStrategyImpl for CustomStrategy {
 
             // Set series path from file path
             if series.path.is_none()
-                && let Some(parent) = file_path.parent()
+                && let Some(parent) = path.parent()
                 && let Ok(rel_parent) = parent.strip_prefix(library_path)
             {
                 series.path = Some(rel_parent.to_string_lossy().to_string());
             }
 
             // Extract book number
-            let mut book = DetectedBook::new(file_path.clone());
-            if let Some(filename) = file_path.file_name() {
+            let mut book = DetectedBook::new(path.clone());
+            if let Some(filename) = path.file_name() {
                 book.number = self.extract_book_number(&filename.to_string_lossy());
             }
 
@@ -159,10 +159,10 @@ impl ScanningStrategyImpl for CustomStrategy {
         Ok(series_map)
     }
 
-    fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
-        let relative = file_path
+    fn extract_series_name(&self, path: &Path, library_path: &Path) -> String {
+        let relative = path
             .strip_prefix(library_path)
-            .unwrap_or(file_path)
+            .unwrap_or(path)
             .to_string_lossy();
 
         if let Some(caps) = self.pattern.captures(&relative) {
@@ -173,8 +173,7 @@ impl ScanningStrategyImpl for CustomStrategy {
         }
 
         // Fallback
-        file_path
-            .parent()
+        path.parent()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "Unsorted".to_string())

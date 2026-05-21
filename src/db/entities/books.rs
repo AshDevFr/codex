@@ -10,7 +10,7 @@ pub struct Model {
     pub id: Uuid,
     pub series_id: Uuid,
     pub library_id: Uuid,
-    pub file_path: String,
+    pub path: String,
     pub file_name: String,
     pub file_size: i64,
     pub file_hash: String,

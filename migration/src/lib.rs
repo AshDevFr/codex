@@ -180,6 +180,8 @@ mod m20260520_000086_seed_duplicate_detection_settings;
 mod m20260520_000087_create_filter_presets;
 // Indexes that back the new BookCondition::Format / PageCount filter variants
 mod m20260520_000088_add_filter_indexes;
+// Rename books.file_path to books.path for symmetry with series.path
+mod m20260521_000089_rename_books_file_path_to_path;
 
 pub struct Migrator;
 
@@ -331,6 +333,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260520_000087_create_filter_presets::Migration),
             // Indexes for the new BookCondition::Format / PageCount filter variants
             Box::new(m20260520_000088_add_filter_indexes::Migration),
+            Box::new(m20260521_000089_rename_books_file_path_to_path::Migration),
         ]
     }
 }

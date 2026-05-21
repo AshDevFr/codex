@@ -27,7 +27,7 @@ function makeBook(overrides: Partial<Book> = {}): Book {
     pageCount: 32,
     fileFormat: "cbz",
     fileHash: "hash",
-    filePath: "/x.cbz",
+    path: "/x.cbz",
     fileSize: 1000,
     deleted: false,
     analyzed: true,

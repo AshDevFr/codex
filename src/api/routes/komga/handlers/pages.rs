@@ -184,7 +184,7 @@ pub async fn get_page(
         .unwrap_or_else(|| "image/jpeg".to_string());
 
     // Extract the page image from the book file
-    let image_data = extract_page_image(&book.file_path, &book.format, page_number)
+    let image_data = extract_page_image(&book.path, &book.format, page_number)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to extract page: {}", e)))?;
 
@@ -261,7 +261,7 @@ pub async fn get_page_thumbnail(
     }
 
     // Extract the page image from the book file
-    let image_data = extract_page_image(&book.file_path, &book.format, page_number)
+    let image_data = extract_page_image(&book.path, &book.format, page_number)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to extract page: {}", e)))?;
 

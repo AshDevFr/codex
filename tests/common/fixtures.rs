@@ -57,7 +57,7 @@ pub fn create_test_user_with_permissions(
 pub fn create_test_book(
     series_id: Uuid,
     library_id: Uuid,
-    file_path: &str,
+    path: &str,
     file_name: &str,
     file_hash: &str,
     format: &str,
@@ -68,7 +68,7 @@ pub fn create_test_book(
         id: Uuid::new_v4(),
         series_id,
         library_id,
-        file_path: file_path.to_string(),
+        path: path.to_string(),
         file_name: file_name.to_string(),
         file_size: 1024,
         file_hash: file_hash.to_string(),
@@ -181,19 +181,15 @@ pub async fn create_test_book_with_hash(
     _library: &libraries::Model,
     series: &series::Model,
     _title: &str,
-    file_path: &str,
+    path: &str,
     file_hash: &str,
 ) -> books::Model {
     let book = books::Model {
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: series.library_id,
-        file_path: file_path.to_string(),
-        file_name: file_path
-            .split('/')
-            .next_back()
-            .unwrap_or(file_path)
-            .to_string(),
+        path: path.to_string(),
+        file_name: path.split('/').next_back().unwrap_or(path).to_string(),
         file_size: 1024,
         file_hash: file_hash.to_string(),
         partial_hash: String::new(),

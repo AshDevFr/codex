@@ -440,7 +440,7 @@ pub fn byte_to_char_progression(spine_items: &[SpineItem], byte_prog: f64) -> f6
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BookMetadata {
     /// File path
-    pub file_path: String,
+    pub path: String,
     /// File format
     pub format: FileFormat,
     /// File size in bytes

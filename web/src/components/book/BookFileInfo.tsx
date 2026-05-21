@@ -85,8 +85,8 @@ export function BookFileInfo({ book }: BookFileInfoProps) {
     { label: "Added", value: formatDate(book.createdAt) },
     {
       label: "File Path",
-      value: book.filePath.split("/").pop() || book.filePath,
-      tooltip: book.filePath,
+      value: book.path.split("/").pop() || book.path,
+      tooltip: book.path,
     },
   ];
 

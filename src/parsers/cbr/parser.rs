@@ -125,7 +125,7 @@ impl FormatParser for CbrParser {
         let page_count = pages.len();
 
         Ok(BookMetadata {
-            file_path: path.to_string_lossy().to_string(),
+            path: path.to_string_lossy().to_string(),
             format: FileFormat::CBR,
             file_size,
             file_hash,

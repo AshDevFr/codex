@@ -112,8 +112,8 @@ impl FilterService {
                     Self::filter_by_language(db, language, candidate_ids).await
                 }
 
-                SeriesCondition::Name { name } => {
-                    Self::filter_by_name(db, name, candidate_ids).await
+                SeriesCondition::Title { title } => {
+                    Self::filter_by_title(db, title, candidate_ids).await
                 }
 
                 SeriesCondition::TitleSort { title_sort } => {
@@ -158,6 +158,10 @@ impl FilterService {
 
                 SeriesCondition::Author { author } => {
                     Self::filter_by_author(db, author, candidate_ids).await
+                }
+
+                SeriesCondition::Path { path } => {
+                    Self::filter_series_by_path(db, path, candidate_ids).await
                 }
 
                 SeriesCondition::DateAdded { date_added } => {
@@ -1141,7 +1145,7 @@ impl FilterService {
         Ok(result)
     }
 
-    async fn filter_by_name(
+    async fn filter_by_title(
         db: &DatabaseConnection,
         operator: &FieldOperator,
         candidate_ids: Option<&HashSet<Uuid>>,
@@ -1149,7 +1153,6 @@ impl FilterService {
         use crate::db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        // Name is now stored as title in series_metadata table
         let query = series_metadata::Entity::find();
 
         let filtered_query = match operator {
@@ -1662,6 +1665,56 @@ impl FilterService {
         Ok(result)
     }
 
+    /// Filter series by `series.path` (the series folder path).
+    ///
+    /// Equality and substring operators work directly against the column. The
+    /// `IsNull` arm returns an empty set since `series.path` is `NOT NULL`.
+    async fn filter_series_by_path(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::series;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = series::Entity::find();
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => query.filter(series::Column::Path.eq(value.clone())),
+            FieldOperator::IsNot { value } => query.filter(series::Column::Path.ne(value.clone())),
+            FieldOperator::IsNull => return Ok(HashSet::new()),
+            FieldOperator::IsNotNull => query.filter(series::Column::Path.is_not_null()),
+            FieldOperator::Contains { value } => {
+                query.filter(series::Column::Path.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(series::Column::Path.not_like(format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(series::Column::Path.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(series::Column::Path.ends_with(value.clone()))
+            }
+        };
+
+        let series_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(series::Column::Id)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            series_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            series_ids.into_iter().collect()
+        };
+        Ok(result)
+    }
+
     /// Filter series by `series.created_at` (date the series row was added).
     async fn filter_series_by_date_added(
         db: &DatabaseConnection,
@@ -1802,6 +1855,10 @@ impl FilterService {
 
                 BookCondition::Title { title } => {
                     Self::filter_books_by_title(db, title, candidate_ids).await
+                }
+
+                BookCondition::TitleSort { title_sort } => {
+                    Self::filter_books_by_title_sort(db, title_sort, candidate_ids).await
                 }
 
                 BookCondition::ReadStatus { read_status } => {
@@ -2113,6 +2170,62 @@ impl FilterService {
         Ok(result)
     }
 
+    /// Filter books by `book_metadata.title_sort` (used for alphabetical
+    /// filtering — e.g. "begins with A"). `title_sort` is nullable; the
+    /// `IsNull` and `IsNotNull` operators behave accordingly.
+    async fn filter_books_by_title_sort(
+        db: &DatabaseConnection,
+        operator: &FieldOperator,
+        candidate_ids: Option<&HashSet<Uuid>>,
+    ) -> Result<HashSet<Uuid>> {
+        use crate::db::entities::book_metadata;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+
+        let query = book_metadata::Entity::find();
+        let filtered_query = match operator {
+            FieldOperator::Is { value } => {
+                query.filter(book_metadata::Column::TitleSort.eq(Some(value.clone())))
+            }
+            FieldOperator::IsNot { value } => {
+                query.filter(book_metadata::Column::TitleSort.ne(Some(value.clone())))
+            }
+            FieldOperator::IsNull => query.filter(book_metadata::Column::TitleSort.is_null()),
+            FieldOperator::IsNotNull => {
+                query.filter(book_metadata::Column::TitleSort.is_not_null())
+            }
+            FieldOperator::Contains { value } => {
+                query.filter(book_metadata::Column::TitleSort.contains(value.clone()))
+            }
+            FieldOperator::DoesNotContain { value } => {
+                query.filter(book_metadata::Column::TitleSort.not_like(format!("%{}%", value)))
+            }
+            FieldOperator::BeginsWith { value } => {
+                query.filter(book_metadata::Column::TitleSort.starts_with(value.clone()))
+            }
+            FieldOperator::EndsWith { value } => {
+                query.filter(book_metadata::Column::TitleSort.ends_with(value.clone()))
+            }
+        };
+
+        let book_ids: Vec<Uuid> = filtered_query
+            .select_only()
+            .column(book_metadata::Column::BookId)
+            .into_tuple()
+            .all(db)
+            .await?;
+
+        let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+            book_ids
+                .into_iter()
+                .filter(|id| candidates.contains(id))
+                .collect()
+        } else {
+            book_ids.into_iter().collect()
+        };
+
+        Ok(result)
+    }
+
     /// Filter books by read status
     ///
     /// Read status values:
@@ -2283,7 +2396,7 @@ impl FilterService {
         Ok(result)
     }
 
-    /// Filter books by `books.file_path`.
+    /// Filter books by `books.path`.
     ///
     /// The column is NOT NULL, so `IsNull` returns empty and `IsNotNull`
     /// matches every book.
@@ -2298,23 +2411,21 @@ impl FilterService {
         let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
 
         let filtered_query = match operator {
-            FieldOperator::Is { value } => query.filter(books::Column::FilePath.eq(value.clone())),
-            FieldOperator::IsNot { value } => {
-                query.filter(books::Column::FilePath.ne(value.clone()))
-            }
+            FieldOperator::Is { value } => query.filter(books::Column::Path.eq(value.clone())),
+            FieldOperator::IsNot { value } => query.filter(books::Column::Path.ne(value.clone())),
             FieldOperator::IsNull => return Ok(HashSet::new()),
             FieldOperator::IsNotNull => query,
             FieldOperator::Contains { value } => {
-                query.filter(books::Column::FilePath.contains(value.clone()))
+                query.filter(books::Column::Path.contains(value.clone()))
             }
             FieldOperator::DoesNotContain { value } => {
-                query.filter(books::Column::FilePath.not_like(format!("%{}%", value)))
+                query.filter(books::Column::Path.not_like(format!("%{}%", value)))
             }
             FieldOperator::BeginsWith { value } => {
-                query.filter(books::Column::FilePath.starts_with(value.clone()))
+                query.filter(books::Column::Path.starts_with(value.clone()))
             }
             FieldOperator::EndsWith { value } => {
-                query.filter(books::Column::FilePath.ends_with(value.clone()))
+                query.filter(books::Column::Path.ends_with(value.clone()))
             }
         };
 
@@ -2772,21 +2883,21 @@ mod tests {
     }
 
     #[test]
-    fn test_series_condition_name() {
-        let condition = SeriesCondition::Name {
-            name: FieldOperator::BeginsWith {
+    fn test_series_condition_title() {
+        let condition = SeriesCondition::Title {
+            title: FieldOperator::BeginsWith {
                 value: "Naruto".to_string(),
             },
         };
 
         match condition {
-            SeriesCondition::Name { name } => match name {
+            SeriesCondition::Title { title } => match title {
                 FieldOperator::BeginsWith { value } => {
                     assert_eq!(value, "Naruto");
                 }
                 _ => panic!("Expected BeginsWith operator"),
             },
-            _ => panic!("Expected Name condition"),
+            _ => panic!("Expected Title condition"),
         }
     }
 

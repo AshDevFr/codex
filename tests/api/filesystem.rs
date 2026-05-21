@@ -139,18 +139,18 @@ async fn test_browse_filesystem_with_invalid_path() {
 }
 
 #[tokio::test]
-async fn test_browse_filesystem_with_file_path() {
+async fn test_browse_filesystem_with_path() {
     let (db, temp_dir) = setup_test_db().await;
     let state = create_test_auth_state(db.clone()).await;
     let token = create_admin_and_token(&db, &state).await;
     let app = create_test_router(state).await;
 
     // Create a test file
-    let file_path = temp_dir.path().join("test_file.txt");
-    std::fs::write(&file_path, "test content").unwrap();
+    let path = temp_dir.path().join("test_file.txt");
+    std::fs::write(&path, "test content").unwrap();
 
     let request = get_request_with_auth(
-        &format!("/api/v1/filesystem/browse?path={}", file_path.display()),
+        &format!("/api/v1/filesystem/browse?path={}", path.display()),
         &token,
     );
 

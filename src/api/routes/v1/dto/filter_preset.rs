@@ -180,7 +180,7 @@ mod tests {
     fn validate_condition_parses_series_payload() {
         let cond = serde_json::json!({
             "allOf": [
-                { "name": { "operator": "contains", "value": "ABC" } }
+                { "title": { "operator": "contains", "value": "ABC" } }
             ]
         });
         assert!(validate_condition("series", &cond).is_ok());

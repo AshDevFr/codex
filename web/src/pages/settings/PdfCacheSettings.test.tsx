@@ -41,21 +41,21 @@ const defaultStats: pdfCacheApi.PdfCacheStatsDto = {
     entries: [
       {
         bookId: "11111111-1111-1111-1111-111111111111",
-        filePath: "/library/book-a.pdf",
+        path: "/library/book-a.pdf",
         ageSeconds: 600,
         idleSeconds: 5,
         renderCount: 30,
       },
       {
         bookId: "22222222-2222-2222-2222-222222222222",
-        filePath: "/library/book-b.pdf",
+        path: "/library/book-b.pdf",
         ageSeconds: 120,
         idleSeconds: 60,
         renderCount: 12,
       },
       {
         bookId: "33333333-3333-3333-3333-333333333333",
-        filePath: "/library/book-c.pdf",
+        path: "/library/book-c.pdf",
         ageSeconds: 30,
         idleSeconds: 30,
         renderCount: 4,

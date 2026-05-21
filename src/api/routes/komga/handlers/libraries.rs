@@ -231,7 +231,7 @@ async fn get_default_series_cover(
     }
 
     // Extract first page from the book
-    extract_page_image(&first_book.file_path, &first_book.format, 1)
+    extract_page_image(&first_book.path, &first_book.format, 1)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to extract cover image: {}", e)))
 }
@@ -263,11 +263,11 @@ pub fn generate_thumbnail(image_data: &[u8], max_dimension: u32) -> anyhow::Resu
 
 /// Extract page image from book file
 pub async fn extract_page_image(
-    file_path: &str,
+    path: &str,
     file_format: &str,
     page_number: i32,
 ) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::Path::new(file_path);
+    let path = std::path::Path::new(path);
 
     // Use the appropriate parser based on format
     let image_data = match file_format.to_uppercase().as_str() {

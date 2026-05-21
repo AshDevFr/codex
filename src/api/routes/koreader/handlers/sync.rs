@@ -330,7 +330,7 @@ mod tests {
             id: uuid::Uuid::new_v4(),
             library_id: uuid::Uuid::new_v4(),
             series_id: uuid::Uuid::new_v4(),
-            file_path: String::new(),
+            path: String::new(),
             file_name: String::new(),
             format: "epub".to_string(),
             file_size: 0,

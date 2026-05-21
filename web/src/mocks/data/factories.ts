@@ -660,7 +660,7 @@ export const createBook = (overrides: Partial<BookDto> = {}): BookDto => {
     seriesName,
     title,
     titleSort: title.toLowerCase(),
-    filePath: `/media/comics/${seriesName.replace(/[:\s]+/g, "-")}/${title.replace(/[:\s#]+/g, "-")}.${fileFormat}`,
+    path: `/media/comics/${seriesName.replace(/[:\s]+/g, "-")}/${title.replace(/[:\s#]+/g, "-")}.${fileFormat}`,
     fileFormat,
     fileSize: faker.number.int({ min: 10_000_000, max: 100_000_000 }),
     fileHash: faker.string.alphanumeric(40),

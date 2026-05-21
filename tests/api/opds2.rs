@@ -888,7 +888,7 @@ fn create_test_book_model(
     series_id: uuid::Uuid,
     library_id: uuid::Uuid,
     _title: &str, // No longer used - title is in book_metadata
-    file_path: &str,
+    path: &str,
     _number: i32, // No longer used - number is in book_metadata
     page_count: i32,
 ) -> codex::db::entities::books::Model {
@@ -899,8 +899,8 @@ fn create_test_book_model(
         id: Uuid::new_v4(),
         series_id,
         library_id,
-        file_path: file_path.to_string(),
-        file_name: file_path.split('/').next_back().unwrap().to_string(),
+        path: path.to_string(),
+        file_name: path.split('/').next_back().unwrap().to_string(),
         file_size: 1024000,
         file_hash: format!("hash_{}", Uuid::new_v4()),
         partial_hash: String::new(),
@@ -927,13 +927,13 @@ async fn create_test_book_with_metadata(
     series_id: uuid::Uuid,
     library_id: uuid::Uuid,
     title: &str,
-    file_path: &str,
+    path: &str,
     number: i32,
     page_count: i32,
 ) -> codex::db::entities::books::Model {
     use codex::db::repositories::{BookMetadataRepository, BookRepository};
 
-    let book = create_test_book_model(series_id, library_id, title, file_path, number, page_count);
+    let book = create_test_book_model(series_id, library_id, title, path, number, page_count);
     let created = BookRepository::create(db, &book, None).await.unwrap();
 
     // Create metadata with title and number

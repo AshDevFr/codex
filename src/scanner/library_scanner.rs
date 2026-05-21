@@ -863,25 +863,25 @@ struct FileHashResult {
 /// Hash a single file and get its metadata
 ///
 /// This is designed to be called concurrently with semaphore control.
-async fn hash_file_with_metadata(file_path: PathBuf) -> Result<FileHashResult> {
-    let path_str = file_path.to_string_lossy().to_string();
+async fn hash_file_with_metadata(path: PathBuf) -> Result<FileHashResult> {
+    let path_str = path.to_string_lossy().to_string();
 
     // Calculate current partial hash and KOReader hash (blocking I/O)
-    let file_path_clone = file_path.clone();
+    let path_clone = path.clone();
     let (current_partial_hash, koreader_hash) = tokio::task::spawn_blocking(move || {
         use crate::utils::hasher::{hash_file_koreader, hash_file_partial};
-        let partial = hash_file_partial(&file_path_clone)?;
-        let koreader = hash_file_koreader(&file_path_clone).ok();
+        let partial = hash_file_partial(&path_clone)?;
+        let koreader = hash_file_koreader(&path_clone).ok();
         Ok::<_, std::io::Error>((partial, koreader))
     })
     .await
     .map_err(|e| anyhow::anyhow!("Failed to spawn hash calculation task: {}", e))??;
 
     // Get file metadata (size and modified time)
-    let file_path_clone = file_path.clone();
+    let path_clone = path.clone();
     let (file_size, modified_at) =
         tokio::task::spawn_blocking(move || -> Result<(u64, DateTime<Utc>)> {
-            let metadata = fs::metadata(&file_path_clone)?;
+            let metadata = fs::metadata(&path_clone)?;
             let modified = metadata.modified()?;
             let modified_dt = DateTime::<Utc>::from(modified);
             Ok((metadata.len(), modified_dt))
@@ -890,14 +890,14 @@ async fn hash_file_with_metadata(file_path: PathBuf) -> Result<FileHashResult> {
         .map_err(|e| anyhow::anyhow!("Failed to get file metadata: {}", e))??;
 
     // Detect format from extension
-    let format = file_path
+    let format = path
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("unknown")
         .to_lowercase();
 
     Ok(FileHashResult {
-        path: file_path,
+        path,
         path_str,
         partial_hash: current_partial_hash,
         koreader_hash,
@@ -918,14 +918,14 @@ async fn hash_files_parallel(
 
     let hash_futures: Vec<_> = files
         .into_iter()
-        .map(|file_path| {
+        .map(|path| {
             let sem = Arc::clone(&semaphore);
             async move {
                 let _permit = sem
                     .acquire()
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to acquire semaphore: {}", e))?;
-                hash_file_with_metadata(file_path).await
+                hash_file_with_metadata(path).await
             }
         })
         .collect();
@@ -956,14 +956,14 @@ async fn process_series_batched(
     let mut result = SeriesProcessResult::new();
 
     // Extract file paths from detected books
-    let file_paths: Vec<PathBuf> = detected_series
+    let paths: Vec<PathBuf> = detected_series
         .books
         .iter()
         .map(|b| b.path.clone())
         .collect();
 
     // Calculate series fingerprint from file paths
-    let file_refs: Vec<&PathBuf> = file_paths.iter().collect();
+    let file_refs: Vec<&PathBuf> = paths.iter().collect();
     let fingerprint = calculate_series_fingerprint(&file_refs);
 
     // Use series path from detected series
@@ -977,7 +977,7 @@ async fn process_series_batched(
         detected_series.name,
         series_path,
         &fingerprint[..16], // First 16 chars of fingerprint for brevity
-        file_paths.len()
+        paths.len()
     );
 
     // Get preprocessing rules from library
@@ -1013,10 +1013,10 @@ async fn process_series_batched(
 
     // Process files in chunks for parallel hashing
     let now = Utc::now();
-    let total_files = file_paths.len();
+    let total_files = paths.len();
     let mut files_processed = 0;
 
-    for chunk in file_paths.chunks(config.batch_size) {
+    for chunk in paths.chunks(config.batch_size) {
         let chunk_start = Instant::now();
 
         // Hash all files in this chunk in parallel
@@ -1103,7 +1103,7 @@ async fn process_series_batched(
                             id: Uuid::new_v4(),
                             series_id: series_model.id,
                             library_id: library.id,
-                            file_path: file_hash.path_str.clone(),
+                            path: file_hash.path_str.clone(),
                             file_name: file_hash
                                 .path
                                 .file_name()
@@ -1196,9 +1196,9 @@ async fn process_series_batched(
 /// Creates a SHA-256 hash from the normalized titles of up to 5 books
 /// (sorted by filename for consistency). This fingerprint can be used
 /// to detect series renames across scans.
-fn calculate_series_fingerprint(file_paths: &[&PathBuf]) -> String {
+fn calculate_series_fingerprint(paths: &[&PathBuf]) -> String {
     // Sort file paths by filename for consistency
-    let mut sorted_paths: Vec<&PathBuf> = file_paths.to_vec();
+    let mut sorted_paths: Vec<&PathBuf> = paths.to_vec();
     sorted_paths.sort_by(|a, b| {
         let a_name = a.file_name().unwrap_or_default();
         let b_name = b.file_name().unwrap_or_default();
@@ -1466,7 +1466,7 @@ async fn load_existing_books(
         let books = BookRepository::list_by_series(db, series.id, true).await?;
         for book in books {
             // Store partial_hash for fast scanning comparison
-            books_map.insert(book.file_path.clone(), (book.partial_hash.clone(), book));
+            books_map.insert(book.path.clone(), (book.partial_hash.clone(), book));
         }
     }
 

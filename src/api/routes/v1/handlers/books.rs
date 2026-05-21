@@ -286,7 +286,7 @@ pub async fn books_to_dtos(
                 series_name,
                 title,
                 title_sort,
-                file_path: book.file_path,
+                path: book.path,
                 file_format: book.format,
                 file_size: book.file_size,
                 file_hash: book.file_hash,
@@ -675,7 +675,7 @@ pub async fn books_to_full_dtos_batched(
             series_name,
             title,
             title_sort,
-            file_path: book.file_path,
+            path: book.path,
             file_format: book.format,
             file_size: book.file_size,
             file_hash: book.file_hash,
@@ -2084,15 +2084,15 @@ pub async fn get_book_file(
     }
 
     // Check if file exists
-    let file_path = std::path::Path::new(&book.file_path);
-    if !file_path.exists() {
+    let path = std::path::Path::new(&book.path);
+    if !path.exists() {
         return Err(ApiError::NotFound(
             "Book file not found on disk".to_string(),
         ));
     }
 
     // Get file metadata for content-length
-    let metadata = tokio::fs::metadata(&book.file_path)
+    let metadata = tokio::fs::metadata(&book.path)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to read file metadata: {}", e)))?;
 
@@ -2106,7 +2106,7 @@ pub async fn get_book_file(
     };
 
     // Open file for streaming
-    let file = tokio::fs::File::open(&book.file_path)
+    let file = tokio::fs::File::open(&book.path)
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to open book file: {}", e)))?;
 

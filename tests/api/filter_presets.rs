@@ -40,7 +40,7 @@ fn sample_books_condition() -> Value {
 fn sample_series_condition() -> Value {
     json!({
         "allOf": [
-            { "name": { "operator": "contains", "value": "ABC" } }
+            { "title": { "operator": "contains", "value": "ABC" } }
         ]
     })
 }

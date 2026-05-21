@@ -163,11 +163,11 @@ impl FileCleanupService {
             let mut file_entries = fs::read_dir(&bucket_path).await?;
 
             while let Some(file_entry) = file_entries.next_entry().await? {
-                let file_path = file_entry.path();
+                let path = file_entry.path();
 
                 // Extract UUID from filename (format: {uuid}.jpg)
-                if let Some(uuid) = self.extract_uuid_from_filename(&file_path) {
-                    results.push((file_path, uuid));
+                if let Some(uuid) = self.extract_uuid_from_filename(&path) {
+                    results.push((path, uuid));
                 }
             }
         }
@@ -195,12 +195,12 @@ impl FileCleanupService {
             })?;
 
             while let Some(entry) = entries.next_entry().await? {
-                let file_path = entry.path();
+                let path = entry.path();
                 // Only include files, skip subdirectories (books/, series/)
-                if file_path.is_file()
-                    && let Some(uuid) = self.extract_uuid_from_filename(&file_path)
+                if path.is_file()
+                    && let Some(uuid) = self.extract_uuid_from_filename(&path)
                 {
-                    results.push((file_path, uuid));
+                    results.push((path, uuid));
                 }
             }
         }
@@ -223,9 +223,9 @@ impl FileCleanupService {
             .with_context(|| format!("Failed to read covers directory: {:?}", dir))?;
 
         while let Some(entry) = entries.next_entry().await? {
-            let file_path = entry.path();
-            if let Some(uuid) = self.extract_uuid_from_filename(&file_path) {
-                results.push((file_path, uuid));
+            let path = entry.path();
+            if let Some(uuid) = self.extract_uuid_from_filename(&path) {
+                results.push((path, uuid));
             }
         }
 

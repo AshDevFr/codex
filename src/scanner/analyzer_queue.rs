@@ -138,9 +138,9 @@ async fn analyze_single_book(
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<()> {
     let analyze_start = Instant::now();
-    let file_path = PathBuf::from(&book.file_path);
+    let path = PathBuf::from(&book.path);
 
-    debug!("Analyzing book: {} (force={})", book.file_path, force);
+    debug!("Analyzing book: {} (force={})", book.path, force);
 
     // FULL HASH VERIFICATION PHASE:
     // Before expensive analysis, verify the file actually changed using full hash
@@ -149,10 +149,10 @@ async fn analyze_single_book(
     if !force && !book.file_hash.is_empty() {
         // Book was previously analyzed and has a full hash
         // Compute full hash to verify the file actually changed
-        let file_path_clone = file_path.clone();
+        let path_clone = path.clone();
         let current_full_hash = tokio::task::spawn_blocking(move || {
             use crate::utils::hasher::hash_file;
-            hash_file(&file_path_clone)
+            hash_file(&path_clone)
         })
         .await
         .map_err(|e| anyhow::anyhow!("Failed to spawn full hash calculation: {}", e))??;
@@ -160,10 +160,10 @@ async fn analyze_single_book(
         if current_full_hash == book.file_hash {
             // Full hash unchanged - false positive from partial hash
             // Update partial_hash to match current state and skip analysis
-            let file_path_clone2 = file_path.clone();
+            let path_clone2 = path.clone();
             let current_partial_hash = tokio::task::spawn_blocking(move || {
                 use crate::utils::hasher::hash_file_partial;
-                hash_file_partial(&file_path_clone2)
+                hash_file_partial(&path_clone2)
             })
             .await
             .map_err(|e| anyhow::anyhow!("Failed to spawn partial hash calculation: {}", e))??;
@@ -175,23 +175,23 @@ async fn analyze_single_book(
 
             debug!(
                 "Skipping analysis - full hash unchanged (false positive from partial hash): {}",
-                book.file_path
+                book.path
             );
             return Ok(());
         } else {
             debug!(
                 "Full hash verification confirmed change: {} - proceeding with analysis",
-                book.file_path
+                book.path
             );
         }
     }
 
     // Analyze the file (blocking I/O operation)
-    let file_path_clone = file_path.clone();
-    let mut metadata = tokio::task::spawn_blocking(move || analyze_file(&file_path_clone))
+    let path_clone = path.clone();
+    let mut metadata = tokio::task::spawn_blocking(move || analyze_file(&path_clone))
         .await
         .map_err(|e| anyhow::anyhow!("Failed to spawn file analysis task: {}", e))?
-        .with_context(|| format!("Failed to analyze file: {}", book.file_path))?;
+        .with_context(|| format!("Failed to analyze file: {}", book.path))?;
 
     // Read Calibre sidecar metadata.opf if applicable
     // This enriches/overrides embedded metadata with user-curated Calibre data
@@ -206,7 +206,7 @@ async fn analyze_single_book(
             .unwrap_or_default();
 
         if cal_config.read_opf_metadata {
-            let opf_path = file_path.parent().map(|p| p.join("metadata.opf"));
+            let opf_path = path.parent().map(|p| p.join("metadata.opf"));
             if let Some(opf_path) = opf_path {
                 let opf_result =
                     tokio::task::spawn_blocking(move || opf::parse_opf_file(&opf_path))
@@ -236,11 +236,11 @@ async fn analyze_single_book(
                             metadata.isbns = all_isbns;
                         }
 
-                        debug!("Merged sidecar OPF metadata for: {}", book.file_path);
+                        debug!("Merged sidecar OPF metadata for: {}", book.path);
                     }
                     Err(_) => {
                         // No sidecar OPF or parse error — continue with embedded metadata
-                        debug!("No sidecar metadata.opf for: {}", book.file_path);
+                        debug!("No sidecar metadata.opf for: {}", book.path);
                     }
                 }
             }
@@ -253,15 +253,15 @@ async fn analyze_single_book(
         debug!(
             "File analysis took {:?}: {}",
             analyze_duration,
-            file_path.file_name().unwrap_or_default().to_string_lossy()
+            path.file_name().unwrap_or_default().to_string_lossy()
         );
     }
 
     // Compute partial hash to keep both hashes in sync
-    let file_path_clone2 = file_path.clone();
+    let path_clone2 = path.clone();
     let partial_hash = tokio::task::spawn_blocking(move || {
         use crate::utils::hasher::hash_file_partial;
-        hash_file_partial(&file_path_clone2)
+        hash_file_partial(&path_clone2)
     })
     .await
     .map_err(|e| anyhow::anyhow!("Failed to spawn partial hash calculation: {}", e))??;
@@ -292,9 +292,9 @@ async fn analyze_single_book(
         resolved_number.map(|n| Decimal::from_f64_retain(n as f64).unwrap_or_default());
 
     // Recompute KOReader hash during analysis
-    let file_path_clone = file_path.clone();
+    let path_clone = path.clone();
     let koreader_hash = tokio::task::spawn_blocking(move || {
-        crate::utils::hasher::hash_file_koreader(&file_path_clone).ok()
+        crate::utils::hasher::hash_file_koreader(&path_clone).ok()
     })
     .await
     .unwrap_or(None);
@@ -661,7 +661,7 @@ async fn analyze_single_book(
         BookMetadataRepository::upsert(db, &metadata_record).await?;
         debug!(
             "Saved metadata for book: {} ({} fields)",
-            book.file_path,
+            book.path,
             count_non_null_fields(&metadata_record)
         );
 
@@ -725,7 +725,7 @@ async fn analyze_single_book(
                 metadata_active.update(db).await?;
                 info!(
                     "Updated series '{}' metadata from book: {}",
-                    series_title, book.file_path
+                    series_title, book.path
                 );
             }
         }
@@ -906,7 +906,7 @@ async fn analyze_single_book(
         BookMetadataRepository::upsert(db, &metadata_record).await?;
         debug!(
             "Saved metadata for book (no ComicInfo): {} - title: {:?}",
-            book.file_path, metadata_record.title
+            book.path, metadata_record.title
         );
 
         // Update series title_sort if not set and not locked (even without ComicInfo)
@@ -933,7 +933,7 @@ async fn analyze_single_book(
     // Read Mylar series.json sidecar if present in the book's parent directory
     // This populates series-level metadata (publisher, year, description, status)
     {
-        let series_json_path = file_path.parent().map(|p| p.join("series.json"));
+        let series_json_path = path.parent().map(|p| p.join("series.json"));
         if let Some(sjp) = series_json_path {
             let sj_result = tokio::task::spawn_blocking(move || {
                 crate::parsers::series_json::parse_series_json_file(&sjp)
@@ -1004,7 +1004,7 @@ async fn analyze_single_book(
                             metadata_active.update(db).await?;
                             info!(
                                 "Updated series '{}' metadata from series.json: {}",
-                                series_title, book.file_path
+                                series_title, book.path
                             );
                         }
                     }
@@ -1027,7 +1027,7 @@ async fn analyze_single_book(
                         }
                     }
 
-                    debug!("Applied series.json metadata for: {}", book.file_path);
+                    debug!("Applied series.json metadata for: {}", book.path);
                 }
                 Err(_) => {
                     // No series.json or parse error — continue silently
@@ -1060,16 +1060,12 @@ async fn analyze_single_book(
 
         // Batch insert all pages for efficiency
         PageRepository::create_batch(db, &page_models).await?;
-        debug!(
-            "Saved {} pages for book: {}",
-            page_models.len(),
-            book.file_path
-        );
+        debug!("Saved {} pages for book: {}", page_models.len(), book.path);
     }
 
     debug!(
         "Analyzed and updated book: {} (took {:?})",
-        book.file_path, analyze_duration
+        book.path, analyze_duration
     );
 
     // Send progress update if channel is provided

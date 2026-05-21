@@ -505,7 +505,7 @@ async fn test_purge_deleted_on_scan_enabled() {
     assert_eq!(deleted_books.len(), 1, "Should have 1 deleted book");
 
     // Delete the file from filesystem to simulate it being removed
-    std::fs::remove_file(&deleted_books[0].file_path).ok();
+    std::fs::remove_file(&deleted_books[0].path).ok();
 
     // Trigger another scan - should purge the deleted book
     trigger_scan_task(&db, library.id, ScanMode::Normal)
@@ -637,7 +637,7 @@ async fn test_purge_deleted_on_scan_disabled() {
     assert_eq!(deleted_books.len(), 1, "Should have 1 deleted book");
 
     // Delete the file from filesystem
-    std::fs::remove_file(&deleted_books[0].file_path).ok();
+    std::fs::remove_file(&deleted_books[0].path).ok();
 
     // Trigger another scan - should NOT purge the deleted book
     trigger_scan_task(&db, library.id, ScanMode::Normal)
@@ -762,7 +762,7 @@ async fn test_purge_deleted_on_scan_with_deep_scan() {
         .unwrap();
 
     // Delete the file from filesystem
-    std::fs::remove_file(&books[0].file_path).ok();
+    std::fs::remove_file(&books[0].path).ok();
 
     // Trigger deep scan - should purge the deleted book
     trigger_scan_task(&db, library.id, ScanMode::Deep)

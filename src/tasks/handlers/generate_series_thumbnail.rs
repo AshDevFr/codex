@@ -210,7 +210,7 @@ impl TaskHandler for GenerateSeriesThumbnailHandler {
             }
 
             // Extract first page from book
-            let image_data = extract_page_image(&first_book.file_path, &first_book.format, 1)
+            let image_data = extract_page_image(&first_book.path, &first_book.format, 1)
                 .await
                 .map_err(|e| {
                     anyhow!("Failed to extract page from book {}: {}", first_book.id, e)
@@ -264,11 +264,11 @@ impl TaskHandler for GenerateSeriesThumbnailHandler {
 /// Uses spawn_blocking to avoid blocking the async runtime during CPU-intensive
 /// image extraction operations (ZIP parsing, RAR extraction, EPUB parsing, PDF rendering)
 async fn extract_page_image(
-    file_path: &str,
+    path: &str,
     file_format: &str,
     page_number: i32,
 ) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::PathBuf::from(file_path);
+    let path = std::path::PathBuf::from(path);
     let format = file_format.to_uppercase();
 
     // Use spawn_blocking for CPU-intensive file parsing operations

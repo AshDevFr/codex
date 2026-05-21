@@ -1737,7 +1737,7 @@ fn create_test_book(
         id: uuid::Uuid::new_v4(),
         series_id,
         library_id,
-        file_path: path.to_string(),
+        path: path.to_string(),
         file_name: name.to_string(),
         file_size: 1024,
         file_hash: format!("hash_{}", uuid::Uuid::new_v4()),
@@ -3702,8 +3702,8 @@ async fn test_list_series_filtered_by_name() {
 
     // Filter by name "Is"
     let request_body = SeriesListRequest {
-        condition: Some(SeriesCondition::Name {
-            name: FieldOperator::Is {
+        condition: Some(SeriesCondition::Title {
+            title: FieldOperator::Is {
                 value: "Naruto".to_string(),
             },
         }),
@@ -3720,8 +3720,8 @@ async fn test_list_series_filtered_by_name() {
 
     // Filter by name "Contains"
     let request_body = SeriesListRequest {
-        condition: Some(SeriesCondition::Name {
-            name: FieldOperator::Contains {
+        condition: Some(SeriesCondition::Title {
+            title: FieldOperator::Contains {
                 value: "Naruto".to_string(),
             },
         }),
@@ -3737,8 +3737,8 @@ async fn test_list_series_filtered_by_name() {
 
     // Filter by name "BeginsWith"
     let request_body = SeriesListRequest {
-        condition: Some(SeriesCondition::Name {
-            name: FieldOperator::BeginsWith {
+        condition: Some(SeriesCondition::Title {
+            title: FieldOperator::BeginsWith {
                 value: "One".to_string(),
             },
         }),
@@ -5986,6 +5986,58 @@ async fn test_list_series_filtered_by_author_contains() {
     let series_list = response.unwrap();
     assert_eq!(series_list.data.len(), 1);
     assert_eq!(series_list.data[0].id, torishima.id);
+}
+
+#[tokio::test]
+async fn test_list_series_filtered_by_path_contains() {
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+
+    let manga_series = SeriesRepository::create_with_fingerprint(
+        &db,
+        library.id,
+        "Naruto",
+        None,
+        "/lib/manga/Naruto".to_string(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    SeriesRepository::create_with_fingerprint(
+        &db,
+        library.id,
+        "Watchmen",
+        None,
+        "/lib/comics/Watchmen".to_string(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let request_body = SeriesListRequest {
+        condition: Some(SeriesCondition::Path {
+            path: FieldOperator::Contains {
+                value: "/manga/".to_string(),
+            },
+        }),
+        ..Default::default()
+    };
+    let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+    let (status, response): (StatusCode, Option<SeriesListResponse>) =
+        make_json_request(app, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let series_list = response.unwrap();
+    assert_eq!(series_list.data.len(), 1);
+    assert_eq!(series_list.data[0].id, manga_series.id);
 }
 
 #[tokio::test]

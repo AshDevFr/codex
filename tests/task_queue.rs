@@ -64,15 +64,15 @@ async fn create_test_series(db: &DatabaseConnection, library_id: Uuid) -> Uuid {
 async fn create_test_book(db: &DatabaseConnection, series_id: Uuid, library_id: Uuid) -> Uuid {
     let book_id = Uuid::new_v4();
     let now = Utc::now();
-    // Use book_id in file_path to ensure uniqueness
-    let file_path = format!("/tmp/test-{}.cbz", book_id);
+    // Use book_id in path to ensure uniqueness
+    let path = format!("/tmp/test-{}.cbz", book_id);
     let file_name = format!("test-{}.cbz", book_id);
     let file_hash = format!("test-hash-{}", book_id);
     let book = books::ActiveModel {
         id: Set(book_id),
         series_id: Set(series_id),
         library_id: Set(library_id),
-        file_path: Set(file_path),
+        path: Set(path),
         file_name: Set(file_name),
         file_size: Set(1024),
         file_hash: Set(file_hash),
@@ -1261,7 +1261,7 @@ async fn create_duplicate_books(
         id: Set(book_id1),
         series_id: Set(series_id),
         library_id: Set(library_id),
-        file_path: Set(format!("/tmp/test-{}.cbz", book_id1)),
+        path: Set(format!("/tmp/test-{}.cbz", book_id1)),
         file_name: Set(format!("test-{}.cbz", book_id1)),
         file_size: Set(1024),
         file_hash: Set(shared_hash.clone()),
@@ -1281,7 +1281,7 @@ async fn create_duplicate_books(
         id: Set(book_id2),
         series_id: Set(series_id),
         library_id: Set(library_id),
-        file_path: Set(format!("/tmp/test-{}.cbz", book_id2)),
+        path: Set(format!("/tmp/test-{}.cbz", book_id2)),
         file_name: Set(format!("test-{}.cbz", book_id2)),
         file_size: Set(1024),
         file_hash: Set(shared_hash.clone()),

@@ -6968,6 +6968,8 @@ export interface components {
         } | {
             title: components["schemas"]["FieldOperator"];
         } | {
+            titleSort: components["schemas"]["FieldOperator"];
+        } | {
             readStatus: components["schemas"]["FieldOperator"];
         } | {
             hasError: components["schemas"]["BoolOperator"];
@@ -7166,11 +7168,6 @@ export interface components {
              */
             fileHash: string;
             /**
-             * @description Filesystem path to the book file
-             * @example /media/comics/Batman/Batman - Year One 001.cbz
-             */
-            filePath: string;
-            /**
              * Format: int64
              * @description File size in bytes
              * @example 52428800
@@ -7207,6 +7204,11 @@ export interface components {
              * @example 32
              */
             pageCount: number;
+            /**
+             * @description Filesystem path to the book file
+             * @example /media/comics/Batman/Batman - Year One 001.cbz
+             */
+            path: string;
             readProgress?: null | components["schemas"]["ReadProgressResponse"];
             /**
              * @description Effective reading direction (from series metadata, or library default if not set)
@@ -10469,11 +10471,6 @@ export interface components {
              */
             fileHash: string;
             /**
-             * @description Filesystem path to the book file
-             * @example /media/comics/Batman/Batman - Year One 001.cbz
-             */
-            filePath: string;
-            /**
              * Format: int64
              * @description File size in bytes
              * @example 52428800
@@ -10514,6 +10511,11 @@ export interface components {
              * @example 32
              */
             pageCount: number;
+            /**
+             * @description Filesystem path to the book file
+             * @example /media/comics/Batman/Batman - Year One 001.cbz
+             */
+            path: string;
             readProgress?: null | components["schemas"]["ReadProgressResponse"];
             /**
              * @description Effective reading direction (from series metadata, or library default)
@@ -13020,11 +13022,6 @@ export interface components {
                  */
                 fileHash: string;
                 /**
-                 * @description Filesystem path to the book file
-                 * @example /media/comics/Batman/Batman - Year One 001.cbz
-                 */
-                filePath: string;
-                /**
                  * Format: int64
                  * @description File size in bytes
                  * @example 52428800
@@ -13061,6 +13058,11 @@ export interface components {
                  * @example 32
                  */
                 pageCount: number;
+                /**
+                 * @description Filesystem path to the book file
+                 * @example /media/comics/Batman/Batman - Year One 001.cbz
+                 */
+                path: string;
                 readProgress?: null | components["schemas"]["ReadProgressResponse"];
                 /**
                  * @description Effective reading direction (from series metadata, or library default if not set)
@@ -14170,16 +14172,16 @@ export interface components {
              */
             bookId: string;
             /**
-             * @description File path of the opened PDF.
-             * @example /library/books/manual.pdf
-             */
-            filePath: string;
-            /**
              * Format: int64
              * @description Seconds since the last render against this handle.
              * @example 14
              */
             idleSeconds: number;
+            /**
+             * @description File path of the opened PDF.
+             * @example /library/books/manual.pdf
+             */
+            path: string;
             /**
              * Format: int64
              * @description Number of renders served from this handle.
@@ -16286,7 +16288,7 @@ export interface components {
         } | {
             language: components["schemas"]["FieldOperator"];
         } | {
-            name: components["schemas"]["FieldOperator"];
+            title: components["schemas"]["FieldOperator"];
         } | {
             titleSort: components["schemas"]["FieldOperator"];
         } | {
@@ -16305,6 +16307,8 @@ export interface components {
             year: components["schemas"]["NumberOperator"];
         } | {
             author: components["schemas"]["FieldOperator"];
+        } | {
+            path: components["schemas"]["FieldOperator"];
         } | {
             dateAdded: components["schemas"]["DateOperator"];
         };

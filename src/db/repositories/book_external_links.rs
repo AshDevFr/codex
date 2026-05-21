@@ -211,7 +211,7 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series.id,
             library_id: library.id,
-            file_path: "/test/path/book.cbz".to_string(),
+            path: "/test/path/book.cbz".to_string(),
             file_name: "book.cbz".to_string(),
             file_size: 1024,
             file_hash: "test_hash".to_string(),
@@ -587,7 +587,7 @@ mod tests {
             id: Uuid::new_v4(),
             series_id: series.id,
             library_id: library.id,
-            file_path: "/test/path/b1.cbz".to_string(),
+            path: "/test/path/b1.cbz".to_string(),
             file_name: "b1.cbz".to_string(),
             file_size: 1024,
             file_hash: "hash1".to_string(),
@@ -610,7 +610,7 @@ mod tests {
 
         let book2_model = books::Model {
             id: Uuid::new_v4(),
-            file_path: "/test/path/b2.cbz".to_string(),
+            path: "/test/path/b2.cbz".to_string(),
             file_name: "b2.cbz".to_string(),
             file_hash: "hash2".to_string(),
             ..book1_model.clone()

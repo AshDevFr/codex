@@ -14,7 +14,7 @@ use common::{files::create_test_cbz, *};
 /// Helper to create a test book with file hash
 async fn create_analyzed_book(
     db_conn: &sea_orm::DatabaseConnection,
-    file_path: &str,
+    path: &str,
 ) -> Result<(books::Model, series::Model)> {
     // Create library
     let library = create_test_library(db_conn, "Test Library", "/test/library").await;
@@ -27,7 +27,7 @@ async fn create_analyzed_book(
         id: Uuid::new_v4(),
         series_id: series.id,
         library_id: library.id,
-        file_path: file_path.to_string(),
+        path: path.to_string(),
         file_name: "test.cbz".to_string(),
         file_size: 1024,
         file_hash: "existing_hash".to_string(), // Pre-existing hash

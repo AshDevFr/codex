@@ -43,12 +43,12 @@ impl ScanningStrategyImpl for SeriesVolumeStrategy {
     ) -> Result<HashMap<String, DetectedSeries>> {
         let mut series_map: HashMap<String, DetectedSeries> = HashMap::new();
 
-        for file_path in files {
-            let series_name = self.extract_series_name(file_path, library_path);
+        for path in files {
+            let series_name = self.extract_series_name(path, library_path);
 
             // Get the relative path to the series folder (parent of the file)
             // For root-level files, this will be an empty string
-            let series_path = file_path
+            let series_path = path
                 .parent()
                 .and_then(|p| p.strip_prefix(library_path).ok())
                 .map(|p| p.to_string_lossy().to_string());
@@ -63,20 +63,20 @@ impl ScanningStrategyImpl for SeriesVolumeStrategy {
                 series.path = series_path;
             }
 
-            series.add_book(DetectedBook::new(file_path.clone()));
+            series.add_book(DetectedBook::new(path.clone()));
         }
 
         Ok(series_map)
     }
 
-    fn extract_series_name(&self, file_path: &Path, library_path: &Path) -> String {
+    fn extract_series_name(&self, path: &Path, library_path: &Path) -> String {
         // Get the immediate parent folder (containing folder) as the series name
-        if let Some(parent) = file_path.parent() {
+        if let Some(parent) = path.parent() {
             // Check if parent is the library root
             if parent == library_path {
                 // For root-level books, use the filename (without extension) as series name
                 // This creates individual oneshot series for each standalone book
-                return file_path
+                return path
                     .file_stem()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Unsorted".to_string());
