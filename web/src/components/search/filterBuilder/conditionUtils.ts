@@ -6,7 +6,12 @@ import type {
   SeriesCondition,
   UuidOperator,
 } from "@/types/filters";
-import type { FieldDef, OperatorType } from "./fieldCatalog";
+import {
+  type FieldDef,
+  type FieldTarget,
+  findField,
+  type OperatorType,
+} from "./fieldCatalog";
 
 /**
  * The condition tree the builder works with. Mirrors the API grammar
@@ -335,19 +340,111 @@ export function emptyRoot(): Condition {
 }
 
 /**
+ * Decide whether a leaf has enough value to send to the API. The backend
+ * rejects empty UUIDs (parse error) and treats blank strings / unfilled
+ * `between` bounds as invalid. We keep partial leaves in the builder UI so
+ * the user can fill them in, but strip them before emitting.
+ */
+export function isLeafComplete(c: Condition): boolean {
+  if (isGroup(c)) return true;
+  const key = leafFieldKey(c);
+  if (!key) return false;
+  const node = (
+    c as Record<string, { operator: string } & Record<string, unknown>>
+  )[key];
+  if (!node || typeof node !== "object") return false;
+  const op = node.operator;
+  if (
+    op === "isNull" ||
+    op === "isNotNull" ||
+    op === "isTrue" ||
+    op === "isFalse"
+  ) {
+    return true;
+  }
+  if (op === "between") {
+    const min = (node as { min?: unknown; start?: unknown }).min;
+    const max = (node as { max?: unknown; end?: unknown }).max;
+    const start = (node as { start?: unknown }).start;
+    const end = (node as { end?: unknown }).end;
+    const anyNumber =
+      (typeof min === "number" && !Number.isNaN(min)) ||
+      (typeof max === "number" && !Number.isNaN(max));
+    const anyDate =
+      (typeof start === "string" && start.length > 0) ||
+      (typeof end === "string" && end.length > 0);
+    return anyNumber || anyDate;
+  }
+  const value = (node as { value?: unknown }).value;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return !Number.isNaN(value);
+  return value !== undefined && value !== null;
+}
+
+/**
+ * Walk a group tree and drop incomplete leaves. Empty groups collapse to
+ * `null` so the caller can prune them too. Used by `normalizeForEmit`.
+ */
+function pruneIncomplete(c: Condition): Condition | null {
+  const group = asGroup(c);
+  if (!group) return isLeafComplete(c) ? c : null;
+  const kept: Condition[] = [];
+  for (const child of group.children) {
+    const next = pruneIncomplete(child);
+    if (next !== null) kept.push(next);
+  }
+  if (kept.length === 0) return null;
+  return makeGroup({ mode: group.mode, children: kept });
+}
+
+/**
+ * Walk a group tree and drop leaves whose field isn't valid for `target`.
+ * The builder lets a user keep a series-only field visible after switching
+ * to the Books tab (so they can edit or remove it explicitly), but those
+ * leaves must not reach the API — `/books/list` would 422 on
+ * `{ titleSort: ... }`. Empty groups collapse to `null`.
+ */
+function pruneForTarget(c: Condition, target: FieldTarget): Condition | null {
+  const group = asGroup(c);
+  if (!group) {
+    const key = leafFieldKey(c);
+    if (!key) return null;
+    return findField(target, key) ? c : null;
+  }
+  const kept: Condition[] = [];
+  for (const child of group.children) {
+    const next = pruneForTarget(child, target);
+    if (next !== null) kept.push(next);
+  }
+  if (kept.length === 0) return null;
+  return makeGroup({ mode: group.mode, children: kept });
+}
+
+/**
  * Normalize a root condition for emission to the API:
+ *   - When `target` is provided, leaves not valid for that target are
+ *     dropped so a series-only filter doesn't 422 the books list.
+ *   - Incomplete leaves (empty UUID, empty text, unfilled range bounds) are
+ *     dropped so the in-progress UI doesn't trigger 4xx responses.
  *   - An empty group becomes `undefined` (no condition).
  *   - A group with a single leaf child unwraps to the leaf.
  *   - Otherwise the group is passed through.
  *
  * Nested groups stay nested — we don't try to flatten across levels.
  */
-export function normalizeForEmit(root: Condition): Condition | undefined {
-  const group = asGroup(root);
-  if (!group) return root;
+export function normalizeForEmit(
+  root: Condition,
+  target?: FieldTarget,
+): Condition | undefined {
+  const targetPruned = target ? pruneForTarget(root, target) : root;
+  if (targetPruned === null) return undefined;
+  const pruned = pruneIncomplete(targetPruned);
+  if (pruned === null) return undefined;
+  const group = asGroup(pruned);
+  if (!group) return pruned;
   if (group.children.length === 0) return undefined;
   if (group.children.length === 1) return group.children[0];
-  return root;
+  return pruned;
 }
 
 /**
