@@ -2211,6 +2211,89 @@ async fn test_list_books_filtered_by_title() {
 }
 
 #[tokio::test]
+async fn test_list_books_title_filter_is_case_insensitive() {
+    // Mirror of the series-side test: a structured `title contains` filter
+    // should match across case, the same way the full-text search bar does.
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    let series = SeriesRepository::create(&db, library.id, "Series", None)
+        .await
+        .unwrap();
+
+    create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/space.cbz",
+        "space.cbz",
+        Some("Space Detective".to_string()),
+    )
+    .await;
+    create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/rocket.cbz",
+        "rocket.cbz",
+        Some("ROCKET SCIENCE".to_string()),
+    )
+    .await;
+    create_test_book_with_metadata(
+        &db,
+        series.id,
+        library.id,
+        "/tales.cbz",
+        "tales.cbz",
+        Some("everyday tales".to_string()),
+    )
+    .await;
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let cases: &[(FieldOperator, usize, &str)] = &[
+        (
+            FieldOperator::Contains {
+                value: "space".to_string(),
+            },
+            1,
+            "contains 'space' matches 'Space Detective'",
+        ),
+        (
+            FieldOperator::BeginsWith {
+                value: "rocket".to_string(),
+            },
+            1,
+            "beginsWith 'rocket' matches 'ROCKET SCIENCE'",
+        ),
+        (
+            FieldOperator::Is {
+                value: "EVERYDAY TALES".to_string(),
+            },
+            1,
+            "is 'EVERYDAY TALES' matches 'everyday tales'",
+        ),
+    ];
+
+    for (op, expected, label) in cases {
+        let request_body = BookListRequest {
+            condition: Some(BookCondition::Title { title: op.clone() }),
+            ..Default::default()
+        };
+        let request = post_json_request_with_auth("/api/v1/books/list", &request_body, &token);
+        let (status, response): (StatusCode, Option<BookListResponse>) =
+            make_json_request(app.clone(), request).await;
+        assert_eq!(status, StatusCode::OK, "{label}: status");
+        let books_list = response.expect(label);
+        assert_eq!(books_list.data.len(), *expected, "{label}");
+    }
+}
+
+#[tokio::test]
 async fn test_list_books_filtered_by_title_sort_begins_with() {
     use codex::db::entities::book_metadata;
     use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};

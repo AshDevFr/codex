@@ -16,6 +16,46 @@ use std::future::Future;
 use std::pin::Pin;
 use uuid::Uuid;
 
+/// Apply a `FieldOperator` to a text column with case-insensitive matching.
+///
+/// Wraps both the column and the value in `LOWER(...)` so the operator
+/// behaves the same on SQLite (where ASCII LIKE happens to be insensitive
+/// but `=` is sensitive) and Postgres (where LIKE is always sensitive).
+/// The macro is used by every text-column filter so callers stay terse.
+///
+/// `$col` must be a column reference that is `Copy` (the auto-generated
+/// `Column` enum variants are) — it's evaluated once per arm.
+macro_rules! apply_ci_text_filter {
+    ($query:expr, $col:expr, $op:expr) => {{
+        use sea_orm::prelude::Expr;
+        use sea_orm::sea_query::Func;
+        let col = $col;
+        match $op {
+            FieldOperator::Is { value } => {
+                $query.filter(Expr::expr(Func::lower(Expr::col(col))).eq(value.to_lowercase()))
+            }
+            FieldOperator::IsNot { value } => {
+                $query.filter(Expr::expr(Func::lower(Expr::col(col))).ne(value.to_lowercase()))
+            }
+            FieldOperator::IsNull => $query.filter(col.is_null()),
+            FieldOperator::IsNotNull => $query.filter(col.is_not_null()),
+            FieldOperator::Contains { value } => $query.filter(
+                Expr::expr(Func::lower(Expr::col(col))).like(format!("%{}%", value.to_lowercase())),
+            ),
+            FieldOperator::DoesNotContain { value } => $query.filter(
+                Expr::expr(Func::lower(Expr::col(col)))
+                    .not_like(format!("%{}%", value.to_lowercase())),
+            ),
+            FieldOperator::BeginsWith { value } => $query.filter(
+                Expr::expr(Func::lower(Expr::col(col))).like(format!("{}%", value.to_lowercase())),
+            ),
+            FieldOperator::EndsWith { value } => $query.filter(
+                Expr::expr(Func::lower(Expr::col(col))).like(format!("%{}", value.to_lowercase())),
+            ),
+        }
+    }};
+}
+
 /// Service for evaluating filter conditions against series/books
 pub struct FilterService;
 
@@ -1046,31 +1086,8 @@ impl FilterService {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
-
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => {
-                query.filter(series_metadata::Column::Publisher.eq(value.clone()))
-            }
-            FieldOperator::IsNot { value } => {
-                query.filter(series_metadata::Column::Publisher.ne(value.clone()))
-            }
-            FieldOperator::IsNull => query.filter(series_metadata::Column::Publisher.is_null()),
-            FieldOperator::IsNotNull => {
-                query.filter(series_metadata::Column::Publisher.is_not_null())
-            }
-            FieldOperator::Contains { value } => {
-                query.filter(series_metadata::Column::Publisher.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::Publisher.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(series_metadata::Column::Publisher.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(series_metadata::Column::Publisher.ends_with(value.clone()))
-            }
-        };
+        let filtered_query =
+            apply_ci_text_filter!(query, series_metadata::Column::Publisher, operator);
 
         let series_ids: Vec<Uuid> = filtered_query
             .select_only()
@@ -1100,31 +1117,8 @@ impl FilterService {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
-
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => {
-                query.filter(series_metadata::Column::Language.eq(value.clone()))
-            }
-            FieldOperator::IsNot { value } => {
-                query.filter(series_metadata::Column::Language.ne(value.clone()))
-            }
-            FieldOperator::IsNull => query.filter(series_metadata::Column::Language.is_null()),
-            FieldOperator::IsNotNull => {
-                query.filter(series_metadata::Column::Language.is_not_null())
-            }
-            FieldOperator::Contains { value } => {
-                query.filter(series_metadata::Column::Language.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::Language.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(series_metadata::Column::Language.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(series_metadata::Column::Language.ends_with(value.clone()))
-            }
-        };
+        let filtered_query =
+            apply_ci_text_filter!(query, series_metadata::Column::Language, operator);
 
         let series_ids: Vec<Uuid> = filtered_query
             .select_only()
@@ -1153,37 +1147,13 @@ impl FilterService {
         use crate::db::entities::series_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        let query = series_metadata::Entity::find();
+        // title is NOT NULL; IsNull always returns empty.
+        if matches!(operator, FieldOperator::IsNull) {
+            return Ok(HashSet::new());
+        }
 
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => {
-                query.filter(series_metadata::Column::Title.eq(value.clone()))
-            }
-            FieldOperator::IsNot { value } => {
-                query.filter(series_metadata::Column::Title.ne(value.clone()))
-            }
-            FieldOperator::IsNull => {
-                // This doesn't make sense for series_metadata.title (required field)
-                // Return empty set
-                return Ok(HashSet::new());
-            }
-            FieldOperator::IsNotNull => {
-                // All series_metadata records have a title, so return all
-                query.filter(series_metadata::Column::Title.is_not_null())
-            }
-            FieldOperator::Contains { value } => {
-                query.filter(series_metadata::Column::Title.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::Title.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(series_metadata::Column::Title.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(series_metadata::Column::Title.ends_with(value.clone()))
-            }
-        };
+        let query = series_metadata::Entity::find();
+        let filtered_query = apply_ci_text_filter!(query, series_metadata::Column::Title, operator);
 
         // Select series_id from series_metadata (not the primary key)
         let series_ids: Vec<Uuid> = filtered_query
@@ -1621,31 +1591,8 @@ impl FilterService {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = series_metadata::Entity::find();
-
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => {
-                query.filter(series_metadata::Column::AuthorsJson.eq(value.clone()))
-            }
-            FieldOperator::IsNot { value } => {
-                query.filter(series_metadata::Column::AuthorsJson.ne(value.clone()))
-            }
-            FieldOperator::IsNull => query.filter(series_metadata::Column::AuthorsJson.is_null()),
-            FieldOperator::IsNotNull => {
-                query.filter(series_metadata::Column::AuthorsJson.is_not_null())
-            }
-            FieldOperator::Contains { value } => {
-                query.filter(series_metadata::Column::AuthorsJson.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(series_metadata::Column::AuthorsJson.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(series_metadata::Column::AuthorsJson.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(series_metadata::Column::AuthorsJson.ends_with(value.clone()))
-            }
-        };
+        let filtered_query =
+            apply_ci_text_filter!(query, series_metadata::Column::AuthorsJson, operator);
 
         let series_ids: Vec<Uuid> = filtered_query
             .select_only()
@@ -1677,25 +1624,13 @@ impl FilterService {
         use crate::db::entities::series;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
+        // series.path is NOT NULL; IsNull always returns empty.
+        if matches!(operator, FieldOperator::IsNull) {
+            return Ok(HashSet::new());
+        }
+
         let query = series::Entity::find();
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => query.filter(series::Column::Path.eq(value.clone())),
-            FieldOperator::IsNot { value } => query.filter(series::Column::Path.ne(value.clone())),
-            FieldOperator::IsNull => return Ok(HashSet::new()),
-            FieldOperator::IsNotNull => query.filter(series::Column::Path.is_not_null()),
-            FieldOperator::Contains { value } => {
-                query.filter(series::Column::Path.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(series::Column::Path.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(series::Column::Path.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(series::Column::Path.ends_with(value.clone()))
-            }
-        };
+        let filtered_query = apply_ci_text_filter!(query, series::Column::Path, operator);
 
         let series_ids: Vec<Uuid> = filtered_query
             .select_only()
@@ -2124,31 +2059,8 @@ impl FilterService {
         use crate::db::entities::book_metadata;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        // Title is now stored in book_metadata table
         let query = book_metadata::Entity::find();
-
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => {
-                query.filter(book_metadata::Column::Title.eq(Some(value.clone())))
-            }
-            FieldOperator::IsNot { value } => {
-                query.filter(book_metadata::Column::Title.ne(Some(value.clone())))
-            }
-            FieldOperator::IsNull => query.filter(book_metadata::Column::Title.is_null()),
-            FieldOperator::IsNotNull => query.filter(book_metadata::Column::Title.is_not_null()),
-            FieldOperator::Contains { value } => {
-                query.filter(book_metadata::Column::Title.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(book_metadata::Column::Title.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(book_metadata::Column::Title.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(book_metadata::Column::Title.ends_with(value.clone()))
-            }
-        };
+        let filtered_query = apply_ci_text_filter!(query, book_metadata::Column::Title, operator);
 
         // Select book_id from book_metadata (not id)
         let book_ids: Vec<Uuid> = filtered_query
@@ -2182,30 +2094,8 @@ impl FilterService {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
         let query = book_metadata::Entity::find();
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => {
-                query.filter(book_metadata::Column::TitleSort.eq(Some(value.clone())))
-            }
-            FieldOperator::IsNot { value } => {
-                query.filter(book_metadata::Column::TitleSort.ne(Some(value.clone())))
-            }
-            FieldOperator::IsNull => query.filter(book_metadata::Column::TitleSort.is_null()),
-            FieldOperator::IsNotNull => {
-                query.filter(book_metadata::Column::TitleSort.is_not_null())
-            }
-            FieldOperator::Contains { value } => {
-                query.filter(book_metadata::Column::TitleSort.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(book_metadata::Column::TitleSort.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(book_metadata::Column::TitleSort.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(book_metadata::Column::TitleSort.ends_with(value.clone()))
-            }
-        };
+        let filtered_query =
+            apply_ci_text_filter!(query, book_metadata::Column::TitleSort, operator);
 
         let book_ids: Vec<Uuid> = filtered_query
             .select_only()
@@ -2408,26 +2298,33 @@ impl FilterService {
         use crate::db::entities::books;
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-        let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
+        // books.path is NOT NULL; IsNull always returns empty.
+        if matches!(operator, FieldOperator::IsNull) {
+            return Ok(HashSet::new());
+        }
+        // IsNotNull is implicitly true for all live (non-deleted) books;
+        // skip the LOWER(...) round-trip in that branch.
+        if matches!(operator, FieldOperator::IsNotNull) {
+            let book_ids: Vec<Uuid> = books::Entity::find()
+                .filter(books::Column::Deleted.eq(false))
+                .select_only()
+                .column(books::Column::Id)
+                .into_tuple()
+                .all(db)
+                .await?;
+            let result: HashSet<Uuid> = if let Some(candidates) = candidate_ids {
+                book_ids
+                    .into_iter()
+                    .filter(|id| candidates.contains(id))
+                    .collect()
+            } else {
+                book_ids.into_iter().collect()
+            };
+            return Ok(result);
+        }
 
-        let filtered_query = match operator {
-            FieldOperator::Is { value } => query.filter(books::Column::Path.eq(value.clone())),
-            FieldOperator::IsNot { value } => query.filter(books::Column::Path.ne(value.clone())),
-            FieldOperator::IsNull => return Ok(HashSet::new()),
-            FieldOperator::IsNotNull => query,
-            FieldOperator::Contains { value } => {
-                query.filter(books::Column::Path.contains(value.clone()))
-            }
-            FieldOperator::DoesNotContain { value } => {
-                query.filter(books::Column::Path.not_like(format!("%{}%", value)))
-            }
-            FieldOperator::BeginsWith { value } => {
-                query.filter(books::Column::Path.starts_with(value.clone()))
-            }
-            FieldOperator::EndsWith { value } => {
-                query.filter(books::Column::Path.ends_with(value.clone()))
-            }
-        };
+        let query = books::Entity::find().filter(books::Column::Deleted.eq(false));
+        let filtered_query = apply_ci_text_filter!(query, books::Column::Path, operator);
 
         let book_ids: Vec<Uuid> = filtered_query
             .select_only()

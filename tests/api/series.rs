@@ -3755,6 +3755,82 @@ async fn test_list_series_filtered_by_name() {
 }
 
 #[tokio::test]
+async fn test_list_series_title_filter_is_case_insensitive() {
+    // Mirrors the user-reported case: a structured `title contains` filter
+    // should behave like the search bar (case-insensitive), so "space"
+    // matches "Space Detective".
+    let (db, _temp_dir) = setup_test_db().await;
+
+    let library = LibraryRepository::create(&db, "Library", "/lib", ScanningStrategy::Default)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "Space Detective", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "ROCKET SCIENCE", None)
+        .await
+        .unwrap();
+    SeriesRepository::create(&db, library.id, "everyday tales", None)
+        .await
+        .unwrap();
+
+    let state = create_test_auth_state(db.clone()).await;
+    let token = create_admin_and_token(&db, &state).await;
+    let app = create_test_router(state).await;
+
+    let cases: &[(FieldOperator, usize, &str)] = &[
+        (
+            FieldOperator::Contains {
+                value: "space".to_string(),
+            },
+            1,
+            "contains 'space' matches 'Space Detective'",
+        ),
+        (
+            FieldOperator::Contains {
+                value: "SCIENCE".to_string(),
+            },
+            1,
+            "contains 'SCIENCE' matches 'ROCKET SCIENCE'",
+        ),
+        (
+            FieldOperator::BeginsWith {
+                value: "rocket".to_string(),
+            },
+            1,
+            "beginsWith 'rocket' matches 'ROCKET SCIENCE'",
+        ),
+        (
+            FieldOperator::EndsWith {
+                value: "DETECTIVE".to_string(),
+            },
+            1,
+            "endsWith 'DETECTIVE' matches 'Space Detective'",
+        ),
+        (
+            FieldOperator::Is {
+                value: "EVERYDAY TALES".to_string(),
+            },
+            1,
+            "is 'EVERYDAY TALES' matches 'everyday tales'",
+        ),
+    ];
+
+    for (op, expected, label) in cases {
+        let request_body = SeriesListRequest {
+            condition: Some(SeriesCondition::Title { title: op.clone() }),
+            ..Default::default()
+        };
+        let request = post_json_request_with_auth("/api/v1/series/list", &request_body, &token);
+        let (status, response): (StatusCode, Option<SeriesListResponse>) =
+            make_json_request(app.clone(), request).await;
+        assert_eq!(status, StatusCode::OK, "{label}: status");
+        let series_list = response.expect(label);
+        assert_eq!(series_list.data.len(), *expected, "{label}");
+    }
+}
+
+#[tokio::test]
 async fn test_list_series_filtered_by_status() {
     let (db, _temp_dir) = setup_test_db().await;
 

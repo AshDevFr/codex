@@ -15,7 +15,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { useDebouncedValue, useDisclosure } from "@mantine/hooks";
+import { useDisclosure } from "@mantine/hooks";
 import {
   IconAdjustmentsHorizontal,
   IconAlertTriangle,
@@ -74,9 +74,15 @@ export function SearchPage() {
 
   useDocumentTitle(state.query ? `Search: ${state.query}` : "Advanced search");
 
-  // Track the live query input so debouncing doesn't fight URL state.
+  // Advanced search is submit-driven: drafts are local until the user hits
+  // Enter or clicks "Search", at which point we write them to the URL.
+  // Live syncing fought the inputs — a URL write on every keystroke could
+  // overwrite the draft mid-edit and drop characters, especially in the
+  // nested LeafEditor inputs.
   const [queryDraft, setQueryDraft] = useState(state.query);
-  const [debouncedQuery] = useDebouncedValue(queryDraft, 300);
+  const [conditionDraft, setConditionDraft] = useState<Condition | undefined>(
+    state.condition as Condition | undefined,
+  );
 
   const [conditionTooLarge, setConditionTooLarge] = useState(false);
 
@@ -97,20 +103,39 @@ export function SearchPage() {
     [state, setSearchParams],
   );
 
-  // Sync URL-driven changes (preset apply, history nav) back into the draft.
+  // Sync URL-driven changes (preset apply, history nav, deep links) into the
+  // drafts. With submit-only writes, the URL never changes from typing, so
+  // this can't fight an in-progress edit.
   useEffect(() => {
     setQueryDraft(state.query);
   }, [state.query]);
 
-  // When the debounced draft diverges from the URL, push it back. updateState
-  // is excluded from deps on purpose — it captures `state`, and re-running the
-  // effect on every render would re-trigger the URL write in a loop.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above
   useEffect(() => {
-    if (debouncedQuery !== state.query) {
-      updateState({ query: debouncedQuery, page: 1 });
-    }
-  }, [debouncedQuery]);
+    setConditionDraft(state.condition as Condition | undefined);
+  }, [state.condition]);
+
+  // Cheap structural compare so submit can no-op when nothing changed.
+  const conditionDraftSerialized = useMemo(
+    () => JSON.stringify(conditionDraft ?? null),
+    [conditionDraft],
+  );
+  const conditionStateSerialized = useMemo(
+    () => JSON.stringify(state.condition ?? null),
+    [state.condition],
+  );
+
+  const isDirty =
+    queryDraft !== state.query ||
+    conditionDraftSerialized !== conditionStateSerialized;
+
+  const submitSearch = useCallback(() => {
+    if (!isDirty) return;
+    updateState({
+      query: queryDraft,
+      condition: conditionDraft as SeriesCondition | BookCondition | undefined,
+      page: 1,
+    });
+  }, [isDirty, queryDraft, conditionDraft, updateState]);
 
   // Fuzzy indicator: opt-in cosmetic that lets users know what's powering
   // the search. Read from the public settings map (no admin required).
@@ -124,25 +149,23 @@ export function SearchPage() {
   );
 
   // ---- Result queries (run in parallel; counts feed the tab labels) ----
-  // Normalize per target so series-only fields don't leak to /books/list
-  // (and vice-versa) when the user switches tabs mid-edit.
+  // Normalize per target so each query gets only the leaves valid for it.
+  // Both tabs apply the filter so the inactive tab's badge reflects the
+  // same condition the user is searching with, instead of showing the
+  // unfiltered library total.
   const seriesCondition = useMemo(
     () =>
-      state.tab === "series"
-        ? (normalizeForEmit(state.condition ?? { allOf: [] }, "series") as
-            | SeriesCondition
-            | undefined)
-        : undefined,
-    [state.tab, state.condition],
+      normalizeForEmit(state.condition ?? { allOf: [] }, "series") as
+        | SeriesCondition
+        | undefined,
+    [state.condition],
   );
   const booksCondition = useMemo(
     () =>
-      state.tab === "books"
-        ? (normalizeForEmit(state.condition ?? { allOf: [] }, "books") as
-            | BookCondition
-            | undefined)
-        : undefined,
-    [state.tab, state.condition],
+      normalizeForEmit(state.condition ?? { allOf: [] }, "books") as
+        | BookCondition
+        | undefined,
+    [state.condition],
   );
 
   const seriesSort = useMemo(() => {
@@ -156,13 +179,19 @@ export function SearchPage() {
   }, [state.tab, state.sort]);
 
   // Advanced search needs *something* to act on: a non-empty query, or at
-  // least one fully-configured filter leaf (normalizeForEmit returns
-  // undefined when every leaf is incomplete, which keeps an empty
+  // least one fully-configured filter leaf on either tab (normalizeForEmit
+  // returns undefined when every leaf is incomplete, which keeps an empty
   // "+ Add filter" row from counting as a filter).
   const hasQuery = state.query.trim().length > 0;
-  const hasFilter =
-    state.tab === "series" ? !!seriesCondition : !!booksCondition;
+  const hasFilter = !!seriesCondition || !!booksCondition;
   const canSearch = hasQuery || hasFilter;
+
+  // Per-tab fetchability: don't fire a query that would degenerate to an
+  // unfiltered "all rows" fetch when the filter only applies to the other
+  // tab. The active tab's panel handles that case below with a specific
+  // empty state.
+  const seriesCanFetch = hasQuery || !!seriesCondition;
+  const booksCanFetch = hasQuery || !!booksCondition;
 
   const seriesQuery = useQuery({
     queryKey: [
@@ -182,7 +211,7 @@ export function SearchPage() {
         sort: seriesSort || undefined,
       }),
     staleTime: 30_000,
-    enabled: canSearch,
+    enabled: seriesCanFetch,
   });
 
   const booksQuery = useQuery({
@@ -203,7 +232,7 @@ export function SearchPage() {
         sort: booksSort || undefined,
       }),
     staleTime: 30_000,
-    enabled: canSearch,
+    enabled: booksCanFetch,
   });
 
   const seriesCount = seriesQuery.data?.total ?? 0;
@@ -240,14 +269,27 @@ export function SearchPage() {
           )}
         </Group>
 
-        <TextInput
-          size="md"
-          leftSection={<IconSearch size={16} />}
-          placeholder="Search by title, author, or text…"
-          value={queryDraft}
-          onChange={(e) => setQueryDraft(e.currentTarget.value)}
-          aria-label="Search query"
-        />
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitSearch();
+          }}
+        >
+          <Group gap="sm" wrap="nowrap" align="stretch">
+            <TextInput
+              size="md"
+              leftSection={<IconSearch size={16} />}
+              placeholder="Search by title, author, or text…"
+              value={queryDraft}
+              onChange={(e) => setQueryDraft(e.currentTarget.value)}
+              aria-label="Search query"
+              style={{ flex: 1 }}
+            />
+            <Button type="submit" size="md" disabled={!isDirty}>
+              Search
+            </Button>
+          </Group>
+        </form>
 
         <Group justify="space-between" wrap="wrap" gap="md">
           <Button
@@ -279,19 +321,28 @@ export function SearchPage() {
             <PresetsMenu
               target={state.tab}
               current={{
-                query: state.query,
+                query: queryDraft,
                 sort: state.sort,
-                condition: state.condition,
+                condition: conditionDraft as
+                  | SeriesCondition
+                  | BookCondition
+                  | undefined,
               }}
               onApply={(preset) => {
+                const nextCondition =
+                  (preset.condition as unknown as
+                    | SeriesCondition
+                    | BookCondition
+                    | undefined) ?? undefined;
+                // Update the drafts in lockstep with the URL so the editor
+                // doesn't flash the old condition for one render before the
+                // sync effect catches up.
+                setQueryDraft(preset.query ?? "");
+                setConditionDraft(nextCondition as Condition | undefined);
                 updateState({
                   query: preset.query ?? "",
                   sort: preset.sort ?? "",
-                  condition:
-                    (preset.condition as unknown as
-                      | SeriesCondition
-                      | BookCondition
-                      | undefined) ?? undefined,
+                  condition: nextCondition,
                   page: 1,
                 });
               }}
@@ -302,17 +353,9 @@ export function SearchPage() {
         <Collapse in={builderOpened}>
           <Card withBorder p="md">
             <FilterBuilder
-              condition={state.condition as Condition | undefined}
+              condition={conditionDraft}
               target={state.tab}
-              onChange={(next) =>
-                updateState({
-                  condition: next as
-                    | SeriesCondition
-                    | BookCondition
-                    | undefined,
-                  page: 1,
-                })
-              }
+              onChange={(next) => setConditionDraft(next)}
             />
           </Card>
         </Collapse>
@@ -359,29 +402,37 @@ export function SearchPage() {
           {canSearch ? (
             <>
               <Tabs.Panel value="series" pt="md">
-                <ResultsGrid
-                  loading={seriesQuery.isLoading}
-                  error={seriesQuery.error}
-                  data={seriesQuery.data?.data ?? []}
-                  total={seriesCount}
-                  page={state.page}
-                  pageSize={DEFAULT_SEARCH_PAGE_SIZE}
-                  onPageChange={(p) => updateState({ page: p })}
-                  type="series"
-                />
+                {seriesCanFetch ? (
+                  <ResultsGrid
+                    loading={seriesQuery.isLoading}
+                    error={seriesQuery.error}
+                    data={seriesQuery.data?.data ?? []}
+                    total={seriesCount}
+                    page={state.page}
+                    pageSize={DEFAULT_SEARCH_PAGE_SIZE}
+                    onPageChange={(p) => updateState({ page: p })}
+                    type="series"
+                  />
+                ) : (
+                  <FilterOnlyForOtherTab type="series" />
+                )}
               </Tabs.Panel>
 
               <Tabs.Panel value="books" pt="md">
-                <ResultsGrid
-                  loading={booksQuery.isLoading}
-                  error={booksQuery.error}
-                  data={booksQuery.data?.data ?? []}
-                  total={booksCount}
-                  page={state.page}
-                  pageSize={DEFAULT_SEARCH_PAGE_SIZE}
-                  onPageChange={(p) => updateState({ page: p })}
-                  type="book"
-                />
+                {booksCanFetch ? (
+                  <ResultsGrid
+                    loading={booksQuery.isLoading}
+                    error={booksQuery.error}
+                    data={booksQuery.data?.data ?? []}
+                    total={booksCount}
+                    page={state.page}
+                    pageSize={DEFAULT_SEARCH_PAGE_SIZE}
+                    onPageChange={(p) => updateState({ page: p })}
+                    type="book"
+                  />
+                ) : (
+                  <FilterOnlyForOtherTab type="books" />
+                )}
               </Tabs.Panel>
             </>
           ) : (
@@ -488,6 +539,23 @@ function ResultsGrid({
         {Math.min(page * pageSize, total)} of {total} results
       </Text>
     </Stack>
+  );
+}
+
+function FilterOnlyForOtherTab({ type }: { type: "series" | "books" }) {
+  const otherTab = type === "series" ? "Books" : "Series";
+  const selfLabel = type === "series" ? "series" : "books";
+  return (
+    <Card mt="md" p="xl" withBorder>
+      <Stack align="center" gap="sm">
+        <Text size="lg" fw={600}>
+          Filter doesn't apply to {selfLabel}
+        </Text>
+        <Text size="sm" c="dimmed" ta="center">
+          The current filter only has fields available on the {otherTab} tab.
+        </Text>
+      </Stack>
+    </Card>
   );
 }
 
