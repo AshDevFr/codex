@@ -3,8 +3,21 @@
  */
 
 import { delay, HttpResponse, http } from "msw";
-import type { DuplicateGroup, SeriesDuplicateGroup } from "../data/factories";
+import type {
+  DuplicateGroup,
+  SeriesDto,
+  SeriesDuplicateGroup,
+} from "../data/factories";
 import { mockBooks, mockSeries } from "../data/store";
+
+const toSeriesMember = (s: SeriesDto) => ({
+  id: s.id,
+  title: s.title,
+  libraryId: s.libraryId,
+  libraryName: s.libraryName,
+  bookCount: s.bookCount,
+  updatedAt: s.updatedAt,
+});
 
 // Generate mock duplicate groups using actual book IDs
 const createMockDuplicates = (): DuplicateGroup[] => {
@@ -43,7 +56,7 @@ const createMockSeriesDuplicates = (): SeriesDuplicateGroup[] => {
       matchType: "external_id",
       matchKey: "plugin:mangabaka:12345",
       libraryId: null,
-      seriesIds: [mockSeries[0].id, mockSeries[1].id],
+      members: [toSeriesMember(mockSeries[0]), toSeriesMember(mockSeries[1])],
       duplicateCount: 2,
       createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
       updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
@@ -61,7 +74,10 @@ const createMockSeriesDuplicates = (): SeriesDuplicateGroup[] => {
         matchType: "title",
         matchKey: "naruto",
         libraryId: sameLibrarySeries[0].libraryId,
-        seriesIds: [sameLibrarySeries[0].id, sameLibrarySeries[1].id],
+        members: [
+          toSeriesMember(sameLibrarySeries[0]),
+          toSeriesMember(sameLibrarySeries[1]),
+        ],
         duplicateCount: 2,
         createdAt: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(),
         updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),

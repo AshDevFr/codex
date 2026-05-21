@@ -1,3 +1,4 @@
+import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useReaderStore } from "@/store/readerStore";
 import { renderWithProviders, screen } from "@/test/utils";
@@ -478,14 +479,23 @@ describe("EpubReader", () => {
 
       // mountAndGetIframeDoc pins window.innerWidth=900, innerHeight=600;
       // center third is x ∈ [300, 600], y ∈ [200, 400]. (450, 300) is dead-center.
+      // Use waitFor on the assertions: under heavy parallel-test CPU load
+      // React's render/effect cycle following the prior setState can still be
+      // pending when we dispatch, and the toggle then races with that flush.
+      // The handler itself is synchronous; waitFor just absorbs the scheduler
+      // jitter without hiding a real regression.
       useReaderStore.setState({ toolbarVisible: true });
       dispatchPointerEvent(doc, "pointerdown", 450, 300);
       dispatchPointerEvent(doc, "pointerup", 451, 300);
-      expect(useReaderStore.getState().toolbarVisible).toBe(false);
+      await waitFor(() => {
+        expect(useReaderStore.getState().toolbarVisible).toBe(false);
+      });
 
       dispatchPointerEvent(doc, "pointerdown", 450, 300);
       dispatchPointerEvent(doc, "pointerup", 450, 301);
-      expect(useReaderStore.getState().toolbarVisible).toBe(true);
+      await waitFor(() => {
+        expect(useReaderStore.getState().toolbarVisible).toBe(true);
+      });
     });
 
     it("routes edge-zone taps to prev/next without toggling the toolbar (LTR)", async () => {

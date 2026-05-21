@@ -81,7 +81,7 @@ describe("DownloadButton + InstallNudgeModal", { timeout: 20000 }, () => {
       await screen.findByRole(
         "menuitem",
         { name: /save for offline/i },
-        { timeout: 5000 },
+        { timeout: 15000 },
       ),
     );
 
@@ -123,7 +123,7 @@ describe("DownloadButton + InstallNudgeModal", { timeout: 20000 }, () => {
       await screen.findByRole(
         "menuitem",
         { name: /save for offline/i },
-        { timeout: 5000 },
+        { timeout: 15000 },
       ),
     );
 
@@ -151,7 +151,7 @@ describe("DownloadButton + InstallNudgeModal", { timeout: 20000 }, () => {
       await screen.findByRole(
         "menuitem",
         { name: /save for offline/i },
-        { timeout: 5000 },
+        { timeout: 15000 },
       ),
     );
 

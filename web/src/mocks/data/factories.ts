@@ -966,17 +966,39 @@ export const createDuplicateGroup = (
  */
 export const createSeriesDuplicateGroup = (
   overrides: Partial<SeriesDuplicateGroup> = {},
-): SeriesDuplicateGroup => ({
-  id: faker.string.uuid(),
-  matchType: "external_id",
-  matchKey: "plugin:mangabaka:12345",
-  libraryId: null,
-  seriesIds: [faker.string.uuid(), faker.string.uuid()],
-  duplicateCount: 2,
-  createdAt: faker.date.past().toISOString(),
-  updatedAt: faker.date.recent().toISOString(),
-  ...overrides,
-});
+): SeriesDuplicateGroup => {
+  const libraryId = faker.string.uuid();
+  const libraryName = "Manga";
+  const updatedAt = faker.date.recent().toISOString();
+  return {
+    id: faker.string.uuid(),
+    matchType: "external_id",
+    matchKey: "plugin:mangabaka:12345",
+    libraryId: null,
+    members: [
+      {
+        id: faker.string.uuid(),
+        title: faker.lorem.words(2),
+        libraryId,
+        libraryName,
+        bookCount: faker.number.int({ min: 1, max: 80 }),
+        updatedAt,
+      },
+      {
+        id: faker.string.uuid(),
+        title: faker.lorem.words(2),
+        libraryId,
+        libraryName,
+        bookCount: faker.number.int({ min: 1, max: 80 }),
+        updatedAt,
+      },
+    ],
+    duplicateCount: 2,
+    createdAt: faker.date.past().toISOString(),
+    updatedAt,
+    ...overrides,
+  };
+};
 
 /**
  * Paginated response factory
