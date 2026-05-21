@@ -2,6 +2,17 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.27.1] - 2026-05-21
+
+### 🚀 Features
+
+- *(duplicates)* Trust-list external-ID sources, hydrate members in list endpoint
+
+### 🐛 Bug Fixes
+
+- *(web)* Align series duplicate mocks with hydrated members schema
+- *(web)* Stabilize EPUB pointer test against extra ReactReader renders
+
 ## [1.27.0] - 2026-05-20
 
 ### 🚀 Features
