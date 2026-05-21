@@ -2,6 +2,31 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.28.0] - 2026-05-21
+
+### 🚀 Features
+
+- *(search)* Add unified filter-preset storage for saved filters and advanced search
+- *(search)* Add path, format, year, page count, date, and author filter variants
+- *(search)* Compose fuzzy index with /list endpoints and add relevance sort
+- *(search)* Add advanced /search page with nested filter builder and presets
+- *(search)* Wire filter presets into series/books list pages
+- *(search)* Make advanced search filters cross-tab aware and tighter on bad input
+- *(search)* Add header shortcut to advanced search and gate empty queries
+
+### 🐛 Bug Fixes
+
+- *(search)* Unbreak frontend build by tightening filter and grid types
+- *(search)* Submit-driven advanced search and case-insensitive text filters
+
+### 🚜 Refactor
+
+- *(search)* Align filter DTO names with their underlying columns
+
+### 📚 Documentation
+
+- *(filtering)* Document advanced search, presets, and new filter variants
+
 ## [1.27.1] - 2026-05-21
 
 ### 🚀 Features
