@@ -143,19 +143,19 @@ Nextest runs tests in parallel and is typically 2-3x faster than `cargo test`.
 
 ## Speeding Up Builds
 
-Codex is configured to use faster linkers when available. This significantly reduces link times during development.
+Codex's `.cargo/config.toml` is preconfigured to use faster linkers and (optionally) a compilation cache. Installing these tools will noticeably reduce rebuild times during development.
 
-### macOS
+### Faster Linker
 
-Install the lld linker:
+On a typical Apple Silicon machine, `lld` cuts warm rebuild link time by roughly a third (e.g., ~23s instead of ~35s) compared to the system linker. On Linux, `mold` provides a similar improvement.
+
+#### macOS
 
 ```bash
 brew install lld
 ```
 
-### Linux
-
-Install the mold linker:
+#### Linux
 
 ```bash
 # Ubuntu/Debian
@@ -164,6 +164,40 @@ sudo apt-get install mold clang
 # Fedora
 sudo dnf install mold clang
 ```
+
+If the linker is not installed, Cargo falls back to the default linker automatically (no errors), so this step is optional.
+
+### Compilation Cache (sccache)
+
+[sccache](https://github.com/mozilla/sccache) caches compiled crates across `cargo clean`, branch switches, and changes to `Cargo.lock`. It mainly helps cold builds and dependency recompiles; it adds ~2s of wrapper overhead on warm incremental rebuilds, but the cold-build savings (around 10% on this project) typically outweigh that.
+
+Install it:
+
+```bash
+# macOS
+brew install sccache
+
+# Linux / other
+cargo install sccache --locked
+```
+
+The `[build] rustc-wrapper = "sccache"` line in `.cargo/config.toml` activates it once `sccache` is on your `PATH`. If you don't want to use it, either remove that line or unset `RUSTC_WRAPPER`.
+
+Check the cache hit rate at any time:
+
+```bash
+sccache --show-stats
+```
+
+### macOS: Exclude `target/` from Spotlight
+
+The `target/` directory can grow to many gigabytes with thousands of small files. Spotlight indexing those files causes very high system CPU during builds. Exclude the directory:
+
+```bash
+touch target/.metadata_never_index
+```
+
+Or add `target/` to **System Settings → Siri & Spotlight → Spotlight Privacy**. The Privacy entry is path-based and survives `cargo clean`.
 
 ### Verify Setup
 

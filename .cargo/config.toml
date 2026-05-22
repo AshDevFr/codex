@@ -1,6 +1,9 @@
 # Cargo configuration for faster builds
 # See: https://doc.rust-lang.org/cargo/reference/config.html
 
+[build]
+rustc-wrapper = "sccache"
+
 # =============================================================================
 # Linker Configuration
 # =============================================================================

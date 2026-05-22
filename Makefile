@@ -79,6 +79,7 @@ dev-check: ## Check development tool installation
 	@echo "$(BLUE)Optional (for faster builds):$(NC)"
 	@command -v lld >/dev/null 2>&1 && echo "  $(GREEN)✓ lld$(NC) (faster linker)" || echo "  $(YELLOW)✗ lld$(NC) - install: brew install lld"
 	@command -v mold >/dev/null 2>&1 && echo "  $(GREEN)✓ mold$(NC) (faster linker)" || echo "  $(YELLOW)✗ mold$(NC) - install: apt install mold (Linux only)"
+	@command -v sccache >/dev/null 2>&1 && echo "  $(GREEN)✓ sccache$(NC) (compilation cache)" || echo "  $(YELLOW)✗ sccache$(NC) - install: brew install sccache (or: cargo install sccache --locked)"
 	@cargo nextest --version >/dev/null 2>&1 && echo "  $(GREEN)✓ cargo-nextest$(NC) (faster tests)" || echo "  $(YELLOW)✗ cargo-nextest$(NC) - install: cargo install cargo-nextest --locked"
 
 # =============================================================================
