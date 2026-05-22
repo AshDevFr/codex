@@ -25,7 +25,7 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { FilterPresetDto } from "@/api/filterPresets";
 import { genresApi } from "@/api/genres";
@@ -38,6 +38,7 @@ import {
   conditionToSeriesFilterState,
   type SeriesCondition,
   serializeSeriesFilters,
+  seriesFilterStateToCondition,
 } from "@/types/filters";
 import { FilterBottomSheet } from "./FilterBottomSheet";
 import { FilterGroup } from "./FilterGroup";
@@ -104,10 +105,15 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
   const {
     activeFilterCount: committedFilterCount,
     hasActiveFilters: hasCommittedFilters,
-    condition: committedCondition,
   } = useSeriesFilterState();
   // Use draft state for editing within the drawer
   const draftState = useDraftSeriesFilterState();
+  // Build the API condition from the draft so presets can be saved directly
+  // from in-drawer selections without first hitting Apply.
+  const draftCondition = useMemo(
+    () => seriesFilterStateToCondition(draftState.draftFilters),
+    [draftState.draftFilters],
+  );
   const isMobile = useMediaQuery("(max-width: 768px)");
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === "admin";
@@ -263,8 +269,8 @@ export function SeriesFilterPanel({ libraryId }: SeriesFilterPanelProps = {}) {
       <ListPresetControls
         target="series"
         libraryId={normalizedLibraryId}
-        currentCondition={committedCondition}
-        hasActiveFilters={hasCommittedFilters}
+        currentCondition={draftCondition}
+        hasActiveFilters={draftState.hasActiveFilters}
         onApply={handleApplyPreset}
       />
 

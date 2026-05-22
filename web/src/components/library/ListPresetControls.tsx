@@ -1,12 +1,16 @@
 import {
   ActionIcon,
   Alert,
+  Badge,
   Box,
   Button,
+  Card,
+  Divider,
   Group,
   Loader,
   Menu,
   Modal,
+  SimpleGrid,
   Stack,
   Text,
   TextInput,
@@ -31,6 +35,7 @@ import {
 } from "@/api/filterPresets";
 import type { BookCondition, SeriesCondition } from "@/types/filters";
 import { ManagePresetsModal } from "./ManagePresetsModal";
+import { PresetConditionSummary } from "./PresetConditionSummary";
 
 export interface ListPresetControlsProps {
   target: FilterPresetTarget;
@@ -68,6 +73,10 @@ export function ListPresetControls({
   const [scopeChoice, setScopeChoice] = useState<"library" | "global">(
     libraryId ? "library" : "global",
   );
+  // Set when the user clicks Save and an existing preset in the same scope
+  // and library already uses the requested name. Drives the Replace/Cancel
+  // confirmation modal.
+  const [duplicate, setDuplicate] = useState<FilterPresetDto | null>(null);
 
   const { data: presets, isLoading } = useQuery({
     queryKey: ["filter-presets", "list", target, libraryId ?? "global"],
@@ -76,22 +85,27 @@ export function ListPresetControls({
   });
 
   // Library-scoped presets show only when their library matches; global ones
-  // (library_id null) show on every page. Sort: global first, then alpha.
+  // (library_id null) show on every page. Use loose equality so an absent
+  // field (legacy responses) is treated the same as an explicit null.
+  // Sort: global first, then alpha.
   const visiblePresets = (presets ?? [])
-    .filter((p) => p.libraryId === null || p.libraryId === libraryId)
+    .filter((p) => p.libraryId == null || p.libraryId === libraryId)
     .sort((a, b) => {
-      if (a.libraryId === null && b.libraryId !== null) return -1;
-      if (b.libraryId === null && a.libraryId !== null) return 1;
+      const aGlobal = a.libraryId == null;
+      const bGlobal = b.libraryId == null;
+      if (aGlobal && !bGlobal) return -1;
+      if (bGlobal && !aGlobal) return 1;
       return a.name.localeCompare(b.name);
     });
+
+  const targetLibraryId =
+    scopeChoice === "library" ? (libraryId ?? null) : null;
 
   const createMutation = useMutation({
     mutationFn: () => {
       if (!currentCondition) {
         throw new Error("Add at least one filter chip before saving a preset.");
       }
-      const targetLibraryId =
-        scopeChoice === "library" ? (libraryId ?? null) : null;
       return filterPresetsApi.create({
         name: presetName.trim(),
         scope: "list",
@@ -101,9 +115,9 @@ export function ListPresetControls({
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({
-        queryKey: ["filter-presets", "list", target],
-      });
+      // Invalidate every filter-presets query (sidebar + Manage modal) so the
+      // new preset shows up everywhere it might be listed.
+      qc.invalidateQueries({ queryKey: ["filter-presets"] });
       notifications.show({
         message: `Saved preset "${presetName.trim()}"`,
         color: "green",
@@ -121,14 +135,64 @@ export function ListPresetControls({
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => filterPresetsApi.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({
-        queryKey: ["filter-presets", "list", target],
+  const replaceMutation = useMutation({
+    mutationFn: (existing: FilterPresetDto) => {
+      if (!currentCondition) {
+        throw new Error("Add at least one filter chip before saving a preset.");
+      }
+      return filterPresetsApi.update(existing.id, {
+        name: existing.name,
+        condition: currentCondition,
+        query: existing.query ?? null,
+        sort: existing.sort ?? null,
+        libraryId: existing.libraryId ?? null,
+      });
+    },
+    onSuccess: (_data, existing) => {
+      qc.invalidateQueries({ queryKey: ["filter-presets"] });
+      notifications.show({
+        message: `Replaced preset "${existing.name}"`,
+        color: "green",
+        icon: <IconCheck size={14} />,
+      });
+      setPresetName("");
+      setDuplicate(null);
+      saveHandlers.close();
+    },
+    onError: (err) => {
+      notifications.show({
+        title: "Could not replace preset",
+        message: (err as Error).message ?? "Unknown error",
+        color: "red",
       });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => filterPresetsApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["filter-presets"] });
+    },
+  });
+
+  const handleSaveClick = () => {
+    const trimmed = presetName.trim();
+    if (trimmed.length === 0 || !currentCondition) return;
+    // Backend enforces uniqueness on (user, scope, target, library_id, name);
+    // mirror that here so we can offer Replace instead of failing later.
+    const existing = (presets ?? []).find(
+      (p) =>
+        p.scope === "list" &&
+        p.target === target &&
+        (p.libraryId ?? null) === targetLibraryId &&
+        p.name === trimmed,
+    );
+    if (existing) {
+      setDuplicate(existing);
+      return;
+    }
+    createMutation.mutate();
+  };
 
   const canSave = hasActiveFilters && currentCondition !== undefined;
   const isAllLibraries = libraryId === null || libraryId === "all";
@@ -221,7 +285,7 @@ export function ListPresetControls({
               >
                 <Stack gap={0}>
                   <Text size="sm">{preset.name}</Text>
-                  {preset.libraryId === null && (
+                  {preset.libraryId == null && (
                     <Text size="xs" c="dimmed">
                       Global
                     </Text>
@@ -282,7 +346,7 @@ export function ListPresetControls({
               Cancel
             </Button>
             <Button
-              onClick={() => createMutation.mutate()}
+              onClick={handleSaveClick}
               loading={createMutation.isPending}
               disabled={presetName.trim().length === 0 || !canSave}
             >
@@ -292,11 +356,122 @@ export function ListPresetControls({
         </Stack>
       </Modal>
 
+      <DuplicatePresetModal
+        existing={duplicate}
+        target={target}
+        targetLibraryId={targetLibraryId}
+        newCondition={currentCondition}
+        onCancel={() => setDuplicate(null)}
+        onReplace={() => {
+          if (duplicate) replaceMutation.mutate(duplicate);
+        }}
+        replacePending={replaceMutation.isPending}
+      />
+
       <ManagePresetsModal
         opened={manageOpened}
         onClose={manageHandlers.close}
         target={target}
       />
     </Box>
+  );
+}
+
+interface DuplicatePresetModalProps {
+  existing: FilterPresetDto | null;
+  target: FilterPresetTarget;
+  targetLibraryId: string | null;
+  newCondition: SeriesCondition | BookCondition | undefined;
+  onCancel: () => void;
+  onReplace: () => void;
+  replacePending: boolean;
+}
+
+/**
+ * Confirmation modal shown when the user tries to save a preset whose name
+ * already exists in the same scope/library. Renders both the existing and
+ * the new preset's filter summary so the user can compare before deciding
+ * to Replace or Cancel.
+ */
+function DuplicatePresetModal({
+  existing,
+  target,
+  targetLibraryId,
+  newCondition,
+  onCancel,
+  onReplace,
+  replacePending,
+}: DuplicatePresetModalProps) {
+  if (!existing || !newCondition) {
+    return (
+      <Modal opened={existing !== null} onClose={onCancel} size="lg" title="" />
+    );
+  }
+  // Synthetic dto-like wrapper so PresetConditionSummary can render the
+  // in-progress draft the same way it renders saved presets.
+  const draftPreview: FilterPresetDto = {
+    id: "__draft__",
+    name: existing.name,
+    scope: "list",
+    target,
+    condition: newCondition as unknown as Record<string, never>,
+    query: null,
+    sort: null,
+    libraryId: targetLibraryId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return (
+    <Modal
+      opened={existing !== null}
+      onClose={onCancel}
+      title={`Replace preset "${existing.name}"?`}
+      size="xl"
+    >
+      <Stack gap="md">
+        <Text size="sm" c="dimmed">
+          A preset with this name already exists in the same scope. Replace its
+          filters with your current selection?
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+          <Card withBorder p="sm" radius="sm">
+            <Stack gap={6}>
+              <Group justify="space-between" wrap="nowrap">
+                <Text size="sm" fw={600}>
+                  Existing
+                </Text>
+                <Badge size="xs" variant="light" color="gray">
+                  {existing.libraryId == null ? "Global" : "This library"}
+                </Badge>
+              </Group>
+              <Divider />
+              <PresetConditionSummary preset={existing} />
+            </Stack>
+          </Card>
+          <Card withBorder p="sm" radius="sm">
+            <Stack gap={6}>
+              <Group justify="space-between" wrap="nowrap">
+                <Text size="sm" fw={600}>
+                  New
+                </Text>
+                <Badge size="xs" variant="light" color="blue">
+                  {targetLibraryId == null ? "Global" : "This library"}
+                </Badge>
+              </Group>
+              <Divider />
+              <PresetConditionSummary preset={draftPreview} />
+            </Stack>
+          </Card>
+        </SimpleGrid>
+        <Group justify="flex-end">
+          <Button variant="subtle" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button color="red" onClick={onReplace} loading={replacePending}>
+            Replace
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   );
 }

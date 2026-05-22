@@ -73,11 +73,12 @@ pub struct FilterPresetDto {
     pub target: String,
     #[schema(value_type = Object)]
     pub condition: serde_json::Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub query: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub sort: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Library scope. `null` means the preset applies globally. Always
+    /// serialized (no `skip_serializing_if`) so clients can reliably check
+    /// `libraryId === null` instead of having to also handle the field being
+    /// absent.
     pub library_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

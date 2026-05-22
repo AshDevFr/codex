@@ -4,6 +4,8 @@ import {
   Box,
   Button,
   Card,
+  Collapse,
+  Divider,
   Group,
   Loader,
   Modal,
@@ -14,14 +16,22 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconCheck, IconPencil, IconTrash } from "@tabler/icons-react";
+import {
+  IconCheck,
+  IconChevronDown,
+  IconChevronRight,
+  IconPencil,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   type FilterPresetDto,
   type FilterPresetTarget,
   filterPresetsApi,
 } from "@/api/filterPresets";
+import { librariesApi } from "@/api/libraries";
+import { PresetConditionSummary } from "./PresetConditionSummary";
 
 export interface ManagePresetsModalProps {
   opened: boolean;
@@ -85,6 +95,20 @@ function PresetsList({ target }: { target: FilterPresetTarget }) {
     staleTime: 15_000,
   });
 
+  // Used to resolve library_id -> library name in the expanded preset view.
+  const { data: libraries } = useQuery({
+    queryKey: ["libraries"],
+    queryFn: () => librariesApi.getAll(),
+    staleTime: 60_000,
+  });
+  const libraryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const lib of libraries ?? []) {
+      map.set(lib.id, lib.name);
+    }
+    return map;
+  }, [libraries]);
+
   if (isLoading) {
     return (
       <Group justify="center" py="md">
@@ -127,6 +151,7 @@ function PresetsList({ target }: { target: FilterPresetTarget }) {
                 <PresetRow
                   key={preset.id}
                   preset={preset}
+                  libraryNameById={libraryNameById}
                   onChange={() =>
                     qc.invalidateQueries({
                       queryKey: ["filter-presets"],
@@ -144,12 +169,15 @@ function PresetsList({ target }: { target: FilterPresetTarget }) {
 
 function PresetRow({
   preset,
+  libraryNameById,
   onChange,
 }: {
   preset: FilterPresetDto;
+  libraryNameById: Map<string, string>;
   onChange: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [draftName, setDraftName] = useState(preset.name);
 
   const renameMutation = useMutation({
@@ -184,53 +212,87 @@ function PresetRow({
     onSuccess: onChange,
   });
 
+  const scopeLabel =
+    preset.libraryId == null
+      ? "Global"
+      : (libraryNameById.get(preset.libraryId) ?? "Library");
+
   return (
     <Card withBorder p="xs" radius="sm">
       <Group justify="space-between" wrap="nowrap" align="center">
-        <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-          {renaming ? (
-            <Group gap="xs">
-              <TextInput
-                size="xs"
-                value={draftName}
-                onChange={(e) => setDraftName(e.currentTarget.value)}
-                style={{ flex: 1 }}
-                autoFocus
-                data-autofocus
-              />
-              <Button
-                size="compact-xs"
-                onClick={() => renameMutation.mutate()}
-                loading={renameMutation.isPending}
-                disabled={
-                  draftName.trim().length === 0 ||
-                  draftName.trim() === preset.name
-                }
-              >
-                Save
-              </Button>
-              <Button
-                size="compact-xs"
-                variant="subtle"
-                onClick={() => {
-                  setDraftName(preset.name);
-                  setRenaming(false);
-                }}
-              >
-                Cancel
-              </Button>
-            </Group>
-          ) : (
-            <>
-              <Text size="sm" fw={500} truncate>
-                {preset.name}
-              </Text>
-              <Text size="xs" c="dimmed" truncate>
-                {summarize(preset)}
-              </Text>
-            </>
+        <Group gap={4} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+          {!renaming && (
+            <ActionIcon
+              variant="subtle"
+              size="sm"
+              onClick={() => setExpanded((e) => !e)}
+              aria-label={
+                expanded
+                  ? `Collapse ${preset.name}`
+                  : `Expand ${preset.name} details`
+              }
+            >
+              {expanded ? (
+                <IconChevronDown size={14} />
+              ) : (
+                <IconChevronRight size={14} />
+              )}
+            </ActionIcon>
           )}
-        </Stack>
+          <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+            {renaming ? (
+              <Group gap="xs">
+                <TextInput
+                  size="xs"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.currentTarget.value)}
+                  style={{ flex: 1 }}
+                  autoFocus
+                  data-autofocus
+                />
+                <Button
+                  size="compact-xs"
+                  onClick={() => renameMutation.mutate()}
+                  loading={renameMutation.isPending}
+                  disabled={
+                    draftName.trim().length === 0 ||
+                    draftName.trim() === preset.name
+                  }
+                >
+                  Save
+                </Button>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  onClick={() => {
+                    setDraftName(preset.name);
+                    setRenaming(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </Group>
+            ) : (
+              <>
+                <Group gap={6} wrap="nowrap">
+                  <Text size="sm" fw={500} truncate>
+                    {preset.name}
+                  </Text>
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={preset.libraryId == null ? "blue" : "gray"}
+                  >
+                    {scopeLabel}
+                  </Badge>
+                </Group>
+                <Text size="xs" c="dimmed" truncate>
+                  {summarize(preset)}
+                </Text>
+              </>
+            )}
+          </Stack>
+        </Group>
         {!renaming && (
           <Group gap={4} wrap="nowrap">
             <Tooltip label="Rename">
@@ -261,13 +323,20 @@ function PresetRow({
           </Group>
         )}
       </Group>
+      {!renaming && (
+        <Collapse in={expanded}>
+          <Divider my="xs" />
+          <Box pl={26}>
+            <PresetConditionSummary preset={preset} />
+          </Box>
+        </Collapse>
+      )}
     </Card>
   );
 }
 
 function summarize(preset: FilterPresetDto): string {
   const bits: string[] = [];
-  if (preset.libraryId === null) bits.push("Global");
   if (preset.query) bits.push(`"${preset.query}"`);
   if (preset.sort) bits.push(`sort: ${preset.sort}`);
   if (

@@ -26,7 +26,7 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { FilterPresetDto } from "@/api/filterPresets";
 import { genresApi } from "@/api/genres";
@@ -37,6 +37,7 @@ import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 import {
   BOOK_FILTER_PARAM_KEYS,
   type BookCondition,
+  bookFilterStateToCondition,
   conditionToBookFilterState,
   serializeBookFilters,
 } from "@/types/filters";
@@ -104,10 +105,15 @@ export function BookFilterPanel({ libraryId }: BookFilterPanelProps = {}) {
   const {
     activeFilterCount: committedFilterCount,
     hasActiveFilters: hasCommittedFilters,
-    condition: committedCondition,
   } = useBookFilterState();
   // Use draft state for editing within the drawer
   const draftState = useDraftBookFilterState();
+  // Build the API condition from the draft so presets can be saved directly
+  // from in-drawer selections without first hitting Apply.
+  const draftCondition = useMemo(
+    () => bookFilterStateToCondition(draftState.draftFilters),
+    [draftState.draftFilters],
+  );
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -250,8 +256,8 @@ export function BookFilterPanel({ libraryId }: BookFilterPanelProps = {}) {
       <ListPresetControls
         target="books"
         libraryId={normalizedLibraryId}
-        currentCondition={committedCondition}
-        hasActiveFilters={hasCommittedFilters}
+        currentCondition={draftCondition}
+        hasActiveFilters={draftState.hasActiveFilters}
         onApply={handleApplyPreset}
       />
 

@@ -10406,7 +10406,13 @@ export interface components {
             createdAt: string;
             /** Format: uuid */
             id: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Library scope. `null` means the preset applies globally. Always
+             *     serialized (no `skip_serializing_if`) so clients can reliably check
+             *     `libraryId === null` instead of having to also handle the field being
+             *     absent.
+             */
             libraryId?: string | null;
             name: string;
             query?: string | null;

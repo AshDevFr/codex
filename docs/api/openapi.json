@@ -25409,7 +25409,8 @@
               "string",
               "null"
             ],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Library scope. `null` means the preset applies globally. Always\nserialized (no `skip_serializing_if`) so clients can reliably check\n`libraryId === null` instead of having to also handle the field being\nabsent."
           },
           "name": {
             "type": "string"
