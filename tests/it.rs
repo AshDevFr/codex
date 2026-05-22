@@ -6,9 +6,6 @@
 // it below.
 
 mod api;
-// mod commands;  // disabled: tests/commands/*.rs has been bitrotted (it referenced
-// codex::commands::*, which isn't exposed from lib.rs). It was never wired into
-// any test binary, so the rot wasn't visible. Fix or delete before re-enabling.
 mod db;
 mod event_bridge;
 mod parsers;

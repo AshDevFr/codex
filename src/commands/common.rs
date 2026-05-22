@@ -168,12 +168,16 @@ pub fn init_tracing(
             tracing_subscriber::fmt()
                 .with_env_filter(env_filter)
                 .with_writer(writer)
-                .init();
+                .try_init()
+                .ok();
 
             Some(guard)
         }
         (true, None) => {
-            tracing_subscriber::fmt().with_env_filter(env_filter).init();
+            tracing_subscriber::fmt()
+                .with_env_filter(env_filter)
+                .try_init()
+                .ok();
             None
         }
         (false, Some(log_path)) => {
@@ -197,12 +201,16 @@ pub fn init_tracing(
                 .with_env_filter(env_filter)
                 .with_writer(non_blocking)
                 .with_ansi(false)
-                .init();
+                .try_init()
+                .ok();
 
             Some(guard)
         }
         (false, None) => {
-            tracing_subscriber::fmt().with_env_filter(env_filter).init();
+            tracing_subscriber::fmt()
+                .with_env_filter(env_filter)
+                .try_init()
+                .ok();
             None
         }
     };
@@ -714,5 +722,157 @@ mod tests {
     async fn test_get_worker_count_default() {
         let worker_count = get_worker_count(None, None).await;
         assert_eq!(worker_count, 4); // Default value
+    }
+
+    fn make_sqlite_config(db_path: &std::path::Path) -> Config {
+        Config {
+            database: DatabaseConfig {
+                db_type: DatabaseType::SQLite,
+                postgres: None,
+                sqlite: Some(SQLiteConfig {
+                    path: db_path.to_str().unwrap().to_string(),
+                    pragmas: None,
+                    ..SQLiteConfig::default()
+                }),
+            },
+            ..Config::default()
+        }
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(codex_migration_env)]
+    async fn init_database_runs_migrations_by_default() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        unsafe {
+            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
+        }
+
+        let config = make_sqlite_config(&db_path);
+        let db = init_database(&config)
+            .await
+            .expect("init_database should succeed when skip is unset");
+
+        let complete = db.migrations_complete().await.unwrap();
+        assert!(complete, "migrations should be complete");
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(codex_migration_env)]
+    async fn init_database_with_skip_succeeds_when_migrations_already_complete() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let config = make_sqlite_config(&db_path);
+
+        // Run migrations out of band first.
+        let db = Database::new(&config.database).await.unwrap();
+        db.run_migrations().await.unwrap();
+        drop(db);
+
+        unsafe {
+            std::env::set_var("CODEX_SKIP_MIGRATIONS", "true");
+        }
+        let result = init_database(&config).await;
+        unsafe {
+            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
+        }
+
+        assert!(
+            result.is_ok(),
+            "init_database should succeed when skip is set and migrations are done: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(codex_migration_env)]
+    async fn init_database_with_skip_waits_for_concurrent_migrations() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        unsafe {
+            std::env::set_var("CODEX_SKIP_MIGRATIONS", "true");
+            std::env::set_var("CODEX_MIGRATION_WAIT_TIMEOUT", "10");
+            std::env::set_var("CODEX_MIGRATION_WAIT_INTERVAL", "1");
+        }
+
+        let config = make_sqlite_config(&db_path);
+
+        let config_clone = config.clone();
+        let migration_handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            let db = Database::new(&config_clone.database).await.unwrap();
+            db.run_migrations().await.unwrap();
+        });
+
+        let result = init_database(&config).await;
+        migration_handle.await.unwrap();
+
+        unsafe {
+            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
+            std::env::remove_var("CODEX_MIGRATION_WAIT_TIMEOUT");
+            std::env::remove_var("CODEX_MIGRATION_WAIT_INTERVAL");
+        }
+
+        let db = result.expect("init_database should succeed once migrations complete");
+        assert!(db.migrations_complete().await.unwrap());
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(codex_migration_env)]
+    async fn init_database_with_skip_accepts_one_as_truthy() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let config = make_sqlite_config(&db_path);
+
+        let db = Database::new(&config.database).await.unwrap();
+        db.run_migrations().await.unwrap();
+        drop(db);
+
+        unsafe {
+            std::env::set_var("CODEX_SKIP_MIGRATIONS", "1");
+        }
+        let result = init_database(&config).await;
+        unsafe {
+            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
+        }
+
+        assert!(
+            result.is_ok(),
+            "'1' should be treated as truthy: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial(codex_migration_env)]
+    async fn init_database_with_skip_times_out_when_migrations_never_run() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        unsafe {
+            std::env::set_var("CODEX_SKIP_MIGRATIONS", "true");
+            std::env::set_var("CODEX_MIGRATION_WAIT_TIMEOUT", "2");
+            std::env::set_var("CODEX_MIGRATION_WAIT_INTERVAL", "1");
+        }
+
+        let config = make_sqlite_config(&db_path);
+        let result = init_database(&config).await;
+
+        unsafe {
+            std::env::remove_var("CODEX_SKIP_MIGRATIONS");
+            std::env::remove_var("CODEX_MIGRATION_WAIT_TIMEOUT");
+            std::env::remove_var("CODEX_MIGRATION_WAIT_INTERVAL");
+        }
+
+        let err = result.expect_err("should time out when migrations never complete");
+        let msg = err.to_string();
+        assert!(
+            msg.to_lowercase().contains("timeout"),
+            "error should mention timeout: {}",
+            msg
+        );
     }
 }

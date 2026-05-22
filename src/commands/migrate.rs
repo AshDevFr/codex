@@ -50,3 +50,52 @@ pub async fn migrate_command(config_path: PathBuf) -> Result<()> {
         anyhow::bail!("Migrations completed but status check indicates pending migrations");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write_sqlite_config(temp_dir: &TempDir) -> PathBuf {
+        let config_path = temp_dir.path().join("test_config.yaml");
+        let db_path = temp_dir.path().join("test.db");
+        let config_content = format!(
+            r#"
+application:
+  host: "127.0.0.1"
+  port: 8080
+
+database:
+  db_type: sqlite
+  sqlite:
+    path: "{}"
+"#,
+            db_path.to_str().unwrap()
+        );
+        std::fs::write(&config_path, config_content).unwrap();
+        config_path
+    }
+
+    #[tokio::test]
+    async fn migrate_command_runs_to_completion() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = write_sqlite_config(&temp_dir);
+
+        let result = migrate_command(config_path).await;
+
+        assert!(result.is_ok(), "migrate should succeed: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn migrate_command_is_idempotent() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = write_sqlite_config(&temp_dir);
+
+        migrate_command(config_path.clone())
+            .await
+            .expect("first migrate should succeed");
+
+        let result = migrate_command(config_path).await;
+        assert!(result.is_ok(), "re-running migrate should also succeed");
+    }
+}
