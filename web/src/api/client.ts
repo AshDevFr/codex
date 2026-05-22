@@ -6,7 +6,7 @@ import axios, {
 import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import type { ApiError } from "@/types";
-import { getFreshAccessToken } from "./refreshClient";
+import { getFreshAccessToken, RefreshFailedError } from "./refreshClient";
 
 // Rate limit retry configuration
 const RATE_LIMIT_MAX_RETRIES = 3;
@@ -137,8 +137,12 @@ api.interceptors.response.use(
     }
 
     // Handle 401 Unauthorized.
-    // Try a single refresh-token exchange first; on failure (or for auth
-    // endpoints themselves) fall through to the legacy clear-auth + redirect.
+    // Try a single refresh-token exchange first. A *transient* refresh
+    // failure (network/5xx/429) must not log the user out: an unstable
+    // connection should not look like a forced sign-out. Only a definitive
+    // refresh failure (the server actually rejected the refresh token)
+    // falls through to clear-auth + redirect.
+    let refreshWasTransient = false;
     if (
       error.response?.status === 401 &&
       config &&
@@ -154,8 +158,22 @@ api.interceptors.response.use(
           (config.headers as Record<string, string>).Authorization =
             `Bearer ${newAccessToken}`;
           return api.request(config);
-        } catch {
-          // Refresh failed; fall through to the clear-auth path below.
+        } catch (refreshErr) {
+          if (
+            refreshErr instanceof RefreshFailedError &&
+            refreshErr.transient
+          ) {
+            refreshWasTransient = true;
+            console.warn(
+              "[auth] transient refresh failure; keeping session and surfacing original 401",
+              {
+                status: refreshErr.status,
+                originalUrl: config.url,
+              },
+            );
+          } else {
+            console.warn("[auth] refresh failed; clearing session", refreshErr);
+          }
         }
       }
     }
@@ -166,10 +184,11 @@ api.interceptors.response.use(
         message: error.response.data?.message || error.message,
       };
 
-      // Handle 401 Unauthorized - clear auth state and redirect to login.
-      // We reach this either because no refresh token was available, the
-      // refresh itself failed, or the retried request still 401'd.
-      if (error.response.status === 401) {
+      // Clear auth on 401 unless we held the session through a transient
+      // refresh hiccup. Reaches here either because no refresh token was
+      // available, the refresh definitively failed, or the retried request
+      // still 401'd.
+      if (error.response.status === 401 && !refreshWasTransient) {
         const { clearAuth } = useAuthStore.getState();
         clearAuth();
         navigationService.navigateTo("/login");

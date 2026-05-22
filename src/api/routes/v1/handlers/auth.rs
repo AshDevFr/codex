@@ -271,18 +271,36 @@ pub async fn refresh(
         .refresh_token_service
         .validate_and_rotate(
             &request.refresh_token,
-            user_agent,
+            user_agent.clone(),
             client_info.ip_address.clone(),
         )
         .await
-        .map_err(|err| match err {
-            RefreshTokenError::Unknown
-            | RefreshTokenError::Expired
-            | RefreshTokenError::Revoked => {
-                ApiError::Unauthorized("Invalid refresh token".to_string())
-            }
-            RefreshTokenError::Other(e) => {
-                ApiError::Internal(format!("Failed to rotate refresh token: {}", e))
+        .map_err(|err| {
+            // Log structured context so an intermittent kick-out can be traced
+            // back to a specific reason. The refresh token itself is never
+            // logged.
+            let reason = match &err {
+                RefreshTokenError::Unknown => "unknown",
+                RefreshTokenError::Expired => "expired",
+                RefreshTokenError::Revoked => "revoked",
+                RefreshTokenError::Other(_) => "other",
+            };
+            tracing::warn!(
+                reason = reason,
+                ip = ?client_info.ip_address,
+                user_agent = ?user_agent,
+                error = ?err,
+                "refresh-token exchange rejected",
+            );
+            match err {
+                RefreshTokenError::Unknown
+                | RefreshTokenError::Expired
+                | RefreshTokenError::Revoked => {
+                    ApiError::Unauthorized("Invalid refresh token".to_string())
+                }
+                RefreshTokenError::Other(e) => {
+                    ApiError::Internal(format!("Failed to rotate refresh token: {}", e))
+                }
             }
         })?;
 

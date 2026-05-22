@@ -1,7 +1,11 @@
 import axios from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/store/authStore";
-import { __resetInFlightRefresh, getFreshAccessToken } from "./refreshClient";
+import {
+  __resetInFlightRefresh,
+  getFreshAccessToken,
+  RefreshFailedError,
+} from "./refreshClient";
 
 vi.mock("axios", async () => {
   const actual = await vi.importActual<typeof import("axios")>("axios");
@@ -129,5 +133,54 @@ describe("refreshClient.getFreshAccessToken", () => {
 
     await expect(getFreshAccessToken()).rejects.toThrow();
     expect(mockedAxiosPost).not.toHaveBeenCalled();
+  });
+
+  it("classifies a no-response network error as transient", async () => {
+    // axios rejects with no `response` when the request never reached a server.
+    mockedAxiosPost.mockRejectedValueOnce({
+      message: "Network Error",
+      code: "ERR_NETWORK",
+    });
+
+    await expect(getFreshAccessToken()).rejects.toMatchObject({
+      name: "RefreshFailedError",
+      transient: true,
+    });
+  });
+
+  it("classifies a 5xx as transient", async () => {
+    mockedAxiosPost.mockRejectedValueOnce({
+      response: { status: 503, data: {} },
+      message: "Service Unavailable",
+    });
+
+    const err = await getFreshAccessToken().catch((e) => e);
+    expect(err).toBeInstanceOf(RefreshFailedError);
+    expect((err as RefreshFailedError).transient).toBe(true);
+    expect((err as RefreshFailedError).status).toBe(503);
+  });
+
+  it("classifies a 429 as transient", async () => {
+    mockedAxiosPost.mockRejectedValueOnce({
+      response: { status: 429, data: {} },
+      message: "Too Many Requests",
+    });
+
+    const err = await getFreshAccessToken().catch((e) => e);
+    expect(err).toBeInstanceOf(RefreshFailedError);
+    expect((err as RefreshFailedError).transient).toBe(true);
+    expect((err as RefreshFailedError).status).toBe(429);
+  });
+
+  it("classifies a 401 from /auth/refresh as definitive", async () => {
+    mockedAxiosPost.mockRejectedValueOnce({
+      response: { status: 401, data: { error: "Unauthorized" } },
+      message: "Unauthorized",
+    });
+
+    const err = await getFreshAccessToken().catch((e) => e);
+    expect(err).toBeInstanceOf(RefreshFailedError);
+    expect((err as RefreshFailedError).transient).toBe(false);
+    expect((err as RefreshFailedError).status).toBe(401);
   });
 });

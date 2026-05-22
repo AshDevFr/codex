@@ -3,6 +3,7 @@ import { navigationService } from "@/services/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { api, onRateLimitNotification } from "./client";
 import * as refreshClient from "./refreshClient";
+import { RefreshFailedError } from "./refreshClient";
 
 describe("API Client", () => {
   beforeEach(() => {
@@ -513,6 +514,84 @@ describe("Refresh Token Retry Logic", () => {
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(navigationService.navigateTo).toHaveBeenCalledWith("/login");
+  });
+
+  it("clears auth when /auth/refresh definitively returns 401", async () => {
+    vi.spyOn(refreshClient, "getFreshAccessToken").mockRejectedValueOnce(
+      new RefreshFailedError({
+        message: "auth/refresh failed (HTTP 401)",
+        transient: false,
+        status: 401,
+      }),
+    );
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url: "/users/me", method: "get", headers: {} },
+    };
+
+    const interceptor = getResponseInterceptor();
+    await expect(interceptor!(mockError)).rejects.toEqual({
+      error: "Unauthorized",
+      message: undefined,
+    });
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(navigationService.navigateTo).toHaveBeenCalledWith("/login");
+  });
+
+  it("keeps the session alive when /auth/refresh fails transiently (network)", async () => {
+    vi.spyOn(refreshClient, "getFreshAccessToken").mockRejectedValueOnce(
+      new RefreshFailedError({
+        message: "auth/refresh failed",
+        transient: true,
+      }),
+    );
+    // Suppress the diagnostic warn the interceptor emits.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url: "/books/abc/progress", method: "put", headers: {} },
+    };
+
+    const interceptor = getResponseInterceptor();
+    await expect(interceptor!(mockError)).rejects.toEqual({
+      error: "Unauthorized",
+      message: undefined,
+    });
+
+    // The session must survive: no clearAuth, no redirect.
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().refreshToken).toBe("old-refresh");
+    expect(navigationService.navigateTo).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
+  it("keeps the session alive when /auth/refresh fails transiently (5xx)", async () => {
+    vi.spyOn(refreshClient, "getFreshAccessToken").mockRejectedValueOnce(
+      new RefreshFailedError({
+        message: "auth/refresh failed (HTTP 503)",
+        transient: true,
+        status: 503,
+      }),
+    );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const mockError = {
+      response: { status: 401, data: { error: "Unauthorized" } },
+      config: { url: "/books/abc/progress", method: "put", headers: {} },
+    };
+
+    const interceptor = getResponseInterceptor();
+    await expect(interceptor!(mockError)).rejects.toBeTruthy();
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(navigationService.navigateTo).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
   });
 
   it("does not loop: a request that 401s again after retry surfaces the error", async () => {
