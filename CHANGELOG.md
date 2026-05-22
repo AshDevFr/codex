@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.28.2] - 2026-05-22
+
+### 🐛 Bug Fixes
+
+- *(auth)* Keep session through transient refresh-token failures
+
 ## [1.28.1] - 2026-05-22
 
 ### 🐛 Bug Fixes
