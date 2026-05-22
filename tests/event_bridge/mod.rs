@@ -4,6 +4,7 @@
 //! recorded and can be replayed on a different broadcaster (simulating the
 //! web server replaying events from worker processes).
 
+#[path = "../common/mod.rs"]
 mod common;
 
 use chrono::Utc;
