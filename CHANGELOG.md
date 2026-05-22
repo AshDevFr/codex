@@ -2,6 +2,16 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.28.1] - 2026-05-22
+
+### 🐛 Bug Fixes
+
+- *(presets)* Show global presets, allow saving from draft, and offer replace on duplicate
+
+### 📚 Documentation
+
+- Cover advanced search, mobile/PWA, and refresh tokens with new screenshots
+
 ## [1.28.0] - 2026-05-21
 
 ### 🚀 Features
