@@ -4,6 +4,7 @@ mod config;
 mod db;
 mod events;
 mod models;
+mod observability;
 mod parsers;
 mod scanner;
 mod scheduler;

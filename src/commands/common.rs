@@ -1,6 +1,7 @@
 use crate::config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use crate::db::Database;
 use crate::events::EventBroadcaster;
+use crate::observability::ObservabilityHandle;
 use crate::services::{SettingsService, TaskMetricsService};
 use crate::tasks::TaskWorker;
 use sea_orm::DatabaseConnection;
@@ -110,16 +111,30 @@ pub fn load_config(config_path: PathBuf) -> anyhow::Result<(Config, bool)> {
     Ok((config, config_created))
 }
 
-/// Initialize tracing with config
-/// Returns an optional guard that must be kept alive and the log level string
-pub fn init_tracing(
-    config: &Config,
-) -> anyhow::Result<(Option<tracing_appender::non_blocking::WorkerGuard>, String)> {
-    use std::fs;
-    use std::io;
-    use tracing_subscriber::fmt::writer::MakeWriterExt;
+/// Bundle of long-lived guards returned by [`init_tracing`].
+///
+/// `file_guard` keeps the non-blocking file appender's worker thread alive,
+/// `observability` owns the OTel providers so [`ObservabilityHandle::shutdown`]
+/// can flush them on graceful exit, and `log_level` is the effective filter
+/// string for diagnostic logging.
+pub struct TracingHandles {
+    pub file_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
+    pub observability: ObservabilityHandle,
+    pub log_level: String,
+}
 
-    // Get log level from config or environment
+/// Initialize tracing with config.
+///
+/// Composes the existing fmt + file appender with an optional OpenTelemetry
+/// layer when `observability.enabled` is true. Returns a [`TracingHandles`]
+/// bundle that the caller is expected to keep alive for the process lifetime
+/// and to drive shutdown through.
+pub fn init_tracing(config: &Config) -> anyhow::Result<TracingHandles> {
+    use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+    // Resolve the effective log filter: explicit RUST_LOG wins, then config.
+    // At info/warn/error we silence sqlx down to warn (it is otherwise noisy
+    // at info), preserving the user's level for the rest of the workspace.
     let log_level = if let Ok(env_log) = std::env::var("RUST_LOG") {
         if env_log.contains("sqlx=") {
             env_log
@@ -143,79 +158,103 @@ pub fn init_tracing(
     };
 
     let env_filter = EnvFilter::new(&log_level);
-    let console_enabled = config.logging.console;
 
-    let guard = match (console_enabled, &config.logging.file) {
-        (true, Some(log_path)) => {
-            let log_path = std::path::Path::new(log_path);
-            if let Some(parent) = log_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
+    // Build the writer + keep the appender's worker guard alive. Branches on
+    // the (console, file) matrix and erases the writer type via `BoxMakeWriter`
+    // so the registry composition stays uniform.
+    let (writer, file_guard, ansi_enabled) =
+        build_log_writer(config.logging.console, config.logging.file.as_deref())?;
 
-            let directory = log_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-            let filename = log_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("codex.log");
+    // Initialize OTel providers (no-op when disabled or feature off). Done
+    // before constructing the bridge layer so the global tracer is in place
+    // for any code that grabs it via `global::tracer(...)` later.
+    let observability = crate::observability::init(&config.observability)?;
 
-            let file_appender = tracing_appender::rolling::daily(directory, filename);
-            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    let fmt_layer = fmt::layer()
+        .with_writer(writer)
+        .with_ansi(ansi_enabled)
+        .event_format(crate::observability::TraceContextFormat::default());
 
-            let writer = io::stdout.and(non_blocking);
+    // Compose subscribers inline: a generic helper here trips up the
+    // Layer<S>/Subscriber bounds because each `.with(...)` changes S, so the
+    // inline form is the cleanest path. Keep the two branches in sync.
+    #[cfg(feature = "observability")]
+    {
+        let otel_layer = observability
+            .tracer()
+            .cloned()
+            .map(|t| tracing_opentelemetry::layer().with_tracer(t));
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer)
+            .with(otel_layer)
+            .init();
+    }
+    #[cfg(not(feature = "observability"))]
+    {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer)
+            .init();
+    }
 
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .with_writer(writer)
-                .try_init()
-                .ok();
+    Ok(TracingHandles {
+        file_guard,
+        observability,
+        log_level,
+    })
+}
 
-            Some(guard)
+/// Build a `MakeWriter` covering the (console, file) matrix.
+///
+/// Returns a type-erased writer plus the file appender's worker guard (when
+/// applicable) and whether ANSI escapes should be emitted (off for file-only
+/// output to keep log files plain text).
+fn build_log_writer(
+    console_enabled: bool,
+    log_file: Option<&str>,
+) -> anyhow::Result<(
+    tracing_subscriber::fmt::writer::BoxMakeWriter,
+    Option<tracing_appender::non_blocking::WorkerGuard>,
+    bool,
+)> {
+    use std::io;
+    use tracing_subscriber::fmt::writer::{BoxMakeWriter, MakeWriterExt};
+
+    match (console_enabled, log_file) {
+        (true, Some(path)) => {
+            let (non_blocking, guard) = build_file_appender(path)?;
+            let combined = io::stdout.and(non_blocking);
+            Ok((BoxMakeWriter::new(combined), Some(guard), true))
         }
-        (true, None) => {
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .try_init()
-                .ok();
-            None
+        (true, None) => Ok((BoxMakeWriter::new(io::stdout), None, true)),
+        (false, Some(path)) => {
+            let (non_blocking, guard) = build_file_appender(path)?;
+            Ok((BoxMakeWriter::new(non_blocking), Some(guard), false))
         }
-        (false, Some(log_path)) => {
-            let log_path = std::path::Path::new(log_path);
-            if let Some(parent) = log_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
+        (false, None) => Ok((BoxMakeWriter::new(io::sink), None, false)),
+    }
+}
 
-            let directory = log_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-            let filename = log_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("codex.log");
-
-            let file_appender = tracing_appender::rolling::daily(directory, filename);
-            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .with_writer(non_blocking)
-                .with_ansi(false)
-                .try_init()
-                .ok();
-
-            Some(guard)
-        }
-        (false, None) => {
-            tracing_subscriber::fmt()
-                .with_env_filter(env_filter)
-                .try_init()
-                .ok();
-            None
-        }
-    };
-
-    Ok((guard, log_level))
+fn build_file_appender(
+    log_path: &str,
+) -> anyhow::Result<(
+    tracing_appender::non_blocking::NonBlocking,
+    tracing_appender::non_blocking::WorkerGuard,
+)> {
+    let log_path = std::path::Path::new(log_path);
+    if let Some(parent) = log_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let directory = log_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let filename = log_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("codex.log");
+    let file_appender = tracing_appender::rolling::daily(directory, filename);
+    Ok(tracing_appender::non_blocking(file_appender))
 }
 
 /// Display database configuration

@@ -1,6 +1,7 @@
 use crate::commands::common::{
-    display_database_config, ensure_data_directories, get_worker_count, init_database,
-    init_settings_service, init_tracing, load_config, shutdown_workers, spawn_workers,
+    TracingHandles, display_database_config, ensure_data_directories, get_worker_count,
+    init_database, init_settings_service, init_tracing, load_config, shutdown_workers,
+    spawn_workers,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,9 +14,9 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Load configuration
     let (config, _config_created) = load_config(config_path.clone())?;
 
-    // Initialize tracing with config
-    let (log_guard, log_level) = init_tracing(&config)?;
-    info!("Logging level: {}", log_level);
+    // Initialize tracing with config (composes fmt + optional OTel layer)
+    let tracing_handles = init_tracing(&config)?;
+    info!("Logging level: {}", tracing_handles.log_level);
     info!("Loading configuration from {:?}", config_path);
     info!("Configuration loaded successfully");
 
@@ -180,8 +181,12 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  Press Ctrl+C to stop");
     info!("========================================");
 
-    // Keep log guard alive
-    let _log_guard = log_guard;
+    // Keep log guard alive; hold the observability handle until graceful exit.
+    let TracingHandles {
+        file_guard: _log_guard,
+        observability: observability_handle,
+        log_level: _,
+    } = tracing_handles;
 
     // Wait for shutdown signal
     shutdown_signal().await;
@@ -207,6 +212,10 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Shutdown workers
     shutdown_workers(worker_handles, worker_shutdown_channels, worker_count).await;
+
+    // Flush + shut down OTel providers (no-op when observability is disabled).
+    info!("Flushing OpenTelemetry providers...");
+    observability_handle.shutdown();
 
     info!("Shutdown complete");
 

@@ -13,9 +13,18 @@ name = "codex"
 path = "src/main.rs"
 
 [features]
-default = ["rar"]
+default = ["rar", "observability"]
 rar = ["dep:unrar"]
 embed-frontend = []
+observability = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+    "dep:opentelemetry-semantic-conventions",
+    "dep:tracing-opentelemetry",
+    "dep:axum-tracing-opentelemetry",
+    "dep:tonic",
+]
 
 [workspace]
 members = [".", "migration"]
@@ -108,6 +117,28 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 log = "0.4"                                                         # For sqlx logging level configuration
+
+# OpenTelemetry (optional, gated by `observability` feature)
+opentelemetry = { version = "0.32", optional = true }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "trace", "metrics"], optional = true }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = [
+    "grpc-tonic",
+    "http-proto",
+    "http-json",
+    # Blocking HTTP client is intentional: the OTel SDK 0.32 batch processor
+    # runs export on a dedicated std::thread that has no async runtime
+    # attached. An async reqwest client would panic on first export. The
+    # blocking client only blocks the batch thread, not the server runtime.
+    "reqwest-blocking-client",
+    "trace",
+    "metrics",
+], optional = true }
+opentelemetry-semantic-conventions = { version = "0.32", optional = true }
+tracing-opentelemetry = { version = "0.33", optional = true }
+axum-tracing-opentelemetry = { version = "0.33", optional = true }
+# Re-used via opentelemetry-otlp's grpc-tonic feature; declared here so
+# metadata helpers can use MetadataKey/MetadataValue types directly.
+tonic = { version = "0.14", default-features = false, optional = true }
 async-stream = "0.3"
 futures = "0.3"
 tokio-stream = "0.1"

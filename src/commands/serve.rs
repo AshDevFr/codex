@@ -1,6 +1,7 @@
 use crate::commands::common::{
-    display_database_config, ensure_data_directories, get_worker_count, init_database,
-    init_settings_service, init_tracing, load_config, shutdown_workers, spawn_workers,
+    TracingHandles, display_database_config, ensure_data_directories, get_worker_count,
+    init_database, init_settings_service, init_tracing, load_config, shutdown_workers,
+    spawn_workers,
 };
 use crate::config::DatabaseType;
 use std::path::PathBuf;
@@ -14,9 +15,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Load configuration
     let (config, config_created) = load_config(config_path.clone())?;
 
-    // Initialize tracing with config
-    let (log_guard, log_level) = init_tracing(&config)?;
-    info!("Logging level: {}", log_level);
+    // Initialize tracing with config (composes fmt + optional OTel layer)
+    let tracing_handles = init_tracing(&config)?;
+    info!("Logging level: {}", tracing_handles.log_level);
+    info!(
+        "Observability: traces={}, metrics={}",
+        tracing_handles.observability.traces_enabled(),
+        tracing_handles.observability.metrics_enabled(),
+    );
 
     if config_created {
         info!("Created default configuration file");
@@ -504,8 +510,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         info!("  GET  {} - API docs (Scalar)", config.api.api_docs_path);
     }
 
-    // Keep log guard alive
-    let _log_guard = log_guard;
+    // Destructure the tracing handles: keep file guard alive for the
+    // remainder of `serve_command`, and hold onto the OTel guard so we can
+    // flush providers explicitly during graceful shutdown.
+    let TracingHandles {
+        file_guard: _log_guard,
+        observability: observability_handle,
+        log_level: _,
+    } = tracing_handles;
 
     // Start server
     info!("========================================");
@@ -600,6 +612,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     if !disable_workers && worker_count > 0 {
         shutdown_workers(worker_handles, worker_shutdown_channels, worker_count).await;
     }
+
+    // Flush + shut down OTel providers (no-op when observability is disabled).
+    // Done last so any spans emitted during shutdown still get exported.
+    info!("Flushing OpenTelemetry providers...");
+    observability_handle.shutdown();
+    info!("OpenTelemetry providers flushed");
 
     info!("Shutdown complete");
     server_result?;
