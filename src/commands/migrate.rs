@@ -9,9 +9,9 @@ pub async fn migrate_command(config_path: PathBuf) -> Result<()> {
     // Load configuration
     let (config, _config_created) = load_config(config_path.clone())?;
 
-    // Initialize tracing with config
-    let (_log_guard, log_level) = init_tracing(&config)?;
-    info!("Logging level: {}", log_level);
+    // Initialize tracing with config (composes fmt + optional OTel layer)
+    let _tracing_handles = init_tracing(&config)?;
+    info!("Logging level: {}", _tracing_handles.log_level);
     info!("Loading configuration from {:?}", config_path);
     info!("Configuration loaded successfully");
 

@@ -168,10 +168,15 @@ pub fn create_router(state: Arc<AppState>, config: &Config) -> Router {
         },
     ));
 
-    // Add request tracing middleware (outermost layer)
+    // Add request tracing middleware
     // This logs all HTTP requests/responses with method, path, status, and latency
     // Logs at debug level for normal requests, error level for 5xx responses
     router = router.layer(create_trace_layer());
+
+    // OpenTelemetry HTTP span / response context middleware (outermost layer).
+    // No-op when the `observability` feature is disabled or
+    // `observability.enabled` is false in config.
+    router = crate::observability::install_http_layers(router, &config.observability);
 
     router
 }

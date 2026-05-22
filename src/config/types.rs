@@ -269,6 +269,8 @@ pub struct Config {
     pub koreader_api: KoreaderApiConfig,
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
+    #[serde(default)]
+    pub observability: ObservabilityConfig,
 }
 
 fn default_data_dir() -> String {
@@ -399,6 +401,7 @@ impl Default for Config {
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
+            observability: ObservabilityConfig::default(),
         }
     }
 }
@@ -914,6 +917,194 @@ impl Default for EmailConfig {
     }
 }
 
+/// OTLP wire protocol used by the OpenTelemetry exporter.
+///
+/// `Grpc` is the default; `HttpProtobuf` is the right choice when the operator's
+/// collector accepts OTLP/HTTP-protobuf (e.g., behind a load balancer that
+/// can't terminate gRPC). `HttpJson` is supported for parity but rarely the
+/// best pick: payloads are larger and most collectors prefer protobuf.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum OtlpProtocol {
+    #[default]
+    Grpc,
+    #[serde(alias = "http-protobuf", alias = "http_protobuf", alias = "httpproto")]
+    HttpProtobuf,
+    #[serde(alias = "http-json", alias = "http_json")]
+    HttpJson,
+}
+
+impl OtlpProtocol {
+    #[allow(dead_code)] // Used by observability module when feature is enabled.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OtlpProtocol::Grpc => "grpc",
+            OtlpProtocol::HttpProtobuf => "http/protobuf",
+            OtlpProtocol::HttpJson => "http/json",
+        }
+    }
+}
+
+/// OTLP exporter transport and endpoint configuration.
+///
+/// `endpoint` is empty by default; an empty endpoint paired with
+/// `observability.enabled = true` is treated as a misconfiguration and the
+/// OTel layer will not be installed. `headers` is the place for tenant/auth
+/// headers (e.g., `signoz-access-token`, `x-honeycomb-team`).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct OtlpConfig {
+    /// OTLP collector endpoint URL. For gRPC use `http://host:4317`; for
+    /// HTTP/protobuf use `http://host:4318` (the SDK appends `/v1/traces`,
+    /// `/v1/metrics` per signal).
+    pub endpoint: String,
+
+    /// Wire protocol used to reach the collector.
+    pub protocol: OtlpProtocol,
+
+    /// Arbitrary headers attached to every export request (auth, tenancy).
+    pub headers: HashMap<String, String>,
+
+    /// Per-export request timeout in milliseconds.
+    pub timeout_ms: u64,
+}
+
+impl Default for OtlpConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: env_string_opt("CODEX_OBSERVABILITY_OTLP_ENDPOINT").unwrap_or_default(),
+            protocol: env_string_opt("CODEX_OBSERVABILITY_OTLP_PROTOCOL")
+                .and_then(|s| match s.to_lowercase().as_str() {
+                    "grpc" => Some(OtlpProtocol::Grpc),
+                    "http/protobuf" | "http-protobuf" | "http_protobuf" | "httpproto" => {
+                        Some(OtlpProtocol::HttpProtobuf)
+                    }
+                    "http/json" | "http-json" | "http_json" => Some(OtlpProtocol::HttpJson),
+                    _ => None,
+                })
+                .unwrap_or_default(),
+            headers: HashMap::new(),
+            timeout_ms: env_or("CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS", 5000),
+        }
+    }
+}
+
+/// Trace exporter configuration.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct ObservabilityTracesConfig {
+    /// Enable trace export. Honored only when the parent `observability.enabled`
+    /// is also true.
+    pub enabled: bool,
+
+    /// Parent-based sampling ratio in `[0.0, 1.0]`. Values outside this range
+    /// are clamped at init.
+    pub sample_ratio: f64,
+}
+
+impl Default for ObservabilityTracesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_OBSERVABILITY_TRACES_ENABLED", true),
+            sample_ratio: env_or("CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO", 1.0_f64),
+        }
+    }
+}
+
+/// Metrics exporter configuration.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct ObservabilityMetricsConfig {
+    /// Enable metrics export. Honored only when the parent `observability.enabled`
+    /// is also true.
+    pub enabled: bool,
+
+    /// Periodic reader export interval in milliseconds.
+    pub export_interval_ms: u64,
+}
+
+impl Default for ObservabilityMetricsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_OBSERVABILITY_METRICS_ENABLED", true),
+            export_interval_ms: env_or("CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS", 30000),
+        }
+    }
+}
+
+/// Browser RUM configuration. The browser SDK posts OTLP via the Codex proxy;
+/// this struct controls the proxy endpoint, default sample ratio, and an
+/// opt-in switch separate from the backend tracing flag.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct ObservabilityBrowserConfig {
+    /// Opt-in switch for serving the browser SDK config and the OTLP proxy.
+    /// Independent of the backend `observability.enabled` flag because some
+    /// operators want server-side observability without shipping spans from
+    /// every browser tab.
+    pub enabled: bool,
+
+    /// Path on the Codex server where the browser SDK POSTs OTLP batches.
+    /// The SDK is expected to append `/v1/traces` / `/v1/metrics` to this base.
+    pub proxy_path: String,
+
+    /// Sample ratio applied client-side. Browsers are noisy; default low.
+    pub sample_ratio: f64,
+}
+
+impl Default for ObservabilityBrowserConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_OBSERVABILITY_BROWSER_ENABLED", false),
+            proxy_path: env_string_opt("CODEX_OBSERVABILITY_BROWSER_PROXY_PATH")
+                .unwrap_or_else(|| "/api/v1/observability/otlp".to_string()),
+            sample_ratio: env_or("CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO", 0.1_f64),
+        }
+    }
+}
+
+/// Top-level observability configuration.
+///
+/// Disabled by default. When `enabled` is `false`, no providers are
+/// initialized and no telemetry leaves the process. This is the trust posture
+/// for a self-hosted product.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct ObservabilityConfig {
+    /// Master switch. Must be `true` for any OTel work to happen.
+    pub enabled: bool,
+
+    /// `service.name` resource attribute. Identifies this process in the
+    /// backend's UI; defaults to `codex`.
+    pub service_name: String,
+
+    /// OTLP exporter transport configuration.
+    pub otlp: OtlpConfig,
+
+    /// Trace pipeline configuration.
+    pub traces: ObservabilityTracesConfig,
+
+    /// Metric pipeline configuration.
+    pub metrics: ObservabilityMetricsConfig,
+
+    /// Browser RUM proxy configuration.
+    pub browser: ObservabilityBrowserConfig,
+}
+
+impl Default for ObservabilityConfig {
+    fn default() -> Self {
+        Self {
+            enabled: env_bool_or("CODEX_OBSERVABILITY_ENABLED", false),
+            service_name: env_string_opt("CODEX_OBSERVABILITY_SERVICE_NAME")
+                .unwrap_or_else(|| "codex".to_string()),
+            otlp: OtlpConfig::default(),
+            traces: ObservabilityTracesConfig::default(),
+            metrics: ObservabilityMetricsConfig::default(),
+            browser: ObservabilityBrowserConfig::default(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1225,6 +1416,7 @@ verification_url_base: https://codex.example.com
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
+            observability: ObservabilityConfig::default(),
         };
 
         // Application name moved to database settings
@@ -2123,5 +2315,117 @@ files:
 "#;
         let config: Config = serde_yaml::from_str(yaml_content).unwrap();
         assert_eq!(config.files.plugins_dir, "/tmp/plugins");
+    }
+
+    // ---- observability config ----
+
+    #[test]
+    #[serial]
+    fn test_observability_defaults_are_disabled() {
+        // Clear any env vars that might otherwise flip the defaults.
+        for var in [
+            "CODEX_OBSERVABILITY_ENABLED",
+            "CODEX_OBSERVABILITY_SERVICE_NAME",
+            "CODEX_OBSERVABILITY_OTLP_ENDPOINT",
+            "CODEX_OBSERVABILITY_OTLP_PROTOCOL",
+            "CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS",
+            "CODEX_OBSERVABILITY_TRACES_ENABLED",
+            "CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO",
+            "CODEX_OBSERVABILITY_METRICS_ENABLED",
+            "CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS",
+            "CODEX_OBSERVABILITY_BROWSER_ENABLED",
+            "CODEX_OBSERVABILITY_BROWSER_PROXY_PATH",
+            "CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO",
+        ] {
+            unsafe { std::env::remove_var(var) };
+        }
+        let config = ObservabilityConfig::default();
+        assert!(!config.enabled, "observability must be off by default");
+        assert_eq!(config.service_name, "codex");
+        assert!(matches!(config.otlp.protocol, OtlpProtocol::Grpc));
+        assert!(config.otlp.endpoint.is_empty());
+        assert_eq!(config.otlp.timeout_ms, 5000);
+        assert!(config.traces.enabled);
+        assert!((config.traces.sample_ratio - 1.0).abs() < f64::EPSILON);
+        assert!(config.metrics.enabled);
+        assert_eq!(config.metrics.export_interval_ms, 30_000);
+        assert!(!config.browser.enabled);
+        assert_eq!(config.browser.proxy_path, "/api/v1/observability/otlp");
+        assert!((config.browser.sample_ratio - 0.1).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_observability_section_in_full_config_yaml() {
+        // YAML round-trip: when the observability section is omitted, the
+        // default block fills it in.
+        let yaml_content = r#"
+database:
+  db_type: sqlite
+  sqlite:
+    path: ./test.db
+"#;
+        let config: Config = serde_yaml::from_str(yaml_content).unwrap();
+        assert!(!config.observability.enabled);
+        // Round-trip preserves the section.
+        let serialized = serde_yaml::to_string(&config).unwrap();
+        assert!(serialized.contains("observability:"));
+    }
+
+    #[test]
+    fn test_observability_from_yaml_with_overrides() {
+        let yaml_content = r#"
+observability:
+  enabled: true
+  service_name: codex-prod
+  otlp:
+    endpoint: http://collector:4317
+    protocol: grpc
+    timeout_ms: 2000
+    headers:
+      x-tenant: acme
+  traces:
+    enabled: true
+    sample_ratio: 0.25
+  metrics:
+    enabled: false
+    export_interval_ms: 15000
+  browser:
+    enabled: true
+    proxy_path: /custom/path
+    sample_ratio: 0.5
+"#;
+        let config: ObservabilityConfig = serde_yaml::from_str(
+            &yaml_content
+                .lines()
+                .skip(1) // drop leading "observability:" so the section root can deserialize directly
+                .map(|l| l.strip_prefix("  ").unwrap_or(l))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+        .unwrap();
+        assert!(config.enabled);
+        assert_eq!(config.service_name, "codex-prod");
+        assert_eq!(config.otlp.endpoint, "http://collector:4317");
+        assert!(matches!(config.otlp.protocol, OtlpProtocol::Grpc));
+        assert_eq!(config.otlp.timeout_ms, 2000);
+        assert_eq!(config.otlp.headers.get("x-tenant"), Some(&"acme".into()));
+        assert!(config.traces.enabled);
+        assert!((config.traces.sample_ratio - 0.25).abs() < f64::EPSILON);
+        assert!(!config.metrics.enabled);
+        assert_eq!(config.metrics.export_interval_ms, 15000);
+        assert!(config.browser.enabled);
+        assert_eq!(config.browser.proxy_path, "/custom/path");
+    }
+
+    #[test]
+    fn test_otlp_protocol_aliases() {
+        let p: OtlpProtocol = serde_yaml::from_str("grpc").unwrap();
+        assert!(matches!(p, OtlpProtocol::Grpc));
+        let p: OtlpProtocol = serde_yaml::from_str("http-protobuf").unwrap();
+        assert!(matches!(p, OtlpProtocol::HttpProtobuf));
+        let p: OtlpProtocol = serde_yaml::from_str("http_protobuf").unwrap();
+        assert!(matches!(p, OtlpProtocol::HttpProtobuf));
+        let p: OtlpProtocol = serde_yaml::from_str("http-json").unwrap();
+        assert!(matches!(p, OtlpProtocol::HttpJson));
     }
 }

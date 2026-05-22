@@ -3,6 +3,7 @@ pub mod config;
 pub mod db;
 pub mod events;
 pub mod models;
+pub mod observability;
 pub mod parsers;
 pub mod scanner;
 pub mod scheduler;

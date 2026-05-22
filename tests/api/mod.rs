@@ -26,6 +26,7 @@ mod library_jobs;
 mod metadata_locks;
 mod metadata_reset;
 mod metrics;
+mod observability;
 mod oidc;
 mod opds;
 mod opds2;

@@ -1,8 +1,10 @@
 #[allow(unused_imports)]
 use super::types::{
     ApiConfig, ApplicationConfig, AuthConfig, Config, DatabaseConfig, DatabaseType, FilesConfig,
-    KomgaApiConfig, KoreaderApiConfig, LogLevel, LoggingConfig, OidcConfig, OidcDefaultRole,
-    OidcProviderConfig, PostgresConfig, RateLimitConfig, SQLiteConfig, ScannerConfig, TaskConfig,
+    KomgaApiConfig, KoreaderApiConfig, LogLevel, LoggingConfig, ObservabilityBrowserConfig,
+    ObservabilityConfig, ObservabilityMetricsConfig, ObservabilityTracesConfig, OidcConfig,
+    OidcDefaultRole, OidcProviderConfig, OtlpConfig, OtlpProtocol, PostgresConfig, RateLimitConfig,
+    SQLiteConfig, ScannerConfig, TaskConfig,
 };
 use std::collections::HashMap;
 use std::env;
@@ -236,6 +238,112 @@ impl EnvOverride for Config {
             .apply_env_overrides(&format!("{}_KOMGA_API", prefix));
         self.rate_limit
             .apply_env_overrides(&format!("{}_RATE_LIMIT", prefix));
+        self.observability
+            .apply_env_overrides(&format!("{}_OBSERVABILITY", prefix));
+    }
+}
+
+impl EnvOverride for ObservabilityConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
+            self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
+        }
+        if let Ok(service_name) = env::var(format!("{}_SERVICE_NAME", prefix))
+            && !service_name.is_empty()
+        {
+            self.service_name = service_name;
+        }
+        self.otlp.apply_env_overrides(&format!("{}_OTLP", prefix));
+        self.traces
+            .apply_env_overrides(&format!("{}_TRACES", prefix));
+        self.metrics
+            .apply_env_overrides(&format!("{}_METRICS", prefix));
+        self.browser
+            .apply_env_overrides(&format!("{}_BROWSER", prefix));
+    }
+}
+
+impl EnvOverride for OtlpConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(endpoint) = env::var(format!("{}_ENDPOINT", prefix)) {
+            self.endpoint = endpoint;
+        }
+        if let Ok(protocol) = env::var(format!("{}_PROTOCOL", prefix)) {
+            self.protocol = match protocol.to_lowercase().as_str() {
+                "grpc" => OtlpProtocol::Grpc,
+                "http/protobuf" | "http-protobuf" | "http_protobuf" | "httpproto" => {
+                    OtlpProtocol::HttpProtobuf
+                }
+                "http/json" | "http-json" | "http_json" => OtlpProtocol::HttpJson,
+                _ => self.protocol,
+            };
+        }
+        if let Ok(headers) = env::var(format!("{}_HEADERS", prefix)) {
+            // Format: "k1=v1,k2=v2". Empty pairs are skipped.
+            self.headers.clear();
+            for entry in headers.split(',') {
+                let entry = entry.trim();
+                if entry.is_empty() {
+                    continue;
+                }
+                if let Some((k, v)) = entry.split_once('=') {
+                    let k = k.trim();
+                    let v = v.trim();
+                    if !k.is_empty() {
+                        self.headers.insert(k.to_string(), v.to_string());
+                    }
+                }
+            }
+        }
+        if let Ok(timeout_ms) = env::var(format!("{}_TIMEOUT_MS", prefix))
+            && let Ok(ms) = timeout_ms.parse::<u64>()
+        {
+            self.timeout_ms = ms;
+        }
+    }
+}
+
+impl EnvOverride for ObservabilityTracesConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
+            self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
+        }
+        if let Ok(sample_ratio) = env::var(format!("{}_SAMPLE_RATIO", prefix))
+            && let Ok(ratio) = sample_ratio.parse::<f64>()
+        {
+            self.sample_ratio = ratio;
+        }
+    }
+}
+
+impl EnvOverride for ObservabilityMetricsConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
+            self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
+        }
+        if let Ok(interval_ms) = env::var(format!("{}_EXPORT_INTERVAL_MS", prefix))
+            && let Ok(ms) = interval_ms.parse::<u64>()
+        {
+            self.export_interval_ms = ms;
+        }
+    }
+}
+
+impl EnvOverride for ObservabilityBrowserConfig {
+    fn apply_env_overrides(&mut self, prefix: &str) {
+        if let Ok(enabled) = env::var(format!("{}_ENABLED", prefix)) {
+            self.enabled = enabled.eq_ignore_ascii_case("true") || enabled == "1";
+        }
+        if let Ok(proxy_path) = env::var(format!("{}_PROXY_PATH", prefix))
+            && !proxy_path.is_empty()
+        {
+            self.proxy_path = proxy_path;
+        }
+        if let Ok(sample_ratio) = env::var(format!("{}_SAMPLE_RATIO", prefix))
+            && let Ok(ratio) = sample_ratio.parse::<f64>()
+        {
+            self.sample_ratio = ratio;
+        }
     }
 }
 
@@ -636,8 +744,8 @@ mod tests {
         // We'll use a helper to create a minimal config
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, PdfHandleCacheConfig,
-            RateLimitConfig, SQLiteConfig, SchedulerConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, ObservabilityConfig, PdfConfig,
+            PdfHandleCacheConfig, RateLimitConfig, SQLiteConfig, SchedulerConfig,
         };
         let mut config = Config {
             data_dir: "data".to_string(),
@@ -670,6 +778,7 @@ mod tests {
             komga_api: KomgaApiConfig::default(),
             koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
+            observability: ObservabilityConfig::default(),
         };
 
         // Set env vars BEFORE applying overrides
@@ -824,8 +933,8 @@ mod tests {
 
         use crate::config::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
-            FilesConfig, KomgaApiConfig, LoggingConfig, PdfConfig, PdfHandleCacheConfig,
-            RateLimitConfig, SQLiteConfig, SchedulerConfig,
+            FilesConfig, KomgaApiConfig, LoggingConfig, ObservabilityConfig, PdfConfig,
+            PdfHandleCacheConfig, RateLimitConfig, SQLiteConfig, SchedulerConfig,
         };
         let mut config = Config {
             data_dir: "data".to_string(),
@@ -861,6 +970,7 @@ mod tests {
             },
             koreader_api: KoreaderApiConfig::default(),
             rate_limit: RateLimitConfig::default(),
+            observability: ObservabilityConfig::default(),
         };
 
         set_var("CODEX_KOMGA_API_ENABLED", "true");
@@ -1497,5 +1607,64 @@ mod tests {
         assert_eq!(config.data_dir, "/mnt/codex-data");
 
         remove_var("CODEX_DATA_DIR");
+    }
+
+    #[test]
+    #[serial]
+    fn test_observability_env_override_all_fields() {
+        // Cover every leaf field at least once so a regression in the
+        // env_override impl is caught here rather than at runtime.
+        let vars = [
+            ("CODEX_OBSERVABILITY_ENABLED", "true"),
+            ("CODEX_OBSERVABILITY_SERVICE_NAME", "codex-staging"),
+            (
+                "CODEX_OBSERVABILITY_OTLP_ENDPOINT",
+                "https://otel.example.com:4317",
+            ),
+            ("CODEX_OBSERVABILITY_OTLP_PROTOCOL", "http/protobuf"),
+            ("CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS", "9000"),
+            (
+                "CODEX_OBSERVABILITY_OTLP_HEADERS",
+                "x-tenant=acme,x-key=secret",
+            ),
+            ("CODEX_OBSERVABILITY_TRACES_ENABLED", "false"),
+            ("CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO", "0.3"),
+            ("CODEX_OBSERVABILITY_METRICS_ENABLED", "false"),
+            ("CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS", "60000"),
+            ("CODEX_OBSERVABILITY_BROWSER_ENABLED", "true"),
+            ("CODEX_OBSERVABILITY_BROWSER_PROXY_PATH", "/proxy"),
+            ("CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO", "0.7"),
+        ];
+        for (k, _) in vars.iter() {
+            remove_var(k);
+        }
+        for (k, v) in vars.iter() {
+            set_var(k, v);
+        }
+
+        let mut config = crate::config::ObservabilityConfig::default();
+        config.apply_env_overrides("CODEX_OBSERVABILITY");
+
+        assert!(config.enabled);
+        assert_eq!(config.service_name, "codex-staging");
+        assert_eq!(config.otlp.endpoint, "https://otel.example.com:4317");
+        assert!(matches!(
+            config.otlp.protocol,
+            crate::config::OtlpProtocol::HttpProtobuf
+        ));
+        assert_eq!(config.otlp.timeout_ms, 9000);
+        assert_eq!(config.otlp.headers.get("x-tenant"), Some(&"acme".into()));
+        assert_eq!(config.otlp.headers.get("x-key"), Some(&"secret".into()));
+        assert!(!config.traces.enabled);
+        assert!((config.traces.sample_ratio - 0.3).abs() < f64::EPSILON);
+        assert!(!config.metrics.enabled);
+        assert_eq!(config.metrics.export_interval_ms, 60000);
+        assert!(config.browser.enabled);
+        assert_eq!(config.browser.proxy_path, "/proxy");
+        assert!((config.browser.sample_ratio - 0.7).abs() < f64::EPSILON);
+
+        for (k, _) in vars.iter() {
+            remove_var(k);
+        }
     }
 }
