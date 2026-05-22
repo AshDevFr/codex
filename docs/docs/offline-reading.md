@@ -6,6 +6,10 @@ sidebar_position: 8
 
 Codex can save individual books or whole series to your device so you can keep reading without a network connection: on a flight, on the train, or anywhere mobile data is patchy. Downloads live in your browser's storage, so each device manages its own offline library.
 
+| Home dashboard at iPhone width | Series list at iPhone width |
+|---|---|
+| ![Codex home dashboard on mobile with the Install Codex prompt](../screenshots/mobile/home-dashboard.png) | ![Series list on mobile with the Install Codex prompt](../screenshots/mobile/series-list.png) |
+
 ## What can be downloaded
 
 | Format | What gets saved | Notes |
@@ -40,6 +44,8 @@ While the queue runs you can:
 Before the queue starts, Codex estimates the total size and compares it to the available storage on your device. If the queue would use more than 90% of your quota it is refused with a clear message and no books are downloaded. Free up storage from **Settings → Offline downloads**, or remove a few books you have already read, then try again.
 
 ## Managing what is saved
+
+![Offline downloads settings page with the storage meter and empty state](../screenshots/settings/downloads-offline.png)
 
 Settings → **Offline downloads** lists every book currently on this device with its size and the date it was saved. From there you can:
 

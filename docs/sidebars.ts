@@ -71,6 +71,7 @@ const sidebars: SidebarsConfig = {
         "opds",
         "third-party-apps",
         "reader-settings",
+        "offline-reading",
       ],
     },
     {

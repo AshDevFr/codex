@@ -38,6 +38,37 @@ Token properties:
 - Stateless (no server-side storage)
 - Contains user ID and permissions
 
+### Refresh Token
+
+Login responses include a long-lived refresh token alongside the short-lived access token:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_at": "2024-01-16T10:00:00Z",
+  "refresh_token": "rt_...",
+  "refresh_token_expires_at": "2024-02-15T10:00:00Z"
+}
+```
+
+Exchange a refresh token for a new access token (and a new refresh token):
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"rt_..."}'
+```
+
+Properties:
+- **Enabled by default.** Disable with `auth.refresh_token_enabled: false` in the config file.
+- **Configurable expiry.** Default 30 days, set with `auth.refresh_token_expiry_days`.
+- **Hashed at rest.** Only the SHA-256 of each token is stored.
+- **Rotated on every refresh.** The previous token is marked used; the response carries a new one.
+- **Theft detection.** Reusing an already-rotated refresh token revokes every active token in the same family as a defensive measure.
+- **Daily cleanup.** Expired refresh tokens are pruned by a scheduled job; logout revokes the active token.
+
+The web client uses this flow automatically: any `401` from the API triggers a transparent `/auth/refresh` exchange and the original request is retried with the new access token. API and CLI clients that want the same behaviour can implement the same one-shot retry, or rely on access-token expiry and re-login.
+
 ### API Key
 
 For automation and service accounts:

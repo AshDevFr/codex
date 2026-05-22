@@ -85,6 +85,23 @@ async function main(): Promise<void> {
       console.log("⚠️  Navigation scenario not found, skipping");
     }
 
+    // Advanced search depends on libraries having scanned content so the
+    // filter builder produces non-empty results.
+    try {
+      const search = await import("./scenarios/search.js");
+      scenarios.push({ name: "Advanced Search", run: search.run });
+    } catch {
+      console.log("⚠️  Search scenario not found, skipping");
+    }
+
+    // Offline downloads page renders even with an empty offline cache.
+    try {
+      const downloads = await import("./scenarios/downloads.js");
+      scenarios.push({ name: "Offline Downloads", run: downloads.run });
+    } catch {
+      console.log("⚠️  Downloads scenario not found, skipping");
+    }
+
     try {
       const plugins = await import("./scenarios/plugins.js");
       scenarios.push({ name: "Plugins", run: plugins.run });
@@ -117,6 +134,16 @@ async function main(): Promise<void> {
       scenarios.push({ name: "Releases", run: releases.run });
     } catch {
       console.log("⚠️  Releases scenario not found, skipping");
+    }
+
+    // Mobile views open a separate iPhone-sized browser context that
+    // shares storage with the desktop session. Runs after the desktop
+    // scenarios so libraries are already populated.
+    try {
+      const mobile = await import("./scenarios/mobile.js");
+      scenarios.push({ name: "Mobile", run: mobile.run });
+    } catch {
+      console.log("⚠️  Mobile scenario not found, skipping");
     }
 
     // Logout runs last since it logs out and captures the login page

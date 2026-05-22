@@ -204,6 +204,16 @@ Configure zoom levels and page spread modes.
 
 ![PDF Reader Settings](../screenshots/reader/pdf-settings.png)
 
+## Mobile & PWA
+
+Codex is a progressive web app: install it to your home screen for a full-screen experience and offline reading. The xs-breakpoint layout collapses the sidebar into a drawer, surfaces a full-screen search sheet, and reflows toolbars and admin tables for one-handed use. See the [Offline Reading guide](./offline-reading.md) for the download model and storage caveats.
+
+| Home dashboard at iPhone width | Series list at iPhone width |
+|---|---|
+| ![Codex home dashboard on mobile with the Install Codex prompt](../screenshots/mobile/home-dashboard.png) | ![Series list on mobile with the Install Codex prompt](../screenshots/mobile/series-list.png) |
+
+The **Install Codex** prompt nudges first-time iOS Safari visitors toward "Add to Home Screen", which is required for durable offline storage on iOS.
+
 ## Settings & Administration
 
 ### System

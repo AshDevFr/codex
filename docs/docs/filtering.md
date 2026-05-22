@@ -100,6 +100,8 @@ For questions that combine a text query with structured filters and a sort
 order, open **`/search`** (also reachable via the "Advanced search →" link in
 the global search bar dropdown).
 
+![Advanced search empty state](../screenshots/search/advanced-empty.png)
+
 The page offers:
 
 - A **text query box** with debounced search.
@@ -112,6 +114,21 @@ The page offers:
   counts update as soon as you change the filter.
 - A **Presets sidebar** for saving and reloading the current `(filter,
   query, sort)` combination — see [Filter Presets](#filter-presets) below.
+
+Results render in the active tab as soon as the query or filter changes:
+
+![Advanced search results — Series tab](../screenshots/search/advanced-results-series.png)
+
+Switch to the Books tab to see book-level matches for the same query and
+filter:
+
+![Advanced search results — Books tab](../screenshots/search/advanced-results-books.png)
+
+When a text query is set, the **Sort** selector exposes a "Relevance
+(best match)" option backed by the fuzzy index, alongside the default
+sort fields:
+
+![Sort dropdown with Relevance option](../screenshots/search/sort-dropdown.png)
 
 If fuzzy search is enabled on the server, a "Fuzzy enabled" badge appears next
 to the page title. See [Full-Text Search](#full-text-search) for the
@@ -167,6 +184,8 @@ When you save from the "All libraries" view, the preset is always global.
 Open the filter drawer (or the `/search` sidebar) and pick a preset from the
 "Apply preset…" menu. The page state updates immediately and pagination
 returns to page 1.
+
+![Presets menu on the advanced search page](../screenshots/search/presets-menu.png)
 
 Presets saved from the advanced search page may use filters that the chip-
 based list-page drawer can't represent — for example, year ranges, nested
