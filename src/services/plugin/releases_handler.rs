@@ -11,13 +11,11 @@
 //! and validation.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -31,11 +29,11 @@ use crate::db::repositories::{
     NewReleaseSource, ReleaseLedgerRepository, ReleaseSourceRepository, SeriesAliasRepository,
     SeriesExternalIdRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
 };
-use crate::scheduler::Scheduler;
 use crate::services::release::auto_ignore::{is_outside_tracking_scope, should_auto_ignore};
 use crate::services::release::candidate::ReleaseCandidate;
 use crate::services::release::languages::{includes, resolve_for_series};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
+use crate::services::scheduler_handle::SharedSchedulerReconciler;
 
 /// Default page size for `releases/list_tracked` when the caller doesn't
 /// specify one. Bounded to keep the response small on first load.
@@ -63,9 +61,9 @@ pub struct ReleasesRequestHandler {
     /// to scope `releases/list_tracked` responses to what the plugin asked
     /// for.
     capability: ReleaseSourceCapability,
-    /// Optional scheduler reference used by `releases/register_sources` to
+    /// Optional scheduler handle used by `releases/register_sources` to
     /// reconcile schedules immediately after the source set changes.
-    scheduler: Option<Arc<Mutex<Scheduler>>>,
+    scheduler: Option<SharedSchedulerReconciler>,
 }
 
 impl ReleasesRequestHandler {
@@ -82,9 +80,9 @@ impl ReleasesRequestHandler {
         }
     }
 
-    /// Attach a scheduler reference so `releases/register_sources` reconciles
+    /// Attach a scheduler handle so `releases/register_sources` reconciles
     /// schedules without waiting for a server restart. Builder-style.
-    pub fn with_scheduler(mut self, scheduler: Arc<Mutex<Scheduler>>) -> Self {
+    pub fn with_scheduler(mut self, scheduler: SharedSchedulerReconciler) -> Self {
         self.scheduler = Some(scheduler);
         self
     }
@@ -922,11 +920,10 @@ impl ReleasesRequestHandler {
         // Reconcile schedules. Best-effort — log failures but don't fail the
         // RPC, since the rows are already persisted and the next scheduler
         // start (or HTTP-driven reconcile) will catch up.
-        if let Some(ref scheduler) = self.scheduler {
-            let mut guard = scheduler.lock().await;
-            if let Err(e) = guard.reconcile_release_sources().await {
-                warn!(error = %e, "scheduler reconcile after register_sources failed");
-            }
+        if let Some(ref scheduler) = self.scheduler
+            && let Err(e) = scheduler.reconcile_release_sources().await
+        {
+            warn!(error = %e, "scheduler reconcile after register_sources failed");
         }
 
         let response = RegisterSourcesResponse {
@@ -1219,6 +1216,7 @@ mod tests {
     use crate::services::plugin::protocol::ReleaseSourceKind;
     use crate::services::release::candidate::{NumericSpan, SeriesMatch};
     use serde_json::json;
+    use std::sync::Arc;
 
     fn make_capability(
         requires_aliases: bool,

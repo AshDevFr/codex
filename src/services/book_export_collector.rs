@@ -11,11 +11,11 @@ use std::collections::HashMap;
 use std::fmt;
 use uuid::Uuid;
 
-use crate::api::extractors::content_filter::ContentFilter;
 use crate::db::entities::{book_metadata, books, read_progress};
 use crate::db::repositories::{
     GenreRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, TagRepository,
 };
+use crate::services::content_filter::ContentFilter;
 
 // =============================================================================
 // BookExportField enum

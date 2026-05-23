@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-use crate::api::permissions::UserRole;
+use crate::models::permissions::UserRole;
 use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};

@@ -13,8 +13,8 @@ use crate::db::repositories::{
     BookCoversRepository, SeriesCoversRepository, SeriesRepository, TaskRepository,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
+use crate::models::task::TaskType;
 use crate::services::ThumbnailService;
-use crate::tasks::types::TaskType;
 
 /// Service for downloading and applying cover images to series.
 pub struct CoverService;

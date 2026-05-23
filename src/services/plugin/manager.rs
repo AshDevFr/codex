@@ -335,7 +335,7 @@ pub struct PluginManager {
     /// Optional scheduler handle so the releases reverse-RPC handler can
     /// trigger a release-source reconcile when a plugin calls
     /// `releases/register_sources`.
-    scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
+    scheduler: Option<crate::services::scheduler_handle::SharedSchedulerReconciler>,
 }
 
 impl PluginManager {
@@ -379,7 +379,7 @@ impl PluginManager {
     /// `releases/register_sources`. Builder-style.
     pub fn with_scheduler(
         mut self,
-        scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>,
+        scheduler: crate::services::scheduler_handle::SharedSchedulerReconciler,
     ) -> Self {
         self.scheduler = Some(scheduler);
         self

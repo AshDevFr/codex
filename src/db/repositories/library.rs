@@ -348,8 +348,8 @@ impl LibraryRepository {
     /// Returns an empty vector if no rules are configured or if parsing fails.
     pub fn get_preprocessing_rules(
         library: &libraries::Model,
-    ) -> Vec<crate::services::metadata::preprocessing::PreprocessingRule> {
-        use crate::services::metadata::preprocessing::parse_preprocessing_rules;
+    ) -> Vec<crate::models::preprocessing::PreprocessingRule> {
+        use crate::models::preprocessing::parse_preprocessing_rules;
 
         match parse_preprocessing_rules(library.title_preprocessing_rules.as_deref()) {
             Ok(rules) => rules,
@@ -370,8 +370,8 @@ impl LibraryRepository {
     /// Returns None if no conditions are configured or if parsing fails.
     pub fn get_auto_match_conditions(
         library: &libraries::Model,
-    ) -> Option<crate::services::metadata::preprocessing::AutoMatchConditions> {
-        use crate::services::metadata::preprocessing::parse_auto_match_conditions;
+    ) -> Option<crate::models::preprocessing::AutoMatchConditions> {
+        use crate::models::preprocessing::parse_auto_match_conditions;
 
         match parse_auto_match_conditions(library.auto_match_conditions.as_deref()) {
             Ok(conditions) => conditions,
@@ -966,7 +966,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_auto_match_conditions_valid() {
-        use crate::services::metadata::preprocessing::{ConditionMode, ConditionOperator};
+        use crate::models::preprocessing::{ConditionMode, ConditionOperator};
 
         let (db, _temp_dir) = create_test_db().await;
 

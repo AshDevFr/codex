@@ -339,13 +339,18 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // set up by `TaskWorker::run_task`, not through a manager-held one.
     // See `crate::events::with_recording_broadcaster`.
     info!("Initializing plugin manager...");
+    // Wrap the scheduler in the services-layer trait so plugin handles can
+    // trigger reconciles without holding the concrete scheduler type.
+    let scheduler_handle: crate::services::scheduler_handle::SharedSchedulerReconciler = Arc::new(
+        crate::scheduler::LockedSchedulerReconciler::new(scheduler.clone()),
+    );
     let plugin_manager = Arc::new(
         crate::services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
         ))
         .with_metrics_service(plugin_metrics_service.clone())
         .with_plugin_file_storage(plugin_file_storage.clone())
-        .with_scheduler(scheduler.clone()),
+        .with_scheduler(scheduler_handle),
     );
     // Load enabled plugins from database
     match plugin_manager.load_all().await {

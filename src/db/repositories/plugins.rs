@@ -15,9 +15,9 @@
 #![allow(dead_code)]
 
 use crate::db::entities::plugins::{self, Entity as Plugins, PluginPermission};
+use crate::models::plugin::{PluginManifest, PluginScope};
 use crate::observability::repo::db_system_str;
-use crate::services::CredentialEncryption;
-use crate::services::plugin::protocol::{PluginManifest, PluginScope};
+use crate::utils::credential_encryption::CredentialEncryption;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::*;
@@ -735,8 +735,8 @@ impl PluginsRepository {
     /// Returns an empty vector if no rules are configured or if parsing fails.
     pub fn get_search_preprocessing_rules(
         plugin: &plugins::Model,
-    ) -> Vec<crate::services::metadata::preprocessing::PreprocessingRule> {
-        use crate::services::metadata::preprocessing::parse_preprocessing_rules;
+    ) -> Vec<crate::models::preprocessing::PreprocessingRule> {
+        use crate::models::preprocessing::parse_preprocessing_rules;
 
         match parse_preprocessing_rules(plugin.search_preprocessing_rules.as_deref()) {
             Ok(rules) => rules,
@@ -757,8 +757,8 @@ impl PluginsRepository {
     /// Returns None if no conditions are configured or if parsing fails.
     pub fn get_auto_match_conditions(
         plugin: &plugins::Model,
-    ) -> Option<crate::services::metadata::preprocessing::AutoMatchConditions> {
-        use crate::services::metadata::preprocessing::parse_auto_match_conditions;
+    ) -> Option<crate::models::preprocessing::AutoMatchConditions> {
+        use crate::models::preprocessing::parse_auto_match_conditions;
 
         match parse_auto_match_conditions(plugin.auto_match_conditions.as_deref()) {
             Ok(conditions) => conditions,

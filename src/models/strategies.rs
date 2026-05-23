@@ -9,7 +9,12 @@ use std::fmt;
 use std::str::FromStr;
 use utoipa::ToSchema;
 
-use crate::utils::default_true;
+/// Local copy of the `default_true` serde helper. The original lives in
+/// `crate::utils::serde`, but `models` sits below `utils` in the layering so
+/// the inlined version keeps `models` dependency-free within the crate.
+fn default_true() -> bool {
+    true
+}
 
 // ============================================================================
 // Series Scanning Strategy

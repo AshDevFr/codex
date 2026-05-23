@@ -1,3 +1,4 @@
+pub mod credential_encryption;
 pub mod cron;
 pub mod deadline;
 pub mod error;
