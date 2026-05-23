@@ -27,6 +27,7 @@ mod metadata_locks;
 mod metadata_reset;
 mod metrics;
 mod observability;
+mod observability_proxy;
 mod oidc;
 mod opds;
 mod opds2;

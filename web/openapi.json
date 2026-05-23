@@ -7423,6 +7423,119 @@
         ]
       }
     },
+    "/api/v1/observability/config": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Return the configuration the browser SDK needs to bootstrap itself.",
+        "description": "Authenticated to keep the response (which leaks the sample ratio /\nproxy path / service name) inside the existing trust boundary;\neverything sensitive (endpoint, headers) stays server-side.",
+        "operationId": "get_browser_config",
+        "responses": {
+          "200": {
+            "description": "Browser SDK bootstrap config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserObservabilityConfigDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/otlp/v1/metrics": {
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Forward a batched OTLP/HTTP metrics payload to the configured upstream.",
+        "operationId": "proxy_metrics",
+        "requestBody": {
+          "description": "OTLP/HTTP metrics payload (protobuf or JSON)",
+          "content": {
+            "application/x-protobuf": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Forwarded successfully"
+          },
+          "400": {
+            "description": "Payload too large"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "502": {
+            "description": "Upstream collector error"
+          },
+          "503": {
+            "description": "Browser observability disabled"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/otlp/v1/traces": {
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Forward a batched OTLP/HTTP traces payload to the configured upstream.",
+        "operationId": "proxy_traces",
+        "requestBody": {
+          "description": "OTLP/HTTP traces payload (protobuf or JSON)",
+          "content": {
+            "application/x-protobuf": {}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Forwarded successfully"
+          },
+          "400": {
+            "description": "Payload too large"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "502": {
+            "description": "Upstream collector error"
+          },
+          "503": {
+            "description": "Browser observability disabled"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/plugins/actions": {
       "get": {
         "tags": [
@@ -21673,6 +21786,38 @@
             }
           ],
           "parentPath": "/home/user"
+        }
+      },
+      "BrowserObservabilityConfigDto": {
+        "type": "object",
+        "description": "Browser RUM bootstrap configuration returned by\n`GET /api/v1/observability/config`.",
+        "required": [
+          "enabled",
+          "serviceName",
+          "proxyPath",
+          "sampleRatio"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the browser SDK should initialize. False means the SDK\nbootstrap is a no-op even if the script is loaded."
+          },
+          "proxyPath": {
+            "type": "string",
+            "description": "Same-origin path prefix on the Codex server where the browser SDK\nshould POST OTLP batches. The SDK appends `/v1/traces` and\n`/v1/metrics` to this base.",
+            "example": "/api/v1/observability/otlp"
+          },
+          "sampleRatio": {
+            "type": "number",
+            "format": "double",
+            "description": "Parent-based sampling ratio applied client-side. Browsers are noisy;\ndefault low.",
+            "example": 0.1
+          },
+          "serviceName": {
+            "type": "string",
+            "description": "`service.name` resource attribute the browser SDK should set on\nevery span (matches the backend service name unless the operator\noverrode it specifically for the browser).",
+            "example": "codex-web"
+          }
         }
       },
       "BulkAnalyzeBooksRequest": {
@@ -41464,6 +41609,10 @@
       "description": "Application metrics and statistics"
     },
     {
+      "name": "Observability",
+      "description": "Browser RUM bootstrap configuration and OTLP forwarding proxy"
+    },
+    {
       "name": "Filesystem",
       "description": "Filesystem browsing for library paths"
     },
@@ -41553,6 +41702,7 @@
         "Plugins",
         "Plugin Actions",
         "Metrics",
+        "Observability",
         "Filesystem",
         "Duplicates",
         "Sharing Tags"

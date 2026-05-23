@@ -54,6 +54,7 @@ pub mod info;
 pub mod libraries;
 pub mod library_jobs;
 pub mod metrics;
+pub mod observability;
 pub mod oidc;
 pub mod pages;
 pub mod pdf_cache;

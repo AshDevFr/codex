@@ -10,7 +10,9 @@ use codex::api::routes::v1::dto::{
     PdfCacheCleanupResultDto, PdfCacheStatsDto, PdfHandleCacheClearResultDto,
     PdfHandleCacheStatsDto, TriggerPdfCacheCleanupResponse,
 };
-use codex::config::{AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
+use codex::config::{
+    AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, ObservabilityConfig, PdfConfig,
+};
 use codex::db::repositories::UserRepository;
 use codex::events::EventBroadcaster;
 use codex::parsers::pdf::{open_pdf_document, renderer};
@@ -81,6 +83,7 @@ async fn create_test_app_state_with_pdf_cache(
         auth_config,
         database_config,
         pdf_config,
+        observability_config: Arc::new(ObservabilityConfig::default()),
         email_service,
         event_broadcaster,
         settings_service,

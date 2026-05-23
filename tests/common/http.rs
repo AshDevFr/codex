@@ -2,7 +2,9 @@ use axum::Router;
 use codex::api::extractors::{AppState, AuthState, auth::UserAuthCache};
 use codex::api::permissions::UserRole;
 use codex::api::routes::create_router;
-use codex::config::{AuthConfig, Config, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
+use codex::config::{
+    AuthConfig, Config, DatabaseConfig, EmailConfig, FilesConfig, ObservabilityConfig, PdfConfig,
+};
 use codex::db::entities::users;
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
@@ -59,6 +61,7 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         auth_config,
         database_config,
         pdf_config,
+        observability_config: Arc::new(ObservabilityConfig::default()),
         email_service,
         event_broadcaster,
         settings_service,
@@ -123,6 +126,7 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         auth_config,
         database_config,
         pdf_config,
+        observability_config: Arc::new(ObservabilityConfig::default()),
         email_service,
         event_broadcaster,
         settings_service,
@@ -212,6 +216,7 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         auth_config,
         database_config,
         pdf_config,
+        observability_config: Arc::new(ObservabilityConfig::default()),
         email_service,
         event_broadcaster,
         settings_service,

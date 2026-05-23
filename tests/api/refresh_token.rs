@@ -16,7 +16,9 @@ use codex::api::routes::create_router;
 use codex::api::routes::v1::dto::auth::{
     LoginRequest, LoginResponse, LogoutRequest, RefreshRequest, TokenPair,
 };
-use codex::config::{AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
+use codex::config::{
+    AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, ObservabilityConfig, PdfConfig,
+};
 use codex::db::repositories::{NewRefreshToken, RefreshTokenRepository, UserRepository};
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
@@ -77,6 +79,7 @@ async fn build_state(db: DatabaseConnection, refresh_enabled: bool) -> Arc<AppSt
         auth_config,
         database_config,
         pdf_config,
+        observability_config: Arc::new(ObservabilityConfig::default()),
         email_service,
         event_broadcaster,
         settings_service,

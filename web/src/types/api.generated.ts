@@ -2531,6 +2531,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/observability/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the configuration the browser SDK needs to bootstrap itself.
+         * @description Authenticated to keep the response (which leaks the sample ratio /
+         *     proxy path / service name) inside the existing trust boundary;
+         *     everything sensitive (endpoint, headers) stays server-side.
+         */
+        get: operations["get_browser_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observability/otlp/v1/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forward a batched OTLP/HTTP metrics payload to the configured upstream. */
+        post: operations["proxy_metrics"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observability/otlp/v1/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forward a batched OTLP/HTTP traces payload to the configured upstream. */
+        post: operations["proxy_traces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plugins/actions": {
         parameters: {
             query?: never;
@@ -8648,6 +8704,38 @@ export interface components {
             entries: components["schemas"]["FileSystemEntry"][];
             /** @description Parent directory path (None if at root) */
             parentPath?: string | null;
+        };
+        /**
+         * @description Browser RUM bootstrap configuration returned by
+         *     `GET /api/v1/observability/config`.
+         */
+        BrowserObservabilityConfigDto: {
+            /**
+             * @description Whether the browser SDK should initialize. False means the SDK
+             *     bootstrap is a no-op even if the script is loaded.
+             */
+            enabled: boolean;
+            /**
+             * @description Same-origin path prefix on the Codex server where the browser SDK
+             *     should POST OTLP batches. The SDK appends `/v1/traces` and
+             *     `/v1/metrics` to this base.
+             * @example /api/v1/observability/otlp
+             */
+            proxyPath: string;
+            /**
+             * Format: double
+             * @description Parent-based sampling ratio applied client-side. Browsers are noisy;
+             *     default low.
+             * @example 0.1
+             */
+            sampleRatio: number;
+            /**
+             * @description `service.name` resource attribute the browser SDK should set on
+             *     every span (matches the backend service name unless the operator
+             *     overrode it specifically for the browser).
+             * @example codex-web
+             */
+            serviceName: string;
         };
         /** @description Request to perform bulk analyze operations on multiple books */
         BulkAnalyzeBooksRequest: {
@@ -24631,6 +24719,135 @@ export interface operations {
                 content?: never;
             };
             /** @description Task metrics service not available */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_browser_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Browser SDK bootstrap config */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserObservabilityConfigDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    proxy_metrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description OTLP/HTTP metrics payload (protobuf or JSON) */
+        requestBody?: {
+            content: {
+                "application/x-protobuf": unknown;
+            };
+        };
+        responses: {
+            /** @description Forwarded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Payload too large */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upstream collector error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Browser observability disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    proxy_traces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description OTLP/HTTP traces payload (protobuf or JSON) */
+        requestBody?: {
+            content: {
+                "application/x-protobuf": unknown;
+            };
+        };
+        responses: {
+            /** @description Forwarded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Payload too large */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upstream collector error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Browser observability disabled */
             503: {
                 headers: {
                     [name: string]: unknown;

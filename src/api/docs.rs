@@ -390,6 +390,11 @@ The following paths are exempt from rate limiting:
         v1::handlers::api_keys::update_api_key,
         v1::handlers::api_keys::delete_api_key,
 
+        // Observability endpoints
+        v1::handlers::observability::get_browser_config,
+        v1::handlers::observability::proxy_traces,
+        v1::handlers::observability::proxy_metrics,
+
         // Metrics endpoints
         v1::handlers::get_inventory_metrics,
         v1::handlers::get_plugin_metrics,
@@ -593,6 +598,9 @@ The following paths are exempt from rate limiting:
         schemas(
             // App info
             v1::dto::AppInfoDto,
+
+            // Observability DTOs
+            v1::dto::BrowserObservabilityConfigDto,
 
             // DTOs
             v1::dto::LoginRequest,
@@ -1119,6 +1127,7 @@ The following paths are exempt from rate limiting:
         (name = "User Plugins", description = "User-facing plugin management, OAuth, and configuration"),
         (name = "Recommendations", description = "Personalized recommendation endpoints"),
         (name = "Metrics", description = "Application metrics and statistics"),
+        (name = "Observability", description = "Browser RUM bootstrap configuration and OTLP forwarding proxy"),
         (name = "Filesystem", description = "Filesystem browsing for library paths"),
         (name = "Duplicates", description = "Duplicate book detection and management"),
         (name = "Sharing Tags", description = "Content access control tags (admin only)"),
@@ -1250,7 +1259,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "Administration",
-                "tags": ["Admin", "Settings", "Plugins", "Plugin Actions", "Metrics", "Filesystem", "Duplicates", "Sharing Tags"]
+                "tags": ["Admin", "Settings", "Plugins", "Plugin Actions", "Metrics", "Observability", "Filesystem", "Duplicates", "Sharing Tags"]
             },
             {
                 "name": "Real-time Events",
