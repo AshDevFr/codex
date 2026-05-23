@@ -1,3 +1,9 @@
+//! Codex utility helpers shared across the workspace.
+//!
+//! Pure helpers (hashing, password, cron parsing, jwt, error type, custom
+//! serde adapters, natural sort, unicode normalization). Depends only on
+//! `codex-models` for the `UserRole` type used by `jwt`.
+
 pub mod credential_encryption;
 pub mod cron;
 pub mod deadline;

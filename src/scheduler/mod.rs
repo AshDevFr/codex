@@ -13,7 +13,7 @@ use crate::scanner::{ScanMode, ScanningConfig};
 use crate::services::library_jobs::{LibraryJobConfig, parse_job_config};
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
-use crate::utils::cron::{normalize_cron_expression, parse_timezone};
+use codex_utils::cron::{normalize_cron_expression, parse_timezone};
 
 /// Generic scheduler for managing scheduled tasks (library scans, deduplication, etc.)
 pub struct Scheduler {
@@ -809,8 +809,8 @@ mod tests {
     use super::*;
     use crate::db::repositories::LibraryRepository;
     use crate::db::test_helpers::setup_test_db;
-    use crate::models::ScanningStrategy;
     use crate::tasks::types::TaskType;
+    use codex_models::ScanningStrategy;
 
     #[test]
     fn test_scheduler_can_be_created() {

@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::db::entities::{
     book_metadata, books, libraries, prelude::*, series, series_metadata, tasks,
 };
-use crate::models::task::{DEFAULT_MAX_RESCHEDULES, TaskStats, TaskType};
+use codex_models::task::{DEFAULT_MAX_RESCHEDULES, TaskStats, TaskType};
 
 /// Task row enriched with the resolved title of its target (book, series, or library).
 ///
@@ -1138,7 +1138,7 @@ impl TaskRepository {
 
     /// Get queue statistics
     pub async fn get_stats(db: &DatabaseConnection) -> Result<TaskStats> {
-        use crate::models::task::TaskTypeStats;
+        use codex_models::task::TaskTypeStats;
         use std::collections::HashMap;
 
         // Get all tasks to calculate both aggregate and per-type stats

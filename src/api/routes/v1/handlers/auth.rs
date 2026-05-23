@@ -13,7 +13,6 @@ use crate::db::{
     repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
 };
 use crate::services::RefreshTokenError;
-use crate::utils::password;
 use axum::{
     Json,
     extract::State,
@@ -21,6 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_utils::password;
 use sea_orm::ActiveModelTrait;
 use sea_orm::Set;
 use std::env;

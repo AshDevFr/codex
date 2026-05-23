@@ -5,7 +5,7 @@
 
 use regex::Regex;
 
-use crate::models::{BookStrategy, CustomBookConfig};
+use codex_models::{BookStrategy, CustomBookConfig};
 
 use super::{
     BookMetadata, BookNamingContext, BookNamingStrategy, create_book_strategy,

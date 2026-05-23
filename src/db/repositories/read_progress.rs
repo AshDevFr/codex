@@ -324,8 +324,8 @@ mod tests {
         BookRepository, LibraryRepository, SeriesRepository, UserRepository,
     };
     use crate::db::test_helpers::setup_test_db;
-    use crate::models::ScanningStrategy;
-    use crate::utils::password;
+    use codex_models::ScanningStrategy;
+    use codex_utils::password;
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {
         let password_hash = password::hash_password("password").unwrap();

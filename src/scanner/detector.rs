@@ -1,4 +1,4 @@
-use crate::parsers::FileFormat;
+use codex_parsers::FileFormat;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;

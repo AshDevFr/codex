@@ -16,9 +16,9 @@
 #![allow(dead_code)]
 
 use crate::db::entities::user_plugins::{self, Entity as UserPlugins};
-use crate::utils::credential_encryption::CredentialEncryption;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
+use codex_utils::credential_encryption::CredentialEncryption;
 use sea_orm::*;
 use uuid::Uuid;
 

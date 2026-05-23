@@ -6,7 +6,7 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::models::{BookStrategy, SmartBookConfig};
+use codex_models::{BookStrategy, SmartBookConfig};
 
 use super::{
     BookMetadata, BookNamingContext, BookNamingStrategy, FilenameStrategy,

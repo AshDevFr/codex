@@ -3,9 +3,9 @@
 //! Parses Dublin Core metadata and Calibre extensions from OPF XML files.
 //! Used for both embedded EPUB OPF content and Calibre sidecar `metadata.opf` files.
 
-use crate::parsers::ComicInfo;
-use crate::parsers::isbn_utils::extract_isbns;
-use crate::utils::{CodexError, Result};
+use crate::ComicInfo;
+use crate::isbn_utils::extract_isbns;
+use codex_utils::{CodexError, Result};
 use serde::Serialize;
 use std::path::Path;
 

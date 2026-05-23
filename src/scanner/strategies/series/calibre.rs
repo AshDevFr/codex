@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
-use crate::models::{CalibreSeriesMode, CalibreStrategyConfig, SeriesStrategy};
-use crate::parsers::opf;
+use codex_models::{CalibreSeriesMode, CalibreStrategyConfig, SeriesStrategy};
+use codex_parsers::opf;
 
 use super::super::common::{DetectedBook, DetectedSeries, SeriesMetadata};
 use super::ScanningStrategyImpl;

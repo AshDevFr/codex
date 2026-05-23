@@ -290,11 +290,11 @@ pub mod methods {
 // Plugin Manifest Types (re-exported from models::plugin)
 // =============================================================================
 //
-// These types live in `crate::models::plugin` so the db layer can speak the
+// These types live in `codex_models::plugin` so the db layer can speak the
 // plugin protocol vocabulary without depending on services. The re-exports
 // preserve historical paths used throughout the plugin codebase.
 #[allow(unused_imports)]
-pub use crate::models::plugin::{
+pub use codex_models::plugin::{
     CredentialField, CredentialType, MetadataContentType, OAuthConfig, PluginCapabilities,
     PluginManifest, PluginManifestType, PluginScope, ReleaseSourceCapability, ReleaseSourceKind,
 };

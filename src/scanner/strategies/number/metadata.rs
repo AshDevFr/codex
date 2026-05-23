@@ -3,7 +3,7 @@
 //! Uses ComicInfo <Number> field only, no fallback.
 //! Returns None if no metadata number is available.
 
-use crate::models::NumberStrategy;
+use codex_models::NumberStrategy;
 
 use super::{BookNumberStrategy, NumberContext, NumberMetadata};
 

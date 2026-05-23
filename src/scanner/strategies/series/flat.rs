@@ -9,7 +9,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::models::{FlatStrategyConfig, SeriesStrategy};
+use codex_models::{FlatStrategyConfig, SeriesStrategy};
 
 use super::super::common::{DetectedBook, DetectedSeries};
 use super::ScanningStrategyImpl;

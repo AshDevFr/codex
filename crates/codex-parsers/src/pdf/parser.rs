@@ -1,9 +1,9 @@
-use crate::parsers::isbn_utils::extract_isbns;
-use crate::parsers::pdf::renderer;
-use crate::parsers::traits::FormatParser;
-use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
-use crate::utils::{CodexError, Result, hash_file};
+use crate::isbn_utils::extract_isbns;
+use crate::pdf::renderer;
+use crate::traits::FormatParser;
+use crate::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use chrono::{DateTime, Utc};
+use codex_utils::{CodexError, Result, hash_file};
 use image::GenericImageView;
 use lopdf::{Document, Object, ObjectId};
 use std::path::Path;

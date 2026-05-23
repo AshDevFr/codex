@@ -10,7 +10,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Qu
 use uuid::Uuid;
 
 use crate::db::entities::{book_metadata, prelude::*};
-use crate::utils::normalize_for_search;
+use codex_utils::normalize_for_search;
 
 /// Repository for BookMetadata operations
 pub struct BookMetadataRepository;

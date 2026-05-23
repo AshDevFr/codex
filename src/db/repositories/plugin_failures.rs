@@ -293,7 +293,7 @@ mod tests {
     use crate::db::entities::plugin_failures::error_codes;
     use crate::db::repositories::PluginsRepository;
     use crate::db::test_helpers::setup_test_db;
-    use crate::models::plugin::PluginScope;
+    use codex_models::plugin::PluginScope;
     use std::env;
     use tokio::time::sleep;
 

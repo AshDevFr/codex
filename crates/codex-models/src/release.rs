@@ -3,7 +3,7 @@
 //!
 //! These are pure data shapes and small helpers. The ledger-shaped service
 //! logic (auto-ignore, candidate validation, language gating) stays in
-//! [`crate::services::release`]; this module only holds the types and the
+//! `codex::services::release`; this module only holds the types and the
 //! span helpers that repositories need to speak.
 
 use serde::{Deserialize, Serialize};
@@ -86,8 +86,8 @@ pub fn primary_value(spans: Option<&Vec<NumericSpan>>) -> Option<f64> {
 }
 
 /// Per-series ownership signature consumed by the auto-ignore logic in
-/// [`crate::services::release::auto_ignore`]. Produced by
-/// [`crate::db::repositories::SeriesRepository::get_owned_release_keys_for_series`].
+/// `codex::services::release::auto_ignore`. Produced by
+/// `codex::db::repositories::SeriesRepository::get_owned_release_keys_for_series`.
 #[derive(Debug, Default, Clone)]
 pub struct OwnedReleaseKeys {
     /// `(volume, chapter)` pairs from book metadata, after filtering out

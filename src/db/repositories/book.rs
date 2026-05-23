@@ -17,8 +17,8 @@ use uuid::Uuid;
 use crate::db::entities::{books, prelude::*};
 use crate::db::repositories::SeriesRepository;
 use crate::observability::repo::db_system_str;
-use crate::utils::normalize_for_search;
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use codex_utils::normalize_for_search;
 
 /// Options for querying books with filtering, sorting, and pagination
 #[derive(Debug, Clone, Default)]
@@ -912,14 +912,14 @@ impl BookRepository {
     pub async fn list_by_ids_sorted(
         db: &DatabaseConnection,
         ids: &[Uuid],
-        sort: &crate::models::sort::BookSortParam,
+        sort: &codex_models::sort::BookSortParam,
         user_id: Option<Uuid>,
         include_deleted: bool,
         offset: u64,
         limit: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::db::entities::{book_metadata, read_progress, series, series_metadata};
-        use crate::models::sort::{BookSortField, SortDirection};
+        use codex_models::sort::{BookSortField, SortDirection};
         use sea_orm::{Condition, JoinType};
 
         if ids.is_empty() {
@@ -1193,13 +1193,13 @@ impl BookRepository {
     pub async fn list_by_library_sorted(
         db: &DatabaseConnection,
         library_id: Uuid,
-        sort: &crate::models::sort::BookSortParam,
+        sort: &codex_models::sort::BookSortParam,
         include_deleted: bool,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
         use crate::db::entities::{book_metadata, series, series_metadata};
-        use crate::models::sort::{BookSortField, SortDirection};
+        use codex_models::sort::{BookSortField, SortDirection};
         use sea_orm::JoinType;
 
         // Build base query
@@ -3379,7 +3379,7 @@ mod tests {
 
         use crate::db::entities::users;
         use crate::db::repositories::{ReadProgressRepository, UserRepository};
-        use crate::utils::password;
+        use codex_utils::password;
 
         let password_hash = password::hash_password("test123").unwrap();
         let user = users::Model {

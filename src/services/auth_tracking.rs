@@ -193,7 +193,7 @@ mod tests {
     use crate::db::entities::{api_keys, users};
     use crate::db::repositories::{ApiKeyRepository, UserRepository};
     use crate::db::test_helpers::setup_test_db;
-    use crate::utils::password;
+    use codex_utils::password;
     use std::time::Duration;
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {

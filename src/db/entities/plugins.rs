@@ -756,8 +756,8 @@ impl Model {
     }
 
     /// Parse the scopes JSON array into a Vec<PluginScope>
-    pub fn scopes_vec(&self) -> Vec<crate::models::plugin::PluginScope> {
-        use crate::models::plugin::PluginScope;
+    pub fn scopes_vec(&self) -> Vec<codex_models::plugin::PluginScope> {
+        use codex_models::plugin::PluginScope;
 
         self.scopes
             .as_array()
@@ -770,7 +770,7 @@ impl Model {
     }
 
     /// Check if the plugin supports a specific scope
-    pub fn has_scope(&self, scope: &crate::models::plugin::PluginScope) -> bool {
+    pub fn has_scope(&self, scope: &codex_models::plugin::PluginScope) -> bool {
         self.scopes_vec().contains(scope)
     }
 
@@ -838,7 +838,7 @@ impl Model {
     }
 
     /// Get the cached manifest if available
-    pub fn cached_manifest(&self) -> Option<crate::models::plugin::PluginManifest> {
+    pub fn cached_manifest(&self) -> Option<codex_models::plugin::PluginManifest> {
         self.manifest
             .as_ref()
             .and_then(|m| serde_json::from_value(m.clone()).ok())

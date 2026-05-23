@@ -19,8 +19,8 @@
 //! an owned `(Some(3), None)`; a release for "Ch 12" matches an owned
 //! `(_, Some(12))` regardless of volume.
 
-use crate::models::release::NumericSpan;
-pub use crate::models::release::OwnedReleaseKeys;
+use codex_models::release::NumericSpan;
+pub use codex_models::release::OwnedReleaseKeys;
 
 /// True when the user owns *every* item the release covers.
 ///

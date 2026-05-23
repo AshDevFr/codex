@@ -1,6 +1,6 @@
 //! Filter DTOs.
 //!
-//! The operator and condition enums live in [`crate::models::filter`] so
+//! The operator and condition enums live in [`codex_models::filter`] so
 //! services and repositories can speak the same vocabulary without depending
 //! on the api layer. The request envelopes that wrap them remain here as API
 //! contract types.
@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-pub use crate::models::filter::{
+pub use codex_models::filter::{
     BookCondition, BoolOperator, DateOperator, FieldOperator, NumberOperator, SeriesCondition,
     UuidOperator,
 };

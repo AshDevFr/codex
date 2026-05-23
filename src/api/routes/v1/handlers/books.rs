@@ -24,16 +24,16 @@ use crate::db::repositories::{
 };
 use crate::require_permission;
 use crate::services::FilterService;
-use crate::utils::{
-    json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
-    validate_custom_metadata_size,
-};
 use axum::{
     Json,
     body::Body,
     extract::{Path, Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
+};
+use codex_utils::{
+    json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
+    validate_custom_metadata_size,
 };
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -3473,7 +3473,7 @@ pub async fn upload_book_cover(
         .map_err(|e| ApiError::BadRequest(format!("Invalid image file: {}", e)))?;
 
     // Compute hash of image data for deduplication
-    let image_hash = crate::utils::hasher::hash_bytes(&image_data);
+    let image_hash = codex_utils::hasher::hash_bytes(&image_data);
     let short_hash = &image_hash[..16];
 
     // Create covers directory within uploads dir if it doesn't exist

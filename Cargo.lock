@@ -823,6 +823,9 @@ dependencies = [
  "clap",
  "codex-config",
  "codex-events",
+ "codex-models",
+ "codex-parsers",
+ "codex-utils",
  "cron",
  "csv",
  "dashmap",
@@ -834,7 +837,6 @@ dependencies = [
  "httpdate",
  "hyper",
  "image",
- "infer",
  "jsonwebtoken",
  "jxl-oxide",
  "lazy_static",
@@ -883,7 +885,6 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "unicode-normalization",
- "unrar",
  "urlencoding",
  "utoipa",
  "utoipa-scalar",
@@ -914,6 +915,71 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "codex-models"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "codex-parsers"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "codex-utils",
+ "image",
+ "infer",
+ "jxl-oxide",
+ "lopdf",
+ "pdfium-render",
+ "quick-xml",
+ "regex",
+ "resvg",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "unrar",
+ "urlencoding",
+ "zip",
+]
+
+[[package]]
+name = "codex-utils"
+version = "0.0.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "argon2",
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "codex-models",
+ "cron",
+ "image",
+ "jsonwebtoken",
+ "md-5",
+ "quick-xml",
+ "rand 0.10.0",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "unicode-normalization",
+ "uuid",
+ "zip",
 ]
 
 [[package]]

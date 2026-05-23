@@ -14,16 +14,16 @@ use crate::db::repositories::{
     BookExternalLinkRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
     LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
-use crate::models::{BookStrategy, CalibreStrategyConfig, NumberStrategy, SeriesStrategy};
-use crate::parsers::opf;
 use crate::scanner::analyze_file;
 use crate::scanner::strategies::{
     BookMetadata, BookNamingContext, NumberContext, NumberMetadata, create_book_strategy,
     create_number_strategy,
 };
 use crate::tasks::types::TaskType;
-use crate::utils::normalize_for_search;
 use codex_events::EventBroadcaster;
+use codex_models::{BookStrategy, CalibreStrategyConfig, NumberStrategy, SeriesStrategy};
+use codex_parsers::opf;
+use codex_utils::normalize_for_search;
 
 use super::types::ScanProgress;
 
@@ -156,7 +156,7 @@ async fn analyze_single_book(
         // Compute full hash to verify the file actually changed
         let path_clone = path.clone();
         let current_full_hash = tokio::task::spawn_blocking(move || {
-            use crate::utils::hasher::hash_file;
+            use codex_utils::hasher::hash_file;
             hash_file(&path_clone)
         })
         .await
@@ -167,7 +167,7 @@ async fn analyze_single_book(
             // Update partial_hash to match current state and skip analysis
             let path_clone2 = path.clone();
             let current_partial_hash = tokio::task::spawn_blocking(move || {
-                use crate::utils::hasher::hash_file_partial;
+                use codex_utils::hasher::hash_file_partial;
                 hash_file_partial(&path_clone2)
             })
             .await
@@ -265,7 +265,7 @@ async fn analyze_single_book(
     // Compute partial hash to keep both hashes in sync
     let path_clone2 = path.clone();
     let partial_hash = tokio::task::spawn_blocking(move || {
-        use crate::utils::hasher::hash_file_partial;
+        use codex_utils::hasher::hash_file_partial;
         hash_file_partial(&path_clone2)
     })
     .await
@@ -299,7 +299,7 @@ async fn analyze_single_book(
     // Recompute KOReader hash during analysis
     let path_clone = path.clone();
     let koreader_hash = tokio::task::spawn_blocking(move || {
-        crate::utils::hasher::hash_file_koreader(&path_clone).ok()
+        codex_utils::hasher::hash_file_koreader(&path_clone).ok()
     })
     .await
     .unwrap_or(None);
@@ -941,7 +941,7 @@ async fn analyze_single_book(
         let series_json_path = path.parent().map(|p| p.join("series.json"));
         if let Some(sjp) = series_json_path {
             let sj_result = tokio::task::spawn_blocking(move || {
-                crate::parsers::series_json::parse_series_json_file(&sjp)
+                codex_parsers::series_json::parse_series_json_file(&sjp)
             })
             .await
             .map_err(|e| anyhow::anyhow!("Failed to spawn series.json parse task: {}", e))?;
@@ -1100,7 +1100,7 @@ struct BookClassification {
 async fn resolve_book_classification(
     db: &DatabaseConnection,
     book: &books::Model,
-    file_metadata: &crate::parsers::BookMetadata,
+    file_metadata: &codex_parsers::BookMetadata,
     book_number: Option<f32>,
 ) -> BookClassification {
     let Ok(Some(library)) = LibraryRepository::get_by_id(db, book.library_id).await else {
@@ -1149,7 +1149,7 @@ async fn resolve_book_classification(
 async fn resolve_book_title(
     db: &DatabaseConnection,
     book: &books::Model,
-    file_metadata: &crate::parsers::BookMetadata,
+    file_metadata: &codex_parsers::BookMetadata,
     book_number: Option<f32>,
 ) -> String {
     // Get library to determine book naming strategy
@@ -1225,7 +1225,7 @@ fn filename_fallback(file_name: &str) -> String {
 async fn resolve_book_number(
     db: &DatabaseConnection,
     book: &books::Model,
-    _file_metadata: &crate::parsers::BookMetadata,
+    _file_metadata: &codex_parsers::BookMetadata,
     metadata_number: Option<f32>,
 ) -> Option<f32> {
     // Get library to determine number strategy
@@ -1290,7 +1290,7 @@ async fn get_book_position_in_series(
 
     // Sort by filename using natural sort order so "Vol. 2" comes before "Vol. 10"
     let mut sorted_names: Vec<&str> = books.iter().map(|b| b.file_name.as_str()).collect();
-    sorted_names.sort_by(|a, b| crate::utils::natural_cmp_filename(a, b));
+    sorted_names.sort_by(|a, b| codex_utils::natural_cmp_filename(a, b));
 
     // Find position of this book (1-indexed)
     let position = sorted_names
@@ -1361,7 +1361,7 @@ pub async fn renumber_series_books(
     // Sort active filenames using natural sort to determine positions
     let mut sorted_filenames: Vec<&str> =
         active_books.iter().map(|b| b.file_name.as_str()).collect();
-    sorted_filenames.sort_by(|a, b| crate::utils::natural_cmp_filename(a, b));
+    sorted_filenames.sort_by(|a, b| codex_utils::natural_cmp_filename(a, b));
 
     // Build a position map: filename -> 1-indexed position
     let position_map: std::collections::HashMap<&str, usize> = sorted_filenames

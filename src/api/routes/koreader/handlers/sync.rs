@@ -10,9 +10,9 @@ use crate::api::permissions::Permission;
 use crate::api::routes::koreader::dto::progress::DocumentProgressDto;
 use crate::db::entities::books;
 use crate::db::repositories::{BookRepository, ReadProgressRepository};
-use crate::parsers::EpubPosition;
 use axum::Json;
 use axum::extract::{Path, State};
+use codex_parsers::EpubPosition;
 use std::sync::Arc;
 
 /// GET /koreader/syncs/progress/{document}

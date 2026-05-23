@@ -8,10 +8,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-// `NumericSpan` and the span helpers live in `crate::models::release` so the
+// `NumericSpan` and the span helpers live in `codex_models::release` so the
 // db layer can consume them without importing services.
 #[allow(unused_imports)]
-pub use crate::models::release::{NumericSpan, normalize_spans, primary_value};
+pub use codex_models::release::{NumericSpan, normalize_spans, primary_value};
 
 /// A release candidate emitted by a `release_source` plugin.
 ///

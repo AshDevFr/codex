@@ -9,7 +9,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::models::SeriesStrategy;
+use codex_models::SeriesStrategy;
 
 use super::super::common::{DetectedBook, DetectedSeries};
 use super::ScanningStrategyImpl;

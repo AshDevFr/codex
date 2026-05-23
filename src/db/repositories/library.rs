@@ -12,8 +12,8 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::db::entities::{libraries, prelude::*};
-use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use crate::observability::repo::db_system_str;
+use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
 
 /// Parameters for creating a new library
 #[derive(Debug, Clone)]
@@ -348,8 +348,8 @@ impl LibraryRepository {
     /// Returns an empty vector if no rules are configured or if parsing fails.
     pub fn get_preprocessing_rules(
         library: &libraries::Model,
-    ) -> Vec<crate::models::preprocessing::PreprocessingRule> {
-        use crate::models::preprocessing::parse_preprocessing_rules;
+    ) -> Vec<codex_models::preprocessing::PreprocessingRule> {
+        use codex_models::preprocessing::parse_preprocessing_rules;
 
         match parse_preprocessing_rules(library.title_preprocessing_rules.as_deref()) {
             Ok(rules) => rules,
@@ -370,8 +370,8 @@ impl LibraryRepository {
     /// Returns None if no conditions are configured or if parsing fails.
     pub fn get_auto_match_conditions(
         library: &libraries::Model,
-    ) -> Option<crate::models::preprocessing::AutoMatchConditions> {
-        use crate::models::preprocessing::parse_auto_match_conditions;
+    ) -> Option<codex_models::preprocessing::AutoMatchConditions> {
+        use codex_models::preprocessing::parse_auto_match_conditions;
 
         match parse_auto_match_conditions(library.auto_match_conditions.as_deref()) {
             Ok(conditions) => conditions,
@@ -966,7 +966,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_auto_match_conditions_valid() {
-        use crate::models::preprocessing::{ConditionMode, ConditionOperator};
+        use codex_models::preprocessing::{ConditionMode, ConditionOperator};
 
         let (db, _temp_dir) = create_test_db().await;
 

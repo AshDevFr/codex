@@ -8,7 +8,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::models::{PublisherHierarchyConfig, SeriesStrategy};
+use codex_models::{PublisherHierarchyConfig, SeriesStrategy};
 
 use super::super::common::{DetectedBook, DetectedSeries, SeriesMetadata};
 use super::ScanningStrategyImpl;

@@ -14,11 +14,11 @@
 
 use crate::services::plugin::PluginManagerError;
 
-// Re-exported from `crate::models::task` so existing call sites work and the
+// Re-exported from `codex_models::task` so existing call sites work and the
 // canonical constants live in the shared `models` layer (avoids db -> tasks
 // imports for what is really a value type).
 #[allow(unused_imports)]
-pub use crate::models::task::{DEFAULT_MAX_RESCHEDULES, DEFAULT_RATE_LIMIT_RETRY_SECONDS};
+pub use codex_models::task::{DEFAULT_MAX_RESCHEDULES, DEFAULT_RATE_LIMIT_RETRY_SECONDS};
 
 /// Trait for errors that represent rate limiting
 ///

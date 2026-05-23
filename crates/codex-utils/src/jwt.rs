@@ -4,9 +4,9 @@
 
 #![allow(dead_code)]
 
-use crate::models::permissions::UserRole;
 use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
+use codex_models::permissions::UserRole;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

@@ -2,7 +2,7 @@
 //!
 //! Uses metadata title if present, falls back to filename
 
-use crate::models::BookStrategy;
+use codex_models::BookStrategy;
 
 use super::{BookMetadata, BookNamingContext, BookNamingStrategy, filename_without_extension};
 

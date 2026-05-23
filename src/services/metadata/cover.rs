@@ -12,9 +12,9 @@ use uuid::Uuid;
 use crate::db::repositories::{
     BookCoversRepository, SeriesCoversRepository, SeriesRepository, TaskRepository,
 };
-use crate::models::task::TaskType;
 use crate::services::ThumbnailService;
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
+use codex_models::task::TaskType;
 
 /// Service for downloading and applying cover images to series.
 pub struct CoverService;
@@ -75,7 +75,7 @@ impl CoverService {
         image::load_from_memory(&image_data).context("Invalid image file")?;
 
         // Compute hash of image data for deduplication
-        let image_hash = crate::utils::hasher::hash_bytes(&image_data);
+        let image_hash = codex_utils::hasher::hash_bytes(&image_data);
         let short_hash = &image_hash[..16];
 
         // Create covers directory within uploads dir if it doesn't exist
@@ -185,7 +185,7 @@ impl CoverService {
         image::load_from_memory(&image_data).context("Invalid image file")?;
 
         // Compute hash of image data for deduplication
-        let image_hash = crate::utils::hasher::hash_bytes(&image_data);
+        let image_hash = codex_utils::hasher::hash_bytes(&image_data);
         let short_hash = &image_hash[..16];
 
         // Create covers directory within uploads dir if it doesn't exist

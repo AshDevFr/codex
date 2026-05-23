@@ -25,7 +25,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::models::{
+use codex_models::{
     CalibreStrategyConfig, CustomStrategyConfig, FlatStrategyConfig, PublisherHierarchyConfig,
     SeriesStrategy,
 };

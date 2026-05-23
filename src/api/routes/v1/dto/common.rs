@@ -3,7 +3,7 @@ use utoipa::{IntoParams, ToSchema};
 
 // Re-export serde helpers from crate-level utils for convenience
 #[allow(unused_imports)] // default_true available for DTOs that need it
-pub use crate::utils::{default_true, deserialize_optional_nullable, is_false};
+pub use codex_utils::{default_true, deserialize_optional_nullable, is_false};
 
 // =============================================================================
 // Pagination Constants

@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 use crate::db::repositories::PluginsRepository;
 use crate::services::metadata::FieldGroup;
-use crate::utils::cron::{validate_cron_expression, validate_timezone};
+use codex_utils::cron::{validate_cron_expression, validate_timezone};
 
 use super::types::{
     LibraryJobConfig, MAX_CONCURRENCY_HARD_CAP, MetadataRefreshJobConfig, RefreshScope,

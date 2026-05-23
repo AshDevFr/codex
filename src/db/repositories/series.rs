@@ -17,10 +17,10 @@ use crate::db::entities::{
     book_metadata, books, prelude::*, read_progress, series, series_external_ratings,
     series_metadata, user_series_ratings,
 };
-use crate::models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
 use crate::observability::repo::db_system_str;
-use crate::utils::normalize_for_search;
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use codex_models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
+use codex_utils::normalize_for_search;
 use std::sync::Arc;
 
 /// Options for querying series with filtering, sorting, and pagination
@@ -2171,8 +2171,8 @@ impl SeriesRepository {
     pub async fn get_owned_release_keys_for_series(
         db: &DatabaseConnection,
         series_id: Uuid,
-    ) -> Result<crate::models::release::OwnedReleaseKeys> {
-        use crate::models::release::OwnedReleaseKeys;
+    ) -> Result<codex_models::release::OwnedReleaseKeys> {
+        use codex_models::release::OwnedReleaseKeys;
 
         #[derive(Debug, FromQueryResult)]
         struct KeyRow {
@@ -3001,7 +3001,7 @@ mod tests {
 
         use crate::db::entities::users;
         use crate::db::repositories::{ReadProgressRepository, UserRepository};
-        use crate::utils::password;
+        use codex_utils::password;
 
         let password_hash = password::hash_password("test123").unwrap();
         let user = users::Model {

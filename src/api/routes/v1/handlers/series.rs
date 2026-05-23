@@ -37,10 +37,6 @@ use crate::require_permission;
 use crate::services::release::upstream_gap::{
     UpstreamGap, UpstreamGapInputs, compute_upstream_gap,
 };
-use crate::utils::{
-    json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
-    validate_custom_metadata_size,
-};
 use axum::{
     Json,
     body::Body,
@@ -50,6 +46,10 @@ use axum::{
 };
 use chrono::Utc;
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
+use codex_utils::{
+    json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
+    validate_custom_metadata_size,
+};
 use httpdate::fmt_http_date;
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
@@ -1669,7 +1669,7 @@ pub async fn upload_series_cover(
         .map_err(|e| ApiError::BadRequest(format!("Invalid image file: {}", e)))?;
 
     // Compute hash of image data for deduplication
-    let image_hash = crate::utils::hasher::hash_bytes(&image_data);
+    let image_hash = codex_utils::hasher::hash_bytes(&image_data);
     // Use first 16 chars of hash for filename (64 chars is excessive)
     let short_hash = &image_hash[..16];
 

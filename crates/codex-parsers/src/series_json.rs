@@ -3,7 +3,7 @@
 //! Parses Mylar's `series.json` sidecar files (schema version 1.0.2) to extract
 //! series-level metadata such as publisher, year, description, and status.
 
-use crate::utils::{CodexError, Result};
+use codex_utils::{CodexError, Result};
 use serde::Deserialize;
 use std::path::Path;
 
