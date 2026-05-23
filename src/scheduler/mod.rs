@@ -742,6 +742,29 @@ impl Scheduler {
     }
 }
 
+/// Adapter that lets the `services` layer drive a `Scheduler` through the
+/// [`crate::services::scheduler_handle::SchedulerReconciler`] trait without
+/// holding the concrete type. The trait inverts the layer dependency so
+/// `services` can ask for a reconcile without importing `scheduler`.
+pub struct LockedSchedulerReconciler {
+    inner: std::sync::Arc<tokio::sync::Mutex<Scheduler>>,
+}
+
+impl LockedSchedulerReconciler {
+    pub fn new(inner: std::sync::Arc<tokio::sync::Mutex<Scheduler>>) -> Self {
+        Self { inner }
+    }
+}
+
+impl crate::services::scheduler_handle::SchedulerReconciler for LockedSchedulerReconciler {
+    fn reconcile_release_sources(&self) -> futures::future::BoxFuture<'_, Result<()>> {
+        Box::pin(async move {
+            let mut guard = self.inner.lock().await;
+            guard.reconcile_release_sources().await
+        })
+    }
+}
+
 /// Whether an active (`pending` or `processing`) `refresh_library_metadata`
 /// task already exists for the given **job**.
 ///

@@ -148,9 +148,9 @@ pub struct PluginHandle {
     /// Optional database connection for handlers that need DB access
     /// post-initialization (releases handler, etc.).
     release_db: Option<DatabaseConnection>,
-    /// Optional scheduler reference so the releases handler can reconcile
+    /// Optional scheduler handle so the releases handler can reconcile
     /// release-source schedules immediately after `releases/register_sources`.
-    scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
+    scheduler: Option<crate::services::scheduler_handle::SharedSchedulerReconciler>,
 }
 
 impl PluginHandle {
@@ -193,12 +193,12 @@ impl PluginHandle {
         self
     }
 
-    /// Attach a scheduler reference so the releases reverse-RPC handler can
+    /// Attach a scheduler handle so the releases reverse-RPC handler can
     /// trigger a release-source reconcile when the plugin calls
     /// `releases/register_sources`. Builder-style.
     pub fn with_scheduler(
         mut self,
-        scheduler: Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>,
+        scheduler: crate::services::scheduler_handle::SharedSchedulerReconciler,
     ) -> Self {
         self.scheduler = Some(scheduler);
         self

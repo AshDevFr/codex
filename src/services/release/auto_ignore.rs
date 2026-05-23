@@ -19,26 +19,8 @@
 //! an owned `(Some(3), None)`; a release for "Ch 12" matches an owned
 //! `(_, Some(12))` regardless of volume.
 
-use crate::services::release::candidate::NumericSpan;
-
-/// Per-series ownership signature consumed by [`should_auto_ignore`].
-#[derive(Debug, Default, Clone)]
-pub struct OwnedReleaseKeys {
-    /// `(volume, chapter)` pairs from book metadata, after filtering out
-    /// rows with both fields null.
-    ///
-    /// - `(Some(v), None)` — whole volume `v` owned (no specific chapter).
-    /// - `(Some(v), Some(c))` — chapter `c` of volume `v` owned.
-    /// - `(None, Some(c))` — chapter `c` owned, volume unknown.
-    pub keys: Vec<(Option<i32>, Option<f64>)>,
-    /// `true` if at least one book in the series carries volume metadata.
-    /// When `false`, we fall back to [`Self::volumes_owned_count`].
-    pub has_any_volume_metadata: bool,
-    /// Count of "complete-volume" books (volume IS NOT NULL AND chapter
-    /// IS NULL). Only consulted in the count-fallback branch when
-    /// [`Self::has_any_volume_metadata`] is `false`.
-    pub volumes_owned_count: i64,
-}
+use crate::models::release::NumericSpan;
+pub use crate::models::release::OwnedReleaseKeys;
 
 /// True when the user owns *every* item the release covers.
 ///

@@ -1,6 +1,7 @@
 pub mod auth_tracking;
 pub mod book_export_collector;
 pub mod cleanup_subscriber;
+pub mod content_filter;
 pub mod email;
 pub mod export_storage;
 pub mod file_cleanup;
@@ -19,6 +20,7 @@ pub mod rate_limiter;
 pub mod read_progress;
 pub mod refresh_token;
 pub mod release;
+pub mod scheduler_handle;
 pub mod series_export_collector;
 pub mod series_export_writer;
 pub mod settings;
@@ -46,6 +48,8 @@ pub use task_listener::TaskListener;
 pub use task_metrics::TaskMetricsService;
 pub use thumbnail::ThumbnailService;
 
-pub use plugin::encryption::CredentialEncryption;
+// Historical alias. The canonical location is `crate::utils::credential_encryption`.
+#[allow(unused_imports)]
+pub use crate::utils::credential_encryption::CredentialEncryption;
 pub use plugin_file_storage::{PluginCleanupStats, PluginFileStorage, PluginStorageStats};
 pub use plugin_metrics::{PluginHealthStatus, PluginMetricsService};

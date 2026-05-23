@@ -11,13 +11,13 @@ use std::collections::HashMap;
 use std::fmt;
 use uuid::Uuid;
 
-use crate::api::extractors::content_filter::ContentFilter;
 use crate::db::entities::series;
 use crate::db::repositories::{
     AlternateTitleRepository, BookRepository, ExternalRatingRepository, GenreRepository,
     LibraryRepository, SeriesMetadataRepository, SeriesRepository, TagRepository,
     UserSeriesRatingRepository,
 };
+use crate::services::content_filter::ContentFilter;
 
 // =============================================================================
 // ExportField enum

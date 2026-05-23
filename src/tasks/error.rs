@@ -14,11 +14,11 @@
 
 use crate::services::plugin::PluginManagerError;
 
-/// Default retry delay in seconds for rate-limited tasks
-pub const DEFAULT_RATE_LIMIT_RETRY_SECONDS: u64 = 30;
-
-/// Default maximum number of rate limit reschedules before marking as failed
-pub const DEFAULT_MAX_RESCHEDULES: i32 = 10;
+// Re-exported from `crate::models::task` so existing call sites work and the
+// canonical constants live in the shared `models` layer (avoids db -> tasks
+// imports for what is really a value type).
+#[allow(unused_imports)]
+pub use crate::models::task::{DEFAULT_MAX_RESCHEDULES, DEFAULT_RATE_LIMIT_RETRY_SECONDS};
 
 /// Trait for errors that represent rate limiting
 ///

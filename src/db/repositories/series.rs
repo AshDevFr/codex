@@ -13,12 +13,12 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::api::routes::v1::dto::series::{SeriesSortField, SeriesSortParam, SortDirection};
 use crate::db::entities::{
     book_metadata, books, prelude::*, read_progress, series, series_external_ratings,
     series_metadata, user_series_ratings,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
 use crate::observability::repo::db_system_str;
 use crate::utils::normalize_for_search;
 use std::sync::Arc;
@@ -2171,8 +2171,8 @@ impl SeriesRepository {
     pub async fn get_owned_release_keys_for_series(
         db: &DatabaseConnection,
         series_id: Uuid,
-    ) -> Result<crate::services::release::auto_ignore::OwnedReleaseKeys> {
-        use crate::services::release::auto_ignore::OwnedReleaseKeys;
+    ) -> Result<crate::models::release::OwnedReleaseKeys> {
+        use crate::models::release::OwnedReleaseKeys;
 
         #[derive(Debug, FromQueryResult)]
         struct KeyRow {

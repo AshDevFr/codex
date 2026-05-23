@@ -68,7 +68,6 @@
 //! - [`health`]: Health monitoring and failure tracking
 //! - [`secrets`]: Secure credential handling with redaction
 
-pub mod encryption;
 pub mod handle;
 pub mod health;
 pub mod library;

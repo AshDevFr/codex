@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::db::entities::release_ledger::{
     self, Entity as ReleaseLedger, Model as ReleaseLedgerRow, state,
 };
-use crate::services::release::candidate::{NumericSpan, normalize_spans, primary_value};
+use crate::models::release::{NumericSpan, normalize_spans, primary_value};
 
 /// New-row payload. Keys plus payload fields.
 ///

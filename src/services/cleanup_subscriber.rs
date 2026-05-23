@@ -10,7 +10,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::db::repositories::TaskRepository;
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
-use crate::tasks::types::TaskType;
+use crate::models::task::TaskType;
 
 /// Service that subscribes to entity events and triggers file cleanup tasks
 pub struct CleanupEventSubscriber {
@@ -191,7 +191,7 @@ mod tests {
     use super::*;
     use crate::db::test_helpers::create_test_db;
     use crate::events::EventBroadcaster;
-    use crate::tasks::types::TaskType;
+    use crate::models::task::TaskType;
     use chrono::Utc;
     use uuid::Uuid;
 

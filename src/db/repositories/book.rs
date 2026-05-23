@@ -912,15 +912,14 @@ impl BookRepository {
     pub async fn list_by_ids_sorted(
         db: &DatabaseConnection,
         ids: &[Uuid],
-        sort: &crate::api::routes::v1::dto::book::BookSortParam,
+        sort: &crate::models::sort::BookSortParam,
         user_id: Option<Uuid>,
         include_deleted: bool,
         offset: u64,
         limit: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::api::routes::v1::dto::book::BookSortField;
-        use crate::api::routes::v1::dto::series::SortDirection;
         use crate::db::entities::{book_metadata, read_progress, series, series_metadata};
+        use crate::models::sort::{BookSortField, SortDirection};
         use sea_orm::{Condition, JoinType};
 
         if ids.is_empty() {
@@ -1194,14 +1193,13 @@ impl BookRepository {
     pub async fn list_by_library_sorted(
         db: &DatabaseConnection,
         library_id: Uuid,
-        sort: &crate::api::routes::v1::dto::book::BookSortParam,
+        sort: &crate::models::sort::BookSortParam,
         include_deleted: bool,
         page: u64,
         page_size: u64,
     ) -> Result<(Vec<books::Model>, u64)> {
-        use crate::api::routes::v1::dto::book::BookSortField;
-        use crate::api::routes::v1::dto::series::SortDirection;
         use crate::db::entities::{book_metadata, series, series_metadata};
+        use crate::models::sort::{BookSortField, SortDirection};
         use sea_orm::JoinType;
 
         // Build base query
