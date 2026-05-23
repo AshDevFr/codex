@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::{Mutex, RwLock, mpsc};
 use tokio::time::timeout;
-use tracing::{debug, error, warn};
+use tracing::{Instrument, debug, error, warn};
 
 use super::permissions::{self, PermissionError};
 use super::process::{PluginProcess, ProcessError};
@@ -342,10 +342,21 @@ impl RpcClient {
             self.remove_pending(id).await;
             return Err(RpcError::Process(ProcessError::ProcessTerminated));
         }
-        {
+        // Span around the stdio write so its duration is attributable
+        // separately from waiting for the response. Most calls spend
+        // microseconds here; a slow write usually means a wedged plugin.
+        async {
             let process = self.process.lock().await;
-            process.write_line(&request_json).await?;
+            process.write_line(&request_json).await
         }
+        .instrument(tracing::info_span!(
+            "plugin.rpc.write",
+            otel.kind = "internal",
+            rpc.id = id,
+            rpc.method = method,
+            request_len = request_json.len(),
+        ))
+        .await?;
 
         // Loop, servicing reverse-RPC frames until the response frame
         // arrives or we time out. Dispatching reverse-RPCs here (on the
@@ -355,6 +366,13 @@ impl RpcClient {
             id = id,
             timeout_ms = request_timeout.as_millis(),
             "Waiting for RPC response"
+        );
+        let wait_span = tracing::info_span!(
+            "plugin.rpc.wait",
+            otel.kind = "internal",
+            rpc.id = id,
+            rpc.method = method,
+            timeout_ms = request_timeout.as_millis() as u64,
         );
         let response_result = timeout(request_timeout, async {
             loop {
@@ -401,6 +419,7 @@ impl RpcClient {
                 }
             }
         })
+        .instrument(wait_span)
         .await;
 
         let result = match response_result {

@@ -39,6 +39,11 @@ pub struct AnalysisResult {
 /// # Arguments
 /// * `force` - If true, bypass full hash check and force re-analysis even if file hasn't changed
 /// * `event_broadcaster` - Optional event broadcaster for emitting entity change events
+#[tracing::instrument(
+    name = "scanner.analyze_book",
+    skip_all,
+    fields(book.id = %book_id, force),
+)]
 pub async fn analyze_book(
     db: &DatabaseConnection,
     book_id: Uuid,

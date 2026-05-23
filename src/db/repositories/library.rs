@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::db::entities::{libraries, prelude::*};
 use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
+use crate::observability::repo::db_system_str;
 
 /// Parameters for creating a new library
 #[derive(Debug, Clone)]
@@ -105,6 +106,15 @@ pub struct LibraryRepository;
 
 impl LibraryRepository {
     /// Create a new library with full parameters
+    #[tracing::instrument(
+        name = "db.library.insert",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "insert",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn create_with_params(
         db: &DatabaseConnection,
         params: CreateLibraryParams,
@@ -149,6 +159,16 @@ impl LibraryRepository {
     }
 
     /// Get a library by ID
+    #[tracing::instrument(
+        name = "db.library.get_by_id",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            library.id = %id,
+        ),
+    )]
     pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<libraries::Model>> {
         Libraries::find_by_id(id)
             .one(db)
@@ -159,6 +179,16 @@ impl LibraryRepository {
     /// Get libraries by multiple IDs
     ///
     /// Returns a HashMap keyed by library ID for efficient lookups
+    #[tracing::instrument(
+        name = "db.library.get_by_ids",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            id_count = ids.len(),
+        ),
+    )]
     pub async fn get_by_ids(
         db: &DatabaseConnection,
         ids: &[Uuid],
@@ -179,6 +209,15 @@ impl LibraryRepository {
     }
 
     /// Get all libraries
+    #[tracing::instrument(
+        name = "db.library.list_all",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn list_all(db: &DatabaseConnection) -> Result<Vec<libraries::Model>> {
         Libraries::find()
             .order_by_asc(libraries::Column::Name)
@@ -200,6 +239,16 @@ impl LibraryRepository {
     }
 
     /// Update library
+    #[tracing::instrument(
+        name = "db.library.update",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            library.id = %library.id,
+        ),
+    )]
     pub async fn update(db: &DatabaseConnection, library: &libraries::Model) -> Result<()> {
         let active = libraries::ActiveModel {
             id: Set(library.id),
@@ -251,6 +300,16 @@ impl LibraryRepository {
 
     /// Delete a library
     /// Note: task_metrics are automatically deleted via CASCADE foreign key
+    #[tracing::instrument(
+        name = "db.library.delete",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "delete",
+            otel.kind = "client",
+            library.id = %id,
+        ),
+    )]
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         Libraries::delete_by_id(id)
             .exec(db)

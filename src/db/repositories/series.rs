@@ -19,6 +19,7 @@ use crate::db::entities::{
     series_metadata, user_series_ratings,
 };
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::observability::repo::db_system_str;
 use crate::utils::normalize_for_search;
 use std::sync::Arc;
 
@@ -220,6 +221,18 @@ impl SeriesRepository {
     ///
     /// This is the primary composable query method that supports all filtering
     /// and sorting options. Use `SeriesQueryOptions` to configure the query.
+    #[tracing::instrument(
+        name = "db.series.query",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            library_id = ?options.library_id,
+            page = options.page,
+            page_size = options.page_size,
+        ),
+    )]
     pub async fn query(
         db: &DatabaseConnection,
         options: SeriesQueryOptions<'_>,
@@ -678,6 +691,16 @@ impl SeriesRepository {
 
     /// Create a new series with a default path derived from the name
     /// For production use, prefer `create_with_fingerprint` which takes an explicit path
+    #[tracing::instrument(
+        name = "db.series.insert",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "insert",
+            otel.kind = "client",
+            library.id = %library_id,
+        ),
+    )]
     pub async fn create(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -819,6 +842,16 @@ impl SeriesRepository {
     }
 
     /// Get a series by ID
+    #[tracing::instrument(
+        name = "db.series.get_by_id",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            series.id = %id,
+        ),
+    )]
     pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<series::Model>> {
         Series::find_by_id(id)
             .one(db)
@@ -943,6 +976,16 @@ impl SeriesRepository {
     }
 
     /// Get all series in a library
+    #[tracing::instrument(
+        name = "db.series.list_by_library",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            library.id = %library_id,
+        ),
+    )]
     pub async fn list_by_library(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -1713,6 +1756,16 @@ impl SeriesRepository {
     }
 
     /// Update series core fields
+    #[tracing::instrument(
+        name = "db.series.update",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            series.id = %series_model.id,
+        ),
+    )]
     pub async fn update(
         db: &DatabaseConnection,
         series_model: &series::Model,

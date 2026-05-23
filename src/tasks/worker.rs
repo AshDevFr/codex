@@ -647,6 +647,20 @@ impl TaskWorker {
             task.book_id,
         ));
 
+        // Each task gets its own root span so background work does not
+        // accidentally inherit an HTTP server span as its parent. The span
+        // covers handler execution across both single-process and
+        // distributed-mode branches below.
+        let task_span = tracing::info_span!(
+            "task.execute",
+            task.id = %task.id,
+            task.type = %task.task_type,
+            library.id = ?task.library_id,
+            series.id = ?task.series_id,
+            book.id = ?task.book_id,
+            otel.kind = "internal",
+        );
+
         // In distributed mode, create a recording broadcaster to capture events
         // that need to be replayed by the TaskListener on the web server
         let (task_broadcaster, recorded_events): (
@@ -666,12 +680,15 @@ impl TaskWorker {
             // request id. Without these scopes, plugins that emit events
             // via reverse-RPC would have no recording context and their
             // events would never replay.
-            let result = crate::events::with_task_identity(
-                task_identity.clone(),
-                crate::events::with_recording_broadcaster(
-                    recording_broadcaster.clone(),
-                    handler.handle(&task, &self.db, Some(&recording_broadcaster)),
+            let result = tracing::Instrument::instrument(
+                crate::events::with_task_identity(
+                    task_identity.clone(),
+                    crate::events::with_recording_broadcaster(
+                        recording_broadcaster.clone(),
+                        handler.handle(&task, &self.db, Some(&recording_broadcaster)),
+                    ),
                 ),
+                task_span.clone(),
             )
             .await;
 
@@ -719,18 +736,24 @@ impl TaskWorker {
         // The shared broadcaster has recording disabled here (web/single-
         // process mode), so emits flow straight to live SSE subscribers.
         let result = if let Some(ref shared) = task_broadcaster {
-            crate::events::with_task_identity(
-                task_identity.clone(),
-                crate::events::with_recording_broadcaster(
-                    shared.clone(),
-                    handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+            tracing::Instrument::instrument(
+                crate::events::with_task_identity(
+                    task_identity.clone(),
+                    crate::events::with_recording_broadcaster(
+                        shared.clone(),
+                        handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+                    ),
                 ),
+                task_span.clone(),
             )
             .await
         } else {
-            crate::events::with_task_identity(
-                task_identity.clone(),
-                handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+            tracing::Instrument::instrument(
+                crate::events::with_task_identity(
+                    task_identity.clone(),
+                    handler.handle(&task, &self.db, task_broadcaster.as_ref()),
+                ),
+                task_span.clone(),
             )
             .await
         };
