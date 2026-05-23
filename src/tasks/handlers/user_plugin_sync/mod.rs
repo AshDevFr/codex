@@ -27,7 +27,6 @@ use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{UserPluginDataRepository, UserPluginsRepository};
-use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::protocol::methods;
@@ -36,6 +35,7 @@ use crate::services::plugin::sync::{
 };
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub(crate) use settings::CodexSyncSettings;
 

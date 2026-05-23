@@ -3,7 +3,7 @@ use crate::commands::common::{
     init_database, init_settings_service, init_tracing, load_config, shutdown_workers,
     spawn_workers,
 };
-use crate::config::DatabaseType;
+use codex_config::DatabaseType;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
@@ -57,7 +57,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         init_settings_service(db.sea_orm_connection(), background_task_cancel.clone()).await?;
 
     // Create event broadcaster for real-time updates
-    let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
+    let event_broadcaster = Arc::new(codex_events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
 
     // Start cleanup event subscriber to handle file cleanup on entity deletion
@@ -337,7 +337,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Note: no broadcaster injection. Reverse-RPC handlers (e.g.
     // `releases/record`) emit through the task-local recording broadcaster
     // set up by `TaskWorker::run_task`, not through a manager-held one.
-    // See `crate::events::with_recording_broadcaster`.
+    // See `codex_events::with_recording_broadcaster`.
     info!("Initializing plugin manager...");
     // Wrap the scheduler in the services-layer trait so plugin handles can
     // trigger reconciles without holding the concrete scheduler type.

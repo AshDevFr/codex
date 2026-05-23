@@ -1,0 +1,20 @@
+[package]
+name = "codex-events"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "codex_events"
+path = "src/lib.rs"
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1.0"

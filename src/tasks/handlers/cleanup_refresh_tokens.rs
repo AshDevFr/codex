@@ -13,9 +13,9 @@ use tracing::info;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::RefreshTokenRepository;
-use crate::events::EventBroadcaster;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 /// Days a revoked refresh-token row sticks around before cleanup deletes it.
 const REVOKED_GRACE_DAYS: i64 = 30;
@@ -57,11 +57,11 @@ impl TaskHandler for CleanupRefreshTokensHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
     use crate::db::Database;
     use crate::db::entities::users;
     use crate::db::repositories::{NewRefreshToken, UserRepository};
     use chrono::{Duration, Utc};
+    use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
     use std::collections::HashMap;
     use tempfile::TempDir;
     use uuid::Uuid;

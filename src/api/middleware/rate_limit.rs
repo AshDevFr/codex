@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn test_rate_limit_layer_creation() {
-        let config = Arc::new(crate::config::RateLimitConfig::default());
+        let config = Arc::new(codex_config::RateLimitConfig::default());
         let service = Arc::new(RateLimiterService::new(config));
         let layer = RateLimitLayer::new(
             service,

@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::db::entities::series_alternate_titles::{
     self, Entity as AlternateTitles, Model as AlternateTitle,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Repository for series alternate title operations
 pub struct AlternateTitleRepository;

@@ -6,10 +6,10 @@ use tracing::{debug, error, info, warn};
 use crate::db::entities::book_error::{BookError, BookErrorType};
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, SeriesRepository, TaskRepository};
-use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 
 pub struct GenerateThumbnailHandler {
     thumbnail_service: Arc<ThumbnailService>,

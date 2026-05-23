@@ -16,9 +16,7 @@ use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::config::FilesConfig;
 use crate::db::repositories::TaskRepository;
-use crate::events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 use crate::services::PdfPageCache;
 use crate::services::export_storage::ExportStorage;
 use crate::services::plugin::PluginManager;
@@ -38,6 +36,8 @@ use crate::tasks::handlers::{
     UserPluginRecommendationDismissHandler, UserPluginRecommendationsHandler,
     UserPluginSyncHandler,
 };
+use codex_config::FilesConfig;
+use codex_events::{EventBroadcaster, RecordedEvent, TaskProgressEvent};
 
 /// RAII guard that increments the OTel in-flight task gauge on creation and
 /// decrements it on drop. Used by `process_next_task` to track currently-
@@ -661,7 +661,7 @@ impl TaskWorker {
         // task-local context. Used by `releases/report_progress` to
         // construct a `TaskProgressEvent` (which needs the task id/type)
         // and to rate-limit emits.
-        let task_identity = Arc::new(crate::events::TaskIdentity::new(
+        let task_identity = Arc::new(codex_events::TaskIdentity::new(
             task.id,
             task.task_type.clone(),
             task.library_id,
@@ -703,9 +703,9 @@ impl TaskWorker {
             // via reverse-RPC would have no recording context and their
             // events would never replay.
             let result = tracing::Instrument::instrument(
-                crate::events::with_task_identity(
+                codex_events::with_task_identity(
                     task_identity.clone(),
-                    crate::events::with_recording_broadcaster(
+                    codex_events::with_recording_broadcaster(
                         recording_broadcaster.clone(),
                         handler.handle(&task, &self.db, Some(&recording_broadcaster)),
                     ),
@@ -759,9 +759,9 @@ impl TaskWorker {
         // process mode), so emits flow straight to live SSE subscribers.
         let result = if let Some(ref shared) = task_broadcaster {
             tracing::Instrument::instrument(
-                crate::events::with_task_identity(
+                codex_events::with_task_identity(
                     task_identity.clone(),
-                    crate::events::with_recording_broadcaster(
+                    codex_events::with_recording_broadcaster(
                         shared.clone(),
                         handler.handle(&task, &self.db, task_broadcaster.as_ref()),
                     ),
@@ -771,7 +771,7 @@ impl TaskWorker {
             .await
         } else {
             tracing::Instrument::instrument(
-                crate::events::with_task_identity(
+                codex_events::with_task_identity(
                     task_identity.clone(),
                     handler.handle(&task, &self.db, task_broadcaster.as_ref()),
                 ),
@@ -1017,9 +1017,9 @@ mod tests {
     use super::*;
     use crate::db::repositories::TaskRepository;
     use crate::db::test_helpers::create_test_db;
-    use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
     use crate::tasks::handlers::TaskHandler;
     use crate::tasks::types::{TaskResult, TaskType};
+    use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
 
     /// Stub handler that returns whatever `TaskResult` it was constructed with.
     /// Used to drive the worker through specific result branches without

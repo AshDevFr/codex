@@ -13,7 +13,6 @@ use super::super::dto::{
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::db::entities::plugins::{InternalPluginConfig, PluginPermission};
 use crate::db::repositories::{PluginFailuresRepository, PluginsRepository, UserPluginsRepository};
-use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::services::PluginHealthStatus;
 use crate::services::plugin::process::{allowed_commands_description, is_command_allowed};
 use crate::services::plugin::protocol::PluginScope;
@@ -22,6 +21,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use codex_events::{EntityChangeEvent, EntityEvent};
 use std::sync::Arc;
 use std::time::Instant;
 use utoipa::OpenApi;

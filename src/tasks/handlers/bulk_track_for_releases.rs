@@ -18,12 +18,12 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::tasks;
-use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::release::tracking_toggle::{
     ToggleOutcome, ToggleResult, track_one_series, untrack_one_series,
 };
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub struct BulkTrackForReleasesHandler;
 

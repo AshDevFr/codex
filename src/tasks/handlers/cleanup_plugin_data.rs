@@ -13,10 +13,10 @@ use tracing::info;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::UserPluginDataRepository;
-use crate::events::EventBroadcaster;
 use crate::services::user_plugin::OAuthStateManager;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 /// Handler for cleaning up expired plugin storage data and OAuth state
 #[derive(Default)]

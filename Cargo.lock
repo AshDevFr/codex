@@ -821,6 +821,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
+ "codex-config",
+ "codex-events",
  "cron",
  "csv",
  "dashmap",
@@ -888,6 +890,30 @@ dependencies = [
  "uuid",
  "walkdir",
  "zip",
+]
+
+[[package]]
+name = "codex-config"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_yaml",
+ "serial_test",
+ "tempfile",
+]
+
+[[package]]
+name = "codex-events"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

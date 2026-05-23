@@ -45,7 +45,7 @@ use crate::db::repositories::{
     LedgerInboxFilter, LibraryRepository, PluginsRepository, ReleaseLedgerRepository,
     ReleaseSourceRepository, ReleaseSourceUpdate, SeriesRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent};
+use codex_events::{EntityChangeEvent, EntityEvent};
 
 /// Hydrate ledger rows with series titles via a single batched lookup.
 ///

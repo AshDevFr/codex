@@ -20,7 +20,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
+    use crate::{
         ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
         FilesConfig, KomgaApiConfig, KoreaderApiConfig, LoggingConfig, ObservabilityConfig,
         PdfConfig, PdfHandleCacheConfig, RateLimitConfig, SQLiteConfig, ScannerConfig,

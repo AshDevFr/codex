@@ -333,7 +333,7 @@ impl PluginHandle {
         // The releases handler emits `ReleaseAnnounced` through the
         // task-local recording broadcaster set by `crate::tasks::worker`
         // around the running task — no broadcaster injection needed here.
-        // See [`crate::events::with_recording_broadcaster`].
+        // See [`codex_events::with_recording_broadcaster`].
         let manifest_for_ctx = manifest.clone();
         let plugin_name = manifest.name.clone();
         let release_db = self.release_db.clone();

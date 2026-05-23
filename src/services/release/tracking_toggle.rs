@@ -14,8 +14,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::repositories::{SeriesRepository, SeriesTrackingRepository, TrackingUpdate};
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use crate::services::release::seed::seed_tracking_for_series;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Discrete outcomes for a single-series toggle attempt.
 ///

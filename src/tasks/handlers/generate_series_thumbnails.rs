@@ -11,10 +11,10 @@ use tracing::{debug, info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{SeriesRepository, TaskRepository};
-use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub struct GenerateSeriesThumbnailsHandler {
     thumbnail_service: Arc<ThumbnailService>,

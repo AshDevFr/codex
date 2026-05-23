@@ -6,9 +6,9 @@ use tracing::{error, info};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::BookRepository;
-use crate::events::EventBroadcaster;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 pub struct PurgeDeletedHandler;
 

@@ -35,7 +35,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::config::{OidcConfig, OidcDefaultRole, OidcProviderConfig};
+use codex_config::{OidcConfig, OidcDefaultRole, OidcProviderConfig};
 
 /// Duration for discovery document cache (1 hour)
 const DISCOVERY_CACHE_TTL_SECS: i64 = 3600;

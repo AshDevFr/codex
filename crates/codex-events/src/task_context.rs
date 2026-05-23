@@ -14,9 +14,9 @@
 //! through every layer of the dispatcher is invasive; the task-local is the
 //! seam.
 //!
-//! The reverse-RPC dispatcher in [`crate::services::plugin::rpc`] runs the
+//! The reverse-RPC dispatcher in [`codex::services::plugin::rpc`] runs the
 //! dispatch on the *caller's* tokio task (the one that issued the forward
-//! call), so the task-local set up by [`crate::tasks::worker`] is in scope.
+//! call), so the task-local set up by [`codex::tasks::worker`] is in scope.
 
 use std::sync::Arc;
 use std::sync::Mutex;

@@ -17,10 +17,10 @@ use crate::db::entities::{
     book_metadata, books, prelude::*, read_progress, series, series_external_ratings,
     series_metadata, user_series_ratings,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use crate::models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
 use crate::observability::repo::db_system_str;
 use crate::utils::normalize_for_search;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use std::sync::Arc;
 
 /// Options for querying series with filtering, sorting, and pagination
@@ -2235,7 +2235,7 @@ impl SeriesRepository {
     pub async fn purge_empty_series_in_library(
         db: &DatabaseConnection,
         library_id: Uuid,
-        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
+        event_broadcaster: Option<&Arc<codex_events::EventBroadcaster>>,
     ) -> Result<u64> {
         use crate::db::entities::{books, prelude::*};
 
@@ -2270,7 +2270,7 @@ impl SeriesRepository {
 
                 // Emit SeriesDeleted event
                 if let Some(broadcaster) = event_broadcaster {
-                    use crate::events::{EntityChangeEvent, EntityEvent};
+                    use codex_events::{EntityChangeEvent, EntityEvent};
                     use tracing::warn;
 
                     let event = EntityChangeEvent {
@@ -2299,7 +2299,7 @@ impl SeriesRepository {
     pub async fn purge_if_empty(
         db: &DatabaseConnection,
         series_id: Uuid,
-        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
+        event_broadcaster: Option<&Arc<codex_events::EventBroadcaster>>,
     ) -> Result<bool> {
         use crate::db::entities::books;
 
@@ -2328,7 +2328,7 @@ impl SeriesRepository {
 
             // Emit SeriesDeleted event
             if let Some(broadcaster) = event_broadcaster {
-                use crate::events::{EntityChangeEvent, EntityEvent};
+                use codex_events::{EntityChangeEvent, EntityEvent};
                 use tracing::warn;
 
                 let event = EntityChangeEvent {

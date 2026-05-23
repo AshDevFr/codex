@@ -9,8 +9,8 @@ use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 
 use crate::db::repositories::TaskRepository;
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use crate::models::task::TaskType;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Service that subscribes to entity events and triggers file cleanup tasks
 pub struct CleanupEventSubscriber {
@@ -190,9 +190,9 @@ impl CleanupEventSubscriber {
 mod tests {
     use super::*;
     use crate::db::test_helpers::create_test_db;
-    use crate::events::EventBroadcaster;
     use crate::models::task::TaskType;
     use chrono::Utc;
+    use codex_events::EventBroadcaster;
     use uuid::Uuid;
 
     #[tokio::test]

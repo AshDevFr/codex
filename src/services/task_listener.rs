@@ -9,12 +9,12 @@
 //! events across process boundaries.
 
 use crate::db::repositories::TaskRepository;
-use crate::events::{
-    EntityChangeEvent, EventBroadcaster, RecordedEvent, TaskProgressEvent, TaskStatus,
-};
 use anyhow::{Context, Result};
 use chrono::TimeZone;
 use chrono::Utc;
+use codex_events::{
+    EntityChangeEvent, EventBroadcaster, RecordedEvent, TaskProgressEvent, TaskStatus,
+};
 use sea_orm::{
     DatabaseConnection, SqlxPostgresPoolConnection,
     sqlx::{PgPool, postgres::PgListener},

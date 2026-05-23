@@ -19,10 +19,10 @@ use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::SeriesRepository;
-use crate::events::EventBroadcaster;
 use crate::services::release::seed::{SeedReport, seed_tracking_for_series};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 pub struct BackfillTrackingFromMetadataHandler;
 

@@ -300,28 +300,39 @@ impl EntityChangeEvent {
         matches!(self.event, EntityEvent::Shutdown)
     }
 
-    /// Build a `ReleaseAnnounced` event from a freshly-inserted ledger row.
+    /// Build a `ReleaseAnnounced` event from the primitive fields of a
+    /// freshly-inserted ledger row.
     ///
-    /// Wraps the variant construction so callers in the polling task and the
-    /// reverse-RPC handler share one source of truth for the event shape.
+    /// Takes individual fields rather than a `release_ledger::Model` so the
+    /// events crate stays free of any database-entity dependency. Callers in
+    /// the polling task and the reverse-RPC handler destructure their
+    /// `Model` at the boundary; this keeps the event-shape source of truth
+    /// in one place.
+    ///
     /// `series_title` should be the canonical display title for the series
     /// (typically `series_metadata.title`, falling back to the series
     /// directory name); the frontend renders it as a clickable link.
+    #[allow(clippy::too_many_arguments)] // event payload has many fields by design
     pub fn release_announced(
-        row: &crate::db::entities::release_ledger::Model,
-        plugin_id: &str,
+        ledger_id: Uuid,
+        series_id: Uuid,
         series_title: String,
+        source_id: Uuid,
+        plugin_id: &str,
+        chapter: Option<f64>,
+        volume: Option<i32>,
+        language: Option<String>,
     ) -> Self {
         Self::new(
             EntityEvent::ReleaseAnnounced {
-                ledger_id: row.id,
-                series_id: row.series_id,
+                ledger_id,
+                series_id,
                 series_title,
-                source_id: row.source_id,
+                source_id,
                 plugin_id: plugin_id.to_string(),
-                chapter: row.chapter,
-                volume: row.volume,
-                language: row.language.clone().unwrap_or_default(),
+                chapter,
+                volume,
+                language: language.unwrap_or_default(),
             },
             None,
         )

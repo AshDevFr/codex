@@ -12,7 +12,7 @@ use tokio::fs;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::config::FilesConfig;
+use codex_config::FilesConfig;
 
 /// Statistics from a cleanup operation
 #[derive(Debug, Clone, Default)]

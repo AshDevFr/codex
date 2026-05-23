@@ -219,7 +219,7 @@ impl EventBroadcaster {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::types::{EntityEvent, EntityType};
+    use crate::types::{EntityEvent, EntityType};
     use uuid::Uuid;
 
     #[tokio::test]

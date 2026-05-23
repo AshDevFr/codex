@@ -16,9 +16,9 @@ use uuid::Uuid;
 
 use crate::db::entities::{books, prelude::*};
 use crate::db::repositories::SeriesRepository;
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use crate::observability::repo::db_system_str;
 use crate::utils::normalize_for_search;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Options for querying books with filtering, sorting, and pagination
 #[derive(Debug, Clone, Default)]
@@ -1924,7 +1924,7 @@ impl BookRepository {
     pub async fn purge_deleted_in_library(
         db: &DatabaseConnection,
         library_id: Uuid,
-        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
+        event_broadcaster: Option<&Arc<codex_events::EventBroadcaster>>,
     ) -> Result<u64> {
         // Get all series in the library
         let series_list =
@@ -1955,7 +1955,7 @@ impl BookRepository {
 
         // Emit BookDeleted events for each purged book
         if let Some(broadcaster) = event_broadcaster {
-            use crate::events::{EntityChangeEvent, EntityEvent};
+            use codex_events::{EntityChangeEvent, EntityEvent};
             use tracing::warn;
 
             for book in books_to_delete {
@@ -2006,7 +2006,7 @@ impl BookRepository {
     pub async fn purge_deleted_in_series(
         db: &DatabaseConnection,
         series_id: Uuid,
-        event_broadcaster: Option<&Arc<crate::events::EventBroadcaster>>,
+        event_broadcaster: Option<&Arc<codex_events::EventBroadcaster>>,
     ) -> Result<u64> {
         // First, fetch the series to get library_id and all books that will be deleted
         let series = crate::db::repositories::SeriesRepository::get_by_id(db, series_id)
@@ -2031,7 +2031,7 @@ impl BookRepository {
 
         // Emit BookDeleted events for each purged book
         if let Some(broadcaster) = event_broadcaster {
-            use crate::events::{EntityChangeEvent, EntityEvent};
+            use codex_events::{EntityChangeEvent, EntityEvent};
             use tracing::warn;
 
             for book in books_to_delete {

@@ -1035,9 +1035,9 @@ The following paths are exempt from rate limiting:
             v1::dto::PluginCleanupResultDto,
 
             // SSE Event DTOs
-            crate::events::EntityChangeEvent,
-            crate::events::EntityEvent,
-            crate::events::TaskProgressEvent,
+            codex_events::EntityChangeEvent,
+            codex_events::EntityEvent,
+            codex_events::TaskProgressEvent,
 
             // Error responses
             ErrorResponse,

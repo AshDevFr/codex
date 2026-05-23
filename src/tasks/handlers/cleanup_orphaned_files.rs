@@ -10,13 +10,13 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, info};
 
-use crate::config::FilesConfig;
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, SeriesRepository};
-use crate::events::EventBroadcaster;
 use crate::services::{CleanupStats, FileCleanupService, OrphanedFileType};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_config::FilesConfig;
+use codex_events::EventBroadcaster;
 
 /// Handler for cleaning up orphaned files
 pub struct CleanupOrphanedFilesHandler {

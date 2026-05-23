@@ -10,10 +10,10 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::db::entities::tasks;
-use crate::events::EventBroadcaster;
 use crate::services::{PdfPageCache, SettingsService};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 /// Handler for cleaning up old PDF cache pages
 pub struct CleanupPdfCacheHandler {

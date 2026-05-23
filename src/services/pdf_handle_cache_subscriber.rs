@@ -16,8 +16,8 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 use crate::services::PdfHandleCache;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
 
 /// Background service that listens for book mutation events and drops the
 /// matching `PdfHandleCache` entry.
@@ -88,8 +88,8 @@ impl PdfHandleCacheSubscriber {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::EventBroadcaster;
     use chrono::Utc;
+    use codex_events::EventBroadcaster;
     use std::time::Duration;
     use uuid::Uuid;
 

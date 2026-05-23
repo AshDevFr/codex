@@ -5,10 +5,10 @@ use tracing::{debug, info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{BookRepository, TaskRepository};
-use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub struct GenerateThumbnailsHandler {
     thumbnail_service: Arc<ThumbnailService>,

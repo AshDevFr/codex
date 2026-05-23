@@ -1,7 +1,7 @@
 #[cfg(test)]
-use crate::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
-#[cfg(test)]
 use crate::db::Database;
+#[cfg(test)]
+use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
 #[cfg(test)]
 use tempfile::TempDir;
 

@@ -10,7 +10,6 @@ use crate::db::repositories::{
     BookMetadataRepository, BookRepository, GenreRepository, SeriesMetadataRepository,
     SeriesRepository, TagRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::require_permission;
 use crate::utils::{
     json_merge_patch, parse_custom_metadata, serialize_custom_metadata,
@@ -18,6 +17,7 @@ use crate::utils::{
 };
 use axum::{Json, extract::State};
 use chrono::Utc;
+use codex_events::{EntityChangeEvent, EntityEvent};
 use sea_orm::{ActiveModelTrait, Set};
 use std::sync::Arc;
 use uuid::Uuid;

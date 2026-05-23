@@ -251,7 +251,7 @@ pub async fn task_progress_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+    use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
     use uuid::Uuid;
 
     #[tokio::test]

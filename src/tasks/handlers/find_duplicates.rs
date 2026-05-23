@@ -7,8 +7,8 @@ use crate::db::entities::tasks;
 use crate::db::repositories::{
     BookDuplicatesRepository, SeriesDuplicatesRepository, SettingsRepository,
 };
-use crate::events::EventBroadcaster;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 use super::TaskHandler;
 

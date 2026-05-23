@@ -11,7 +11,7 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
-use crate::config::ObservabilityConfig;
+use codex_config::ObservabilityConfig;
 
 /// Empty handle. All accessors return as if observability is disabled.
 pub struct ObservabilityHandle;

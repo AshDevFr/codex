@@ -13,7 +13,7 @@ use opentelemetry_sdk::{
 };
 use opentelemetry_semantic_conventions::resource::SERVICE_VERSION;
 
-use crate::config::{ObservabilityConfig, OtlpProtocol};
+use codex_config::{ObservabilityConfig, OtlpProtocol};
 
 const TRACER_INSTRUMENTATION_NAME: &str = "codex";
 
@@ -297,17 +297,17 @@ mod tests {
         ObservabilityConfig {
             enabled: true,
             service_name: "codex-test".to_string(),
-            otlp: crate::config::OtlpConfig {
+            otlp: codex_config::OtlpConfig {
                 endpoint: "http://127.0.0.1:14318".to_string(),
                 protocol: OtlpProtocol::HttpProtobuf,
                 headers: Default::default(),
                 timeout_ms: 1000,
             },
-            traces: crate::config::ObservabilityTracesConfig {
+            traces: codex_config::ObservabilityTracesConfig {
                 enabled: true,
                 sample_ratio: 1.0,
             },
-            metrics: crate::config::ObservabilityMetricsConfig {
+            metrics: codex_config::ObservabilityMetricsConfig {
                 enabled: true,
                 export_interval_ms: 1000,
             },

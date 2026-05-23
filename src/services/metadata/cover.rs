@@ -12,9 +12,9 @@ use uuid::Uuid;
 use crate::db::repositories::{
     BookCoversRepository, SeriesCoversRepository, SeriesRepository, TaskRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 use crate::models::task::TaskType;
 use crate::services::ThumbnailService;
+use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 
 /// Service for downloading and applying cover images to series.
 pub struct CoverService;

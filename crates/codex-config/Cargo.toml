@@ -1,0 +1,18 @@
+[package]
+name = "codex-config"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "codex_config"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serial_test = { workspace = true }

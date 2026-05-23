@@ -324,14 +324,14 @@ pub async fn scan_progress_stream(
                             };
 
                             let status_str = match event.status {
-                                crate::events::TaskStatus::Pending => "pending",
-                                crate::events::TaskStatus::Running => "running",
-                                crate::events::TaskStatus::Completed => "completed",
-                                crate::events::TaskStatus::Failed => "failed",
+                                codex_events::TaskStatus::Pending => "pending",
+                                codex_events::TaskStatus::Running => "running",
+                                codex_events::TaskStatus::Completed => "completed",
+                                codex_events::TaskStatus::Failed => "failed",
                             };
 
                             // For completed tasks, try to extract scan counts from task result
-                            let (series_found, books_found) = if event.status == crate::events::TaskStatus::Completed {
+                            let (series_found, books_found) = if event.status == codex_events::TaskStatus::Completed {
                                 // Query task result to get actual scan counts
                                 match TaskRepository::get_by_id(&db, event.task_id).await {
                                     Ok(Some(task)) if task.result.is_some() => {

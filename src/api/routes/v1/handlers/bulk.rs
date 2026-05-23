@@ -16,11 +16,11 @@ use crate::db::repositories::{
     SeriesMetadataRepository, SeriesRepository, SharingTagRepository, TagRepository,
     TaskRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::require_permission;
 use crate::tasks::types::TaskType;
 use axum::{Json, extract::State};
 use chrono::Utc;
+use codex_events::{EntityChangeEvent, EntityEvent};
 use std::sync::Arc;
 use uuid::Uuid;
 

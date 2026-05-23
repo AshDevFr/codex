@@ -19,9 +19,9 @@ use crate::db::repositories::{
     AlternateTitleRepository, ExternalLinkRepository, ExternalRatingRepository, GenreRepository,
     SeriesExternalIdRepository, SeriesMetadataRepository, TagRepository,
 };
-use crate::events::EventBroadcaster;
 use crate::services::ThumbnailService;
 use crate::services::plugin::PluginSeriesMetadata;
+use codex_events::EventBroadcaster;
 
 use super::CoverService;
 

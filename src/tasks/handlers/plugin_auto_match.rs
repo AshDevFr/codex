@@ -24,7 +24,6 @@ use crate::db::repositories::{
     BookExternalIdRepository, BookMetadataRepository, BookRepository, LibraryRepository,
     PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::services::metadata::preprocessing::{
     AutoMatchConditions, PreprocessingRule, SeriesContext, SeriesContextBuilder, apply_rules,
@@ -40,6 +39,7 @@ use crate::services::plugin::{PluginManager, PluginManagerError};
 use crate::services::settings::SettingsService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 
 /// Settings key for the auto-match confidence threshold
 const SETTING_AUTO_MATCH_CONFIDENCE_THRESHOLD: &str = "plugins.auto_match_confidence_threshold";
