@@ -178,6 +178,10 @@ pub fn init_tracing(config: &Config) -> anyhow::Result<TracingHandles> {
     // Compose subscribers inline: a generic helper here trips up the
     // Layer<S>/Subscriber bounds because each `.with(...)` changes S, so the
     // inline form is the cleanest path. Keep the two branches in sync.
+    //
+    // `try_init().ok()` (instead of `init()`) so a second call in the same
+    // process — e.g. tests that drive migrate + wait_for_migrations back to
+    // back — no-ops on the global subscriber instead of panicking.
     #[cfg(feature = "observability")]
     {
         let otel_layer = observability
@@ -188,14 +192,16 @@ pub fn init_tracing(config: &Config) -> anyhow::Result<TracingHandles> {
             .with(env_filter)
             .with(fmt_layer)
             .with(otel_layer)
-            .init();
+            .try_init()
+            .ok();
     }
     #[cfg(not(feature = "observability"))]
     {
         tracing_subscriber::registry()
             .with(env_filter)
             .with(fmt_layer)
-            .init();
+            .try_init()
+            .ok();
     }
 
     Ok(TracingHandles {
