@@ -18,9 +18,9 @@ use crate::db::entities::{books, series};
 use crate::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
 };
-use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::models::SeriesStrategy;
 use crate::tasks::types::TaskType;
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 use super::strategies::{DetectedSeries, create_strategy};
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus, ScannerConfig};

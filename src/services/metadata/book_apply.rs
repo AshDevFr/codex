@@ -14,9 +14,9 @@ use uuid::Uuid;
 use crate::db::entities::book_metadata::Model as BookMetadata;
 use crate::db::entities::plugins::{Model as Plugin, PluginPermission};
 use crate::db::repositories::{BookExternalIdRepository, BookMetadataRepository};
-use crate::events::EventBroadcaster;
 use crate::services::ThumbnailService;
 use crate::services::plugin::protocol::PluginBookMetadata;
+use codex_events::EventBroadcaster;
 
 use super::CoverService;
 use super::apply::SkippedField;

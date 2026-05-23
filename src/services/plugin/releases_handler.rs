@@ -352,7 +352,7 @@ impl ReleasesRequestHandler {
         // task (e.g. plugins poking the host on their own initiative),
         // both calls return None and we silently no-op — there's no task
         // to attach progress to.
-        let identity = match crate::events::current_task_identity() {
+        let identity = match codex_events::current_task_identity() {
             Some(id_arc) => id_arc,
             None => {
                 debug!(
@@ -365,7 +365,7 @@ impl ReleasesRequestHandler {
                 );
             }
         };
-        let broadcaster = match crate::events::current_recording_broadcaster() {
+        let broadcaster = match codex_events::current_recording_broadcaster() {
             Some(b) => b,
             None => {
                 debug!("releases/report_progress: no broadcaster in scope, dropping");
@@ -401,7 +401,7 @@ impl ReleasesRequestHandler {
                 Some(std::time::Instant::now());
         }
 
-        let event = crate::events::TaskProgressEvent::progress(
+        let event = codex_events::TaskProgressEvent::progress(
             identity.task_id,
             identity.task_type.clone(),
             params.current,
@@ -589,17 +589,22 @@ impl ReleasesRequestHandler {
                     state = %outcome.row.state,
                     "Skipping release_announced emit for non-announced state"
                 );
-            } else if let Some(broadcaster) = crate::events::current_recording_broadcaster() {
+            } else if let Some(broadcaster) = codex_events::current_recording_broadcaster() {
                 let series_title =
                     crate::tasks::handlers::poll_release_source::lookup_series_title(
                         &self.db,
                         outcome.row.series_id,
                     )
                     .await;
-                let _ = broadcaster.emit(crate::events::EntityChangeEvent::release_announced(
-                    &outcome.row,
-                    &self.plugin_name,
+                let _ = broadcaster.emit(codex_events::EntityChangeEvent::release_announced(
+                    outcome.row.id,
+                    outcome.row.series_id,
                     series_title,
+                    outcome.row.source_id,
+                    &self.plugin_name,
+                    outcome.row.chapter,
+                    outcome.row.volume,
+                    outcome.row.language.clone(),
                 ));
             } else {
                 debug!(
@@ -1463,7 +1468,7 @@ mod tests {
     /// it on dedup.
     #[tokio::test]
     async fn record_emits_release_announced_on_insert_only() {
-        use crate::events::{EntityEvent, EventBroadcaster, with_recording_broadcaster};
+        use codex_events::{EntityEvent, EventBroadcaster, with_recording_broadcaster};
 
         let (db, _t) = create_test_db().await;
         let conn = db.sea_orm_connection();
@@ -1905,7 +1910,7 @@ mod tests {
 
     #[tokio::test]
     async fn report_progress_inside_task_scope_emits_progress_event() {
-        use crate::events::EventBroadcaster;
+        use codex_events::EventBroadcaster;
 
         let (db, _t) = create_test_db().await;
         let conn = db.sea_orm_connection();
@@ -1917,7 +1922,7 @@ mod tests {
 
         let broadcaster = Arc::new(EventBroadcaster::new(8));
         let mut rx = broadcaster.subscribe_tasks();
-        let identity = Arc::new(crate::events::TaskIdentity::new(
+        let identity = Arc::new(codex_events::TaskIdentity::new(
             Uuid::new_v4(),
             "poll_release_source",
             None,
@@ -1929,9 +1934,9 @@ mod tests {
             methods::RELEASES_REPORT_PROGRESS,
             json!({"current": 3, "total": 10, "message": "Polled 3/10 series"}),
         );
-        let resp = crate::events::with_task_identity(
+        let resp = codex_events::with_task_identity(
             identity.clone(),
-            crate::events::with_recording_broadcaster(broadcaster.clone(), async {
+            codex_events::with_recording_broadcaster(broadcaster.clone(), async {
                 handler.handle_request(&req).await
             }),
         )
@@ -1953,7 +1958,7 @@ mod tests {
 
     #[tokio::test]
     async fn report_progress_rate_limits_back_to_back_emits_but_lets_final_through() {
-        use crate::events::EventBroadcaster;
+        use codex_events::EventBroadcaster;
 
         let (db, _t) = create_test_db().await;
         let conn = db.sea_orm_connection();
@@ -1965,7 +1970,7 @@ mod tests {
 
         let broadcaster = Arc::new(EventBroadcaster::new(16));
         let mut rx = broadcaster.subscribe_tasks();
-        let identity = Arc::new(crate::events::TaskIdentity::new(
+        let identity = Arc::new(codex_events::TaskIdentity::new(
             Uuid::new_v4(),
             "poll_release_source",
             None,
@@ -1973,9 +1978,9 @@ mod tests {
             None,
         ));
 
-        crate::events::with_task_identity(
+        codex_events::with_task_identity(
             identity.clone(),
-            crate::events::with_recording_broadcaster(broadcaster.clone(), async {
+            codex_events::with_recording_broadcaster(broadcaster.clone(), async {
                 // First emit goes through (last_progress_emit was None).
                 let r1 = handler
                     .handle_request(&make_request(

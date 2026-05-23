@@ -14,7 +14,6 @@ use crate::db::repositories::{
     BookExternalLinkRepository, BookMetadataRepository, BookRepository, ExternalLinkRepository,
     LibraryRepository, PageRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
-use crate::events::EventBroadcaster;
 use crate::models::{BookStrategy, CalibreStrategyConfig, NumberStrategy, SeriesStrategy};
 use crate::parsers::opf;
 use crate::scanner::analyze_file;
@@ -24,6 +23,7 @@ use crate::scanner::strategies::{
 };
 use crate::tasks::types::TaskType;
 use crate::utils::normalize_for_search;
+use codex_events::EventBroadcaster;
 
 use super::types::ScanProgress;
 
@@ -361,7 +361,7 @@ async fn analyze_single_book(
             && let Some(broadcaster) = event_broadcaster
             && let Ok(Some(series)) = SeriesRepository::get_by_id(db, book.series_id).await
         {
-            use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
+            use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
 
             let event = EntityChangeEvent {
                 event: EntityEvent::CoverUpdated {

@@ -8,12 +8,12 @@ use crate::db::entities::tasks;
 use crate::db::repositories::{
     BookRepository, LibraryRepository, PluginsRepository, SeriesRepository, TaskRepository,
 };
-use crate::events::EventBroadcaster;
 use crate::scanner::{ScanMode, ScanningConfig, scan_library};
 use crate::services::plugin::protocol::PluginScope;
 use crate::services::settings::SettingsService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_events::EventBroadcaster;
 
 /// Settings key for enabling post-scan auto-match
 const SETTING_POST_SCAN_AUTO_MATCH_ENABLED: &str = "plugins.post_scan_auto_match_enabled";

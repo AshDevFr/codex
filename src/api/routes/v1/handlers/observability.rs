@@ -23,7 +23,7 @@ use crate::api::{
     error::ApiError,
     extractors::{AppState, FlexibleAuthContext},
 };
-use crate::config::ObservabilityConfig;
+use codex_config::ObservabilityConfig;
 
 use super::super::dto::BrowserObservabilityConfigDto;
 

@@ -33,7 +33,6 @@ use crate::db::repositories::{
     SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
     SeriesTrackingRepository, SharingTagRepository, TagRepository, UserSeriesRatingRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EntityType};
 use crate::require_permission;
 use crate::services::release::upstream_gap::{
     UpstreamGap, UpstreamGapInputs, compute_upstream_gap,
@@ -50,6 +49,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_events::{EntityChangeEvent, EntityEvent, EntityType};
 use httpdate::fmt_http_date;
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;

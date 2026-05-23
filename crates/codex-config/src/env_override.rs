@@ -742,7 +742,7 @@ mod tests {
 
         // Create config with explicit values to avoid reading env vars in default()
         // We'll use a helper to create a minimal config
-        use crate::config::{
+        use crate::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
             FilesConfig, KomgaApiConfig, LoggingConfig, ObservabilityConfig, PdfConfig,
             PdfHandleCacheConfig, RateLimitConfig, SQLiteConfig, SchedulerConfig,
@@ -931,7 +931,7 @@ mod tests {
         remove_var("CODEX_KOMGA_API_ENABLED");
         remove_var("CODEX_KOMGA_API_PREFIX");
 
-        use crate::config::{
+        use crate::{
             ApiConfig, ApplicationConfig, AuthConfig, DatabaseConfig, DatabaseType, EmailConfig,
             FilesConfig, KomgaApiConfig, LoggingConfig, ObservabilityConfig, PdfConfig,
             PdfHandleCacheConfig, RateLimitConfig, SQLiteConfig, SchedulerConfig,
@@ -1140,7 +1140,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS");
         remove_var("CODEX_AUTH_OIDC_DEFAULT_ROLE");
 
-        use crate::config::{OidcConfig, OidcDefaultRole};
+        use crate::{OidcConfig, OidcDefaultRole};
 
         let mut config = OidcConfig {
             enabled: false,
@@ -1170,7 +1170,7 @@ mod tests {
     fn test_oidc_config_env_override_enabled_with_1() {
         remove_var("CODEX_AUTH_OIDC_ENABLED");
 
-        use crate::config::{OidcConfig, OidcDefaultRole};
+        use crate::{OidcConfig, OidcDefaultRole};
 
         let mut config = OidcConfig {
             enabled: false,
@@ -1191,7 +1191,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_oidc_config_env_override_default_role_variants() {
-        use crate::config::{OidcConfig, OidcDefaultRole};
+        use crate::{OidcConfig, OidcDefaultRole};
 
         // Test maintainer role
         remove_var("CODEX_AUTH_OIDC_DEFAULT_ROLE");
@@ -1226,7 +1226,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_SCOPES");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_GROUPS_CLAIM");
 
-        use crate::config::OidcProviderConfig;
+        use crate::OidcProviderConfig;
 
         let mut provider = OidcProviderConfig {
             display_name: "Original".to_string(),
@@ -1296,7 +1296,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_ID");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_CLIENT_SECRET");
 
-        use crate::config::{OidcConfig, OidcDefaultRole, OidcProviderConfig};
+        use crate::{OidcConfig, OidcDefaultRole, OidcProviderConfig};
 
         let mut providers = std::collections::HashMap::new();
         providers.insert(
@@ -1355,7 +1355,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_CLIENT_SECRET");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_NEWPROVIDER_DISPLAY_NAME");
 
-        use crate::config::{OidcConfig, OidcDefaultRole};
+        use crate::{OidcConfig, OidcDefaultRole};
 
         let mut config = OidcConfig {
             enabled: true,
@@ -1405,7 +1405,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_ENABLED");
         remove_var("CODEX_AUTH_OIDC_AUTO_CREATE_USERS");
 
-        use crate::config::{AuthConfig, OidcConfig, OidcDefaultRole};
+        use crate::{AuthConfig, OidcConfig, OidcDefaultRole};
 
         let mut config = AuthConfig {
             jwt_secret: "test-secret".to_string(),
@@ -1443,7 +1443,7 @@ mod tests {
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_MAINTAINER");
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_READER");
 
-        use crate::config::OidcProviderConfig;
+        use crate::OidcProviderConfig;
 
         let mut provider = OidcProviderConfig {
             display_name: "Authentik".to_string(),
@@ -1502,7 +1502,7 @@ mod tests {
     fn test_oidc_provider_role_mapping_env_override_merges_with_existing() {
         remove_var("CODEX_AUTH_OIDC_PROVIDERS_AUTHENTIK_ROLE_MAPPING_ADMIN");
 
-        use crate::config::OidcProviderConfig;
+        use crate::OidcProviderConfig;
 
         let mut role_mapping = std::collections::HashMap::new();
         role_mapping.insert("reader".to_string(), vec!["yaml-readers".to_string()]);
@@ -1642,7 +1642,7 @@ mod tests {
             set_var(k, v);
         }
 
-        let mut config = crate::config::ObservabilityConfig::default();
+        let mut config = crate::ObservabilityConfig::default();
         config.apply_env_overrides("CODEX_OBSERVABILITY");
 
         assert!(config.enabled);
@@ -1650,7 +1650,7 @@ mod tests {
         assert_eq!(config.otlp.endpoint, "https://otel.example.com:4317");
         assert!(matches!(
             config.otlp.protocol,
-            crate::config::OtlpProtocol::HttpProtobuf
+            crate::OtlpProtocol::HttpProtobuf
         ));
         assert_eq!(config.otlp.timeout_ms, 9000);
         assert_eq!(config.otlp.headers.get("x-tenant"), Some(&"acme".into()));

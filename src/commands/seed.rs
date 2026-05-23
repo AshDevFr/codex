@@ -1,7 +1,6 @@
 use crate::api::permissions::{
     ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS, serialize_permissions,
 };
-use crate::config::{Config, EnvOverride};
 use crate::db::Database;
 use crate::db::entities::{api_keys, plugins::PluginPermission, users};
 use crate::db::repositories::{
@@ -13,6 +12,7 @@ use crate::services::plugin::protocol::PluginScope;
 use crate::utils::password::hash_password;
 use anyhow::{Context, Result};
 use chrono::Utc;
+use codex_config::{Config, EnvOverride};
 use rand::RngExt;
 use serde::Deserialize;
 use std::collections::HashMap;

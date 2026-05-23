@@ -175,17 +175,17 @@ pub struct AppState {
     /// Always present; the [`AuthConfig::refresh_token_enabled`] flag gates
     /// whether handlers actually call `issue` on login.
     pub refresh_token_service: Arc<crate::services::RefreshTokenService>,
-    pub auth_config: Arc<crate::config::AuthConfig>,
+    pub auth_config: Arc<codex_config::AuthConfig>,
     /// Database configuration - used for operation deadlines and pool settings
-    pub database_config: Arc<crate::config::DatabaseConfig>,
+    pub database_config: Arc<codex_config::DatabaseConfig>,
     /// PDF configuration - used for rendering settings and cache config
-    pub pdf_config: Arc<crate::config::PdfConfig>,
+    pub pdf_config: Arc<codex_config::PdfConfig>,
     /// Observability configuration - used by the browser RUM SDK bootstrap
     /// endpoint and the OTLP forwarding proxy. Always present; handlers gate
     /// behavior on `browser.enabled` / `otlp.endpoint`.
-    pub observability_config: Arc<crate::config::ObservabilityConfig>,
+    pub observability_config: Arc<codex_config::ObservabilityConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
-    pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
+    pub event_broadcaster: Arc<codex_events::EventBroadcaster>,
     /// Settings service - used for runtime configuration
     #[allow(dead_code)]
     pub settings_service: Arc<crate::services::SettingsService>,

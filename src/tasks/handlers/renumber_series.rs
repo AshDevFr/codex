@@ -13,9 +13,9 @@ use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{SeriesRepository, TaskRepository};
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 
 // =============================================================================
 // RenumberSeries Handler (Single Series)

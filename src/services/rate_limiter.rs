@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, trace};
 use uuid::Uuid;
 
-use crate::config::RateLimitConfig;
+use codex_config::RateLimitConfig;
 
 /// Client identifier for rate limiting
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]

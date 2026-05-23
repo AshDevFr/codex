@@ -55,7 +55,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Starting {} task queue worker(s)...", worker_count);
 
     // Create event broadcaster for real-time updates (workers don't need to emit events, but handlers might)
-    let event_broadcaster = Arc::new(crate::events::EventBroadcaster::new(1000));
+    let event_broadcaster = Arc::new(codex_events::EventBroadcaster::new(1000));
     info!("Event broadcaster initialized");
 
     // Initialize thumbnail service
@@ -132,7 +132,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Note: no broadcaster injection. Reverse-RPC handlers (e.g.
     // `releases/record`) emit through the task-local recording broadcaster
     // set up by `TaskWorker::run_task`, not through a manager-held one.
-    // See `crate::events::with_recording_broadcaster`.
+    // See `codex_events::with_recording_broadcaster`.
     info!("Initializing plugin manager...");
     let plugin_manager = Arc::new(
         crate::services::plugin::PluginManager::with_defaults(Arc::new(

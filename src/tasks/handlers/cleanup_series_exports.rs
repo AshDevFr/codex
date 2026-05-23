@@ -13,11 +13,11 @@ use tracing::{info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::SeriesExportRepository;
-use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::services::SettingsService;
 use crate::services::export_storage::ExportStorage;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 /// Default global storage cap: 2 GiB
 const DEFAULT_STORAGE_CAP_BYTES: u64 = 2 * 1024 * 1024 * 1024;

@@ -25,7 +25,6 @@ use crate::db::repositories::{
     LibraryJobRepository, LibraryRepository, PluginsRepository, RecordRunStatus,
     SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 use crate::services::ThumbnailService;
 use crate::services::library_jobs::{LibraryJobConfig, RefreshScope, parse_job_config};
 use crate::services::metadata::refresh_planner::{
@@ -37,6 +36,7 @@ use crate::services::plugin::PluginManager;
 use crate::services::plugin::protocol::{MetadataGetParams, MetadataMatchParams};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 
 /// Soft cap to keep one job's refresh from monopolizing the worker.
 const MAX_CONCURRENCY_HARD_CAP: usize = 16;

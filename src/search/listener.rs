@@ -18,7 +18,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::events::{EntityEvent, EventBroadcaster};
+use codex_events::{EntityEvent, EventBroadcaster};
 
 use super::FuzzyIndex;
 use super::builder::{fetch_book_entry, fetch_series_entry, rebuild_into};
@@ -220,9 +220,9 @@ mod tests {
         SeriesRepository,
     };
     use crate::db::test_helpers::create_test_db;
-    use crate::events::EntityChangeEvent;
     use crate::search::builder::build_from_db;
     use chrono::Utc;
+    use codex_events::EntityChangeEvent;
     use std::time::Duration;
     use uuid::Uuid;
 

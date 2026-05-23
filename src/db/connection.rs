@@ -13,8 +13,8 @@ use tracing::info;
 use uuid::Uuid;
 
 use super::ScanningStrategy;
-use crate::config::{DatabaseConfig, DatabaseType};
 use crate::db::entities;
+use codex_config::{DatabaseConfig, DatabaseType};
 
 use super::repositories::{
     BookMetadataRepository, BookRepository, LibraryRepository, PageRepository, SeriesRepository,
@@ -462,7 +462,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
+    use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -499,7 +499,7 @@ mod tests {
     async fn test_database_new_postgres() {
         let config = DatabaseConfig {
             db_type: DatabaseType::Postgres,
-            postgres: Some(crate::config::PostgresConfig {
+            postgres: Some(codex_config::PostgresConfig {
                 host: std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string()),
                 port: std::env::var("POSTGRES_PORT")
                     .ok()
@@ -511,7 +511,7 @@ mod tests {
                     .unwrap_or_else(|_| "codex_test".to_string()),
                 database_name: std::env::var("POSTGRES_DB")
                     .unwrap_or_else(|_| "codex_test".to_string()),
-                ..crate::config::PostgresConfig::default()
+                ..codex_config::PostgresConfig::default()
             }),
             sqlite: None,
         };

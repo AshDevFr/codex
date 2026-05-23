@@ -3,8 +3,8 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 
 use crate::db::entities::tasks;
-use crate::events::EventBroadcaster;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 pub mod analyze_book;
 pub mod analyze_series;

@@ -1,8 +1,6 @@
 mod api;
 mod commands;
-mod config;
 mod db;
-mod events;
 mod models;
 mod observability;
 mod parsers;

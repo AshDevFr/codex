@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use crate::db::entities::tasks;
 use crate::db::repositories::{PluginsRepository, UserPluginDataRepository, UserPluginsRepository};
-use crate::events::EventBroadcaster;
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::library::build_user_library;
@@ -28,6 +27,7 @@ use crate::services::plugin::recommendations::{
 };
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::EventBroadcaster;
 
 /// Default plugin task timeout in seconds (5 minutes)
 const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
@@ -204,7 +204,7 @@ fn emit_phase(
             Some(d) => format!("{}: {}", phase.1, d),
             None => phase.1.to_string(),
         };
-        let _ = b.emit_task(crate::events::TaskProgressEvent::progress(
+        let _ = b.emit_task(codex_events::TaskProgressEvent::progress(
             task.id,
             "user_plugin_recommendations",
             phase.0,

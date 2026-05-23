@@ -6,10 +6,10 @@ use tracing::{error, info, warn};
 
 use crate::db::entities::tasks;
 use crate::db::repositories::BookRepository;
-use crate::events::{EventBroadcaster, TaskProgressEvent};
 use crate::scanner::analyze_book;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::{EventBroadcaster, TaskProgressEvent};
 
 pub struct AnalyzeBookHandler;
 

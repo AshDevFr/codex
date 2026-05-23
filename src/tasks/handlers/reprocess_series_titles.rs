@@ -14,10 +14,10 @@ use crate::db::entities::{series_metadata, tasks};
 use crate::db::repositories::{
     LibraryRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
-use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 use crate::services::metadata::preprocessing::apply_rules;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
+use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
 
 // =============================================================================
 // ReprocessSeriesTitle Handler (Single Series)

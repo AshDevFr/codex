@@ -29,9 +29,9 @@ use crate::db::entities::series_aliases::alias_source;
 use crate::db::repositories::{
     SeriesAliasRepository, SeriesRepository, SeriesTrackingRepository, TrackingUpdate,
 };
-use crate::events::{EntityChangeEvent, EntityEvent};
 use crate::require_permission;
 use crate::services::release::seed::seed_tracking_for_series;
+use codex_events::{EntityChangeEvent, EntityEvent};
 
 // =============================================================================
 // Tracking config handlers

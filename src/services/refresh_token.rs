@@ -211,10 +211,10 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{DatabaseConfig, DatabaseType, SQLiteConfig};
     use crate::db::Database;
     use crate::db::entities::users;
     use crate::db::repositories::UserRepository;
+    use codex_config::{DatabaseConfig, DatabaseType, SQLiteConfig};
     use std::collections::HashMap;
     use tempfile::TempDir;
 

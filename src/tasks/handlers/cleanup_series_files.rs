@@ -9,12 +9,12 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::config::FilesConfig;
 use crate::db::entities::tasks;
-use crate::events::EventBroadcaster;
 use crate::services::FileCleanupService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_config::FilesConfig;
+use codex_events::EventBroadcaster;
 
 /// Handler for cleaning up series files after deletion
 pub struct CleanupSeriesFilesHandler {

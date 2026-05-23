@@ -1,9 +1,9 @@
-use crate::config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use crate::db::Database;
-use crate::events::EventBroadcaster;
 use crate::observability::ObservabilityHandle;
 use crate::services::{SettingsService, TaskMetricsService};
 use crate::tasks::TaskWorker;
+use codex_config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
+use codex_events::EventBroadcaster;
 use sea_orm::DatabaseConnection;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -442,7 +442,7 @@ pub async fn init_settings_service(
 /// Get worker count from config (which already includes env override)
 /// Falls back to settings if config not available (for backward compatibility)
 pub async fn get_worker_count(
-    config: Option<&crate::config::TaskConfig>,
+    config: Option<&codex_config::TaskConfig>,
     settings_service: Option<&SettingsService>,
 ) -> u32 {
     // Priority: config (with env override) > settings > default
@@ -469,7 +469,7 @@ pub fn spawn_workers(
     settings_service: Arc<SettingsService>,
     thumbnail_service: Arc<crate::services::ThumbnailService>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
-    files_config: crate::config::FilesConfig,
+    files_config: codex_config::FilesConfig,
     pdf_page_cache: Option<Arc<crate::services::PdfPageCache>>,
     pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
     plugin_manager: Option<Arc<crate::services::plugin::PluginManager>>,
@@ -583,9 +583,9 @@ pub async fn shutdown_workers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{FilesConfig, SQLiteConfig, TaskConfig};
     use crate::db::test_helpers::create_test_db;
     use crate::services::SettingsService;
+    use codex_config::{FilesConfig, SQLiteConfig, TaskConfig};
     use tempfile::TempDir;
 
     #[test]
@@ -674,8 +674,8 @@ mod tests {
                     .to_string_lossy()
                     .to_string(),
             },
-            database: crate::config::DatabaseConfig {
-                db_type: crate::config::DatabaseType::SQLite,
+            database: codex_config::DatabaseConfig {
+                db_type: codex_config::DatabaseType::SQLite,
                 sqlite: Some(SQLiteConfig {
                     path: db_path.to_string_lossy().to_string(),
                     pragmas: None,
@@ -683,9 +683,9 @@ mod tests {
                 }),
                 postgres: None,
             },
-            pdf: crate::config::PdfConfig {
+            pdf: codex_config::PdfConfig {
                 cache_dir: pdf_cache_dir.to_string_lossy().to_string(),
-                ..crate::config::PdfConfig::default()
+                ..codex_config::PdfConfig::default()
             },
             ..Config::default()
         };

@@ -28,15 +28,37 @@ observability = [
 ]
 
 [workspace]
-members = [".", "migration"]
+members = [".", "migration", "crates/codex-config", "crates/codex-events"]
+
+# Shared dependencies inherited by workspace members. Only deps that are
+# actually consumed by more than one crate live here; the others stay inline in
+# the consuming crate's Cargo.toml until they become cross-crate.
+[workspace.dependencies]
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+utoipa = { version = "5.0", features = [
+    "axum_extras",
+    "chrono",
+    "uuid",
+    "yaml",
+] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Shared dev-dependencies
+tempfile = "3.13"
+serial_test = "3.2"
 
 [dependencies]
 # CLI
 clap = { version = "4", features = ["derive"] }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
+serde = { workspace = true }
+serde_yaml = { workspace = true }
 serde_json = "1.0"
 csv = "1.3"
 
@@ -61,7 +83,7 @@ sha2 = "0.10"
 md-5 = "0.10"
 
 # Error handling
-anyhow = "1.0"
+anyhow = { workspace = true }
 thiserror = "2.0"
 
 # XML parsing (for ComicInfo.xml)
@@ -85,7 +107,7 @@ dirs = "6.0"
 globset = "0.4"
 
 # Date/time
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { workspace = true }
 chrono-tz = "0.10"
 httpdate = "1.0"
 
@@ -107,14 +129,16 @@ sea-orm-migration = { version = "1.1", features = [
     "sqlx-sqlite",
 ] }
 migration = { path = "migration" }
-tokio = { version = "1", features = ["full"] }
-uuid = { version = "1.0", features = ["v4", "serde"] }
+codex-config = { path = "crates/codex-config" }
+codex-events = { path = "crates/codex-events" }
+tokio = { workspace = true }
+uuid = { workspace = true }
 
 # Web framework
 axum = { version = "0.8", features = ["multipart"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "catch-panic"] }
-tracing = "0.1"
+tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 log = "0.4"                                                         # For sqlx logging level configuration
@@ -176,12 +200,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 
 # API Documentation
-utoipa = { version = "5.0", features = [
-    "axum_extras",
-    "chrono",
-    "uuid",
-    "yaml",
-] }
+utoipa = { workspace = true }
 utoipa-scalar = { version = "0.3", features = ["axum"] }
 
 # Job Scheduling
@@ -202,11 +221,11 @@ rust-embed = "8.5"
 mime_guess = "2.0"
 
 [dev-dependencies]
-tempfile = "3.13"
+tempfile = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
-serial_test = "3.2"
+serial_test = { workspace = true }
 tracing-test = "0.2"
 # Enable the SDK's `testing` feature for the in-memory metric exporter used
 # in observability::metrics tests. Dev-only; no production impact.

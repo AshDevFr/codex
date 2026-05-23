@@ -40,7 +40,6 @@ use crate::db::repositories::{
     NewReleaseEntry, PluginsRepository, ReleaseLedgerRepository, ReleaseSourceRepository,
     SeriesRepository, SeriesTrackingRepository,
 };
-use crate::events::{EntityChangeEvent, EventBroadcaster};
 use crate::services::SettingsService;
 use crate::services::plugin::PluginManager;
 use crate::services::plugin::handle::PluginError;
@@ -50,6 +49,7 @@ use crate::services::release::backoff::{HostBackoff, is_backoff_status};
 use crate::services::release::matcher::{evaluate, resolve_threshold};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
+use codex_events::{EntityChangeEvent, EventBroadcaster};
 
 /// Default plugin task timeout in seconds (5 minutes — same as user_plugin_sync).
 const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
@@ -638,9 +638,14 @@ pub(crate) fn emit_release_announced(
     series_title: String,
 ) {
     let _ = broadcaster.emit(EntityChangeEvent::release_announced(
-        row,
-        plugin_id,
+        row.id,
+        row.series_id,
         series_title,
+        row.source_id,
+        plugin_id,
+        row.chapter,
+        row.volume,
+        row.language.clone(),
     ));
 }
 
@@ -748,7 +753,7 @@ mod tests {
     };
     use crate::db::test_helpers::create_test_db;
 
-    use crate::events::EntityEvent;
+    use codex_events::EntityEvent;
 
     /// `emit_release_announced` produces a `ReleaseAnnounced` event whose
     /// fields mirror the ledger row and the source's plugin id.

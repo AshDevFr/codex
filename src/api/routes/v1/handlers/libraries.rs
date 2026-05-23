@@ -456,7 +456,7 @@ pub async fn update_library(
 
     // Emit LibraryUpdated event
     {
-        use crate::events::{EntityChangeEvent, EntityEvent};
+        use codex_events::{EntityChangeEvent, EntityEvent};
 
         let event = EntityChangeEvent {
             event: EntityEvent::LibraryUpdated { library_id },
@@ -521,7 +521,7 @@ pub async fn delete_library(
 
     // Emit LibraryDeleted event
     {
-        use crate::events::{EntityChangeEvent, EntityEvent};
+        use codex_events::{EntityChangeEvent, EntityEvent};
 
         let event = EntityChangeEvent {
             event: EntityEvent::LibraryDeleted { library_id },

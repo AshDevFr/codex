@@ -7,7 +7,7 @@
 
 use axum::Router;
 
-use crate::config::ObservabilityConfig;
+use codex_config::ObservabilityConfig;
 
 /// Apply the HTTP server-side OTel layers to the given router.
 ///

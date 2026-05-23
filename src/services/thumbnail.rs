@@ -19,10 +19,10 @@ use tokio_util::io::ReaderStream;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::config::FilesConfig;
 use crate::db::entities::books;
 use crate::db::repositories::{BookRepository, SeriesRepository, SettingsRepository};
-use crate::events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
+use codex_config::FilesConfig;
+use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
 
 // ============================================================================
 // Placeholder Thumbnail Generation

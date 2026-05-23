@@ -15,7 +15,7 @@
 //!
 //! Phase 1 exposed build + query. Phase 2 wires in event-driven updates via
 //! the `listener` module: a Tokio task subscribes to the global
-//! [`crate::events::EventBroadcaster`] and translates each entity event into
+//! [`codex_events::EventBroadcaster`] and translates each entity event into
 //! a single-row upsert or remove against the index.
 
 pub mod builder;

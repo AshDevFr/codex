@@ -2135,8 +2135,8 @@ use crate::api::routes::v1::dto::{
     BookMetadataResponse, PatchBookMetadataRequest, ReplaceBookMetadataRequest,
 };
 use crate::db::entities::book_metadata;
-use crate::events::{EntityChangeEvent, EntityEvent};
 use chrono::Utc;
+use codex_events::{EntityChangeEvent, EntityEvent};
 use sea_orm::{ActiveModelTrait, Set};
 
 /// Replace all book metadata (PUT)
@@ -3403,8 +3403,8 @@ pub async fn update_book_metadata_locks(
 // Book Cover Upload Endpoint
 // ============================================================================
 
-use crate::events::EntityType;
 use axum::extract::Multipart;
+use codex_events::EntityType;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
