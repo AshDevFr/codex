@@ -46,7 +46,7 @@ If you're running Codex outside of `docker-compose.yml`, any OTLP backend works.
 docker run -d --name codex-jaeger \
   -e COLLECTOR_OTLP_ENABLED=true \
   -p 16686:16686 -p 4317:4317 -p 4318:4318 \
-  jaegertracing/all-in-one:1.62
+  jaegertracing/all-in-one:1.62.0
 ```
 
 Then enable `observability` in your config file with `otlp.endpoint: http://localhost:4317`.

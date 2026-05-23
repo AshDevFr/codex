@@ -134,7 +134,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
-      start_period: 30s
+      # Generous grace period: first-time `cargo build` inside the container
+      # can take 10+ minutes on a cold cache. During start_period, failing
+      # healthchecks do not count toward `retries`, so the container is not
+      # prematurely marked unhealthy (which would also fail codex-dev-worker
+      # since it depends on `codex-dev: service_healthy`).
+      start_period: 900s
     networks:
       - codex-network
     profiles:
@@ -338,7 +343,7 @@ services:
   # codex-dev-worker services above are pre-wired to send OTLP here via
   # CODEX_OBSERVABILITY_OTLP_ENDPOINT=http://jaeger:4317.
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/all-in-one:1.62.0
     container_name: codex-jaeger
     environment:
       - COLLECTOR_OTLP_ENABLED=true

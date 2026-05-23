@@ -44,6 +44,9 @@ dev-logs-worker: ## View worker logs only
 dev-logs-frontend: ## View frontend logs only
 	docker compose logs -f frontend-dev
 
+dev-logs-jaeger: ## View Jaeger logs only
+	docker compose logs -f jaeger
+
 dev-restart: ## Restart all development containers
 	docker compose restart codex-dev codex-dev-worker frontend-dev
 
