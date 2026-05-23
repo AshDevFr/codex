@@ -42,7 +42,7 @@ pub async fn read_default_cron_schedule(settings: &SettingsService) -> String {
 /// inheriting). `server_default` is the resolved server-wide default. The
 /// returned string is the raw 5- or 6-field cron expression; callers
 /// normalize to the 6-field tokio-cron-scheduler format via
-/// [`crate::utils::cron::normalize_cron_expression`].
+/// [`codex_utils::cron::normalize_cron_expression`].
 pub fn resolve_cron_schedule(per_source: Option<&str>, server_default: &str) -> String {
     if let Some(cron) = per_source.map(str::trim).filter(|s| !s.is_empty()) {
         cron.to_string()

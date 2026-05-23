@@ -7,12 +7,12 @@ use crate::db::repositories::{
     api_key::ApiKeyRepository, library::CreateLibraryParams, library::LibraryRepository,
     plugins::PluginsRepository, user::UserRepository,
 };
-use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use crate::services::plugin::protocol::PluginScope;
-use crate::utils::password::hash_password;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use codex_config::{Config, EnvOverride};
+use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
+use codex_utils::password::hash_password;
 use rand::RngExt;
 use serde::Deserialize;
 use std::collections::HashMap;

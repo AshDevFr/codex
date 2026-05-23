@@ -2,7 +2,7 @@
 //! services layers.
 //!
 //! The JSON-RPC wire format and the search/match DTOs live next to the plugin
-//! manager in [`crate::services::plugin::protocol`]. Only the types that both
+//! manager in `codex::services::plugin::protocol`. Only the types that both
 //! a repository and a service need to speak (manifest descriptors, capability
 //! declarations, scope enums) live here so `db` can reference them without
 //! taking a hard dependency on `services`.

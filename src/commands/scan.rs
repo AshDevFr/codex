@@ -1,5 +1,5 @@
-use crate::parsers::BookMetadata;
 use crate::scanner::{analyze_file, detect_format};
+use codex_parsers::BookMetadata;
 use std::path::PathBuf;
 use tabled::{Table, Tabled};
 

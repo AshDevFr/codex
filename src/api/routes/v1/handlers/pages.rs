@@ -5,13 +5,13 @@ use crate::api::{
 };
 use crate::db::repositories::{BookCoversRepository, BookRepository, PageRepository};
 use crate::require_permission;
-use crate::utils::{DeadlineResult, with_deadline};
 use axum::{
     body::Body,
     extract::{Path, State},
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
+use codex_utils::{DeadlineResult, with_deadline};
 use httpdate::fmt_http_date;
 use image::{ImageFormat, imageops::FilterType};
 use std::io::Cursor;
@@ -253,22 +253,22 @@ async fn serve_pdf_page_with_streaming(
     // same book skip the per-page PDFium open. If PDFium isn't initialised
     // (no library binding available), fall back to the legacy path which can
     // serve embedded JPEGs directly via lopdf.
-    let render_result = if crate::parsers::pdf::static_pdfium().is_some() {
+    let render_result = if codex_parsers::pdf::static_pdfium().is_some() {
         let cache = state.pdf_handle_cache.clone();
         let opener_path = path.clone();
         let lookup_path = path.clone();
         tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
             let doc_arc = cache.get_or_open(book_id, lookup_path, move || {
-                crate::parsers::pdf::open_pdf_document(&opener_path)
+                codex_parsers::pdf::open_pdf_document(&opener_path)
             })?;
             let doc = doc_arc.blocking_lock();
-            crate::parsers::pdf::render_page_from_doc(&doc, page_number, dpi)
+            codex_parsers::pdf::render_page_from_doc(&doc, page_number, dpi)
         })
         .await
         .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
     } else {
         tokio::task::spawn_blocking(move || {
-            crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, page_number, dpi)
+            codex_parsers::pdf::extract_page_from_pdf_with_dpi(&path, page_number, dpi)
         })
         .await
         .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
@@ -560,7 +560,7 @@ async fn generate_book_thumbnail(
             // Render in blocking task to avoid blocking async runtime
             let path = std::path::PathBuf::from(&book.path);
             let data = tokio::task::spawn_blocking(move || {
-                crate::parsers::pdf::extract_page_from_pdf_with_dpi(&path, 1, dpi)
+                codex_parsers::pdf::extract_page_from_pdf_with_dpi(&path, 1, dpi)
             })
             .await
             .map_err(|e| ApiError::Internal(format!("Task join error: {}", e)))?
@@ -707,11 +707,11 @@ async fn extract_page_image(
 
     // Use spawn_blocking for CPU-intensive file parsing operations
     tokio::task::spawn_blocking(move || match format.as_str() {
-        "CBZ" => crate::parsers::cbz::extract_page_from_cbz(&path, page_number),
+        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(&path, page_number),
         #[cfg(feature = "rar")]
-        "CBR" => crate::parsers::cbr::extract_page_from_cbr(&path, page_number),
-        "EPUB" => crate::parsers::epub::extract_page_from_epub(&path, page_number),
-        "PDF" => crate::parsers::pdf::extract_page_from_pdf(&path, page_number),
+        "CBR" => codex_parsers::cbr::extract_page_from_cbr(&path, page_number),
+        "EPUB" => codex_parsers::epub::extract_page_from_epub(&path, page_number),
+        "PDF" => codex_parsers::pdf::extract_page_from_pdf(&path, page_number),
         _ => anyhow::bail!("Unsupported format: {}", format),
     })
     .await

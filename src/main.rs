@@ -1,15 +1,12 @@
 mod api;
 mod commands;
 mod db;
-mod models;
 mod observability;
-mod parsers;
 mod scanner;
 mod scheduler;
 mod search;
 mod services;
 mod tasks;
-mod utils;
 mod web;
 
 use clap::{Parser, Subcommand};

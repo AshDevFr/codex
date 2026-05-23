@@ -1,11 +1,11 @@
-use crate::parsers::image_utils::{get_image_format, get_svg_dimensions, is_image_file};
-use crate::parsers::isbn_utils::extract_isbns;
-use crate::parsers::metadata::{SpineItem, compute_epub_positions};
-use crate::parsers::opf;
-use crate::parsers::traits::FormatParser;
-use crate::parsers::{BookMetadata, FileFormat, ImageFormat, PageInfo};
-use crate::utils::{CodexError, Result, hash_file};
+use crate::image_utils::{get_image_format, get_svg_dimensions, is_image_file};
+use crate::isbn_utils::extract_isbns;
+use crate::metadata::{SpineItem, compute_epub_positions};
+use crate::opf;
+use crate::traits::FormatParser;
+use crate::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use chrono::{DateTime, Utc};
+use codex_utils::{CodexError, Result, hash_file};
 use image::GenericImageView;
 use std::collections::HashMap;
 use std::fs::File;
@@ -139,7 +139,7 @@ impl EpubParser {
     }
 
     /// Parse the EPUB container.xml to find the root file (usually content.opf)
-    pub(crate) fn find_root_file(archive: &mut ZipArchive<File>) -> Result<String> {
+    pub fn find_root_file(archive: &mut ZipArchive<File>) -> Result<String> {
         let mut container_file = archive
             .by_name("META-INF/container.xml")
             .map_err(|_| CodexError::ParseError("META-INF/container.xml not found".to_string()))?;
@@ -211,7 +211,7 @@ impl EpubParser {
     ///
     /// Returns (manifest: id -> (href, media_type), spine_order: Vec<(href, media_type)>)
     #[allow(clippy::type_complexity)]
-    pub(crate) fn parse_opf(
+    pub fn parse_opf(
         archive: &mut ZipArchive<File>,
         opf_path: &str,
     ) -> Result<(HashMap<String, (String, String)>, Vec<(String, String)>)> {
@@ -721,7 +721,7 @@ pub fn extract_cover_from_epub_with_fallback<P: AsRef<Path>>(
     path: P,
     fallback_on_invalid: bool,
 ) -> anyhow::Result<Vec<u8>> {
-    use crate::parsers::image_utils::is_valid_image_data;
+    use crate::image_utils::is_valid_image_data;
 
     let path = path.as_ref();
     let file = File::open(path)?;
@@ -860,7 +860,7 @@ pub fn extract_page_from_epub_with_fallback<P: AsRef<Path>>(
     }
 
     // For other pages, use alphabetical order
-    use crate::parsers::image_utils::is_valid_image_data;
+    use crate::image_utils::is_valid_image_data;
 
     let file = File::open(path)?;
     let mut archive = ZipArchive::new(file)?;

@@ -11,13 +11,13 @@ use crate::api::{
 use crate::db::entities::users;
 use crate::db::repositories::{SharingTagRepository, UserListFilter, UserRepository};
 use crate::require_permission;
-use crate::utils::password;
 use axum::{
     Json,
     extract::{Path, Query, State},
     response::Response,
 };
 use chrono::Utc;
+use codex_utils::password;
 use std::sync::Arc;
 use uuid::Uuid;
 

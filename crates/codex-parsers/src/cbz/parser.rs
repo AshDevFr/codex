@@ -1,8 +1,8 @@
-use crate::parsers::image_utils::{create_page_info, is_image_file, process_image_data};
-use crate::parsers::traits::FormatParser;
-use crate::parsers::{BookMetadata, FileFormat, parse_comic_info};
-use crate::utils::{Result, hash_file};
+use crate::image_utils::{create_page_info, is_image_file, process_image_data};
+use crate::traits::FormatParser;
+use crate::{BookMetadata, FileFormat, parse_comic_info};
 use chrono::{DateTime, Utc};
+use codex_utils::{Result, hash_file};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -184,7 +184,7 @@ pub fn extract_page_from_cbz_with_fallback<P: AsRef<Path>>(
     page_number: i32,
     fallback_on_invalid: bool,
 ) -> anyhow::Result<Vec<u8>> {
-    use crate::parsers::image_utils::is_valid_image_data;
+    use crate::image_utils::is_valid_image_data;
 
     let file = File::open(path)?;
     let mut archive = ZipArchive::new(file)?;

@@ -271,11 +271,11 @@ pub async fn extract_page_image(
 
     // Use the appropriate parser based on format
     let image_data = match file_format.to_uppercase().as_str() {
-        "CBZ" => crate::parsers::cbz::extract_page_from_cbz(path, page_number)?,
+        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(path, page_number)?,
         #[cfg(feature = "rar")]
-        "CBR" => crate::parsers::cbr::extract_page_from_cbr(path, page_number)?,
-        "EPUB" => crate::parsers::epub::extract_page_from_epub(path, page_number)?,
-        "PDF" => crate::parsers::pdf::extract_page_from_pdf(path, page_number)?,
+        "CBR" => codex_parsers::cbr::extract_page_from_cbr(path, page_number)?,
+        "EPUB" => codex_parsers::epub::extract_page_from_epub(path, page_number)?,
+        "PDF" => codex_parsers::pdf::extract_page_from_pdf(path, page_number)?,
         _ => {
             return Err(anyhow::anyhow!(
                 "Unsupported format for page extraction: {}",

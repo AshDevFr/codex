@@ -1163,11 +1163,11 @@ impl ThumbnailService {
         // Use the appropriate parser extraction function based on format
         // Enable fallback mode to skip corrupted images
         let image_data = match book.format.to_uppercase().as_str() {
-            "CBZ" => crate::parsers::cbz::extract_page_from_cbz_with_fallback(path, 1, true)?,
+            "CBZ" => codex_parsers::cbz::extract_page_from_cbz_with_fallback(path, 1, true)?,
             #[cfg(feature = "rar")]
-            "CBR" => crate::parsers::cbr::extract_page_from_cbr_with_fallback(path, 1, true)?,
-            "EPUB" => crate::parsers::epub::extract_page_from_epub_with_fallback(path, 1, true)?,
-            "PDF" => crate::parsers::pdf::extract_page_from_pdf(path, 1)?,
+            "CBR" => codex_parsers::cbr::extract_page_from_cbr_with_fallback(path, 1, true)?,
+            "EPUB" => codex_parsers::epub::extract_page_from_epub_with_fallback(path, 1, true)?,
+            "PDF" => codex_parsers::pdf::extract_page_from_pdf(path, 1)?,
             _ => {
                 return Err(anyhow!(
                     "Unsupported format for thumbnail generation: {}",

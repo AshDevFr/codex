@@ -1,12 +1,12 @@
-use crate::parsers::BookMetadata;
-#[cfg(feature = "rar")]
-use crate::parsers::cbr::CbrParser;
-use crate::parsers::cbz::CbzParser;
-use crate::parsers::epub::EpubParser;
-use crate::parsers::pdf::PdfParser;
-use crate::parsers::traits::FormatParser;
 use crate::scanner::detect_format;
-use crate::utils::{CodexError, Result};
+use codex_parsers::BookMetadata;
+#[cfg(feature = "rar")]
+use codex_parsers::cbr::CbrParser;
+use codex_parsers::cbz::CbzParser;
+use codex_parsers::epub::EpubParser;
+use codex_parsers::pdf::PdfParser;
+use codex_parsers::traits::FormatParser;
+use codex_utils::{CodexError, Result};
 use std::path::Path;
 
 /// Analyze a file and extract metadata
@@ -19,26 +19,26 @@ pub fn analyze_file<P: AsRef<Path>>(path: P) -> Result<BookMetadata> {
 
     // Select appropriate parser
     let metadata = match format {
-        crate::parsers::FileFormat::CBZ => {
+        codex_parsers::FileFormat::CBZ => {
             let parser = CbzParser::new();
             parser.parse(path)?
         }
         #[cfg(feature = "rar")]
-        crate::parsers::FileFormat::CBR => {
+        codex_parsers::FileFormat::CBR => {
             let parser = CbrParser::new();
             parser.parse(path)?
         }
         #[cfg(not(feature = "rar"))]
-        crate::parsers::FileFormat::CBR => {
+        codex_parsers::FileFormat::CBR => {
             return Err(CodexError::UnsupportedFormat(
                 "CBR support requires the 'rar' feature to be enabled".to_string(),
             ));
         }
-        crate::parsers::FileFormat::EPUB => {
+        codex_parsers::FileFormat::EPUB => {
             let parser = EpubParser::new();
             parser.parse(path)?
         }
-        crate::parsers::FileFormat::PDF => {
+        codex_parsers::FileFormat::PDF => {
             let parser = PdfParser::new();
             parser.parse(path)?
         }

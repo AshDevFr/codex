@@ -11,8 +11,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::entities::{series_metadata, series_metadata::Entity as SeriesMetadata};
-use crate::utils::normalize_for_search;
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use codex_utils::normalize_for_search;
 
 /// Repository for series metadata operations
 pub struct SeriesMetadataRepository;

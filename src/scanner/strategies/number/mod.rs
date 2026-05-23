@@ -18,7 +18,7 @@ pub use filename::FilenameStrategy;
 pub use metadata::MetadataStrategy;
 pub use smart::SmartStrategy;
 
-use crate::models::NumberStrategy;
+use codex_models::NumberStrategy;
 
 /// Context for resolving book numbers
 #[derive(Debug, Clone)]

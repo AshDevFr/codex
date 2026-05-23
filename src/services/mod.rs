@@ -48,8 +48,8 @@ pub use task_listener::TaskListener;
 pub use task_metrics::TaskMetricsService;
 pub use thumbnail::ThumbnailService;
 
-// Historical alias. The canonical location is `crate::utils::credential_encryption`.
+// Historical alias. The canonical location is `codex_utils::credential_encryption`.
 #[allow(unused_imports)]
-pub use crate::utils::credential_encryption::CredentialEncryption;
+pub use codex_utils::credential_encryption::CredentialEncryption;
 pub use plugin_file_storage::{PluginCleanupStats, PluginFileStorage, PluginStorageStats};
 pub use plugin_metrics::{PluginHealthStatus, PluginMetricsService};

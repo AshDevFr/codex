@@ -273,11 +273,11 @@ async fn extract_page_image(
 
     // Use spawn_blocking for CPU-intensive file parsing operations
     tokio::task::spawn_blocking(move || match format.as_str() {
-        "CBZ" => crate::parsers::cbz::extract_page_from_cbz(&path, page_number),
+        "CBZ" => codex_parsers::cbz::extract_page_from_cbz(&path, page_number),
         #[cfg(feature = "rar")]
-        "CBR" => crate::parsers::cbr::extract_page_from_cbr(&path, page_number),
-        "EPUB" => crate::parsers::epub::extract_page_from_epub(&path, page_number),
-        "PDF" => crate::parsers::pdf::extract_page_from_pdf(&path, page_number),
+        "CBR" => codex_parsers::cbr::extract_page_from_cbr(&path, page_number),
+        "EPUB" => codex_parsers::epub::extract_page_from_epub(&path, page_number),
+        "PDF" => codex_parsers::pdf::extract_page_from_pdf(&path, page_number),
         _ => anyhow::bail!("Unsupported format: {}", format),
     })
     .await

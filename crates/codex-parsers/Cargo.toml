@@ -1,0 +1,47 @@
+[package]
+name = "codex-parsers"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "codex_parsers"
+path = "src/lib.rs"
+
+[features]
+default = ["rar"]
+rar = ["dep:unrar"]
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+codex-utils = { workspace = true }
+
+# URL decoding (EPUB OPF hrefs)
+urlencoding = "2.1"
+
+# Archive formats
+zip = "8.1"
+unrar = { version = "0.5", optional = true }
+
+# PDF parsing
+lopdf = "0.39"
+pdfium-render = { version = "0.8", features = ["sync"] }
+
+# Image processing
+image = { version = "0.25", features = ["avif"] }
+resvg = "0.47"
+jxl-oxide = "0.12"
+infer = "0.19"
+
+# XML / metadata parsing
+quick-xml = { version = "0.39", features = ["serialize"] }
+serde_json = "1.0"
+
+# Regex (ISBN extraction)
+regex = "1.10"
+
+[dev-dependencies]
+tempfile = { workspace = true }

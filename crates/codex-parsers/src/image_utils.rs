@@ -1,4 +1,4 @@
-use crate::parsers::ImageFormat;
+use crate::ImageFormat;
 use jxl_oxide::JxlImage;
 use resvg::usvg::{Options, Tree};
 use std::io::Cursor;
@@ -269,7 +269,7 @@ pub fn get_verified_image_format(filename: &str, data: &[u8]) -> Option<ImageFor
     }
 }
 
-use crate::parsers::PageInfo;
+use crate::PageInfo;
 
 /// Result of processing an image file from an archive
 #[derive(Debug)]

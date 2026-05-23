@@ -121,10 +121,10 @@ impl ScanningConfigDto {
     /// If `cron_timezone` is set, validates it as a valid IANA timezone name.
     pub fn validated(self) -> Result<Self, String> {
         if let Some(cron) = &self.cron_schedule {
-            crate::utils::cron::validate_cron_expression(cron).map_err(|e| e.to_string())?;
+            codex_utils::cron::validate_cron_expression(cron).map_err(|e| e.to_string())?;
         }
         if let Some(tz) = &self.cron_timezone {
-            crate::utils::cron::validate_timezone(tz).map_err(|e| e.to_string())?;
+            codex_utils::cron::validate_timezone(tz).map_err(|e| e.to_string())?;
         }
         Ok(self)
     }

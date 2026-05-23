@@ -13,7 +13,6 @@ use crate::db::{
     repositories::{SettingsRepository, UserRepository},
 };
 use crate::require_permission;
-use crate::utils::password;
 use axum::{
     Json,
     extract::State,
@@ -21,6 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use codex_utils::password;
 use std::sync::Arc;
 use uuid::Uuid;
 

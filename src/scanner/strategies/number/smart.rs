@@ -3,7 +3,7 @@
 //! Fallback chain: metadata → filename patterns → file order.
 //! This provides the best coverage by using the best available information.
 
-use crate::models::NumberStrategy;
+use codex_models::NumberStrategy;
 
 use super::{BookNumberStrategy, NumberContext, NumberMetadata, filename::FilenameStrategy};
 

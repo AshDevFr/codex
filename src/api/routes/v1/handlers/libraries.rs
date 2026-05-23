@@ -13,7 +13,6 @@ use crate::api::{
 };
 use crate::db::entities::libraries;
 use crate::db::repositories::{CreateLibraryParams, LibraryRepository};
-use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use crate::require_permission;
 use crate::scanner::strategies::create_strategy;
 use axum::{
@@ -22,6 +21,7 @@ use axum::{
     response::Response,
 };
 use chrono::Utc;
+use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use uuid::Uuid;

@@ -408,9 +408,9 @@ pub struct BookCoverListResponse {
     pub covers: Vec<BookCoverDto>,
 }
 
-// Sort parameters live in `crate::models::sort` so db repositories can take
+// Sort parameters live in `codex_models::sort` so db repositories can take
 // typed sort params without depending on the api layer.
-pub use crate::models::sort::{BookSortField, BookSortParam};
+pub use codex_models::sort::{BookSortField, BookSortParam};
 
 /// Book data transfer object
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

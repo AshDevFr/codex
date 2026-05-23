@@ -11,13 +11,13 @@ use crate::db::repositories::{
     SeriesRepository, TagRepository,
 };
 use crate::require_permission;
-use crate::utils::{
-    json_merge_patch, parse_custom_metadata, serialize_custom_metadata,
-    validate_custom_metadata_size,
-};
 use axum::{Json, extract::State};
 use chrono::Utc;
 use codex_events::{EntityChangeEvent, EntityEvent};
+use codex_utils::{
+    json_merge_patch, parse_custom_metadata, serialize_custom_metadata,
+    validate_custom_metadata_size,
+};
 use sea_orm::{ActiveModelTrait, Set};
 use std::sync::Arc;
 use uuid::Uuid;

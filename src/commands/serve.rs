@@ -178,7 +178,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .as_ref()
         .filter(|s| !s.is_empty())
         .map(std::path::Path::new);
-    match crate::parsers::pdf::init_pdfium(pdfium_path) {
+    match codex_parsers::pdf::init_pdfium(pdfium_path) {
         Ok(()) => {
             info!("PDFium library initialized successfully");
         }
@@ -461,7 +461,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     ));
     let api_state = Arc::new(crate::api::AppState {
         db: db.sea_orm_connection().clone(),
-        jwt_service: Arc::new(crate::utils::jwt::JwtService::new(
+        jwt_service: Arc::new(codex_utils::jwt::JwtService::new(
             config.auth.jwt_secret.clone(),
             config.auth.jwt_expiry_hours,
         )),

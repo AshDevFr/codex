@@ -5,11 +5,11 @@
 #![allow(dead_code)]
 
 use crate::db::repositories::{GenreRepository, TagRepository};
-use crate::models::filter::{
+use anyhow::Result;
+use codex_models::filter::{
     BookCondition, BoolOperator, DateOperator, FieldOperator, NumberOperator, SeriesCondition,
     UuidOperator,
 };
-use anyhow::Result;
 use sea_orm::DatabaseConnection;
 use std::collections::HashSet;
 use std::future::Future;
@@ -2515,7 +2515,7 @@ impl FilterService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::filter::{BookCondition, FieldOperator, SeriesCondition, UuidOperator};
+    use codex_models::filter::{BookCondition, FieldOperator, SeriesCondition, UuidOperator};
 
     // Unit tests for condition building and basic logic
 

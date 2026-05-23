@@ -13,7 +13,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::models::{CustomStrategyConfig, SeriesStrategy};
+use codex_models::{CustomStrategyConfig, SeriesStrategy};
 
 use super::super::common::{DetectedBook, DetectedSeries, SeriesMetadata};
 use super::ScanningStrategyImpl;

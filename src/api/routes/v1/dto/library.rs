@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use super::ScanningConfigDto;
 use super::common::is_false;
 use super::patch::PatchValue;
-use crate::models::{BookStrategy, NumberStrategy, SeriesStrategy};
+use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
 
 /// Library data transfer object
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

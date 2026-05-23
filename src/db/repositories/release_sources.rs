@@ -20,7 +20,7 @@ use crate::db::entities::release_sources::{
     self, Entity as ReleaseSources, Model as ReleaseSource, kind, plugin_id as source_plugin_id,
 };
 use crate::db::repositories::plugins::PluginsRepository;
-use crate::utils::cron::validate_cron_expression;
+use codex_utils::cron::validate_cron_expression;
 
 /// Normalize a caller-supplied cron schedule: trim, treat empty as `None`,
 /// validate the parse, and return the trimmed string. Errors when the

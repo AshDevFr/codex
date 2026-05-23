@@ -18,9 +18,9 @@ use crate::db::entities::{books, series};
 use crate::db::repositories::{
     BookRepository, LibraryRepository, SeriesRepository, TaskRepository,
 };
-use crate::models::SeriesStrategy;
 use crate::tasks::types::TaskType;
 use codex_events::{EventBroadcaster, TaskProgressEvent};
+use codex_models::SeriesStrategy;
 
 use super::strategies::{DetectedSeries, create_strategy};
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus, ScannerConfig};
@@ -878,7 +878,7 @@ async fn hash_file_with_metadata(path: PathBuf) -> Result<FileHashResult> {
     // Calculate current partial hash and KOReader hash (blocking I/O)
     let path_clone = path.clone();
     let (current_partial_hash, koreader_hash) = tokio::task::spawn_blocking(move || {
-        use crate::utils::hasher::{hash_file_koreader, hash_file_partial};
+        use codex_utils::hasher::{hash_file_koreader, hash_file_partial};
         let partial = hash_file_partial(&path_clone)?;
         let koreader = hash_file_koreader(&path_clone).ok();
         Ok::<_, std::io::Error>((partial, koreader))

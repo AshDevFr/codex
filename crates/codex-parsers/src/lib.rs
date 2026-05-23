@@ -1,3 +1,9 @@
+//! Codex file-format parsers (CBZ, CBR, EPUB, PDF) and shared metadata
+//! utilities.
+//!
+//! Depends on `codex-utils` for the `CodexError` / `Result` types and the
+//! file-level hasher. No upward deps to db/services/api.
+
 #[cfg(feature = "rar")]
 pub mod cbr;
 pub mod cbz;

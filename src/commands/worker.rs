@@ -111,7 +111,7 @@ pub async fn worker_command(config_path: PathBuf) -> anyhow::Result<()> {
         .as_ref()
         .filter(|s| !s.is_empty())
         .map(std::path::Path::new);
-    match crate::parsers::pdf::init_pdfium(pdfium_path) {
+    match codex_parsers::pdf::init_pdfium(pdfium_path) {
         Ok(()) => {
             info!("PDFium library initialized successfully");
         }

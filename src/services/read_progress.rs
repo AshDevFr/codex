@@ -217,9 +217,9 @@ mod tests {
         BookRepository, LibraryRepository, ReadProgressRepository, SeriesRepository, UserRepository,
     };
     use crate::db::test_helpers::setup_test_db;
-    use crate::models::ScanningStrategy;
-    use crate::utils::password;
     use chrono::Utc;
+    use codex_models::ScanningStrategy;
+    use codex_utils::password;
     use std::time::Duration;
 
     async fn create_test_user(db: &DatabaseConnection) -> users::Model {

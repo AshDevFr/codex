@@ -6,7 +6,7 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::models::NumberStrategy;
+use codex_models::NumberStrategy;
 
 use super::{BookNumberStrategy, NumberContext, NumberMetadata};
 

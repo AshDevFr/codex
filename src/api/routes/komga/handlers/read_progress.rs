@@ -320,9 +320,9 @@ pub async fn put_progression(
     // Normalize totalProgression using server-side positions if available
     let (total_progression, current_page) = if let Some(ref positions_json) = book.epub_positions {
         if let Ok(positions) =
-            serde_json::from_str::<Vec<crate::parsers::EpubPosition>>(positions_json)
+            serde_json::from_str::<Vec<codex_parsers::EpubPosition>>(positions_json)
         {
-            if let Some((normalized, position)) = crate::parsers::normalize_progression(
+            if let Some((normalized, position)) = codex_parsers::normalize_progression(
                 &positions,
                 client_href,
                 client_total_progression,

@@ -13,7 +13,7 @@ use nucleo_matcher::{Config, Matcher, Utf32String};
 use parking_lot::{Mutex, RwLock};
 use uuid::Uuid;
 
-use crate::utils::normalize_for_search;
+use codex_utils::normalize_for_search;
 
 /// Source strings for a series entry, retained so we can rebuild the
 /// haystack on an incremental update (Phase 2) without round-tripping

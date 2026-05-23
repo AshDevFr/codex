@@ -4,9 +4,9 @@ use utoipa::ToSchema;
 
 use super::common::PaginatedResponse;
 
-// Sort parameters live in `crate::models::sort` so db repositories can take
+// Sort parameters live in `codex_models::sort` so db repositories can take
 // typed sort params without depending on the api layer.
-pub use crate::models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
+pub use codex_models::sort::{SeriesSortField, SeriesSortParam, SortDirection};
 
 /// Series data transfer object
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

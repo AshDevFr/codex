@@ -375,9 +375,9 @@ pub async fn put_progression(
     let canonical_progression = if has_cfi {
         if let Some(ref spine_json) = book.epub_spine_items {
             if let Ok(spine_items) =
-                serde_json::from_str::<Vec<crate::parsers::SpineItem>>(spine_json)
+                serde_json::from_str::<Vec<codex_parsers::SpineItem>>(spine_json)
             {
-                crate::parsers::char_to_byte_progression(&spine_items, client_total_progression)
+                codex_parsers::char_to_byte_progression(&spine_items, client_total_progression)
             } else {
                 client_total_progression
             }
@@ -391,13 +391,11 @@ pub async fn put_progression(
     // Normalize totalProgression using server-side positions if available
     let (total_progression, current_page) = if let Some(ref positions_json) = book.epub_positions {
         if let Ok(positions) =
-            serde_json::from_str::<Vec<crate::parsers::EpubPosition>>(positions_json)
+            serde_json::from_str::<Vec<codex_parsers::EpubPosition>>(positions_json)
         {
-            if let Some((normalized, position)) = crate::parsers::normalize_progression(
-                &positions,
-                client_href,
-                canonical_progression,
-            ) {
+            if let Some((normalized, position)) =
+                codex_parsers::normalize_progression(&positions, client_href, canonical_progression)
+            {
                 (normalized, position)
             } else {
                 let page = if book.page_count > 0 {

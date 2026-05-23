@@ -15,11 +15,11 @@
 #![allow(dead_code)]
 
 use crate::db::entities::plugins::{self, Entity as Plugins, PluginPermission};
-use crate::models::plugin::{PluginManifest, PluginScope};
 use crate::observability::repo::db_system_str;
-use crate::utils::credential_encryption::CredentialEncryption;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
+use codex_models::plugin::{PluginManifest, PluginScope};
+use codex_utils::credential_encryption::CredentialEncryption;
 use sea_orm::*;
 use uuid::Uuid;
 
@@ -735,8 +735,8 @@ impl PluginsRepository {
     /// Returns an empty vector if no rules are configured or if parsing fails.
     pub fn get_search_preprocessing_rules(
         plugin: &plugins::Model,
-    ) -> Vec<crate::models::preprocessing::PreprocessingRule> {
-        use crate::models::preprocessing::parse_preprocessing_rules;
+    ) -> Vec<codex_models::preprocessing::PreprocessingRule> {
+        use codex_models::preprocessing::parse_preprocessing_rules;
 
         match parse_preprocessing_rules(plugin.search_preprocessing_rules.as_deref()) {
             Ok(rules) => rules,
@@ -757,8 +757,8 @@ impl PluginsRepository {
     /// Returns None if no conditions are configured or if parsing fails.
     pub fn get_auto_match_conditions(
         plugin: &plugins::Model,
-    ) -> Option<crate::models::preprocessing::AutoMatchConditions> {
-        use crate::models::preprocessing::parse_auto_match_conditions;
+    ) -> Option<codex_models::preprocessing::AutoMatchConditions> {
+        use codex_models::preprocessing::parse_auto_match_conditions;
 
         match parse_auto_match_conditions(plugin.auto_match_conditions.as_deref()) {
             Ok(conditions) => conditions,

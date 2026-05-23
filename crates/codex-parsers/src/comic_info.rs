@@ -1,4 +1,4 @@
-use crate::parsers::ComicInfo;
+use crate::ComicInfo;
 use quick_xml::de::from_str;
 use serde::{Deserialize, Serialize};
 

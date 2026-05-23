@@ -4,8 +4,8 @@
 
 #![allow(dead_code)]
 
-use crate::parsers::BookMetadata;
-use crate::utils::Result;
+use crate::BookMetadata;
+use codex_utils::Result;
 use std::path::Path;
 
 /// Trait for parsing different file formats

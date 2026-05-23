@@ -3,7 +3,7 @@
 //! Book number = position in alphabetically sorted file list within series.
 //! This is the default strategy and matches Komga behavior.
 
-use crate::models::NumberStrategy;
+use codex_models::NumberStrategy;
 
 use super::{BookNumberStrategy, NumberContext, NumberMetadata};
 

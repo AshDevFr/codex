@@ -27,7 +27,7 @@ use crate::db::repositories::{ReleaseSourceRepository, TaskRepository};
 use crate::services::release::schedule::{read_default_cron_schedule, resolve_cron_schedule};
 use crate::services::settings::SettingsService;
 use crate::tasks::types::TaskType;
-use crate::utils::cron::normalize_cron_expression;
+use codex_utils::cron::normalize_cron_expression;
 
 /// Tracks scheduler-registered jobs per source row so we can reconcile.
 #[derive(Debug, Default)]

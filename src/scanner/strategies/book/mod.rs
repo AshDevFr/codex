@@ -22,7 +22,7 @@ pub use metadata_first::MetadataFirstStrategy;
 pub use series_name::SeriesNameStrategy;
 pub use smart::SmartStrategy;
 
-use crate::models::{BookStrategy, CustomBookConfig, SmartBookConfig};
+use codex_models::{BookStrategy, CustomBookConfig, SmartBookConfig};
 
 /// Context for resolving book metadata
 #[derive(Debug, Clone)]
