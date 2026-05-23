@@ -181,7 +181,20 @@ brew install sccache
 cargo install sccache --locked
 ```
 
-The `[build] rustc-wrapper = "sccache"` line in `.cargo/config.toml` activates it once `sccache` is on your `PATH`. If you don't want to use it, either remove that line or unset `RUSTC_WRAPPER`.
+sccache is opt-in per developer. The repo's `.cargo/config.toml` deliberately doesn't wire it in, so checkouts work on machines and in CI/Docker environments where it isn't installed. Pick whichever opt-in fits your setup:
+
+```bash
+# Shell profile (applies to every cargo project on your machine)
+export RUSTC_WRAPPER=sccache
+```
+
+```toml
+# Or in ~/.cargo/config.toml (user-level, also applies everywhere)
+[build]
+rustc-wrapper = "sccache"
+```
+
+To disable temporarily for a single build, prefix it with `RUSTC_WRAPPER= cargo build`.
 
 Check the cache hit rate at any time:
 

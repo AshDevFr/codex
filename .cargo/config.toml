@@ -1,8 +1,10 @@
 # Cargo configuration for faster builds
 # See: https://doc.rust-lang.org/cargo/reference/config.html
-
-[build]
-rustc-wrapper = "sccache"
+#
+# Note: sccache is intentionally not wired in here. It's an optional local
+# speed-up and committing `rustc-wrapper = "sccache"` would crash any CI
+# job or Docker build that doesn't have sccache installed. Opt in locally
+# via `export RUSTC_WRAPPER=sccache` (see docs/dev/contributing/development.md).
 
 # =============================================================================
 # Linker Configuration
