@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::db::entities::{books, prelude::*};
 use crate::db::repositories::SeriesRepository;
 use crate::events::{EntityChangeEvent, EntityEvent, EventBroadcaster};
+use crate::observability::repo::db_system_str;
 use crate::utils::normalize_for_search;
 
 /// Options for querying books with filtering, sorting, and pagination
@@ -133,6 +134,19 @@ impl BookRepository {
     /// };
     /// let (books, total) = BookRepository::query(db, options).await?;
     /// ```
+    #[tracing::instrument(
+        name = "db.book.query",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            library_id = ?options.library_id,
+            series_id = ?options.series_id,
+            page = options.page,
+            page_size = options.page_size,
+        ),
+    )]
     pub async fn query(
         db: &DatabaseConnection,
         options: BookQueryOptions<'_>,
@@ -373,6 +387,16 @@ impl BookRepository {
     }
 
     /// Create a new book from entity model
+    #[tracing::instrument(
+        name = "db.book.insert",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "insert",
+            otel.kind = "client",
+            book.id = %book_model.id,
+        ),
+    )]
     pub async fn create(
         db: &DatabaseConnection,
         book_model: &books::Model,
@@ -428,6 +452,16 @@ impl BookRepository {
     }
 
     /// Get a book by ID
+    #[tracing::instrument(
+        name = "db.book.get_by_id",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            book.id = %id,
+        ),
+    )]
     pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<books::Model>> {
         Books::find_by_id(id)
             .one(db)
@@ -436,6 +470,16 @@ impl BookRepository {
     }
 
     /// Check if a book exists by ID (more efficient than get_by_id for existence checks)
+    #[tracing::instrument(
+        name = "db.book.exists",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            book.id = %id,
+        ),
+    )]
     pub async fn exists(db: &DatabaseConnection, id: Uuid) -> Result<bool> {
         let count = Books::find_by_id(id)
             .count(db)
@@ -474,6 +518,16 @@ impl BookRepository {
     ///
     /// Returns all books matching the given IDs. This is useful for batch operations
     /// where all matching books need to be processed.
+    #[tracing::instrument(
+        name = "db.book.get_by_ids",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            id_count = ids.len(),
+        ),
+    )]
     pub async fn get_by_ids(db: &DatabaseConnection, ids: &[Uuid]) -> Result<Vec<books::Model>> {
         if ids.is_empty() {
             return Ok(vec![]);
@@ -544,6 +598,17 @@ impl BookRepository {
 
     /// Get all books in a series
     /// Orders by book_metadata.number, book_metadata.title_sort, then file_name
+    #[tracing::instrument(
+        name = "db.book.list_by_series",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            series.id = %series_id,
+            include_deleted,
+        ),
+    )]
     pub async fn list_by_series(
         db: &DatabaseConnection,
         series_id: Uuid,
@@ -1006,6 +1071,18 @@ impl BookRepository {
     }
 
     /// List books by library with pagination
+    #[tracing::instrument(
+        name = "db.book.list_by_library",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            library.id = %library_id,
+            page,
+            page_size,
+        ),
+    )]
     pub async fn list_by_library(
         db: &DatabaseConnection,
         library_id: Uuid,
@@ -1675,6 +1752,16 @@ impl BookRepository {
     }
 
     /// Update book
+    #[tracing::instrument(
+        name = "db.book.update",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            book.id = %book_model.id,
+        ),
+    )]
     pub async fn update(
         db: &DatabaseConnection,
         book_model: &books::Model,
@@ -1728,6 +1815,17 @@ impl BookRepository {
     }
 
     /// Mark a book as deleted or restore it
+    #[tracing::instrument(
+        name = "db.book.mark_deleted",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            book.id = %book_id,
+            deleted,
+        ),
+    )]
     pub async fn mark_deleted(
         db: &DatabaseConnection,
         book_id: Uuid,
@@ -1777,6 +1875,16 @@ impl BookRepository {
     }
 
     /// Delete a book
+    #[tracing::instrument(
+        name = "db.book.delete",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "delete",
+            otel.kind = "client",
+            book.id = %id,
+        ),
+    )]
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         Books::delete_by_id(id)
             .exec(db)

@@ -43,7 +43,7 @@ use std::time::{Duration, Instant};
 
 use sea_orm::DatabaseConnection;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::{Span, debug, error, field::Empty, info, warn};
 use uuid::Uuid;
 
 use crate::db::entities::plugins;
@@ -1087,6 +1087,19 @@ impl PluginManager {
     }
 
     /// Search for series metadata using a specific plugin
+    #[tracing::instrument(
+        name = "plugin.search_series",
+        skip_all,
+        fields(
+            plugin_id = %plugin_id,
+            plugin_name = Empty,
+            plugin.method = "search",
+            otel.kind = "client",
+            otel.status_code = Empty,
+            duration_ms = Empty,
+            error.code = Empty,
+        ),
+    )]
     pub async fn search_series(
         &self,
         plugin_id: Uuid,
@@ -1094,6 +1107,7 @@ impl PluginManager {
     ) -> Result<MetadataSearchResponse, PluginManagerError> {
         // Check rate limit before making the request
         let plugin_name = self.check_rate_limit(plugin_id).await?;
+        Span::current().record("plugin_name", plugin_name.as_str());
 
         let timeout_ms = self.config.default_request_timeout.as_millis();
         debug!(
@@ -1108,9 +1122,11 @@ impl PluginManager {
         let handle = self.get_or_spawn(plugin_id).await?;
         let result = handle.search_series(params.clone()).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        Span::current().record("duration_ms", duration_ms);
 
         match &result {
             Ok(response) => {
+                Span::current().record("otel.status_code", "OK");
                 debug!(
                     plugin_id = %plugin_id,
                     plugin_name = %plugin_name,
@@ -1133,6 +1149,9 @@ impl PluginManager {
                 }
             }
             Err(e) => {
+                let error_code = self.error_to_code(e);
+                Span::current().record("otel.status_code", "ERROR");
+                Span::current().record("error.code", error_code);
                 if e.rpc_retry_after_seconds().is_some() {
                     warn!(
                         plugin_id = %plugin_id,
@@ -1159,7 +1178,6 @@ impl PluginManager {
                 if e.rpc_retry_after_seconds().is_none()
                     && let Some(ref metrics) = self.metrics_service
                 {
-                    let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
                             plugin_id,
@@ -1177,6 +1195,19 @@ impl PluginManager {
     }
 
     /// Get series metadata using a specific plugin
+    #[tracing::instrument(
+        name = "plugin.get_series_metadata",
+        skip_all,
+        fields(
+            plugin_id = %plugin_id,
+            plugin_name = Empty,
+            plugin.method = "get_metadata",
+            otel.kind = "client",
+            otel.status_code = Empty,
+            duration_ms = Empty,
+            error.code = Empty,
+        ),
+    )]
     pub async fn get_series_metadata(
         &self,
         plugin_id: Uuid,
@@ -1184,14 +1215,17 @@ impl PluginManager {
     ) -> Result<PluginSeriesMetadata, PluginManagerError> {
         // Check rate limit before making the request
         let plugin_name = self.check_rate_limit(plugin_id).await?;
+        Span::current().record("plugin_name", plugin_name.as_str());
 
         let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
         let result = handle.get_series_metadata(params).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        Span::current().record("duration_ms", duration_ms);
 
         match &result {
             Ok(_) => {
+                Span::current().record("otel.status_code", "OK");
                 // Update health status on success
                 if self.config.auto_sync_health {
                     let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
@@ -1205,11 +1239,13 @@ impl PluginManager {
                 }
             }
             Err(e) => {
+                let error_code = self.error_to_code(e);
+                Span::current().record("otel.status_code", "ERROR");
+                Span::current().record("error.code", error_code);
                 // Don't record RPC rate limits as failures — the plugin is healthy
                 if e.rpc_retry_after_seconds().is_none()
                     && let Some(ref metrics) = self.metrics_service
                 {
-                    let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
                             plugin_id,
@@ -1227,6 +1263,19 @@ impl PluginManager {
     }
 
     /// Find best series match using a specific plugin
+    #[tracing::instrument(
+        name = "plugin.match_series",
+        skip_all,
+        fields(
+            plugin_id = %plugin_id,
+            plugin_name = Empty,
+            plugin.method = "match",
+            otel.kind = "client",
+            otel.status_code = Empty,
+            duration_ms = Empty,
+            error.code = Empty,
+        ),
+    )]
     pub async fn match_series(
         &self,
         plugin_id: Uuid,
@@ -1234,14 +1283,17 @@ impl PluginManager {
     ) -> Result<Option<SearchResult>, PluginManagerError> {
         // Check rate limit before making the request
         let plugin_name = self.check_rate_limit(plugin_id).await?;
+        Span::current().record("plugin_name", plugin_name.as_str());
 
         let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
         let result = handle.match_series(params).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        Span::current().record("duration_ms", duration_ms);
 
         match &result {
             Ok(_) => {
+                Span::current().record("otel.status_code", "OK");
                 // Update health status on success
                 if self.config.auto_sync_health {
                     let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
@@ -1255,11 +1307,13 @@ impl PluginManager {
                 }
             }
             Err(e) => {
+                let error_code = self.error_to_code(e);
+                Span::current().record("otel.status_code", "ERROR");
+                Span::current().record("error.code", error_code);
                 // Don't record RPC rate limits as failures — the plugin is healthy
                 if e.rpc_retry_after_seconds().is_none()
                     && let Some(ref metrics) = self.metrics_service
                 {
-                    let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
                             plugin_id,
@@ -1281,6 +1335,19 @@ impl PluginManager {
     // =========================================================================
 
     /// Search for book metadata using a specific plugin
+    #[tracing::instrument(
+        name = "plugin.search_book",
+        skip_all,
+        fields(
+            plugin_id = %plugin_id,
+            plugin_name = Empty,
+            plugin.method = "book_search",
+            otel.kind = "client",
+            otel.status_code = Empty,
+            duration_ms = Empty,
+            error.code = Empty,
+        ),
+    )]
     pub async fn search_book(
         &self,
         plugin_id: Uuid,
@@ -1288,14 +1355,17 @@ impl PluginManager {
     ) -> Result<MetadataSearchResponse, PluginManagerError> {
         // Check rate limit before making the request
         let plugin_name = self.check_rate_limit(plugin_id).await?;
+        Span::current().record("plugin_name", plugin_name.as_str());
 
         let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
         let result = handle.search_book(params.clone()).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        Span::current().record("duration_ms", duration_ms);
 
         match &result {
             Ok(response) => {
+                Span::current().record("otel.status_code", "OK");
                 debug!(
                     plugin_id = %plugin_id,
                     isbn = ?params.isbn,
@@ -1318,6 +1388,9 @@ impl PluginManager {
                 }
             }
             Err(e) => {
+                let error_code = self.error_to_code(e);
+                Span::current().record("otel.status_code", "ERROR");
+                Span::current().record("error.code", error_code);
                 if e.rpc_retry_after_seconds().is_some() {
                     warn!(
                         plugin_id = %plugin_id,
@@ -1342,7 +1415,6 @@ impl PluginManager {
                 if e.rpc_retry_after_seconds().is_none()
                     && let Some(ref metrics) = self.metrics_service
                 {
-                    let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
                             plugin_id,
@@ -1360,6 +1432,19 @@ impl PluginManager {
     }
 
     /// Get full book metadata using a specific plugin
+    #[tracing::instrument(
+        name = "plugin.get_book_metadata",
+        skip_all,
+        fields(
+            plugin_id = %plugin_id,
+            plugin_name = Empty,
+            plugin.method = "book_get",
+            otel.kind = "client",
+            otel.status_code = Empty,
+            duration_ms = Empty,
+            error.code = Empty,
+        ),
+    )]
     pub async fn get_book_metadata(
         &self,
         plugin_id: Uuid,
@@ -1367,14 +1452,17 @@ impl PluginManager {
     ) -> Result<PluginBookMetadata, PluginManagerError> {
         // Check rate limit before making the request
         let plugin_name = self.check_rate_limit(plugin_id).await?;
+        Span::current().record("plugin_name", plugin_name.as_str());
 
         let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
         let result = handle.get_book_metadata(params).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        Span::current().record("duration_ms", duration_ms);
 
         match &result {
             Ok(_) => {
+                Span::current().record("otel.status_code", "OK");
                 // Update health status on success
                 if self.config.auto_sync_health {
                     let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
@@ -1388,11 +1476,13 @@ impl PluginManager {
                 }
             }
             Err(e) => {
+                let error_code = self.error_to_code(e);
+                Span::current().record("otel.status_code", "ERROR");
+                Span::current().record("error.code", error_code);
                 // Don't record RPC rate limits as failures — the plugin is healthy
                 if e.rpc_retry_after_seconds().is_none()
                     && let Some(ref metrics) = self.metrics_service
                 {
-                    let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
                             plugin_id,
@@ -1410,6 +1500,19 @@ impl PluginManager {
     }
 
     /// Find best book match using a specific plugin
+    #[tracing::instrument(
+        name = "plugin.match_book",
+        skip_all,
+        fields(
+            plugin_id = %plugin_id,
+            plugin_name = Empty,
+            plugin.method = "book_match",
+            otel.kind = "client",
+            otel.status_code = Empty,
+            duration_ms = Empty,
+            error.code = Empty,
+        ),
+    )]
     pub async fn match_book(
         &self,
         plugin_id: Uuid,
@@ -1417,14 +1520,17 @@ impl PluginManager {
     ) -> Result<Option<SearchResult>, PluginManagerError> {
         // Check rate limit before making the request
         let plugin_name = self.check_rate_limit(plugin_id).await?;
+        Span::current().record("plugin_name", plugin_name.as_str());
 
         let start = Instant::now();
         let handle = self.get_or_spawn(plugin_id).await?;
         let result = handle.match_book(params).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        Span::current().record("duration_ms", duration_ms);
 
         match &result {
             Ok(_) => {
+                Span::current().record("otel.status_code", "OK");
                 // Update health status on success
                 if self.config.auto_sync_health {
                     let _ = PluginsRepository::record_success(&self.db, plugin_id).await;
@@ -1438,11 +1544,13 @@ impl PluginManager {
                 }
             }
             Err(e) => {
+                let error_code = self.error_to_code(e);
+                Span::current().record("otel.status_code", "ERROR");
+                Span::current().record("error.code", error_code);
                 // Don't record RPC rate limits as failures — the plugin is healthy
                 if e.rpc_retry_after_seconds().is_none()
                     && let Some(ref metrics) = self.metrics_service
                 {
-                    let error_code = self.error_to_code(e);
                     metrics
                         .record_failure(
                             plugin_id,
@@ -1464,6 +1572,15 @@ impl PluginManager {
     // =========================================================================
 
     /// Ping a plugin to check health
+    #[tracing::instrument(
+        name = "plugin.ping",
+        skip_all,
+        fields(
+            plugin_id = %plugin_id,
+            plugin.method = "ping",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn ping(&self, plugin_id: Uuid) -> Result<(), PluginManagerError> {
         let handle = self.get_or_spawn(plugin_id).await?;
         handle.ping().await?;
@@ -1479,6 +1596,16 @@ impl PluginManager {
     ///
     /// This is useful for admin testing of plugin configuration without
     /// affecting the managed plugin state.
+    #[tracing::instrument(
+        name = "plugin.test_plugin",
+        skip_all,
+        fields(
+            plugin_id = %plugin.id,
+            plugin_name = %plugin.name,
+            plugin.method = "test",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn test_plugin(
         &self,
         _db: &DatabaseConnection,
@@ -2218,4 +2345,114 @@ mod tests {
 
     // Integration tests require a database connection
     // See tests/integration/plugin_manager.rs for full tests
+
+    /// Phase 2 instrumentation smoke test: a call into `search_series` must
+    /// emit a span named `plugin.search_series` with the OTel client-kind
+    /// attributes set. The call itself fails because the manager has no
+    /// plugins loaded against a `Disconnected` database — that's fine, the
+    /// span is created at function entry before any error path runs.
+    #[tokio::test]
+    async fn search_series_emits_plugin_span_with_otel_kind_client() {
+        use std::collections::HashMap;
+        use std::sync::{Arc as StdArc, Mutex};
+        use tracing::field::{Field, Visit};
+        use tracing_subscriber::Layer;
+        use tracing_subscriber::layer::{Context, SubscriberExt};
+
+        #[derive(Debug, Default)]
+        struct CapturedSpan {
+            name: &'static str,
+            fields: HashMap<String, String>,
+        }
+
+        struct CapturingLayer {
+            captured: StdArc<Mutex<Vec<CapturedSpan>>>,
+        }
+
+        struct FieldVisitor<'a>(&'a mut HashMap<String, String>);
+        impl Visit for FieldVisitor<'_> {
+            fn record_str(&mut self, field: &Field, value: &str) {
+                self.0.insert(field.name().to_string(), value.to_string());
+            }
+            fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+                self.0
+                    .insert(field.name().to_string(), format!("{value:?}"));
+            }
+            fn record_u64(&mut self, field: &Field, value: u64) {
+                self.0.insert(field.name().to_string(), value.to_string());
+            }
+            fn record_i64(&mut self, field: &Field, value: i64) {
+                self.0.insert(field.name().to_string(), value.to_string());
+            }
+            fn record_bool(&mut self, field: &Field, value: bool) {
+                self.0.insert(field.name().to_string(), value.to_string());
+            }
+        }
+
+        impl<S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>> Layer<S>
+            for CapturingLayer
+        {
+            fn on_new_span(
+                &self,
+                attrs: &tracing::span::Attributes<'_>,
+                _id: &tracing::span::Id,
+                _ctx: Context<'_, S>,
+            ) {
+                let mut fields = HashMap::new();
+                attrs.record(&mut FieldVisitor(&mut fields));
+                self.captured.lock().unwrap().push(CapturedSpan {
+                    name: attrs.metadata().name(),
+                    fields,
+                });
+            }
+        }
+
+        let captured: StdArc<Mutex<Vec<CapturedSpan>>> = StdArc::new(Mutex::new(Vec::new()));
+        let layer = CapturingLayer {
+            captured: captured.clone(),
+        };
+        let subscriber = tracing_subscriber::registry().with(layer);
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        // Use a real in-memory sqlite connection so SeaORM doesn't panic on
+        // the cache-refresh read. The plugins table will not exist, so the
+        // refresh fails cleanly (logged, ignored) and the lookup misses,
+        // letting the call proceed to `get_or_spawn` and error out there.
+        let db = Arc::new(
+            sea_orm::Database::connect("sqlite::memory:")
+                .await
+                .expect("connect to in-memory sqlite"),
+        );
+        let manager = PluginManager::new(db, PluginManagerConfig::default());
+
+        // Call into the instrumented entry method. We expect it to fail (the
+        // plugin isn't loaded), but the span is created before the failure.
+        let params = MetadataSearchParams {
+            query: "anything".to_string(),
+            limit: None,
+            cursor: None,
+        };
+        let _ = manager.search_series(Uuid::nil(), params).await;
+
+        let spans = captured.lock().unwrap();
+        let search_span = spans
+            .iter()
+            .find(|s| s.name == "plugin.search_series")
+            .expect("plugin.search_series span should be emitted");
+        assert_eq!(
+            search_span.fields.get("otel.kind").map(String::as_str),
+            Some("client"),
+            "otel.kind should be client for plugin RPC spans"
+        );
+        assert_eq!(
+            search_span.fields.get("plugin.method").map(String::as_str),
+            Some("search"),
+            "plugin.method should identify the RPC method"
+        );
+        assert!(
+            search_span.fields.contains_key("plugin_id"),
+            "plugin_id must be on the span; got fields: {:?}",
+            search_span.fields
+        );
+    }
 }

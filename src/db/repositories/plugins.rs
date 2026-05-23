@@ -15,6 +15,7 @@
 #![allow(dead_code)]
 
 use crate::db::entities::plugins::{self, Entity as Plugins, PluginPermission};
+use crate::observability::repo::db_system_str;
 use crate::services::CredentialEncryption;
 use crate::services::plugin::protocol::{PluginManifest, PluginScope};
 use anyhow::{Result, anyhow};
@@ -30,6 +31,15 @@ impl PluginsRepository {
     // =========================================================================
 
     /// Get all plugins
+    #[tracing::instrument(
+        name = "db.plugin.get_all",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn get_all(db: &DatabaseConnection) -> Result<Vec<plugins::Model>> {
         let plugins = Plugins::find()
             .order_by_asc(plugins::Column::Name)
@@ -101,6 +111,16 @@ impl PluginsRepository {
     }
 
     /// Get a plugin by ID
+    #[tracing::instrument(
+        name = "db.plugin.get_by_id",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            plugin.id = %id,
+        ),
+    )]
     pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<plugins::Model>> {
         let plugin = Plugins::find_by_id(id).one(db).await?;
         Ok(plugin)
@@ -589,6 +609,16 @@ impl PluginsRepository {
     // =========================================================================
 
     /// Record a successful operation
+    #[tracing::instrument(
+        name = "db.plugin.record_success",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            plugin.id = %id,
+        ),
+    )]
     pub async fn record_success(db: &DatabaseConnection, id: Uuid) -> Result<plugins::Model> {
         let existing = Self::get_by_id(db, id)
             .await?
@@ -605,6 +635,16 @@ impl PluginsRepository {
     }
 
     /// Record a failed operation and increment failure count
+    #[tracing::instrument(
+        name = "db.plugin.record_failure",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            plugin.id = %id,
+        ),
+    )]
     pub async fn record_failure(
         db: &DatabaseConnection,
         id: Uuid,

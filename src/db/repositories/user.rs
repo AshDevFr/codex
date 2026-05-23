@@ -1,4 +1,5 @@
 use crate::db::entities::{sharing_tags, user_sharing_tags, users, users::Entity as User};
+use crate::observability::repo::db_system_str;
 use anyhow::Result;
 use chrono::Utc;
 use sea_orm::*;
@@ -26,6 +27,16 @@ pub struct UserRepository;
 
 impl UserRepository {
     /// Create a new user
+    #[tracing::instrument(
+        name = "db.user.insert",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "insert",
+            otel.kind = "client",
+            user.id = %model.id,
+        ),
+    )]
     pub async fn create(db: &DatabaseConnection, model: &users::Model) -> Result<users::Model> {
         let active_model = users::ActiveModel {
             id: Set(model.id),
@@ -46,12 +57,31 @@ impl UserRepository {
     }
 
     /// Get user by ID
+    #[tracing::instrument(
+        name = "db.user.get_by_id",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+            user.id = %id,
+        ),
+    )]
     pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<Option<users::Model>> {
         let user = User::find_by_id(id).one(db).await?;
         Ok(user)
     }
 
     /// Get user by username
+    #[tracing::instrument(
+        name = "db.user.get_by_username",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn get_by_username(
         db: &DatabaseConnection,
         username: &str,
@@ -64,6 +94,15 @@ impl UserRepository {
     }
 
     /// Get user by email
+    #[tracing::instrument(
+        name = "db.user.get_by_email",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn get_by_email(
         db: &DatabaseConnection,
         email: &str,
@@ -91,6 +130,16 @@ impl UserRepository {
     }
 
     /// Update user
+    #[tracing::instrument(
+        name = "db.user.update",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "update",
+            otel.kind = "client",
+            user.id = %model.id,
+        ),
+    )]
     pub async fn update(db: &DatabaseConnection, model: &users::Model) -> Result<users::Model> {
         let active_model = users::ActiveModel {
             id: Unchanged(model.id),
@@ -110,12 +159,31 @@ impl UserRepository {
     }
 
     /// Delete user
+    #[tracing::instrument(
+        name = "db.user.delete",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "delete",
+            otel.kind = "client",
+            user.id = %id,
+        ),
+    )]
     pub async fn delete(db: &DatabaseConnection, id: Uuid) -> Result<()> {
         User::delete_by_id(id).exec(db).await?;
         Ok(())
     }
 
     /// List users with filtering and pagination
+    #[tracing::instrument(
+        name = "db.user.list_paginated",
+        skip_all,
+        fields(
+            db.system = db_system_str(db),
+            db.operation = "select",
+            otel.kind = "client",
+        ),
+    )]
     pub async fn list_paginated(
         db: &DatabaseConnection,
         filter: &UserListFilter,

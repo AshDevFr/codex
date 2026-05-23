@@ -27,3 +27,5 @@ pub use stub::{ObservabilityHandle, TraceContextFormat, init};
 
 mod http;
 pub use http::install_http_layers;
+
+pub mod repo;

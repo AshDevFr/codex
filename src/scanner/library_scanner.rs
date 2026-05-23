@@ -434,6 +434,15 @@ impl BookBatch {
 }
 
 /// Main library scanner that orchestrates the scanning process
+#[tracing::instrument(
+    name = "scanner.scan_library",
+    skip_all,
+    fields(
+        library.id = %library_id,
+        scan.mode = %mode,
+        task.id = ?task_id,
+    ),
+)]
 pub async fn scan_library(
     db: &DatabaseConnection,
     library_id: Uuid,
