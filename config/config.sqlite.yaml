@@ -162,3 +162,28 @@ files:
 #     - /api/v1/books/*/thumbnail   # Exempt book thumbnails
 #   cleanup_interval_secs: 60  # How often to clean up stale buckets
 #   bucket_ttl_secs: 300       # Time before a bucket is considered stale
+
+# OpenTelemetry observability (disabled by default).
+#
+# Uncomment and point `otlp.endpoint` at your collector to enable trace and
+# metric export. See docs/docs/observability.md for the schema, backend matrix
+# (SigNoz, Tempo, Honeycomb, Uptrace, ...), and sampling guidance.
+# observability:
+#   enabled: true
+#   service_name: codex
+#   otlp:
+#     endpoint: http://localhost:4317   # e.g. a local Jaeger or your operator's collector
+#     protocol: grpc                    # grpc | http/protobuf | http/json
+#     # headers:                        # auth/tenant headers (e.g. signoz-access-token)
+#     #   x-honeycomb-team: ...
+#     timeout_ms: 5000
+#   traces:
+#     enabled: true
+#     sample_ratio: 1.0                 # tune down on busy deployments
+#   metrics:
+#     enabled: true
+#     export_interval_ms: 30000
+#   browser:
+#     enabled: false                    # opt-in browser RUM, proxied through codex
+#     proxy_path: /api/v1/observability/otlp
+#     sample_ratio: 0.1

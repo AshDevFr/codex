@@ -163,3 +163,31 @@ komga_api:
 
 koreader_api:
   enabled: true
+
+# OpenTelemetry observability (disabled by default).
+#
+# Uncomment to ship traces/metrics to the bundled Jaeger sidecar (started
+# automatically by `make dev-up`). Jaeger accepts OTLP on port 4317 inside the
+# compose network and serves a UI at http://localhost:16686 on the host.
+#
+# See docs/docs/observability.md for the full schema, backend matrix, and
+# sampling guidance.
+# observability:
+#   enabled: true
+#   service_name: codex
+#   otlp:
+#     endpoint: http://jaeger:4317
+#     protocol: grpc
+#     # headers:                      # auth/tenant headers for hosted backends
+#     #   x-tenant: dev
+#     timeout_ms: 5000
+#   traces:
+#     enabled: true
+#     sample_ratio: 1.0
+#   metrics:
+#     enabled: true
+#     export_interval_ms: 30000
+#   browser:
+#     enabled: true                   # opt-in browser RUM (proxied through codex)
+#     proxy_path: /api/v1/observability/otlp
+#     sample_ratio: 0.1
