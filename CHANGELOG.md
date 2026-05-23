@@ -2,6 +2,21 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.28.3] - 2026-05-23
+
+### 🐛 Bug Fixes
+
+- *(build)* Unwire sccache from repo config to keep CI/Docker green
+
+### 💼 Other
+
+- Enable sccache wrapper and document fast-build tooling
+
+### 🚜 Refactor
+
+- *(tests)* Consolidate integration tests into a single binary
+- *(commands)* Inline migrate/wait/init_database tests next to their code
+
 ## [1.28.2] - 2026-05-22
 
 ### 🐛 Bug Fixes
