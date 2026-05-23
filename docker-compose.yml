@@ -120,6 +120,15 @@ services:
       # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
       CODEX_SCHEDULER_TIMEZONE: America/Los_Angeles
       CODEX_LOGGING_LEVEL: debug
+      # OpenTelemetry observability: ship traces/metrics to the bundled Jaeger
+      # sidecar so `make dev-up` "just works". The Codex config files keep
+      # observability disabled by default (trust posture for production
+      # deployments); the dev compose overrides that here.
+      CODEX_OBSERVABILITY_ENABLED: "true"
+      CODEX_OBSERVABILITY_SERVICE_NAME: codex
+      CODEX_OBSERVABILITY_OTLP_ENDPOINT: http://jaeger:4317
+      CODEX_OBSERVABILITY_OTLP_PROTOCOL: grpc
+      CODEX_OBSERVABILITY_BROWSER_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -202,6 +211,12 @@ services:
       # CODEX_DATABASE_POSTGRES_PASSWORD: codex
       # CODEX_DATABASE_POSTGRES_DATABASE_NAME: codex
       CODEX_LOGGING_LEVEL: debug
+      # OpenTelemetry observability: same overrides as codex-dev so the worker
+      # emits spans/metrics into the same Jaeger sidecar.
+      CODEX_OBSERVABILITY_ENABLED: "true"
+      CODEX_OBSERVABILITY_SERVICE_NAME: codex
+      CODEX_OBSERVABILITY_OTLP_ENDPOINT: http://jaeger:4317
+      CODEX_OBSERVABILITY_OTLP_PROTOCOL: grpc
     networks:
       - codex-network
     profiles:
@@ -316,6 +331,26 @@ services:
     profiles:
       - dev
       - prod
+
+  # Jaeger all-in-one for OTLP trace evaluation (see docs/docs/observability.md).
+  # Accepts OTLP natively on 4317 (gRPC) / 4318 (HTTP), serves the UI on 16686,
+  # and stores spans in memory. Available in the dev profile; the codex-dev and
+  # codex-dev-worker services above are pre-wired to send OTLP here via
+  # CODEX_OBSERVABILITY_OTLP_ENDPOINT=http://jaeger:4317.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    container_name: codex-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - codex-network
+    restart: unless-stopped
+    profiles:
+      - dev
 
   # Documentation server
   docs:

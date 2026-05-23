@@ -685,6 +685,82 @@ If you lose the encryption key, all stored OAuth tokens become undecryptable. Us
 
 Automatic key rotation with key versioning (storing the key version alongside encrypted data for seamless re-encryption) is planned for a future release.
 
+## Observability Configuration
+
+Codex emits OpenTelemetry traces and metrics over OTLP, plus optional browser RUM proxied through the server. Everything is **disabled by default**; nothing is exported until an operator opts in.
+
+For the full guide (architecture, sampling guidance, backend matrix, troubleshooting), see the [Observability page](./observability).
+
+```yaml
+observability:
+  enabled: false                        # master switch; must be true for any export to happen
+  service_name: codex                   # `service.name` resource attribute
+  otlp:
+    endpoint: ""                        # e.g. http://localhost:4317 (gRPC) or http://localhost:4318 (HTTP)
+    protocol: grpc                      # grpc | http/protobuf | http/json
+    headers: {}                         # auth/tenant headers (e.g. signoz-access-token: ...)
+    timeout_ms: 5000
+  traces:
+    enabled: true                       # honored only when observability.enabled is also true
+    sample_ratio: 1.0                   # parent-based sampler ratio in [0.0, 1.0]
+  metrics:
+    enabled: true
+    export_interval_ms: 30000           # periodic reader interval
+  browser:
+    enabled: false                      # opt-in separately; enables the OTLP proxy + ships SDK config
+    proxy_path: /api/v1/observability/otlp
+    sample_ratio: 0.1                   # browsers are noisy; sample lower than backend by default
+```
+
+### Top-level settings
+
+| Setting | Default | Env Override | Description |
+|---------|---------|--------------|-------------|
+| `enabled` | `false` | `CODEX_OBSERVABILITY_ENABLED` | Master switch. No providers are initialized when `false`. |
+| `service_name` | `codex` | `CODEX_OBSERVABILITY_SERVICE_NAME` | Resource attribute that identifies this process in the backend UI. |
+
+### OTLP exporter (`observability.otlp`)
+
+| Setting | Default | Env Override | Description |
+|---------|---------|--------------|-------------|
+| `endpoint` | `""` | `CODEX_OBSERVABILITY_OTLP_ENDPOINT` | Collector URL. Required when `enabled: true`. |
+| `protocol` | `grpc` | `CODEX_OBSERVABILITY_OTLP_PROTOCOL` | One of `grpc`, `http/protobuf`, `http/json`. |
+| `headers` | `{}` | `CODEX_OBSERVABILITY_OTLP_HEADERS` | Map of arbitrary headers. Env format: `k1=v1,k2=v2`. |
+| `timeout_ms` | `5000` | `CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS` | Per-export request timeout. |
+
+:::tip Endpoint format
+For gRPC endpoints, include the scheme: `http://host:4317` (cleartext) or `https://host:4317` (TLS).
+For HTTP endpoints, point at the base URL only: `http://collector:4318`. The SDK appends `/v1/traces` and `/v1/metrics` per signal.
+:::
+
+### Traces (`observability.traces`)
+
+| Setting | Default | Env Override | Description |
+|---------|---------|--------------|-------------|
+| `enabled` | `true` | `CODEX_OBSERVABILITY_TRACES_ENABLED` | Per-signal switch. Honored only when the parent `enabled` is also true. |
+| `sample_ratio` | `1.0` | `CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO` | Parent-based sampler ratio in `[0.0, 1.0]`. Out-of-range values are clamped. |
+
+See the [sampling guidance table](./observability#sampling-guidance) for production-sized recommendations.
+
+### Metrics (`observability.metrics`)
+
+| Setting | Default | Env Override | Description |
+|---------|---------|--------------|-------------|
+| `enabled` | `true` | `CODEX_OBSERVABILITY_METRICS_ENABLED` | Per-signal switch. Honored only when the parent `enabled` is also true. |
+| `export_interval_ms` | `30000` | `CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS` | Periodic reader export interval. Lower values increase load on the collector. |
+
+### Browser RUM (`observability.browser`)
+
+| Setting | Default | Env Override | Description |
+|---------|---------|--------------|-------------|
+| `enabled` | `false` | `CODEX_OBSERVABILITY_BROWSER_ENABLED` | Opt-in switch for the OTLP proxy and the SPA's SDK bootstrap. |
+| `proxy_path` | `/api/v1/observability/otlp` | `CODEX_OBSERVABILITY_BROWSER_PROXY_PATH` | Path on the Codex server where the browser SDK POSTs OTLP batches. |
+| `sample_ratio` | `0.1` | `CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO` | Client-side sample ratio. |
+
+:::note Two independent switches
+`observability.browser.enabled` is intentionally independent from the backend `observability.enabled` flag. Some operators want server-side observability without shipping spans from every browser tab. The SDK additionally refuses to start if `observability.otlp.endpoint` is empty, so a misconfigured server cannot leak data via the browser.
+:::
+
 ## Environment Variables
 
 All configuration options can be overridden with environment variables using the `CODEX_` prefix.
@@ -772,6 +848,21 @@ CODEX_RATE_LIMIT_AUTHENTICATED_BURST=200
 CODEX_RATE_LIMIT_EXEMPT_PATHS=/health,/api/v1/events
 CODEX_RATE_LIMIT_CLEANUP_INTERVAL_SECS=60
 CODEX_RATE_LIMIT_BUCKET_TTL_SECS=300
+
+# Observability (OpenTelemetry / OTLP)
+CODEX_OBSERVABILITY_ENABLED=true
+CODEX_OBSERVABILITY_SERVICE_NAME=codex
+CODEX_OBSERVABILITY_OTLP_ENDPOINT=http://localhost:4317
+CODEX_OBSERVABILITY_OTLP_PROTOCOL=grpc
+CODEX_OBSERVABILITY_OTLP_HEADERS=signoz-access-token=abc123,x-tenant=production
+CODEX_OBSERVABILITY_OTLP_TIMEOUT_MS=5000
+CODEX_OBSERVABILITY_TRACES_ENABLED=true
+CODEX_OBSERVABILITY_TRACES_SAMPLE_RATIO=0.1
+CODEX_OBSERVABILITY_METRICS_ENABLED=true
+CODEX_OBSERVABILITY_METRICS_EXPORT_INTERVAL_MS=30000
+CODEX_OBSERVABILITY_BROWSER_ENABLED=false
+CODEX_OBSERVABILITY_BROWSER_PROXY_PATH=/api/v1/observability/otlp
+CODEX_OBSERVABILITY_BROWSER_SAMPLE_RATIO=0.1
 ```
 
 ## Runtime vs Startup Settings

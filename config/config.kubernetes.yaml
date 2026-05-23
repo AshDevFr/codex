@@ -155,3 +155,36 @@ files:
 #     - /api/v1/books/*/thumbnail   # Exempt book thumbnails
 #   cleanup_interval_secs: 60
 #   bucket_ttl_secs: 300
+
+# OpenTelemetry observability (disabled by default).
+#
+# In Kubernetes you'll typically point this at the cluster's OTel collector
+# DaemonSet/Deployment (e.g. opentelemetry-collector.observability.svc:4317)
+# or at the OTLP receiver of an agent like the DataDog Agent. See
+# docs/docs/observability.md for the schema, backend matrix, and sampling
+# guidance.
+#
+# Most fields can also be set via env (CODEX_OBSERVABILITY_*) so secrets
+# (auth tokens) can come from Kubernetes Secrets:
+#   CODEX_OBSERVABILITY_ENABLED=true
+#   CODEX_OBSERVABILITY_OTLP_ENDPOINT=http://otel-collector.observability:4317
+#   CODEX_OBSERVABILITY_OTLP_HEADERS=signoz-access-token=$(cat /secrets/signoz-token)
+# observability:
+#   enabled: true
+#   service_name: codex
+#   otlp:
+#     endpoint: http://otel-collector.observability:4317
+#     protocol: grpc
+#     # headers:                        # auth/tenant headers
+#     #   x-honeycomb-team: ...
+#     timeout_ms: 5000
+#   traces:
+#     enabled: true
+#     sample_ratio: 0.25                # tune for cluster traffic volume
+#   metrics:
+#     enabled: true
+#     export_interval_ms: 30000
+#   browser:
+#     enabled: false
+#     proxy_path: /api/v1/observability/otlp
+#     sample_ratio: 0.1

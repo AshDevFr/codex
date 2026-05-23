@@ -158,4 +158,75 @@ mod tests {
             Some("client")
         );
     }
+
+    /// Microbench for instrumentation overhead. Not part of CI: run manually
+    /// with `cargo test --release -p codex -- --ignored bench_instrumentation_overhead --nocapture`
+    /// to get a feel for the per-call cost of `#[tracing::instrument]` under
+    /// the two configurations that matter:
+    ///
+    /// 1. No subscriber attached (production path when observability is off):
+    ///    the macro short-circuits to a no-op.
+    /// 2. A capturing subscriber attached (closest in-process analogue to the
+    ///    enabled path): the macro builds the span, records fields, and pushes
+    ///    a frame onto the registry.
+    ///
+    /// The numbers are recorded in `tmp/implementation/planned/otlp-traces.md`
+    /// under Phase 5's progress log.
+    #[tokio::test]
+    #[ignore = "manual benchmark; run with --ignored"]
+    async fn bench_instrumentation_overhead() {
+        use std::time::Instant;
+
+        const ITERS: u32 = 200_000;
+
+        #[tracing::instrument(
+            name = "db.bench.noop",
+            skip_all,
+            fields(
+                db.system = "sqlite",
+                db.operation = "select",
+                otel.kind = "client",
+                id = %0u32,
+            )
+        )]
+        fn instrumented_call(_i: u32) -> u32 {
+            std::hint::black_box(_i.wrapping_mul(31))
+        }
+
+        // Warmup
+        for i in 0..1_000 {
+            std::hint::black_box(instrumented_call(i));
+        }
+
+        // No subscriber: the instrument! macro is meant to short-circuit.
+        let start = Instant::now();
+        for i in 0..ITERS {
+            std::hint::black_box(instrumented_call(i));
+        }
+        let disabled = start.elapsed();
+
+        // With a subscriber: full span construction + field recording.
+        let (layer, _captured) = CapturingLayer::new();
+        let subscriber = tracing_subscriber::registry().with(layer);
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let start = Instant::now();
+        for i in 0..ITERS {
+            std::hint::black_box(instrumented_call(i));
+        }
+        let enabled = start.elapsed();
+
+        let per_call_disabled_ns = disabled.as_nanos() / u128::from(ITERS);
+        let per_call_enabled_ns = enabled.as_nanos() / u128::from(ITERS);
+
+        println!("---");
+        println!("Instrumentation overhead microbench ({ITERS} iters)");
+        println!("  disabled (no subscriber): {disabled:?}  ({per_call_disabled_ns} ns/call)");
+        println!("  enabled  (capturing layer): {enabled:?}  ({per_call_enabled_ns} ns/call)");
+        println!(
+            "  per-call overhead added:  {} ns",
+            per_call_enabled_ns.saturating_sub(per_call_disabled_ns)
+        );
+        println!("---");
+    }
 }
