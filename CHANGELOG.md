@@ -2,6 +2,27 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.29.0] - 2026-05-23
+
+### 🚀 Features
+
+- *(observability)* Add opt-in OTLP traces and metrics scaffolding
+- *(observability)* Instrument plugin RPCs, repositories, scanner, and task worker with OTel spans
+- *(observability)* Emit OTel counters, histograms, and gauges alongside in-app metrics
+- *(observability)* Add browser RUM SDK and same-origin OTLP forwarding proxy
+
+### 🐛 Bug Fixes
+
+- *(observability)* Make init_tracing idempotent so repeat calls no-op
+
+### 📚 Documentation
+
+- *(observability)* Add operator quickstart with dev-profile Jaeger sidecar
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dev)* Extend codex-dev healthcheck grace, add Jaeger log target, pin Jaeger tag
+
 ## [1.28.3] - 2026-05-23
 
 ### 🐛 Bug Fixes
