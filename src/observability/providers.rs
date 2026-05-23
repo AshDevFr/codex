@@ -123,6 +123,12 @@ pub fn init(config: &ObservabilityConfig) -> Result<ObservabilityHandle> {
 
     if let Some(mp) = meter_provider.as_ref() {
         global::set_meter_provider(mp.clone());
+
+        // Register the observable instruments (inventory gauges, in-flight
+        // task gauge, process CPU/memory). Only meaningful once a real meter
+        // provider is in place; the SDK ignores callbacks registered against
+        // the no-op default.
+        crate::observability::metrics::install_runtime_observers();
     }
 
     tracing::info!(

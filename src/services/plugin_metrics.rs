@@ -195,6 +195,15 @@ impl PluginMetricsService {
         method: &str,
         duration_ms: u64,
     ) {
+        // OTel dual-write: emit the counter + histogram before taking the
+        // write lock so the OTel cost doesn't widen the critical section.
+        crate::observability::metrics::record_plugin_request(
+            &plugin_id.to_string(),
+            method,
+            "success",
+            duration_ms,
+        );
+
         let mut plugins = self.plugins.write().await;
         let entry = plugins
             .entry(plugin_id)
@@ -244,6 +253,13 @@ impl PluginMetricsService {
         duration_ms: u64,
         error_code: Option<&str>,
     ) {
+        crate::observability::metrics::record_plugin_request(
+            &plugin_id.to_string(),
+            method,
+            "failure",
+            duration_ms,
+        );
+
         let mut plugins = self.plugins.write().await;
         let entry = plugins
             .entry(plugin_id)
@@ -298,6 +314,8 @@ impl PluginMetricsService {
 
     /// Record a rate limit rejection
     pub async fn record_rate_limit(&self, plugin_id: Uuid, plugin_name: &str) {
+        crate::observability::metrics::record_plugin_rate_limit_rejection(&plugin_id.to_string());
+
         let mut plugins = self.plugins.write().await;
         let entry = plugins
             .entry(plugin_id)

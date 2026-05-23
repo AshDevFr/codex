@@ -24,6 +24,7 @@ observability = [
     "dep:tracing-opentelemetry",
     "dep:axum-tracing-opentelemetry",
     "dep:tonic",
+    "dep:sysinfo",
 ]
 
 [workspace]
@@ -139,6 +140,11 @@ axum-tracing-opentelemetry = { version = "0.33", optional = true }
 # Re-used via opentelemetry-otlp's grpc-tonic feature; declared here so
 # metadata helpers can use MetadataKey/MetadataValue types directly.
 tonic = { version = "0.14", default-features = false, optional = true }
+# Process-level metrics (CPU, memory). `opentelemetry-system-metrics` would
+# do this for us but is pinned to opentelemetry 0.31, one minor behind our
+# 0.32. Rolling the few callbacks we need against sysinfo directly is ~30 lines
+# and keeps the toolchain consistent.
+sysinfo = { version = "0.39", default-features = false, features = ["system"], optional = true }
 async-stream = "0.3"
 futures = "0.3"
 tokio-stream = "0.1"
@@ -202,6 +208,9 @@ http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 serial_test = "3.2"
 tracing-test = "0.2"
+# Enable the SDK's `testing` feature for the in-memory metric exporter used
+# in observability::metrics tests. Dev-only; no production impact.
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "trace", "metrics", "testing"] }
 
 # =============================================================================
 # Development Profile - Optimized for fast incremental builds

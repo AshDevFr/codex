@@ -137,6 +137,15 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .start_background_jobs(background_task_cancel.clone());
     info!("Task metrics background jobs started");
 
+    // Refresh the inventory metric snapshot every 30s so the OTel observable
+    // gauges have current values. Cheap: five `COUNT(*)` queries. The poller
+    // exits as soon as the cancellation token fires.
+    let inventory_poller_handle = crate::observability::inventory::spawn_poller(
+        Arc::new(db.sea_orm_connection().clone()),
+        std::time::Duration::from_secs(30),
+        background_task_cancel.clone(),
+    );
+
     // Initialize read progress batching service
     let read_progress_service = Arc::new(crate::services::ReadProgressService::new(
         db.sea_orm_connection().clone(),
@@ -560,6 +569,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         if let Err(e) = handle.await {
             tracing::warn!("Task metrics background job {} panicked: {}", i, e);
         }
+    }
+
+    // Await inventory metrics poller completion
+    info!("Waiting for inventory metrics poller to complete...");
+    if let Err(e) = inventory_poller_handle.await {
+        tracing::warn!("Inventory metrics poller panicked: {}", e);
     }
 
     // Await read progress background flush task completion
