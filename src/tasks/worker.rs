@@ -39,6 +39,24 @@ use crate::tasks::handlers::{
     UserPluginSyncHandler,
 };
 
+/// RAII guard that increments the OTel in-flight task gauge on creation and
+/// decrements it on drop. Used by `process_next_task` to track currently-
+/// executing tasks across all exit paths (success, failure, `?` propagation).
+struct InFlightGuard;
+
+impl InFlightGuard {
+    fn new() -> Self {
+        crate::observability::metrics::task_in_flight_inc();
+        Self
+    }
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        crate::observability::metrics::task_in_flight_dec();
+    }
+}
+
 /// Task worker that processes tasks from the queue
 pub struct TaskWorker {
     db: DatabaseConnection,
@@ -611,6 +629,10 @@ impl TaskWorker {
                 return Ok(false);
             }
         };
+
+        // RAII guard for the OTel in-flight task gauge: increments on claim,
+        // decrements on every exit path (success, failure, error propagation).
+        let _in_flight = InFlightGuard::new();
 
         let started_at = Utc::now();
 

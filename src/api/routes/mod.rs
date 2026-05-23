@@ -173,6 +173,13 @@ pub fn create_router(state: Arc<AppState>, config: &Config) -> Router {
     // Logs at debug level for normal requests, error level for 5xx responses
     router = router.layer(create_trace_layer());
 
+    // OpenTelemetry HTTP request-duration histogram (no-op when observability
+    // is disabled). Layered after the trace layer so request timing here is
+    // bounded by the same span the OTel server span covers.
+    router = router.layer(axum::middleware::from_fn(
+        crate::api::middleware::http_metrics_middleware,
+    ));
+
     // OpenTelemetry HTTP span / response context middleware (outermost layer).
     // No-op when the `observability` feature is disabled or
     // `observability.enabled` is false in config.

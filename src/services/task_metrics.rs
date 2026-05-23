@@ -245,6 +245,24 @@ impl TaskMetricsService {
         bytes_processed: i64,
         error: Option<String>,
     ) {
+        // OTel dual-write. Rate-limited / rescheduled tasks come through here
+        // with `success = false` + the literal `"rate_limited"` error string
+        // (set by the worker on rate-limit recovery); surface that as a
+        // distinct outcome so dashboards can filter it out of error rates.
+        let outcome = if success {
+            "success"
+        } else if error.as_deref() == Some("rate_limited") {
+            "rate_limited"
+        } else {
+            "failure"
+        };
+        crate::observability::metrics::record_task_completion(
+            &task_type,
+            outcome,
+            duration_ms,
+            queue_wait_ms,
+        );
+
         let completion = TaskCompletion {
             task_type,
             library_id,
