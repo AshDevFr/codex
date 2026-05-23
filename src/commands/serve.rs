@@ -464,6 +464,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         auth_config: Arc::new(config.auth.clone()),
         database_config: Arc::new(config.database.clone()),
         pdf_config: Arc::new(config.pdf.clone()),
+        observability_config: Arc::new(config.observability.clone()),
         email_service,
         event_broadcaster: event_broadcaster.clone(),
         settings_service,

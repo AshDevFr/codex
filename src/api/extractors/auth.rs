@@ -180,6 +180,10 @@ pub struct AppState {
     pub database_config: Arc<crate::config::DatabaseConfig>,
     /// PDF configuration - used for rendering settings and cache config
     pub pdf_config: Arc<crate::config::PdfConfig>,
+    /// Observability configuration - used by the browser RUM SDK bootstrap
+    /// endpoint and the OTLP forwarding proxy. Always present; handlers gate
+    /// behavior on `browser.enabled` / `otlp.endpoint`.
+    pub observability_config: Arc<crate::config::ObservabilityConfig>,
     pub email_service: Arc<crate::services::email::EmailService>,
     pub event_broadcaster: Arc<crate::events::EventBroadcaster>,
     /// Settings service - used for runtime configuration

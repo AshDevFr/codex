@@ -8,6 +8,7 @@ mod auth;
 mod books;
 mod libraries;
 mod misc;
+mod observability;
 mod oidc;
 mod plugins;
 mod recommendations;
@@ -43,6 +44,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .merge(user_plugins::routes(state.clone()))
         .merge(recommendations::routes(state.clone()))
         .merge(releases::routes(state.clone()))
+        .merge(observability::routes(state.clone()))
         // Apply state to all routes
         .with_state(state)
 }

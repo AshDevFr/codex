@@ -7,6 +7,7 @@ import App from "./App.tsx";
 import { InstallPrompt, PwaUpdatePrompt } from "./components/pwa";
 import { ThemeSync } from "./components/ThemeSync.tsx";
 import { MotionProvider } from "./lib/motion/MotionProvider";
+import { initObservability } from "./lib/observability";
 import { installOutboxDrainListeners } from "./lib/offline/outbox";
 import { cssVariablesResolver, theme } from "./theme";
 
@@ -56,6 +57,12 @@ async function enableMocking() {
 // or the tab regains focus. Safe to install before render: the listeners
 // no-op if there is nothing queued, and double-install is guarded.
 installOutboxDrainListeners();
+
+// Kick off the OTel web SDK bootstrap. The call returns immediately;
+// the network round-trip + SDK code-split happen in the background and
+// never block render. If the server says RUM is disabled we never load
+// the SDK bundle in the first place.
+void initObservability();
 
 // Start the application after mocking is ready
 enableMocking().then(() => {

@@ -64,7 +64,9 @@ async fn create_rate_limited_app_state(
     db: sea_orm::DatabaseConnection,
     config: &RateLimitConfig,
 ) -> Arc<AppState> {
-    use codex::config::{AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, PdfConfig};
+    use codex::config::{
+        AuthConfig, DatabaseConfig, EmailConfig, FilesConfig, ObservabilityConfig, PdfConfig,
+    };
     use codex::events::EventBroadcaster;
     use codex::services::email::EmailService;
     use codex::services::{
@@ -114,6 +116,7 @@ async fn create_rate_limited_app_state(
         auth_config,
         database_config,
         pdf_config,
+        observability_config: Arc::new(ObservabilityConfig::default()),
         email_service,
         event_broadcaster,
         settings_service,

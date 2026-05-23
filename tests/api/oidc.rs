@@ -11,8 +11,8 @@ use codex::api::extractors::AppState;
 use codex::api::extractors::auth::UserAuthCache;
 use codex::api::routes::create_router;
 use codex::config::{
-    AuthConfig, Config, DatabaseConfig, EmailConfig, FilesConfig, OidcConfig, OidcDefaultRole,
-    OidcProviderConfig, PdfConfig,
+    AuthConfig, Config, DatabaseConfig, EmailConfig, FilesConfig, ObservabilityConfig, OidcConfig,
+    OidcDefaultRole, OidcProviderConfig, PdfConfig,
 };
 use codex::events::EventBroadcaster;
 use codex::services::email::EmailService;
@@ -84,6 +84,7 @@ async fn create_test_state_with_oidc(
         auth_config,
         database_config,
         pdf_config,
+        observability_config: Arc::new(ObservabilityConfig::default()),
         email_service,
         event_broadcaster,
         settings_service,
