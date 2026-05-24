@@ -1,13 +1,12 @@
 //! Codex utility helpers shared across the workspace.
 //!
-//! Pure helpers (hashing, password, cron parsing, jwt, error type, custom
-//! serde adapters, natural sort, unicode normalization). Depends only on
-//! `codex-models` for the `UserRole` type used by `jwt`.
+//! Pure helpers (hashing, password, cron parsing, jwt, custom serde adapters,
+//! natural sort, unicode normalization). Depends only on `codex-models` for
+//! the `UserRole` type used by `jwt`.
 
 pub mod credential_encryption;
 pub mod cron;
 pub mod deadline;
-pub mod error;
 pub mod hasher;
 pub mod json;
 pub mod jwt;
@@ -18,7 +17,6 @@ pub mod serde;
 
 #[allow(unused_imports)]
 pub use deadline::{DeadlineResult, with_deadline, with_deadline_or_err};
-pub use error::{CodexError, Result};
 pub use hasher::hash_file;
 pub use json::{
     json_merge_patch, parse_custom_metadata, serialize_custom_metadata,

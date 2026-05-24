@@ -4,8 +4,8 @@
 //! Used for both embedded EPUB OPF content and Calibre sidecar `metadata.opf` files.
 
 use crate::ComicInfo;
+use crate::error::{ParserError, Result};
 use crate::isbn_utils::extract_isbns;
-use codex_utils::{CodexError, Result};
 use serde::Serialize;
 use std::path::Path;
 
@@ -60,7 +60,7 @@ pub fn parse_opf_metadata(xml: &str) -> Result<OpfMetadata> {
 /// Read and parse an OPF file from disk.
 pub fn parse_opf_file(path: &Path) -> Result<OpfMetadata> {
     let content = std::fs::read_to_string(path).map_err(|e| {
-        CodexError::ParseError(format!("Failed to read OPF file {}: {}", path.display(), e))
+        ParserError::ParseError(format!("Failed to read OPF file {}: {}", path.display(), e))
     })?;
     parse_opf_metadata(&content)
 }

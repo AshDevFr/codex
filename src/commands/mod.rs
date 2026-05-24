@@ -1,4 +1,3 @@
-pub mod common;
 pub mod migrate;
 pub mod openapi;
 pub mod scan;

@@ -5,7 +5,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, Quer
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::commands::common::{init_database, load_config};
+use codex_cli_common::{init_database, load_config};
 use codex_db::entities::prelude::Tasks;
 use codex_db::entities::tasks;
 use codex_db::repositories::TaskRepository;

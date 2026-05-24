@@ -29,7 +29,7 @@ embed-frontend = ["codex-api/embed-frontend"]
 # Enables the OpenTelemetry HTTP/runtime instrumentation in codex-api.
 # Root composes the OTel `tracing-opentelemetry` bridge layer in init_tracing,
 # so the dep is enabled here too.
-observability = ["codex-api/observability", "dep:tracing-opentelemetry"]
+observability = ["codex-api/observability", "codex-cli-common/observability"]
 
 [workspace.package]
 # Single source of truth for crate versions. `release-prepare` rewrites this
@@ -53,6 +53,7 @@ members = [
     "crates/codex-tasks",
     "crates/codex-scheduler",
     "crates/codex-api",
+    "crates/codex-cli-common",
 ]
 
 # Shared dependencies inherited by workspace members. Only deps that are
@@ -76,6 +77,7 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 # Workspace-internal crates. Declaring them here keeps cross-crate path edges
 # in one place so members reference each other via `{ workspace = true }`.
 codex-api = { path = "crates/codex-api", default-features = false }
+codex-cli-common = { path = "crates/codex-cli-common", default-features = false }
 codex-config = { path = "crates/codex-config" }
 codex-db = { path = "crates/codex-db" }
 codex-events = { path = "crates/codex-events" }
@@ -108,6 +110,7 @@ uuid = { workspace = true }
 
 # Workspace-internal
 codex-api = { workspace = true }
+codex-cli-common = { workspace = true }
 codex-config = { workspace = true }
 codex-db = { workspace = true }
 codex-events = { workspace = true }
@@ -140,10 +143,6 @@ rand = "0.10"
 # Async helpers (commands/serve.rs uses tokio_util::sync::CancellationToken)
 tokio-util = { version = "0.7", features = ["io"] }
 
-# Tracing subscribers / appenders (commands/common.rs init_tracing).
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
-
 # Tabular output (commands/tasks.rs admin views)
 tabled = "0.20"
 
@@ -152,11 +151,6 @@ axum = { version = "0.8", features = ["multipart"] }
 
 # Recursive file walking (commands/scan.rs)
 walkdir = "2.5"
-
-# OpenTelemetry bridge layer composition in init_tracing. Optional so a
-# `--no-default-features` build drops the dep entirely; enabled together with
-# the root-level `observability` feature.
-tracing-opentelemetry = { version = "0.33", optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -191,6 +185,7 @@ base64 = "0.22"
 # context flows into request handlers.
 opentelemetry = "0.32"
 tracing-opentelemetry = "0.33"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # =============================================================================
 # Development Profile - Optimized for fast incremental builds

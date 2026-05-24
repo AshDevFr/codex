@@ -1,9 +1,10 @@
+use crate::error::{ParserError, Result};
 use crate::isbn_utils::extract_isbns;
 use crate::pdf::renderer;
 use crate::traits::FormatParser;
 use crate::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use chrono::{DateTime, Utc};
-use codex_utils::{CodexError, Result, hash_file};
+use codex_utils::hash_file;
 use image::GenericImageView;
 use lopdf::{Document, Object, ObjectId};
 use std::path::Path;
@@ -285,7 +286,7 @@ impl FormatParser for PdfParser {
 
         // Load the PDF document with lopdf
         let doc = Document::load(path)
-            .map_err(|e| CodexError::ParseError(format!("Failed to load PDF: {}", e)))?;
+            .map_err(|e| ParserError::ParseError(format!("Failed to load PDF: {}", e)))?;
 
         // Extract ISBNs from PDF metadata
         let isbns = Self::extract_isbns_from_pdf(&doc);
