@@ -39,6 +39,7 @@ FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY assets/ ./assets/
 COPY migration/ ./migration/
+COPY crates/ ./crates/
 COPY src/ ./src/
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -57,6 +58,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 COPY Cargo.toml Cargo.lock ./
 COPY assets/ ./assets/
 COPY migration/ ./migration/
+COPY crates/ ./crates/
 COPY src/ ./src/
 
 # Copy frontend dist from frontend-builder

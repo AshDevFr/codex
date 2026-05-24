@@ -859,7 +859,7 @@ dependencies = [
 
 [[package]]
 name = "codex-api"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -919,7 +919,7 @@ dependencies = [
 
 [[package]]
 name = "codex-config"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "codex-db"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "codex-events"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "chrono",
  "serde",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "codex-models"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "chrono",
  "lazy_static",
@@ -981,7 +981,7 @@ dependencies = [
 
 [[package]]
 name = "codex-parsers"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "codex-scanner"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1033,7 +1033,7 @@ dependencies = [
 
 [[package]]
 name = "codex-scheduler"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1056,7 +1056,7 @@ dependencies = [
 
 [[package]]
 name = "codex-search"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "codex-services"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1126,7 +1126,7 @@ dependencies = [
 
 [[package]]
 name = "codex-tasks"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "codex-utils"
-version = "0.0.0"
+version = "1.29.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3357,7 +3357,7 @@ dependencies = [
 
 [[package]]
 name = "migration"
-version = "0.1.0"
+version = "1.29.0"
 dependencies = [
  "chrono",
  "lazy_static",

@@ -48,10 +48,24 @@ RUN cargo install cargo-watch cargo-nextest --locked
 
 WORKDIR /app
 
-# Copy Cargo workspace files for dependency caching
+# Copy Cargo workspace manifests for dependency caching. Every workspace
+# member's Cargo.toml must be present so the root manifest resolves; source
+# is stubbed below and replaced wholesale by `COPY . .` further down.
 COPY Cargo.toml Cargo.lock ./
 COPY .cargo/ ./.cargo/
 COPY migration/Cargo.toml ./migration/
+COPY crates/codex-api/Cargo.toml ./crates/codex-api/
+COPY crates/codex-config/Cargo.toml ./crates/codex-config/
+COPY crates/codex-db/Cargo.toml ./crates/codex-db/
+COPY crates/codex-events/Cargo.toml ./crates/codex-events/
+COPY crates/codex-models/Cargo.toml ./crates/codex-models/
+COPY crates/codex-parsers/Cargo.toml ./crates/codex-parsers/
+COPY crates/codex-scanner/Cargo.toml ./crates/codex-scanner/
+COPY crates/codex-scheduler/Cargo.toml ./crates/codex-scheduler/
+COPY crates/codex-search/Cargo.toml ./crates/codex-search/
+COPY crates/codex-services/Cargo.toml ./crates/codex-services/
+COPY crates/codex-tasks/Cargo.toml ./crates/codex-tasks/
+COPY crates/codex-utils/Cargo.toml ./crates/codex-utils/
 
 # Create dummy source files to build dependencies
 # Disable static linking to enable dlopen() for PDFium dynamic loading
@@ -61,8 +75,13 @@ ENV RUSTFLAGS="-C target-feature=-crt-static"
 RUN mkdir -p src migration/src && \
     echo "fn main() {}" > src/main.rs && \
     echo "pub use sea_orm_migration::prelude::*; pub struct Migrator; impl MigratorTrait for Migrator { fn migrations() -> Vec<Box<dyn MigrationTrait>> { vec![] } }" > migration/src/lib.rs && \
+    for crate in codex-api codex-config codex-db codex-events codex-models codex-parsers codex-scanner codex-scheduler codex-search codex-services codex-tasks codex-utils; do \
+        mkdir -p "crates/$crate/src" && : > "crates/$crate/src/lib.rs"; \
+    done && \
     cargo build && \
-    rm -rf src migration/src target/debug/.fingerprint/codex-* target/debug/.fingerprint/migration-*
+    rm -rf src migration/src crates/*/src \
+        target/debug/.fingerprint/codex-* \
+        target/debug/.fingerprint/migration-*
 
 # Copy the rest of the application
 COPY . .
