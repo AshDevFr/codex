@@ -8,8 +8,8 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::scanner::analyze_file;
-use crate::scanner::strategies::{
+use crate::analyze_file;
+use crate::strategies::{
     BookMetadata, BookNamingContext, NumberContext, NumberMetadata, create_book_strategy,
     create_number_strategy,
 };

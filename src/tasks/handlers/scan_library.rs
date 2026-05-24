@@ -4,7 +4,6 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
-use crate::scanner::{ScanMode, ScanningConfig, scan_library};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
 use codex_db::entities::tasks;
@@ -12,6 +11,7 @@ use codex_db::repositories::{
     BookRepository, LibraryRepository, PluginsRepository, SeriesRepository, TaskRepository,
 };
 use codex_events::EventBroadcaster;
+use codex_scanner::{ScanMode, ScanningConfig, scan_library};
 use codex_services::plugin::protocol::PluginScope;
 use codex_services::settings::SettingsService;
 

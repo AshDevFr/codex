@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::scanner::ScanProgress;
+use codex_scanner::ScanProgress;
 
 /// Scan status response
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -155,8 +155,8 @@ pub struct AnalysisResult {
     pub errors: Vec<String>,
 }
 
-impl From<crate::scanner::AnalysisResult> for AnalysisResult {
-    fn from(result: crate::scanner::AnalysisResult) -> Self {
+impl From<codex_scanner::AnalysisResult> for AnalysisResult {
+    fn from(result: codex_scanner::AnalysisResult) -> Self {
         Self {
             books_analyzed: result.books_analyzed,
             errors: result.errors,

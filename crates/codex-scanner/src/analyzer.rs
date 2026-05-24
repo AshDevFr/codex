@@ -1,4 +1,4 @@
-use crate::scanner::detect_format;
+use crate::detect_format;
 use codex_parsers::BookMetadata;
 #[cfg(feature = "rar")]
 use codex_parsers::cbr::CbrParser;
