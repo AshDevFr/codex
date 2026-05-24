@@ -2,6 +2,34 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.30.0] - 2026-05-24
+
+### 🐛 Bug Fixes
+
+- *(api)* Point rust-embed at workspace-root web/dist
+
+### 🚜 Refactor
+
+- *(layering)* Hoist cross-layer types into models/ to break dep cycles
+- *(workspace)* Bootstrap Cargo workspace, extract codex-config + codex-events
+- *(workspace)* Extract codex-models, codex-utils, codex-parsers crates
+- *(workspace)* Extract codex-db crate
+- *(workspace)* Extract codex-services crate
+- *(workspace)* Extract codex-search crate
+- *(workspace)* Extract codex-scanner crate
+- *(workspace)* Extract codex-tasks crate
+- *(workspace)* Extract codex-scheduler crate
+- *(workspace)* Extract codex-api crate, slim root to binary glue
+- *(workspace)* Extract codex-cli-common, scope ParserError to codex-parsers
+
+### 📚 Documentation
+
+- *(workspace)* Add workspace architecture section and ADR 0001
+
+### ⚙️ Miscellaneous Tasks
+
+- *(workspace)* Unify crate versions and fix Docker builds
+
 ## [1.29.0] - 2026-05-23
 
 ### 🚀 Features
