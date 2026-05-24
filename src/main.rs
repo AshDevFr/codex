@@ -1,7 +1,6 @@
 mod api;
 mod commands;
 mod observability;
-mod scanner;
 mod scheduler;
 mod tasks;
 mod web;

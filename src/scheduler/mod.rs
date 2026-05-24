@@ -7,10 +7,10 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::scanner::{ScanMode, ScanningConfig};
 use crate::tasks::types::TaskType;
 use codex_db::entities::library_jobs;
 use codex_db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
+use codex_scanner::{ScanMode, ScanningConfig};
 use codex_services::library_jobs::{LibraryJobConfig, parse_job_config};
 use codex_services::settings::SettingsService;
 use codex_utils::cron::{normalize_cron_expression, parse_timezone};

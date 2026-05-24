@@ -826,6 +826,7 @@ dependencies = [
  "codex-events",
  "codex-models",
  "codex-parsers",
+ "codex-scanner",
  "codex-search",
  "codex-services",
  "codex-utils",
@@ -978,6 +979,34 @@ dependencies = [
  "tracing",
  "unrar",
  "urlencoding",
+ "zip",
+]
+
+[[package]]
+name = "codex-scanner"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "codex-db",
+ "codex-events",
+ "codex-models",
+ "codex-parsers",
+ "codex-services",
+ "codex-utils",
+ "futures",
+ "globset",
+ "lazy_static",
+ "regex",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
+ "walkdir",
  "zip",
 ]
 

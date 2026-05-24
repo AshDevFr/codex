@@ -59,7 +59,7 @@ impl TaskHandler for RenumberSeriesHandler {
 
             // Call the existing renumber function
             let updated_count =
-                crate::scanner::renumber_series_books(db, series_id, series.library_id).await?;
+                codex_scanner::renumber_series_books(db, series_id, series.library_id).await?;
 
             // Emit SeriesUpdated event so the frontend can refresh
             if updated_count > 0

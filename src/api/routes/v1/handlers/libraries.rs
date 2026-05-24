@@ -12,7 +12,6 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::require_permission;
-use crate::scanner::strategies::create_strategy;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -22,6 +21,7 @@ use chrono::Utc;
 use codex_db::entities::libraries;
 use codex_db::repositories::{CreateLibraryParams, LibraryRepository};
 use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
+use codex_scanner::strategies::create_strategy;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use uuid::Uuid;
