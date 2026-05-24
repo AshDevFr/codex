@@ -307,6 +307,74 @@ impl AccessGroupRepository {
             .all(db)
             .await?)
     }
+
+    // ==================== OIDC Reconciliation ====================
+
+    /// Reconcile a user's OIDC-sourced group memberships with their current
+    /// IdP group claims.
+    ///
+    /// - Computes the set of access groups the user *should* belong to based
+    ///   on `access_group_oidc_mappings` that match any of `oidc_groups`.
+    /// - Adds memberships for groups in `desired - current` (with `source='oidc'`).
+    /// - Removes memberships for groups in `current - desired` (only `source='oidc'`).
+    /// - Manual memberships are never touched.
+    ///
+    /// Returns `(added, removed)` counts.
+    pub async fn reconcile_oidc_group_memberships(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        oidc_groups: &[String],
+    ) -> Result<(usize, usize)> {
+        use std::collections::HashSet;
+
+        // 1. Desired: access groups mapped to any of the user's OIDC group names
+        let desired_group_ids: HashSet<Uuid> = if oidc_groups.is_empty() {
+            HashSet::new()
+        } else {
+            access_group_oidc_mappings::Entity::find()
+                .filter(
+                    access_group_oidc_mappings::Column::OidcGroupName.is_in(oidc_groups.to_vec()),
+                )
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|m| m.access_group_id)
+                .collect()
+        };
+
+        // 2. Current: access groups the user is already in via OIDC
+        let current_oidc_memberships: Vec<user_access_groups::Model> =
+            user_access_groups::Entity::find()
+                .filter(user_access_groups::Column::UserId.eq(user_id))
+                .filter(user_access_groups::Column::Source.eq("oidc"))
+                .all(db)
+                .await?;
+        let current_group_ids: HashSet<Uuid> = current_oidc_memberships
+            .iter()
+            .map(|m| m.access_group_id)
+            .collect();
+
+        // 3. Add: desired - current
+        let to_add: Vec<Uuid> = desired_group_ids
+            .difference(&current_group_ids)
+            .copied()
+            .collect();
+        for group_id in &to_add {
+            Self::add_member(db, *group_id, user_id, MembershipSource::Oidc).await?;
+        }
+
+        // 4. Remove: current - desired (only OIDC-sourced)
+        let to_remove: Vec<Uuid> = current_group_ids
+            .difference(&desired_group_ids)
+            .copied()
+            .collect();
+        for group_id in &to_remove {
+            // Only remove if source is OIDC (which it is, since we filtered above)
+            Self::remove_member(db, *group_id, user_id).await?;
+        }
+
+        Ok((to_add.len(), to_remove.len()))
+    }
 }
 
 #[cfg(test)]
@@ -684,5 +752,232 @@ mod tests {
                 .await
                 .unwrap()
         );
+    }
+
+    // ---------- OIDC reconciliation ----------
+
+    #[tokio::test]
+    async fn reconcile_joins_matching_groups() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+
+        let staff = AccessGroupRepository::create(&db, "Staff", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_oidc_mapping(&db, staff.id, "library-staff")
+            .await
+            .unwrap();
+
+        let (added, removed) = AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["library-staff".to_string()],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(added, 1);
+        assert_eq!(removed, 0);
+
+        let groups = AccessGroupRepository::list_for_user(&db, user.id)
+            .await
+            .unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].id, staff.id);
+    }
+
+    #[tokio::test]
+    async fn reconcile_leaves_removed_groups() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+
+        let staff = AccessGroupRepository::create(&db, "Staff", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_oidc_mapping(&db, staff.id, "library-staff")
+            .await
+            .unwrap();
+
+        // First login: join
+        AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["library-staff".to_string()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            AccessGroupRepository::list_for_user(&db, user.id)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+
+        // Second login: group removed from IdP
+        let (added, removed) =
+            AccessGroupRepository::reconcile_oidc_group_memberships(&db, user.id, &[])
+                .await
+                .unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(removed, 1);
+        assert!(
+            AccessGroupRepository::list_for_user(&db, user.id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn reconcile_no_change_when_groups_match() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+
+        let staff = AccessGroupRepository::create(&db, "Staff", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_oidc_mapping(&db, staff.id, "library-staff")
+            .await
+            .unwrap();
+
+        // First login
+        AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["library-staff".to_string()],
+        )
+        .await
+        .unwrap();
+
+        // Second login with same groups: no-op
+        let (added, removed) = AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["library-staff".to_string()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(removed, 0);
+
+        assert_eq!(
+            AccessGroupRepository::list_for_user(&db, user.id)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn reconcile_no_mappings_exist() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+
+        // No access_group_oidc_mappings exist at all
+        let (added, removed) = AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["some-idp-group".to_string()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(removed, 0);
+    }
+
+    #[tokio::test]
+    async fn reconcile_preserves_manual_memberships() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+
+        let manual_group = AccessGroupRepository::create(&db, "Manual Group", None)
+            .await
+            .unwrap();
+        let oidc_group = AccessGroupRepository::create(&db, "OIDC Group", None)
+            .await
+            .unwrap();
+
+        // Manually assign user to manual_group
+        AccessGroupRepository::add_member(&db, manual_group.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        // Map oidc_group to an IdP group
+        AccessGroupRepository::add_oidc_mapping(&db, oidc_group.id, "idp-team")
+            .await
+            .unwrap();
+
+        // Reconcile with the IdP group
+        AccessGroupRepository::reconcile_oidc_group_memberships(
+            &db,
+            user.id,
+            &["idp-team".to_string()],
+        )
+        .await
+        .unwrap();
+
+        let groups = AccessGroupRepository::list_for_user(&db, user.id)
+            .await
+            .unwrap();
+        assert_eq!(groups.len(), 2);
+
+        // Now reconcile with empty groups (user left IdP group)
+        AccessGroupRepository::reconcile_oidc_group_memberships(&db, user.id, &[])
+            .await
+            .unwrap();
+
+        // Manual membership should be preserved, OIDC membership removed
+        let groups = AccessGroupRepository::list_for_user(&db, user.id)
+            .await
+            .unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].id, manual_group.id);
+    }
+
+    #[tokio::test]
+    async fn reconcile_idempotent_back_to_back() {
+        let db = setup_test_db().await;
+        let user = create_test_user(&db, "alice").await;
+
+        let group = AccessGroupRepository::create(&db, "Staff", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_oidc_mapping(&db, group.id, "staff")
+            .await
+            .unwrap();
+
+        let groups = vec!["staff".to_string()];
+
+        // First call
+        let (a1, r1) =
+            AccessGroupRepository::reconcile_oidc_group_memberships(&db, user.id, &groups)
+                .await
+                .unwrap();
+        assert_eq!(a1, 1);
+        assert_eq!(r1, 0);
+
+        // Record membership timestamp
+        let memberships_after_first = AccessGroupRepository::list_members(&db, group.id)
+            .await
+            .unwrap();
+        assert_eq!(memberships_after_first.len(), 1);
+        let first_created_at = memberships_after_first[0].created_at;
+
+        // Second call: no changes
+        let (a2, r2) =
+            AccessGroupRepository::reconcile_oidc_group_memberships(&db, user.id, &groups)
+                .await
+                .unwrap();
+        assert_eq!(a2, 0);
+        assert_eq!(r2, 0);
+
+        // Timestamp unchanged (no spurious delete+insert)
+        let memberships_after_second = AccessGroupRepository::list_members(&db, group.id)
+            .await
+            .unwrap();
+        assert_eq!(memberships_after_second.len(), 1);
+        assert_eq!(memberships_after_second[0].created_at, first_created_at);
     }
 }
