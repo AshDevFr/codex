@@ -99,8 +99,11 @@ rand = "0.10"
 # Archive utilities for export handlers
 zip = "8.1"
 
-# Static file embedding for frontend (gated by `embed-frontend`)
-rust-embed = "8.5"
+# Static file embedding for frontend (gated by `embed-frontend`).
+# `interpolate-folder-path` lets `#[folder = "$CODEX_WEB_DIST"]` expand the env
+# var emitted by build.rs (the dist tree lives at the workspace root, not under
+# this crate's CARGO_MANIFEST_DIR).
+rust-embed = { version = "8.5", features = ["interpolate-folder-path"] }
 mime_guess = "2.0"
 
 # Logging (for sqlx log filter adjustments inside init paths)

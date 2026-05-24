@@ -16,10 +16,12 @@ use axum::{
 #[cfg(feature = "embed-frontend")]
 use rust_embed::RustEmbed;
 
-// Embed the frontend dist directory when the feature is enabled
+// Embed the frontend dist directory when the feature is enabled.
+// `CODEX_WEB_DIST` is set by build.rs to the absolute path of <workspace>/web/dist,
+// since rust-embed resolves relative folders against this crate's manifest dir.
 #[cfg(feature = "embed-frontend")]
 #[derive(RustEmbed)]
-#[folder = "web/dist"]
+#[folder = "$CODEX_WEB_DIST"]
 struct StaticAssets;
 
 /// Serves static files from the embedded frontend (production mode)
