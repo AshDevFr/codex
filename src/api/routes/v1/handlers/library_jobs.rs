@@ -15,7 +15,6 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::require_permission;
-use crate::tasks::types::TaskType;
 use codex_db::entities::library_jobs;
 use codex_db::repositories::{
     CreateLibraryJobParams, LibraryJobRepository, LibraryRepository, SeriesRepository,
@@ -24,6 +23,7 @@ use codex_services::library_jobs::{
     LibraryJobConfig, MetadataRefreshJobConfig, parse_job_config, validation,
 };
 use codex_services::metadata::{FieldGroup, RefreshPlanner, fields_for_group};
+use codex_tasks::types::TaskType;
 
 use super::super::dto::patch::PatchValue;
 use super::super::dto::{

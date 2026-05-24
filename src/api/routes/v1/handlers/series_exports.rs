@@ -12,10 +12,10 @@ use uuid::Uuid;
 
 use crate::api::error::ApiError;
 use crate::api::extractors::auth::{AppState, AuthContext};
-use crate::tasks::types::TaskType;
 use codex_db::repositories::{SeriesExportRepository, TaskRepository};
 use codex_services::book_export_collector::BookExportField;
 use codex_services::series_export_collector::ExportField;
+use codex_tasks::types::TaskType;
 
 use super::super::dto::series_export::{
     CreateSeriesExportRequest, ExportFieldCatalogResponse, ExportFieldDto, ExportPresetsDto,

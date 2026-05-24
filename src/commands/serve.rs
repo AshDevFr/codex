@@ -395,7 +395,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         }
 
         // Reconcile orphaned series exports from prior crash/restart
-        if let Err(e) = crate::tasks::handlers::cleanup_series_exports::reconcile_on_startup(
+        if let Err(e) = codex_tasks::handlers::cleanup_series_exports::reconcile_on_startup(
             db.sea_orm_connection(),
         )
         .await

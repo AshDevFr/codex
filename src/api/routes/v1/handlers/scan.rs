@@ -14,9 +14,9 @@ use uuid::Uuid;
 use super::super::dto::{ScanStatusDto, TriggerScanQuery};
 use super::task_queue::CreateTaskResponse;
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::tasks::types::TaskType;
 use codex_db::repositories::{BookRepository, LibraryRepository, SeriesRepository, TaskRepository};
 use codex_scanner::ScanMode;
+use codex_tasks::types::TaskType;
 
 /// Trigger a library scan
 ///

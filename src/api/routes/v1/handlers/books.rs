@@ -4299,9 +4299,9 @@ use super::super::dto::{
     BookErrorDto, BookErrorTypeDto, BookWithErrorsDto, BooksWithErrorsResponse, ErrorGroupDto,
     RetryAllErrorsRequest, RetryBookErrorsRequest, RetryErrorsResponse,
 };
-use crate::tasks::types::TaskType;
 use codex_db::entities::book_error::{BookErrorType, parse_analysis_errors};
 use codex_db::repositories::TaskRepository;
+use codex_tasks::types::TaskType;
 
 /// Query parameters for listing books with analysis errors
 #[derive(Debug, Deserialize, utoipa::IntoParams)]

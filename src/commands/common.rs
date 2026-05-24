@@ -1,9 +1,9 @@
 use crate::observability::ObservabilityHandle;
-use crate::tasks::TaskWorker;
 use codex_config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use codex_db::Database;
 use codex_events::EventBroadcaster;
 use codex_services::{SettingsService, TaskMetricsService};
+use codex_tasks::TaskWorker;
 use sea_orm::DatabaseConnection;
 use std::fs;
 use std::path::{Path, PathBuf};
