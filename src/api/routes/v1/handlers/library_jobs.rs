@@ -323,7 +323,7 @@ pub async fn run_job_now(
         return Err(ApiError::NotFound("Job not found".to_string()));
     }
 
-    if crate::scheduler::has_active_refresh_for_job(&state.db, job_id)
+    if codex_scheduler::has_active_refresh_for_job(&state.db, job_id)
         .await
         .map_err(|e| anyhow_to_api_error(e, "Failed to check in-flight task"))?
     {

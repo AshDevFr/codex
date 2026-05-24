@@ -197,7 +197,7 @@ pub struct AppState {
     pub task_metrics_service: Option<Arc<codex_services::TaskMetricsService>>,
     /// Scheduler for managing scheduled tasks (library scans, deduplication, etc.)
     /// None when workers are disabled (CODEX_DISABLE_WORKERS=true) or in test environments
-    pub scheduler: Option<Arc<tokio::sync::Mutex<crate::scheduler::Scheduler>>>,
+    pub scheduler: Option<Arc<tokio::sync::Mutex<codex_scheduler::Scheduler>>>,
     /// Read progress batching service for efficient page view tracking
     /// Batches progress updates in memory and flushes periodically to reduce DB load
     pub read_progress_service: Arc<codex_services::ReadProgressService>,
