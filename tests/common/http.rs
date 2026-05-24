@@ -84,6 +84,8 @@ pub async fn create_test_auth_state(db: DatabaseConnection) -> Arc<AuthState> {
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
         fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
+        app_name: env!("CARGO_PKG_NAME"),
+        app_version: env!("CARGO_PKG_VERSION"),
     })
 }
 
@@ -149,6 +151,8 @@ pub async fn create_test_app_state(db: DatabaseConnection) -> Arc<AppState> {
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
         fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
+        app_name: env!("CARGO_PKG_NAME"),
+        app_version: env!("CARGO_PKG_VERSION"),
     })
 }
 
@@ -239,6 +243,8 @@ pub async fn create_test_router(state: Arc<AuthState>) -> Router {
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
         fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
+        app_name: env!("CARGO_PKG_NAME"),
+        app_version: env!("CARGO_PKG_VERSION"),
     });
     let config = create_test_config();
     create_router(app_state, &config)

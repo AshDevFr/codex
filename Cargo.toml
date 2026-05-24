@@ -14,19 +14,22 @@ path = "src/main.rs"
 
 [features]
 default = ["rar", "observability"]
-rar = ["codex-parsers/rar", "codex-scanner/rar", "codex-services/rar", "codex-tasks/rar"]
-embed-frontend = []
-observability = [
-    "dep:opentelemetry",
-    "dep:opentelemetry_sdk",
-    "dep:opentelemetry-otlp",
-    "dep:opentelemetry-semantic-conventions",
-    "dep:tracing-opentelemetry",
-    "dep:axum-tracing-opentelemetry",
-    "dep:tonic",
-    "dep:sysinfo",
-    "codex-services/observability",
+# Forwards CBR support down through the dependency stack. Every workspace
+# member that touches archive parsing owns its own `rar` feature; this is the
+# top-level switch.
+rar = [
+    "codex-api/rar",
+    "codex-parsers/rar",
+    "codex-scanner/rar",
+    "codex-services/rar",
+    "codex-tasks/rar",
 ]
+# Embeds the React frontend assets into the binary at build time.
+embed-frontend = ["codex-api/embed-frontend"]
+# Enables the OpenTelemetry HTTP/runtime instrumentation in codex-api.
+# Root composes the OTel `tracing-opentelemetry` bridge layer in init_tracing,
+# so the dep is enabled here too.
+observability = ["codex-api/observability", "dep:tracing-opentelemetry"]
 
 [workspace]
 members = [
@@ -43,6 +46,7 @@ members = [
     "crates/codex-scanner",
     "crates/codex-tasks",
     "crates/codex-scheduler",
+    "crates/codex-api",
 ]
 
 # Shared dependencies inherited by workspace members. Only deps that are
@@ -65,6 +69,7 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 
 # Workspace-internal crates. Declaring them here keeps cross-crate path edges
 # in one place so members reference each other via `{ workspace = true }`.
+codex-api = { path = "crates/codex-api", default-features = false }
 codex-config = { path = "crates/codex-config" }
 codex-db = { path = "crates/codex-db" }
 codex-events = { path = "crates/codex-events" }
@@ -85,73 +90,18 @@ serial_test = "3.2"
 # CLI
 clap = { version = "4", features = ["derive"] }
 
-# Serialization
+# Workspace-inherited
+anyhow = { workspace = true }
+chrono = { workspace = true }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
-serde_json = "1.0"
-csv = "1.3"
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
 
-# Configuration (config crate removed - not used, config loaded via serde_yaml)
-
-# Archive formats
-zip = "8.1"
-
-# PDF runtime handle cache (pdfium_render types are re-exposed by services)
-pdfium-render = { version = "0.8", features = ["sync"] }
-
-# Image processing
-image = { version = "0.25", features = ["avif"] }
-resvg = "0.47"
-jxl-oxide = "0.12"
-
-# Hashing
-sha2 = "0.10"
-md-5 = "0.10"
-
-# Error handling
-anyhow = { workspace = true }
-thiserror = "2.0"
-
-# XML parsing (for ComicInfo.xml)
-quick-xml = { version = "0.39", features = ["serialize"] }
-
-# Unicode normalization (for accent-insensitive search)
-unicode-normalization = "0.1"
-
-# Regular expressions (for ISBN extraction)
-regex = "1.10"
-
-# Templating (for plugin search query templates)
-handlebars = "6"
-
-# URL encoding
-urlencoding = "2.1"
-
-# File system utilities
-walkdir = "2.5"
-dirs = "6.0"
-globset = "0.4"
-
-# Date/time
-chrono = { workspace = true }
-chrono-tz = "0.10"
-httpdate = "1.0"
-
-# Table formatting
-tabled = "0.20"
-
-# Database
-sea-orm = { version = "1.1", features = [
-    "sqlx-postgres",
-    "sqlx-sqlite",
-    "runtime-tokio-rustls",
-    "macros",
-    "with-chrono",
-    "with-uuid",
-] }
-# `sea-orm-migration` lives in codex-db; root reaches the `migration` crate
-# directly for the oidc handler's one-off Migrator::up call.
-migration = { path = "migration" }
+# Workspace-internal
+codex-api = { workspace = true }
 codex-config = { workspace = true }
 codex-db = { workspace = true }
 codex-events = { workspace = true }
@@ -163,113 +113,78 @@ codex-scheduler = { workspace = true }
 codex-services = { workspace = true }
 codex-tasks = { workspace = true }
 codex-utils = { workspace = true }
-tokio = { workspace = true }
-uuid = { workspace = true }
 
-# Web framework
-axum = { version = "0.8", features = ["multipart"] }
-tower = "0.5"
-tower-http = { version = "0.6", features = ["trace", "cors", "catch-panic"] }
-tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
-log = "0.4"                                                         # For sqlx logging level configuration
+# Serialization (commands use json output formats)
+serde_json = "1.0"
 
-# OpenTelemetry (optional, gated by `observability` feature)
-opentelemetry = { version = "0.32", optional = true }
-opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "trace", "metrics"], optional = true }
-opentelemetry-otlp = { version = "0.32", default-features = false, features = [
-    "grpc-tonic",
-    "http-proto",
-    "http-json",
-    # Blocking HTTP client is intentional: the OTel SDK 0.32 batch processor
-    # runs export on a dedicated std::thread that has no async runtime
-    # attached. An async reqwest client would panic on first export. The
-    # blocking client only blocks the batch thread, not the server runtime.
-    "reqwest-blocking-client",
-    "trace",
-    "metrics",
-], optional = true }
-opentelemetry-semantic-conventions = { version = "0.32", optional = true }
-tracing-opentelemetry = { version = "0.33", optional = true }
-axum-tracing-opentelemetry = { version = "0.33", optional = true }
-# Re-used via opentelemetry-otlp's grpc-tonic feature; declared here so
-# metadata helpers can use MetadataKey/MetadataValue types directly.
-tonic = { version = "0.14", default-features = false, optional = true }
-# Process-level metrics (CPU, memory). `opentelemetry-system-metrics` would
-# do this for us but is pinned to opentelemetry 0.31, one minor behind our
-# 0.32. Rolling the few callbacks we need against sysinfo directly is ~30 lines
-# and keeps the toolchain consistent.
-sysinfo = { version = "0.39", default-features = false, features = ["system"], optional = true }
-async-stream = "0.3"
-futures = "0.3"
-tokio-stream = "0.1"
+# Database (commands inspect DatabaseBackend at runtime to log the active
+# driver in init_database).
+sea-orm = { version = "1.1", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+    "with-uuid",
+] }
 
-# Authentication & Security
-jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
-argon2 = "0.5"
+# Random for seed defaults
 rand = "0.10"
-lazy_static = "1.4"
-base64 = "0.22"
-openidconnect = "4"
 
-# Encryption
-aes-gcm = "0.10"
-
-# Email
-lettre = { version = "0.11", default-features = false, features = [
-    "tokio1",
-    "tokio1-rustls-tls",
-    "smtp-transport",
-    "builder",
-] }
-
-# HTTP Client (for plugin cover downloads and OAuth token exchange)
-reqwest = { version = "0.13", default-features = false, features = [
-    "rustls",
-    "json",
-    "form",
-] }
-
-# API Documentation
-utoipa = { workspace = true }
-utoipa-scalar = { version = "0.3", features = ["axum"] }
-
-# Job Scheduling
-cron = "0.13"
-tokio-cron-scheduler = "0.15"
+# Async helpers (commands/serve.rs uses tokio_util::sync::CancellationToken)
 tokio-util = { version = "0.7", features = ["io"] }
 
-# Concurrent data structures
-dashmap = "6.1"
-lru = "0.18"
-parking_lot = "0.12"
+# Tracing subscribers / appenders (commands/common.rs init_tracing).
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
-# Fuzzy matching (in-memory search index)
-nucleo-matcher = "0.3"
+# Tabular output (commands/tasks.rs admin views)
+tabled = "0.20"
 
-# Static file embedding for frontend
-rust-embed = "8.5"
-mime_guess = "2.0"
+# Axum (`axum::serve` in commands/serve.rs to bind the router on the listener).
+axum = { version = "0.8", features = ["multipart"] }
+
+# Recursive file walking (commands/scan.rs)
+walkdir = "2.5"
+
+# OpenTelemetry bridge layer composition in init_tracing. Optional so a
+# `--no-default-features` build drops the dep entirely; enabled together with
+# the root-level `observability` feature.
+tracing-opentelemetry = { version = "0.33", optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
+axum = { version = "0.8", features = ["multipart"] }
+image = { version = "0.25", features = ["avif"] }
+zip = "8.1"
+migration = { path = "migration" }
 serial_test = { workspace = true }
 tracing-test = "0.2"
 # Enables codex_db::test_helpers (gated behind the `test-utils` feature) so
-# the root crate's `#[cfg(test)]` blocks and the `tests/` integration suite
-# can mint SQLite test databases.
+# the root crate's integration suite under `tests/` can mint SQLite test
+# databases.
 codex-db = { workspace = true, features = ["test-utils"] }
+# Tests assert against the api crate's behaviour via `codex::api::*`. Pull
+# codex-api in directly so `[features]` propagation works for tests that need
+# the `observability` feature surface (see tests/api/observability.rs).
+codex-api = { workspace = true, features = ["observability"] }
 # Used by tests/common/files.rs to mint PDF fixtures. The runtime PDF
 # rendering path lives in codex-parsers; tests reach for lopdf directly to
 # craft byte-level inputs.
 lopdf = "0.39"
 # Enable the SDK's `testing` feature for the in-memory metric exporter used
-# in observability::metrics tests. Dev-only; no production impact.
+# in observability tests reachable via `codex::observability`.
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "trace", "metrics", "testing"] }
+# Used directly by tests/api/auth.rs (Basic-auth header construction) and a
+# couple of OPDS tests.
+base64 = "0.22"
+# Used by tests/api/observability.rs to assert that the registered OTel trace
+# context flows into request handlers.
+opentelemetry = "0.32"
+tracing-opentelemetry = "0.33"
 
 # =============================================================================
 # Development Profile - Optimized for fast incremental builds

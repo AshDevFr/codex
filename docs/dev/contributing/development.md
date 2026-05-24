@@ -305,20 +305,32 @@ cargo clippy
 
 ## Project Structure
 
+Codex is a Cargo workspace. The top-level binary crate (`src/`) is intentionally thin; the bulk of the code lives in sibling crates under `crates/`. Editing one subsystem only recompiles that crate and its downstream consumers, which keeps warm rebuilds fast.
+
 ```
 codex/
-├── src/
-│   ├── api/          # HTTP API handlers
-│   ├── commands/      # CLI commands
-│   ├── config/        # Configuration management
-│   ├── db/            # Database layer
-│   ├── parsers/       # File format parsers
-│   ├── scanner/       # File scanning logic
-│   └── utils/         # Utility functions
-├── migration/         # Database migrations
-├── tests/             # Integration tests
-└── docs/              # Documentation
+├── src/                       # codex (binary) crate
+│   ├── main.rs                # CLI entry point
+│   └── commands/              # Per-subcommand orchestration (scan, serve, ...)
+├── crates/
+│   ├── codex-api/             # HTTP API: axum routes, OPDS, Komga, observability
+│   ├── codex-config/          # YAML config + env overrides
+│   ├── codex-db/              # SeaORM entities + repositories
+│   ├── codex-events/          # In-process event broadcaster
+│   ├── codex-models/          # Cross-layer DTOs and shared types
+│   ├── codex-parsers/         # CBZ/CBR/EPUB/PDF parsing
+│   ├── codex-scanner/         # Library scan workflow
+│   ├── codex-scheduler/       # Cron/interval scheduler
+│   ├── codex-search/          # In-memory fuzzy search index
+│   ├── codex-services/        # Business logic (auth, plugins, metadata, ...)
+│   ├── codex-tasks/           # Background worker + task handlers
+│   └── codex-utils/           # Crypto, JWT, hashing, error types
+├── migration/                 # SeaORM migrations (own crate, used by codex-db)
+├── tests/                     # Integration tests against codex-api
+└── docs/                      # Documentation
 ```
+
+Per-crate builds work in isolation, e.g. `cargo build -p codex-parsers`.
 
 ## Database Migrations
 

@@ -1,11 +1,8 @@
-pub mod api;
-pub mod observability;
-pub mod web;
-
-// Re-exports of workspace-leaf crates so existing `codex::config::*`,
-// `codex::db::*`, `codex::events::*`, `codex::models::*`, `codex::parsers::*`,
-// `codex::services::*`, and `codex::utils::*` paths (used pervasively in
-// integration tests) keep resolving without churn.
+// Re-exports of workspace crates so existing `codex::<module>::*` paths used
+// pervasively in integration tests keep resolving without churn.
+pub use codex_api as api;
+pub use codex_api::observability;
+pub use codex_api::web;
 pub use codex_config as config;
 pub use codex_db as db;
 pub use codex_events as events;

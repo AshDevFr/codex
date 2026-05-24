@@ -102,6 +102,8 @@ async fn build_state(db: DatabaseConnection, refresh_enabled: bool) -> Arc<AppSt
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
         fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
+        app_name: env!("CARGO_PKG_NAME"),
+        app_version: env!("CARGO_PKG_VERSION"),
     })
 }
 

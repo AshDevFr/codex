@@ -1,0 +1,157 @@
+[package]
+name = "codex-api"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "codex_api"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Forwards to codex-parsers/rar so CBR-aware handlers (pages, thumbnails,
+# komga manifest) compile with UnRAR support.
+rar = ["codex-parsers/rar", "codex-scanner/rar", "codex-services/rar", "codex-tasks/rar"]
+# Embeds the React frontend assets into the binary (see src/web.rs).
+embed-frontend = []
+# Enables OTel HTTP tracing + meter providers. When off, observability is a
+# set of no-op stubs and the OTel deps drop out of the build entirely.
+observability = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+    "dep:opentelemetry-semantic-conventions",
+    "dep:tracing-opentelemetry",
+    "dep:axum-tracing-opentelemetry",
+    "dep:tonic",
+    "codex-services/observability",
+]
+
+[dependencies]
+# Workspace-inherited
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+
+# Workspace-internal
+codex-config = { workspace = true }
+codex-db = { workspace = true }
+# The OIDC bootstrap handler runs `Migrator::up` after re-opening the
+# connection with new credentials, so api needs the migration crate directly.
+migration = { path = "../../migration" }
+codex-events = { workspace = true }
+codex-models = { workspace = true }
+codex-parsers = { workspace = true }
+codex-scanner = { workspace = true }
+codex-scheduler = { workspace = true }
+codex-search = { workspace = true }
+codex-services = { workspace = true }
+codex-tasks = { workspace = true }
+codex-utils = { workspace = true }
+
+# Web framework
+axum = { version = "0.8", features = ["multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "catch-panic"] }
+
+# Database (direct queries in some handlers)
+sea-orm = { version = "1.1", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+    "with-uuid",
+] }
+
+# Serialization
+serde_json = "1.0"
+
+# Async helpers
+async-stream = "0.3"
+futures = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
+
+# OpenAPI / Scalar
+utoipa-scalar = { version = "0.3", features = ["axum"] }
+
+# Rate-limit / OAuth state caches
+dashmap = "6.1"
+
+# Glob matching for rate-limit allow/deny lists
+globset = "0.4"
+
+# HTTP date parsing for If-Modified-Since handling
+httpdate = "1.0"
+
+# Image processing for cover/thumbnail handlers
+image = { version = "0.25", features = ["avif"] }
+
+# Encoding helpers for auth handlers + CSRF state
+base64 = "0.22"
+rand = "0.10"
+
+# Archive utilities for export handlers
+zip = "8.1"
+
+# Static file embedding for frontend (gated by `embed-frontend`)
+rust-embed = "8.5"
+mime_guess = "2.0"
+
+# Logging (for sqlx log filter adjustments inside init paths)
+log = "0.4"
+
+# OPDS Atom XML serialization
+quick-xml = { version = "0.39", features = ["serialize"] }
+
+# HTTP client (observability proxy)
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls",
+    "json",
+    "form",
+] }
+
+# URL encoding (OPDS search, OIDC error redirects, koreader sync)
+urlencoding = "2.1"
+
+# Filesystem helpers (filesystem-picker handler resolves $HOME defaults)
+dirs = "6.0"
+
+# OpenTelemetry (optional, gated by `observability` feature)
+opentelemetry = { version = "0.32", optional = true }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "trace", "metrics"], optional = true }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = [
+    "grpc-tonic",
+    "http-proto",
+    "http-json",
+    # Blocking HTTP client is intentional: the OTel SDK 0.32 batch processor
+    # runs export on a dedicated std::thread that has no async runtime
+    # attached. An async reqwest client would panic on first export. The
+    # blocking client only blocks the batch thread, not the server runtime.
+    "reqwest-blocking-client",
+    "trace",
+    "metrics",
+], optional = true }
+opentelemetry-semantic-conventions = { version = "0.32", optional = true }
+tracing-opentelemetry = { version = "0.33", optional = true }
+axum-tracing-opentelemetry = { version = "0.33", optional = true }
+# Used via opentelemetry-otlp's grpc-tonic feature; declared here so metadata
+# helpers can use MetadataKey/MetadataValue types directly.
+tonic = { version = "0.14", default-features = false, optional = true }
+# Tracing subscriber types referenced by the trace-context formatter.
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serial_test = { workspace = true }
+codex-db = { workspace = true, features = ["test-utils"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+hyper = { version = "1.0", features = ["full"] }
+# In-memory metric exporter for observability tests inside this crate.
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "trace", "metrics", "testing"] }

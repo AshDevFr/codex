@@ -140,7 +140,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // Refresh the inventory metric snapshot every 30s so the OTel observable
     // gauges have current values. Cheap: five `COUNT(*)` queries. The poller
     // exits as soon as the cancellation token fires.
-    let inventory_poller_handle = crate::observability::inventory::spawn_poller(
+    let inventory_poller_handle = codex_api::observability::inventory::spawn_poller(
         Arc::new(db.sea_orm_connection().clone()),
         std::time::Duration::from_secs(30),
         background_task_cancel.clone(),
@@ -459,7 +459,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         db.sea_orm_connection().clone(),
         config.auth.refresh_token_expiry_days,
     ));
-    let api_state = Arc::new(crate::api::AppState {
+    let api_state = Arc::new(codex_api::AppState {
         db: db.sea_orm_connection().clone(),
         jwt_service: Arc::new(codex_utils::jwt::JwtService::new(
             config.auth.jwt_secret.clone(),
@@ -486,7 +486,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         pdf_page_cache,
         pdf_handle_cache,
         inflight_thumbnails: Arc::new(codex_services::InflightThumbnailTracker::new()),
-        user_auth_cache: Arc::new(crate::api::extractors::auth::UserAuthCache::new()),
+        user_auth_cache: Arc::new(codex_api::extractors::auth::UserAuthCache::new()),
         rate_limiter_service,
         plugin_manager: plugin_manager.clone(),
         plugin_metrics_service,
@@ -496,6 +496,8 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         plugin_file_storage: Some(plugin_file_storage),
         scheduler_timezone: config.scheduler.timezone.clone(),
         fuzzy_index,
+        app_name: env!("CARGO_PKG_NAME"),
+        app_version: env!("CARGO_PKG_VERSION"),
     });
 
     // Build router using API module
@@ -511,7 +513,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     }
     info!("  Max page size: {}", config.api.max_page_size);
 
-    let app = crate::api::create_router(api_state, &config);
+    let app = codex_api::create_router(api_state, &config);
 
     info!("Registered routes:");
     info!("  GET  /health - Health check endpoint");
