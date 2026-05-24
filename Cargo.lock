@@ -826,6 +826,7 @@ dependencies = [
  "codex-events",
  "codex-models",
  "codex-parsers",
+ "codex-search",
  "codex-services",
  "codex-utils",
  "cron",
@@ -978,6 +979,26 @@ dependencies = [
  "unrar",
  "urlencoding",
  "zip",
+]
+
+[[package]]
+name = "codex-search"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "codex-db",
+ "codex-events",
+ "codex-utils",
+ "nucleo-matcher",
+ "parking_lot",
+ "sea-orm",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

@@ -213,7 +213,7 @@ async fn upsert_book(index: &FuzzyIndex, db: &DatabaseConnection, book_id: uuid:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::search::builder::build_from_db;
+    use crate::builder::build_from_db;
     use chrono::Utc;
     use codex_db::ScanningStrategy;
     use codex_db::entities::books;
