@@ -6,10 +6,10 @@ use std::collections::HashMap;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::services::plugin::sync::{SyncEntry, SyncReadingStatus};
 use codex_db::repositories::{
     BookRepository, ReadProgressRepository, SeriesExternalIdRepository, UserSeriesRatingRepository,
 };
+use codex_services::plugin::sync::{SyncEntry, SyncReadingStatus};
 
 /// Match pulled sync entries to Codex series using external IDs and apply
 /// reading progress.

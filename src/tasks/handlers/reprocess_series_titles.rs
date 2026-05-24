@@ -10,7 +10,6 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::metadata::preprocessing::apply_rules;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
 use codex_db::entities::{series_metadata, tasks};
@@ -18,6 +17,7 @@ use codex_db::repositories::{
     LibraryRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent, EventBroadcaster, TaskProgressEvent};
+use codex_services::metadata::preprocessing::apply_rules;
 
 // =============================================================================
 // ReprocessSeriesTitle Handler (Single Series)

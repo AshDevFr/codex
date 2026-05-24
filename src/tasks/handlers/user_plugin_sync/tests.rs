@@ -1,5 +1,4 @@
 use super::*;
-use crate::services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 use chrono::Utc;
 use codex_db::ScanningStrategy;
 use codex_db::entities::{books, users};
@@ -8,6 +7,7 @@ use codex_db::repositories::{
     SeriesMetadataRepository, SeriesRepository, UserRepository, UserSeriesRatingRepository,
 };
 use codex_db::test_helpers::create_test_db;
+use codex_services::plugin::sync::{SyncEntry, SyncProgress, SyncReadingStatus};
 
 /// Helper to create a test user in the database
 async fn create_test_user(db: &sea_orm::DatabaseConnection) -> users::Model {

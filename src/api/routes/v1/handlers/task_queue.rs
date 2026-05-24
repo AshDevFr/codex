@@ -1032,7 +1032,7 @@ pub async fn reprocess_series_title(
     Path(series_id): Path<Uuid>,
     Json(request): Json<EnqueueReprocessTitleRequest>,
 ) -> Result<Json<EnqueueReprocessTitleResponse>, ApiError> {
-    use crate::services::metadata::preprocessing::apply_rules;
+    use codex_services::metadata::preprocessing::apply_rules;
 
     auth.require_permission(&Permission::SeriesWrite)?;
 
@@ -1157,7 +1157,7 @@ pub async fn reprocess_library_series_titles(
     Path(library_id): Path<Uuid>,
     Json(request): Json<ReprocessTitleRequest>,
 ) -> Result<Json<EnqueueReprocessTitleResponse>, ApiError> {
-    use crate::services::metadata::preprocessing::apply_rules;
+    use codex_services::metadata::preprocessing::apply_rules;
 
     auth.require_permission(&Permission::LibrariesWrite)?;
 

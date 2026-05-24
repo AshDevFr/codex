@@ -9,11 +9,11 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::services::{PdfPageCache, SettingsService};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
 use codex_events::EventBroadcaster;
+use codex_services::{PdfPageCache, SettingsService};
 
 /// Handler for cleaning up old PDF cache pages
 pub struct CleanupPdfCacheHandler {

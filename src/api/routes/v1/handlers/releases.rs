@@ -882,8 +882,8 @@ pub async fn list_release_sources(
 /// rather than 500-ing the request — the field is informational on the
 /// response shape.
 async fn resolve_server_default_cron(db: &sea_orm::DatabaseConnection) -> String {
-    use crate::services::release::schedule::{DEFAULT_CRON_SCHEDULE, read_default_cron_schedule};
-    use crate::services::settings::SettingsService;
+    use codex_services::release::schedule::{DEFAULT_CRON_SCHEDULE, read_default_cron_schedule};
+    use codex_services::settings::SettingsService;
     match SettingsService::new(db.clone()).await {
         Ok(svc) => read_default_cron_schedule(&svc).await,
         Err(e) => {
@@ -1330,9 +1330,9 @@ pub async fn get_release_tracking_applicability(
         let Some(manifest_json) = plugin.manifest.as_ref() else {
             continue;
         };
-        let Ok(manifest) = serde_json::from_value::<
-            crate::services::plugin::protocol::PluginManifest,
-        >(manifest_json.clone()) else {
+        let Ok(manifest) = serde_json::from_value::<codex_services::plugin::protocol::PluginManifest>(
+            manifest_json.clone(),
+        ) else {
             continue;
         };
         if manifest.capabilities.release_source.is_none() {

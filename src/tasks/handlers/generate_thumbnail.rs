@@ -3,13 +3,13 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
-use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::{TaskResult, TaskType};
 use codex_db::entities::book_error::{BookError, BookErrorType};
 use codex_db::entities::tasks;
 use codex_db::repositories::{BookRepository, SeriesRepository, TaskRepository};
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
+use codex_services::ThumbnailService;
 
 pub struct GenerateThumbnailHandler {
     thumbnail_service: Arc<ThumbnailService>,

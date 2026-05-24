@@ -14,11 +14,11 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::tasks::types::TaskType;
 use codex_db::entities::{books, series};
 use codex_db::repositories::{BookRepository, LibraryRepository, SeriesRepository, TaskRepository};
 use codex_events::{EventBroadcaster, TaskProgressEvent};
 use codex_models::SeriesStrategy;
+use codex_models::task::TaskType;
 
 use super::strategies::{DetectedSeries, create_strategy};
 use super::types::{ScanMode, ScanProgress, ScanResult, ScanStatus, ScannerConfig};
@@ -306,14 +306,14 @@ struct BookBatch {
     /// PDF handle cache to invalidate when book file content changes on disk.
     /// `BookRepository::update_batch` is silent (no per-book events), so the
     /// global event subscriber would miss these mutations: evict directly.
-    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+    pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
 }
 
 impl BookBatch {
     fn new(
         capacity: usize,
         force_analysis: bool,
-        pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+        pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
     ) -> Self {
         Self {
             to_create: Vec::with_capacity(capacity),
@@ -448,7 +448,7 @@ pub async fn scan_library(
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
     task_id: Option<Uuid>,
-    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+    pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
 ) -> Result<ScanResult> {
     let scan_start = Instant::now();
     info!("Starting {} scan for library {}", mode, library_id);
@@ -565,7 +565,7 @@ async fn scan_batched(
     progress_tx: Option<mpsc::Sender<ScanProgress>>,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
     task_id: Option<Uuid>,
-    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+    pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
 ) -> Result<ScanResult> {
     // Load scanner configuration from database settings
     let config = ScannerConfig::load(db).await;
@@ -958,7 +958,7 @@ async fn process_series_batched(
     mode: ScanMode,
     config: &ScannerConfig,
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
-    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
+    pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
 ) -> Result<(SeriesProcessResult, bool)> {
     let mut result = SeriesProcessResult::new();
 
@@ -1263,11 +1263,11 @@ async fn find_or_create_series(
     fingerprint: Option<&str>,
     path: &str,
     all_series_paths: &HashSet<String>,
-    preprocessing_rules: &[crate::services::metadata::preprocessing::PreprocessingRule],
+    preprocessing_rules: &[codex_services::metadata::preprocessing::PreprocessingRule],
     event_broadcaster: Option<&Arc<EventBroadcaster>>,
 ) -> Result<series::Model> {
-    use crate::services::metadata::preprocessing::apply_rules;
     use codex_db::repositories::SeriesMetadataRepository;
+    use codex_services::metadata::preprocessing::apply_rules;
 
     debug!(
         "find_or_create_series: name='{}', path='{}', fingerprint={:?}",

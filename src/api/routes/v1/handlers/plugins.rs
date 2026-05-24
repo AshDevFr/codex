@@ -11,9 +11,6 @@ use super::super::dto::{
     parse_permission, parse_scope,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::services::PluginHealthStatus;
-use crate::services::plugin::process::{allowed_commands_description, is_command_allowed};
-use crate::services::plugin::protocol::PluginScope;
 use axum::{
     Json,
     extract::{Path, State},
@@ -22,6 +19,9 @@ use axum::{
 use codex_db::entities::plugins::{InternalPluginConfig, PluginPermission};
 use codex_db::repositories::{PluginFailuresRepository, PluginsRepository, UserPluginsRepository};
 use codex_events::{EntityChangeEvent, EntityEvent};
+use codex_services::PluginHealthStatus;
+use codex_services::plugin::process::{allowed_commands_description, is_command_allowed};
+use codex_services::plugin::protocol::PluginScope;
 use std::sync::Arc;
 use std::time::Instant;
 use utoipa::OpenApi;

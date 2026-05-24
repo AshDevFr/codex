@@ -33,13 +33,6 @@ use std::time::Duration;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::services::SettingsService;
-use crate::services::plugin::PluginManager;
-use crate::services::plugin::handle::PluginError;
-use crate::services::plugin::protocol::{ReleasePollRequest, ReleasePollResponse, methods};
-use crate::services::release::auto_ignore::{OwnedReleaseKeys, should_auto_ignore};
-use crate::services::release::backoff::{HostBackoff, is_backoff_status};
-use crate::services::release::matcher::{evaluate, resolve_threshold};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::release_ledger::state as ledger_state;
@@ -50,6 +43,13 @@ use codex_db::repositories::{
     SeriesRepository, SeriesTrackingRepository,
 };
 use codex_events::{EntityChangeEvent, EventBroadcaster};
+use codex_services::SettingsService;
+use codex_services::plugin::PluginManager;
+use codex_services::plugin::handle::PluginError;
+use codex_services::plugin::protocol::{ReleasePollRequest, ReleasePollResponse, methods};
+use codex_services::release::auto_ignore::{OwnedReleaseKeys, should_auto_ignore};
+use codex_services::release::backoff::{HostBackoff, is_backoff_status};
+use codex_services::release::matcher::{evaluate, resolve_threshold};
 
 /// Default plugin task timeout in seconds (5 minutes — same as user_plugin_sync).
 const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;
@@ -429,9 +429,11 @@ impl TaskHandler for PollReleaseSourceHandler {
                                         {
                                             cached.clone()
                                         } else {
-                                            let resolved =
-                                                lookup_series_title(db, outcome.row.series_id)
-                                                    .await;
+                                            let resolved = codex_services::release::announce::lookup_series_title(
+                                                db,
+                                                outcome.row.series_id,
+                                            )
+                                            .await;
                                             series_title_cache
                                                 .insert(outcome.row.series_id, resolved.clone());
                                             resolved
@@ -649,24 +651,6 @@ pub(crate) fn emit_release_announced(
     ));
 }
 
-/// Resolve the display title for a series, preferring `series_metadata.title`
-/// and falling back to the directory-derived `series.name`. Returns an empty
-/// string if the series row is missing (shouldn't happen for a valid ledger
-/// insert, but we don't want a notification failure to surface as a panic).
-pub(crate) async fn lookup_series_title(db: &DatabaseConnection, series_id: Uuid) -> String {
-    match SeriesRepository::get_with_metadata(db, series_id).await {
-        Ok(Some((series, metadata))) => metadata.map(|m| m.title).unwrap_or(series.name),
-        Ok(None) => String::new(),
-        Err(e) => {
-            warn!(
-                "Failed to look up title for series {} (release notification): {}",
-                series_id, e
-            );
-            String::new()
-        }
-    }
-}
-
 /// Compute the initial ledger state for a candidate. Returns
 /// `Some("ignored")` when the user already owns this volume/chapter;
 /// `None` falls back to the repository's default (`announced`).
@@ -677,8 +661,8 @@ async fn resolve_initial_state(
     db: &DatabaseConnection,
     owned_cache: &mut std::collections::HashMap<Uuid, OwnedReleaseKeys>,
     series_id: Uuid,
-    volumes: Option<&[crate::services::release::candidate::NumericSpan]>,
-    chapters: Option<&[crate::services::release::candidate::NumericSpan]>,
+    volumes: Option<&[codex_services::release::candidate::NumericSpan]>,
+    chapters: Option<&[codex_services::release::candidate::NumericSpan]>,
 ) -> Result<Option<String>> {
     let has_v = volumes.is_some_and(|s| !s.is_empty());
     let has_c = chapters.is_some_and(|s| !s.is_empty());

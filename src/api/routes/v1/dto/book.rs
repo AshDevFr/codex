@@ -2481,8 +2481,8 @@ pub struct BookContextDto {
 }
 
 // Conversion from internal BookContext to DTO
-impl From<crate::services::metadata::preprocessing::context::BookContext> for BookContextDto {
-    fn from(ctx: crate::services::metadata::preprocessing::context::BookContext) -> Self {
+impl From<codex_services::metadata::preprocessing::context::BookContext> for BookContextDto {
+    fn from(ctx: codex_services::metadata::preprocessing::context::BookContext) -> Self {
         Self {
             context_type: ctx.context_type,
             book_id: ctx.book_id,

@@ -19,7 +19,6 @@ use crate::api::{
     permissions::Permission,
 };
 use crate::require_permission;
-use crate::services::FilterService;
 use axum::{
     Json,
     body::Body,
@@ -31,6 +30,7 @@ use codex_db::repositories::{
     BookMetadataRepository, BookRepository, GenreRepository, LibraryRepository, PageRepository,
     ReadProgressRepository, SeriesMetadataRepository, TagRepository,
 };
+use codex_services::FilterService;
 use codex_utils::{
     json_merge_patch, normalize_for_search, parse_custom_metadata, serialize_custom_metadata,
     validate_custom_metadata_size,

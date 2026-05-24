@@ -11,12 +11,12 @@ use serde_json::json;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::services::user_plugin::OAuthStateManager;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
 use codex_db::repositories::UserPluginDataRepository;
 use codex_events::EventBroadcaster;
+use codex_services::user_plugin::OAuthStateManager;
 
 /// Handler for cleaning up expired plugin storage data and OAuth state
 #[derive(Default)]
@@ -82,7 +82,7 @@ impl TaskHandler for CleanupPluginDataHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::plugin::protocol::OAuthConfig;
+    use codex_services::plugin::protocol::OAuthConfig;
     use uuid::Uuid;
 
     #[test]

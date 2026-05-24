@@ -1,7 +1,6 @@
 use crate::api::permissions::{
     ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS, serialize_permissions,
 };
-use crate::services::plugin::protocol::PluginScope;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use codex_config::{Config, EnvOverride};
@@ -12,6 +11,7 @@ use codex_db::repositories::{
     plugins::PluginsRepository, user::UserRepository,
 };
 use codex_models::{BookStrategy, NumberStrategy, SeriesStrategy};
+use codex_services::plugin::protocol::PluginScope;
 use codex_utils::password::hash_password;
 use rand::RngExt;
 use serde::Deserialize;

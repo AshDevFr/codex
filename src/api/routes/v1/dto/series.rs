@@ -1840,8 +1840,8 @@ pub struct SeriesContextDto {
 }
 
 // Conversion from internal SeriesContext to DTO
-impl From<crate::services::metadata::preprocessing::context::SeriesContext> for SeriesContextDto {
-    fn from(ctx: crate::services::metadata::preprocessing::context::SeriesContext) -> Self {
+impl From<codex_services::metadata::preprocessing::context::SeriesContext> for SeriesContextDto {
+    fn from(ctx: codex_services::metadata::preprocessing::context::SeriesContext) -> Self {
         Self {
             context_type: ctx.context_type,
             series_id: ctx.series_id,

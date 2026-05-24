@@ -8,7 +8,6 @@ use crate::api::{
     extractors::{AuthContext, AuthState, ClientInfo, FlexibleAuthContext},
     permissions::UserRole, // Used for creating users with default role
 };
-use crate::services::RefreshTokenError;
 use axum::{
     Json,
     extract::State,
@@ -20,6 +19,7 @@ use codex_db::{
     entities::users,
     repositories::{EmailVerificationTokenRepository, SettingsRepository, UserRepository},
 };
+use codex_services::RefreshTokenError;
 use codex_utils::password;
 use sea_orm::ActiveModelTrait;
 use sea_orm::Set;

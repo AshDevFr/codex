@@ -12,7 +12,7 @@
 //! Rate-limited tasks use a separate counter to avoid exhausting retry attempts on
 //! expected throttling behavior.
 
-use crate::services::plugin::PluginManagerError;
+use codex_services::plugin::PluginManagerError;
 
 // Re-exported from `codex_models::task` so existing call sites work and the
 // canonical constants live in the shared `models` layer (avoids db -> tasks
@@ -124,8 +124,8 @@ impl RateLimitedError for PluginManagerError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::plugin::handle::PluginError;
-    use crate::services::plugin::rpc::RpcError;
+    use codex_services::plugin::handle::PluginError;
+    use codex_services::plugin::rpc::RpcError;
     use uuid::Uuid;
 
     /// Helper to create an RPC rate limit error wrapped in PluginManagerError

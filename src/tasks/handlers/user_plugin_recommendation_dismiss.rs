@@ -11,16 +11,16 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::services::SettingsService;
-use crate::services::plugin::PluginManager;
-use crate::services::plugin::protocol::methods;
-use crate::services::plugin::recommendations::{
-    DismissReason, RecommendationDismissRequest, RecommendationDismissResponse,
-};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
 use codex_events::EventBroadcaster;
+use codex_services::SettingsService;
+use codex_services::plugin::PluginManager;
+use codex_services::plugin::protocol::methods;
+use codex_services::plugin::recommendations::{
+    DismissReason, RecommendationDismissRequest, RecommendationDismissResponse,
+};
 
 /// Default plugin task timeout in seconds (5 minutes)
 const DEFAULT_TASK_TIMEOUT_SECS: u64 = 300;

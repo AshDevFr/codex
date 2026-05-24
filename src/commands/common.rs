@@ -1,9 +1,9 @@
 use crate::observability::ObservabilityHandle;
-use crate::services::{SettingsService, TaskMetricsService};
 use crate::tasks::TaskWorker;
 use codex_config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use codex_db::Database;
 use codex_events::EventBroadcaster;
+use codex_services::{SettingsService, TaskMetricsService};
 use sea_orm::DatabaseConnection;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -467,14 +467,14 @@ pub fn spawn_workers(
     worker_count: u32,
     event_broadcaster: Arc<EventBroadcaster>,
     settings_service: Arc<SettingsService>,
-    thumbnail_service: Arc<crate::services::ThumbnailService>,
+    thumbnail_service: Arc<codex_services::ThumbnailService>,
     task_metrics_service: Option<Arc<TaskMetricsService>>,
     files_config: codex_config::FilesConfig,
-    pdf_page_cache: Option<Arc<crate::services::PdfPageCache>>,
-    pdf_handle_cache: Option<Arc<crate::services::PdfHandleCache>>,
-    plugin_manager: Option<Arc<crate::services::plugin::PluginManager>>,
-    oauth_state_manager: Option<Arc<crate::services::user_plugin::OAuthStateManager>>,
-    export_storage: Arc<crate::services::ExportStorage>,
+    pdf_page_cache: Option<Arc<codex_services::PdfPageCache>>,
+    pdf_handle_cache: Option<Arc<codex_services::PdfHandleCache>>,
+    plugin_manager: Option<Arc<codex_services::plugin::PluginManager>>,
+    oauth_state_manager: Option<Arc<codex_services::user_plugin::OAuthStateManager>>,
+    export_storage: Arc<codex_services::ExportStorage>,
 ) -> (
     Vec<tokio::task::JoinHandle<()>>,
     Vec<tokio::sync::broadcast::Sender<()>>,
@@ -583,9 +583,9 @@ pub async fn shutdown_workers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::SettingsService;
     use codex_config::{FilesConfig, SQLiteConfig, TaskConfig};
     use codex_db::test_helpers::create_test_db;
+    use codex_services::SettingsService;
     use tempfile::TempDir;
 
     #[test]

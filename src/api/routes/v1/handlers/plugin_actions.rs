@@ -20,17 +20,6 @@ use super::super::dto::{
     PreviewSummary, SearchTitleResponse, SkippedField, parse_scope,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::services::metadata::preprocessing::{
-    PreprocessingRule, SeriesContextBuilder, apply_rules, render_template,
-};
-use crate::services::metadata::{
-    ApplyOptions, BookApplyOptions, BookMetadataApplier, MetadataApplier,
-};
-use crate::services::plugin::PluginManagerError;
-use crate::services::plugin::protocol::{
-    BookMatchParams, BookSearchParams, MetadataContentType, MetadataGetParams, MetadataMatchParams,
-    MetadataSearchParams, PluginScope,
-};
 use crate::tasks::types::TaskType;
 use axum::{
     Json,
@@ -42,6 +31,17 @@ use codex_db::repositories::{
     ExternalLinkRepository, ExternalRatingRepository, GenreRepository, LibraryRepository,
     PluginsRepository, SeriesExternalIdRepository, SeriesMetadataRepository, SeriesRepository,
     TagRepository, TaskRepository,
+};
+use codex_services::metadata::preprocessing::{
+    PreprocessingRule, SeriesContextBuilder, apply_rules, render_template,
+};
+use codex_services::metadata::{
+    ApplyOptions, BookApplyOptions, BookMetadataApplier, MetadataApplier,
+};
+use codex_services::plugin::PluginManagerError;
+use codex_services::plugin::protocol::{
+    BookMatchParams, BookSearchParams, MetadataContentType, MetadataGetParams, MetadataMatchParams,
+    MetadataSearchParams, PluginScope,
 };
 use sea_orm::prelude::Decimal;
 use serde::Deserialize;
@@ -2541,9 +2541,9 @@ fn sanitize_plugin_error(error: &PluginManagerError) -> String {
 ///
 /// Since the nested error types (PluginError, RpcError) are not part of the public API,
 /// we pattern match on the error string to provide user-friendly messages.
-fn sanitize_nested_plugin_error(error: &crate::services::plugin::handle::PluginError) -> String {
-    use crate::services::plugin::handle::PluginError;
-    use crate::services::plugin::rpc::RpcError;
+fn sanitize_nested_plugin_error(error: &codex_services::plugin::handle::PluginError) -> String {
+    use codex_services::plugin::handle::PluginError;
+    use codex_services::plugin::rpc::RpcError;
 
     match error {
         PluginError::NotInitialized => "Plugin is not ready, please try again".to_string(),

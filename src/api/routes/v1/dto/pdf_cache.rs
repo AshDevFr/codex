@@ -41,8 +41,8 @@ pub struct PdfPageCacheStatsDto {
     pub cache_enabled: bool,
 }
 
-impl From<crate::services::CacheStats> for PdfPageCacheStatsDto {
-    fn from(stats: crate::services::CacheStats) -> Self {
+impl From<codex_services::CacheStats> for PdfPageCacheStatsDto {
+    fn from(stats: codex_services::CacheStats) -> Self {
         Self {
             total_files: stats.total_files,
             total_size_bytes: stats.total_size_bytes,
@@ -80,8 +80,8 @@ pub struct PdfHandleCacheEntryDto {
     pub render_count: u64,
 }
 
-impl From<crate::services::HandleCacheEntrySnapshot> for PdfHandleCacheEntryDto {
-    fn from(entry: crate::services::HandleCacheEntrySnapshot) -> Self {
+impl From<codex_services::HandleCacheEntrySnapshot> for PdfHandleCacheEntryDto {
+    fn from(entry: codex_services::HandleCacheEntrySnapshot) -> Self {
         Self {
             book_id: entry.book_id,
             path: entry.path,
@@ -139,8 +139,8 @@ pub struct PdfHandleCacheStatsDto {
     pub entries: Vec<PdfHandleCacheEntryDto>,
 }
 
-impl From<crate::services::HandleCacheSnapshot> for PdfHandleCacheStatsDto {
-    fn from(snap: crate::services::HandleCacheSnapshot) -> Self {
+impl From<codex_services::HandleCacheSnapshot> for PdfHandleCacheStatsDto {
+    fn from(snap: codex_services::HandleCacheSnapshot) -> Self {
         Self {
             enabled: snap.enabled,
             capacity: snap.capacity as u64,
@@ -186,8 +186,8 @@ pub struct PdfCacheCleanupResultDto {
     pub bytes_reclaimed_human: String,
 }
 
-impl From<crate::services::CleanupResult> for PdfCacheCleanupResultDto {
-    fn from(result: crate::services::CleanupResult) -> Self {
+impl From<codex_services::CleanupResult> for PdfCacheCleanupResultDto {
+    fn from(result: codex_services::CleanupResult) -> Self {
         Self {
             files_deleted: result.files_deleted,
             bytes_reclaimed: result.bytes_reclaimed,

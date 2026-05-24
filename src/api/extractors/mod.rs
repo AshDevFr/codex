@@ -5,5 +5,5 @@ pub mod client_info;
 #[allow(unused_imports)]
 pub use auth::{AppState, AuthContext, AuthMethod, AuthState, FlexibleAuthContext};
 pub use client_info::ClientInfo;
-// Historical alias. The canonical location is `crate::services::content_filter`.
-pub use crate::services::content_filter::ContentFilter;
+// Historical alias. The canonical location is `codex_services::content_filter`.
+pub use codex_services::content_filter::ContentFilter;

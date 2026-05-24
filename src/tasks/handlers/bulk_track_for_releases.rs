@@ -3,7 +3,7 @@
 //! Drives the bulk-toggle work that used to happen synchronously inside the
 //! `POST /series/bulk/{track,untrack}-for-releases` HTTP request. Each
 //! series goes through the shared
-//! [`crate::services::release::tracking_toggle`] helpers, which keep the
+//! [`codex_services::release::tracking_toggle`] helpers, which keep the
 //! "track on -> seed first, then flip" / "track off -> flip only" ordering
 //! identical to the per-series PATCH path.
 //!
@@ -17,13 +17,13 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::services::release::tracking_toggle::{
-    ToggleOutcome, ToggleResult, track_one_series, untrack_one_series,
-};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
 use codex_events::{EventBroadcaster, TaskProgressEvent};
+use codex_services::release::tracking_toggle::{
+    ToggleOutcome, ToggleResult, track_one_series, untrack_one_series,
+};
 
 pub struct BulkTrackForReleasesHandler;
 

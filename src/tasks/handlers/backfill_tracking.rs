@@ -17,12 +17,12 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::services::release::seed::{SeedReport, seed_tracking_for_series};
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
 use codex_db::repositories::SeriesRepository;
 use codex_events::EventBroadcaster;
+use codex_services::release::seed::{SeedReport, seed_tracking_for_series};
 
 pub struct BackfillTrackingFromMetadataHandler;
 

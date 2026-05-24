@@ -61,7 +61,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Event broadcaster initialized");
 
     // Start cleanup event subscriber to handle file cleanup on entity deletion
-    let cleanup_subscriber = crate::services::CleanupEventSubscriber::new(
+    let cleanup_subscriber = codex_services::CleanupEventSubscriber::new(
         db.sea_orm_connection().clone(),
         event_broadcaster.clone(),
     );
@@ -72,7 +72,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // This allows workers in separate containers to notify the web server of task completions
     if config.database.db_type == DatabaseType::Postgres {
         info!("Starting PostgreSQL task listener for cross-container notifications...");
-        match crate::services::TaskListener::from_sea_orm(
+        match codex_services::TaskListener::from_sea_orm(
             db.sea_orm_connection(),
             event_broadcaster.clone(),
         ) {
@@ -100,7 +100,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         .unwrap_or(false);
 
     // Initialize thumbnail service (needed for both workers, API handlers, and scheduler)
-    let thumbnail_service = Arc::new(crate::services::ThumbnailService::new(config.files.clone()));
+    let thumbnail_service = Arc::new(codex_services::ThumbnailService::new(config.files.clone()));
     info!(
         "Files service initialized (thumbnails: {}, uploads: {})",
         config.files.thumbnail_dir, config.files.uploads_dir
@@ -120,12 +120,12 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Job scheduler started successfully");
 
     // Initialize file cleanup service (for orphaned file cleanup via API)
-    let file_cleanup_service = Arc::new(crate::services::FileCleanupService::new(
+    let file_cleanup_service = Arc::new(codex_services::FileCleanupService::new(
         config.files.clone(),
     ));
 
     // Initialize task metrics service
-    let task_metrics_service = Arc::new(crate::services::TaskMetricsService::new(
+    let task_metrics_service = Arc::new(codex_services::TaskMetricsService::new(
         db.sea_orm_connection().clone(),
         settings_service.clone(),
     ));
@@ -147,7 +147,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     );
 
     // Initialize read progress batching service
-    let read_progress_service = Arc::new(crate::services::ReadProgressService::new(
+    let read_progress_service = Arc::new(codex_services::ReadProgressService::new(
         db.sea_orm_connection().clone(),
     ));
     info!("Read progress batching service initialized");
@@ -159,7 +159,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Read progress background flush started (5s interval)");
 
     // Initialize auth tracking batching service
-    let auth_tracking_service = Arc::new(crate::services::AuthTrackingService::new(
+    let auth_tracking_service = Arc::new(codex_services::AuthTrackingService::new(
         db.sea_orm_connection().clone(),
     ));
     info!("Auth tracking batching service initialized");
@@ -191,7 +191,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     }
 
     // Initialize PDF page cache service
-    let pdf_page_cache = Arc::new(crate::services::PdfPageCache::new(
+    let pdf_page_cache = Arc::new(codex_services::PdfPageCache::new(
         &config.pdf.cache_dir,
         config.pdf.cache_rendered_pages,
     ));
@@ -209,7 +209,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // task. The cache stays empty until the page handler wires `get_or_open`
     // into the render miss path.
     let handle_cache_cfg = &config.pdf_handle_cache;
-    let pdf_handle_cache = Arc::new(crate::services::PdfHandleCache::new(
+    let pdf_handle_cache = Arc::new(codex_services::PdfHandleCache::new(
         handle_cache_cfg.capacity,
         std::time::Duration::from_secs(handle_cache_cfg.idle_ttl_minutes * 60),
         handle_cache_cfg.enabled,
@@ -234,7 +234,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // stale handles automatically. Covers BookUpdated (analyzer, manual edits,
     // scanner soft-delete/restore) and BookDeleted (purge paths).
     let _pdf_handle_cache_subscriber_handle = if handle_cache_cfg.enabled {
-        let subscriber = crate::services::PdfHandleCacheSubscriber::new(
+        let subscriber = codex_services::PdfHandleCacheSubscriber::new(
             pdf_handle_cache.clone(),
             event_broadcaster.clone(),
         );
@@ -245,7 +245,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Initialize rate limiter service if enabled
     let rate_limiter_service = if config.rate_limit.enabled {
-        let service = Arc::new(crate::services::RateLimiterService::new(Arc::new(
+        let service = Arc::new(codex_services::RateLimiterService::new(Arc::new(
             config.rate_limit.clone(),
         )));
         info!(
@@ -275,7 +275,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     if email_config.verification_url_base.is_none() {
         email_config.verification_url_base = Some(config.application.effective_base_url());
     }
-    let email_service = Arc::new(crate::services::email::EmailService::new(email_config));
+    let email_service = Arc::new(codex_services::email::EmailService::new(email_config));
     info!("  SMTP host: {}", config.email.smtp_host);
     info!("  SMTP port: {}", config.email.smtp_port);
     info!("  From: {}", config.email.smtp_from_email);
@@ -295,7 +295,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
             config.auth.oidc.auto_create_users
         );
         info!("  Default role: {}", config.auth.oidc.default_role.as_str());
-        let service = crate::services::OidcService::new(config.auth.oidc.clone(), base_url.clone());
+        let service = codex_services::OidcService::new(config.auth.oidc.clone(), base_url.clone());
         let provider_count = service.get_providers().len();
         info!("  Providers: {}", provider_count);
         for (name, provider_config) in &config.auth.oidc.providers {
@@ -324,11 +324,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
 
     // Initialize plugin metrics service
     info!("Initializing plugin metrics service...");
-    let plugin_metrics_service = Arc::new(crate::services::PluginMetricsService::new());
+    let plugin_metrics_service = Arc::new(codex_services::PluginMetricsService::new());
     info!("Plugin metrics service initialized");
 
     // Initialize plugin file storage (shared between plugin manager and app state)
-    let plugin_file_storage = Arc::new(crate::services::PluginFileStorage::new(
+    let plugin_file_storage = Arc::new(codex_services::PluginFileStorage::new(
         &config.files.plugins_dir,
     ));
 
@@ -341,11 +341,11 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("Initializing plugin manager...");
     // Wrap the scheduler in the services-layer trait so plugin handles can
     // trigger reconciles without holding the concrete scheduler type.
-    let scheduler_handle: crate::services::scheduler_handle::SharedSchedulerReconciler = Arc::new(
+    let scheduler_handle: codex_services::scheduler_handle::SharedSchedulerReconciler = Arc::new(
         crate::scheduler::LockedSchedulerReconciler::new(scheduler.clone()),
     );
     let plugin_manager = Arc::new(
-        crate::services::plugin::PluginManager::with_defaults(Arc::new(
+        codex_services::plugin::PluginManager::with_defaults(Arc::new(
             db.sea_orm_connection().clone(),
         ))
         .with_metrics_service(plugin_metrics_service.clone())
@@ -362,17 +362,17 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     info!("  Plugin health checks started (60s interval)");
 
     // Initialize OAuth state manager (shared between API and workers for cleanup)
-    let oauth_state_manager = Arc::new(crate::services::user_plugin::OAuthStateManager::new());
+    let oauth_state_manager = Arc::new(codex_services::user_plugin::OAuthStateManager::new());
 
     // Create export storage for series export tasks (shared between workers and API)
     let exports_dir = settings_service
         .get_string(
             "exports.dir",
-            crate::services::export_storage::DEFAULT_EXPORTS_DIR,
+            codex_services::export_storage::DEFAULT_EXPORTS_DIR,
         )
         .await
-        .unwrap_or_else(|_| crate::services::export_storage::DEFAULT_EXPORTS_DIR.to_string());
-    let export_storage = Arc::new(crate::services::ExportStorage::new(exports_dir));
+        .unwrap_or_else(|_| codex_services::export_storage::DEFAULT_EXPORTS_DIR.to_string());
+    let export_storage = Arc::new(codex_services::ExportStorage::new(exports_dir));
 
     // Initialize worker tracking variables
     let mut worker_handles = Vec::new();
@@ -455,7 +455,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     );
 
     // Create application state for API
-    let refresh_token_service = Arc::new(crate::services::RefreshTokenService::new(
+    let refresh_token_service = Arc::new(codex_services::RefreshTokenService::new(
         db.sea_orm_connection().clone(),
         config.auth.refresh_token_expiry_days,
     ));
@@ -485,7 +485,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
         auth_tracking_service,
         pdf_page_cache,
         pdf_handle_cache,
-        inflight_thumbnails: Arc::new(crate::services::InflightThumbnailTracker::new()),
+        inflight_thumbnails: Arc::new(codex_services::InflightThumbnailTracker::new()),
         user_auth_cache: Arc::new(crate::api::extractors::auth::UserAuthCache::new()),
         rate_limiter_service,
         plugin_manager: plugin_manager.clone(),

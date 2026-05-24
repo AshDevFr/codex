@@ -8,12 +8,12 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::services::ThumbnailService;
 use crate::tasks::handlers::TaskHandler;
 use crate::tasks::types::TaskResult;
 use codex_db::entities::tasks;
 use codex_db::repositories::{BookRepository, SeriesCoversRepository, SeriesRepository};
 use codex_events::{EntityChangeEvent, EntityEvent, EntityType, EventBroadcaster};
+use codex_services::ThumbnailService;
 
 pub struct GenerateSeriesThumbnailHandler {
     thumbnail_service: Arc<ThumbnailService>,

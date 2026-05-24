@@ -10,8 +10,6 @@ use super::super::dto::recommendations::{
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::services::plugin::protocol::PluginManifest;
-use crate::services::plugin::recommendations::RecommendationResponse;
 use crate::tasks::types::TaskType;
 use axum::{
     Json,
@@ -22,6 +20,8 @@ use codex_db::repositories::{
     PluginsRepository, SeriesExternalIdRepository, TaskRepository, UserPluginDataRepository,
     UserPluginsRepository,
 };
+use codex_services::plugin::protocol::PluginManifest;
+use codex_services::plugin::recommendations::RecommendationResponse;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -354,7 +354,7 @@ async fn enrich_and_filter_codex_presence(
 /// This is extracted for testability — the handler maps the plugin's response
 /// into the API response type field-by-field.
 fn to_recommendation_dto(
-    r: crate::services::plugin::recommendations::Recommendation,
+    r: codex_services::plugin::recommendations::Recommendation,
 ) -> RecommendationDto {
     use super::super::dto::recommendations::RecommendationTagDto;
 
@@ -489,10 +489,10 @@ pub async fn dismiss_recommendation(
 mod tests {
     use super::*;
     use crate::api::error::ApiError;
-    use crate::services::plugin::handle::PluginError;
-    use crate::services::plugin::process::ProcessError;
-    use crate::services::plugin::recommendations::Recommendation;
-    use crate::services::plugin::rpc::RpcError;
+    use codex_services::plugin::handle::PluginError;
+    use codex_services::plugin::process::ProcessError;
+    use codex_services::plugin::recommendations::Recommendation;
+    use codex_services::plugin::rpc::RpcError;
     use std::time::Duration;
 
     /// Map a `PluginError` to the appropriate `ApiError` with proper HTTP status codes.
@@ -755,7 +755,7 @@ mod tests {
     /// and the GET endpoint (read from DB → deserialize from Value).
     #[test]
     fn test_recommendation_response_round_trip_through_json_value() {
-        use crate::services::plugin::recommendations::RecommendationResponse;
+        use codex_services::plugin::recommendations::RecommendationResponse;
 
         let original = RecommendationResponse {
             recommendations: vec![Recommendation {
@@ -804,7 +804,7 @@ mod tests {
     /// This covers the case where a plugin returns zero recommendations.
     #[test]
     fn test_empty_recommendation_response_round_trip() {
-        use crate::services::plugin::recommendations::RecommendationResponse;
+        use codex_services::plugin::recommendations::RecommendationResponse;
 
         let original = RecommendationResponse {
             recommendations: vec![],

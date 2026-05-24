@@ -71,8 +71,8 @@ pub struct CleanupResultDto {
     pub errors: Vec<String>,
 }
 
-impl From<crate::services::file_cleanup::CleanupStats> for CleanupResultDto {
-    fn from(stats: crate::services::file_cleanup::CleanupStats) -> Self {
+impl From<codex_services::file_cleanup::CleanupStats> for CleanupResultDto {
+    fn from(stats: codex_services::file_cleanup::CleanupStats) -> Self {
         Self {
             thumbnails_deleted: stats.thumbnails_deleted,
             covers_deleted: stats.covers_deleted,
@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_result_dto_from_stats() {
-        let stats = crate::services::file_cleanup::CleanupStats {
+        let stats = codex_services::file_cleanup::CleanupStats {
             thumbnails_deleted: 10,
             covers_deleted: 2,
             bytes_freed: 500_000,

@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::api::routes::v1::dto::patch::PatchValue;
-use crate::services::library_jobs::{LibraryJobConfig, MetadataRefreshJobConfig, RefreshScope};
+use codex_services::library_jobs::{LibraryJobConfig, MetadataRefreshJobConfig, RefreshScope};
 
 /// Type-discriminated job config exposed over the wire.
 ///
