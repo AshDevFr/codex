@@ -11,7 +11,6 @@ use super::super::dto::{
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::require_permission;
-use crate::tasks::types::TaskType;
 use axum::{Json, extract::State};
 use chrono::Utc;
 use codex_db::repositories::{
@@ -21,6 +20,7 @@ use codex_db::repositories::{
     TaskRepository,
 };
 use codex_events::{EntityChangeEvent, EntityEvent};
+use codex_tasks::types::TaskType;
 use std::sync::Arc;
 use uuid::Uuid;
 

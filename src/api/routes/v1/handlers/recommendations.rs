@@ -10,7 +10,6 @@ use super::super::dto::recommendations::{
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::tasks::types::TaskType;
 use axum::{
     Json,
     extract::{Path, State},
@@ -22,6 +21,7 @@ use codex_db::repositories::{
 };
 use codex_services::plugin::protocol::PluginManifest;
 use codex_services::plugin::recommendations::RecommendationResponse;
+use codex_tasks::types::TaskType;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;

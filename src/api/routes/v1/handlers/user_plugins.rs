@@ -13,8 +13,6 @@ use super::super::dto::user_plugins::{
 };
 use crate::api::extractors::auth::AuthContext;
 use crate::api::{error::ApiError, extractors::AppState};
-use crate::tasks::handlers::user_plugin_sync::LAST_SYNC_RESULT_KEY;
-use crate::tasks::types::TaskType;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -25,6 +23,8 @@ use codex_db::repositories::{
 };
 use codex_services::plugin::protocol::{OAuthConfig, PluginManifest, methods};
 use codex_services::plugin::sync::SyncStatusResponse;
+use codex_tasks::handlers::user_plugin_sync::LAST_SYNC_RESULT_KEY;
+use codex_tasks::types::TaskType;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use uuid::Uuid;

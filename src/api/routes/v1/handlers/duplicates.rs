@@ -17,11 +17,11 @@ use super::super::dto::{
     TriggerDuplicateScanResponse,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::tasks::types::TaskType;
 use codex_db::entities::series_duplicates::{MATCH_TYPE_EXTERNAL_ID, MATCH_TYPE_TITLE};
 use codex_db::repositories::{
     BookDuplicatesRepository, SeriesDuplicatesRepository, TaskRepository,
 };
+use codex_tasks::types::TaskType;
 
 /// List all duplicate book groups
 ///

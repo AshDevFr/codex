@@ -10,10 +10,10 @@ use uuid::Uuid;
 
 use crate::api::{error::ApiError, extractors::AuthContext, permissions::Permission};
 use crate::require_permission;
-use crate::tasks::types::{TaskStats, TaskType};
 use codex_db::repositories::{
     LibraryRepository, SeriesMetadataRepository, SeriesRepository, TaskRepository,
 };
+use codex_tasks::types::{TaskStats, TaskType};
 
 use super::super::dto::series::{
     EnqueueReprocessTitleRequest, EnqueueReprocessTitleResponse, ReprocessSeriesTitlesRequest,

@@ -1981,8 +1981,8 @@ pub async fn get_series_thumbnail(
     );
 
     // Queue the thumbnail generation task (fire and forget)
-    use crate::tasks::types::TaskType;
     use codex_db::repositories::TaskRepository;
+    use codex_tasks::types::TaskType;
 
     let task_type = TaskType::GenerateSeriesThumbnail {
         series_id,
@@ -5885,8 +5885,8 @@ pub async fn get_series_cover_image(
 /// This should be called whenever a series cover is selected/unselected to ensure
 /// the cached thumbnail reflects the current cover selection.
 async fn regenerate_series_thumbnail(state: &AuthState, series_id: Uuid) {
-    use crate::tasks::types::TaskType;
     use codex_db::repositories::TaskRepository;
+    use codex_tasks::types::TaskType;
 
     // Delete the cached series thumbnail first
     if let Err(e) = state

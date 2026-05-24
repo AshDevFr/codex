@@ -829,6 +829,7 @@ dependencies = [
  "codex-scanner",
  "codex-search",
  "codex-services",
+ "codex-tasks",
  "codex-utils",
  "cron",
  "csv",
@@ -1076,6 +1077,32 @@ dependencies = [
  "tracing-subscriber",
  "tracing-test",
  "urlencoding",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "codex-tasks"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "codex-config",
+ "codex-db",
+ "codex-events",
+ "codex-models",
+ "codex-parsers",
+ "codex-scanner",
+ "codex-services",
+ "codex-utils",
+ "futures",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "tokio",
+ "tracing",
  "utoipa",
  "uuid",
 ]

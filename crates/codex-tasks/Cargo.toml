@@ -1,0 +1,48 @@
+[package]
+name = "codex-tasks"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "codex_tasks"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Forwards to codex-scanner/rar so library-scan tasks include CBR files.
+rar = ["codex-scanner/rar"]
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+
+codex-config = { workspace = true }
+codex-db = { workspace = true }
+codex-events = { workspace = true }
+codex-models = { workspace = true }
+codex-parsers = { workspace = true }
+codex-scanner = { workspace = true }
+codex-services = { workspace = true }
+codex-utils = { workspace = true }
+
+sea-orm = { version = "1.1", features = [
+    "sqlx-postgres",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+    "with-uuid",
+] }
+serde_json = "1.0"
+futures = "0.3"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serial_test = { workspace = true }
+codex-db = { workspace = true, features = ["test-utils"] }

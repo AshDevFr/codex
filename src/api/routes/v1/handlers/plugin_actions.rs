@@ -20,7 +20,6 @@ use super::super::dto::{
     PreviewSummary, SearchTitleResponse, SkippedField, parse_scope,
 };
 use crate::api::{AppState, error::ApiError, extractors::AuthContext, permissions::Permission};
-use crate::tasks::types::TaskType;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -43,6 +42,7 @@ use codex_services::plugin::protocol::{
     BookMatchParams, BookSearchParams, MetadataContentType, MetadataGetParams, MetadataMatchParams,
     MetadataSearchParams, PluginScope,
 };
+use codex_tasks::types::TaskType;
 use sea_orm::prelude::Decimal;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};

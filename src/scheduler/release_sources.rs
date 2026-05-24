@@ -23,10 +23,10 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::tasks::types::TaskType;
 use codex_db::repositories::{ReleaseSourceRepository, TaskRepository};
 use codex_services::release::schedule::{read_default_cron_schedule, resolve_cron_schedule};
 use codex_services::settings::SettingsService;
+use codex_tasks::types::TaskType;
 use codex_utils::cron::normalize_cron_expression;
 
 /// Tracks scheduler-registered jobs per source row so we can reconcile.

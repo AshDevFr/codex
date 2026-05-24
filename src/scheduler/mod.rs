@@ -7,12 +7,12 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::tasks::types::TaskType;
 use codex_db::entities::library_jobs;
 use codex_db::repositories::{LibraryJobRepository, LibraryRepository, TaskRepository};
 use codex_scanner::{ScanMode, ScanningConfig};
 use codex_services::library_jobs::{LibraryJobConfig, parse_job_config};
 use codex_services::settings::SettingsService;
+use codex_tasks::types::TaskType;
 use codex_utils::cron::{normalize_cron_expression, parse_timezone};
 
 /// Generic scheduler for managing scheduled tasks (library scans, deduplication, etc.)
@@ -807,10 +807,10 @@ pub async fn has_active_refresh_for_job(db: &DatabaseConnection, job_id: Uuid) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tasks::types::TaskType;
     use codex_db::repositories::LibraryRepository;
     use codex_db::test_helpers::setup_test_db;
     use codex_models::ScanningStrategy;
+    use codex_tasks::types::TaskType;
 
     #[test]
     fn test_scheduler_can_be_created() {

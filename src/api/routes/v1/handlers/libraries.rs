@@ -304,7 +304,7 @@ pub async fn create_library(
 
     // Trigger scan immediately after creation if requested
     if request.scan_immediately {
-        let task_type = crate::tasks::types::TaskType::ScanLibrary {
+        let task_type = codex_tasks::types::TaskType::ScanLibrary {
             library_id: library.id,
             mode: "normal".to_string(),
         };

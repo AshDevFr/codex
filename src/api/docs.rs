@@ -1002,9 +1002,9 @@ The following paths are exempt from rate limiting:
             v1::handlers::task_queue::GenerateBookThumbnailsRequest,
             v1::handlers::task_queue::GenerateSeriesThumbnailsRequest,
             v1::handlers::task_queue::ForceRequest,
-            crate::tasks::types::TaskStats,
-            crate::tasks::types::TaskTypeStats,
-            crate::tasks::types::TaskType,
+            codex_tasks::types::TaskStats,
+            codex_tasks::types::TaskTypeStats,
+            codex_tasks::types::TaskType,
 
             // Duplicates DTOs
             v1::dto::DuplicateGroup,

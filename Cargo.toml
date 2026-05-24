@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [features]
 default = ["rar", "observability"]
-rar = ["codex-parsers/rar", "codex-scanner/rar", "codex-services/rar"]
+rar = ["codex-parsers/rar", "codex-scanner/rar", "codex-services/rar", "codex-tasks/rar"]
 embed-frontend = []
 observability = [
     "dep:opentelemetry",
@@ -41,6 +41,7 @@ members = [
     "crates/codex-services",
     "crates/codex-search",
     "crates/codex-scanner",
+    "crates/codex-tasks",
 ]
 
 # Shared dependencies inherited by workspace members. Only deps that are
@@ -71,6 +72,7 @@ codex-parsers = { path = "crates/codex-parsers", default-features = false }
 codex-scanner = { path = "crates/codex-scanner", default-features = false }
 codex-search = { path = "crates/codex-search" }
 codex-services = { path = "crates/codex-services" }
+codex-tasks = { path = "crates/codex-tasks", default-features = false }
 codex-utils = { path = "crates/codex-utils" }
 
 # Shared dev-dependencies
@@ -156,6 +158,7 @@ codex-parsers = { workspace = true }
 codex-scanner = { workspace = true }
 codex-search = { workspace = true }
 codex-services = { workspace = true }
+codex-tasks = { workspace = true }
 codex-utils = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
