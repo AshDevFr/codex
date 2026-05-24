@@ -245,7 +245,7 @@ pub struct AppState {
     /// Phase 2. Queries are gated by the `search.fuzzy.enabled` setting in
     /// Phase 3 — the handler falls back to the existing LIKE search when off.
     #[allow(dead_code)]
-    pub fuzzy_index: Arc<crate::search::FuzzyIndex>,
+    pub fuzzy_index: Arc<codex_search::FuzzyIndex>,
 }
 
 // Legacy alias for backwards compatibility during transition

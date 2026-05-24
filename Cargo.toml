@@ -39,6 +39,7 @@ members = [
     "crates/codex-parsers",
     "crates/codex-db",
     "crates/codex-services",
+    "crates/codex-search",
 ]
 
 # Shared dependencies inherited by workspace members. Only deps that are
@@ -66,6 +67,7 @@ codex-db = { path = "crates/codex-db" }
 codex-events = { path = "crates/codex-events" }
 codex-models = { path = "crates/codex-models" }
 codex-parsers = { path = "crates/codex-parsers", default-features = false }
+codex-search = { path = "crates/codex-search" }
 codex-services = { path = "crates/codex-services" }
 codex-utils = { path = "crates/codex-utils" }
 
@@ -149,6 +151,7 @@ codex-db = { workspace = true }
 codex-events = { workspace = true }
 codex-models = { workspace = true }
 codex-parsers = { workspace = true }
+codex-search = { workspace = true }
 codex-services = { workspace = true }
 codex-utils = { workspace = true }
 tokio = { workspace = true }

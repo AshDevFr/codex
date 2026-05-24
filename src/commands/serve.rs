@@ -432,14 +432,14 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // reads) we fall back to an empty index and continue starting up; queries
     // will simply return no results until the event listener catches up.
     info!("Building in-memory fuzzy search index...");
-    let fuzzy_index = match crate::search::builder::build_from_db(db.sea_orm_connection()).await {
+    let fuzzy_index = match codex_search::builder::build_from_db(db.sea_orm_connection()).await {
         Ok(idx) => Arc::new(idx),
         Err(err) => {
             tracing::warn!(
                 "Failed to build fuzzy search index at startup: {err:#}. \
                  Continuing with an empty index; results will be incomplete until rebuild."
             );
-            Arc::new(crate::search::FuzzyIndex::empty())
+            Arc::new(codex_search::FuzzyIndex::empty())
         }
     };
 
@@ -447,7 +447,7 @@ pub async fn serve_command(config_path: PathBuf) -> anyhow::Result<()> {
     // they happen. Lifetime is tied to `background_task_cancel`; on shutdown
     // either the cancel token fires or the broadcaster's shutdown signal
     // wakes the recv and the listener exits.
-    let fuzzy_listener_handle = crate::search::spawn_listener(
+    let fuzzy_listener_handle = codex_search::spawn_listener(
         fuzzy_index.clone(),
         event_broadcaster.clone(),
         db.sea_orm_connection().clone(),
