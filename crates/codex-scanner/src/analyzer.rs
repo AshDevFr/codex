@@ -4,9 +4,9 @@ use codex_parsers::BookMetadata;
 use codex_parsers::cbr::CbrParser;
 use codex_parsers::cbz::CbzParser;
 use codex_parsers::epub::EpubParser;
+use codex_parsers::error::{ParserError, Result};
 use codex_parsers::pdf::PdfParser;
 use codex_parsers::traits::FormatParser;
-use codex_utils::{CodexError, Result};
 use std::path::Path;
 
 /// Analyze a file and extract metadata
@@ -15,7 +15,7 @@ pub fn analyze_file<P: AsRef<Path>>(path: P) -> Result<BookMetadata> {
 
     // Detect format
     let format = detect_format(path)
-        .ok_or_else(|| CodexError::UnsupportedFormat(path.to_string_lossy().to_string()))?;
+        .ok_or_else(|| ParserError::UnsupportedFormat(path.to_string_lossy().to_string()))?;
 
     // Select appropriate parser
     let metadata = match format {
@@ -30,7 +30,7 @@ pub fn analyze_file<P: AsRef<Path>>(path: P) -> Result<BookMetadata> {
         }
         #[cfg(not(feature = "rar"))]
         codex_parsers::FileFormat::CBR => {
-            return Err(CodexError::UnsupportedFormat(
+            return Err(ParserError::UnsupportedFormat(
                 "CBR support requires the 'rar' feature to be enabled".to_string(),
             ));
         }
@@ -67,7 +67,7 @@ mod tests {
         let result = analyze_file(&path);
         assert!(result.is_err());
 
-        if let Err(CodexError::UnsupportedFormat(msg)) = result {
+        if let Err(ParserError::UnsupportedFormat(msg)) = result {
             assert!(msg.contains(".txt"));
         } else {
             panic!("Expected UnsupportedFormat error");

@@ -1,0 +1,39 @@
+[package]
+name = "codex-cli-common"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+name = "codex_cli_common"
+path = "src/lib.rs"
+
+[features]
+default = []
+observability = ["codex-api/observability", "dep:tracing-opentelemetry"]
+
+[dependencies]
+# Workspace-inherited
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+# Workspace-internal
+codex-api = { workspace = true }
+codex-config = { workspace = true }
+codex-db = { workspace = true }
+codex-events = { workspace = true }
+codex-services = { workspace = true }
+codex-tasks = { workspace = true }
+
+# Crate-specific
+sea-orm = { version = "1.1", default-features = false }
+tokio-util = { version = "0.7", features = ["io"] }
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = { version = "0.33", optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serial_test = { workspace = true }
+codex-db = { workspace = true, features = ["test-utils"] }

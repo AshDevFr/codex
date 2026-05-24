@@ -19,6 +19,9 @@ serde = { workspace = true }
 tracing = { workspace = true }
 codex-utils = { workspace = true }
 
+# Error handling for ParserError
+thiserror = "2.0"
+
 # URL decoding (EPUB OPF hrefs)
 urlencoding = "2.1"
 

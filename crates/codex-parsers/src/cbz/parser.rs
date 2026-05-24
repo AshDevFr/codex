@@ -1,8 +1,9 @@
+use crate::error::Result;
 use crate::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::traits::FormatParser;
 use crate::{BookMetadata, FileFormat, parse_comic_info};
 use chrono::{DateTime, Utc};
-use codex_utils::{Result, hash_file};
+use codex_utils::hash_file;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;

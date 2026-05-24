@@ -22,16 +22,12 @@ argon2 = "0.5"
 base64 = "0.22"
 chrono-tz = "0.10"
 cron = "0.13"
-image = { version = "0.25", features = ["avif"] }
 jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 md-5 = "0.10"
-quick-xml = { version = "0.39", features = ["serialize"] }
 rand = "0.10"
 serde_json = "1.0"
 sha2 = "0.10"
-thiserror = "2.0"
 unicode-normalization = "0.1"
-zip = "8.1"
 
 [dev-dependencies]
 tempfile = { workspace = true }

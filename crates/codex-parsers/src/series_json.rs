@@ -3,7 +3,7 @@
 //! Parses Mylar's `series.json` sidecar files (schema version 1.0.2) to extract
 //! series-level metadata such as publisher, year, description, and status.
 
-use codex_utils::{CodexError, Result};
+use crate::error::{ParserError, Result};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -71,14 +71,14 @@ pub struct MylarCollects {
 /// Parse series.json content from a string.
 pub fn parse_series_json(content: &str) -> Result<MylarSeriesMetadata> {
     let wrapper: MylarSeriesJson = serde_json::from_str(content)
-        .map_err(|e| CodexError::ParseError(format!("Failed to parse series.json: {}", e)))?;
+        .map_err(|e| ParserError::ParseError(format!("Failed to parse series.json: {}", e)))?;
     Ok(wrapper.metadata)
 }
 
 /// Read and parse a series.json file from disk.
 pub fn parse_series_json_file(path: &Path) -> Result<MylarSeriesMetadata> {
     let content = std::fs::read_to_string(path).map_err(|e| {
-        CodexError::ParseError(format!(
+        ParserError::ParseError(format!(
             "Failed to read series.json file {}: {}",
             path.display(),
             e

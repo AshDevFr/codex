@@ -55,7 +55,7 @@ impl<T, E> DeadlineResult<T, E> {
 /// # Examples
 ///
 /// ```text
-/// use codex::utils::deadline::{with_deadline, DeadlineResult};
+/// use codex_utils::deadline::{with_deadline, DeadlineResult};
 ///
 /// let result = with_deadline(5, async {
 ///     // Some database operation

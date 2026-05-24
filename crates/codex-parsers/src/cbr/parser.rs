@@ -1,8 +1,9 @@
+use crate::error::{ParserError, Result};
 use crate::image_utils::{create_page_info, is_image_file, process_image_data};
 use crate::traits::FormatParser;
 use crate::{BookMetadata, FileFormat, parse_comic_info};
 use chrono::{DateTime, Utc};
-use codex_utils::{CodexError, Result, hash_file};
+use codex_utils::hash_file;
 use std::path::Path;
 use unrar::Archive;
 
@@ -37,10 +38,10 @@ impl FormatParser for CbrParser {
         // Open RAR archive for processing - we'll do everything in one pass
         let mut archive = Archive::new(
             path.to_str()
-                .ok_or_else(|| CodexError::ParseError("Invalid path encoding".to_string()))?,
+                .ok_or_else(|| ParserError::ParseError("Invalid path encoding".to_string()))?,
         )
         .open_for_processing()
-        .map_err(|e| CodexError::ParseError(format!("Failed to open RAR archive: {}", e)))?;
+        .map_err(|e| ParserError::ParseError(format!("Failed to open RAR archive: {}", e)))?;
 
         // Collect all entries with their data
         let mut image_data_entries: Vec<(String, Vec<u8>, u64)> = Vec::new();
@@ -51,7 +52,7 @@ impl FormatParser for CbrParser {
                 Ok(Some(h)) => h,
                 Ok(None) => break,
                 Err(e) => {
-                    return Err(CodexError::ParseError(format!(
+                    return Err(ParserError::ParseError(format!(
                         "Failed to read RAR header: {}",
                         e
                     )));
@@ -64,7 +65,7 @@ impl FormatParser for CbrParser {
             // Skip directories
             if header.entry().is_directory() {
                 archive = header.skip().map_err(|e| {
-                    CodexError::ParseError(format!("Failed to skip directory: {}", e))
+                    ParserError::ParseError(format!("Failed to skip directory: {}", e))
                 })?;
                 continue;
             }
@@ -72,7 +73,7 @@ impl FormatParser for CbrParser {
             // Check for ComicInfo.xml
             if filename == "ComicInfo.xml" {
                 let (xml_content, next) = header.read().map_err(|e| {
-                    CodexError::ParseError(format!("Failed to read ComicInfo.xml: {}", e))
+                    ParserError::ParseError(format!("Failed to read ComicInfo.xml: {}", e))
                 })?;
 
                 let xml_str = String::from_utf8_lossy(&xml_content).to_string();
@@ -84,7 +85,7 @@ impl FormatParser for CbrParser {
                 // Read image data
                 let (data, next) = header
                     .read()
-                    .map_err(|e| CodexError::ParseError(format!("Failed to read image: {}", e)))?;
+                    .map_err(|e| ParserError::ParseError(format!("Failed to read image: {}", e)))?;
 
                 image_data_entries.push((filename, data, unpacked_size));
                 archive = next;
@@ -92,7 +93,7 @@ impl FormatParser for CbrParser {
                 // Skip non-image, non-ComicInfo files
                 archive = header
                     .skip()
-                    .map_err(|e| CodexError::ParseError(format!("Failed to skip file: {}", e)))?;
+                    .map_err(|e| ParserError::ParseError(format!("Failed to skip file: {}", e)))?;
             }
         }
 

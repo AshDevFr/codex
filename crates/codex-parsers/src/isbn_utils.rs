@@ -18,7 +18,7 @@ use std::sync::OnceLock;
 /// # Examples
 ///
 /// ```
-/// use codex::parsers::isbn_utils::clean_isbn;
+/// use codex_parsers::isbn_utils::clean_isbn;
 ///
 /// assert_eq!(clean_isbn("978-0-123-45678-9"), "9780123456789");
 /// assert_eq!(clean_isbn("0-123-45678-X"), "012345678X");
@@ -43,7 +43,7 @@ pub fn clean_isbn(isbn: &str) -> String {
 /// # Examples
 ///
 /// ```
-/// use codex::parsers::isbn_utils::is_valid_isbn;
+/// use codex_parsers::isbn_utils::is_valid_isbn;
 ///
 /// assert!(is_valid_isbn("9780123456789"));
 /// assert!(is_valid_isbn("012345678X"));
@@ -76,7 +76,7 @@ pub fn is_valid_isbn(isbn: &str) -> bool {
 /// # Examples
 ///
 /// ```
-/// use codex::parsers::isbn_utils::validate_isbn10_checksum;
+/// use codex_parsers::isbn_utils::validate_isbn10_checksum;
 ///
 /// assert!(validate_isbn10_checksum("0306406152"));
 /// assert!(validate_isbn10_checksum("043942089X"));
@@ -116,7 +116,7 @@ pub fn validate_isbn10_checksum(isbn: &str) -> bool {
 /// # Examples
 ///
 /// ```
-/// use codex::parsers::isbn_utils::validate_isbn13_checksum;
+/// use codex_parsers::isbn_utils::validate_isbn13_checksum;
 ///
 /// assert!(validate_isbn13_checksum("9780306406157"));
 /// assert!(validate_isbn13_checksum("9780134685991"));
@@ -177,7 +177,7 @@ fn isbn_regex() -> &'static Regex {
 /// # Examples
 ///
 /// ```
-/// use codex::parsers::isbn_utils::extract_isbns;
+/// use codex_parsers::isbn_utils::extract_isbns;
 ///
 /// let text = "ISBN: 978-0-306-40615-7 and ISBN-10: 0-306-40615-2";
 /// let isbns = extract_isbns(text, false);

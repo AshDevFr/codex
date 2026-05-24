@@ -1,3 +1,4 @@
+use crate::error::{ParserError, Result};
 use crate::image_utils::{get_image_format, get_svg_dimensions, is_image_file};
 use crate::isbn_utils::extract_isbns;
 use crate::metadata::{SpineItem, compute_epub_positions};
@@ -5,7 +6,7 @@ use crate::opf;
 use crate::traits::FormatParser;
 use crate::{BookMetadata, FileFormat, ImageFormat, PageInfo};
 use chrono::{DateTime, Utc};
-use codex_utils::{CodexError, Result, hash_file};
+use codex_utils::hash_file;
 use image::GenericImageView;
 use std::collections::HashMap;
 use std::fs::File;
@@ -142,7 +143,7 @@ impl EpubParser {
     pub fn find_root_file(archive: &mut ZipArchive<File>) -> Result<String> {
         let mut container_file = archive
             .by_name("META-INF/container.xml")
-            .map_err(|_| CodexError::ParseError("META-INF/container.xml not found".to_string()))?;
+            .map_err(|_| ParserError::ParseError("META-INF/container.xml not found".to_string()))?;
 
         let mut xml_content = String::new();
         container_file.read_to_string(&mut xml_content)?;
@@ -156,7 +157,7 @@ impl EpubParser {
             }
         }
 
-        Err(CodexError::ParseError(
+        Err(ParserError::ParseError(
             "Could not find rootfile path in container.xml".to_string(),
         ))
     }
@@ -217,7 +218,7 @@ impl EpubParser {
     ) -> Result<(HashMap<String, (String, String)>, Vec<(String, String)>)> {
         let mut opf_file = archive
             .by_name(opf_path)
-            .map_err(|_| CodexError::ParseError(format!("OPF file not found: {}", opf_path)))?;
+            .map_err(|_| ParserError::ParseError(format!("OPF file not found: {}", opf_path)))?;
 
         let mut xml_content = String::new();
         opf_file.read_to_string(&mut xml_content)?;
@@ -349,9 +350,9 @@ impl FormatParser for EpubParser {
 
         // Read OPF content for metadata extraction
         let opf_content = {
-            let mut opf_file = archive
-                .by_name(&opf_path)
-                .map_err(|_| CodexError::ParseError(format!("OPF file not found: {}", opf_path)))?;
+            let mut opf_file = archive.by_name(&opf_path).map_err(|_| {
+                ParserError::ParseError(format!("OPF file not found: {}", opf_path))
+            })?;
             let mut content = String::new();
             opf_file.read_to_string(&mut content)?;
             content

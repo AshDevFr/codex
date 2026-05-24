@@ -15,7 +15,7 @@ use std::cmp::Ordering;
 /// # Examples
 ///
 /// ```ignore
-/// use codex::utils::natural_sort::natural_cmp;
+/// use codex_utils::natural_sort::natural_cmp;
 ///
 /// assert_eq!(natural_cmp("Vol. 2", "Vol. 10"), Ordering::Less);
 /// assert_eq!(natural_cmp("Ch 1", "Ch 1"), Ordering::Equal);
