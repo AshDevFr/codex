@@ -1,4 +1,4 @@
-use crate::observability::ObservabilityHandle;
+use codex_api::observability::ObservabilityHandle;
 use codex_config::{Config, DatabaseConfig, DatabaseType, EnvOverride};
 use codex_db::Database;
 use codex_events::EventBroadcaster;
@@ -168,12 +168,12 @@ pub fn init_tracing(config: &Config) -> anyhow::Result<TracingHandles> {
     // Initialize OTel providers (no-op when disabled or feature off). Done
     // before constructing the bridge layer so the global tracer is in place
     // for any code that grabs it via `global::tracer(...)` later.
-    let observability = crate::observability::init(&config.observability)?;
+    let observability = codex_api::observability::init(&config.observability)?;
 
     let fmt_layer = fmt::layer()
         .with_writer(writer)
         .with_ansi(ansi_enabled)
-        .event_format(crate::observability::TraceContextFormat::default());
+        .event_format(codex_api::observability::TraceContextFormat::default());
 
     // Compose subscribers inline: a generic helper here trips up the
     // Layer<S>/Subscriber bounds because each `.with(...)` changes S, so the

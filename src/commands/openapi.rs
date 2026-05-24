@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use utoipa::OpenApi;
 
-use crate::api::docs::ApiDoc;
+use codex_api::docs::ApiDoc;
 
 /// Export OpenAPI specification to a file
 ///

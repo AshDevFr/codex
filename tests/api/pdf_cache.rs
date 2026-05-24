@@ -106,6 +106,8 @@ async fn create_test_app_state_with_pdf_cache(
         plugin_file_storage: None,
         scheduler_timezone: "UTC".to_string(),
         fuzzy_index: Arc::new(codex::search::FuzzyIndex::empty()),
+        app_name: env!("CARGO_PKG_NAME"),
+        app_version: env!("CARGO_PKG_VERSION"),
     })
 }
 

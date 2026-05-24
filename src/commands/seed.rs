@@ -1,8 +1,8 @@
-use crate::api::permissions::{
-    ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS, serialize_permissions,
-};
 use anyhow::{Context, Result};
 use chrono::Utc;
+use codex_api::permissions::{
+    ADMIN_PERMISSIONS, MAINTAINER_PERMISSIONS, READER_PERMISSIONS, serialize_permissions,
+};
 use codex_config::{Config, EnvOverride};
 use codex_db::Database;
 use codex_db::entities::{api_keys, plugins::PluginPermission, users};
@@ -190,7 +190,7 @@ async fn seed_users(
     db_conn: &sea_orm::DatabaseConnection,
     seed_config: Option<&SeedConfig>,
 ) -> Result<()> {
-    use crate::api::permissions::UserRole;
+    use codex_api::permissions::UserRole;
 
     // Define users to create: (username, email, role, permissions for API key)
     let users_to_create = [
@@ -464,7 +464,7 @@ fn generate_random_password(length: usize) -> String {
 fn generate_api_key(
     user_id: Uuid,
     name: String,
-    permissions: &std::collections::HashSet<crate::api::permissions::Permission>,
+    permissions: &std::collections::HashSet<codex_api::permissions::Permission>,
 ) -> Result<(String, api_keys::Model)> {
     let mut rng = rand::rng();
 
@@ -522,7 +522,7 @@ mod tests {
     fn test_generate_api_key() {
         let user_id = Uuid::new_v4();
         let mut permissions = std::collections::HashSet::new();
-        permissions.insert(crate::api::permissions::Permission::LibrariesRead);
+        permissions.insert(codex_api::permissions::Permission::LibrariesRead);
 
         let (api_key, model) =
             generate_api_key(user_id, "Test Key".to_string(), &permissions).unwrap();

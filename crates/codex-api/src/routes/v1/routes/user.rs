@@ -1,0 +1,117 @@
+//! Current user routes
+//!
+//! Handles current user's preferences, ratings, and API keys.
+
+use super::super::handlers;
+use crate::extractors::AppState;
+use axum::{
+    Router,
+    routing::{delete, get, patch, post, put},
+};
+use std::sync::Arc;
+
+/// Create current user routes
+///
+/// All routes are protected (authentication required).
+///
+/// Routes:
+/// - Profile: /user (GET)
+/// - Preferences: /user/preferences
+/// - Ratings: /user/ratings
+/// - Sharing tags: /user/sharing-tags
+/// - API keys: /api-keys
+/// - Exports: /user/exports/series
+pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
+    Router::new()
+        // Current user profile route
+        .route("/user", get(handlers::get_current_user))
+        // User ratings routes
+        .route("/user/ratings", get(handlers::list_user_ratings))
+        // Current user's sharing tags route
+        .route(
+            "/user/sharing-tags",
+            get(handlers::sharing_tags::get_my_sharing_tags),
+        )
+        // User preferences routes
+        .route(
+            "/user/preferences",
+            get(handlers::user_preferences::get_all_preferences),
+        )
+        .route(
+            "/user/preferences",
+            put(handlers::user_preferences::set_bulk_preferences),
+        )
+        .route(
+            "/user/preferences/{key}",
+            get(handlers::user_preferences::get_preference),
+        )
+        .route(
+            "/user/preferences/{key}",
+            put(handlers::user_preferences::set_preference),
+        )
+        .route(
+            "/user/preferences/{key}",
+            delete(handlers::user_preferences::delete_preference),
+        )
+        // Series export routes
+        .route(
+            "/user/exports/series",
+            post(handlers::series_exports::create_export),
+        )
+        .route(
+            "/user/exports/series",
+            get(handlers::series_exports::list_exports),
+        )
+        .route(
+            "/user/exports/series/fields",
+            get(handlers::series_exports::get_field_catalog),
+        )
+        .route(
+            "/user/exports/series/{id}",
+            get(handlers::series_exports::get_export),
+        )
+        .route(
+            "/user/exports/series/{id}",
+            delete(handlers::series_exports::delete_export),
+        )
+        .route(
+            "/user/exports/series/{id}/download",
+            get(handlers::series_exports::download_export),
+        )
+        // API key routes
+        .route("/api-keys", get(handlers::api_keys::list_api_keys))
+        .route("/api-keys", post(handlers::api_keys::create_api_key))
+        .route(
+            "/api-keys/{api_key_id}",
+            get(handlers::api_keys::get_api_key),
+        )
+        .route(
+            "/api-keys/{api_key_id}",
+            patch(handlers::api_keys::update_api_key),
+        )
+        .route(
+            "/api-keys/{api_key_id}",
+            delete(handlers::api_keys::delete_api_key),
+        )
+        // Filter preset routes
+        .route(
+            "/filter-presets",
+            get(handlers::filter_presets::list_filter_presets),
+        )
+        .route(
+            "/filter-presets",
+            post(handlers::filter_presets::create_filter_preset),
+        )
+        .route(
+            "/filter-presets/{id}",
+            get(handlers::filter_presets::get_filter_preset),
+        )
+        .route(
+            "/filter-presets/{id}",
+            put(handlers::filter_presets::update_filter_preset),
+        )
+        .route(
+            "/filter-presets/{id}",
+            delete(handlers::filter_presets::delete_filter_preset),
+        )
+}

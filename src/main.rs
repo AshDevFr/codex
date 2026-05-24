@@ -1,7 +1,4 @@
-mod api;
 mod commands;
-mod observability;
-mod web;
 
 use clap::{Parser, Subcommand};
 use commands::{
