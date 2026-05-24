@@ -19,7 +19,7 @@ use base64::{Engine as _, engine::general_purpose};
 use chrono::Utc;
 use codex_db::{
     entities::users,
-    repositories::{OidcConnectionRepository, UserRepository},
+    repositories::{AccessGroupRepository, OidcConnectionRepository, UserRepository},
 };
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -236,6 +236,21 @@ pub async fn callback(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to update OIDC connection: {}", e)))?;
 
+        // Reconcile OIDC-sourced access group memberships
+        if let Err(e) = AccessGroupRepository::reconcile_oidc_group_memberships(
+            &state.db,
+            user.id,
+            &auth_result.groups,
+        )
+        .await
+        {
+            warn!(
+                user_id = %user.id,
+                error = %e,
+                "Failed to reconcile OIDC access group memberships (login continues)"
+            );
+        }
+
         // Sync role from IdP groups on every login
         let user = sync_role_from_groups(&state.db, user, &auth_result.mapped_role).await?;
 
@@ -341,6 +356,21 @@ pub async fn callback(
         OidcConnectionRepository::create(&state.db, &connection)
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to create OIDC connection: {}", e)))?;
+
+        // Reconcile OIDC-sourced access group memberships for new connection
+        if let Err(e) = AccessGroupRepository::reconcile_oidc_group_memberships(
+            &state.db,
+            user.id,
+            &auth_result.groups,
+        )
+        .await
+        {
+            warn!(
+                user_id = %user.id,
+                error = %e,
+                "Failed to reconcile OIDC access group memberships (login continues)"
+            );
+        }
 
         (user, is_new)
     };
