@@ -3,12 +3,13 @@
 //! Sharing tags control content access. Series can be tagged, and users can be granted
 //! access (allow/deny) to content via these tags.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, Set, Statement,
 };
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::entities::{
@@ -671,6 +672,75 @@ impl SharingTagRepository {
         Ok(Some(allowed_series.into_iter().collect()))
     }
 
+    /// Get effective sharing-tag grants for a user.
+    ///
+    /// Effective grants are the union of:
+    /// - The user's own `user_sharing_tags` rows (per-user overrides), and
+    /// - Every grant on every access group the user belongs to.
+    ///
+    /// The same tag may appear in both `allows` and `denies` (e.g. a group
+    /// allows it while the user denies it). Callers apply the deny-wins rule
+    /// downstream — this method intentionally surfaces the raw union so the
+    /// caller can decide policy.
+    ///
+    /// Returns `(allow_tag_ids, deny_tag_ids)`. Each vec is deduplicated.
+    pub async fn get_effective_grants(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+    ) -> Result<(Vec<Uuid>, Vec<Uuid>)> {
+        let backend = db.get_database_backend();
+        let sql = match backend {
+            DbBackend::Postgres => {
+                r#"
+                SELECT sharing_tag_id, access_mode
+                FROM user_sharing_tags
+                WHERE user_id = $1
+                UNION
+                SELECT gst.sharing_tag_id, gst.access_mode
+                FROM user_access_groups uag
+                JOIN access_group_sharing_tags gst
+                    ON gst.access_group_id = uag.access_group_id
+                WHERE uag.user_id = $2
+                "#
+            }
+            _ => {
+                r#"
+                SELECT sharing_tag_id, access_mode
+                FROM user_sharing_tags
+                WHERE user_id = ?
+                UNION
+                SELECT gst.sharing_tag_id, gst.access_mode
+                FROM user_access_groups uag
+                JOIN access_group_sharing_tags gst
+                    ON gst.access_group_id = uag.access_group_id
+                WHERE uag.user_id = ?
+                "#
+            }
+        };
+        let stmt =
+            Statement::from_sql_and_values(backend, sql, vec![user_id.into(), user_id.into()]);
+        let rows = db
+            .query_all(stmt)
+            .await
+            .context("Failed to query effective sharing-tag grants")?;
+
+        let mut allows: HashSet<Uuid> = HashSet::new();
+        let mut denies: HashSet<Uuid> = HashSet::new();
+        for row in rows {
+            let tag_id: Uuid = row.try_get("", "sharing_tag_id")?;
+            let mode: String = row.try_get("", "access_mode")?;
+            match mode.parse::<AccessMode>().unwrap_or(AccessMode::Allow) {
+                AccessMode::Allow => {
+                    allows.insert(tag_id);
+                }
+                AccessMode::Deny => {
+                    denies.insert(tag_id);
+                }
+            }
+        }
+        Ok((allows.into_iter().collect(), denies.into_iter().collect()))
+    }
+
     /// Get series IDs to exclude for a user (series with denied tags)
     pub async fn get_excluded_series_ids_for_user(
         db: &DatabaseConnection,
@@ -1124,6 +1194,202 @@ mod tests {
         .await
         .unwrap();
         assert!(!visible);
+    }
+
+    #[tokio::test]
+    async fn test_get_effective_grants_user_only() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = create_test_user(conn, "u").await;
+        let allow_tag = SharingTagRepository::create(conn, "allow", None)
+            .await
+            .unwrap();
+        let deny_tag = SharingTagRepository::create(conn, "deny", None)
+            .await
+            .unwrap();
+
+        SharingTagRepository::set_user_grant(conn, user.id, allow_tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        SharingTagRepository::set_user_grant(conn, user.id, deny_tag.id, AccessMode::Deny)
+            .await
+            .unwrap();
+
+        let (allows, denies) = SharingTagRepository::get_effective_grants(conn, user.id)
+            .await
+            .unwrap();
+        assert_eq!(allows, vec![allow_tag.id]);
+        assert_eq!(denies, vec![deny_tag.id]);
+    }
+
+    #[tokio::test]
+    async fn test_get_effective_grants_group_only() {
+        use crate::entities::user_access_groups::MembershipSource;
+        use crate::repositories::AccessGroupRepository;
+
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = create_test_user(conn, "u").await;
+        let group = AccessGroupRepository::create(conn, "Group", None)
+            .await
+            .unwrap();
+        let allow_tag = SharingTagRepository::create(conn, "manga", None)
+            .await
+            .unwrap();
+        let deny_tag = SharingTagRepository::create(conn, "adult", None)
+            .await
+            .unwrap();
+
+        AccessGroupRepository::set_grant(conn, group.id, allow_tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, group.id, deny_tag.id, AccessMode::Deny)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, group.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        let (allows, denies) = SharingTagRepository::get_effective_grants(conn, user.id)
+            .await
+            .unwrap();
+        assert_eq!(allows, vec![allow_tag.id]);
+        assert_eq!(denies, vec![deny_tag.id]);
+    }
+
+    #[tokio::test]
+    async fn test_get_effective_grants_user_and_group_merged() {
+        use crate::entities::user_access_groups::MembershipSource;
+        use crate::repositories::AccessGroupRepository;
+
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = create_test_user(conn, "u").await;
+        let group = AccessGroupRepository::create(conn, "Manga Readers", None)
+            .await
+            .unwrap();
+        let manga = SharingTagRepository::create(conn, "manga", None)
+            .await
+            .unwrap();
+        let adult = SharingTagRepository::create(conn, "18+", None)
+            .await
+            .unwrap();
+        let news = SharingTagRepository::create(conn, "anime-news", None)
+            .await
+            .unwrap();
+
+        // Group: allow manga
+        AccessGroupRepository::set_grant(conn, group.id, manga.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, group.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        // User: deny 18+, allow anime-news (per-user extra)
+        SharingTagRepository::set_user_grant(conn, user.id, adult.id, AccessMode::Deny)
+            .await
+            .unwrap();
+        SharingTagRepository::set_user_grant(conn, user.id, news.id, AccessMode::Allow)
+            .await
+            .unwrap();
+
+        let (mut allows, denies) = SharingTagRepository::get_effective_grants(conn, user.id)
+            .await
+            .unwrap();
+        allows.sort();
+        let mut expected_allow = vec![manga.id, news.id];
+        expected_allow.sort();
+        assert_eq!(allows, expected_allow);
+        assert_eq!(denies, vec![adult.id]);
+    }
+
+    #[tokio::test]
+    async fn test_get_effective_grants_deduplicates_across_sources() {
+        use crate::entities::user_access_groups::MembershipSource;
+        use crate::repositories::AccessGroupRepository;
+
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = create_test_user(conn, "u").await;
+        let g1 = AccessGroupRepository::create(conn, "G1", None)
+            .await
+            .unwrap();
+        let g2 = AccessGroupRepository::create(conn, "G2", None)
+            .await
+            .unwrap();
+        let tag = SharingTagRepository::create(conn, "shared", None)
+            .await
+            .unwrap();
+
+        // Same allow grant from two groups + user
+        AccessGroupRepository::set_grant(conn, g1.id, tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, g2.id, tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        SharingTagRepository::set_user_grant(conn, user.id, tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, g1.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, g2.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        let (allows, denies) = SharingTagRepository::get_effective_grants(conn, user.id)
+            .await
+            .unwrap();
+        assert_eq!(allows, vec![tag.id]);
+        assert!(denies.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_effective_grants_no_grants_no_groups() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = create_test_user(conn, "u").await;
+        let (allows, denies) = SharingTagRepository::get_effective_grants(conn, user.id)
+            .await
+            .unwrap();
+        assert!(allows.is_empty());
+        assert!(denies.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_effective_grants_surfaces_both_allow_and_deny_for_same_tag() {
+        use crate::entities::user_access_groups::MembershipSource;
+        use crate::repositories::AccessGroupRepository;
+
+        // Group allows the tag; user denies it. Both surface; deny-wins is
+        // applied by the caller (ContentFilter), not here.
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+        let user = create_test_user(conn, "u").await;
+        let group = AccessGroupRepository::create(conn, "G", None)
+            .await
+            .unwrap();
+        let tag = SharingTagRepository::create(conn, "tag", None)
+            .await
+            .unwrap();
+
+        AccessGroupRepository::set_grant(conn, group.id, tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, group.id, user.id, MembershipSource::Manual)
+            .await
+            .unwrap();
+        SharingTagRepository::set_user_grant(conn, user.id, tag.id, AccessMode::Deny)
+            .await
+            .unwrap();
+
+        let (allows, denies) = SharingTagRepository::get_effective_grants(conn, user.id)
+            .await
+            .unwrap();
+        assert_eq!(allows, vec![tag.id]);
+        assert_eq!(denies, vec![tag.id]);
     }
 
     #[tokio::test]

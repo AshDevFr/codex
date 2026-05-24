@@ -68,3 +68,9 @@ pub mod user_series_ratings;
 pub mod series_sharing_tags;
 pub mod sharing_tags;
 pub mod user_sharing_tags;
+
+// Access groups for sharing tag management
+pub mod access_group_oidc_mappings;
+pub mod access_group_sharing_tags;
+pub mod access_groups;
+pub mod user_access_groups;

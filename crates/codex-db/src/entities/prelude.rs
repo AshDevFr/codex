@@ -54,10 +54,20 @@ pub use super::series_exports::Entity as SeriesExports;
 #[allow(unused_imports)]
 pub use super::filter_presets::Entity as FilterPresets;
 
-// Sharing tags for content access control (WIP feature)
+// Sharing tags for content access control
 #[allow(unused_imports)]
 pub use super::series_sharing_tags::Entity as SeriesSharingTags;
 #[allow(unused_imports)]
 pub use super::sharing_tags::Entity as SharingTags;
 #[allow(unused_imports)]
 pub use super::user_sharing_tags::Entity as UserSharingTags;
+
+// Access groups
+#[allow(unused_imports)]
+pub use super::access_group_oidc_mappings::Entity as AccessGroupOidcMappings;
+#[allow(unused_imports)]
+pub use super::access_group_sharing_tags::Entity as AccessGroupSharingTags;
+#[allow(unused_imports)]
+pub use super::access_groups::Entity as AccessGroups;
+#[allow(unused_imports)]
+pub use super::user_access_groups::Entity as UserAccessGroups;

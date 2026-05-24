@@ -40,6 +40,9 @@ pub mod user_series_rating;
 // Sharing tags for content access control
 pub mod sharing_tag;
 
+// Access groups: reusable bundles of sharing-tag grants assignable to users
+pub mod access_group;
+
 // OIDC authentication
 pub mod oidc_connection;
 
@@ -99,6 +102,9 @@ pub use user_series_rating::UserSeriesRatingRepository;
 
 // Sharing tags
 pub use sharing_tag::SharingTagRepository;
+
+// Access groups
+pub use access_group::AccessGroupRepository;
 
 // OIDC authentication
 pub use oidc_connection::OidcConnectionRepository;

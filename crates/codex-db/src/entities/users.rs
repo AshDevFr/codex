@@ -43,6 +43,8 @@ pub enum Relation {
     OidcConnections,
     #[sea_orm(has_many = "super::user_plugins::Entity")]
     UserPlugins,
+    #[sea_orm(has_many = "super::user_access_groups::Entity")]
+    UserAccessGroups,
 }
 
 impl Related<super::read_progress::Entity> for Entity {
@@ -75,6 +77,21 @@ impl Related<super::oidc_connections::Entity> for Entity {
 impl Related<super::user_plugins::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::UserPlugins.def()
+    }
+}
+
+impl Related<super::user_access_groups::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::UserAccessGroups.def()
+    }
+}
+
+impl Related<super::access_groups::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::user_access_groups::Relation::AccessGroup.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::user_access_groups::Relation::User.def().rev())
     }
 }
 

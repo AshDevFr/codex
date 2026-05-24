@@ -29,6 +29,8 @@ pub enum Relation {
     SeriesSharingTags,
     #[sea_orm(has_many = "super::user_sharing_tags::Entity")]
     UserSharingTags,
+    #[sea_orm(has_many = "super::access_group_sharing_tags::Entity")]
+    AccessGroupSharingTags,
 }
 
 impl Related<super::series_sharing_tags::Entity> for Entity {
@@ -40,6 +42,12 @@ impl Related<super::series_sharing_tags::Entity> for Entity {
 impl Related<super::user_sharing_tags::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::UserSharingTags.def()
+    }
+}
+
+impl Related<super::access_group_sharing_tags::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AccessGroupSharingTags.def()
     }
 }
 
