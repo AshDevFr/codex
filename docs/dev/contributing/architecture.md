@@ -9,6 +9,103 @@ This document describes the architecture and design decisions behind Codex.
 
 Codex is built with Rust for performance and safety. It follows a modular architecture that separates concerns and enables horizontal scaling.
 
+## Workspace Architecture
+
+The backend is a Cargo workspace. The root `codex` crate produces the binary and contains only `src/main.rs` plus the per-subcommand orchestrators under `src/commands/`. Every subsystem is its own sibling crate under `crates/`, so editing one subsystem only recompiles that crate and its downstream consumers, keeping warm rebuilds fast.
+
+### Crate Layering
+
+Each crate sits at a fixed level in the dependency graph. Crates may only depend on crates lower in the stack (or peers on the same level when the edge is non-cyclic). The binary at the top wires everything together.
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ codex (bin)             main.rs + commands/                │
+│ codex-cli-common        shared subcommand helpers          │
+└────────────────────────────────────────────────────────────┘
+                              │
+┌────────────────────────────────────────────────────────────┐
+│ codex-api               axum, OPDS, OPDS2, Komga, KOReader │
+│                         observability, embedded frontend   │
+└────────────────────────────────────────────────────────────┘
+                              │
+┌────────────────────────────────────────────────────────────┐
+│ codex-scheduler         cron / interval scheduler          │
+└────────────────────────────────────────────────────────────┘
+                              │
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐
+│ codex-tasks      │  │ codex-scanner    │  │ codex-search │
+│ background jobs  │  │ library scan     │  │ fuzzy index  │
+└──────────────────┘  └──────────────────┘  └──────────────┘
+                              │
+┌────────────────────────────────────────────────────────────┐
+│ codex-services          business logic, plugins, metadata  │
+└────────────────────────────────────────────────────────────┘
+                              │
+┌────────────────────────────────────────────────────────────┐
+│ codex-db                SeaORM entities + repositories     │
+└────────────────────────────────────────────────────────────┘
+                              │
+┌────────────────────────────────────────────────────────────┐
+│ codex-parsers           CBZ / CBR / EPUB / PDF             │
+└────────────────────────────────────────────────────────────┘
+                              │
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐
+│ codex-utils      │  │ codex-events     │  │ codex-config │
+│ crypto, jwt,     │  │ in-process event │  │ YAML + env   │
+│ hashing helpers  │  │ broadcaster      │  │ overrides    │
+└──────────────────┘  └──────────────────┘  └──────────────┘
+                              │
+┌────────────────────────────────────────────────────────────┐
+│ codex-models            shared DTOs + cross-layer types    │
+└────────────────────────────────────────────────────────────┘
+```
+
+`migration/` is a self-contained sibling crate consumed by `codex-db` for SeaORM schema migrations.
+
+### Crate Reference
+
+| Crate | Purpose |
+| --- | --- |
+| `codex` (bin) | CLI entry point (`main.rs`) and subcommand orchestrators (`commands/scan.rs`, `commands/serve.rs`, `commands/worker.rs`, ...) |
+| `codex-cli-common` | Shared CLI helpers: config loading, tracing init, database init, worker spawn/shutdown |
+| `codex-api` | HTTP layer (axum), native `/api/v1/`, OPDS 1.2/2.0, Komga compatibility, KOReader sync, observability HTTP layers, embedded frontend |
+| `codex-scheduler` | Cron- and interval-based scheduler that reconciles plugin-defined recurring tasks |
+| `codex-tasks` | Background worker and task handlers (scans, releases, OAuth refresh, ...) |
+| `codex-scanner` | Library scan workflow: file discovery, deduplication, analysis pipeline |
+| `codex-search` | In-memory fuzzy search index, kept in sync via the event broadcaster |
+| `codex-services` | Business logic: auth, plugins, metadata, release tracking, exports, OTel meter instruments |
+| `codex-db` | SeaORM entities, repositories, and connection pool |
+| `codex-parsers` | Format parsers (CBZ, CBR optional behind `rar`, EPUB, PDF) and their format-scoped `ParserError` |
+| `codex-utils` | Format-agnostic helpers: crypto, JWT, password hashing, file/zip helpers, deadlines |
+| `codex-events` | In-process event broadcaster (entity changes, task lifecycle, releases) |
+| `codex-config` | YAML config loader with environment-variable overrides |
+| `codex-models` | Pure-leaf DTOs and cross-layer types (permissions, sort/filter primitives, task types, plugin protocol) |
+| `migration/` | SeaORM migrations, depended on directly by `codex-db` |
+
+### Building Individual Crates
+
+Because each subsystem is its own crate, you can build, test, and lint them in isolation:
+
+```bash
+cargo build -p codex-db
+cargo test  -p codex-parsers
+cargo clippy -p codex-api -- -D warnings
+```
+
+The full workspace is built and tested with `cargo build --workspace` and `make test-fast` (which already passes `--workspace` to nextest).
+
+### Feature Flags
+
+Three feature flags cascade from the root binary through the sibling crates:
+
+- `rar` (default on) — enables CBR parsing via the proprietary UnRAR library. Owned by `codex-parsers`; forwarded by `codex-scanner`, `codex-services`, `codex-tasks`, `codex-api`, and the root crate.
+- `observability` (default on) — enables OpenTelemetry tracing, metrics, and the HTTP middleware that emits them. Owned by `codex-services` (meter instruments), `codex-api` (HTTP layers), and `codex-cli-common` (tracing-subscriber composition).
+- `embed-frontend` — bundles the built React frontend into the binary via `rust-embed`. Owned by `codex-api`.
+
+### Design Rationale
+
+The workspace split is documented in detail in [ADR 0001: Workspace Split](../decisions/0001-workspace-split.md), which captures the original dependency graph, the measured build-time outcomes, and the alternatives considered.
+
 ## Core Principles
 
 ### Stateless Design

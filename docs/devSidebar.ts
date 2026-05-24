@@ -24,6 +24,14 @@ const devSidebar: SidebarsConfig = {
         "contributing/migrations",
       ],
     },
+    {
+      type: "category",
+      label: "Decisions",
+      collapsed: false,
+      items: [
+        "decisions/0001-workspace-split",
+      ],
+    },
   ],
 };
 
