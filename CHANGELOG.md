@@ -2,6 +2,12 @@
 
 All notable changes to Codex will be documented in this file.
 
+## [1.30.1] - 2026-05-24
+
+### 🐛 Bug Fixes
+
+- *(observability)* Decouple browser RUM proxy endpoint from SDK exporter
+
 ## [1.30.0] - 2026-05-24
 
 ### 🐛 Bug Fixes
