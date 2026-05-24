@@ -39,6 +39,7 @@ pub fn paginated_response<T: Serialize>(data: T, link_builder: &PaginationLinkBu
     }
 }
 
+pub mod access_groups;
 pub mod api_keys;
 pub mod auth;
 pub mod books;

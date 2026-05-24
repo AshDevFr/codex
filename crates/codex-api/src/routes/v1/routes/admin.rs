@@ -131,6 +131,51 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/admin/plugin-storage/{name}",
             delete(handlers::plugin_storage::cleanup_plugin_storage),
         )
+        // Access group routes (admin only)
+        .route(
+            "/access-groups",
+            get(handlers::access_groups::list_access_groups),
+        )
+        .route(
+            "/access-groups",
+            post(handlers::access_groups::create_access_group),
+        )
+        .route(
+            "/access-groups/{group_id}",
+            get(handlers::access_groups::get_access_group),
+        )
+        .route(
+            "/access-groups/{group_id}",
+            patch(handlers::access_groups::update_access_group),
+        )
+        .route(
+            "/access-groups/{group_id}",
+            delete(handlers::access_groups::delete_access_group),
+        )
+        .route(
+            "/access-groups/{group_id}/members",
+            post(handlers::access_groups::add_access_group_members),
+        )
+        .route(
+            "/access-groups/{group_id}/members/{user_id}",
+            delete(handlers::access_groups::remove_access_group_member),
+        )
+        .route(
+            "/access-groups/{group_id}/grants",
+            post(handlers::access_groups::add_access_group_grant),
+        )
+        .route(
+            "/access-groups/{group_id}/grants/{tag_id}",
+            delete(handlers::access_groups::remove_access_group_grant),
+        )
+        .route(
+            "/access-groups/{group_id}/oidc-mappings",
+            post(handlers::access_groups::add_access_group_oidc_mapping),
+        )
+        .route(
+            "/access-groups/{group_id}/oidc-mappings/{mapping_id}",
+            delete(handlers::access_groups::remove_access_group_oidc_mapping),
+        )
         // Plugin management routes (admin only)
         .route("/admin/plugins", get(handlers::plugins::list_plugins))
         .route("/admin/plugins", post(handlers::plugins::create_plugin))

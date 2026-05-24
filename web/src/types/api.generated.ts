@@ -4,6 +4,145 @@
  */
 
 export interface paths {
+    "/api/v1/access-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all access groups (admin only) */
+        get: operations["list_access_groups"];
+        put?: never;
+        /** Create a new access group (admin only) */
+        post: operations["create_access_group"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an access group by ID with full details (admin only) */
+        get: operations["get_access_group"];
+        put?: never;
+        post?: never;
+        /** Delete an access group (admin only) */
+        delete: operations["delete_access_group"];
+        options?: never;
+        head?: never;
+        /** Update an access group (admin only) */
+        patch: operations["update_access_group"];
+        trace?: never;
+    };
+    "/api/v1/access-groups/{group_id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a tag grant to an access group (admin only) */
+        post: operations["add_access_group_grant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access-groups/{group_id}/grants/{tag_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a tag grant from an access group (admin only) */
+        delete: operations["remove_access_group_grant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access-groups/{group_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add users to an access group (admin only) */
+        post: operations["add_access_group_members"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access-groups/{group_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a user from an access group (admin only) */
+        delete: operations["remove_access_group_member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access-groups/{group_id}/oidc-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an OIDC mapping to an access group (admin only) */
+        post: operations["add_access_group_oidc_mapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access-groups/{group_id}/oidc-mappings/{mapping_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an OIDC mapping from an access group (admin only) */
+        delete: operations["remove_access_group_oidc_mapping"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/cleanup-orphans": {
         parameters: {
             query?: never;
@@ -5300,6 +5439,45 @@ export interface paths {
         patch: operations["update_user"];
         trace?: never;
     };
+    "/api/v1/users/{user_id}/access-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a user's access groups (admin only) */
+        get: operations["get_user_access_groups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/effective-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get effective grants for a user with source attribution (admin only)
+         * @description Returns each (tag, access_mode) with the sources that contribute it
+         *     (user override or group name). Useful for debugging "why can/can't this
+         *     user see content X".
+         */
+        get: operations["get_user_effective_grants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{user_id}/sharing-tags": {
         parameters: {
             query?: never;
@@ -6675,11 +6853,206 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Access group detail (includes members, grants, and OIDC mappings) */
+        AccessGroupDetailDto: {
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description Optional description
+             * @example Users who can access manga content
+             */
+            description?: string | null;
+            /** @description Tag grants for the group */
+            grants: components["schemas"]["AccessGroupGrantDto"][];
+            /**
+             * Format: uuid
+             * @description Unique access group identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /** @description Members of the group */
+            members: components["schemas"]["AccessGroupMemberDto"][];
+            /**
+             * @description Display name of the access group
+             * @example Manga Readers
+             */
+            name: string;
+            /** @description OIDC mappings for the group */
+            oidcMappings: components["schemas"]["AccessGroupOidcMappingDto"][];
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+        };
+        /** @description Access group data transfer object */
+        AccessGroupDto: {
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description Optional description
+             * @example Users who can access manga content
+             */
+            description?: string | null;
+            /**
+             * Format: int64
+             * @description Number of tag grants in the group
+             * @example 3
+             */
+            grantCount: number;
+            /**
+             * Format: uuid
+             * @description Unique access group identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * Format: int64
+             * @description Number of members in the group
+             * @example 5
+             */
+            memberCount: number;
+            /**
+             * @description Display name of the access group
+             * @example Manga Readers
+             */
+            name: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             * @example 2024-01-15T10:30:00Z
+             */
+            updatedAt: string;
+        };
+        /** @description Access group tag grant */
+        AccessGroupGrantDto: {
+            /** @description Access mode: allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: date-time
+             * @description Grant creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Sharing tag ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            sharingTagId: string;
+            /**
+             * @description Sharing tag name
+             * @example manga
+             */
+            sharingTagName: string;
+        };
+        /** @description Access group member */
+        AccessGroupMemberDto: {
+            /**
+             * Format: date-time
+             * @description When the user was added to the group
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * @description Membership source (manual or oidc)
+             * @example manual
+             */
+            source: string;
+            /**
+             * Format: uuid
+             * @description User ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            userId: string;
+            /**
+             * @description Username
+             * @example alice
+             */
+            username: string;
+        };
+        /** @description OIDC mapping for an access group */
+        AccessGroupOidcMappingDto: {
+            /**
+             * Format: date-time
+             * @description Mapping creation timestamp
+             * @example 2024-01-01T00:00:00Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Mapping ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description OIDC group name from the IdP
+             * @example library-staff
+             */
+            oidcGroupName: string;
+        };
+        /** @description Access group summary (for user's group list) */
+        AccessGroupSummaryDto: {
+            /**
+             * @description Optional description
+             * @example Users who can access manga content
+             */
+            description?: string | null;
+            /**
+             * Format: uuid
+             * @description Unique access group identifier
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            id: string;
+            /**
+             * @description Display name
+             * @example Manga Readers
+             */
+            name: string;
+        };
         /**
          * @description Access mode for sharing tag grants
          * @enum {string}
          */
         AccessMode: "allow" | "deny";
+        /** @description Add a tag grant to an access group request */
+        AddAccessGroupGrantRequest: {
+            /** @description Access mode: allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: uuid
+             * @description Sharing tag ID to grant access to
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            sharingTagId: string;
+        };
+        /** @description Add members to an access group request */
+        AddAccessGroupMembersRequest: {
+            /**
+             * @description User IDs to add to the group
+             * @example [
+             *       "550e8400-e29b-41d4-a716-446655440000"
+             *     ]
+             */
+            userIds: string[];
+        };
+        /** @description Add an OIDC mapping to an access group request */
+        AddAccessGroupOidcMappingRequest: {
+            /**
+             * @description OIDC group name from the IdP
+             * @example library-staff
+             */
+            oidcGroupName: string;
+        };
         /** @description Request to add a single genre to a series */
         AddSeriesGenreRequest: {
             /**
@@ -9245,6 +9618,19 @@ export interface components {
             /** @description Sort-friendly version of the name */
             sortAs?: string | null;
         };
+        /** @description Create access group request */
+        CreateAccessGroupRequest: {
+            /**
+             * @description Optional description
+             * @example Users who can access manga content
+             */
+            description?: string | null;
+            /**
+             * @description Display name for the access group (must be unique)
+             * @example Manga Readers
+             */
+            name: string;
+        };
         /** @description Request to create an alternate title for a series */
         CreateAlternateTitleRequest: {
             /**
@@ -9891,6 +10277,35 @@ export interface components {
              * @example 2024-01-15T10:30:00Z
              */
             updatedAt: string;
+        };
+        /** @description A single effective grant with source attribution */
+        EffectiveGrantDto: {
+            /** @description Access mode: allow or deny */
+            accessMode: components["schemas"]["AccessMode"];
+            /**
+             * Format: uuid
+             * @description Sharing tag ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            sharingTagId: string;
+            /**
+             * @description Sharing tag name
+             * @example manga
+             */
+            sharingTagName: string;
+            /** @description Sources of this grant */
+            sources: components["schemas"]["GrantSourceDto"][];
+        };
+        /** @description Effective grants response for a user (debug endpoint) */
+        EffectiveGrantsResponse: {
+            /** @description Effective grants with source attribution */
+            grants: components["schemas"]["EffectiveGrantDto"][];
+            /**
+             * Format: uuid
+             * @description User ID
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            userId: string;
         };
         /** @description Request to enqueue plugin auto-match task for a single series */
         EnqueueAutoMatchRequest: {
@@ -10934,6 +11349,25 @@ export interface components {
         GenreListResponse: {
             /** @description List of genres */
             genres: components["schemas"]["GenreDto"][];
+        };
+        /** @description Source of a grant (user or group) */
+        GrantSourceDto: {
+            /**
+             * Format: uuid
+             * @description Group ID (only present for group sources)
+             * @example 550e8400-e29b-41d4-a716-446655440000
+             */
+            groupId?: string | null;
+            /**
+             * @description Group name (only present for group sources)
+             * @example Manga Readers
+             */
+            groupName?: string | null;
+            /**
+             * @description Source kind: "user" or "group"
+             * @example group
+             */
+            kind: string;
         };
         /**
          * @description A group containing navigation or publications
@@ -12208,6 +12642,11 @@ export interface components {
              */
             message: string;
         };
+        /**
+         * @description Provenance of a group membership
+         * @enum {string}
+         */
+        MembershipSource: "manual" | "oidc";
         MessageResponse: {
             /**
              * @description Response message
@@ -18325,6 +18764,19 @@ export interface components {
              */
             mode?: string;
         };
+        /** @description Update access group request */
+        UpdateAccessGroupRequest: {
+            /**
+             * @description New description (set to null to remove)
+             * @example Updated description
+             */
+            description?: string | null;
+            /**
+             * @description New display name (must be unique)
+             * @example Manga & Comic Readers
+             */
+            name?: string | null;
+        };
         /** @description Request to update an alternate title */
         UpdateAlternateTitleRequest: {
             /**
@@ -19236,6 +19688,425 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_access_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of access groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupDto"][];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_access_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Access group created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupDto"];
+                };
+            };
+            /** @description Invalid request or group name already exists */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_access_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Access group details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupDetailDto"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_access_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Access group deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_access_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccessGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Access group updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupDto"];
+                };
+            };
+            /** @description Invalid request or group name already exists */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_access_group_grant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAccessGroupGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Grant added/updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupGrantDto"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group or sharing tag not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_access_group_grant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+                /** @description Sharing tag ID */
+                tag_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grant removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Grant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_access_group_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAccessGroupMembersRequest"];
+            };
+        };
+        responses: {
+            /** @description Members added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupMemberDto"][];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_access_group_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+                /** @description User ID to remove */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Member not found in group */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_access_group_oidc_mapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAccessGroupOidcMappingRequest"];
+            };
+        };
+        responses: {
+            /** @description OIDC mapping added */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupOidcMappingDto"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_access_group_oidc_mapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Access group ID */
+                group_id: string;
+                /** @description OIDC mapping ID */
+                mapping_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OIDC mapping removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OIDC mapping not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     trigger_cleanup: {
         parameters: {
             query?: never;
@@ -30962,6 +31833,66 @@ export interface operations {
             };
             /** @description User not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_user_access_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User ID */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of access groups for the user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessGroupSummaryDto"][];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_user_effective_grants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User ID */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective grants with source attribution */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveGrantsResponse"];
+                };
+            };
+            /** @description Forbidden - Missing permission */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

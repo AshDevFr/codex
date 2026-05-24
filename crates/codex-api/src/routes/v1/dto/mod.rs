@@ -2,6 +2,7 @@
 //!
 //! This module contains all DTOs for API v1 request/response serialization.
 
+pub mod access_group;
 pub mod api_key;
 pub mod auth;
 pub mod book;
@@ -37,6 +38,7 @@ pub mod user;
 pub mod user_plugins;
 pub mod user_preferences;
 
+pub use access_group::*;
 pub use api_key::*;
 pub use auth::*;
 pub use book::*;

@@ -42,4 +42,14 @@ pub fn routes(_state: Arc<AppState>) -> Router<Arc<AppState>> {
             "/users/{user_id}/sharing-tags/{tag_id}",
             delete(handlers::sharing_tags::remove_user_sharing_tag),
         )
+        // User access groups routes (admin only)
+        .route(
+            "/users/{user_id}/access-groups",
+            get(handlers::access_groups::get_user_access_groups),
+        )
+        // Effective grants debug endpoint (admin only)
+        .route(
+            "/users/{user_id}/effective-grants",
+            get(handlers::access_groups::get_user_effective_grants),
+        )
 }
