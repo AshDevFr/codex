@@ -10,6 +10,551 @@
     "version": "1.30.1"
   },
   "paths": {
+    "/api/v1/access-groups": {
+      "get": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "List all access groups (admin only)",
+        "operationId": "list_access_groups",
+        "responses": {
+          "200": {
+            "description": "List of access groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessGroupDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Create a new access group (admin only)",
+        "operationId": "create_access_group",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Access group created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGroupDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or group name already exists"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access-groups/{group_id}": {
+      "get": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Get an access group by ID with full details (admin only)",
+        "operationId": "get_access_group",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Access group details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGroupDetailDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Delete an access group (admin only)",
+        "operationId": "delete_access_group",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Access group deleted"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Update an access group (admin only)",
+        "operationId": "update_access_group",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccessGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Access group updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGroupDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or group name already exists"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access-groups/{group_id}/grants": {
+      "post": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Add a tag grant to an access group (admin only)",
+        "operationId": "add_access_group_grant",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAccessGroupGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Grant added/updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGroupGrantDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group or sharing tag not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access-groups/{group_id}/grants/{tag_id}": {
+      "delete": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Remove a tag grant from an access group (admin only)",
+        "operationId": "remove_access_group_grant",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "path",
+            "description": "Sharing tag ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Grant removed"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Grant not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access-groups/{group_id}/members": {
+      "post": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Add users to an access group (admin only)",
+        "operationId": "add_access_group_members",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAccessGroupMembersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Members added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessGroupMemberDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access-groups/{group_id}/members/{user_id}": {
+      "delete": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Remove a user from an access group (admin only)",
+        "operationId": "remove_access_group_member",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID to remove",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Member removed"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Member not found in group"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access-groups/{group_id}/oidc-mappings": {
+      "post": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Add an OIDC mapping to an access group (admin only)",
+        "operationId": "add_access_group_oidc_mapping",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAccessGroupOidcMappingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OIDC mapping added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessGroupOidcMappingDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "Access group not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/access-groups/{group_id}/oidc-mappings/{mapping_id}": {
+      "delete": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Remove an OIDC mapping from an access group (admin only)",
+        "operationId": "remove_access_group_oidc_mapping",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Access group ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "OIDC mapping ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "OIDC mapping removed"
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          },
+          "404": {
+            "description": "OIDC mapping not found"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/cleanup-orphans": {
       "post": {
         "tags": [
@@ -15488,6 +16033,98 @@
         ]
       }
     },
+    "/api/v1/users/{user_id}/access-groups": {
+      "get": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "List a user's access groups (admin only)",
+        "operationId": "get_user_access_groups",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of access groups for the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessGroupSummaryDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/effective-grants": {
+      "get": {
+        "tags": [
+          "Access Groups"
+        ],
+        "summary": "Get effective grants for a user with source attribution (admin only)",
+        "description": "Returns each (tag, access_mode) with the sources that contribute it\n(user override or group name). Useful for debugging \"why can/can't this\nuser see content X\".",
+        "operationId": "get_user_effective_grants",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective grants with source attribution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveGrantsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Missing permission"
+          }
+        },
+        "security": [
+          {
+            "jwt_bearer": []
+          },
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/{user_id}/sharing-tags": {
       "get": {
         "tags": [
@@ -18386,6 +19023,256 @@
   },
   "components": {
     "schemas": {
+      "AccessGroupDetailDto": {
+        "type": "object",
+        "description": "Access group detail (includes members, grants, and OIDC mappings)",
+        "required": [
+          "id",
+          "name",
+          "members",
+          "grants",
+          "oidcMappings",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description",
+            "example": "Users who can access manga content"
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessGroupGrantDto"
+            },
+            "description": "Tag grants for the group"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique access group identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessGroupMemberDto"
+            },
+            "description": "Members of the group"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the access group",
+            "example": "Manga Readers"
+          },
+          "oidcMappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessGroupOidcMappingDto"
+            },
+            "description": "OIDC mappings for the group"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "AccessGroupDto": {
+        "type": "object",
+        "description": "Access group data transfer object",
+        "required": [
+          "id",
+          "name",
+          "memberCount",
+          "grantCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description",
+            "example": "Users who can access manga content"
+          },
+          "grantCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of tag grants in the group",
+            "example": 3,
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique access group identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "memberCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of members in the group",
+            "example": 5,
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the access group",
+            "example": "Manga Readers"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "AccessGroupGrantDto": {
+        "type": "object",
+        "description": "Access group tag grant",
+        "required": [
+          "sharingTagId",
+          "sharingTagName",
+          "accessMode",
+          "createdAt"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Access mode: allow or deny"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Grant creation timestamp",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "sharingTagName": {
+            "type": "string",
+            "description": "Sharing tag name",
+            "example": "manga"
+          }
+        }
+      },
+      "AccessGroupMemberDto": {
+        "type": "object",
+        "description": "Access group member",
+        "required": [
+          "userId",
+          "username",
+          "source",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user was added to the group",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "source": {
+            "type": "string",
+            "description": "Membership source (manual or oidc)",
+            "example": "manual"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "username": {
+            "type": "string",
+            "description": "Username",
+            "example": "alice"
+          }
+        }
+      },
+      "AccessGroupOidcMappingDto": {
+        "type": "object",
+        "description": "OIDC mapping for an access group",
+        "required": [
+          "id",
+          "oidcGroupName",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Mapping creation timestamp",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Mapping ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "oidcGroupName": {
+            "type": "string",
+            "description": "OIDC group name from the IdP",
+            "example": "library-staff"
+          }
+        }
+      },
+      "AccessGroupSummaryDto": {
+        "type": "object",
+        "description": "Access group summary (for user's group list)",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description",
+            "example": "Users who can access manga content"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique access group identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name",
+            "example": "Manga Readers"
+          }
+        }
+      },
       "AccessMode": {
         "type": "string",
         "description": "Access mode for sharing tag grants",
@@ -18393,6 +19280,60 @@
           "allow",
           "deny"
         ]
+      },
+      "AddAccessGroupGrantRequest": {
+        "type": "object",
+        "description": "Add a tag grant to an access group request",
+        "required": [
+          "sharingTagId",
+          "accessMode"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Access mode: allow or deny"
+          },
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID to grant access to",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "AddAccessGroupMembersRequest": {
+        "type": "object",
+        "description": "Add members to an access group request",
+        "required": [
+          "userIds"
+        ],
+        "properties": {
+          "userIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "User IDs to add to the group",
+            "example": [
+              "550e8400-e29b-41d4-a716-446655440000"
+            ]
+          }
+        }
+      },
+      "AddAccessGroupOidcMappingRequest": {
+        "type": "object",
+        "description": "Add an OIDC mapping to an access group request",
+        "required": [
+          "oidcGroupName"
+        ],
+        "properties": {
+          "oidcGroupName": {
+            "type": "string",
+            "description": "OIDC group name from the IdP",
+            "example": "library-staff"
+          }
+        }
       },
       "AddSeriesGenreRequest": {
         "type": "object",
@@ -22853,6 +23794,28 @@
           }
         }
       },
+      "CreateAccessGroupRequest": {
+        "type": "object",
+        "description": "Create access group request",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description",
+            "example": "Users who can access manga content"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the access group (must be unique)",
+            "example": "Manga Readers"
+          }
+        }
+      },
       "CreateAlternateTitleRequest": {
         "type": "object",
         "description": "Request to create an alternate title for a series",
@@ -24114,6 +25077,63 @@
             "type": "string",
             "description": "When the group was last updated",
             "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "EffectiveGrantDto": {
+        "type": "object",
+        "description": "A single effective grant with source attribution",
+        "required": [
+          "sharingTagId",
+          "sharingTagName",
+          "accessMode",
+          "sources"
+        ],
+        "properties": {
+          "accessMode": {
+            "$ref": "#/components/schemas/AccessMode",
+            "description": "Access mode: allow or deny"
+          },
+          "sharingTagId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sharing tag ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "sharingTagName": {
+            "type": "string",
+            "description": "Sharing tag name",
+            "example": "manga"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrantSourceDto"
+            },
+            "description": "Sources of this grant"
+          }
+        }
+      },
+      "EffectiveGrantsResponse": {
+        "type": "object",
+        "description": "Effective grants response for a user (debug endpoint)",
+        "required": [
+          "userId",
+          "grants"
+        ],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveGrantDto"
+            },
+            "description": "Effective grants with source attribution"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
       },
@@ -26318,6 +27338,37 @@
               "$ref": "#/components/schemas/GenreDto"
             },
             "description": "List of genres"
+          }
+        }
+      },
+      "GrantSourceDto": {
+        "type": "object",
+        "description": "Source of a grant (user or group)",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "groupId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Group ID (only present for group sources)",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "groupName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Group name (only present for group sources)",
+            "example": "Manga Readers"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Source kind: \"user\" or \"group\"",
+            "example": "group"
           }
         }
       },
@@ -28878,6 +29929,14 @@
             "example": "Marked 5 books as read"
           }
         }
+      },
+      "MembershipSource": {
+        "type": "string",
+        "description": "Provenance of a group membership",
+        "enum": [
+          "manual",
+          "oidc"
+        ]
       },
       "MessageResponse": {
         "type": "object",
@@ -39721,6 +40780,28 @@
           }
         }
       },
+      "UpdateAccessGroupRequest": {
+        "type": "object",
+        "description": "Update access group request",
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New description (set to null to remove)",
+            "example": "Updated description"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New display name (must be unique)",
+            "example": "Manga & Comic Readers"
+          }
+        }
+      },
       "UpdateAlternateTitleRequest": {
         "type": "object",
         "description": "Request to update an alternate title",
@@ -41621,6 +42702,10 @@
       "description": "Duplicate book detection and management"
     },
     {
+      "name": "Access Groups",
+      "description": "Access group management for sharing-tag grants (admin only)"
+    },
+    {
       "name": "Sharing Tags",
       "description": "Content access control tags (admin only)"
     },
@@ -41705,6 +42790,7 @@
         "Observability",
         "Filesystem",
         "Duplicates",
+        "Access Groups",
         "Sharing Tags"
       ]
     },

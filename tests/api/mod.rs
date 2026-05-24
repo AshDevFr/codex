@@ -3,6 +3,7 @@
 // Tests the HTTP layer including authentication, authorization,
 // request/response handling, and error responses.
 
+mod access_groups;
 mod alternate_titles;
 mod analyze;
 mod api_keys;

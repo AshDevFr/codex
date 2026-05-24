@@ -497,6 +497,21 @@ The following paths are exempt from rate limiting:
         v1::handlers::recommendations::refresh_recommendations,
         v1::handlers::recommendations::dismiss_recommendation,
 
+        // Access Groups endpoints
+        v1::handlers::access_groups::list_access_groups,
+        v1::handlers::access_groups::get_access_group,
+        v1::handlers::access_groups::create_access_group,
+        v1::handlers::access_groups::update_access_group,
+        v1::handlers::access_groups::delete_access_group,
+        v1::handlers::access_groups::add_access_group_members,
+        v1::handlers::access_groups::remove_access_group_member,
+        v1::handlers::access_groups::get_user_access_groups,
+        v1::handlers::access_groups::add_access_group_grant,
+        v1::handlers::access_groups::remove_access_group_grant,
+        v1::handlers::access_groups::add_access_group_oidc_mapping,
+        v1::handlers::access_groups::remove_access_group_oidc_mapping,
+        v1::handlers::access_groups::get_user_effective_grants,
+
         // Sharing Tags endpoints
         v1::handlers::sharing_tags::list_sharing_tags,
         v1::handlers::sharing_tags::get_sharing_tag,
@@ -798,6 +813,23 @@ The following paths are exempt from rate limiting:
             v1::dto::BookExternalLinkDto,
             v1::dto::BookExternalLinkListResponse,
             v1::dto::CreateBookExternalLinkRequest,
+
+            // Access Group DTOs
+            v1::dto::AccessGroupDto,
+            v1::dto::AccessGroupDetailDto,
+            v1::dto::AccessGroupMemberDto,
+            v1::dto::AccessGroupGrantDto,
+            v1::dto::AccessGroupOidcMappingDto,
+            v1::dto::AccessGroupSummaryDto,
+            v1::dto::CreateAccessGroupRequest,
+            v1::dto::UpdateAccessGroupRequest,
+            v1::dto::AddAccessGroupMembersRequest,
+            v1::dto::AddAccessGroupGrantRequest,
+            v1::dto::AddAccessGroupOidcMappingRequest,
+            v1::dto::EffectiveGrantsResponse,
+            v1::dto::EffectiveGrantDto,
+            v1::dto::GrantSourceDto,
+            codex_db::entities::user_access_groups::MembershipSource,
 
             // Sharing Tag DTOs
             v1::dto::SharingTagDto,
@@ -1133,6 +1165,7 @@ The following paths are exempt from rate limiting:
         (name = "Observability", description = "Browser RUM bootstrap configuration and OTLP forwarding proxy"),
         (name = "Filesystem", description = "Filesystem browsing for library paths"),
         (name = "Duplicates", description = "Duplicate book detection and management"),
+        (name = "Access Groups", description = "Access group management for sharing-tag grants (admin only)"),
         (name = "Sharing Tags", description = "Content access control tags (admin only)"),
 
         // Real-time Events
@@ -1262,7 +1295,7 @@ impl utoipa::Modify for TagGroupsModifier {
             },
             {
                 "name": "Administration",
-                "tags": ["Admin", "Settings", "Plugins", "Plugin Actions", "Metrics", "Observability", "Filesystem", "Duplicates", "Sharing Tags"]
+                "tags": ["Admin", "Settings", "Plugins", "Plugin Actions", "Metrics", "Observability", "Filesystem", "Duplicates", "Access Groups", "Sharing Tags"]
             },
             {
                 "name": "Real-time Events",
