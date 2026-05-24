@@ -33,23 +33,31 @@ pub struct ContentFilter {
 }
 
 impl ContentFilter {
-    /// Create a content filter for a user based on their sharing tag grants
+    /// Create a content filter for a user based on their effective sharing tag grants.
     ///
-    /// This fetches the user's sharing tag grants and computes the access rules.
+    /// Effective grants are the union of the user's per-user `user_sharing_tags`
+    /// rows and grants attached to every access group the user belongs to.
+    /// Access groups can supply both `allow` and `deny` rules; users can
+    /// override either side. Downstream behavior (deny-wins, whitelist mode)
+    /// is unchanged — the only difference vs. the old implementation is the
+    /// data source feeding the rule set.
+    ///
     /// The result can be reused for multiple queries in the same request.
     pub async fn for_user(db: &DatabaseConnection, user_id: Uuid) -> anyhow::Result<Self> {
-        // Get user's allow and deny tag IDs
-        let allowed_tag_ids =
-            SharingTagRepository::get_allowed_tag_ids_for_user(db, user_id).await?;
+        let (allowed_tag_ids, denied_tag_ids) =
+            SharingTagRepository::get_effective_grants(db, user_id).await?;
 
-        // Get excluded series IDs (series with tags the user has deny grants for)
-        let excluded_series_ids =
-            SharingTagRepository::get_excluded_series_ids_for_user(db, user_id).await?;
+        // Excluded series = series tagged with any effective deny tag.
+        let excluded_series_ids = if denied_tag_ids.is_empty() {
+            Vec::new()
+        } else {
+            SharingTagRepository::get_series_ids_with_any_tags(db, &denied_tag_ids).await?
+        };
 
-        // Whitelist mode: if user has any allow grants
+        // Whitelist mode: any effective allow grant flips the user into
+        // "only-tagged" mode (untagged content disappears).
         let whitelist_mode = !allowed_tag_ids.is_empty();
 
-        // Get allowed series IDs (series with tags the user has allow grants for)
         let allowed_series_ids = if whitelist_mode {
             let ids =
                 SharingTagRepository::get_series_ids_with_any_tags(db, &allowed_tag_ids).await?;
@@ -279,5 +287,388 @@ mod tests {
 
         assert!(filter.is_book_visible(allowed_series));
         assert!(!filter.is_book_visible(denied_series));
+    }
+}
+
+#[cfg(test)]
+mod db_tests {
+    //! DB-backed integration tests for the group-aware `ContentFilter`.
+    //!
+    //! These exercise the full path from `user_sharing_tags` and
+    //! `user_access_groups` rows through `get_effective_grants` into the
+    //! filter's boolean output. The pure unit tests above cover the
+    //! in-memory rules; here we cover the data wiring.
+
+    use super::*;
+    use codex_db::ScanningStrategy;
+    use codex_db::entities::user_access_groups::MembershipSource;
+    use codex_db::entities::user_sharing_tags::AccessMode;
+    use codex_db::repositories::{
+        AccessGroupRepository, LibraryRepository, SeriesRepository, SharingTagRepository,
+        UserRepository,
+    };
+    use codex_db::test_helpers::create_test_db;
+
+    async fn make_user(db: &DatabaseConnection, username: &str) -> Uuid {
+        use chrono::Utc;
+        use codex_db::entities::users;
+        let now = Utc::now();
+        let model = users::Model {
+            id: Uuid::new_v4(),
+            username: username.to_string(),
+            email: format!("{}@test.com", username),
+            password_hash: "hash".to_string(),
+            role: "reader".to_string(),
+            is_active: true,
+            email_verified: true,
+            permissions: serde_json::json!([]),
+            created_at: now,
+            updated_at: now,
+            last_login_at: None,
+        };
+        UserRepository::create(db, &model).await.unwrap().id
+    }
+
+    /// The canonical scenario from the plan:
+    /// - Group "Manga Readers" allows "manga"
+    /// - User is a member of that group
+    /// - User has a personal deny on "18+"
+    /// Expectations:
+    /// - manga-tagged series → visible (allow from group)
+    /// - manga + 18+ series → hidden (deny-wins, even across sources)
+    /// - 18+-only series → hidden (never had an allow; also explicitly denied)
+    /// - untagged series → hidden (whitelist mode is triggered by any allow)
+    #[tokio::test]
+    async fn test_for_user_group_allow_plus_user_deny() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let user_id = make_user(conn, "reader").await;
+        let library = LibraryRepository::create(conn, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let manga_only = SeriesRepository::create(conn, library.id, "Manga Only", None)
+            .await
+            .unwrap();
+        let manga_adult = SeriesRepository::create(conn, library.id, "Manga Adult", None)
+            .await
+            .unwrap();
+        let adult_only = SeriesRepository::create(conn, library.id, "Adult Only", None)
+            .await
+            .unwrap();
+        let untagged = SeriesRepository::create(conn, library.id, "Untagged", None)
+            .await
+            .unwrap();
+
+        let manga = SharingTagRepository::create(conn, "manga", None)
+            .await
+            .unwrap();
+        let adult = SharingTagRepository::create(conn, "18+", None)
+            .await
+            .unwrap();
+
+        SharingTagRepository::add_tag_to_series(conn, manga_only.id, manga.id)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, manga_adult.id, manga.id)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, manga_adult.id, adult.id)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, adult_only.id, adult.id)
+            .await
+            .unwrap();
+
+        let group = AccessGroupRepository::create(conn, "Manga Readers", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, group.id, manga.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, group.id, user_id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        SharingTagRepository::set_user_grant(conn, user_id, adult.id, AccessMode::Deny)
+            .await
+            .unwrap();
+
+        let filter = ContentFilter::for_user(conn, user_id).await.unwrap();
+
+        assert!(filter.whitelist_mode, "any allow flips whitelist mode on");
+        assert!(filter.has_restrictions);
+        assert!(filter.is_series_visible(manga_only.id), "manga visible");
+        assert!(
+            !filter.is_series_visible(manga_adult.id),
+            "deny-wins across sources"
+        );
+        assert!(!filter.is_series_visible(adult_only.id), "deny hides it");
+        assert!(
+            !filter.is_series_visible(untagged.id),
+            "whitelist mode hides untagged content"
+        );
+    }
+
+    /// Group-only allow, no user-side grants. The group's tag should drive
+    /// visibility just as a per-user allow would.
+    #[tokio::test]
+    async fn test_for_user_group_allow_only() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let user_id = make_user(conn, "u").await;
+        let library = LibraryRepository::create(conn, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let allowed_series = SeriesRepository::create(conn, library.id, "Allowed", None)
+            .await
+            .unwrap();
+        let other_series = SeriesRepository::create(conn, library.id, "Other", None)
+            .await
+            .unwrap();
+
+        let allow_tag = SharingTagRepository::create(conn, "allow", None)
+            .await
+            .unwrap();
+        let other_tag = SharingTagRepository::create(conn, "other", None)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, allowed_series.id, allow_tag.id)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, other_series.id, other_tag.id)
+            .await
+            .unwrap();
+
+        let group = AccessGroupRepository::create(conn, "G", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, group.id, allow_tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, group.id, user_id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        let filter = ContentFilter::for_user(conn, user_id).await.unwrap();
+
+        assert!(filter.is_series_visible(allowed_series.id));
+        assert!(!filter.is_series_visible(other_series.id));
+    }
+
+    /// User in two groups: one allows the tag, the other denies it.
+    /// Deny must win.
+    #[tokio::test]
+    async fn test_for_user_multi_group_deny_wins() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let user_id = make_user(conn, "u").await;
+        let library = LibraryRepository::create(conn, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series = SeriesRepository::create(conn, library.id, "Series", None)
+            .await
+            .unwrap();
+        let tag = SharingTagRepository::create(conn, "tag", None)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, series.id, tag.id)
+            .await
+            .unwrap();
+
+        let g_allow = AccessGroupRepository::create(conn, "Allow Group", None)
+            .await
+            .unwrap();
+        let g_deny = AccessGroupRepository::create(conn, "Deny Group", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, g_allow.id, tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, g_deny.id, tag.id, AccessMode::Deny)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, g_allow.id, user_id, MembershipSource::Manual)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, g_deny.id, user_id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        let filter = ContentFilter::for_user(conn, user_id).await.unwrap();
+        assert!(!filter.is_series_visible(series.id));
+    }
+
+    /// User in two groups, each allowing a different tag. Both tags' series
+    /// must be visible (union of allows).
+    #[tokio::test]
+    async fn test_for_user_multi_group_union_of_allows() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let user_id = make_user(conn, "u").await;
+        let library = LibraryRepository::create(conn, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let s1 = SeriesRepository::create(conn, library.id, "S1", None)
+            .await
+            .unwrap();
+        let s2 = SeriesRepository::create(conn, library.id, "S2", None)
+            .await
+            .unwrap();
+        let t1 = SharingTagRepository::create(conn, "t1", None)
+            .await
+            .unwrap();
+        let t2 = SharingTagRepository::create(conn, "t2", None)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, s1.id, t1.id)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, s2.id, t2.id)
+            .await
+            .unwrap();
+
+        let g1 = AccessGroupRepository::create(conn, "G1", None)
+            .await
+            .unwrap();
+        let g2 = AccessGroupRepository::create(conn, "G2", None)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, g1.id, t1.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::set_grant(conn, g2.id, t2.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, g1.id, user_id, MembershipSource::Manual)
+            .await
+            .unwrap();
+        AccessGroupRepository::add_member(conn, g2.id, user_id, MembershipSource::Manual)
+            .await
+            .unwrap();
+
+        let filter = ContentFilter::for_user(conn, user_id).await.unwrap();
+        assert!(filter.is_series_visible(s1.id));
+        assert!(filter.is_series_visible(s2.id));
+    }
+
+    /// User in zero groups behaves identically to the pre-group implementation:
+    /// only per-user grants matter.
+    #[tokio::test]
+    async fn test_for_user_no_groups_matches_legacy_behavior() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let user_id = make_user(conn, "u").await;
+        let library = LibraryRepository::create(conn, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let allowed_series = SeriesRepository::create(conn, library.id, "Allowed", None)
+            .await
+            .unwrap();
+        let denied_series = SeriesRepository::create(conn, library.id, "Denied", None)
+            .await
+            .unwrap();
+        let untagged_series = SeriesRepository::create(conn, library.id, "Untagged", None)
+            .await
+            .unwrap();
+
+        let allow_tag = SharingTagRepository::create(conn, "ok", None)
+            .await
+            .unwrap();
+        let deny_tag = SharingTagRepository::create(conn, "no", None)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, allowed_series.id, allow_tag.id)
+            .await
+            .unwrap();
+        SharingTagRepository::add_tag_to_series(conn, denied_series.id, deny_tag.id)
+            .await
+            .unwrap();
+
+        SharingTagRepository::set_user_grant(conn, user_id, allow_tag.id, AccessMode::Allow)
+            .await
+            .unwrap();
+        SharingTagRepository::set_user_grant(conn, user_id, deny_tag.id, AccessMode::Deny)
+            .await
+            .unwrap();
+
+        let filter = ContentFilter::for_user(conn, user_id).await.unwrap();
+        assert!(filter.whitelist_mode);
+        assert!(filter.is_series_visible(allowed_series.id));
+        assert!(!filter.is_series_visible(denied_series.id));
+        assert!(!filter.is_series_visible(untagged_series.id));
+    }
+
+    /// User with neither group memberships nor per-user grants sees everything.
+    #[tokio::test]
+    async fn test_for_user_no_grants_no_groups_default_open() {
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let user_id = make_user(conn, "u").await;
+        let library = LibraryRepository::create(conn, "Lib", "/tmp/lib", ScanningStrategy::Default)
+            .await
+            .unwrap();
+        let series = SeriesRepository::create(conn, library.id, "Series", None)
+            .await
+            .unwrap();
+
+        let filter = ContentFilter::for_user(conn, user_id).await.unwrap();
+        assert!(!filter.has_restrictions);
+        assert!(!filter.whitelist_mode);
+        assert!(filter.is_series_visible(series.id));
+    }
+
+    /// Smoke check: building a filter for a user in 10 groups with ~50 grants
+    /// each (~500 group grants total) should be well under 50ms on SQLite.
+    /// Not a hard performance contract — just catches O(n*m) regressions.
+    #[tokio::test]
+    async fn test_for_user_build_is_fast_for_many_groups() {
+        use std::time::Instant;
+
+        let (db, _temp_dir) = create_test_db().await;
+        let conn = db.sea_orm_connection();
+
+        let user_id = make_user(conn, "perf").await;
+
+        let mut all_tags = Vec::with_capacity(500);
+        for i in 0..500 {
+            let tag = SharingTagRepository::create(conn, &format!("tag-{i}"), None)
+                .await
+                .unwrap();
+            all_tags.push(tag.id);
+        }
+
+        for g in 0..10 {
+            let group = AccessGroupRepository::create(conn, &format!("group-{g}"), None)
+                .await
+                .unwrap();
+            for j in 0..50 {
+                let tag_id = all_tags[g * 50 + j];
+                AccessGroupRepository::set_grant(conn, group.id, tag_id, AccessMode::Allow)
+                    .await
+                    .unwrap();
+            }
+            AccessGroupRepository::add_member(conn, group.id, user_id, MembershipSource::Manual)
+                .await
+                .unwrap();
+        }
+
+        let start = Instant::now();
+        let filter = ContentFilter::for_user(conn, user_id).await.unwrap();
+        let elapsed = start.elapsed();
+
+        assert!(filter.whitelist_mode);
+        // Loose bound: 250ms accounts for slow CI; the SQL is two queries
+        // regardless of grant count, so this would only fail on a real regression.
+        assert!(
+            elapsed.as_millis() < 250,
+            "ContentFilter::for_user took {}ms with 10 groups x 50 grants",
+            elapsed.as_millis()
+        );
     }
 }
